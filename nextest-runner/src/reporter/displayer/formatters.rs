@@ -194,7 +194,7 @@ pub(super) fn write_final_warnings(
         FinalRunStats::Failed(RunStatsFailureKind::Test {
             initial_run_count,
             not_run,
-        }) => {
+        }) if not_run > 0 => {
             write_final_warnings_for_failure(
                 initial_run_count,
                 not_run,

@@ -708,7 +708,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     let tests_str = plural::tests_str(*running);
                     write!(
                         writer,
-                        ": {} {tests_str} still running",
+                        "{} {tests_str} still running",
                         running.style(self.styles.count),
                     )?;
                 }
@@ -957,46 +957,118 @@ impl<'a> DisplayReporterImpl<'a> {
                 run_stats,
                 ..
             } => {
-                let stats_summary = run_stats.summarize_final();
-                let summary_style = match stats_summary {
-                    FinalRunStats::Success => self.styles.pass,
-                    FinalRunStats::NoTestsRun => self.styles.skip,
-                    FinalRunStats::Failed(_) | FinalRunStats::Cancelled { .. } => self.styles.fail,
-                };
-                write!(
-                    writer,
-                    "{}\n{:>12} ",
-                    self.theme_characters.hbar(12),
-                    "Summary".style(summary_style)
-                )?;
+                match run_stats {
+                    RunFinishedStats::Single(run_stats) => {
+                        let stats_summary = run_stats.summarize_final();
+                        let summary_style = match stats_summary {
+                            FinalRunStats::Success => self.styles.pass,
+                            FinalRunStats::NoTestsRun => self.styles.skip,
+                            FinalRunStats::Failed(_) | FinalRunStats::Cancelled { .. } => {
+                                self.styles.fail
+                            }
+                        };
+                        write!(
+                            writer,
+                            "{}\n{:>12} ",
+                            self.theme_characters.hbar(12),
+                            "Summary".style(summary_style)
+                        )?;
 
-                // Next, print the total time taken.
-                // * > means right-align.
-                // * 8 is the number of characters to pad to.
-                // * .3 means print two digits after the decimal point.
-                write!(writer, "[{:>8.3?}s] ", elapsed.as_secs_f64())?;
+                        // Next, print the total time taken.
+                        // * > means right-align.
+                        // * 8 is the number of characters to pad to.
+                        // * .3 means print two digits after the decimal point.
+                        write!(writer, "[{:>8.3?}s] ", elapsed.as_secs_f64())?;
 
-                write!(
-                    writer,
-                    "{}",
-                    run_stats.finished_count.style(self.styles.count)
-                )?;
-                if run_stats.finished_count != run_stats.initial_run_count {
-                    write!(
-                        writer,
-                        "/{}",
-                        run_stats.initial_run_count.style(self.styles.count)
-                    )?;
+                        write!(
+                            writer,
+                            "{}",
+                            run_stats.finished_count.style(self.styles.count)
+                        )?;
+                        if run_stats.finished_count != run_stats.initial_run_count {
+                            write!(
+                                writer,
+                                "/{}",
+                                run_stats.initial_run_count.style(self.styles.count)
+                            )?;
+                        }
+
+                        // Both initial and finished counts must be 1 for the singular form.
+                        let tests_str = plural::tests_plural_if(
+                            run_stats.initial_run_count != 1 || run_stats.finished_count != 1,
+                        );
+
+                        let mut summary_str = String::new();
+                        write_summary_str(run_stats, &self.styles, &mut summary_str);
+                        writeln!(writer, " {tests_str} run: {summary_str}")?;
+                    }
+                    RunFinishedStats::Stress(stats) => {
+                        let stats_summary = stats.summarize_final();
+                        let summary_style = match stats_summary {
+                            StressFinalRunStats::Success => self.styles.pass,
+                            StressFinalRunStats::NoTestsRun => self.styles.skip,
+                            StressFinalRunStats::Cancelled | StressFinalRunStats::Failed => {
+                                self.styles.fail
+                            }
+                        };
+
+                        write!(
+                            writer,
+                            "{}\n{:>12} ",
+                            self.theme_characters.hbar(12),
+                            "Summary".style(summary_style),
+                        )?;
+
+                        // Next, print the total time taken.
+                        // * > means right-align.
+                        // * 8 is the number of characters to pad to.
+                        // * .3 means print two digits after the decimal point.
+                        write!(writer, "[{:>8.3?}s] ", elapsed.as_secs_f64())?;
+
+                        write!(
+                            writer,
+                            "{}",
+                            stats.completed.current.style(self.styles.count),
+                        )?;
+                        let iterations_str = if let Some(total) = stats.completed.total {
+                            write!(writer, "/{}", total.style(self.styles.count))?;
+                            plural::iterations_str(total.get())
+                        } else {
+                            plural::iterations_str(stats.completed.current)
+                        };
+                        write!(
+                            writer,
+                            " stress run {iterations_str}: {} {}",
+                            stats.success_count.style(self.styles.count),
+                            "passed".style(self.styles.pass),
+                        )?;
+                        if stats.failed_count > 0 {
+                            write!(
+                                writer,
+                                ", {} {}",
+                                stats.failed_count.style(self.styles.count),
+                                "failed".style(self.styles.fail),
+                            )?;
+                        }
+
+                        match stats.last_final_stats {
+                            FinalRunStats::Cancelled { reason, kind: _ } => {
+                                if let Some(reason) = reason {
+                                    write!(
+                                        writer,
+                                        "; cancelled due to {}",
+                                        reason.to_static_str().style(self.styles.fail),
+                                    )?;
+                                }
+                            }
+                            FinalRunStats::Failed(_)
+                            | FinalRunStats::Success
+                            | FinalRunStats::NoTestsRun => {}
+                        }
+
+                        writeln!(writer)?;
+                    }
                 }
-
-                // Both initial and finished counts must be 1 for the singular form.
-                let tests_str = plural::tests_plural_if(
-                    run_stats.initial_run_count != 1 || run_stats.finished_count != 1,
-                );
-
-                let mut summary_str = String::new();
-                write_summary_str(run_stats, &self.styles, &mut summary_str);
-                writeln!(writer, " {tests_str} run: {summary_str}")?;
 
                 // Don't print out test outputs after Ctrl-C, but *do* print them after SIGTERM or
                 // SIGHUP since those tend to be automated tasks performing kills.
@@ -1040,7 +1112,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 }
 
                 // Print out warnings at the end, if any.
-                write_final_warnings(stats_summary, &self.styles, writer)?;
+                write_final_warnings(run_stats.final_stats(), &self.styles, writer)?;
             }
         }
 
@@ -2075,6 +2147,7 @@ mod tests {
     use camino::Utf8PathBuf;
     use chrono::Local;
     use nextest_metadata::RustBinaryId;
+    use quick_junit::ReportUuid;
     use smol_str::SmolStr;
     use std::{num::NonZero, sync::Arc};
 
@@ -2212,6 +2285,181 @@ mod tests {
 
         insta::assert_snapshot!(
             "final_status_output",
+            String::from_utf8(out).expect("output only consists of UTF-8"),
+        );
+    }
+
+    #[test]
+    fn test_summary_line() {
+        let run_id = ReportUuid::nil();
+        let mut out = Vec::new();
+
+        with_reporter(
+            |mut reporter| {
+                // Test single run with all passing tests
+                let run_stats_success = RunStats {
+                    initial_run_count: 5,
+                    finished_count: 5,
+                    setup_scripts_initial_count: 0,
+                    setup_scripts_finished_count: 0,
+                    setup_scripts_passed: 0,
+                    setup_scripts_failed: 0,
+                    setup_scripts_exec_failed: 0,
+                    setup_scripts_timed_out: 0,
+                    passed: 5,
+                    passed_slow: 0,
+                    flaky: 0,
+                    failed: 0,
+                    failed_slow: 0,
+                    timed_out: 0,
+                    leaky: 0,
+                    leaky_failed: 0,
+                    exec_failed: 0,
+                    skipped: 0,
+                    cancel_reason: None,
+                };
+
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::RunFinished {
+                            run_id,
+                            start_time: Local::now().into(),
+                            elapsed: Duration::from_secs(2),
+                            run_stats: RunFinishedStats::Single(run_stats_success),
+                        },
+                    })
+                    .unwrap();
+
+                // Test single run with mixed results
+                let run_stats_mixed = RunStats {
+                    initial_run_count: 10,
+                    finished_count: 8,
+                    setup_scripts_initial_count: 1,
+                    setup_scripts_finished_count: 1,
+                    setup_scripts_passed: 1,
+                    setup_scripts_failed: 0,
+                    setup_scripts_exec_failed: 0,
+                    setup_scripts_timed_out: 0,
+                    passed: 5,
+                    passed_slow: 1,
+                    flaky: 1,
+                    failed: 2,
+                    failed_slow: 0,
+                    timed_out: 1,
+                    leaky: 1,
+                    leaky_failed: 0,
+                    exec_failed: 1,
+                    skipped: 2,
+                    cancel_reason: Some(CancelReason::Signal),
+                };
+
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::RunFinished {
+                            run_id,
+                            start_time: Local::now().into(),
+                            elapsed: Duration::from_millis(15750),
+                            run_stats: RunFinishedStats::Single(run_stats_mixed),
+                        },
+                    })
+                    .unwrap();
+
+                // Test stress run with success
+                let stress_stats_success = StressRunStats {
+                    completed: StressIndex {
+                        current: 25,
+                        total: Some(NonZero::new(50).unwrap()),
+                    },
+                    success_count: 25,
+                    failed_count: 0,
+                    last_final_stats: FinalRunStats::Success,
+                };
+
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::RunFinished {
+                            run_id,
+                            start_time: Local::now().into(),
+                            elapsed: Duration::from_secs(120),
+                            run_stats: RunFinishedStats::Stress(stress_stats_success),
+                        },
+                    })
+                    .unwrap();
+
+                // Test stress run with failures and cancellation
+                let stress_stats_failed = StressRunStats {
+                    completed: StressIndex {
+                        current: 15,
+                        total: None, // Unlimited iterations
+                    },
+                    success_count: 12,
+                    failed_count: 3,
+                    last_final_stats: FinalRunStats::Cancelled {
+                        reason: Some(CancelReason::Interrupt),
+                        kind: RunStatsFailureKind::SetupScript,
+                    },
+                };
+
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::RunFinished {
+                            run_id,
+                            start_time: Local::now().into(),
+                            elapsed: Duration::from_millis(45250),
+                            run_stats: RunFinishedStats::Stress(stress_stats_failed),
+                        },
+                    })
+                    .unwrap();
+
+                // Test no tests run case
+                let run_stats_empty = RunStats {
+                    initial_run_count: 0,
+                    finished_count: 0,
+                    setup_scripts_initial_count: 0,
+                    setup_scripts_finished_count: 0,
+                    setup_scripts_passed: 0,
+                    setup_scripts_failed: 0,
+                    setup_scripts_exec_failed: 0,
+                    setup_scripts_timed_out: 0,
+                    passed: 0,
+                    passed_slow: 0,
+                    flaky: 0,
+                    failed: 0,
+                    failed_slow: 0,
+                    timed_out: 0,
+                    leaky: 0,
+                    leaky_failed: 0,
+                    exec_failed: 0,
+                    skipped: 0,
+                    cancel_reason: None,
+                };
+
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::RunFinished {
+                            run_id,
+                            start_time: Local::now().into(),
+                            elapsed: Duration::from_millis(100),
+                            run_stats: RunFinishedStats::Single(run_stats_empty),
+                        },
+                    })
+                    .unwrap();
+            },
+            &mut out,
+        );
+
+        insta::assert_snapshot!(
+            "summary_line_output",
             String::from_utf8(out).expect("output only consists of UTF-8"),
         );
     }

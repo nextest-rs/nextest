@@ -16,8 +16,9 @@ use crate::{
     input::{InputEvent, InputHandler},
     list::{TestInstance, TestInstanceId, TestList},
     reporter::events::{
-        CancelReason, ExecuteStatus, ExecutionStatuses, InfoResponse, RunStats, StressIndex,
-        StressProgress, TestEvent, TestEventKind,
+        CancelReason, ExecuteStatus, ExecutionStatuses, FinalRunStats, InfoResponse,
+        RunFinishedStats, RunStats, StressIndex, StressProgress, StressRunStats, TestEvent,
+        TestEventKind,
     },
     runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalInfoEvent},
@@ -362,7 +363,9 @@ where
     }
 
     pub(super) fn stress_sub_run_finished(&mut self) {
-        let sub_elapsed = self.stress_cx.mark_completed();
+        let sub_elapsed = self
+            .stress_cx
+            .mark_completed(self.run_stats.summarize_final());
         let progress = self
             .stress_progress()
             .expect("stress_sub_run_finished called in non-stress test context");
@@ -880,7 +883,13 @@ where
             start_time: stopwatch_end.start_time.fixed_offset(),
             run_id: self.run_id,
             elapsed: stopwatch_end.active,
-            run_stats: self.run_stats,
+            run_stats: self
+                .stress_cx
+                .run_stats(self.run_stats.summarize_final())
+                .map_or_else(
+                    || RunFinishedStats::Single(self.run_stats),
+                    RunFinishedStats::Stress,
+                ),
         })
     }
 
@@ -896,6 +905,8 @@ enum DispatcherStressContext {
         condition: StressCondition,
         sub_stopwatch: StopwatchStart,
         completed: u32,
+        failed: u32,
+        cancelled: bool,
     },
 }
 
@@ -906,6 +917,8 @@ impl DispatcherStressContext {
                 condition,
                 sub_stopwatch: crate::time::stopwatch(),
                 completed: 0,
+                failed: 0,
+                cancelled: false,
             }
         } else {
             Self::None
@@ -926,6 +939,8 @@ impl DispatcherStressContext {
                 condition,
                 sub_stopwatch: _,
                 completed,
+                failed: _,
+                cancelled: _,
             } => match condition {
                 StressCondition::Count(total) => Some(StressProgress::Count {
                     total: *total,
@@ -963,7 +978,7 @@ impl DispatcherStressContext {
         }
     }
 
-    fn mark_completed(&mut self) -> Duration {
+    fn mark_completed(&mut self, summary: FinalRunStats) -> Duration {
         match self {
             Self::None => {
                 panic!("mark_completed called in a non-stress test context");
@@ -972,11 +987,55 @@ impl DispatcherStressContext {
                 condition: _,
                 sub_stopwatch,
                 completed,
+                failed,
+                cancelled,
             } => {
                 *completed += 1;
+                match summary {
+                    FinalRunStats::Success => {}
+                    FinalRunStats::NoTestsRun => {
+                        // TODO: We should figure out whether to terminate the
+                        // test run based on this.
+                    }
+                    FinalRunStats::Failed(_) => {
+                        *failed += 1;
+                    }
+                    FinalRunStats::Cancelled { .. } => {
+                        // In this case, we don't add to the failed count. The
+                        // displayer will take care of displaying the
+                        // cancellation message properly.
+                        *cancelled = true;
+                    }
+                }
                 let duration = sub_stopwatch.snapshot().active;
                 *sub_stopwatch = crate::time::stopwatch();
                 duration
+            }
+        }
+    }
+
+    fn run_stats(&self, last_final_stats: FinalRunStats) -> Option<StressRunStats> {
+        match self {
+            Self::None => None,
+            Self::Stress {
+                condition: _,
+                sub_stopwatch: _,
+                completed,
+                failed,
+                cancelled,
+            } => {
+                let mut success_count = completed.saturating_sub(*failed);
+                // If the run is cancelled, there's one less success than we
+                // thought above.
+                if *cancelled {
+                    success_count = success_count.saturating_sub(1);
+                }
+                Some(StressRunStats {
+                    completed: self.stress_index().expect("we're in the Self::Stress case"),
+                    success_count,
+                    failed_count: *failed,
+                    last_final_stats,
+                })
             }
         }
     }

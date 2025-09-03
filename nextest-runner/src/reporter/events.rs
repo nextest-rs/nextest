@@ -361,8 +361,8 @@ pub enum TestEventKind<'a> {
         /// The amount of time it took for the tests to run.
         elapsed: Duration,
 
-        /// Statistics for the run (last sub-run if this is a stress test).
-        run_stats: RunStats,
+        /// Statistics for the run, or overall statistics for stress tests.
+        run_stats: RunFinishedStats,
     },
 }
 
@@ -442,6 +442,27 @@ pub struct StressIndex {
 
     /// The total number of stress runs, if that is available.
     pub total: Option<NonZero<u32>>,
+}
+
+/// Statistics for a completed test run or stress run.
+#[derive(Clone, Debug)]
+pub enum RunFinishedStats {
+    /// A single test run was completed.
+    Single(RunStats),
+
+    /// A stress run was completed.
+    Stress(StressRunStats),
+}
+
+impl RunFinishedStats {
+    /// For a single run, returns a summary of statistics as an enum. For a
+    /// stress run, returns a summary for the last sub-run.
+    pub fn final_stats(&self) -> FinalRunStats {
+        match self {
+            Self::Single(stats) => stats.summarize_final(),
+            Self::Stress(stats) => stats.last_final_stats,
+        }
+    }
 }
 
 /// Statistics for a test run.
@@ -528,8 +549,8 @@ impl RunStats {
 
     /// Summarizes the stats as an enum at the end of a test run.
     pub fn summarize_final(&self) -> FinalRunStats {
-        // Check for failures first. The order of setup scripts vs tests should not be important,
-        // though we don't assert that here.
+        // Check for failures first. The order of setup scripts vs tests should
+        // not be important, though we don't assert that here.
         if self.failed_setup_script_count() > 0 {
             // Is this related to a cancellation other than one directly caused
             // by the failure?
@@ -679,6 +700,52 @@ pub enum FinalRunStats {
 
     /// At least one test failed.
     Failed(RunStatsFailureKind),
+}
+
+/// Statistics for a stress run.
+#[derive(Clone, Debug)]
+pub struct StressRunStats {
+    /// The number of stress runs completed.
+    pub completed: StressIndex,
+
+    /// The number of stress runs that succeeded.
+    pub success_count: u32,
+
+    /// The number of stress runs that failed.
+    pub failed_count: u32,
+
+    /// The last stress run's `FinalRunStats`.
+    pub last_final_stats: FinalRunStats,
+}
+
+impl StressRunStats {
+    /// Summarizes the stats as an enum at the end of a test run.
+    pub fn summarize_final(&self) -> StressFinalRunStats {
+        if self.failed_count > 0 {
+            StressFinalRunStats::Failed
+        } else if matches!(self.last_final_stats, FinalRunStats::Cancelled { .. }) {
+            StressFinalRunStats::Cancelled
+        } else if matches!(self.last_final_stats, FinalRunStats::NoTestsRun) {
+            StressFinalRunStats::NoTestsRun
+        } else {
+            StressFinalRunStats::Success
+        }
+    }
+}
+
+/// A summary of final statistics for a stress run.
+pub enum StressFinalRunStats {
+    /// The stress run was successful.
+    Success,
+
+    /// No tests were run.
+    NoTestsRun,
+
+    /// The stress run was cancelled.
+    Cancelled,
+
+    /// At least one stress run failed.
+    Failed,
 }
 
 /// A type summarizing the step at which a test run failed.
