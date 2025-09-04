@@ -28,7 +28,7 @@ form_urlencoded = { version = "1.2.1" }
 getrandom = { version = "0.3.3", default-features = false, features = ["std"] }
 hashbrown = { version = "0.15.4" }
 indexmap = { version = "2.11.0", features = ["serde"] }
-log = { version = "0.4.27", default-features = false, features = ["std"] }
+log = { version = "0.4.28", default-features = false, features = ["std"] }
 memchr = { version = "2.7.5" }
 miette = { version = "7.6.0", features = ["fancy"] }
 ppv-lite86 = { version = "0.2.21", default-features = false, features = ["simd", "std"] }
