@@ -77,7 +77,7 @@ indent_write = "2.2.0"
 indexmap = "2.11.0"
 indicatif = "0.18.0"
 indoc = "2.0.6"
-insta = { version = "1.43.1", default-features = false }
+insta = { version = "1.43.2", default-features = false }
 is_ci = "1.2.0"
 itertools = "0.14.0"
 libc = "0.2.175"
