@@ -44,7 +44,7 @@ config = { version = "0.15.15", default-features = false, features = [
     "toml",
     "preserve_order",
 ] }
-chrono = "0.4.41"
+chrono = "0.4.42"
 clap = { version = "4.5.47", features = ["derive", "unstable-markdown"] }
 console-subscriber = "0.4.1"
 cp_r = "0.5.2"
