@@ -531,19 +531,45 @@ impl RunStats {
         // Check for failures first. The order of setup scripts vs tests should not be important,
         // though we don't assert that here.
         if self.failed_setup_script_count() > 0 {
-            FinalRunStats::Failed(RunStatsFailureKind::SetupScript)
+            // Is this related to a cancellation other than one directly caused
+            // by the failure?
+            if self.cancel_reason > Some(CancelReason::TestFailure) {
+                FinalRunStats::Cancelled {
+                    reason: self.cancel_reason,
+                    kind: RunStatsFailureKind::SetupScript,
+                }
+            } else {
+                FinalRunStats::Failed(RunStatsFailureKind::SetupScript)
+            }
         } else if self.setup_scripts_initial_count > self.setup_scripts_finished_count {
-            FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript)
+            FinalRunStats::Cancelled {
+                reason: self.cancel_reason,
+                kind: RunStatsFailureKind::SetupScript,
+            }
         } else if self.failed_count() > 0 {
-            FinalRunStats::Failed(RunStatsFailureKind::Test {
+            let kind = RunStatsFailureKind::Test {
                 initial_run_count: self.initial_run_count,
                 not_run: self.initial_run_count.saturating_sub(self.finished_count),
-            })
+            };
+
+            // Is this related to a cancellation other than one directly caused
+            // by the failure?
+            if self.cancel_reason > Some(CancelReason::TestFailure) {
+                FinalRunStats::Cancelled {
+                    reason: self.cancel_reason,
+                    kind,
+                }
+            } else {
+                FinalRunStats::Failed(kind)
+            }
         } else if self.initial_run_count > self.finished_count {
-            FinalRunStats::Cancelled(RunStatsFailureKind::Test {
-                initial_run_count: self.initial_run_count,
-                not_run: self.initial_run_count.saturating_sub(self.finished_count),
-            })
+            FinalRunStats::Cancelled {
+                reason: self.cancel_reason,
+                kind: RunStatsFailureKind::Test {
+                    initial_run_count: self.initial_run_count,
+                    not_run: self.initial_run_count.saturating_sub(self.finished_count),
+                },
+            }
         } else if self.finished_count == 0 {
             FinalRunStats::NoTestsRun
         } else {
@@ -640,7 +666,16 @@ pub enum FinalRunStats {
     NoTestsRun,
 
     /// The test run was cancelled.
-    Cancelled(RunStatsFailureKind),
+    Cancelled {
+        /// The reason for cancellation, if available.
+        ///
+        /// This should generally be available, but may be None if some tests
+        /// that were selected to run were not executed.
+        reason: Option<CancelReason>,
+
+        /// The kind of failure that occurred.
+        kind: RunStatsFailureKind,
+    },
 
     /// At least one test failed.
     Failed(RunStatsFailureKind),
@@ -1368,10 +1403,13 @@ mod tests {
                 ..RunStats::default()
             }
             .summarize_final(),
-            FinalRunStats::Cancelled(RunStatsFailureKind::Test {
-                initial_run_count: 42,
-                not_run: 1
-            }),
+            FinalRunStats::Cancelled {
+                reason: None,
+                kind: RunStatsFailureKind::Test {
+                    initial_run_count: 42,
+                    not_run: 1
+                }
+            },
             "initial run count > final run count => cancelled"
         );
         assert_eq!(
@@ -1435,7 +1473,10 @@ mod tests {
                 ..RunStats::default()
             }
             .summarize_final(),
-            FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript),
+            FinalRunStats::Cancelled {
+                reason: None,
+                kind: RunStatsFailureKind::SetupScript,
+            },
             "setup script failed => failure"
         );
 

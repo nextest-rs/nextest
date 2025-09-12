@@ -1946,11 +1946,17 @@ impl App {
                 Some(NoTestsBehavior::Fail) => Err(ExpectedError::NoTestsRun { is_default: false }),
                 None => Err(ExpectedError::NoTestsRun { is_default: true }),
             },
-            FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript)
+            FinalRunStats::Cancelled {
+                reason: _,
+                kind: RunStatsFailureKind::SetupScript,
+            }
             | FinalRunStats::Failed(RunStatsFailureKind::SetupScript) => {
                 Err(ExpectedError::setup_script_failed())
             }
-            FinalRunStats::Cancelled(RunStatsFailureKind::Test { .. })
+            FinalRunStats::Cancelled {
+                reason: _,
+                kind: RunStatsFailureKind::Test { .. },
+            }
             | FinalRunStats::Failed(RunStatsFailureKind::Test { .. }) => {
                 Err(ExpectedError::test_run_failed())
             }
