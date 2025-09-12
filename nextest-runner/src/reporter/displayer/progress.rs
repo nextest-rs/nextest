@@ -94,18 +94,19 @@ impl ProgressBarState {
             TestEventKind::TestStarted {
                 current_stats,
                 running,
-                cancel_state,
                 ..
             }
             | TestEventKind::TestFinished {
                 current_stats,
                 running,
-                cancel_state,
                 ..
             } => {
                 self.hidden_between_sub_runs = false;
-                self.bar
-                    .set_prefix(progress_bar_prefix(current_stats, *cancel_state, styles));
+                self.bar.set_prefix(progress_bar_prefix(
+                    current_stats,
+                    current_stats.cancel_reason,
+                    styles,
+                ));
                 self.bar
                     .set_message(progress_bar_msg(current_stats, *running, styles));
                 // If there are skipped tests, the initial run count will be lower than when constructed
@@ -135,10 +136,12 @@ impl ProgressBarState {
                 let bar = std::mem::replace(&mut self.bar, ProgressBar::hidden());
                 self.bar = bar.with_elapsed(event.elapsed);
             }
-            TestEventKind::RunBeginCancel { reason, .. }
-            | TestEventKind::RunBeginKill { reason, .. } => {
-                self.bar
-                    .set_prefix(progress_bar_cancel_prefix(*reason, styles));
+            TestEventKind::RunBeginCancel { current_stats, .. }
+            | TestEventKind::RunBeginKill { current_stats, .. } => {
+                self.bar.set_prefix(progress_bar_cancel_prefix(
+                    current_stats.cancel_reason,
+                    styles,
+                ));
             }
             _ => {}
         }
@@ -254,20 +257,12 @@ impl TerminalProgress {
             | TestEventKind::SetupScriptStarted { .. }
             | TestEventKind::SetupScriptSlow { .. }
             | TestEventKind::SetupScriptFinished { .. } => TerminalProgressValue::None,
-            TestEventKind::TestStarted {
-                current_stats,
-                cancel_state,
-                ..
-            }
-            | TestEventKind::TestFinished {
-                current_stats,
-                cancel_state,
-                ..
-            } => {
+            TestEventKind::TestStarted { current_stats, .. }
+            | TestEventKind::TestFinished { current_stats, .. } => {
                 let percentage = (current_stats.finished_count as f64
                     / current_stats.initial_run_count as f64)
                     * 100.0;
-                if current_stats.has_failures() || cancel_state.is_some() {
+                if current_stats.has_failures() || current_stats.cancel_reason.is_some() {
                     TerminalProgressValue::Error(percentage)
                 } else {
                     TerminalProgressValue::Value(percentage)
@@ -372,11 +367,10 @@ pub(super) fn progress_str(
     elapsed: Duration,
     current_stats: &RunStats,
     running: usize,
-    cancel_reason: Option<CancelReason>,
     styles: &Styles,
 ) -> String {
     // First, show the prefix.
-    let mut s = progress_bar_prefix(current_stats, cancel_reason, styles);
+    let mut s = progress_bar_prefix(current_stats, current_stats.cancel_reason, styles);
 
     // Then, the time elapsed, test counts, and message.
     swrite!(
@@ -412,6 +406,7 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         leaky_failed,
         exec_failed,
         skipped,
+        cancel_reason: _,
     } = run_stats;
 
     swrite!(
@@ -492,15 +487,16 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
     );
 }
 
-fn progress_bar_cancel_prefix(reason: CancelReason, styles: &Styles) -> String {
+fn progress_bar_cancel_prefix(reason: Option<CancelReason>, styles: &Styles) -> String {
     let status = match reason {
-        CancelReason::SetupScriptFailure
-        | CancelReason::TestFailure
-        | CancelReason::ReportError
-        | CancelReason::GlobalTimeout
-        | CancelReason::Signal
-        | CancelReason::Interrupt => "Cancelling",
-        CancelReason::SecondSignal => "Killing",
+        Some(CancelReason::SetupScriptFailure)
+        | Some(CancelReason::TestFailure)
+        | Some(CancelReason::ReportError)
+        | Some(CancelReason::GlobalTimeout)
+        | Some(CancelReason::Signal)
+        | Some(CancelReason::Interrupt)
+        | None => "Cancelling",
+        Some(CancelReason::SecondSignal) => "Killing",
     };
     format!("{:>12}", status.style(styles.fail))
 }
@@ -511,7 +507,7 @@ fn progress_bar_prefix(
     styles: &Styles,
 ) -> String {
     if let Some(reason) = cancel_reason {
-        return progress_bar_cancel_prefix(reason, styles);
+        return progress_bar_cancel_prefix(Some(reason), styles);
     }
 
     let style = if run_stats.has_failures() {
@@ -594,30 +590,22 @@ mod tests {
         let running = 10;
 
         for (name, stats) in run_stats_test_failure_examples() {
-            let s = progress_str(
-                elapsed,
-                &stats,
-                running,
-                Some(CancelReason::TestFailure),
-                &styles,
-            );
+            let s = progress_str(elapsed, &stats, running, &styles);
             insta::assert_snapshot!(format!("{name}_with_cancel_reason"), s);
 
-            let s = progress_str(elapsed, &stats, running, None, &styles);
+            let mut stats = stats;
+            stats.cancel_reason = None;
+            let s = progress_str(elapsed, &stats, running, &styles);
             insta::assert_snapshot!(format!("{name}_without_cancel_reason"), s);
         }
 
         for (name, stats) in run_stats_setup_script_failure_examples() {
-            let s = progress_str(
-                elapsed,
-                &stats,
-                running,
-                Some(CancelReason::SetupScriptFailure),
-                &styles,
-            );
+            let s = progress_str(elapsed, &stats, running, &styles);
             insta::assert_snapshot!(format!("{name}_with_cancel_reason"), s);
 
-            let s = progress_str(elapsed, &stats, running, None, &styles);
+            let mut stats = stats;
+            stats.cancel_reason = None;
+            let s = progress_str(elapsed, &stats, running, &styles);
             insta::assert_snapshot!(format!("{name}_without_cancel_reason"), s);
         }
     }
@@ -630,6 +618,7 @@ mod tests {
                     initial_run_count: 20,
                     finished_count: 1,
                     failed: 1,
+                    cancel_reason: Some(CancelReason::TestFailure),
                     ..RunStats::default()
                 },
             ),
@@ -640,6 +629,7 @@ mod tests {
                     finished_count: 2,
                     failed: 1,
                     passed: 1,
+                    cancel_reason: Some(CancelReason::TestFailure),
                     ..RunStats::default()
                 },
             ),
@@ -649,6 +639,7 @@ mod tests {
                     initial_run_count: 20,
                     finished_count: 10,
                     exec_failed: 1,
+                    cancel_reason: Some(CancelReason::TestFailure),
                     ..RunStats::default()
                 },
             ),
@@ -658,6 +649,7 @@ mod tests {
                     initial_run_count: 20,
                     finished_count: 10,
                     timed_out: 1,
+                    cancel_reason: Some(CancelReason::TestFailure),
                     ..RunStats::default()
                 },
             ),
@@ -671,6 +663,7 @@ mod tests {
                 RunStats {
                     initial_run_count: 30,
                     setup_scripts_failed: 1,
+                    cancel_reason: Some(CancelReason::SetupScriptFailure),
                     ..RunStats::default()
                 },
             ),
@@ -679,6 +672,7 @@ mod tests {
                 RunStats {
                     initial_run_count: 35,
                     setup_scripts_exec_failed: 1,
+                    cancel_reason: Some(CancelReason::SetupScriptFailure),
                     ..RunStats::default()
                 },
             ),
@@ -687,6 +681,7 @@ mod tests {
                 RunStats {
                     initial_run_count: 40,
                     setup_scripts_timed_out: 1,
+                    cancel_reason: Some(CancelReason::SetupScriptFailure),
                     ..RunStats::default()
                 },
             ),

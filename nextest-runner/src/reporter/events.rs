@@ -159,9 +159,6 @@ pub enum TestEventKind<'a> {
 
         /// The number of tests currently running, including this one.
         running: usize,
-
-        /// The cancel status of the run. This is None if the run is still ongoing.
-        cancel_state: Option<CancelReason>,
     },
 
     /// A test was slower than a configured soft timeout.
@@ -242,9 +239,6 @@ pub enum TestEventKind<'a> {
 
         /// The number of tests that are currently running, excluding this one.
         running: usize,
-
-        /// The cancel status of the run. This is None if the run is still ongoing.
-        cancel_state: Option<CancelReason>,
     },
 
     /// A test was skipped.
@@ -296,9 +290,6 @@ pub enum TestEventKind<'a> {
 
         /// The number of tests running.
         running: usize,
-
-        /// The cancel status of the run. This is None if the run is still ongoing.
-        cancel_reason: Option<CancelReason>,
     },
 
     /// A cancellation notice was received.
@@ -307,13 +298,12 @@ pub enum TestEventKind<'a> {
         setup_scripts_running: usize,
 
         /// Current statistics for number of tests so far.
+        ///
+        /// `current_stats.cancel_reason` is set to `Some`.
         current_stats: RunStats,
 
         /// The number of tests still running.
         running: usize,
-
-        /// The reason this run was cancelled.
-        reason: CancelReason,
     },
 
     /// A forcible kill was requested due to receiving a signal.
@@ -322,13 +312,12 @@ pub enum TestEventKind<'a> {
         setup_scripts_running: usize,
 
         /// Current statistics for number of tests so far.
+        ///
+        /// `current_stats.cancel_reason` is set to `Some`.
         current_stats: RunStats,
 
         /// The number of tests still running.
         running: usize,
-
-        /// The reason this run was killed.
-        reason: CancelReason,
     },
 
     /// A SIGTSTP event was received and the run was paused.
@@ -516,6 +505,9 @@ pub struct RunStats {
 
     /// The number of tests that were skipped.
     pub skipped: usize,
+
+    /// If the run is cancelled, the reason the cancellation is happening.
+    pub cancel_reason: Option<CancelReason>,
 }
 
 impl RunStats {

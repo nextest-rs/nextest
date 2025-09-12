@@ -682,25 +682,26 @@ impl<'a> DisplayReporterImpl<'a> {
             }
             TestEventKind::RunBeginCancel {
                 setup_scripts_running,
-                current_stats: _,
+                current_stats,
                 running,
-                reason,
             } => {
-                self.cancel_status = self.cancel_status.max(Some(*reason));
+                self.cancel_status = self.cancel_status.max(current_stats.cancel_reason);
 
-                write!(
-                    writer,
-                    "{:>12} due to {}",
-                    "Cancelling".style(self.styles.fail),
-                    reason.to_static_str().style(self.styles.fail)
-                )?;
+                write!(writer, "{:>12} ", "Cancelling".style(self.styles.fail))?;
+                if let Some(reason) = current_stats.cancel_reason {
+                    write!(
+                        writer,
+                        "due to {}: ",
+                        reason.to_static_str().style(self.styles.fail)
+                    )?;
+                }
 
                 // At the moment, we can have either setup scripts or tests running, but not both.
                 if *setup_scripts_running > 0 {
                     let s = plural::setup_scripts_str(*setup_scripts_running);
                     write!(
                         writer,
-                        ": {} {s} still running",
+                        "{} {s} still running",
                         setup_scripts_running.style(self.styles.count),
                     )?;
                 } else if *running > 0 {
@@ -715,18 +716,19 @@ impl<'a> DisplayReporterImpl<'a> {
             }
             TestEventKind::RunBeginKill {
                 setup_scripts_running,
-                current_stats: _,
+                current_stats,
                 running,
-                reason,
             } => {
-                self.cancel_status = self.cancel_status.max(Some(*reason));
+                self.cancel_status = self.cancel_status.max(current_stats.cancel_reason);
 
-                write!(
-                    writer,
-                    "{:>12} due to {}",
-                    "Killing".style(self.styles.fail),
-                    reason.to_static_str().style(self.styles.fail)
-                )?;
+                write!(writer, "{:>12} ", "Killing".style(self.styles.fail),)?;
+                if let Some(reason) = current_stats.cancel_reason {
+                    write!(
+                        writer,
+                        "due to {}: ",
+                        reason.to_static_str().style(self.styles.fail)
+                    )?;
+                }
 
                 // At the moment, we can have either setup scripts or tests running, but not both.
                 if *setup_scripts_running > 0 {
@@ -854,20 +856,13 @@ impl<'a> DisplayReporterImpl<'a> {
             TestEventKind::InputEnter {
                 current_stats,
                 running,
-                cancel_reason,
             } => {
                 // Print everything that would be shown in the progress bar,
                 // except for the bar itself.
                 writeln!(
                     writer,
                     "{}",
-                    progress_str(
-                        event.elapsed,
-                        current_stats,
-                        *running,
-                        *cancel_reason,
-                        &self.styles,
-                    )
+                    progress_str(event.elapsed, current_stats, *running, &self.styles)
                 )?;
             }
             TestEventKind::StressSubRunFinished {
@@ -2259,6 +2254,7 @@ mod tests {
                                 leaky_failed: 2,
                                 exec_failed: 1,
                                 skipped: 5,
+                                cancel_reason: None,
                             },
                         },
                     })
