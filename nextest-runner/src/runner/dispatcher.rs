@@ -51,7 +51,6 @@ pub(super) struct DispatcherContext<'a, F> {
     global_timeout: Duration,
     running_setup_script: Option<ContextSetupScript<'a>>,
     running_tests: BTreeMap<TestInstanceId<'a>, ContextTestInstance<'a>>,
-    cancel_state: Option<CancelReason>,
     signal_count: Option<SignalCount>,
     stress_cx: DispatcherStressContext,
     #[cfg(test)]
@@ -87,7 +86,6 @@ where
             global_timeout,
             running_setup_script: None,
             running_tests: BTreeMap::new(),
-            cancel_state: None,
             signal_count: None,
             stress_cx: DispatcherStressContext::new(stress_condition),
             #[cfg(test)]
@@ -386,7 +384,7 @@ where
 
     /// Returns the reason for cancellation, or `None` if the run is not cancelled.
     pub(super) fn cancel_reason(&self) -> Option<CancelReason> {
-        self.cancel_state
+        self.run_stats.cancel_reason
     }
 
     #[inline]
@@ -421,7 +419,7 @@ where
                 total,
                 req_rx_tx,
             }) => {
-                if self.cancel_state.is_some() {
+                if self.run_stats.cancel_reason.is_some() {
                     // The run has been cancelled: don't start any new units.
                     return HandleEventResponse::None;
                 }
@@ -500,7 +498,7 @@ where
                 test_instance,
                 req_rx_tx,
             }) => {
-                if self.cancel_state.is_some() {
+                if self.run_stats.cancel_reason.is_some() {
                     // The run has been cancelled: don't start any new units.
                     return HandleEventResponse::None;
                 }
@@ -520,7 +518,6 @@ where
                     test_instance,
                     current_stats: self.run_stats,
                     running: self.running_tests.len(),
-                    cancel_state: self.cancel_state,
                 })
             }
             InternalEvent::Executor(ExecutorEvent::Slow {
@@ -559,7 +556,7 @@ where
                 retry_data,
                 tx,
             }) => {
-                if self.cancel_state.is_some() {
+                if self.run_stats.cancel_reason.is_some() {
                     // The run has been cancelled: don't send a message over the tx and don't start
                     // any new units.
                     return HandleEventResponse::None;
@@ -605,7 +602,6 @@ where
                     run_statuses,
                     current_stats: self.run_stats,
                     running: self.running(),
-                    cancel_state: self.cancel_state,
                 });
 
                 if fail_cancel {
@@ -639,7 +635,6 @@ where
                 self.callback_none_response(TestEventKind::InputEnter {
                     current_stats: self.run_stats,
                     running: self.running(),
-                    cancel_reason: self.cancel_state,
                 })
             }
             InternalEvent::ReportCancel => {
@@ -859,21 +854,19 @@ where
         if event == CancelEvent::Signal(ShutdownRequest::Twice) {
             // Forcibly kill child processes in the case of a second shutdown
             // signal.
+            self.run_stats.cancel_reason = Some(CancelReason::SecondSignal);
             self.basic_callback(TestEventKind::RunBeginKill {
                 setup_scripts_running: self.setup_scripts_running(),
                 current_stats: self.run_stats,
                 running: self.running(),
-                // This is always a second signal.
-                reason: CancelReason::SecondSignal,
             });
             HandleEventResponse::Cancel(event)
-        } else if self.cancel_state < Some(reason) {
-            self.cancel_state = Some(reason);
+        } else if self.run_stats.cancel_reason < Some(reason) {
+            self.run_stats.cancel_reason = Some(reason);
             self.basic_callback(TestEventKind::RunBeginCancel {
                 setup_scripts_running: self.setup_scripts_running(),
                 current_stats: self.run_stats,
                 running: self.running(),
-                reason,
             });
             HandleEventResponse::Cancel(event)
         } else {
@@ -1150,16 +1143,19 @@ mod tests {
             let event = events.pop().unwrap();
             let TestEventKind::RunBeginCancel {
                 setup_scripts_running,
-                current_stats: _,
+                current_stats,
                 running,
-                reason,
             } = event.kind
             else {
                 panic!("expected RunBeginCancel event, found {:?}", event.kind);
             };
             assert_eq!(setup_scripts_running, 0, "expected 0 setup scripts running");
             assert_eq!(running, 0, "expected 0 tests running");
-            assert_eq!(reason, CancelReason::ReportError, "expected report error");
+            assert_eq!(
+                current_stats.cancel_reason,
+                Some(CancelReason::ReportError),
+                "expected report error"
+            );
         }
 
         // Send another report error, ensuring it's ignored.
@@ -1195,16 +1191,19 @@ mod tests {
                     let event = events.pop().unwrap();
                     let TestEventKind::RunBeginCancel {
                         setup_scripts_running,
-                        current_stats: _,
+                        current_stats,
                         running,
-                        reason,
                     } = event.kind
                     else {
                         panic!("expected RunBeginCancel event, found {:?}", event.kind);
                     };
                     assert_eq!(setup_scripts_running, 0, "expected 0 setup scripts running");
                     assert_eq!(running, 0, "expected 0 tests running");
-                    assert_eq!(reason, event_to_cancel_reason(*sig1), "expected signal");
+                    assert_eq!(
+                        current_stats.cancel_reason,
+                        Some(event_to_cancel_reason(*sig1)),
+                        "expected signal"
+                    );
                 }
 
                 // Another report error, ensuring it's ignored.
@@ -1224,16 +1223,19 @@ mod tests {
                     let event = events.pop().unwrap();
                     let TestEventKind::RunBeginKill {
                         setup_scripts_running,
-                        current_stats: _,
+                        current_stats,
                         running,
-                        reason,
                     } = event.kind
                     else {
                         panic!("expected RunBeginKill event, found {:?}", event.kind);
                     };
                     assert_eq!(setup_scripts_running, 0, "expected 0 setup scripts running");
                     assert_eq!(running, 0, "expected 0 tests running");
-                    assert_eq!(reason, CancelReason::SecondSignal, "expected second signal");
+                    assert_eq!(
+                        current_stats.cancel_reason,
+                        Some(CancelReason::SecondSignal),
+                        "expected second signal"
+                    );
                 }
 
                 // Another report error, ensuring it's ignored.
