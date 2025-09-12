@@ -187,7 +187,6 @@ fn write_skip_counts_impl(
 
 pub(super) fn write_final_warnings(
     final_stats: FinalRunStats,
-    cancel_status: Option<CancelReason>,
     styles: &Styles,
     writer: &mut dyn Write,
 ) -> io::Result<()> {
@@ -195,44 +194,68 @@ pub(super) fn write_final_warnings(
         FinalRunStats::Failed(RunStatsFailureKind::Test {
             initial_run_count,
             not_run,
-        })
-        | FinalRunStats::Cancelled(RunStatsFailureKind::Test {
-            initial_run_count,
-            not_run,
-        }) if not_run > 0 => {
-            if cancel_status == Some(CancelReason::TestFailure) {
-                writeln!(
-                    writer,
-                    "{}: {}/{} {} {} not run due to {} (run with {} to run all tests, or run with {})",
-                    "warning".style(styles.skip),
-                    not_run.style(styles.count),
-                    initial_run_count.style(styles.count),
-                    plural::tests_plural_if(initial_run_count != 1 || not_run != 1),
-                    plural::were_plural_if(initial_run_count != 1 || not_run != 1),
-                    CancelReason::TestFailure.to_static_str().style(styles.skip),
-                    "--no-fail-fast".style(styles.count),
-                    "--max-fail".style(styles.count),
-                )?;
-            } else {
-                let due_to_reason = match cancel_status {
-                    Some(reason) => {
-                        format!(" due to {}", reason.to_static_str().style(styles.skip))
-                    }
-                    None => "".to_string(),
-                };
-                writeln!(
-                    writer,
-                    "{}: {}/{} {} {} not run{}",
-                    "warning".style(styles.skip),
-                    not_run.style(styles.count),
-                    initial_run_count.style(styles.count),
-                    plural::tests_plural_if(initial_run_count != 1 || not_run != 1),
-                    plural::were_plural_if(initial_run_count != 1 || not_run != 1),
-                    due_to_reason,
-                )?;
-            }
+        }) => {
+            write_final_warnings_for_failure(
+                initial_run_count,
+                not_run,
+                Some(CancelReason::TestFailure),
+                styles,
+                writer,
+            )?;
+        }
+        FinalRunStats::Cancelled {
+            reason,
+            kind:
+                RunStatsFailureKind::Test {
+                    initial_run_count,
+                    not_run,
+                },
+        } if not_run > 0 => {
+            write_final_warnings_for_failure(initial_run_count, not_run, reason, styles, writer)?;
         }
         _ => {}
+    }
+
+    Ok(())
+}
+
+fn write_final_warnings_for_failure(
+    initial_run_count: usize,
+    not_run: usize,
+    reason: Option<CancelReason>,
+    styles: &Styles,
+    writer: &mut dyn Write,
+) -> io::Result<()> {
+    if reason == Some(CancelReason::TestFailure) {
+        writeln!(
+            writer,
+            "{}: {}/{} {} {} not run due to {} (run with {} to run all tests, or run with {})",
+            "warning".style(styles.skip),
+            not_run.style(styles.count),
+            initial_run_count.style(styles.count),
+            plural::tests_plural_if(initial_run_count != 1 || not_run != 1),
+            plural::were_plural_if(initial_run_count != 1 || not_run != 1),
+            CancelReason::TestFailure.to_static_str().style(styles.skip),
+            "--no-fail-fast".style(styles.count),
+            "--max-fail".style(styles.count),
+        )?;
+    } else {
+        let due_to_reason = match reason {
+            Some(reason) => {
+                format!(" due to {}", reason.to_static_str().style(styles.skip))
+            }
+            None => "".to_string(),
+        };
+        writeln!(
+            writer,
+            "{}: {}/{} {} {} not run{}",
+            "warning".style(styles.skip),
+            not_run.style(styles.count),
+            initial_run_count.style(styles.count),
+            plural::tests_plural_if(initial_run_count != 1 || not_run != 1),
+            plural::were_plural_if(initial_run_count != 1 || not_run != 1),
+            due_to_reason,
+        )?;
     }
 
     Ok(())
@@ -374,66 +397,58 @@ mod tests {
 
     #[test]
     fn test_final_warnings() {
-        let warnings = final_warnings_for(
-            FinalRunStats::Failed(RunStatsFailureKind::Test {
-                initial_run_count: 3,
-                not_run: 1,
-            }),
-            Some(CancelReason::TestFailure),
-        );
+        let warnings = final_warnings_for(FinalRunStats::Failed(RunStatsFailureKind::Test {
+            initial_run_count: 3,
+            not_run: 1,
+        }));
         assert_eq!(
             warnings,
             "warning: 1/3 tests were not run due to test failure \
              (run with --no-fail-fast to run all tests, or run with --max-fail)\n"
         );
 
-        let warnings = final_warnings_for(
-            FinalRunStats::Failed(RunStatsFailureKind::Test {
+        let warnings = final_warnings_for(FinalRunStats::Cancelled {
+            reason: Some(CancelReason::Signal),
+            kind: RunStatsFailureKind::Test {
                 initial_run_count: 8,
                 not_run: 5,
-            }),
-            Some(CancelReason::Signal),
-        );
+            },
+        });
         assert_eq!(warnings, "warning: 5/8 tests were not run due to signal\n");
 
-        let warnings = final_warnings_for(
-            FinalRunStats::Cancelled(RunStatsFailureKind::Test {
+        let warnings = final_warnings_for(FinalRunStats::Cancelled {
+            reason: Some(CancelReason::Interrupt),
+            kind: RunStatsFailureKind::Test {
                 initial_run_count: 1,
                 not_run: 1,
-            }),
-            Some(CancelReason::Interrupt),
-        );
+            },
+        });
         assert_eq!(warnings, "warning: 1/1 test was not run due to interrupt\n");
 
-        // These warnings are taken care of by cargo-nextest.
-        let warnings = final_warnings_for(FinalRunStats::NoTestsRun, None);
-        assert_eq!(warnings, "");
-        let warnings = final_warnings_for(FinalRunStats::NoTestsRun, Some(CancelReason::Signal));
+        // This warning is taken care of by cargo-nextest.
+        let warnings = final_warnings_for(FinalRunStats::NoTestsRun);
         assert_eq!(warnings, "");
 
         // No warnings for success.
-        let warnings = final_warnings_for(FinalRunStats::Success, None);
+        let warnings = final_warnings_for(FinalRunStats::Success);
         assert_eq!(warnings, "");
 
         // No warnings for setup script failure.
-        let warnings = final_warnings_for(
-            FinalRunStats::Failed(RunStatsFailureKind::SetupScript),
-            Some(CancelReason::SetupScriptFailure),
-        );
+        let warnings = final_warnings_for(FinalRunStats::Failed(RunStatsFailureKind::SetupScript));
         assert_eq!(warnings, "");
 
         // No warnings for setup script cancellation.
-        let warnings = final_warnings_for(
-            FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript),
-            Some(CancelReason::Interrupt),
-        );
+        let warnings = final_warnings_for(FinalRunStats::Cancelled {
+            reason: Some(CancelReason::Interrupt),
+            kind: RunStatsFailureKind::SetupScript,
+        });
         assert_eq!(warnings, "");
     }
 
-    fn final_warnings_for(stats: FinalRunStats, cancel_status: Option<CancelReason>) -> String {
+    fn final_warnings_for(stats: FinalRunStats) -> String {
         let mut buf: Vec<u8> = Vec::new();
         let styles = Styles::default();
-        write_final_warnings(stats, cancel_status, &styles, &mut buf).unwrap();
+        write_final_warnings(stats, &styles, &mut buf).unwrap();
         String::from_utf8(buf).unwrap()
     }
 }

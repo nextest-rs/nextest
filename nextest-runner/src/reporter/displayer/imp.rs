@@ -874,7 +874,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 let summary_style = match stats_summary {
                     FinalRunStats::Success => self.styles.pass,
                     FinalRunStats::NoTestsRun => self.styles.skip,
-                    FinalRunStats::Failed(_) | FinalRunStats::Cancelled(_) => self.styles.fail,
+                    FinalRunStats::Failed(_) | FinalRunStats::Cancelled { .. } => self.styles.fail,
                 };
 
                 write!(
@@ -961,7 +961,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 let summary_style = match stats_summary {
                     FinalRunStats::Success => self.styles.pass,
                     FinalRunStats::NoTestsRun => self.styles.skip,
-                    FinalRunStats::Failed(_) | FinalRunStats::Cancelled(_) => self.styles.fail,
+                    FinalRunStats::Failed(_) | FinalRunStats::Cancelled { .. } => self.styles.fail,
                 };
                 write!(
                     writer,
@@ -1040,7 +1040,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 }
 
                 // Print out warnings at the end, if any.
-                write_final_warnings(stats_summary, self.cancel_status, &self.styles, writer)?;
+                write_final_warnings(stats_summary, &self.styles, writer)?;
             }
         }
 
