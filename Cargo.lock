@@ -2140,7 +2140,7 @@ dependencies = [
  "unicode-ident",
  "unicode-normalization",
  "win32job",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.0",
  "xxhash-rust",
  "zstd",
 ]
@@ -4382,6 +4382,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
 dependencies = [
  "windows-targets 0.53.2",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.61.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e201184e40b2ede64bc2ea34968b28e33622acdbbf37104f0e4a33f7abe657aa"
+dependencies = [
+ "windows-link 0.2.0",
 ]
 
 [[package]]
