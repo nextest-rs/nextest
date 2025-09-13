@@ -6,10 +6,11 @@
 //! These types form the interface between the test runner and the test
 //! reporter. The root structure for all events is [`TestEvent`].
 
-use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
+use super::{FinalStatusLevel, StatusLevel};
 use crate::{
     config::{elements::LeakTimeoutResult, scripts::ScriptId},
     list::{TestInstance, TestInstanceId, TestList},
+    reporter::displayer::TestOutputDisplayStreams,
     runner::{StressCondition, StressCount},
     test_output::ChildExecutionOutput,
 };
@@ -196,7 +197,7 @@ pub enum TestEventKind<'a> {
         delay_before_next_attempt: Duration,
 
         /// Whether failure outputs are printed out.
-        failure_output: TestOutputDisplay,
+        failure_output: TestOutputDisplayStreams,
     },
 
     /// A retry has started.
@@ -220,10 +221,10 @@ pub enum TestEventKind<'a> {
         test_instance: TestInstance<'a>,
 
         /// Test setting for success output.
-        success_output: TestOutputDisplay,
+        success_output: TestOutputDisplayStreams,
 
         /// Test setting for failure output.
-        failure_output: TestOutputDisplay,
+        failure_output: TestOutputDisplayStreams,
 
         /// Whether the JUnit report should store success output for this test.
         junit_store_success_output: bool,
