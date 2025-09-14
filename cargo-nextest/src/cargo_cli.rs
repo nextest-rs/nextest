@@ -356,7 +356,6 @@ impl<'a> CargoCli<'a> {
         if options.future_incompat_report {
             self.add_arg("--future-incompat-report");
         }
-        self.add_args(options.config.iter().flat_map(|s| ["--config", s.as_str()]));
         self.add_args(
             options
                 .unstable_flags
@@ -368,7 +367,7 @@ impl<'a> CargoCli<'a> {
     }
 
     /// Add Cargo options that are common to all commands.
-    pub(crate) fn add_generic_cargo_options(&mut self, options: &CargoOptions) -> &mut Self {
+    pub(crate) fn add_generic_cargo_options(&mut self, options: &'a CargoOptions) -> &mut Self {
         // ---
         // Manifest options
         // ---
@@ -390,6 +389,7 @@ impl<'a> CargoCli<'a> {
         if options.cargo_quiet > 1 {
             self.stderr_null = true;
         }
+        self.add_args(options.config.iter().flat_map(|s| ["--config", s.as_str()]));
 
         self
     }
