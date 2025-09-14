@@ -38,7 +38,7 @@ regex-automata = { version = "0.4.9", default-features = false, features = ["dfa
 regex-syntax = { version = "0.8.6" }
 serde = { version = "1.0.221", features = ["alloc", "derive"] }
 serde_core = { version = "1.0.221", default-features = false, features = ["alloc", "result", "std"] }
-serde_json = { version = "1.0.143", features = ["unbounded_depth"] }
+serde_json = { version = "1.0.144", features = ["unbounded_depth"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
 target-spec = { version = "3.5.0", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.4", default-features = false, features = ["fixtures"] }
