@@ -8,6 +8,17 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.104] - 2025-09-14
+
+### Added
+
+- For [stress tests](https://nexte.st/docs/features/stress-tests/), summary lines now indicate the number of iterations passed and/or failed.
+
+### Changed
+
+- Always forward `--config` arguments to Cargo invocations. Thanks to [benschulz](https://github.com/benschulz) for your first contribution!
+- Internal dependency update: `target-spec` updated to 3.5.1, updating built-in targets to Rust 1.89.
+
 ## [0.9.103] - 2025-08-24
 
 ### Added
@@ -1526,7 +1537,8 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
-[0.9.103]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.102
+[0.9.104]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.104
+[0.9.103]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.103
 [0.9.102]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.102
 [0.9.101]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.101
 [0.9.100]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.100
