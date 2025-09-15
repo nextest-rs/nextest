@@ -15,4 +15,4 @@
 [32;1m        PASS[0m [   0.006s] [[1m3[0m/[1m3[0m] [35;1mnextest-filtering::match[0m [34;1mtest_expr_deps[0m
 [32;1m Stress test[0m [   0.006s] iteration [1m3[0m/[1m3[0m: [1m2[0m tests run: [1m2[0m [32;1mpassed[0m, [1m49[0m [33;1mskipped[0m
 ────────────
-[32;1m     Summary[0m [   0.020s] [1m2[0m tests run: [1m2[0m [32;1mpassed[0m, [1m49[0m [33;1mskipped[0m
+[32;1m     Summary[0m [   0.020s] [1m3[0m/[1m3[0m stress run iterations: [1m3[0m [32;1mpassed[0m
