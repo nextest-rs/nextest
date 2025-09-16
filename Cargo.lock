@@ -2106,6 +2106,7 @@ dependencies = [
  "nix",
  "owo-colors",
  "pathdiff",
+ "petgraph",
  "pin-project-lite",
  "pretty_assertions",
  "proptest",
@@ -2372,6 +2373,7 @@ dependencies = [
  "fixedbitset",
  "hashbrown 0.15.4",
  "indexmap 2.11.1",
+ "serde",
 ]
 
 [[package]]

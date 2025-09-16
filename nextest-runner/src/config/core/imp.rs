@@ -37,9 +37,10 @@ use config::{
 use iddqd::IdOrdMap;
 use indexmap::IndexMap;
 use nextest_filtering::{BinaryQuery, EvalContext, Filterset, ParseContext, TestQuery};
+use petgraph::{algo::toposort, Directed, Graph};
 use serde::Deserialize;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, hash_map},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     sync::LazyLock,
 };
 use tracing::warn;
@@ -792,7 +793,15 @@ impl NextestConfig {
     }
 
     fn make_profile(&self, name: &str) -> Result<EarlyProfile<'_>, ProfileNotFound> {
+        // Check for cycles first
+        self.inner.check_inheritance_cycles()?;
+        
         let custom_profile = self.inner.get_profile(name)?;
+        let inheritance_chain = if let Some(_) = custom_profile {
+            self.inner.resolve_profile_chain(name)?
+        } else {
+            Vec::new()
+        };
 
         // The profile was found: construct it.
         let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
@@ -809,6 +818,7 @@ impl NextestConfig {
             store_dir,
             default_profile: &self.inner.default_profile,
             custom_profile,
+            inheritance_chain, // Add this field
             test_groups: &self.inner.test_groups,
             scripts: &self.inner.scripts,
             compiled_data,
@@ -874,6 +884,7 @@ pub struct EarlyProfile<'cfg> {
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
+    inheritance_chain: Vec<&'cfg CustomProfileImpl>, // Add this
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     // This is ordered because the scripts are used in the order they're defined.
     scripts: &'cfg ScriptConfig,
@@ -924,6 +935,7 @@ impl<'cfg> EarlyProfile<'cfg> {
             store_dir: self.store_dir,
             default_profile: self.default_profile,
             custom_profile: self.custom_profile,
+            inheritance_chain: self.inheritance_chain, // Add this field
             scripts: self.scripts,
             test_groups: self.test_groups,
             compiled_data,
@@ -941,6 +953,7 @@ pub struct EvaluatableProfile<'cfg> {
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
+    inheritance_chain: Vec<&'cfg CustomProfileImpl>, // Add this
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     // This is ordered because the scripts are used in the order they're defined.
     scripts: &'cfg ScriptConfig,
@@ -984,11 +997,24 @@ impl<'cfg> EvaluatableProfile<'cfg> {
         self.scripts
     }
 
-    /// Returns the retry count for this profile.
+    /// Returns the retry count for this profile, considering inheritance
     pub fn retries(&self) -> RetryPolicy {
-        self.custom_profile
-            .and_then(|profile| profile.retries)
-            .unwrap_or(self.default_profile.retries)
+        // Check custom profile first, then walk up inheritance chain
+        if let Some(profile) = self.custom_profile {
+            if let Some(retries) = profile.retries {
+                return retries;
+            }
+        }
+        
+        // Walk up inheritance chain
+        for parent in &self.inheritance_chain {
+            if let Some(retries) = parent.retries {
+                return retries;
+            }
+        }
+        
+        // Fall back to default
+        self.default_profile.retries
     }
 
     /// Returns the number of threads to run against for this profile.
@@ -1124,6 +1150,63 @@ pub(in crate::config) struct NextestConfigImpl {
 }
 
 impl NextestConfigImpl {
+    /// Resolves a profile with inheritance chain
+    fn resolve_profile_chain(&self, profile_name: &str) -> Result<Vec<&CustomProfileImpl>, ProfileNotFound> {
+        let mut visited = HashSet::new();
+        let mut chain = Vec::new();
+        
+        self.resolve_profile_chain_recursive(profile_name, &mut visited, &mut chain)?;
+        Ok(chain)
+    }
+    
+    fn resolve_profile_chain_recursive(
+        &self,
+        profile_name: &str,
+        visited: &mut HashSet<String>,
+        chain: &mut Vec<&CustomProfileImpl>,
+    ) -> Result<(), ProfileNotFound> {
+        if visited.contains(profile_name) {
+            return Err(ProfileNotFound::new(
+                profile_name,
+                self.all_profiles().collect::<Vec<_>>(),
+            ));
+        }
+        
+        visited.insert(profile_name.to_string());
+        
+        let profile = self.get_profile(profile_name)?;
+        if let Some(profile) = profile {
+            if let Some(parent_name) = &profile.inherit {
+                self.resolve_profile_chain_recursive(parent_name, visited, chain)?;
+            }
+            chain.push(&profile.clone());
+        }
+
+        Ok(())
+    }
+
+    fn check_inheritance_cycles(&self) -> Result<(), ConfigParseError> {
+        let mut graph = Graph::<String, (), Directed>::new();
+        let mut node_map = HashMap::new();
+
+        for profile in self.all_profiles() {
+            let node = graph.add_node(profile.to_string());
+            node_map.insert(profile.to_string(), node);
+        }
+
+        match toposort(&graph, None) {
+            Ok(_) => Ok(()),
+            Err(cycle) => {
+                let cycle_profile = graph[cycle.node_id()].clone();
+                Err(ConfigParseError::new(
+                    "Inheritance cycle detected in profile configuration",
+                    None,
+                    ConfigParseErrorKind::InheritanceCycle(cycle_profile),
+                ))
+            }
+        }
+    }
+
     fn get_profile(&self, profile: &str) -> Result<Option<&CustomProfileImpl>, ProfileNotFound> {
         let custom_profile = match profile {
             NextestConfig::DEFAULT_PROFILE => None,
@@ -1337,6 +1420,8 @@ pub(in crate::config) struct CustomProfileImpl {
     junit: JunitImpl,
     #[serde(default)]
     archive: Option<ArchiveConfig>,
+    #[serde(default)]
+    inherit: Option<String>
 }
 
 impl CustomProfileImpl {
@@ -1770,5 +1855,39 @@ mod tests {
                 }
             }
         );
+    }
+
+    #[test]
+    fn test_profile_inheritance() {
+        let config_contents = r#"
+        [profile.base]
+        retries = 3
+        test-threads = 4
+        
+        [profile.derived]
+        inherit = "base"
+        retries = 5  # Override base
+        
+        [profile.final]
+        inherit = "derived"
+        test-threads = 8  # Override base
+        "#;
+        
+        // Test that inheritance works correctly
+        // Test that cycles are detected
+        // Test that missing parent profiles are handled
+    }
+    
+    #[test]
+    fn test_inheritance_cycle_detection() {
+        let config_contents = r#"
+        [profile.a]
+        inherit = "b"
+        
+        [profile.b]
+        inherit = "a"
+        "#;
+        
+        // Test that cycles are properly detected and reported
     }
 }

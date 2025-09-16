@@ -121,6 +121,7 @@ strip-ansi-escapes = "0.2.1"
 supports-color = "3.0.2"
 supports-unicode = "3.0.0"
 swrite = "0.1.0"
+petgraph = "0.8.2"
 tar = "0.4.44"
 target-spec = { version = "3.4.2", features = ["custom", "summaries"] }
 target-spec-miette = "0.4.4"
