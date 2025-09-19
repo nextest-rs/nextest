@@ -794,7 +794,7 @@ impl NextestConfig {
 
     fn make_profile(&self, name: &str) -> Result<EarlyProfile<'_>, ProfileNotFound> {
         // Check for cycles first
-        self.inner.check_inheritance_cycles()?;
+        self.inner.check_inheritance_cycles().unwrap();
         
         let custom_profile = self.inner.get_profile(name)?;
         let inheritance_chain = if let Some(_) = custom_profile {
@@ -818,7 +818,7 @@ impl NextestConfig {
             store_dir,
             default_profile: &self.inner.default_profile,
             custom_profile,
-            inheritance_chain, // Add this field
+            inheritance_chain,
             test_groups: &self.inner.test_groups,
             scripts: &self.inner.scripts,
             compiled_data,
@@ -884,7 +884,7 @@ pub struct EarlyProfile<'cfg> {
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
-    inheritance_chain: Vec<&'cfg CustomProfileImpl>, // Add this
+    inheritance_chain: Vec<&'cfg CustomProfileImpl>,
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     // This is ordered because the scripts are used in the order they're defined.
     scripts: &'cfg ScriptConfig,
@@ -935,7 +935,7 @@ impl<'cfg> EarlyProfile<'cfg> {
             store_dir: self.store_dir,
             default_profile: self.default_profile,
             custom_profile: self.custom_profile,
-            inheritance_chain: self.inheritance_chain, // Add this field
+            inheritance_chain: self.inheritance_chain,
             scripts: self.scripts,
             test_groups: self.test_groups,
             compiled_data,
@@ -1159,11 +1159,11 @@ impl NextestConfigImpl {
         Ok(chain)
     }
     
-    fn resolve_profile_chain_recursive(
-        &self,
+    fn resolve_profile_chain_recursive<'cfg>(
+        &'cfg self,
         profile_name: &str,
         visited: &mut HashSet<String>,
-        chain: &mut Vec<&CustomProfileImpl>,
+        chain: &mut Vec<&'cfg CustomProfileImpl>,
     ) -> Result<(), ProfileNotFound> {
         if visited.contains(profile_name) {
             return Err(ProfileNotFound::new(
@@ -1179,9 +1179,9 @@ impl NextestConfigImpl {
             if let Some(parent_name) = &profile.inherit {
                 self.resolve_profile_chain_recursive(parent_name, visited, chain)?;
             }
-            chain.push(&profile.clone());
+            chain.push(profile);
         }
-
+    
         Ok(())
     }
 
@@ -1192,6 +1192,14 @@ impl NextestConfigImpl {
         for profile in self.all_profiles() {
             let node = graph.add_node(profile.to_string());
             node_map.insert(profile.to_string(), node);
+        }
+
+        for (profile_name, profile) in &self.other_profiles {
+            if let Some(inherit_name) = &profile.inherit {
+                if let (Some(&from), Some(&to)) = (node_map.get(inherit_name), node_map.get(profile_name)) {
+                    graph.add_edge(from, to, ());
+                }
+            }
         }
 
         match toposort(&graph, None) {
@@ -1855,39 +1863,5 @@ mod tests {
                 }
             }
         );
-    }
-
-    #[test]
-    fn test_profile_inheritance() {
-        let config_contents = r#"
-        [profile.base]
-        retries = 3
-        test-threads = 4
-        
-        [profile.derived]
-        inherit = "base"
-        retries = 5  # Override base
-        
-        [profile.final]
-        inherit = "derived"
-        test-threads = 8  # Override base
-        "#;
-        
-        // Test that inheritance works correctly
-        // Test that cycles are detected
-        // Test that missing parent profiles are handled
-    }
-    
-    #[test]
-    fn test_inheritance_cycle_detection() {
-        let config_contents = r#"
-        [profile.a]
-        inherit = "b"
-        
-        [profile.b]
-        inherit = "a"
-        "#;
-        
-        // Test that cycles are properly detected and reported
     }
 }
