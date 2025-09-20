@@ -577,7 +577,7 @@ dependencies = [
  "ron",
  "serde_core",
  "serde_json",
- "toml 0.9.0",
+ "toml 0.9.7",
  "winnow",
 ]
 
@@ -2162,7 +2162,7 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
- "toml 0.8.23",
+ "toml 0.9.7",
  "toml_edit 0.23.6",
  "tracing",
  "tracing-subscriber",
@@ -3683,12 +3683,12 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.9.0"
+version = "0.9.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f271e09bde39ab52250160a67e88577e0559ad77e9085de6e9051a2c4353f8f8"
+checksum = "00e5e5d9bf2475ac9d4f0d9edab68cc573dc2fd644b0dba36b0c30a92dd9eaa0"
 dependencies = [
  "indexmap 2.11.4",
- "serde",
+ "serde_core",
  "serde_spanned 1.0.2",
  "toml_datetime 0.7.2",
  "toml_parser",
