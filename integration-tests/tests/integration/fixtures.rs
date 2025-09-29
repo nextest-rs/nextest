@@ -153,13 +153,23 @@ impl CheckResult {
     fn make_status_line_regex(self, name: &str) -> Regex {
         let name = regex::escape(name);
         match self {
-            CheckResult::Pass => Regex::new(&format!(r"PASS \[.*\] *{name}")).unwrap(),
-            CheckResult::Leak => Regex::new(&format!(r"LEAK \[.*\] *{name}")).unwrap(),
-            CheckResult::LeakFail => Regex::new(&format!(r"LEAK-FAIL \[.*\] *{name}")).unwrap(),
-            CheckResult::Fail => Regex::new(&format!(r"FAIL \[.*\] *{name}")).unwrap(),
-            CheckResult::FailLeak => Regex::new(&format!(r"FAIL \+ LEAK \[.*\] *{name}")).unwrap(),
+            CheckResult::Pass => {
+                Regex::new(&format!(r"PASS \[[^\]]+\] \([^\)]+\) *{name}")).unwrap()
+            }
+            CheckResult::Leak => {
+                Regex::new(&format!(r"LEAK \[[^\]]+\] \([^\)]+\) *{name}")).unwrap()
+            }
+            CheckResult::LeakFail => {
+                Regex::new(&format!(r"LEAK-FAIL \[[^\]]+\] \([^\)]+\) *{name}")).unwrap()
+            }
+            CheckResult::Fail => {
+                Regex::new(&format!(r"FAIL \[[^\]]+\] \([^\)]+\) *{name}")).unwrap()
+            }
+            CheckResult::FailLeak => {
+                Regex::new(&format!(r"FAIL \+ LEAK \[[^\]]+\] \([^\)]+\) *{name}")).unwrap()
+            }
             CheckResult::Abort => {
-                Regex::new(&format!(r"(ABORT|SIGSEGV|SIGABRT) \[.*\] *{name}")).unwrap()
+                Regex::new(&format!(r"(ABORT|SIGSEGV|SIGABRT) \[[^\]]+\] *{name}")).unwrap()
             }
         }
     }

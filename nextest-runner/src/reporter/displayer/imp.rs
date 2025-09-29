@@ -19,10 +19,12 @@ use crate::{
     cargo_config::CargoConfigs,
     config::{elements::LeakTimeoutResult, overrides::CompiledDefaultFilter, scripts::ScriptId},
     errors::WriteEventError,
-    helpers::{DisplayScriptInstance, DisplayTestInstance, plural},
+    helpers::{
+        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, decimal_char_width, plural,
+    },
     list::{TestInstance, TestInstanceId},
     reporter::{
-        displayer::{formatters::DisplayHhMmSs, progress::TerminalProgress},
+        displayer::{ShowProgress, formatters::DisplayHhMmSs, progress::TerminalProgress},
         events::*,
         helpers::Styles,
         imp::ReporterStderr,
@@ -48,7 +50,7 @@ pub(crate) struct DisplayReporterBuilder {
     pub(crate) failure_output: Option<TestOutputDisplay>,
     pub(crate) should_colorize: bool,
     pub(crate) no_capture: bool,
-    pub(crate) hide_progress_bar: bool,
+    pub(crate) show_progress: ShowProgress,
     pub(crate) no_output_indent: bool,
 }
 
@@ -82,34 +84,18 @@ impl DisplayReporterBuilder {
             }
         }
 
+        let mut show_progress_bar = false;
+
         let stderr = match output {
             ReporterStderr::Terminal => {
-                let progress_bar = if self.no_capture {
-                    // Do not use a progress bar if --no-capture is passed in.
-                    // This is required since we pass down stderr to the child
-                    // process.
-                    //
-                    // In the future, we could potentially switch to using a
-                    // pty, in which case we could still potentially use the
-                    // progress bar as a status bar. However, that brings about
-                    // its own complications: what if a test's output doesn't
-                    // include a newline? We might have to use a curses-like UI
-                    // which would be a lot of work for not much gain.
-                    None
-                } else if is_ci::uncached() {
-                    // Some CI environments appear to pretend to be a terminal.
-                    // Disable the progress bar in these environments.
-                    None
-                } else if self.hide_progress_bar {
-                    None
-                } else {
-                    let state =
-                        ProgressBarState::new(self.test_count, theme_characters.progress_chars);
-                    // Note: even if we create a progress bar here, if stderr is
-                    // piped, indicatif will not show it.
-                    Some(state)
-                };
+                let progress_bar = self.progress_bar(theme_characters.progress_chars);
                 let term_progress = TerminalProgress::new(configs, &io::stderr());
+
+                show_progress_bar = progress_bar
+                    .as_ref()
+                    .map(|progress_bar| !progress_bar.is_hidden())
+                    .unwrap_or_default();
+
                 ReporterStderrImpl::Terminal {
                     progress_bar,
                     term_progress,
@@ -129,6 +115,12 @@ impl DisplayReporterBuilder {
             false => self.failure_output,
         };
 
+        let show_counter = match self.show_progress {
+            ShowProgress::Auto => is_ci::uncached() || !show_progress_bar,
+            ShowProgress::Bar | ShowProgress::None => false,
+            ShowProgress::Counter => true,
+        };
+
         DisplayReporter {
             inner: DisplayReporterImpl {
                 default_filter: self.default_filter,
@@ -138,6 +130,7 @@ impl DisplayReporterBuilder {
                 },
                 no_capture: self.no_capture,
                 no_output_indent: self.no_output_indent,
+                no_counter: !show_counter,
                 styles,
                 theme_characters,
                 cancel_status: None,
@@ -146,6 +139,39 @@ impl DisplayReporterBuilder {
             },
             stderr,
         }
+    }
+
+    fn progress_bar(&self, progress_chars: &'static str) -> Option<ProgressBarState> {
+        if self.no_capture {
+            // Do not use a progress bar if --no-capture is passed in.
+            // This is required since we pass down stderr to the child
+            // process.
+            //
+            // In the future, we could potentially switch to using a
+            // pty, in which case we could still potentially use the
+            // progress bar as a status bar. However, that brings about
+            // its own complications: what if a test's output doesn't
+            // include a newline? We might have to use a curses-like UI
+            // which would be a lot of work for not much gain.
+            return None;
+        }
+
+        if is_ci::uncached() {
+            // Some CI environments appear to pretend to be a terminal.
+            // Disable the progress bar in these environments.
+            return None;
+        }
+
+        match self.show_progress {
+            ShowProgress::None | ShowProgress::Counter => return None,
+            // For auto we enable progress bar if not in ci, and it's checked above.
+            ShowProgress::Auto | ShowProgress::Bar => (),
+        };
+
+        let state = ProgressBarState::new(self.test_count, progress_chars);
+        // Note: even if we create a progress bar here, if stderr is
+        // piped, indicatif will not show it.
+        Some(state)
     }
 }
 
@@ -259,6 +285,7 @@ struct DisplayReporterImpl<'a> {
     status_levels: StatusLevels,
     no_capture: bool,
     no_output_indent: bool,
+    no_counter: bool,
     styles: Box<Styles>,
     theme_characters: ThemeCharacters,
     cancel_status: Option<CancelReason>,
@@ -478,16 +505,25 @@ impl<'a> DisplayReporterImpl<'a> {
             TestEventKind::TestStarted {
                 stress_index,
                 test_instance,
+                current_stats,
                 ..
             } => {
                 // In no-capture mode, print out a test start event.
                 if self.no_capture {
                     // The spacing is to align test instances.
+                    let width = 11
+                        + if self.no_counter {
+                            0
+                        } else {
+                            DisplayCounterIndex::new(current_stats).width() + 1
+                        };
                     writeln!(
                         writer,
-                        "{:>12}             {}",
+                        "{:>12} {:>width$} {}",
                         "START".style(self.styles.pass),
-                        self.display_test_instance(*stress_index, test_instance.id()),
+                        " ",
+                        self.display_test_instance(*stress_index, None, test_instance.id()),
+                        width = width,
                     )?;
                 }
             }
@@ -531,7 +567,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     writer,
                     "{}{}",
                     DisplaySlowDuration(*elapsed),
-                    self.display_test_instance(*stress_index, test_instance.id())
+                    self.display_test_instance(*stress_index, None, test_instance.id())
                 )?;
             }
 
@@ -561,7 +597,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     writeln!(
                         writer,
                         "{}",
-                        self.display_test_instance(*stress_index, test_instance.id())
+                        self.display_test_instance(*stress_index, None, test_instance.id())
                     )?;
 
                     // This test is guaranteed to have failed.
@@ -598,7 +634,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         writeln!(
                             writer,
                             "{}",
-                            self.display_test_instance(*stress_index, test_instance.id())
+                            self.display_test_instance(*stress_index, None, test_instance.id())
                         )?;
                     }
                 }
@@ -620,7 +656,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     writer,
                     "[{:<9}] {}",
                     "",
-                    self.display_test_instance(*stress_index, test_instance.id())
+                    self.display_test_instance(*stress_index, None, test_instance.id())
                 )?;
             }
             TestEventKind::TestFinished {
@@ -629,6 +665,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 success_output,
                 failure_output,
                 run_statuses,
+                current_stats,
                 ..
             } => {
                 let describe = run_statuses.describe();
@@ -646,7 +683,13 @@ impl<'a> DisplayReporterImpl<'a> {
                 );
 
                 if output_on_test_finished.write_status_line {
-                    self.write_status_line(*stress_index, *test_instance, describe, writer)?;
+                    self.write_status_line(
+                        *stress_index,
+                        *test_instance,
+                        describe,
+                        current_stats,
+                        writer,
+                    )?;
                 }
                 if output_on_test_finished.show_immediate {
                     self.write_test_execute_status(last_status, false, writer)?;
@@ -1130,7 +1173,7 @@ impl<'a> DisplayReporterImpl<'a> {
         writeln!(
             writer,
             "[         ] {}",
-            self.display_test_instance(stress_index, test_instance)
+            self.display_test_instance(stress_index, None, test_instance)
         )?;
 
         Ok(())
@@ -1182,6 +1225,7 @@ impl<'a> DisplayReporterImpl<'a> {
         stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
         describe: ExecutionDescription<'_>,
+        current_stats: &RunStats,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         let last_status = describe.last_status();
@@ -1224,12 +1268,16 @@ impl<'a> DisplayReporterImpl<'a> {
             }
         };
 
-        // Print the time taken and the name of the test.
+        write!(
+            writer,
+            "{}",
+            DisplayBracketedDuration(last_status.time_taken)
+        )?;
+
         writeln!(
             writer,
-            "{}{}",
-            DisplayBracketedDuration(last_status.time_taken),
-            self.display_test_instance(stress_index, test_instance.id())
+            "{}",
+            self.display_test_instance(stress_index, Some(current_stats), test_instance.id())
         )?;
 
         // On Windows, also print out the exception if available.
@@ -1319,7 +1367,7 @@ impl<'a> DisplayReporterImpl<'a> {
             writer,
             "{}{}",
             DisplayBracketedDuration(last_status.time_taken),
-            self.display_test_instance(stress_index, test_instance),
+            self.display_test_instance(stress_index, None, test_instance),
         )?;
 
         // On Windows, also print out the exception if available.
@@ -1338,9 +1386,19 @@ impl<'a> DisplayReporterImpl<'a> {
     fn display_test_instance(
         &self,
         stress_index: Option<StressIndex>,
+        current_stats: Option<&RunStats>,
         instance: TestInstanceId<'a>,
     ) -> DisplayTestInstance<'_> {
-        DisplayTestInstance::new(stress_index, instance, &self.styles.list_styles)
+        let counter_index = current_stats.and_then(|current_stats| {
+            (!self.no_counter).then(|| DisplayCounterIndex::new(current_stats))
+        });
+
+        DisplayTestInstance::new(
+            stress_index,
+            counter_index,
+            instance,
+            &self.styles.list_styles,
+        )
     }
 
     fn display_script_instance(
@@ -1379,7 +1437,7 @@ impl<'a> DisplayReporterImpl<'a> {
         // The width to be printed out is index width + total width + 1 for '/'
         // + 1 for ':' + 1 for the space after that.
         let count_width = decimal_char_width(index + 1) + decimal_char_width(total) + 3;
-        let padding = usize::try_from(8_u32.saturating_sub(count_width)).unwrap();
+        let padding = 8usize.saturating_sub(count_width);
 
         write!(
             writer,
@@ -1440,7 +1498,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 writeln!(
                     writer,
                     "{}",
-                    self.display_test_instance(*stress_index, *test_instance)
+                    self.display_test_instance(*stress_index, None, *test_instance)
                 )?;
 
                 // We want to show an attached attempt string either if this is
@@ -2128,13 +2186,6 @@ impl ThemeCharacters {
     }
 }
 
-fn decimal_char_width(n: usize) -> u32 {
-    // checked_ilog10 returns 0 for 1-9, 1 for 10-99, 2 for 100-999, etc. (And
-    // None for 0 which we unwrap to the same as 1). Add 1 to it to get the
-    // actual number of digits.
-    n.checked_ilog10().unwrap_or(0) + 1
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2181,7 +2232,7 @@ mod tests {
             failure_output: Some(TestOutputDisplay::Immediate),
             should_colorize: false,
             no_capture: true,
-            hide_progress_bar: false,
+            show_progress: ShowProgress::default(),
             no_output_indent: false,
         };
         let output = ReporterStderr::Buffer(out);

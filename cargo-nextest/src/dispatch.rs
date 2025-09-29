@@ -36,7 +36,8 @@ use nextest_runner::{
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
     redact::Redactor,
     reporter::{
-        FinalStatusLevel, ReporterBuilder, StatusLevel, TestOutputDisplay, TestOutputErrorSlice,
+        FinalStatusLevel, ReporterBuilder, ShowProgress, StatusLevel, TestOutputDisplay,
+        TestOutputErrorSlice,
         events::{FinalRunStats, RunStatsFailureKind},
         highlight_end, structured,
     },
@@ -1049,7 +1050,11 @@ struct ReporterOpts {
     )]
     final_status_level: Option<FinalStatusLevelOpt>,
 
-    /// Do not display the progress bar
+    /// Show progress in a specified way.
+    #[arg(long, env = "NEXTEST_SHOW_PROGRESS")]
+    show_progress: Option<ShowProgressOpt>,
+
+    /// Do not display the progress bar. Deprecated, use **--show-progress** instead.
     #[arg(long, env = "NEXTEST_HIDE_PROGRESS_BAR", value_parser = BoolishValueParser::new())]
     hide_progress_bar: bool,
 
@@ -1128,6 +1133,16 @@ impl ReporterOpts {
             warn!("ignoring --message-format-version because --no-run is specified");
         }
 
+        let show_progress = match (self.show_progress, self.hide_progress_bar) {
+            (Some(show_progress), true) => {
+                warn!("ignoring --hide-progress-bar because --show-progress is specified");
+                show_progress
+            }
+            (Some(show_progress), false) => show_progress,
+            (None, true) => ShowProgressOpt::None,
+            (None, false) => ShowProgressOpt::default(),
+        };
+
         // ---
 
         let mut builder = ReporterBuilder::default();
@@ -1146,7 +1161,7 @@ impl ReporterOpts {
         if let Some(final_status_level) = self.final_status_level {
             builder.set_final_status_level(final_status_level.into());
         }
-        builder.set_hide_progress_bar(self.hide_progress_bar);
+        builder.set_show_progress(show_progress.into());
         builder.set_no_output_indent(self.no_output_indent);
         builder
     }
@@ -1221,6 +1236,26 @@ impl From<FinalStatusLevelOpt> for FinalStatusLevel {
             FinalStatusLevelOpt::Skip => FinalStatusLevel::Skip,
             FinalStatusLevelOpt::Pass => FinalStatusLevel::Pass,
             FinalStatusLevelOpt::All => FinalStatusLevel::All,
+        }
+    }
+}
+
+#[derive(Default, Clone, Copy, Debug, ValueEnum)]
+enum ShowProgressOpt {
+    #[default]
+    Auto,
+    None,
+    Bar,
+    Counter,
+}
+
+impl From<ShowProgressOpt> for ShowProgress {
+    fn from(opt: ShowProgressOpt) -> Self {
+        match opt {
+            ShowProgressOpt::Auto => Self::Auto,
+            ShowProgressOpt::None => Self::None,
+            ShowProgressOpt::Bar => Self::Bar,
+            ShowProgressOpt::Counter => Self::Counter,
         }
     }
 }
