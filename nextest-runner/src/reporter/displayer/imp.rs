@@ -22,7 +22,11 @@ use crate::{
     helpers::{DisplayScriptInstance, DisplayTestInstance, plural},
     list::{TestInstance, TestInstanceId},
     reporter::{
-        displayer::{formatters::DisplayHhMmSs, progress::TerminalProgress},
+        displayer::{
+            ShowProgress,
+            formatters::{DisplayBracketedCounter, DisplayHhMmSs},
+            progress::TerminalProgress,
+        },
         events::*,
         helpers::Styles,
         imp::ReporterStderr,
@@ -48,7 +52,7 @@ pub(crate) struct DisplayReporterBuilder {
     pub(crate) failure_output: Option<TestOutputDisplay>,
     pub(crate) should_colorize: bool,
     pub(crate) no_capture: bool,
-    pub(crate) hide_progress_bar: bool,
+    pub(crate) show_progress: ShowProgress,
     pub(crate) no_output_indent: bool,
 }
 
@@ -82,34 +86,18 @@ impl DisplayReporterBuilder {
             }
         }
 
+        let mut show_progress_bar = false;
+
         let stderr = match output {
             ReporterStderr::Terminal => {
-                let progress_bar = if self.no_capture {
-                    // Do not use a progress bar if --no-capture is passed in.
-                    // This is required since we pass down stderr to the child
-                    // process.
-                    //
-                    // In the future, we could potentially switch to using a
-                    // pty, in which case we could still potentially use the
-                    // progress bar as a status bar. However, that brings about
-                    // its own complications: what if a test's output doesn't
-                    // include a newline? We might have to use a curses-like UI
-                    // which would be a lot of work for not much gain.
-                    None
-                } else if is_ci::uncached() {
-                    // Some CI environments appear to pretend to be a terminal.
-                    // Disable the progress bar in these environments.
-                    None
-                } else if self.hide_progress_bar {
-                    None
-                } else {
-                    let state =
-                        ProgressBarState::new(self.test_count, theme_characters.progress_chars);
-                    // Note: even if we create a progress bar here, if stderr is
-                    // piped, indicatif will not show it.
-                    Some(state)
-                };
+                let progress_bar = self.progress_bar(theme_characters.progress_chars);
                 let term_progress = TerminalProgress::new(configs, &io::stderr());
+
+                show_progress_bar = progress_bar
+                    .as_ref()
+                    .map(|progress_bar| !progress_bar.is_hidden())
+                    .unwrap_or_default();
+
                 ReporterStderrImpl::Terminal {
                     progress_bar,
                     term_progress,
@@ -129,6 +117,12 @@ impl DisplayReporterBuilder {
             false => self.failure_output,
         };
 
+        let show_counter = match self.show_progress {
+            ShowProgress::Auto => is_ci::uncached() || !show_progress_bar,
+            ShowProgress::Bar | ShowProgress::None => false,
+            ShowProgress::Counter => true,
+        };
+
         DisplayReporter {
             inner: DisplayReporterImpl {
                 default_filter: self.default_filter,
@@ -138,6 +132,7 @@ impl DisplayReporterBuilder {
                 },
                 no_capture: self.no_capture,
                 no_output_indent: self.no_output_indent,
+                no_counter: !show_counter,
                 styles,
                 theme_characters,
                 cancel_status: None,
@@ -146,6 +141,39 @@ impl DisplayReporterBuilder {
             },
             stderr,
         }
+    }
+
+    fn progress_bar(&self, progress_chars: &'static str) -> Option<ProgressBarState> {
+        if self.no_capture {
+            // Do not use a progress bar if --no-capture is passed in.
+            // This is required since we pass down stderr to the child
+            // process.
+            //
+            // In the future, we could potentially switch to using a
+            // pty, in which case we could still potentially use the
+            // progress bar as a status bar. However, that brings about
+            // its own complications: what if a test's output doesn't
+            // include a newline? We might have to use a curses-like UI
+            // which would be a lot of work for not much gain.
+            return None;
+        }
+
+        if is_ci::uncached() {
+            // Some CI environments appear to pretend to be a terminal.
+            // Disable the progress bar in these environments.
+            return None;
+        }
+
+        match self.show_progress {
+            ShowProgress::None | ShowProgress::Counter => return None,
+            // For auto we enable progress bar if not in ci, and it's checked above.
+            ShowProgress::Auto | ShowProgress::Bar => (),
+        };
+
+        let state = ProgressBarState::new(self.test_count, progress_chars);
+        // Note: even if we create a progress bar here, if stderr is
+        // piped, indicatif will not show it.
+        Some(state)
     }
 }
 
@@ -259,6 +287,7 @@ struct DisplayReporterImpl<'a> {
     status_levels: StatusLevels,
     no_capture: bool,
     no_output_indent: bool,
+    no_counter: bool,
     styles: Box<Styles>,
     theme_characters: ThemeCharacters,
     cancel_status: Option<CancelReason>,
@@ -629,6 +658,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 success_output,
                 failure_output,
                 run_statuses,
+                current_stats,
                 ..
             } => {
                 let describe = run_statuses.describe();
@@ -646,7 +676,13 @@ impl<'a> DisplayReporterImpl<'a> {
                 );
 
                 if output_on_test_finished.write_status_line {
-                    self.write_status_line(*stress_index, *test_instance, describe, writer)?;
+                    self.write_status_line(
+                        *stress_index,
+                        *test_instance,
+                        describe,
+                        current_stats,
+                        writer,
+                    )?;
                 }
                 if output_on_test_finished.show_immediate {
                     self.write_test_execute_status(last_status, false, writer)?;
@@ -1182,6 +1218,7 @@ impl<'a> DisplayReporterImpl<'a> {
         stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
         describe: ExecutionDescription<'_>,
+        current_stats: &RunStats,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         let last_status = describe.last_status();
@@ -1224,11 +1261,19 @@ impl<'a> DisplayReporterImpl<'a> {
             }
         };
 
-        // Print the time taken and the name of the test.
+        write!(
+            writer,
+            "{}",
+            DisplayBracketedDuration(last_status.time_taken)
+        )?;
+
+        if !self.no_counter {
+            write!(writer, "{}", DisplayBracketedCounter(current_stats))?;
+        }
+
         writeln!(
             writer,
-            "{}{}",
-            DisplayBracketedDuration(last_status.time_taken),
+            "{}",
             self.display_test_instance(stress_index, test_instance.id())
         )?;
 
@@ -2181,7 +2226,7 @@ mod tests {
             failure_output: Some(TestOutputDisplay::Immediate),
             should_colorize: false,
             no_capture: true,
-            hide_progress_bar: false,
+            show_progress: ShowProgress::default(),
             no_output_indent: false,
         };
         let output = ReporterStderr::Buffer(out);

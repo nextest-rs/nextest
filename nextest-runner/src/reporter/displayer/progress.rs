@@ -15,6 +15,23 @@ use std::{
 use swrite::{SWrite, swrite};
 use tracing::debug;
 
+/// How to show progress.
+#[derive(Default, Clone, Copy, Debug)]
+pub enum ShowProgress {
+    /// Automatically decide based on environment.
+    #[default]
+    Auto,
+
+    /// No progress display.
+    None,
+
+    /// Show a progress bar.
+    Bar,
+
+    /// Show a counter on each line.
+    Counter,
+}
+
 #[derive(Debug)]
 pub(super) struct ProgressBarState {
     bar: ProgressBar,
@@ -182,6 +199,10 @@ impl ProgressBarState {
             || self.hidden_run_paused
             || self.hidden_info_response
             || self.hidden_between_sub_runs
+    }
+
+    pub(super) fn is_hidden(&self) -> bool {
+        self.bar.is_hidden()
     }
 }
 
