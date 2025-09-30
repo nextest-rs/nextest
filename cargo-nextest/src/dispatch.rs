@@ -781,7 +781,8 @@ impl From<RunIgnoredOpt> for RunIgnored {
 }
 
 impl CargoOptions {
-    fn compute_binary_list(
+    /// Invoke 'cargo test --no-run' to compile test binaries and produce a list of them
+    pub fn compute_binary_list(
         &self,
         graph: &PackageGraph,
         manifest_path: Option<&Utf8Path>,
@@ -797,6 +798,7 @@ impl CargoOptions {
         cargo_cli.add_options(self);
 
         let expression = cargo_cli.to_expression();
+
         let output = expression
             .stdout_capture()
             .unchecked()
@@ -2405,7 +2407,8 @@ pub enum BuildPlatformsOutputFormat {
     Triple,
 }
 
-fn acquire_graph_data(
+/// Invoke 'cargo metadata', the result may be parsed with `PackageGraph::from_json`
+pub fn acquire_graph_data(
     manifest_path: Option<&Utf8Path>,
     target_dir: Option<&Utf8Path>,
     cargo_opts: &CargoOptions,

@@ -31,3 +31,11 @@ pub use dispatch::*;
 pub use errors::*;
 #[doc(hidden)]
 pub use output::OutputWriter;
+#[doc(hidden)]
+pub use output::OutputContext;
+#[doc(hidden)]
+pub use output::Color;
+#[doc(hidden)]
+pub use cargo_cli::CargoOptions;
+#[doc(hidden)]
+pub use cargo_cli::cargo_options;

@@ -20,6 +20,7 @@ license = "MIT OR Apache-2.0"
 aho-corasick = "1.1.3"
 async-scoped = { version = "0.9.0", features = ["use-tokio"] }
 atomicwrites = "0.4.4"
+bon = "3.7.2"
 bstr = { version = "1.12.0", default-features = false, features = ["std"] }
 bytes = "1.10.1"
 camino = "1.2.0"
