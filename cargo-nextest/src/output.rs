@@ -87,8 +87,8 @@ impl OutputOpts {
 #[derive(Copy, Clone, Debug)]
 #[must_use]
 pub struct OutputContext {
-    pub(crate) verbose: bool,
-    pub(crate) color: Color,
+    pub verbose: bool,
+    pub color: Color,
 }
 
 impl OutputContext {
