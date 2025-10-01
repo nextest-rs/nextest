@@ -798,7 +798,6 @@ impl CargoOptions {
         cargo_cli.add_options(self);
 
         let expression = cargo_cli.to_expression();
-
         let output = expression
             .stdout_capture()
             .unchecked()
