@@ -123,7 +123,7 @@ impl OutputContext {
 #[must_use]
 #[derive(Default)]
 pub enum Color {
-    /// Determine coloration based on whether the actual terminal stream supports it and the 'NO_COLOR' environment variable
+    /// Determine coloration based on whether the actual terminal supports it and whether the 'NO_COLOR' environment variable is set
     #[default]
     Auto,
 
