@@ -201,6 +201,47 @@ pub struct CargoOptions {
     unstable_flags: Vec<String>,
 }
 
+impl CargoOptions {
+    /// Manually construct `CargoOptions``, the expected way to achieve this is normally through `CargoNextestApp::parse()`
+    #[expect(clippy::too_many_arguments)]
+    pub fn new(
+        packages: Vec<String>,
+        workspace: bool,
+        exclude: Vec<String>,
+        all: bool,
+        lib: bool,
+        bin: Vec<String>,
+        bins: bool,
+        example: Vec<String>,
+        examples: bool,
+        test: Vec<String>,
+        tests: bool,
+        bench: Vec<String>,
+        benches: bool,
+        all_targets: bool,
+        features: Vec<String>,
+        all_features: bool,
+        no_default_features: bool,
+        build_jobs: Option<String>,
+        release: bool,
+        cargo_profile: Option<String>,
+        target: Option<String>,
+        target_dir: Option<Utf8PathBuf>,
+        unit_graph: bool,
+        timings: Option<Option<String>>,
+        frozen: bool,
+        locked: bool,
+        offline: bool,
+        cargo_quiet: u8,
+        cargo_verbose: u8,
+        ignore_rust_version: bool,
+        future_incompat_report: bool,
+        config: Vec<String>,
+        unstable_flags: Vec<String>) -> Self {
+        Self { packages, workspace, exclude, all, lib, bin, bins, example, examples, test, tests, bench, benches, all_targets, features, all_features, no_default_features, build_jobs, release, cargo_profile, target, target_dir, unit_graph, timings, frozen, locked, offline, cargo_quiet, cargo_verbose, ignore_rust_version, future_incompat_report, config, unstable_flags }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct CargoCli<'a> {
     cargo_path: Utf8PathBuf,
