@@ -369,7 +369,7 @@ impl<'a> ExecutorContext<'a> {
 
         // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
         // best-effort thing.
-        let job = super::os::Job::create().ok();
+        let job = super::os::create_job().ok();
 
         // The --no-capture CLI argument overrides the config.
         if self.capture_strategy != CaptureStrategy::None {
@@ -689,7 +689,7 @@ impl<'a> ExecutorContext<'a> {
 
         // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
         // best-effort thing.
-        let job = super::os::Job::create().ok();
+        let job = super::os::create_job().ok();
 
         let crate::test_command::Child {
             mut child,
