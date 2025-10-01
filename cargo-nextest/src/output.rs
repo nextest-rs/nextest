@@ -84,10 +84,14 @@ impl OutputOpts {
     }
 }
 
+/// Specifies details about nextest
 #[derive(Copy, Clone, Debug)]
 #[must_use]
 pub struct OutputContext {
+    /// Request the output to be verbose
     pub verbose: bool,
+
+    /// Specify how colorization is determined (not what color is used)
     pub color: Color,
 }
 
@@ -114,13 +118,19 @@ impl OutputContext {
     }
 }
 
+/// Specifies whether to colorize output
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 #[must_use]
 #[derive(Default)]
 pub enum Color {
+    /// Determine coloration based on whether the actual terminal stream supports it and the 'NO_COLOR' environment variable
     #[default]
     Auto,
+
+    /// Always try to colorize
     Always,
+
+    /// Never try to colorize
     Never,
 }
 
