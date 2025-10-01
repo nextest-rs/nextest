@@ -37,5 +37,3 @@ pub use output::OutputContext;
 pub use output::Color;
 #[doc(hidden)]
 pub use cargo_cli::CargoOptions;
-#[doc(hidden)]
-pub use cargo_cli::cargo_options;
