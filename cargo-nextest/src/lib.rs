@@ -13,7 +13,6 @@
 
 #![warn(missing_docs)]
 
-mod cargo_cli;
 mod dispatch;
 #[cfg(unix)]
 mod double_spawn;

@@ -2100,6 +2100,7 @@ dependencies = [
  "cargo_metadata",
  "cfg-if",
  "chrono",
+ "clap",
  "color-eyre",
  "config",
  "console-subscriber",

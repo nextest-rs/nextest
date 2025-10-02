@@ -1,11 +1,14 @@
 // Copyright (c) The nextest Contributors
-// SPDX-License-Identifier: MIT OR Apache-2.0
+// SPDX-License-pub Identifier: MIT OR Apache-2.0
 
 //! Cargo CLI support.
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Args};
-use std::{borrow::Cow, path::PathBuf};
+use guppy::graph::PackageGraph;
+use std::{borrow::Cow, error::Error, io::Cursor, path::PathBuf};
+
+use crate::{errors::CreateBinaryListError, list::BinaryList, platform::BuildPlatforms};
 
 /// Options passed down to cargo.
 #[derive(Debug, Args)]
@@ -20,59 +23,59 @@ pub struct CargoOptions {
         group = "cargo-opts",
         help_heading = "Package selection"
     )]
-    packages: Vec<String>,
+    pub packages: Vec<String>,
 
     /// Test all packages in the workspace
     #[arg(long, group = "cargo-opts", help_heading = "Package selection")]
-    workspace: bool,
+    pub workspace: bool,
 
     /// Exclude packages from the test
     #[arg(long, group = "cargo-opts", help_heading = "Package selection")]
-    exclude: Vec<String>,
+    pub exclude: Vec<String>,
 
     /// Alias for --workspace (deprecated)
     #[arg(long, group = "cargo-opts", help_heading = "Package selection")]
-    all: bool,
+    pub all: bool,
 
     /// Test only this package's library unit tests
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
-    lib: bool,
+    pub lib: bool,
 
     /// Test only the specified binary
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
-    bin: Vec<String>,
+    pub bin: Vec<String>,
 
     /// Test all binaries
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
-    bins: bool,
+    pub bins: bool,
 
     /// Test only the specified example
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
-    example: Vec<String>,
+    pub example: Vec<String>,
 
     /// Test all examples
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
-    examples: bool,
+    pub examples: bool,
 
     /// Test only the specified test target
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
-    test: Vec<String>,
+    pub test: Vec<String>,
 
     /// Test all targets
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
-    tests: bool,
+    pub tests: bool,
 
     /// Test only the specified bench target
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
-    bench: Vec<String>,
+    pub bench: Vec<String>,
 
     /// Test all benches
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
-    benches: bool,
+    pub benches: bool,
 
     /// Test all targets
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
-    all_targets: bool,
+    pub all_targets: bool,
 
     /// Space or comma separated list of features to activate
     #[arg(
@@ -81,15 +84,15 @@ pub struct CargoOptions {
         group = "cargo-opts",
         help_heading = "Feature selection"
     )]
-    features: Vec<String>,
+    pub features: Vec<String>,
 
     /// Activate all available features
     #[arg(long, group = "cargo-opts", help_heading = "Feature selection")]
-    all_features: bool,
+    pub all_features: bool,
 
     /// Do not activate the `default` feature
     #[arg(long, group = "cargo-opts", help_heading = "Feature selection")]
-    no_default_features: bool,
+    pub no_default_features: bool,
 
     // jobs is handled by test runner
     /// Number of build jobs to run
@@ -100,7 +103,7 @@ pub struct CargoOptions {
         help_heading = "Compilation options",
         allow_negative_numbers = true
     )]
-    build_jobs: Option<String>,
+    pub build_jobs: Option<String>,
 
     /// Build artifacts in release mode, with optimizations
     #[arg(
@@ -109,7 +112,7 @@ pub struct CargoOptions {
         group = "cargo-opts",
         help_heading = "Compilation options"
     )]
-    release: bool,
+    pub release: bool,
 
     /// Build artifacts with the specified Cargo profile
     #[arg(
@@ -119,7 +122,7 @@ pub struct CargoOptions {
         group = "cargo-opts",
         help_heading = "Compilation options"
     )]
-    cargo_profile: Option<String>,
+    pub cargo_profile: Option<String>,
 
     /// Build for the target triple
     #[arg(
@@ -128,7 +131,7 @@ pub struct CargoOptions {
         group = "cargo-opts",
         help_heading = "Compilation options"
     )]
-    pub(crate) target: Option<String>,
+    pub target: Option<String>,
 
     /// Directory for all generated artifacts
     #[arg(
@@ -137,11 +140,11 @@ pub struct CargoOptions {
         group = "cargo-opts",
         help_heading = "Compilation options"
     )]
-    pub(crate) target_dir: Option<Utf8PathBuf>,
+    pub target_dir: Option<Utf8PathBuf>,
 
     /// Output build graph in JSON (unstable)
     #[arg(long, group = "cargo-opts", help_heading = "Compilation options")]
-    unit_graph: bool,
+    pub unit_graph: bool,
 
     /// Timing output formats (unstable) (comma separated): html, json
     #[arg(
@@ -151,44 +154,44 @@ pub struct CargoOptions {
         group = "cargo-opts",
         help_heading = "Compilation options"
     )]
-    timings: Option<Option<String>>,
+    pub timings: Option<Option<String>>,
 
     // --color is handled by runner
     /// Require Cargo.lock and cache are up to date
     #[arg(long, group = "cargo-opts", help_heading = "Manifest options")]
-    frozen: bool,
+    pub frozen: bool,
 
     /// Require Cargo.lock is up to date
     #[arg(long, group = "cargo-opts", help_heading = "Manifest options")]
-    locked: bool,
+    pub locked: bool,
 
     /// Run without accessing the network
     #[arg(long, group = "cargo-opts", help_heading = "Manifest options")]
-    offline: bool,
+    pub offline: bool,
 
     //  TODO: doc?
     // no-run is handled by test runner
     /// Do not print cargo log messages (specify twice for no Cargo output at all)
     #[arg(long, action = ArgAction::Count, group = "cargo-opts", help_heading = "Other Cargo options")]
-    cargo_quiet: u8,
+    pub cargo_quiet: u8,
 
     /// Use cargo verbose output (specify twice for very verbose/build.rs output)
     #[arg(long, action = ArgAction::Count, group = "cargo-opts", help_heading = "Other Cargo options")]
-    cargo_verbose: u8,
+    pub cargo_verbose: u8,
 
     /// Ignore `rust-version` specification in packages
     #[arg(long, group = "cargo-opts", help_heading = "Other Cargo options")]
-    ignore_rust_version: bool,
+    pub ignore_rust_version: bool,
     // --message-format is captured by nextest
     /// Outputs a future incompatibility report at the end of the build
     #[arg(long, group = "cargo-opts", help_heading = "Other Cargo options")]
-    future_incompat_report: bool,
+    pub future_incompat_report: bool,
 
     // NOTE: this does not conflict with reuse build opts (not part of the cargo-opts group) since
     // we let target.runner be specified this way
     /// Override a Cargo configuration value
     #[arg(long, value_name = "KEY=VALUE", help_heading = "Other Cargo options")]
-    pub(crate) config: Vec<String>,
+    pub config: Vec<String>,
 
     /// Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
     #[clap(
@@ -197,52 +200,46 @@ pub struct CargoOptions {
         group = "cargo-opts",
         help_heading = "Other Cargo options"
     )]
-    unstable_flags: Vec<String>,
+    pub unstable_flags: Vec<String>,
 }
 
 impl CargoOptions {
-    /// Manually construct `CargoOptions``, the expected way to achieve this is normally through `CargoNextestApp::parse()`
-    #[expect(clippy::too_many_arguments)]
-    pub fn new(
-        packages: Vec<String>,
-        workspace: bool,
-        exclude: Vec<String>,
-        all: bool,
-        lib: bool,
-        bin: Vec<String>,
-        bins: bool,
-        example: Vec<String>,
-        examples: bool,
-        test: Vec<String>,
-        tests: bool,
-        bench: Vec<String>,
-        benches: bool,
-        all_targets: bool,
-        features: Vec<String>,
-        all_features: bool,
-        no_default_features: bool,
-        build_jobs: Option<String>,
-        release: bool,
-        cargo_profile: Option<String>,
-        target: Option<String>,
-        target_dir: Option<Utf8PathBuf>,
-        unit_graph: bool,
-        timings: Option<Option<String>>,
-        frozen: bool,
-        locked: bool,
-        offline: bool,
-        cargo_quiet: u8,
-        cargo_verbose: u8,
-        ignore_rust_version: bool,
-        future_incompat_report: bool,
-        config: Vec<String>,
-        unstable_flags: Vec<String>) -> Self {
-        Self { packages, workspace, exclude, all, lib, bin, bins, example, examples, test, tests, bench, benches, all_targets, features, all_features, no_default_features, build_jobs, release, cargo_profile, target, target_dir, unit_graph, timings, frozen, locked, offline, cargo_quiet, cargo_verbose, ignore_rust_version, future_incompat_report, config, unstable_flags }
+    /// Invoke 'cargo test --no-run' to compile test binaries and produce a list of them
+    pub fn compute_binary_list(
+        &self,
+        graph: &PackageGraph,
+        manifest_path: Option<&Utf8Path>,
+        build_platforms: BuildPlatforms,
+    ) -> Result<BinaryList, CreateBinaryListError> {
+        // Don't use the manifest path from the graph to ensure that if the user cd's into a
+        // particular crate and runs cargo nextest, then it behaves identically to cargo test.
+        let mut cargo_cli = CargoCli::new("test", manifest_path);
+
+        // Only build tests in the cargo test invocation, do not run them.
+        cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
+        cargo_cli.add_options(self);
+
+        let expression = cargo_cli.to_expression();
+        let output = expression
+            .stdout_capture()
+            .unchecked()
+            .run()
+            .map_err(|err| CreateBinaryListError::build_exec_failed(cargo_cli.all_args(), err))?;
+        if !output.status.success() {
+            return Err(CreateBinaryListError::build_failed(
+                cargo_cli.all_args(),
+                output.status.code(),
+            ));
+        }
+
+        let test_binaries =
+            BinaryList::from_messages(Cursor::new(output.stdout), graph, build_platforms)?;
+        Ok(test_binaries)
     }
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct CargoCli<'a> {
+pub struct CargoCli<'a> {
     cargo_path: Utf8PathBuf,
     manifest_path: Option<&'a Utf8Path>,
     command: &'a str,
@@ -251,7 +248,7 @@ pub(crate) struct CargoCli<'a> {
 }
 
 impl<'a> CargoCli<'a> {
-    pub(crate) fn new(
+    pub fn new(
         command: &'a str,
         manifest_path: Option<&'a Utf8Path>,
     ) -> Self {
@@ -265,17 +262,17 @@ impl<'a> CargoCli<'a> {
         }
     }
 
-    pub(crate) fn add_arg(&mut self, arg: &'a str) -> &mut Self {
+    pub fn add_arg(&mut self, arg: &'a str) -> &mut Self {
         self.args.push(Cow::Borrowed(arg));
         self
     }
 
-    pub(crate) fn add_args(&mut self, args: impl IntoIterator<Item = &'a str>) -> &mut Self {
+    pub fn add_args(&mut self, args: impl IntoIterator<Item = &'a str>) -> &mut Self {
         self.args.extend(args.into_iter().map(Cow::Borrowed));
         self
     }
 
-    pub(crate) fn add_options(&mut self, options: &'a CargoOptions) -> &mut Self {
+    pub fn add_options(&mut self, options: &'a CargoOptions) -> &mut Self {
         // ---
         // Package selection
         // ---
@@ -404,7 +401,7 @@ impl<'a> CargoCli<'a> {
     }
 
     /// Add Cargo options that are common to all commands.
-    pub(crate) fn add_generic_cargo_options(&mut self, options: &'a CargoOptions) -> &mut Self {
+    pub fn add_generic_cargo_options(&mut self, options: &'a CargoOptions) -> &mut Self {
         // ---
         // Manifest options
         // ---
@@ -435,13 +432,13 @@ impl<'a> CargoCli<'a> {
         self.args.push(Cow::Owned(arg));
     }
 
-    pub(crate) fn all_args(&self) -> Vec<&str> {
+    pub fn all_args(&self) -> Vec<&str> {
         let mut all_args = vec![self.cargo_path.as_str(), self.command];
         all_args.extend(self.args.iter().map(|s| s.as_ref()));
         all_args
     }
 
-    pub(crate) fn to_expression(&self) -> duct::Expression {
+    pub fn to_expression(&self) -> duct::Expression {
         let mut initial_args = vec![self.command];
         if let Some(path) = self.manifest_path {
             initial_args.extend(["--manifest-path", path.as_str()]);
