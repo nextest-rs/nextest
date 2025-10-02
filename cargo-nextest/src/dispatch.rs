@@ -3,7 +3,6 @@
 
 use crate::{
     ExpectedError, Result, ReuseBuildKind,
-    cargo_cli::{CargoCli, CargoOptions},
     output::{OutputContext, OutputOpts, OutputWriter, StderrStyles, should_redact},
     reuse_build::{ArchiveFormatOpt, ReuseBuildOpts, make_path_mapper},
     version,
@@ -15,20 +14,12 @@ use itertools::Itertools;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
-    RustcCli,
-    cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
-    config::{
+    cargo_cli::{CargoCli, CargoOptions}, cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple}, config::{
         core::{
-            ConfigExperimental, EarlyProfile, EvaluatableProfile, NextestConfig,
-            NextestVersionConfig, NextestVersionEval, ToolConfigFile, VersionOnlyConfig,
-            get_num_cpus,
+            get_num_cpus, ConfigExperimental, EarlyProfile, EvaluatableProfile, NextestConfig, NextestVersionConfig, NextestVersionEval, ToolConfigFile, VersionOnlyConfig
         },
         elements::{MaxFail, RetryPolicy, TestGroup, TestThreads},
-    },
-    double_spawn::DoubleSpawnInfo,
-    errors::{TargetTripleError, WriteTestListError},
-    input::InputHandlerKind,
-    list::{
+    }, double_spawn::DoubleSpawnInfo, errors::{TargetTripleError, WriteTestListError}, input::InputHandlerKind, list::{
         BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestExecuteContext,
         TestList,
     },
@@ -57,7 +48,7 @@ use std::{
     collections::BTreeSet,
     env::VarError,
     fmt,
-    io::{Cursor, Write},
+    io::Write,
     sync::{Arc, OnceLock},
     time::Duration,
 };
@@ -782,41 +773,6 @@ impl From<RunIgnoredOpt> for RunIgnored {
             RunIgnoredOpt::Only => RunIgnored::Only,
             RunIgnoredOpt::All => RunIgnored::All,
         }
-    }
-}
-
-impl CargoOptions {
-    /// Invoke 'cargo test --no-run' to compile test binaries and produce a list of them
-    pub fn compute_binary_list(
-        &self,
-        graph: &PackageGraph,
-        manifest_path: Option<&Utf8Path>,
-        build_platforms: BuildPlatforms,
-    ) -> Result<BinaryList> {
-        // Don't use the manifest path from the graph to ensure that if the user cd's into a
-        // particular crate and runs cargo nextest, then it behaves identically to cargo test.
-        let mut cargo_cli = CargoCli::new("test", manifest_path);
-
-        // Only build tests in the cargo test invocation, do not run them.
-        cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
-        cargo_cli.add_options(self);
-
-        let expression = cargo_cli.to_expression();
-        let output = expression
-            .stdout_capture()
-            .unchecked()
-            .run()
-            .map_err(|err| ExpectedError::build_exec_failed(cargo_cli.all_args(), err))?;
-        if !output.status.success() {
-            return Err(ExpectedError::build_failed(
-                cargo_cli.all_args(),
-                output.status.code(),
-            ));
-        }
-
-        let test_binaries =
-            BinaryList::from_messages(Cursor::new(output.stdout), graph, build_platforms)?;
-        Ok(test_binaries)
     }
 }
 

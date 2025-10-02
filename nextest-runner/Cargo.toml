@@ -22,6 +22,7 @@ bytes.workspace = true
 camino = { workspace = true, features = ["serde1"] }
 camino-tempfile.workspace = true
 cargo_metadata.workspace = true
+clap = { workspace = true, features = ["derive", "env", "unicode", "wrap_help"] }
 config.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
