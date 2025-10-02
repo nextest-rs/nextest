@@ -24,6 +24,10 @@ use windows_sys::Win32::{
     },
 };
 
+pub(super) fn create_job() -> Result<Job, JobError> {
+    Job::create_with_limit_info(win32job::ExtendedLimitInfo::new().limit_breakaway_ok())
+}
+
 pub(super) fn configure_handle_inheritance_impl(
     no_capture: bool,
 ) -> Result<(), ConfigureHandleInheritanceError> {

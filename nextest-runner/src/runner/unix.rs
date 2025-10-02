@@ -34,10 +34,8 @@ pub(super) fn set_process_group(cmd: &mut std::process::Command) {
 #[derive(Debug)]
 pub(super) struct Job(());
 
-impl Job {
-    pub(super) fn create() -> Result<Self, Infallible> {
-        Ok(Self(()))
-    }
+pub(super) fn create_job() -> Result<Job, Infallible> {
+    Ok(Job(()))
 }
 
 pub(super) fn assign_process_to_job(
