@@ -246,7 +246,6 @@ impl CargoOptions {
 pub(crate) struct CargoCli<'a> {
     cargo_path: Utf8PathBuf,
     manifest_path: Option<&'a Utf8Path>,
-    output: OutputContext,
     command: &'a str,
     args: Vec<Cow<'a, str>>,
     stderr_null: bool,
@@ -256,13 +255,11 @@ impl<'a> CargoCli<'a> {
     pub(crate) fn new(
         command: &'a str,
         manifest_path: Option<&'a Utf8Path>,
-        output: OutputContext,
     ) -> Self {
         let cargo_path = cargo_path();
         Self {
             cargo_path,
             manifest_path,
-            output,
             command,
             args: vec![],
             stderr_null: false,
@@ -446,7 +443,7 @@ impl<'a> CargoCli<'a> {
     }
 
     pub(crate) fn to_expression(&self) -> duct::Expression {
-        let mut initial_args = vec![self.output.color.to_arg(), self.command];
+        let mut initial_args = vec![self.command];
         if let Some(path) = self.manifest_path {
             initial_args.extend(["--manifest-path", path.as_str()]);
         }
