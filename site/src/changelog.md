@@ -8,6 +8,14 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.105] - 2025-10-02
+
+### Changed
+
+On Windows, [job objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects) are now created with `JOB_OBJECT_LIMIT_BREAKAWAY_OK`. This enables test processes to have their children be assigned a different job object, which is particularly relevant on Windows 7 since that platform doesn't have nested job objects.
+
+Thanks to [Guiguiprim](https://github.com/Guiguiprim) for the contribution!
+
 ## [0.9.104] - 2025-09-14
 
 ### Added
@@ -1537,6 +1545,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.105]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.105
 [0.9.104]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.104
 [0.9.103]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.103
 [0.9.102]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.102
