@@ -3,7 +3,6 @@
 
 //! Cargo CLI support.
 
-use crate::output::OutputContext;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Args};
 use std::{borrow::Cow, path::PathBuf};
