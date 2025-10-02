@@ -791,12 +791,11 @@ impl CargoOptions {
         &self,
         graph: &PackageGraph,
         manifest_path: Option<&Utf8Path>,
-        output: OutputContext,
         build_platforms: BuildPlatforms,
     ) -> Result<BinaryList> {
         // Don't use the manifest path from the graph to ensure that if the user cd's into a
         // particular crate and runs cargo nextest, then it behaves identically to cargo test.
-        let mut cargo_cli = CargoCli::new("test", manifest_path, output);
+        let mut cargo_cli = CargoCli::new("test", manifest_path);
 
         // Only build tests in the cargo test invocation, do not run them.
         cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
@@ -1316,7 +1315,6 @@ impl BaseApp {
                     cargo_opts.target_dir.as_deref(),
                     &cargo_opts,
                     &build_platforms,
-                    output,
                 )?;
                 let graph = PackageGraph::from_json(&json)
                     .map_err(|err| ExpectedError::cargo_metadata_parse_error(None, err))?;
@@ -1628,7 +1626,6 @@ impl BaseApp {
             None => Arc::new(self.cargo_opts.compute_binary_list(
                 self.graph(),
                 self.manifest_path.as_deref(),
-                self.output,
                 self.build_platforms.clone(),
             )?),
         };
@@ -2040,7 +2037,7 @@ impl ShowConfigCommand {
         match self {
             Self::Version {} => {
                 let mut cargo_cli =
-                    CargoCli::new("locate-project", manifest_path.as_deref(), output);
+                    CargoCli::new("locate-project", manifest_path.as_deref());
                 cargo_cli.add_args(["--workspace", "--message-format=plain"]);
                 let locate_project_output = cargo_cli
                     .to_expression()
@@ -2451,12 +2448,11 @@ pub fn acquire_graph_data(
     target_dir: Option<&Utf8Path>,
     cargo_opts: &CargoOptions,
     build_platforms: &BuildPlatforms,
-    output: OutputContext,
 ) -> Result<String> {
     let cargo_target_arg = build_platforms.to_cargo_target_arg()?;
     let cargo_target_arg_str = cargo_target_arg.to_string();
 
-    let mut cargo_cli = CargoCli::new("metadata", manifest_path, output);
+    let mut cargo_cli = CargoCli::new("metadata", manifest_path);
     cargo_cli
         .add_args(["--format-version=1", "--all-features"])
         .add_args(["--filter-platform", &cargo_target_arg_str])

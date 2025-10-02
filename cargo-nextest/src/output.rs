@@ -84,15 +84,12 @@ impl OutputOpts {
     }
 }
 
-/// Specifies details about nextest
 #[derive(Copy, Clone, Debug)]
 #[must_use]
 pub struct OutputContext {
-    /// Request the output to be verbose
-    pub verbose: bool,
 
-    /// Specify how colorization is determined (not what color is used)
-    pub color: Color,
+    pub(crate) verbose: bool,
+    pub(crate) color: Color,
 }
 
 impl OutputContext {
@@ -287,14 +284,6 @@ impl Color {
             Color::Auto => supports_color::on_cached(stream).is_some(),
             Color::Always => true,
             Color::Never => false,
-        }
-    }
-
-    pub(crate) fn to_arg(self) -> &'static str {
-        match self {
-            Color::Auto => "--color=auto",
-            Color::Always => "--color=always",
-            Color::Never => "--color=never",
         }
     }
 }
