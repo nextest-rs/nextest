@@ -39,15 +39,10 @@ pub enum ExpectedError {
         #[source]
         err: std::io::Error,
     },
-    #[error("cargo metadata exec failed")]
-    CargoMetadataExecFailed {
-        command: String,
-        err: std::io::Error,
-    },
     #[error("cargo metadata failed")]
     CargoMetadataFailed {
-        command: String,
-        exit_status: ExitStatus,
+        #[from]
+        err: CargoMetaDataError
     },
     #[error("cargo locate-project exec failed")]
     CargoLocateProjectExecFailed {
@@ -286,26 +281,6 @@ pub enum ExpectedError {
 }
 
 impl ExpectedError {
-    pub(crate) fn cargo_metadata_exec_failed(
-        command: impl IntoIterator<Item = impl AsRef<str>>,
-        err: std::io::Error,
-    ) -> Self {
-        Self::CargoMetadataExecFailed {
-            command: shell_words::join(command),
-            err,
-        }
-    }
-
-    pub(crate) fn cargo_metadata_failed(
-        command: impl IntoIterator<Item = impl AsRef<str>>,
-        exit_status: ExitStatus,
-    ) -> Self {
-        Self::CargoMetadataFailed {
-            command: shell_words::join(command),
-            exit_status,
-        }
-    }
-
     pub(crate) fn cargo_locate_project_exec_failed(
         command: impl IntoIterator<Item = impl AsRef<str>>,
         err: std::io::Error,
@@ -378,8 +353,7 @@ impl ExpectedError {
     /// Returns the exit code for the process.
     pub fn process_exit_code(&self) -> i32 {
         match self {
-            Self::CargoMetadataExecFailed { .. }
-            | Self::CargoMetadataFailed { .. }
+            Self::CargoMetadataFailed { .. }
             | Self::CargoLocateProjectExecFailed { .. }
             | Self::CargoLocateProjectFailed { .. } => NextestExitCode::CARGO_METADATA_FAILED,
             Self::WorkspaceRootInvalidUtf8 { .. }
@@ -459,20 +433,34 @@ impl ExpectedError {
                 error!("failed to get current executable");
                 Some(err as &dyn Error)
             }
-            Self::CargoMetadataExecFailed { command, err } => {
-                error!("failed to execute `{}`", command.style(styles.bold));
-                Some(err as &dyn Error)
-            }
-            Self::CargoMetadataFailed {
-                command,
-                exit_status,
-            } => {
-                error!(
-                    "command `{}` failed with {}",
-                    command.style(styles.bold),
-                    exit_status
-                );
-                None
+            Self::CargoMetadataFailed { err } => {
+                match err {
+                    CargoMetaDataError::CommandExecFail { command, err } => {
+                        error!("failed to execute `{}`", command.style(styles.bold));
+                        Some(err as &dyn Error)
+                    }
+                    CargoMetaDataError::CommandFail { 
+                        command, 
+                        exit_status 
+                    } => {
+                        error!(
+                            "command `{}` failed with {}",
+                            command.style(styles.bold),
+                            exit_status
+                        );
+                        None
+                    }
+                    CargoMetaDataError::TargetTriple { err } => {
+                        if let Some(report) = err.source_report() {
+                            // Display the miette report if available.
+                            error!(target: "cargo_nextest::no_heading", "{report:?}");
+                            None
+                        } else {
+                            error!("{err}");
+                            err.source()
+                        }
+                    }
+                }
             }
             Self::CargoLocateProjectExecFailed { command, err } => {
                 error!("failed to execute `{}`", command.style(styles.bold));

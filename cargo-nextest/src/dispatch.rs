@@ -14,7 +14,7 @@ use itertools::Itertools;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
-    cargo_cli::{CargoCli, CargoOptions}, cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple}, config::{
+    cargo_cli::{acquire_graph_data, CargoCli, CargoOptions}, cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple}, config::{
         core::{
             get_num_cpus, ConfigExperimental, EarlyProfile, EvaluatableProfile, NextestConfig, NextestVersionConfig, NextestVersionEval, ToolConfigFile, VersionOnlyConfig
         },
@@ -2396,50 +2396,6 @@ pub enum BuildPlatformsOutputFormat {
 
     /// Show just the triple.
     Triple,
-}
-
-/// Invoke 'cargo metadata', the result may be parsed with `PackageGraph::from_json`
-pub fn acquire_graph_data(
-    manifest_path: Option<&Utf8Path>,
-    target_dir: Option<&Utf8Path>,
-    cargo_opts: &CargoOptions,
-    build_platforms: &BuildPlatforms,
-) -> Result<String> {
-    let cargo_target_arg = build_platforms.to_cargo_target_arg()?;
-    let cargo_target_arg_str = cargo_target_arg.to_string();
-
-    let mut cargo_cli = CargoCli::new("metadata", manifest_path);
-    cargo_cli
-        .add_args(["--format-version=1", "--all-features"])
-        .add_args(["--filter-platform", &cargo_target_arg_str])
-        .add_generic_cargo_options(cargo_opts);
-
-    // We used to be able to pass in --no-deps in common cases, but that was (a) error-prone and (b)
-    // a bit harder to do given that some nextest config options depend on the graph. Maybe we could
-    // reintroduce it some day.
-
-    let mut expression = cargo_cli.to_expression().stdout_capture().unchecked();
-    // cargo metadata doesn't support "--target-dir" but setting the environment
-    // variable works.
-    if let Some(target_dir) = target_dir {
-        expression = expression.env("CARGO_TARGET_DIR", target_dir);
-    }
-    // Capture stdout but not stderr.
-    let output = expression
-        .run()
-        .map_err(|err| ExpectedError::cargo_metadata_exec_failed(cargo_cli.all_args(), err))?;
-    if !output.status.success() {
-        return Err(ExpectedError::cargo_metadata_failed(
-            cargo_cli.all_args(),
-            output.status,
-        ));
-    }
-
-    let json = String::from_utf8(output.stdout).map_err(|error| {
-        let io_error = std::io::Error::new(std::io::ErrorKind::InvalidData, error);
-        ExpectedError::cargo_metadata_exec_failed(cargo_cli.all_args(), io_error)
-    })?;
-    Ok(json)
 }
 
 fn detect_build_platforms(
