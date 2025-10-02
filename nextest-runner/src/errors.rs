@@ -954,7 +954,7 @@ pub enum FromMessagesError {
     },
 }
 
-/// An error that occurs while parsing test list output.
+/// An error that occurs while building the test binaries.
 #[derive(Debug, Error)]
 pub enum CreateBinaryListError {
     /// Running a command to gather the list of binaries failed to execute.
@@ -971,7 +971,7 @@ pub enum CreateBinaryListError {
         error: std::io::Error,
     },
 
-    /// Running a command to gather the list of tests failed failed with a non-zero exit code.
+    /// Running a command to gather the list of binaries failed failed with a non-zero exit code.
     #[error(
         "command `{}` exited{}",
         command,
@@ -1011,6 +1011,67 @@ impl CreateBinaryListError {
         Self::CommandFail {
             command: shell_words::join(command),
             exit_code,
+        }
+    }
+}
+
+/// An error that occurs while gather cargo metadata.
+#[derive(Debug, Error)]
+pub enum CargoMetaDataError {
+    /// Running a command to gather the list of binaries failed to execute.
+    #[error(
+        "running command `{}` failed to execute",
+        command
+    )]
+    CommandExecFail {
+        /// The command that was run.
+        command: String,
+
+        /// The underlying error.
+        #[source]
+        err: std::io::Error,
+    },
+
+    /// Running a command to gather the list of tests failed failed with a non-zero exit code.
+    #[error(
+        "command `{}` failed with {}",
+        command,
+        exit_status
+    )]
+    CommandFail {
+        /// The command that was run.
+        command: String,
+
+        /// The exit status with which the command failed.
+        exit_status: ExitStatus
+    },
+
+    #[error("target triple error")]
+    TargetTriple {
+        /// The underlying error.
+        #[from]
+        err: TargetTripleError,
+    }
+}
+
+impl CargoMetaDataError {
+    pub(crate) fn cargo_metadata_exec_failed(
+        command: impl IntoIterator<Item = impl AsRef<str>>,
+        err: std::io::Error,
+    ) -> Self {
+        Self::CommandExecFail {
+            command: shell_words::join(command),
+            err,
+        }
+    }
+
+    pub(crate) fn cargo_metadata_failed(
+        command: impl IntoIterator<Item = impl AsRef<str>>,
+        exit_status: ExitStatus,
+    ) -> Self {
+        Self::CommandFail {
+            command: shell_words::join(command),
+            exit_status,
         }
     }
 }
