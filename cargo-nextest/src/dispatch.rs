@@ -14,12 +14,21 @@ use itertools::Itertools;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
-    cargo_cli::{acquire_graph_data, CargoCli, CargoOptions}, cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple}, config::{
+    RustcCli,
+    cargo_cli::{acquire_graph_data, CargoCli, CargoOptions},
+    cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
+    config::{
         core::{
-            get_num_cpus, ConfigExperimental, EarlyProfile, EvaluatableProfile, NextestConfig, NextestVersionConfig, NextestVersionEval, ToolConfigFile, VersionOnlyConfig
+            ConfigExperimental, EarlyProfile, EvaluatableProfile, NextestConfig,
+            NextestVersionConfig, NextestVersionEval, ToolConfigFile, VersionOnlyConfig,
+            get_num_cpus,
         },
         elements::{MaxFail, RetryPolicy, TestGroup, TestThreads},
-    }, double_spawn::DoubleSpawnInfo, errors::{TargetTripleError, WriteTestListError}, input::InputHandlerKind, list::{
+    },
+    double_spawn::DoubleSpawnInfo,
+    errors::{TargetTripleError, WriteTestListError},
+    input::InputHandlerKind,
+    list::{
         BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestExecuteContext,
         TestList,
     },
