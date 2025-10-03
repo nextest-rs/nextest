@@ -87,7 +87,6 @@ impl OutputOpts {
 #[derive(Copy, Clone, Debug)]
 #[must_use]
 pub struct OutputContext {
-
     pub(crate) verbose: bool,
     pub(crate) color: Color,
 }
@@ -115,19 +114,13 @@ impl OutputContext {
     }
 }
 
-/// Specifies whether to colorize output
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 #[must_use]
 #[derive(Default)]
 pub enum Color {
-    /// Determine coloration based on whether the actual terminal supports it and whether the 'NO_COLOR' environment variable is set
     #[default]
     Auto,
-
-    /// Always try to colorize
     Always,
-
-    /// Never try to colorize
     Never,
 }
 
