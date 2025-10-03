@@ -42,7 +42,7 @@ pub enum ExpectedError {
     #[error("cargo metadata failed")]
     CargoMetadataFailed {
         #[from]
-        err: CargoMetaDataError
+        err: CargoMetadataError
     },
     #[error("cargo locate-project exec failed")]
     CargoLocateProjectExecFailed {
@@ -435,11 +435,11 @@ impl ExpectedError {
             }
             Self::CargoMetadataFailed { err } => {
                 match err {
-                    CargoMetaDataError::CommandExecFail { command, err } => {
+                    CargoMetadataError::CommandExecFail { command, err } => {
                         error!("failed to execute `{}`", command.style(styles.bold));
                         Some(err as &dyn Error)
                     }
-                    CargoMetaDataError::CommandFail { 
+                    CargoMetadataError::CommandFail { 
                         command, 
                         exit_status 
                     } => {
@@ -450,7 +450,7 @@ impl ExpectedError {
                         );
                         None
                     }
-                    CargoMetaDataError::TargetTriple { err } => {
+                    CargoMetadataError::TargetTriple { err } => {
                         display_target_triple_error_to_stderr(err)
                     }
                 }
