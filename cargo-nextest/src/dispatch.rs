@@ -14,17 +14,40 @@ use itertools::Itertools;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
-    cargo_cli::{acquire_graph_data, CargoCli, CargoOptions}, cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple}, config::{
+    RustcCli,
+    cargo_cli::{acquire_graph_data, CargoCli, CargoOptions},
+    cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
+    config::{
         core::{
-            get_num_cpus, ConfigExperimental, EarlyProfile, EvaluatableProfile, NextestConfig, NextestVersionConfig, NextestVersionEval, ToolConfigFile, VersionOnlyConfig
+            ConfigExperimental, EarlyProfile, EvaluatableProfile, NextestConfig,
+            NextestVersionConfig, NextestVersionEval, ToolConfigFile, VersionOnlyConfig,
+            get_num_cpus,
         },
         elements::{MaxFail, RetryPolicy, TestGroup, TestThreads},
-    }, double_spawn::DoubleSpawnInfo, errors::{TargetTripleError, WriteTestListError}, input::InputHandlerKind, list::{
+    },
+    double_spawn::DoubleSpawnInfo,
+    errors::{TargetTripleError, WriteTestListError},
+    input::InputHandlerKind,
+    list::{
         BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestExecuteContext,
         TestList,
-    }, partition::PartitionerBuilder, platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform}, redact::Redactor, reporter::{
-        events::{FinalRunStats, RunStatsFailureKind}, highlight_end, structured, FinalStatusLevel, ReporterBuilder, StatusLevel, TestOutputDisplay, TestOutputErrorSlice
-    }, reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo}, runner::{configure_handle_inheritance, StressCondition, StressCount, TestRunnerBuilder}, show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode}, signal::SignalHandlerKind, target_runner::{PlatformRunner, TargetRunner}, test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns}, test_output::CaptureStrategy, write_str::WriteStr, RustcCli
+    },
+    partition::PartitionerBuilder,
+    platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
+    redact::Redactor,
+    reporter::{
+        FinalStatusLevel, ReporterBuilder, StatusLevel, TestOutputDisplay, TestOutputErrorSlice,
+        events::{FinalRunStats, RunStatsFailureKind},
+        highlight_end, structured,
+    },
+    reuse_build::{ArchiveReporter, PathMapper, ReuseBuildInfo, archive_to_file},
+    runner::{StressCondition, StressCount, TestRunnerBuilder, configure_handle_inheritance},
+    show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
+    signal::SignalHandlerKind,
+    target_runner::{PlatformRunner, TargetRunner},
+    test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
+    test_output::CaptureStrategy,
+    write_str::WriteStr,
 };
 use owo_colors::OwoColorize;
 use quick_junit::XmlString;
