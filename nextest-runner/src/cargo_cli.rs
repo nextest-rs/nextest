@@ -1,5 +1,5 @@
 // Copyright (c) The nextest Contributors
-// SPDX-License-pub Identifier: MIT OR Apache-2.0
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Cargo CLI support.
 
@@ -8,7 +8,10 @@ use clap::{ArgAction, Args};
 use guppy::graph::PackageGraph;
 use std::{borrow::Cow, io::Cursor, path::PathBuf};
 
-use crate::{errors::{CargoMetadataError, CreateBinaryListError}, list::BinaryList, platform::BuildPlatforms};
+use crate::{
+    errors::{CargoMetadataError, CreateBinaryListError}, 
+    list::BinaryList, platform::BuildPlatforms
+};
 
 /// Options passed down to cargo.
 #[derive(Debug, Args)]
