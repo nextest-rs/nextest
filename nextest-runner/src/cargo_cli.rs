@@ -7,7 +7,6 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Args};
 use guppy::graph::PackageGraph;
 use std::{borrow::Cow, io::Cursor, path::PathBuf};
-
 use crate::{
     errors::{CargoMetadataError, CreateBinaryListError}, 
     list::BinaryList, platform::BuildPlatforms
