@@ -451,14 +451,7 @@ impl ExpectedError {
                         None
                     }
                     CargoMetaDataError::TargetTriple { err } => {
-                        if let Some(report) = err.source_report() {
-                            // Display the miette report if available.
-                            error!(target: "cargo_nextest::no_heading", "{report:?}");
-                            None
-                        } else {
-                            error!("{err}");
-                            err.source()
-                        }
+                        display_target_triple_error_to_stderr(err)
                     }
                 }
             }
@@ -703,14 +696,7 @@ impl ExpectedError {
                 Some(err as &dyn Error)
             }
             Self::TargetTripleError { err } => {
-                if let Some(report) = err.source_report() {
-                    // Display the miette report if available.
-                    error!(target: "cargo_nextest::no_heading", "{report:?}");
-                    None
-                } else {
-                    error!("{err}");
-                    err.source()
-                }
+                display_target_triple_error_to_stderr(err)
             }
             Self::RemapAbsoluteError {
                 arg_name,
@@ -965,5 +951,16 @@ impl ExpectedError {
             );
             next_error = err.source();
         }
+    }
+}
+
+fn display_target_triple_error_to_stderr(err: &TargetTripleError) -> Option<&(dyn Error + 'static)> {
+    if let Some(report) = err.source_report() {
+        // Display the miette report if available.
+        error!(target: "cargo_nextest::no_heading", "{report:?}");
+        None
+    } else {
+        error!("{err}");
+        err.source()
     }
 }
