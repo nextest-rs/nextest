@@ -975,7 +975,7 @@ pub enum CreateBinaryListError {
     #[error(
         "command `{}` exited{}",
         command,
-        exit_code.map_or_else(|| String::new(), |c| format!(" with code {}", c))
+        exit_code.map_or_else(String::new, |c| format!(" with code {}", c))
     )]
     CommandFail {
         /// The command that was run.
@@ -985,6 +985,7 @@ pub enum CreateBinaryListError {
         exit_code: Option<i32>
     },
 
+    /// See `FromMessagesError`
     #[error("error parsing Cargo messages")]
     FromMessages {
         /// The underlying error.
@@ -994,7 +995,7 @@ pub enum CreateBinaryListError {
 }
 
 impl CreateBinaryListError {
-        pub(crate) fn build_exec_failed(
+    pub(crate) fn build_exec_failed(
         command: impl IntoIterator<Item = impl AsRef<str>>,
         error: std::io::Error,
     ) -> Self {
@@ -1046,6 +1047,7 @@ pub enum CargoMetadataError {
         exit_status: ExitStatus
     },
 
+    /// An error occurred while determining the cross-compiling target triple.
     #[error("target triple error")]
     TargetTriple {
         /// The underlying error.
