@@ -6,9 +6,9 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Args};
 use guppy::graph::PackageGraph;
-use std::{borrow::Cow, error::Error, io::Cursor, path::PathBuf};
+use std::{borrow::Cow, io::Cursor, path::PathBuf};
 
-use crate::{errors::{CargoMetaDataError, CreateBinaryListError}, list::BinaryList, platform::BuildPlatforms};
+use crate::{errors::{CargoMetadataError, CreateBinaryListError}, list::BinaryList, platform::BuildPlatforms};
 
 /// Options passed down to cargo.
 #[derive(Debug, Args)]
@@ -466,7 +466,7 @@ pub fn acquire_graph_data(
     target_dir: Option<&Utf8Path>,
     cargo_opts: &CargoOptions,
     build_platforms: &BuildPlatforms,
-) -> Result<String, CargoMetaDataError> {
+) -> Result<String, CargoMetadataError> {
     let cargo_target_arg = build_platforms.to_cargo_target_arg()?;
     let cargo_target_arg_str = cargo_target_arg.to_string();
 
@@ -489,9 +489,9 @@ pub fn acquire_graph_data(
     // Capture stdout but not stderr.
     let output = expression
         .run()
-        .map_err(|err| CargoMetaDataError::cargo_metadata_exec_failed(cargo_cli.all_args(), err))?;
+        .map_err(|err| CargoMetadataError::cargo_metadata_exec_failed(cargo_cli.all_args(), err))?;
     if !output.status.success() {
-        return Err(CargoMetaDataError::cargo_metadata_failed(
+        return Err(CargoMetadataError::cargo_metadata_failed(
             cargo_cli.all_args(),
             output.status,
         ));
@@ -499,7 +499,7 @@ pub fn acquire_graph_data(
 
     let json = String::from_utf8(output.stdout).map_err(|error| {
         let io_error = std::io::Error::new(std::io::ErrorKind::InvalidData, error);
-        CargoMetaDataError::cargo_metadata_exec_failed(cargo_cli.all_args(), io_error)
+        CargoMetadataError::cargo_metadata_exec_failed(cargo_cli.all_args(), io_error)
     })?;
     Ok(json)
 }

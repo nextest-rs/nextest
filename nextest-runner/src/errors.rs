@@ -1017,7 +1017,7 @@ impl CreateBinaryListError {
 
 /// An error that occurs while gather cargo metadata.
 #[derive(Debug, Error)]
-pub enum CargoMetaDataError {
+pub enum CargoMetadataError {
     /// Running a command to gather the list of binaries failed to execute.
     #[error(
         "running command `{}` failed to execute",
@@ -1054,7 +1054,7 @@ pub enum CargoMetaDataError {
     }
 }
 
-impl CargoMetaDataError {
+impl CargoMetadataError {
     pub(crate) fn cargo_metadata_exec_failed(
         command: impl IntoIterator<Item = impl AsRef<str>>,
         err: std::io::Error,
