@@ -241,6 +241,7 @@ impl CargoOptions {
     }
 }
 
+/// Command builder for 'cargo' subcommands.
 #[derive(Clone, Debug)]
 pub struct CargoCli<'a> {
     cargo_path: Utf8PathBuf,
@@ -251,6 +252,9 @@ pub struct CargoCli<'a> {
 }
 
 impl<'a> CargoCli<'a> {
+    /// Creates a new `CargoCli`.
+    ///
+    /// This runs 'cargo' subcommands.
     pub fn new(
         command: &'a str,
         manifest_path: Option<&'a Utf8Path>,
@@ -265,16 +269,19 @@ impl<'a> CargoCli<'a> {
         }
     }
 
+    /// Add an argument to the command.
     pub fn add_arg(&mut self, arg: &'a str) -> &mut Self {
         self.args.push(Cow::Borrowed(arg));
         self
     }
 
+    /// Add arguments to the command.
     pub fn add_args(&mut self, args: impl IntoIterator<Item = &'a str>) -> &mut Self {
         self.args.extend(args.into_iter().map(Cow::Borrowed));
         self
     }
 
+    /// Add all options from a `CargoOptions` instance to the command.
     pub fn add_options(&mut self, options: &'a CargoOptions) -> &mut Self {
         // ---
         // Package selection
@@ -435,12 +442,14 @@ impl<'a> CargoCli<'a> {
         self.args.push(Cow::Owned(arg));
     }
 
+    /// Get all arguments added to this command.
     pub fn all_args(&self) -> Vec<&str> {
         let mut all_args = vec![self.cargo_path.as_str(), self.command];
         all_args.extend(self.args.iter().map(|s| s.as_ref()));
         all_args
     }
 
+    /// Convert the command to a [`duct::Expression`].
     pub fn to_expression(&self) -> duct::Expression {
         let mut initial_args = vec![self.command];
         if let Some(path) = self.manifest_path {
