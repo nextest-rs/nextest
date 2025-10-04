@@ -39,15 +39,10 @@ pub enum ExpectedError {
         #[source]
         err: std::io::Error,
     },
-    #[error("cargo metadata exec failed")]
-    CargoMetadataExecFailed {
-        command: String,
-        err: std::io::Error,
-    },
     #[error("cargo metadata failed")]
     CargoMetadataFailed {
-        command: String,
-        exit_status: ExitStatus,
+        #[from]
+        err: CargoMetadataError
     },
     #[error("cargo locate-project exec failed")]
     CargoLocateProjectExecFailed {
@@ -165,16 +160,10 @@ pub enum ExpectedError {
         #[source]
         err: CreateTestListError,
     },
-    #[error("failed to execute build command")]
-    BuildExecFailed {
-        command: String,
-        #[source]
-        err: std::io::Error,
-    },
     #[error("build failed")]
     BuildFailed {
-        command: String,
-        exit_code: Option<i32>,
+        #[from]
+        err: CreateBinaryListError
     },
     #[error("building test runner failed")]
     TestRunnerBuildError {
@@ -292,26 +281,6 @@ pub enum ExpectedError {
 }
 
 impl ExpectedError {
-    pub(crate) fn cargo_metadata_exec_failed(
-        command: impl IntoIterator<Item = impl AsRef<str>>,
-        err: std::io::Error,
-    ) -> Self {
-        Self::CargoMetadataExecFailed {
-            command: shell_words::join(command),
-            err,
-        }
-    }
-
-    pub(crate) fn cargo_metadata_failed(
-        command: impl IntoIterator<Item = impl AsRef<str>>,
-        exit_status: ExitStatus,
-    ) -> Self {
-        Self::CargoMetadataFailed {
-            command: shell_words::join(command),
-            exit_status,
-        }
-    }
-
     pub(crate) fn cargo_locate_project_exec_failed(
         command: impl IntoIterator<Item = impl AsRef<str>>,
         err: std::io::Error,
@@ -365,26 +334,6 @@ impl ExpectedError {
         Self::ExperimentalFeatureNotEnabled { name, var_name }
     }
 
-    pub(crate) fn build_exec_failed(
-        command: impl IntoIterator<Item = impl AsRef<str>>,
-        err: std::io::Error,
-    ) -> Self {
-        Self::BuildExecFailed {
-            command: shell_words::join(command),
-            err,
-        }
-    }
-
-    pub(crate) fn build_failed(
-        command: impl IntoIterator<Item = impl AsRef<str>>,
-        exit_code: Option<i32>,
-    ) -> Self {
-        Self::BuildFailed {
-            command: shell_words::join(command),
-            exit_code,
-        }
-    }
-
     pub(crate) fn filter_expression_parse_error(all_errors: Vec<FiltersetParseErrors>) -> Self {
         Self::FiltersetParseError { all_errors }
     }
@@ -404,8 +353,7 @@ impl ExpectedError {
     /// Returns the exit code for the process.
     pub fn process_exit_code(&self) -> i32 {
         match self {
-            Self::CargoMetadataExecFailed { .. }
-            | Self::CargoMetadataFailed { .. }
+            Self::CargoMetadataFailed { .. }
             | Self::CargoLocateProjectExecFailed { .. }
             | Self::CargoLocateProjectFailed { .. } => NextestExitCode::CARGO_METADATA_FAILED,
             Self::WorkspaceRootInvalidUtf8 { .. }
@@ -452,7 +400,7 @@ impl ExpectedError {
             Self::FromMessagesError { .. } | Self::CreateTestListError { .. } => {
                 NextestExitCode::TEST_LIST_CREATION_FAILED
             }
-            Self::BuildExecFailed { .. } | Self::BuildFailed { .. } => {
+            Self::BuildFailed { .. } => {
                 NextestExitCode::BUILD_FAILED
             }
             Self::SetupScriptFailed => NextestExitCode::SETUP_SCRIPT_FAILED,
@@ -485,20 +433,27 @@ impl ExpectedError {
                 error!("failed to get current executable");
                 Some(err as &dyn Error)
             }
-            Self::CargoMetadataExecFailed { command, err } => {
-                error!("failed to execute `{}`", command.style(styles.bold));
-                Some(err as &dyn Error)
-            }
-            Self::CargoMetadataFailed {
-                command,
-                exit_status,
-            } => {
-                error!(
-                    "command `{}` failed with {}",
-                    command.style(styles.bold),
-                    exit_status
-                );
-                None
+            Self::CargoMetadataFailed { err } => {
+                match err {
+                    CargoMetadataError::CommandExecFail { command, err } => {
+                        error!("failed to execute `{}`", command.style(styles.bold));
+                        Some(err as &dyn Error)
+                    }
+                    CargoMetadataError::CommandFail { 
+                        command, 
+                        exit_status 
+                    } => {
+                        error!(
+                            "command `{}` failed with {}",
+                            command.style(styles.bold),
+                            exit_status
+                        );
+                        None
+                    }
+                    CargoMetadataError::TargetTriple { err } => {
+                        display_target_triple_error_to_stderr(err)
+                    }
+                }
             }
             Self::CargoLocateProjectExecFailed { command, err } => {
                 error!("failed to execute `{}`", command.style(styles.bold));
@@ -741,14 +696,7 @@ impl ExpectedError {
                 Some(err as &dyn Error)
             }
             Self::TargetTripleError { err } => {
-                if let Some(report) = err.source_report() {
-                    // Display the miette report if available.
-                    error!(target: "cargo_nextest::no_heading", "{report:?}");
-                    None
-                } else {
-                    error!("{err}");
-                    err.source()
-                }
+                display_target_triple_error_to_stderr(err)
             }
             Self::RemapAbsoluteError {
                 arg_name,
@@ -822,25 +770,33 @@ impl ExpectedError {
                 error!("creating test list failed");
                 Some(err as &dyn Error)
             }
-            Self::BuildExecFailed { command, err } => {
-                error!("failed to execute `{}`", command.style(styles.bold));
-                Some(err as &dyn Error)
-            }
-            Self::BuildFailed { command, exit_code } => {
-                let with_code_str = match exit_code {
-                    Some(code) => {
-                        format!(" with code {}", code.style(styles.bold))
+            Self::BuildFailed { err } => {
+                match err {
+                    CreateBinaryListError::CommandExecFail { command, error: _ } => {
+                        error!("failed to execute `{}`", command.style(styles.bold));
+                        Some(err as &dyn Error)
+                    },
+                    CreateBinaryListError::CommandFail { command, exit_code } => {            
+                        let with_code_str = match exit_code {
+                            Some(code) => {
+                                format!(" with code {}", code.style(styles.bold))
+                            }
+                            None => "".to_owned(),
+                        };
+
+                        error!(
+                            "command `{}` exited{}",
+                            command.style(styles.bold),
+                            with_code_str,
+                        );
+
+                        None
+                    },
+                    CreateBinaryListError::FromMessages { error: _ } => {
+                        error!("failed to parse messages generated by Cargo");
+                        Some(err as &dyn Error)
                     }
-                    None => "".to_owned(),
-                };
-
-                error!(
-                    "command `{}` exited{}",
-                    command.style(styles.bold),
-                    with_code_str,
-                );
-
-                None
+                }
             }
             Self::TestRunnerBuildError { err } => {
                 error!("failed to build test runner");
@@ -995,5 +951,16 @@ impl ExpectedError {
             );
             next_error = err.source();
         }
+    }
+}
+
+fn display_target_triple_error_to_stderr(err: &TargetTripleError) -> Option<&(dyn Error + 'static)> {
+    if let Some(report) = err.source_report() {
+        // Display the miette report if available.
+        error!(target: "cargo_nextest::no_heading", "{report:?}");
+        None
+    } else {
+        error!("{err}");
+        err.source()
     }
 }
