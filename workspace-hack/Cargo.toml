@@ -40,7 +40,7 @@ serde_core = { version = "1.0.226", features = ["alloc"] }
 serde_json = { version = "1.0.145", features = ["unbounded_depth"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
 target-spec = { version = "3.5.2", default-features = false, features = ["custom", "summaries"] }
-target-spec-miette = { version = "0.4.4", default-features = false, features = ["fixtures"] }
+target-spec-miette = { version = "0.4.5", default-features = false, features = ["fixtures"] }
 tokio = { version = "1.47.1", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 tracing-core = { version = "0.1.34" }
 xxhash-rust = { version = "0.8.15", default-features = false, features = ["xxh3", "xxh64"] }
