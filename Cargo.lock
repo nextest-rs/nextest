@@ -1300,9 +1300,9 @@ dependencies = [
 
 [[package]]
 name = "guppy"
-version = "0.17.21"
+version = "0.17.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "382d0681e5ca365cdee6c0c1bdcc92bca024322134e3793880c68d888540410b"
+checksum = "41ae4d3577acdf296abfed57f2f391137b545f445d9a6e3600c0a40815872e31"
 dependencies = [
  "ahash",
  "camino",
@@ -3427,9 +3427,9 @@ checksum = "e502f78cdbb8ba4718f566c418c52bc729126ffd16baee5baa718cf25dd5a69a"
 
 [[package]]
 name = "target-spec"
-version = "3.5.1"
+version = "3.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a71c1bf7d91dcc2635d3f3f59a5b03b982868af0545fa28b2a5a070cbdd09ffe"
+checksum = "b44840fc121ca20db81dadbb66d27ac9133a0d4756d674caa7da088ce89cbf2d"
 dependencies = [
  "cfg-expr",
  "guppy-workspace-hack",
