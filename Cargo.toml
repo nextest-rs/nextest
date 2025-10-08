@@ -49,7 +49,7 @@ clap = { version = "4.5.48", features = ["derive", "unstable-markdown"] }
 console-subscriber = "0.4.1"
 cp_r = "0.5.2"
 crossterm = { version = "0.29.0", features = ["event-stream"] }
-datatest-stable = { version = "0.3.2", features = ["include-dir"] }
+datatest-stable = { version = "0.3.3", features = ["include-dir"] }
 dialoguer = "0.12.0"
 debug-ignore = "1.0.5"
 derive-where = "1.6.0"
