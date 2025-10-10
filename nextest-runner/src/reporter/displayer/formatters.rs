@@ -8,7 +8,7 @@ use crate::{
     helpers::plural,
     list::SkipCounts,
     reporter::{
-        events::{CancelReason, FinalRunStats, RunStatsFailureKind},
+        events::{CancelReason, FinalRunStats, RunStats, RunStatsFailureKind},
         helpers::Styles,
     },
 };
@@ -59,6 +59,20 @@ impl fmt::Display for DisplayHhMmSs {
         // Buffer the output internally to provide padding.
         let out = format!("{hours:02}:{mins:02}:{secs:02}");
         write!(f, "{out}")
+    }
+}
+
+pub(super) struct DisplayBracketedCounter<'a>(pub(super) &'a RunStats);
+
+impl<'a> fmt::Display for DisplayBracketedCounter<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "[{:>width$} / {:>width$}] ",
+            self.0.finished_count,
+            self.0.initial_run_count,
+            width = (self.0.initial_run_count.ilog10() as usize + 1).max(1),
+        )
     }
 }
 
