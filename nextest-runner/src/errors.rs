@@ -954,6 +954,130 @@ pub enum FromMessagesError {
     },
 }
 
+/// An error that occurs while building the test binaries.
+#[derive(Debug, Error)]
+pub enum CreateBinaryListError {
+    /// Running a command to gather the list of binaries failed to execute.
+    #[error(
+        "running command `{}` failed to execute",
+        command
+    )]
+    CommandExecFail {
+        /// The command that was run.
+        command: String,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Running a command to gather the list of binaries failed failed with a non-zero exit code.
+    #[error(
+        "command `{}` exited{}",
+        command,
+        exit_code.map_or_else(String::new, |c| format!(" with code {}", c))
+    )]
+    CommandFail {
+        /// The command that was run.
+        command: String,
+
+        /// The exit code with which the command failed.
+        exit_code: Option<i32>
+    },
+
+    /// See `FromMessagesError`
+    #[error("error parsing Cargo messages")]
+    FromMessages {
+        /// The underlying error.
+        #[from]
+        error: FromMessagesError,
+    }
+}
+
+impl CreateBinaryListError {
+    pub(crate) fn build_exec_failed(
+        command: impl IntoIterator<Item = impl AsRef<str>>,
+        error: std::io::Error,
+    ) -> Self {
+        Self::CommandExecFail {
+            command: shell_words::join(command),
+            error,
+        }
+    }
+
+    pub(crate) fn build_failed(
+        command: impl IntoIterator<Item = impl AsRef<str>>,
+        exit_code: Option<i32>,
+    ) -> Self {
+        Self::CommandFail {
+            command: shell_words::join(command),
+            exit_code,
+        }
+    }
+}
+
+/// An error that occurs while gather cargo metadata.
+#[derive(Debug, Error)]
+pub enum CargoMetadataError {
+    /// Running a command to gather the list of binaries failed to execute.
+    #[error(
+        "running command `{}` failed to execute",
+        command
+    )]
+    CommandExecFail {
+        /// The command that was run.
+        command: String,
+
+        /// The underlying error.
+        #[source]
+        err: std::io::Error,
+    },
+
+    /// Running a command to gather the list of tests failed failed with a non-zero exit code.
+    #[error(
+        "command `{}` failed with {}",
+        command,
+        exit_status
+    )]
+    CommandFail {
+        /// The command that was run.
+        command: String,
+
+        /// The exit status with which the command failed.
+        exit_status: ExitStatus
+    },
+
+    /// An error occurred while determining the cross-compiling target triple.
+    #[error("target triple error")]
+    TargetTriple {
+        /// The underlying error.
+        #[from]
+        err: TargetTripleError,
+    }
+}
+
+impl CargoMetadataError {
+    pub(crate) fn cargo_metadata_exec_failed(
+        command: impl IntoIterator<Item = impl AsRef<str>>,
+        err: std::io::Error,
+    ) -> Self {
+        Self::CommandExecFail {
+            command: shell_words::join(command),
+            err,
+        }
+    }
+
+    pub(crate) fn cargo_metadata_failed(
+        command: impl IntoIterator<Item = impl AsRef<str>>,
+        exit_status: ExitStatus,
+    ) -> Self {
+        Self::CommandFail {
+            command: shell_words::join(command),
+            exit_status,
+        }
+    }
+}
+
 /// An error that occurs while parsing test list output.
 #[derive(Debug, Error)]
 #[non_exhaustive]
