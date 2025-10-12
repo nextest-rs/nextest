@@ -319,7 +319,7 @@ mod tests {
             [profile.custom]
             fail-fast = { invalid-key = 1 }
         "#},
-        "profile.custom.fail-fast: missing field `max-fail`"
+        r#"profile.custom.fail-fast: missing configuration field "profile.custom.fail-fast.max-fail""#
         ; "invalid map key"
     )]
     #[test_case(

@@ -169,7 +169,7 @@ mod tests {
             [profile.ci]
             slow-timeout = { terminate-after = 3 }
         "#},
-        Err("original: missing field `period`"),
+        Err("original: missing configuration field \"profile.ci.slow-timeout.period\""),
         None
 
         ; "partial slow-timeout table should error"

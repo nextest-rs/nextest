@@ -56,6 +56,12 @@ pub(in crate::config) struct BinaryQueryCreator<'a> {
     platform: BuildPlatform,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(in crate::config) enum ConfigErrorKind {
+    NotFound,
+    Message,
+}
+
 impl BinaryQueryCreator<'_> {
     pub(in crate::config) fn to_query(&self) -> BinaryQuery<'_> {
         BinaryQuery {

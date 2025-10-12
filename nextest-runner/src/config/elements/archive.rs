@@ -352,6 +352,7 @@ mod tests {
             [profile.default]
             archive.include = { path = "foo", relative-to = "target" }
         "#},
+        ConfigErrorKind::Message,
         r"invalid type: map, expected a sequence"
         ; "missing list")]
     #[test_case(
@@ -361,7 +362,8 @@ mod tests {
                 { path = "foo" }
             ]
         "#},
-        r"missing field `relative-to`"
+        ConfigErrorKind::NotFound,
+        r#"profile.default.archive.include[0]relative-to"#
         ; "missing relative-to")]
     #[test_case(
         indoc!{r#"
@@ -370,6 +372,7 @@ mod tests {
                 { path = "bar", relative-to = "unknown" }
             ]
         "#},
+        ConfigErrorKind::Message,
         r"enum ArchiveRelativeTo does not have variant constructor unknown"
         ; "invalid relative-to")]
     #[test_case(
@@ -379,6 +382,7 @@ mod tests {
                 { path = "bar", relative-to = "target", depth = -1 }
             ]
         "#},
+        ConfigErrorKind::Message,
         r#"invalid value: integer `-1`, expected a non-negative integer or "infinite""#
         ; "negative depth")]
     #[test_case(
@@ -388,6 +392,7 @@ mod tests {
                 { path = "foo/../bar", relative-to = "target" }
             ]
         "#},
+        ConfigErrorKind::Message,
         r#"invalid value: string "foo/../bar", expected a relative path with no parent components"#
         ; "parent component")]
     #[test_case(
@@ -397,6 +402,7 @@ mod tests {
                 { path = "/foo/bar", relative-to = "target" }
             ]
         "#},
+        ConfigErrorKind::Message,
         r#"invalid value: string "/foo/bar", expected a relative path with no parent components"#
         ; "absolute path")]
     #[test_case(
@@ -406,6 +412,7 @@ mod tests {
                 { path = "foo", relative-to = "target", on-missing = "unknown" }
             ]
         "#},
+        ConfigErrorKind::Message,
         r#"invalid value: string "unknown", expected a string: "ignore", "warn", or "error""#
         ; "invalid on-missing")]
     #[test_case(
@@ -415,9 +422,14 @@ mod tests {
                 { path = "foo", relative-to = "target", on-missing = 42 }
             ]
         "#},
+        ConfigErrorKind::Message,
         r#"invalid type: integer `42`, expected a string: "ignore", "warn", or "error""#
         ; "invalid on-missing type")]
-    fn parse_invalid(config_contents: &str, expected_message: &str) {
+    fn parse_invalid(
+        config_contents: &str,
+        expected_kind: ConfigErrorKind,
+        expected_message: &str,
+    ) {
         let workspace_dir = tempdir().unwrap();
 
         let graph = temp_workspace(&workspace_dir, config_contents);
@@ -434,14 +446,18 @@ mod tests {
         .expect_err("config expected to be invalid");
 
         let message = match config_err.kind() {
-            ConfigParseErrorKind::DeserializeError(path_error) => match path_error.inner() {
-                ConfigError::Message(message) => message,
-                other => {
-                    panic!(
-                        "for config error {config_err:?}, expected ConfigError::Message for inner error {other:?}"
-                    );
+            ConfigParseErrorKind::DeserializeError(path_error) => {
+                match (path_error.inner(), expected_kind) {
+                    (ConfigError::NotFound(message), ConfigErrorKind::NotFound) => message,
+                    (ConfigError::Message(message), ConfigErrorKind::Message) => message,
+                    (other, expected) => {
+                        panic!(
+                            "for config error {config_err:?}, expected \
+                             ConfigErrorKind::{expected:?} for inner error {other:?}"
+                        );
+                    }
                 }
-            },
+            }
             other => {
                 panic!(
                     "for config error {other:?}, expected ConfigParseErrorKind::DeserializeError"

@@ -300,6 +300,7 @@ mod tests {
             [profile.default]
             retries = { backoff = "foo" }
         "#},
+        ConfigErrorKind::Message,
         "unknown variant `foo`, expected `fixed` or `exponential`"
         ; "invalid value for backoff")]
     #[test_case(
@@ -307,13 +308,15 @@ mod tests {
             [profile.default]
             retries = { backoff = "fixed" }
         "#},
-        "missing field `count`"
+        ConfigErrorKind::NotFound,
+        "profile.default.retries.count"
         ; "fixed specified without count")]
     #[test_case(
         indoc!{r#"
             [profile.default]
             retries = { backoff = "fixed", count = 1, delay = "foobar" }
         "#},
+        ConfigErrorKind::Message,
         "invalid value: string \"foobar\", expected a duration"
         ; "delay is not a valid duration")]
     #[test_case(
@@ -321,6 +324,7 @@ mod tests {
             [profile.default]
             retries = { backoff = "fixed", count = 1, jitter = true }
         "#},
+        ConfigErrorKind::Message,
         "`jitter` cannot be true if `delay` isn't specified or is zero"
         ; "jitter specified without delay")]
     #[test_case(
@@ -328,6 +332,7 @@ mod tests {
             [profile.default]
             retries = { backoff = "fixed", count = 1, max-delay = "10s" }
         "#},
+        ConfigErrorKind::Message,
         "unknown field `max-delay`, expected one of `count`, `delay`, `jitter`"
         ; "max-delay is incompatible with fixed backoff")]
     #[test_case(
@@ -335,20 +340,23 @@ mod tests {
             [profile.default]
             retries = { backoff = "exponential", count = 1 }
         "#},
-        "missing field `delay`"
+        ConfigErrorKind::NotFound,
+        "profile.default.retries.delay"
         ; "exponential backoff must specify delay")]
     #[test_case(
         indoc!{r#"
             [profile.default]
             retries = { backoff = "exponential", delay = "1s" }
         "#},
-        "missing field `count`"
+        ConfigErrorKind::NotFound,
+        "profile.default.retries.count"
         ; "exponential backoff must specify count")]
     #[test_case(
         indoc!{r#"
             [profile.default]
             retries = { backoff = "exponential", count = 0, delay = "1s" }
         "#},
+        ConfigErrorKind::Message,
         "`count` cannot be zero with exponential backoff"
         ; "exponential backoff must have a non-zero count")]
     #[test_case(
@@ -356,6 +364,7 @@ mod tests {
             [profile.default]
             retries = { backoff = "exponential", count = 1, delay = "0s" }
         "#},
+        ConfigErrorKind::Message,
         "`delay` cannot be zero with exponential backoff"
         ; "exponential backoff must have a non-zero delay")]
     #[test_case(
@@ -363,6 +372,7 @@ mod tests {
             [profile.default]
             retries = { backoff = "exponential", count = 1, delay = "1s", max-delay = "0s" }
         "#},
+        ConfigErrorKind::Message,
         "`max-delay` cannot be zero with exponential backoff"
         ; "exponential backoff must have a non-zero max delay")]
     #[test_case(
@@ -370,9 +380,14 @@ mod tests {
             [profile.default]
             retries = { backoff = "exponential", count = 1, delay = "4s", max-delay = "2s", jitter = true }
         "#},
+        ConfigErrorKind::Message,
         "`max-delay` cannot be less than delay"
         ; "max-delay greater than delay")]
-    fn parse_retries_invalid(config_contents: &str, expected_message: &str) {
+    fn parse_retries_invalid(
+        config_contents: &str,
+        expected_kind: ConfigErrorKind,
+        expected_message: &str,
+    ) {
         let workspace_dir = tempdir().unwrap();
 
         let graph = temp_workspace(&workspace_dir, config_contents);
@@ -388,14 +403,18 @@ mod tests {
         .expect_err("config expected to be invalid");
 
         let message = match config_err.kind() {
-            ConfigParseErrorKind::DeserializeError(path_error) => match path_error.inner() {
-                ConfigError::Message(message) => message,
-                other => {
-                    panic!(
-                        "for config error {config_err:?}, expected ConfigError::Message for inner error {other:?}"
-                    );
+            ConfigParseErrorKind::DeserializeError(path_error) => {
+                match (path_error.inner(), expected_kind) {
+                    (ConfigError::Message(message), ConfigErrorKind::Message) => message,
+                    (ConfigError::NotFound(message), ConfigErrorKind::NotFound) => message,
+                    (other, expected) => {
+                        panic!(
+                            "for config error {config_err:?}, expected \
+                             ConfigErrorKind::{expected:?} for inner error {other:?}"
+                        );
+                    }
                 }
-            },
+            }
             other => {
                 panic!(
                     "for config error {other:?}, expected ConfigParseErrorKind::DeserializeError"

@@ -1200,7 +1200,7 @@ mod tests {
         indoc! {r#"
             [scripts.setup.foo]
         "#},
-        "scripts.setup.foo: missing field `command`"
+        r#"scripts.setup.foo: missing configuration field "scripts.setup.foo.command""#
 
         ; "missing command"
     )]
@@ -1227,7 +1227,7 @@ mod tests {
             [scripts.setup.foo]
             command = { relative-to = "target" }
         "#},
-        "missing field `command-line`"
+        r#"missing configuration field "scripts.setup.foo.command.command-line""#
 
         ; "missing command-line in table"
     )]

@@ -151,7 +151,7 @@ mod tests {
             [profile.ci]
             leak-timeout = { result = "fail" }
         "#},
-        Err("original: missing field `period`"),
+        Err(r#"original: missing configuration field "profile.ci.leak-timeout.period""#),
         None
 
         ; "partial leak-timeout table should error"
