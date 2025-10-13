@@ -6,7 +6,7 @@
 use crate::{
     config::scripts::ScriptId,
     list::{Styles, TestInstanceId},
-    reporter::events::{AbortStatus, StressIndex},
+    reporter::events::{AbortStatus, RunStats, StressIndex},
     write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -99,6 +99,7 @@ pub mod plural {
 
 pub(crate) struct DisplayTestInstance<'a> {
     stress_index: Option<StressIndex>,
+    display_counter_index: Option<DisplayCounterIndex>,
     instance: TestInstanceId<'a>,
     styles: &'a Styles,
 }
@@ -106,11 +107,13 @@ pub(crate) struct DisplayTestInstance<'a> {
 impl<'a> DisplayTestInstance<'a> {
     pub(crate) fn new(
         stress_index: Option<StressIndex>,
+        display_counter_index: Option<DisplayCounterIndex>,
         instance: TestInstanceId<'a>,
         styles: &'a Styles,
     ) -> Self {
         Self {
             stress_index,
+            display_counter_index,
             instance,
             styles,
         }
@@ -128,6 +131,10 @@ impl fmt::Display for DisplayTestInstance<'_> {
                     count_style: self.styles.count,
                 }
             )?;
+        }
+
+        if let Some(display_counter_index) = &self.display_counter_index {
+            write!(f, "{display_counter_index} ")?
         }
 
         write!(
@@ -215,6 +222,40 @@ impl fmt::Display for DisplayStressIndex {
             }
         }
     }
+}
+
+pub(super) struct DisplayCounterIndex(usize, usize);
+
+impl DisplayCounterIndex {
+    pub fn new(current_stats: &RunStats) -> Self {
+        Self(
+            current_stats.finished_count,
+            current_stats.initial_run_count,
+        )
+    }
+
+    pub fn width(&self) -> usize {
+        decimal_char_width(self.1) * 2 + 3
+    }
+}
+
+impl fmt::Display for DisplayCounterIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "({:>width$}/{})",
+            self.0,
+            self.1,
+            width = decimal_char_width(self.1)
+        )
+    }
+}
+
+pub(crate) fn decimal_char_width(n: usize) -> usize {
+    // checked_ilog10 returns 0 for 1-9, 1 for 10-99, 2 for 100-999, etc. (And
+    // None for 0 which we unwrap to the same as 1). Add 1 to it to get the
+    // actual number of digits.
+    (n.checked_ilog10().unwrap_or(0) + 1).try_into().unwrap()
 }
 
 /// Write out a test name.
@@ -469,4 +510,22 @@ pub(crate) fn statically_unreachable() -> ! {
         __nextest_external_symbol_that_does_not_exist();
     }
     unreachable!("linker symbol above cannot be resolved")
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_decimal_char_width() {
+        assert_eq!(1, decimal_char_width(0));
+        assert_eq!(1, decimal_char_width(1));
+        assert_eq!(1, decimal_char_width(5));
+        assert_eq!(1, decimal_char_width(9));
+        assert_eq!(2, decimal_char_width(10));
+        assert_eq!(2, decimal_char_width(11));
+        assert_eq!(2, decimal_char_width(99));
+        assert_eq!(3, decimal_char_width(100));
+        assert_eq!(3, decimal_char_width(999));
+    }
 }

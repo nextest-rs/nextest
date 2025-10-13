@@ -10,5 +10,6 @@ mod status_level;
 mod unit_output;
 
 pub(crate) use imp::*;
+pub use progress::ShowProgress;
 pub use status_level::*;
 pub use unit_output::*;

@@ -14,7 +14,10 @@ use crate::{
     config::core::EvaluatableProfile,
     errors::WriteEventError,
     list::TestList,
-    reporter::{aggregator::EventAggregator, events::*, structured::StructuredReporter},
+    reporter::{
+        aggregator::EventAggregator, displayer::ShowProgress, events::*,
+        structured::StructuredReporter,
+    },
 };
 
 /// Standard error destination for the reporter.
@@ -41,7 +44,7 @@ pub struct ReporterBuilder {
     final_status_level: Option<FinalStatusLevel>,
 
     verbose: bool,
-    hide_progress_bar: bool,
+    show_progress: ShowProgress,
     no_output_indent: bool,
 }
 
@@ -91,10 +94,9 @@ impl ReporterBuilder {
         self
     }
 
-    /// Sets visibility of the progress bar.
-    /// The progress bar is also hidden if `no_capture` is set.
-    pub fn set_hide_progress_bar(&mut self, hide_progress_bar: bool) -> &mut Self {
-        self.hide_progress_bar = hide_progress_bar;
+    /// Sets the way of displaying progress.
+    pub fn set_show_progress(&mut self, show_progress: ShowProgress) -> &mut Self {
+        self.show_progress = show_progress;
         self
     }
 
@@ -133,7 +135,7 @@ impl ReporterBuilder {
             failure_output: self.failure_output,
             should_colorize: self.should_colorize,
             no_capture: self.no_capture,
-            hide_progress_bar: self.hide_progress_bar,
+            show_progress: self.show_progress,
             no_output_indent: self.no_output_indent,
         }
         .build(cargo_configs, output);
