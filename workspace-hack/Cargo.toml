@@ -25,7 +25,7 @@ console = { version = "0.16.0" }
 either = { version = "1.15.0", features = ["use_std"] }
 form_urlencoded = { version = "1.2.2" }
 getrandom = { version = "0.3.3", default-features = false, features = ["std"] }
-hashbrown = { version = "0.16.0", default-features = false, features = ["allocator-api2", "inline-more"] }
+hashbrown = { version = "0.15.5" }
 indexmap = { version = "2.11.4", features = ["serde"] }
 log = { version = "0.4.28", default-features = false, features = ["std"] }
 memchr = { version = "2.7.5" }
@@ -39,7 +39,7 @@ serde = { version = "1.0.228", features = ["alloc", "derive"] }
 serde_core = { version = "1.0.228", features = ["alloc"] }
 serde_json = { version = "1.0.145", features = ["unbounded_depth"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
-target-spec = { version = "3.5.2", default-features = false, features = ["custom", "summaries"] }
+target-spec = { version = "3.5.4", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.5", default-features = false, features = ["fixtures"] }
 tokio = { version = "1.47.1", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 tracing-core = { version = "0.1.34" }
