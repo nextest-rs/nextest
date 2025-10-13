@@ -13,7 +13,7 @@ mod helpers;
 mod imp;
 pub mod structured;
 
-pub use displayer::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
+pub use displayer::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestOutputDisplayStreams};
 pub use error_description::*;
 pub use helpers::highlight_end;
 pub use imp::*;

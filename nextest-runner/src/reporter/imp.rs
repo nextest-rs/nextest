@@ -6,7 +6,7 @@
 //! The main structure in this module is [`TestReporter`].
 
 use super::{
-    FinalStatusLevel, StatusLevel, TestOutputDisplay,
+    FinalStatusLevel, StatusLevel,
     displayer::{DisplayReporter, DisplayReporterBuilder, StatusLevels},
 };
 use crate::{
@@ -14,7 +14,10 @@ use crate::{
     config::core::EvaluatableProfile,
     errors::WriteEventError,
     list::TestList,
-    reporter::{aggregator::EventAggregator, events::*, structured::StructuredReporter},
+    reporter::{
+        aggregator::EventAggregator, displayer::TestOutputDisplayStreams, events::*,
+        structured::StructuredReporter,
+    },
 };
 
 /// Standard error destination for the reporter.
@@ -35,8 +38,8 @@ pub enum ReporterStderr<'a> {
 pub struct ReporterBuilder {
     no_capture: bool,
     should_colorize: bool,
-    failure_output: Option<TestOutputDisplay>,
-    success_output: Option<TestOutputDisplay>,
+    failure_output: TestOutputDisplayStreams,
+    success_output: TestOutputDisplayStreams,
     status_level: Option<StatusLevel>,
     final_status_level: Option<FinalStatusLevel>,
 
@@ -62,14 +65,14 @@ impl ReporterBuilder {
     }
 
     /// Sets the conditions under which test failures are output.
-    pub fn set_failure_output(&mut self, failure_output: TestOutputDisplay) -> &mut Self {
-        self.failure_output = Some(failure_output);
+    pub fn set_failure_output(&mut self, failure_output: TestOutputDisplayStreams) -> &mut Self {
+        self.failure_output = failure_output;
         self
     }
 
     /// Sets the conditions under which test successes are output.
-    pub fn set_success_output(&mut self, success_output: TestOutputDisplay) -> &mut Self {
-        self.success_output = Some(success_output);
+    pub fn set_success_output(&mut self, success_output: TestOutputDisplayStreams) -> &mut Self {
+        self.success_output = success_output;
         self
     }
 

@@ -12,7 +12,7 @@ use crate::{
     config::scripts::{ScriptId, SetupScriptConfig},
     list::TestInstance,
     reporter::{
-        TestOutputDisplay,
+        TestOutputDisplayStreams,
         events::{
             ExecuteStatus, ExecutionResult, InfoResponse, RetryData, SetupScriptEnvMap,
             SetupScriptExecuteStatus, StressIndex, UnitState,
@@ -91,7 +91,7 @@ pub(super) enum ExecutorEvent<'a> {
     AttemptFailedWillRetry {
         stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
-        failure_output: TestOutputDisplay,
+        failure_output: TestOutputDisplayStreams,
         run_status: ExecuteStatus,
         delay_before_next_attempt: Duration,
     },
@@ -105,8 +105,8 @@ pub(super) enum ExecutorEvent<'a> {
     Finished {
         stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
-        success_output: TestOutputDisplay,
-        failure_output: TestOutputDisplay,
+        success_output: TestOutputDisplayStreams,
+        failure_output: TestOutputDisplayStreams,
         junit_store_success_output: bool,
         junit_store_failure_output: bool,
         last_run_status: ExecuteStatus,
