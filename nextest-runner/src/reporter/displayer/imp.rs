@@ -20,7 +20,8 @@ use crate::{
     config::{elements::LeakTimeoutResult, overrides::CompiledDefaultFilter, scripts::ScriptId},
     errors::WriteEventError,
     helpers::{
-        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, decimal_char_width, plural,
+        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, plural,
+        usize_decimal_char_width,
     },
     list::{TestInstance, TestInstanceId},
     reporter::{
@@ -1436,7 +1437,7 @@ impl<'a> DisplayReporterImpl<'a> {
         //
         // The width to be printed out is index width + total width + 1 for '/'
         // + 1 for ':' + 1 for the space after that.
-        let count_width = decimal_char_width(index + 1) + decimal_char_width(total) + 3;
+        let count_width = usize_decimal_char_width(index + 1) + usize_decimal_char_width(total) + 3;
         let padding = 8usize.saturating_sub(count_width);
 
         write!(

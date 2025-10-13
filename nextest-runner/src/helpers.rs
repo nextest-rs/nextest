@@ -208,9 +208,10 @@ impl fmt::Display for DisplayStressIndex {
             Some(total) => {
                 write!(
                     f,
-                    "{}/{}",
+                    "{:>width$}/{}",
                     (self.stress_index.current + 1).style(self.count_style),
-                    total.style(self.count_style)
+                    total.style(self.count_style),
+                    width = u32_decimal_char_width(total.get()),
                 )
             }
             None => {
@@ -235,7 +236,7 @@ impl DisplayCounterIndex {
     }
 
     pub fn width(&self) -> usize {
-        decimal_char_width(self.1) * 2 + 3
+        usize_decimal_char_width(self.1) * 2 + 3
     }
 }
 
@@ -246,12 +247,19 @@ impl fmt::Display for DisplayCounterIndex {
             "({:>width$}/{})",
             self.0,
             self.1,
-            width = decimal_char_width(self.1)
+            width = usize_decimal_char_width(self.1)
         )
     }
 }
 
-pub(crate) fn decimal_char_width(n: usize) -> usize {
+pub(crate) fn usize_decimal_char_width(n: usize) -> usize {
+    // checked_ilog10 returns 0 for 1-9, 1 for 10-99, 2 for 100-999, etc. (And
+    // None for 0 which we unwrap to the same as 1). Add 1 to it to get the
+    // actual number of digits.
+    (n.checked_ilog10().unwrap_or(0) + 1).try_into().unwrap()
+}
+
+pub(crate) fn u32_decimal_char_width(n: u32) -> usize {
     // checked_ilog10 returns 0 for 1-9, 1 for 10-99, 2 for 100-999, etc. (And
     // None for 0 which we unwrap to the same as 1). Add 1 to it to get the
     // actual number of digits.
@@ -518,14 +526,14 @@ mod test {
 
     #[test]
     fn test_decimal_char_width() {
-        assert_eq!(1, decimal_char_width(0));
-        assert_eq!(1, decimal_char_width(1));
-        assert_eq!(1, decimal_char_width(5));
-        assert_eq!(1, decimal_char_width(9));
-        assert_eq!(2, decimal_char_width(10));
-        assert_eq!(2, decimal_char_width(11));
-        assert_eq!(2, decimal_char_width(99));
-        assert_eq!(3, decimal_char_width(100));
-        assert_eq!(3, decimal_char_width(999));
+        assert_eq!(1, usize_decimal_char_width(0));
+        assert_eq!(1, usize_decimal_char_width(1));
+        assert_eq!(1, usize_decimal_char_width(5));
+        assert_eq!(1, usize_decimal_char_width(9));
+        assert_eq!(2, usize_decimal_char_width(10));
+        assert_eq!(2, usize_decimal_char_width(11));
+        assert_eq!(2, usize_decimal_char_width(99));
+        assert_eq!(3, usize_decimal_char_width(100));
+        assert_eq!(3, usize_decimal_char_width(999));
     }
 }
