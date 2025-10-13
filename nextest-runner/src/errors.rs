@@ -1016,7 +1016,7 @@ impl CreateBinaryListError {
     }
 }
 
-/// An error that occurs while gather cargo metadata.
+/// An error that occurs while gathering cargo metadata.
 #[derive(Debug, Error)]
 pub enum CargoMetadataError {
     /// Running a command to gather the list of binaries failed to execute.
