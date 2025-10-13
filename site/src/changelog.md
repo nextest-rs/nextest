@@ -8,6 +8,16 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.106] - 2025-10-13
+
+### Fixed
+
+- For custom targets, updated the deserializer to handle [`target-pointer-width` becoming an integer](https://github.com/rust-lang/rust/pull/144443) in the newest Rust nightlies.
+
+### Changed
+
+- Update builtin list of targets to Rust 1.90.
+
 ## [0.9.105] - 2025-10-02
 
 ### Changed
@@ -1545,6 +1555,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.106]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.106
 [0.9.105]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.105
 [0.9.104]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.104
 [0.9.103]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.103
