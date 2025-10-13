@@ -44,32 +44,41 @@ fn parses_cargo_env() {
 }
 
 static MY_TARGET_TRIPLE_STR: &str = "my-target";
+static MY_TARGET_2_TRIPLE_STR: &str = "my-target-2";
 static MY_TARGET_JSON_PATH: &str = "../custom-target/my-target.json";
+static MY_TARGET_2_JSON_PATH: &str = "../custom-target/my-target-2.json";
+static MY_TARGET_PATHS: &[(&str, &str)] = &[
+    (MY_TARGET_JSON_PATH, MY_TARGET_TRIPLE_STR),
+    (MY_TARGET_2_JSON_PATH, MY_TARGET_2_TRIPLE_STR),
+];
 
 #[test]
 fn parses_custom_target_cli() {
     // SAFETY:
     // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
     unsafe { std::env::set_var("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl") };
-    let expected_path = workspace_root()
-        .join(MY_TARGET_JSON_PATH)
-        .canonicalize_utf8()
-        .expect("canonicalization succeeded");
-    let triple = target_triple(Some(MY_TARGET_JSON_PATH), Vec::new())
-        .unwrap()
-        .expect("platform found");
-    assert_eq!(
-        triple.platform.triple_str(),
-        MY_TARGET_TRIPLE_STR,
-        "custom platform name"
-    );
+    for (target_path, expected_triple) in MY_TARGET_PATHS {
+        eprintln!("** testing: {}", target_path);
+        let expected_path = workspace_root()
+            .join(target_path)
+            .canonicalize_utf8()
+            .expect("canonicalization succeeded");
+        let triple = target_triple(Some(target_path), Vec::new())
+            .unwrap()
+            .expect("platform found");
+        assert_eq!(
+            triple.platform.triple_str(),
+            *expected_triple,
+            "custom platform name"
+        );
 
-    assert!(triple.platform.is_custom(), "custom platform");
-    assert_eq!(triple.source, TargetTripleSource::CliOption);
-    assert_eq!(
-        triple.location,
-        TargetDefinitionLocation::DirectPath(expected_path)
-    );
+        assert!(triple.platform.is_custom(), "custom platform");
+        assert_eq!(triple.source, TargetTripleSource::CliOption);
+        assert_eq!(
+            triple.location,
+            TargetDefinitionLocation::DirectPath(expected_path)
+        );
+    }
 }
 
 #[test]
@@ -77,76 +86,86 @@ fn parses_custom_target_env() {
     // SAFETY:
     // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
     unsafe { std::env::set_var("CARGO_BUILD_TARGET", MY_TARGET_JSON_PATH) };
-    let expected_path = workspace_root()
-        .join(MY_TARGET_JSON_PATH)
-        .canonicalize_utf8()
-        .expect("canonicalization succeeded");
-    let triple = target_triple(None, Vec::new())
-        .unwrap()
-        .expect("platform found");
-    assert_eq!(
-        triple.platform.triple_str(),
-        MY_TARGET_TRIPLE_STR,
-        "custom platform name"
-    );
+    for (target_path, expected_triple) in MY_TARGET_PATHS {
+        eprintln!("** testing: {}", target_path);
+        unsafe { std::env::set_var("CARGO_BUILD_TARGET", target_path) };
+        let expected_path = workspace_root()
+            .join(target_path)
+            .canonicalize_utf8()
+            .expect("canonicalization succeeded");
+        let triple = target_triple(None, Vec::new())
+            .unwrap()
+            .expect("platform found");
+        assert_eq!(
+            triple.platform.triple_str(),
+            *expected_triple,
+            "custom platform name"
+        );
 
-    assert!(triple.platform.is_custom(), "custom platform");
-    assert_eq!(triple.source, TargetTripleSource::Env);
-    assert_eq!(
-        triple.location,
-        TargetDefinitionLocation::DirectPath(expected_path)
-    );
+        assert!(triple.platform.is_custom(), "custom platform");
+        assert_eq!(triple.source, TargetTripleSource::Env);
+        assert_eq!(
+            triple.location,
+            TargetDefinitionLocation::DirectPath(expected_path)
+        );
+    }
 }
 
 #[test]
 fn parses_custom_target_cli_from_rust_target_path() {
     let target_paths = vec![workspace_root().join("../custom-target")];
-    let expected_path = workspace_root()
-        .join(MY_TARGET_JSON_PATH)
-        .canonicalize_utf8()
-        .expect("canonicalization succeeded");
-    let triple = target_triple(Some(MY_TARGET_TRIPLE_STR), target_paths)
-        .unwrap()
-        .expect("platform found");
-    assert_eq!(
-        triple.platform.triple_str(),
-        MY_TARGET_TRIPLE_STR,
-        "custom platform name"
-    );
+    for (target_path, expected_triple) in MY_TARGET_PATHS {
+        eprintln!("** testing: {}", expected_triple);
+        let expected_path = workspace_root()
+            .join(target_path)
+            .canonicalize_utf8()
+            .expect("canonicalization succeeded");
+        let triple = target_triple(Some(expected_triple), target_paths.clone())
+            .unwrap()
+            .expect("platform found");
+        assert_eq!(
+            triple.platform.triple_str(),
+            *expected_triple,
+            "custom platform name"
+        );
 
-    assert!(triple.platform.is_custom(), "custom platform");
-    assert_eq!(triple.source, TargetTripleSource::CliOption);
-    assert_eq!(
-        triple.location,
-        TargetDefinitionLocation::RustTargetPath(expected_path)
-    );
+        assert!(triple.platform.is_custom(), "custom platform");
+        assert_eq!(triple.source, TargetTripleSource::CliOption);
+        assert_eq!(
+            triple.location,
+            TargetDefinitionLocation::RustTargetPath(expected_path)
+        );
+    }
 }
 
 #[test]
 fn parses_custom_target_env_from_rust_target_path() {
-    // SAFETY:
-    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
-    unsafe { std::env::set_var("CARGO_BUILD_TARGET", MY_TARGET_TRIPLE_STR) };
     let target_paths = vec![workspace_root().join("../custom-target")];
-    let expected_path = workspace_root()
-        .join(MY_TARGET_JSON_PATH)
-        .canonicalize_utf8()
-        .expect("canonicalization succeeded");
-    let triple = target_triple(None, target_paths)
-        .unwrap()
-        .expect("platform found");
-    assert_eq!(
-        triple.platform.triple_str(),
-        MY_TARGET_TRIPLE_STR,
-        "custom platform name"
-    );
+    for (target_path, expected_triple) in MY_TARGET_PATHS {
+        eprintln!("** testing: {}", expected_triple);
+        // SAFETY:
+        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+        unsafe { std::env::set_var("CARGO_BUILD_TARGET", expected_triple) };
+        let expected_path = workspace_root()
+            .join(target_path)
+            .canonicalize_utf8()
+            .expect("canonicalization succeeded");
+        let triple = target_triple(None, target_paths.clone())
+            .unwrap()
+            .expect("platform found");
+        assert_eq!(
+            triple.platform.triple_str(),
+            *expected_triple,
+            "custom platform name"
+        );
 
-    assert!(triple.platform.is_custom(), "custom platform");
-    assert_eq!(triple.source, TargetTripleSource::Env);
-    assert_eq!(
-        triple.location,
-        TargetDefinitionLocation::RustTargetPath(expected_path)
-    );
+        assert!(triple.platform.is_custom(), "custom platform");
+        assert_eq!(triple.source, TargetTripleSource::Env);
+        assert_eq!(
+            triple.location,
+            TargetDefinitionLocation::RustTargetPath(expected_path)
+        );
+    }
 }
 
 #[test]
