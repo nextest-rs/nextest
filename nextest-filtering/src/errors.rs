@@ -1,6 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+// rust nightly 2025-10-12 complains that "value assigned to `kind` is never
+// read", and this is the nearest location this works in. Maybe a miette issue?
+#![allow(unused_assignments)]
+
 use crate::expression::FiltersetKind;
 use miette::{Diagnostic, SourceSpan};
 use std::fmt;
