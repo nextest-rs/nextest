@@ -443,6 +443,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo_metadata"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "981a6f317983eec002839b90fae7411a85621410ae591a9cab2ecf5cb5744873"
+dependencies = [
+ "camino",
+ "cargo-platform",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1300,13 +1314,13 @@ dependencies = [
 
 [[package]]
 name = "guppy"
-version = "0.17.22"
+version = "0.17.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41ae4d3577acdf296abfed57f2f391137b545f445d9a6e3600c0a40815872e31"
+checksum = "93383817a8d78167955d55ea78081f940df5469a02cf40eb4e26e56194fe11cb"
 dependencies = [
  "ahash",
  "camino",
- "cargo_metadata",
+ "cargo_metadata 0.23.0",
  "cfg-if",
  "debug-ignore",
  "fixedbitset",
@@ -2097,7 +2111,7 @@ dependencies = [
  "camino",
  "camino-tempfile",
  "camino-tempfile-ext",
- "cargo_metadata",
+ "cargo_metadata 0.22.0",
  "cfg-if",
  "chrono",
  "color-eyre",
