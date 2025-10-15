@@ -24,7 +24,7 @@ clap_builder = { version = "4.5.49", default-features = false, features = ["colo
 console = { version = "0.16.0" }
 either = { version = "1.15.0", features = ["use_std"] }
 getrandom = { version = "0.3.3", default-features = false, features = ["std"] }
-hashbrown = { version = "0.15.5" }
+hashbrown = { version = "0.16.0", default-features = false, features = ["allocator-api2", "inline-more"] }
 idna_adapter = { version = "1.0.0", default-features = false, features = ["compiled_data"] }
 indexmap = { version = "2.11.4", features = ["serde"] }
 log = { version = "0.4.28", default-features = false, features = ["std"] }
