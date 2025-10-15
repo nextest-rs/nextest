@@ -1,13 +1,13 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{ExtractOutputFormat, output::StderrStyles};
+use crate::ExtractOutputFormat;
 use camino::Utf8PathBuf;
 use indent_write::indentable::Indented;
 use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
-use nextest_runner::{errors::*, helpers::plural, redact::Redactor};
+use nextest_runner::{errors::*, helpers::plural, output::StderrStyles, redact::Redactor};
 use owo_colors::OwoColorize;
 use semver::Version;
 use std::{error::Error, io, path::PathBuf, process::ExitStatus, string::FromUtf8Error};

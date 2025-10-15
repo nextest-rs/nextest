@@ -62,6 +62,7 @@ shell-words.workspace = true
 smallvec.workspace = true
 smol_str = { workspace = true, features = ["serde"] }
 strip-ansi-escapes.workspace = true
+supports-color.workspace = true
 supports-unicode.workspace = true
 swrite.workspace = true
 tar.workspace = true
@@ -86,6 +87,7 @@ tokio-stream = { workspace = true, features = ["signal"] }
 toml.workspace = true
 toml_edit = { workspace = true, features = ["serde"] }
 tracing.workspace = true
+tracing-subscriber = { workspace = true, default-features = false }
 unicode-ident.workspace = true
 unicode-normalization.workspace = true
 xxhash-rust = { workspace = true, features = ["xxh64"] }
@@ -105,7 +107,6 @@ self_update = { workspace = true, optional = true }
 ### tokio-console support, not enabled by default
 ###
 console-subscriber = { workspace = true, optional = true }
-tracing-subscriber = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
@@ -164,6 +165,5 @@ self-update = [
 ]
 experimental-tokio-console = [
     "dep:console-subscriber",
-    "dep:tracing-subscriber",
     "tokio/tracing",
 ]

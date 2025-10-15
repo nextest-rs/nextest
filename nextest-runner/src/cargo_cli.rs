@@ -8,8 +8,7 @@ use clap::{ArgAction, Args};
 use guppy::graph::PackageGraph;
 use std::{borrow::Cow, io::Cursor, path::PathBuf};
 use crate::{
-    errors::{CargoMetadataError, CreateBinaryListError}, 
-    list::BinaryList, platform::BuildPlatforms
+    errors::{CargoMetadataError, CreateBinaryListError}, list::BinaryList, output::OutputContext, platform::BuildPlatforms
 };
 
 /// Options passed down to cargo.
@@ -211,11 +210,12 @@ impl CargoOptions {
         &self,
         graph: &PackageGraph,
         manifest_path: Option<&Utf8Path>,
+        output: OutputContext,
         build_platforms: BuildPlatforms,
     ) -> Result<BinaryList, CreateBinaryListError> {
         // Don't use the manifest path from the graph to ensure that if the user cd's into a
         // particular crate and runs cargo nextest, then it behaves identically to cargo test.
-        let mut cargo_cli = CargoCli::new("test", manifest_path);
+        let mut cargo_cli = CargoCli::new("test", manifest_path, output);
 
         // Only build tests in the cargo test invocation, do not run them.
         cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
@@ -245,6 +245,7 @@ impl CargoOptions {
 pub struct CargoCli<'a> {
     cargo_path: Utf8PathBuf,
     manifest_path: Option<&'a Utf8Path>,
+    output: OutputContext,
     command: &'a str,
     args: Vec<Cow<'a, str>>,
     stderr_null: bool,
@@ -257,11 +258,13 @@ impl<'a> CargoCli<'a> {
     pub fn new(
         command: &'a str,
         manifest_path: Option<&'a Utf8Path>,
+        output: OutputContext,
     ) -> Self {
         let cargo_path = cargo_path();
         Self {
             cargo_path,
             manifest_path,
+            output,
             command,
             args: vec![],
             stderr_null: false,
@@ -450,7 +453,7 @@ impl<'a> CargoCli<'a> {
 
     /// Convert the command to a [`duct::Expression`].
     pub fn to_expression(&self) -> duct::Expression {
-        let mut initial_args = vec![self.command];
+        let mut initial_args = vec![self.output.color.to_arg(), self.command];
         if let Some(path) = self.manifest_path {
             initial_args.extend(["--manifest-path", path.as_str()]);
         }
@@ -477,11 +480,12 @@ pub fn acquire_graph_data(
     target_dir: Option<&Utf8Path>,
     cargo_opts: &CargoOptions,
     build_platforms: &BuildPlatforms,
+    output: OutputContext,
 ) -> Result<String, CargoMetadataError> {
     let cargo_target_arg = build_platforms.to_cargo_target_arg()?;
     let cargo_target_arg_str = cargo_target_arg.to_string();
 
-    let mut cargo_cli = CargoCli::new("metadata", manifest_path);
+    let mut cargo_cli = CargoCli::new("metadata", manifest_path, output);
     cargo_cli
         .add_args(["--format-version=1", "--all-features"])
         .add_args(["--filter-platform", &cargo_target_arg_str])

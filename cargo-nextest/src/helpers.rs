@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::output::StderrStyles;
+use nextest_runner::output::StderrStyles;
 
 // From https://github.com/tokio-rs/tracing/issues/2730#issuecomment-1943022805
 macro_rules! dyn_event {

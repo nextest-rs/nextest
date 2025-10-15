@@ -3,7 +3,7 @@
 
 use crate::{
     ExpectedError, Result, ReuseBuildKind,
-    output::{OutputContext, OutputOpts, OutputWriter, StderrStyles, should_redact},
+    output::{OutputOpts, OutputWriter, should_redact},
     reuse_build::{ArchiveFormatOpt, ReuseBuildOpts, make_path_mapper},
     version,
 };
@@ -14,40 +14,17 @@ use itertools::Itertools;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
-    RustcCli,
-    cargo_cli::{acquire_graph_data, CargoCli, CargoOptions},
-    cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
-    config::{
+    cargo_cli::{acquire_graph_data, CargoCli, CargoOptions}, cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple}, config::{
         core::{
-            ConfigExperimental, EarlyProfile, EvaluatableProfile, NextestConfig,
-            NextestVersionConfig, NextestVersionEval, ToolConfigFile, VersionOnlyConfig,
-            get_num_cpus,
+            get_num_cpus, ConfigExperimental, EarlyProfile, EvaluatableProfile, NextestConfig, NextestVersionConfig, NextestVersionEval, ToolConfigFile, VersionOnlyConfig
         },
         elements::{MaxFail, RetryPolicy, TestGroup, TestThreads},
-    },
-    double_spawn::DoubleSpawnInfo,
-    errors::{TargetTripleError, WriteTestListError},
-    input::InputHandlerKind,
-    list::{
+    }, double_spawn::DoubleSpawnInfo, errors::{TargetTripleError, WriteTestListError}, input::InputHandlerKind, list::{
         BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestExecuteContext,
         TestList,
-    },
-    partition::PartitionerBuilder,
-    platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
-    redact::Redactor,
-    reporter::{
-        FinalStatusLevel, ReporterBuilder, StatusLevel, TestOutputDisplay, TestOutputErrorSlice,
-        events::{FinalRunStats, RunStatsFailureKind},
-        highlight_end, structured,
-    },
-    reuse_build::{ArchiveReporter, PathMapper, ReuseBuildInfo, archive_to_file},
-    runner::{StressCondition, StressCount, TestRunnerBuilder, configure_handle_inheritance},
-    show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
-    signal::SignalHandlerKind,
-    target_runner::{PlatformRunner, TargetRunner},
-    test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
-    test_output::CaptureStrategy,
-    write_str::WriteStr,
+    }, output::{OutputContext, StderrStyles}, partition::PartitionerBuilder, platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform}, redact::Redactor, reporter::{
+        events::{FinalRunStats, RunStatsFailureKind}, highlight_end, structured, FinalStatusLevel, ReporterBuilder, StatusLevel, TestOutputDisplay, TestOutputErrorSlice
+    }, reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo}, runner::{configure_handle_inheritance, StressCondition, StressCount, TestRunnerBuilder}, show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode}, signal::SignalHandlerKind, target_runner::{PlatformRunner, TargetRunner}, test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns}, test_output::CaptureStrategy, write_str::WriteStr, RustcCli
 };
 use owo_colors::OwoColorize;
 use quick_junit::XmlString;
@@ -1241,6 +1218,7 @@ impl BaseApp {
                     cargo_opts.target_dir.as_deref(),
                     &cargo_opts,
                     &build_platforms,
+                    output
                 )?;
                 let graph = PackageGraph::from_json(&json)
                     .map_err(|err| ExpectedError::cargo_metadata_parse_error(None, err))?;
@@ -1552,6 +1530,7 @@ impl BaseApp {
             None => Arc::new(self.cargo_opts.compute_binary_list(
                 self.graph(),
                 self.manifest_path.as_deref(),
+                self.output,
                 self.build_platforms.clone(),
             )?),
         };
@@ -1963,7 +1942,7 @@ impl ShowConfigCommand {
         match self {
             Self::Version {} => {
                 let mut cargo_cli =
-                    CargoCli::new("locate-project", manifest_path.as_deref());
+                    CargoCli::new("locate-project", manifest_path.as_deref(), output);
                 cargo_cli.add_args(["--workspace", "--message-format=plain"]);
                 let locate_project_output = cargo_cli
                     .to_expression()
