@@ -36,7 +36,7 @@ cargo_metadata = "0.23.0"
 cargo-nextest = { path = "cargo-nextest", default-features = false, features = [
     "default-no-update",
 ] }
-cfg-if = "1.0.3"
+cfg-if = "1.0.4"
 color-eyre = "0.6.5"
 # config's "preserve_order" feature is needed for preserving the order of
 # setup scripts in .config/nextest.toml.
