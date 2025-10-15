@@ -2161,6 +2161,7 @@ dependencies = [
  "smallvec",
  "smol_str",
  "strip-ansi-escapes",
+ "supports-color",
  "supports-unicode",
  "swrite",
  "tar",

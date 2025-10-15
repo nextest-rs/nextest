@@ -1,17 +1,15 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{ExpectedError, OutputWriter, Result, output::OutputContext};
+use crate::{ExpectedError, OutputWriter, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Args, ValueEnum};
 use guppy::graph::PackageGraph;
 use nextest_runner::{
-    errors::PathMapperConstructKind,
-    redact::Redactor,
-    reuse_build::{
+    errors::PathMapperConstructKind, output::OutputContext, redact::Redactor, reuse_build::{
         ArchiveFormat, ArchiveReporter, ExtractDestination, MetadataKind, MetadataWithRemap,
         PathMapper, ReuseBuildInfo, ReusedBinaryList, ReusedCargoMetadata,
-    },
+    }
 };
 use std::io::Write;
 use tracing::warn;
