@@ -9,6 +9,7 @@
 //! For the basic flow of operations in nextest, see [this blog
 //! post](https://sunshowers.io/posts/nextest-and-tokio/).
 
+pub mod cargo_cli;
 pub mod cargo_config;
 pub mod config;
 #[cfg(feature = "experimental-tokio-console")]

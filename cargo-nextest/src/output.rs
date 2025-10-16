@@ -279,14 +279,6 @@ impl Color {
             Color::Never => false,
         }
     }
-
-    pub(crate) fn to_arg(self) -> &'static str {
-        match self {
-            Color::Auto => "--color=auto",
-            Color::Always => "--color=always",
-            Color::Never => "--color=never",
-        }
-    }
 }
 
 #[derive(Debug, Default)]
