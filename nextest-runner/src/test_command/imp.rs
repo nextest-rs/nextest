@@ -6,7 +6,11 @@ use crate::{
     test_output::{CaptureStrategy, ChildExecutionOutput, ChildOutput, ChildSplitOutput},
 };
 use bytes::BytesMut;
-use std::{io, process::Stdio, sync::Arc};
+use std::{
+    io::{self, PipeReader},
+    process::Stdio,
+    sync::Arc,
+};
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, AsyncRead, BufReader},
@@ -39,13 +43,25 @@ pub(super) fn spawn(
 ) -> std::io::Result<Child> {
     cmd.stdin(Stdio::null());
 
-    let state: Option<os::State> = match strategy {
+    let combined_rx: Option<PipeReader> = match strategy {
         CaptureStrategy::None => None,
         CaptureStrategy::Split => {
             cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
             None
         }
-        CaptureStrategy::Combined => Some(os::setup_io(&mut cmd)?),
+        CaptureStrategy::Combined => {
+            // We use std::io::pipe() here rather than tokio::net::unix::pipe()
+            // for a couple of reasons:
+            //
+            // * std::io::pipe has the most up-to-date information about things
+            //   like atomic O_CLOEXEC. In particular, mio-pipe 0.1.1 doesn't do
+            //   O_CLOEXEC on platforms like illumos.
+            // * There's no analog to Tokio's anonymous pipes on Windows, while
+            //   std::io::pipe works on all platforms.
+            let (rx, tx) = std::io::pipe()?;
+            cmd.stdout(tx.try_clone()?).stderr(tx);
+            Some(rx)
+        }
     };
 
     let mut cmd: tokio::process::Command = cmd.into();
@@ -59,9 +75,9 @@ pub(super) fn spawn(
 
             ChildFds::new_split(Some(stdout), Some(stderr))
         }
-        CaptureStrategy::Combined => {
-            ChildFds::new_combined(std::fs::File::from(state.expect("state was set").ours).into())
-        }
+        CaptureStrategy::Combined => ChildFds::new_combined(
+            os::pipe_reader_to_file(combined_rx.expect("combined_fx was set")).into(),
+        ),
     };
 
     Ok(Child {
@@ -194,9 +210,9 @@ impl ChildFds {
         }
     }
 
-    pub(crate) fn new_combined(file: File) -> Self {
+    pub(crate) fn new_combined(rx: File) -> Self {
         Self::Combined {
-            combined: FusedBufReader::new(file),
+            combined: FusedBufReader::new(rx),
         }
     }
 
