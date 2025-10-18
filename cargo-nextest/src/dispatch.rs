@@ -100,6 +100,10 @@ impl CargoNextestApp {
         output: OutputContext,
         output_writer: &mut OutputWriter,
     ) -> Result<i32> {
+        if let Err(err) = usdt::register_probes() {
+            warn!("failed to register USDT probes: {}", err);
+        }
+
         match self.subcommand {
             NextestSubcommand::Nextest(app) => app.exec(cli_args, output, output_writer),
             NextestSubcommand::Ntr(opts) => opts.exec(cli_args, output, output_writer),
@@ -838,7 +842,7 @@ pub struct TestRunnerOpts {
 
     /// Number of retries for failing tests [default: from profile]
     #[arg(long, env = "NEXTEST_RETRIES", value_name = "N")]
-    retries: Option<usize>,
+    retries: Option<u32>,
 
     /// Cancel test run on the first failure
     #[arg(

@@ -35,6 +35,7 @@ use crate::{
     test_command::{ChildAccumulator, ChildFds},
     test_output::{CaptureStrategy, ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     time::{PausableSleep, StopwatchStart},
+    usdt::usdt_probes,
 };
 use future_queue::FutureQueueContext;
 use nextest_metadata::FilterMatch;
@@ -224,6 +225,7 @@ impl<'a> ExecutorContext<'a> {
 
         let mut attempt = 0;
         let mut delay = Duration::ZERO;
+
         let last_run_status = loop {
             attempt += 1;
             let retry_data = RetryData {
@@ -645,6 +647,18 @@ impl<'a> ExecutorContext<'a> {
             test.settings.run_wrapper(),
             test.settings.run_extra_args(),
         );
+
+        let id = test.test_instance.id();
+
+        usdt_probes::start_test_attempt!(|| UsdtStartTestAttempt {
+            binary_id: id.binary_id.clone(),
+            test_name: id.test_name.to_owned(),
+            program: cmd.program().to_owned(),
+            args: cmd.args().to_owned(),
+            attempt: test.retry_data.attempt,
+            total_attempts: test.retry_data.total_attempts,
+        });
+
         let command_mut = cmd.command_mut();
 
         // Debug environment variable for testing.
@@ -902,7 +916,7 @@ impl<'a> ExecutorContext<'a> {
 struct BackoffIter {
     policy: RetryPolicy,
     current_factor: f64,
-    remaining_attempts: usize,
+    remaining_attempts: u32,
 }
 
 impl BackoffIter {

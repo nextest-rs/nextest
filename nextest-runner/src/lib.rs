@@ -38,6 +38,7 @@ pub mod test_output;
 mod time;
 #[cfg(feature = "self-update")]
 pub mod update;
+pub mod usdt;
 pub mod write_str;
 
 pub use rustc_cli::RustcCli;

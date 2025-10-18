@@ -149,7 +149,7 @@ impl PartialEq<TestNameAndFilterMatch<'_>> for TestCaseFixture {
 pub enum TestCaseFixtureStatus {
     Pass,
     Fail,
-    Flaky { pass_attempt: usize },
+    Flaky { pass_attempt: u32 },
     Leak,
     LeakFail,
     FailLeak,

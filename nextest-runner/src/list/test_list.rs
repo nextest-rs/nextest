@@ -35,6 +35,7 @@ use nextest_metadata::{
     RustTestSuiteSummary, TestListSummary,
 };
 use owo_colors::OwoColorize;
+use serde::Serialize;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
@@ -1243,7 +1244,7 @@ impl<'a> TestCommandCli<'a> {
 /// A key for identifying and sorting test instances.
 ///
 /// Returned by [`TestInstance::id`].
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct TestInstanceId<'a> {
     /// The binary ID.
     pub binary_id: &'a RustBinaryId,

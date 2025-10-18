@@ -43,6 +43,7 @@ swrite.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, default-features = false }
+usdt.workspace = true
 
 [build-dependencies]
 camino.workspace = true

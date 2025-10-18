@@ -32,6 +32,8 @@ memchr = { version = "2.7.5" }
 miette = { version = "7.6.0", features = ["fancy"] }
 num-traits = { version = "0.2.19", default-features = false, features = ["std"] }
 ppv-lite86 = { version = "0.2.21", default-features = false, features = ["simd", "std"] }
+proc-macro2 = { version = "1.0.101" }
+quote = { version = "1.0.40" }
 rand = { version = "0.9.2" }
 rand_chacha = { version = "0.9.0", default-features = false, features = ["std"] }
 regex-automata = { version = "0.4.12", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
@@ -39,11 +41,14 @@ regex-syntax = { version = "0.8.8" }
 serde_core = { version = "1.0.228", features = ["alloc"] }
 serde_json = { version = "1.0.145", features = ["unbounded_depth"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
+syn = { version = "2.0.106", features = ["extra-traits", "full", "visit", "visit-mut"] }
 target-spec = { version = "3.5.4", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.5", default-features = false, features = ["fixtures"] }
 tokio = { version = "1.48.0", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 tracing-core = { version = "0.1.34" }
+usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 xxhash-rust = { version = "0.8.15", default-features = false, features = ["xxh3", "xxh64"] }
+zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [build-dependencies]
 camino = { version = "1.2.1", default-features = false, features = ["serde1"] }
@@ -51,10 +56,13 @@ memchr = { version = "2.7.5" }
 proc-macro2 = { version = "1.0.101" }
 quote = { version = "1.0.40" }
 serde_core = { version = "1.0.228", features = ["alloc"] }
+serde_json = { version = "1.0.145", features = ["unbounded_depth"] }
 syn = { version = "2.0.106", features = ["extra-traits", "full", "visit", "visit-mut"] }
+usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 bitflags = { version = "2.9.4", default-features = false, features = ["std"] }
+dof = { version = "0.4.0", default-features = false, features = ["des"] }
 futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31" }
@@ -67,7 +75,10 @@ tokio = { version = "1.48.0", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 bitflags = { version = "2.9.4", default-features = false, features = ["std"] }
+dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.177", features = ["extra_traits"] }
+log = { version = "0.4.28", default-features = false, features = ["std"] }
+zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.x86_64-apple-darwin.dependencies]
 bitflags = { version = "2.9.4", default-features = false, features = ["std"] }
@@ -84,8 +95,11 @@ tokio = { version = "1.48.0", default-features = false, features = ["net"] }
 [target.x86_64-apple-darwin.build-dependencies]
 bitflags = { version = "2.9.4", default-features = false, features = ["std"] }
 libc = { version = "0.2.177", features = ["extra_traits"] }
+log = { version = "0.4.28", default-features = false, features = ["std"] }
+zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
+dof = { version = "0.4.0", default-features = false, features = ["des"] }
 futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31" }
@@ -97,6 +111,10 @@ windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52.0", fe
 windows-sys-d4189bed749088b6 = { package = "windows-sys", version = "0.61.2", features = ["Win32_Globalization", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
 
 [target.x86_64-pc-windows-msvc.build-dependencies]
+dof = { version = "0.4.0", default-features = false, features = ["des"] }
 getrandom = { version = "0.3.3", default-features = false, features = ["std"] }
+log = { version = "0.4.28", default-features = false, features = ["std"] }
+windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59.0", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell"] }
+zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 ### END HAKARI SECTION
