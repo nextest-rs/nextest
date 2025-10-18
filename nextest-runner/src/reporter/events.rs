@@ -972,10 +972,10 @@ pub struct SetupScriptEnvMap {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub struct RetryData {
     /// The current attempt. In the range `[1, total_attempts]`.
-    pub attempt: usize,
+    pub attempt: u32,
 
     /// The total number of times this test can be run. Equal to `1 + retries`.
-    pub total_attempts: usize,
+    pub total_attempts: u32,
 }
 
 impl RetryData {

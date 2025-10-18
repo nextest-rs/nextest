@@ -44,7 +44,7 @@ use std::{
 pub(crate) fn ensure_execution_result(
     actual: &ExecutionResult,
     status: TestCaseFixtureStatus,
-    total_attempts: usize,
+    total_attempts: u32,
 ) -> Result<()> {
     match status {
         TestCaseFixtureStatus::Pass | TestCaseFixtureStatus::IgnoredPass => {

@@ -573,7 +573,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
                     };
                     assert_eq!(
                         run_statuses.len(),
-                        expected_len,
+                        expected_len as usize,
                         "test {} should be run {} times",
                         fixture.name,
                         expected_len,
@@ -596,7 +596,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
                         } => {
                             assert_eq!(
                                 prior_statuses.len(),
-                                expected_len - 1,
+                                (expected_len - 1) as usize,
                                 "correct length for prior statuses"
                             );
                             for prior_status in prior_statuses {
@@ -615,7 +615,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
                         } => {
                             assert_eq!(
                                 retries.len(),
-                                expected_len - 1,
+                                (expected_len - 1) as usize,
                                 "correct length for retries"
                             );
                             for retry in retries {

@@ -43,6 +43,10 @@ pub(crate) enum TestCommandPhase {
 
 /// Represents a to-be-run test command for a test binary with a certain set of arguments.
 pub(crate) struct TestCommand {
+    /// The program to run.
+    program: String,
+    /// The arguments to pass to the program.
+    args: Vec<String>,
     /// The command to be run.
     command: std::process::Command,
     /// Double-spawn context.
@@ -59,7 +63,7 @@ impl TestCommand {
         package: &PackageMetadata<'_>,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
     ) -> Self {
-        let mut cmd = create_command(program, args, lctx.double_spawn);
+        let mut cmd = create_command(program.clone(), args, lctx.double_spawn);
 
         // NB: we will always override user-provided environment variables with the
         // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
@@ -113,9 +117,19 @@ impl TestCommand {
         let double_spawn = lctx.double_spawn.spawn_context();
 
         Self {
+            program,
+            args: args.iter().map(|arg| arg.clone().into_owned()).collect(),
             command: cmd,
             double_spawn,
         }
+    }
+
+    pub(crate) fn program(&self) -> &str {
+        &self.program
+    }
+
+    pub(crate) fn args(&self) -> &[String] {
+        &self.args
     }
 
     #[inline]

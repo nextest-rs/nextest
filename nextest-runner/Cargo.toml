@@ -87,6 +87,7 @@ toml_edit = { workspace = true, features = ["serde"] }
 tracing.workspace = true
 unicode-ident.workspace = true
 unicode-normalization.workspace = true
+usdt.workspace = true
 xxhash-rust = { workspace = true, features = ["xxh64"] }
 zstd.workspace = true
 

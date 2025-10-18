@@ -12,7 +12,7 @@ pub enum RetryPolicy {
     #[serde(rename_all = "kebab-case")]
     Fixed {
         /// Maximum retry count.
-        count: usize,
+        count: u32,
 
         /// Delay between retries.
         #[serde(default, with = "humantime_serde")]
@@ -27,7 +27,7 @@ pub enum RetryPolicy {
     #[serde(rename_all = "kebab-case")]
     Exponential {
         /// Maximum retry count.
-        count: usize,
+        count: u32,
 
         /// Delay between retries. Not optional for exponential backoff.
         #[serde(with = "humantime_serde")]
@@ -52,7 +52,7 @@ impl Default for RetryPolicy {
 
 impl RetryPolicy {
     /// Create new policy with no delay between retries.
-    pub fn new_without_delay(count: usize) -> Self {
+    pub fn new_without_delay(count: u32) -> Self {
         Self::Fixed {
             count,
             delay: Duration::ZERO,
@@ -61,7 +61,7 @@ impl RetryPolicy {
     }
 
     /// Returns the number of retries.
-    pub fn count(&self) -> usize {
+    pub fn count(&self) -> u32 {
         match self {
             Self::Fixed { count, .. } | Self::Exponential { count, .. } => *count,
         }
@@ -93,7 +93,13 @@ where
         {
             match v.cmp(&0) {
                 Ordering::Greater | Ordering::Equal => {
-                    Ok(Some(RetryPolicy::new_without_delay(v as usize)))
+                    let v = u32::try_from(v).map_err(|_| {
+                        serde::de::Error::invalid_value(
+                            serde::de::Unexpected::Signed(v),
+                            &"a positive u32",
+                        )
+                    })?;
+                    Ok(Some(RetryPolicy::new_without_delay(v)))
                 }
                 Ordering::Less => Err(serde::de::Error::invalid_value(
                     serde::de::Unexpected::Signed(v),
