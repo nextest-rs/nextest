@@ -842,6 +842,29 @@ archive.include = [
         .expect_err("archive should have failed");
 }
 
+#[test]
+fn test_archive_with_build_filters() {
+    set_env_vars();
+
+    let filters = ["all()", "none()", "package(cdylib-example)"];
+    let expected_file_counts = [27, 11, 12];
+
+    for (&expected_file_count, filter) in expected_file_counts.iter().zip(filters) {
+        let (_p1, archive_file) =
+            create_archive_with_args("", false, "archive_build_filter", &["-E", filter], false)
+                .expect("archive succeeded");
+        let file = File::open(archive_file).unwrap();
+        let decoder = zstd::stream::read::Decoder::new(file).unwrap();
+        let mut archive = tar::Archive::new(decoder);
+        let paths = archive
+            .entries()
+            .unwrap()
+            .map(|e| e.unwrap().path().unwrap().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(paths.len(), expected_file_count);
+    }
+}
+
 const APP_DATA_DIR: &str = "application-data";
 // The default limit is 16, so anything at depth 17 (under d16) is excluded.
 const DIR_TREE: &str = "application-data/d1/d2/d3/d4/d5/d6/d7/d8/d9/d10/d11/d12/d13/d14/d15/d16";
@@ -860,6 +883,16 @@ fn create_archive(
     config_contents: &str,
     make_uds: bool,
     snapshot_name: &str,
+) -> Result<(TempProject, Utf8PathBuf), CargoNextestOutput> {
+    create_archive_with_args(config_contents, make_uds, snapshot_name, &[], true)
+}
+
+fn create_archive_with_args(
+    config_contents: &str,
+    make_uds: bool,
+    snapshot_name: &str,
+    extra_args: &[&str],
+    check_output: bool,
 ) -> Result<(TempProject, Utf8PathBuf), CargoNextestOutput> {
     let custom_target_dir = Utf8TempDir::new().unwrap();
     let custom_target_path = custom_target_dir.path().join("target");
@@ -894,22 +927,26 @@ fn create_archive(
 
     let archive_file = p.temp_root().join("my-archive.tar.zst");
 
+    let manifest_path = p.manifest_path();
+    let mut cli_args = vec![
+        "--manifest-path",
+        manifest_path.as_str(),
+        "archive",
+        "--archive-file",
+        archive_file.as_str(),
+        "--workspace",
+        "--target-dir",
+        p.target_dir().as_str(),
+        "--all-targets",
+        // Make cargo fully quiet since we're testing just nextest output below.
+        "--cargo-quiet",
+        "--cargo-quiet",
+    ];
+    cli_args.extend(extra_args);
+
     // Write the archive to the archive_file above.
     let output = CargoNextestCli::for_test()
-        .args([
-            "--manifest-path",
-            p.manifest_path().as_str(),
-            "archive",
-            "--archive-file",
-            archive_file.as_str(),
-            "--workspace",
-            "--target-dir",
-            p.target_dir().as_str(),
-            "--all-targets",
-            // Make cargo fully quiet since we're testing just nextest output below.
-            "--cargo-quiet",
-            "--cargo-quiet",
-        ])
+        .args(cli_args)
         .env("__NEXTEST_REDACT", "1")
         // Used for linked path testing. See comment in
         // binary_list.rs:detect_linked_path.
@@ -923,7 +960,9 @@ fn create_archive(
         UdsStatus::NotCreated => format!("{snapshot_name}_without_uds"),
     };
 
-    insta::assert_snapshot!(snapshot_name, output.stderr_as_str());
+    if check_output {
+        insta::assert_snapshot!(snapshot_name, output.stderr_as_str());
+    }
 
     // Remove the old source and target directories to ensure that any tests that refer to files within
     // it fail.

@@ -45,7 +45,9 @@ use nextest_runner::{
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
-    test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
+    test_filter::{
+        FilterBinaryMatch, FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns,
+    },
     test_output::CaptureStrategy,
     write_str::WriteStr,
 };
@@ -188,6 +190,7 @@ impl AppOpts {
                 cargo_options,
                 archive_file,
                 archive_format,
+                build_filter,
                 zstd_level,
             } => {
                 let app = BaseApp::new(
@@ -198,6 +201,7 @@ impl AppOpts {
                     self.common.manifest_path,
                     output_writer,
                 )?;
+                let app = App::new(app, build_filter)?;
                 app.exec_archive(&archive_file, archive_format, zstd_level, output_writer)?;
                 Ok(0)
             }
@@ -389,6 +393,9 @@ enum Command {
             default_value_t
         )]
         archive_format: ArchiveFormatOpt,
+
+        #[clap(flatten)]
+        build_filter: TestBuildFilter,
 
         /// Zstandard compression level (-7 to 22, higher is more compressed + slower)
         #[arg(
@@ -1519,69 +1526,6 @@ impl BaseApp {
         })
     }
 
-    fn exec_archive(
-        &self,
-        output_file: &Utf8Path,
-        format: ArchiveFormatOpt,
-        zstd_level: i32,
-        output_writer: &mut OutputWriter,
-    ) -> Result<()> {
-        // Do format detection first so we fail immediately.
-        let format = format.to_archive_format(output_file)?;
-        let binary_list = self.build_binary_list()?;
-        let path_mapper = PathMapper::noop();
-
-        let build_platforms = binary_list.rust_build_meta.build_platforms.clone();
-        let pcx = ParseContext::new(self.graph());
-        let (_, config) = self.load_config(&pcx)?;
-        let profile = self
-            .load_profile(&config)?
-            .apply_build_platforms(&build_platforms);
-
-        let redactor = if should_redact() {
-            Redactor::build_active(&binary_list.rust_build_meta)
-                .with_path(output_file.to_path_buf(), "<archive-file>".to_owned())
-                .build()
-        } else {
-            Redactor::noop()
-        };
-
-        let mut reporter = ArchiveReporter::new(self.output.verbose, redactor.clone());
-        if self
-            .output
-            .color
-            .should_colorize(supports_color::Stream::Stderr)
-        {
-            reporter.colorize();
-        }
-
-        let mut writer = output_writer.stderr_writer();
-        archive_to_file(
-            profile,
-            &binary_list,
-            &self.cargo_metadata_json,
-            &self.package_graph,
-            // Note that path_mapper is currently a no-op -- we don't support reusing builds for
-            // archive creation because it's too confusing.
-            &path_mapper,
-            format,
-            zstd_level,
-            output_file,
-            |event| {
-                reporter.report_event(event, &mut writer)?;
-                writer.flush()
-            },
-            redactor.clone(),
-        )
-        .map_err(|err| ExpectedError::ArchiveCreateError {
-            archive_file: output_file.to_owned(),
-            err,
-            redactor,
-        })?;
-
-        Ok(())
-    }
-
     fn build_binary_list(&self) -> Result<Arc<BinaryList>> {
         let binary_list = match self.reuse_build.binaries_metadata() {
             Some(m) => m.binary_list.clone(),
@@ -1755,6 +1699,122 @@ impl App {
 
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
+        Ok(())
+    }
+
+    fn exec_archive(
+        &self,
+        output_file: &Utf8Path,
+        format: ArchiveFormatOpt,
+        zstd_level: i32,
+        output_writer: &mut OutputWriter,
+    ) -> Result<()> {
+        // Do format detection first so we fail immediately.
+        let format = format.to_archive_format(output_file)?;
+        let binary_list = self.base.build_binary_list()?;
+        let path_mapper = PathMapper::noop();
+        let build_platforms = &binary_list.rust_build_meta.build_platforms;
+        let pcx = ParseContext::new(self.base.graph());
+        let (_, config) = self.base.load_config(&pcx)?;
+        let profile = self
+            .base
+            .load_profile(&config)?
+            .apply_build_platforms(build_platforms);
+        let redactor = if should_redact() {
+            Redactor::build_active(&binary_list.rust_build_meta)
+                .with_path(output_file.to_path_buf(), "<archive-file>".to_owned())
+                .build()
+        } else {
+            Redactor::noop()
+        };
+        let mut reporter = ArchiveReporter::new(self.base.output.verbose, redactor.clone());
+
+        if self
+            .base
+            .output
+            .color
+            .should_colorize(supports_color::Stream::Stderr)
+        {
+            reporter.colorize();
+        }
+
+        let rust_build_meta = binary_list.rust_build_meta.map_paths(&path_mapper);
+        let test_artifacts = RustTestArtifact::from_binary_list(
+            self.base.graph(),
+            binary_list.clone(),
+            &rust_build_meta,
+            &path_mapper,
+            self.build_filter.platform_filter.into(),
+        )?;
+
+        let filter_bound = {
+            if self.build_filter.ignore_default_filter {
+                FilterBound::All
+            } else {
+                FilterBound::DefaultSet
+            }
+        };
+
+        let filter_exprs = self.build_filtering_expressions(&pcx)?;
+        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+        let ecx = profile.filterset_ecx();
+
+        // Apply filterset to `RustTestArtifact` list.
+        let test_artifacts: BTreeSet<_> = test_artifacts
+            .iter()
+            .filter(|test_artifact| {
+                matches!(
+                    test_filter_builder.filter_binary_match(test_artifact, &ecx, filter_bound),
+                    FilterBinaryMatch::Definite | FilterBinaryMatch::Possible
+                )
+            })
+            .map(|test_artifact| &test_artifact.binary_id)
+            .collect();
+
+        let filtered_binaries: Vec<_> = binary_list
+            .rust_binaries
+            .iter()
+            .filter(|binary| test_artifacts.contains(&binary.id))
+            .cloned()
+            .collect();
+
+        if filtered_binaries.len() < binary_list.rust_binaries.len() {
+            info!(
+                "archiving {} of {} test binaries after filtering",
+                filtered_binaries.len(),
+                binary_list.rust_binaries.len()
+            );
+        }
+
+        let binary_list_to_archive = BinaryList {
+            rust_build_meta: binary_list.rust_build_meta.clone(),
+            rust_binaries: filtered_binaries,
+        };
+
+        let mut writer = output_writer.stderr_writer();
+        archive_to_file(
+            profile,
+            &binary_list_to_archive,
+            &self.base.cargo_metadata_json,
+            &self.base.package_graph,
+            // Note that path_mapper is currently a no-op -- we don't support reusing builds for
+            // archive creation because it's too confusing.
+            &path_mapper,
+            format,
+            zstd_level,
+            output_file,
+            |event| {
+                reporter.report_event(event, &mut writer)?;
+                writer.flush()
+            },
+            redactor.clone(),
+        )
+        .map_err(|err| ExpectedError::ArchiveCreateError {
+            archive_file: output_file.to_owned(),
+            err,
+            redactor,
+        })?;
+
         Ok(())
     }
 
