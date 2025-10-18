@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(jj s:*)",
+      "WebSearch",
+      "Bash(cargo check:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

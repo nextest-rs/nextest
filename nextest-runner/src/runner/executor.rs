@@ -417,7 +417,7 @@ impl<'a> ExecutorContext<'a> {
             slow_after: None,
         };
 
-        let (res, leaked) = {
+        let (res, leak_info) = {
             let res = loop {
                 tokio::select! {
                     () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
@@ -548,7 +548,7 @@ impl<'a> ExecutorContext<'a> {
                 })
             });
 
-            let leaked = detect_fd_leaks(
+            let leak_info = detect_fd_leaks(
                 &cx,
                 child_pid,
                 &mut child_acc,
@@ -559,7 +559,7 @@ impl<'a> ExecutorContext<'a> {
             )
             .await;
 
-            (res, leaked)
+            (res, leak_info)
         };
 
         let exit_status = match res {
@@ -572,6 +572,7 @@ impl<'a> ExecutorContext<'a> {
 
         let exit_status = exit_status.expect("None always results in early return");
 
+        let leaked = matches!(leak_info, LeakDetectInfo::Leaked);
         let exec_result = status.unwrap_or_else(|| {
             create_execution_result(exit_status, &child_acc.errors, leaked, leak_timeout.result)
         });
@@ -650,13 +651,15 @@ impl<'a> ExecutorContext<'a> {
 
         let id = test.test_instance.id();
 
-        usdt_probes::start_test_attempt!(|| UsdtStartTestAttempt {
+        usdt_probes::test__attempt__start!(|| UsdtTestAttemptStart {
             binary_id: id.binary_id.clone(),
             test_name: id.test_name.to_owned(),
             program: cmd.program().to_owned(),
             args: cmd.args().to_owned(),
             attempt: test.retry_data.attempt,
             total_attempts: test.retry_data.total_attempts,
+            stress_current: test.stress_index.map(|s| s.current),
+            stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
         });
 
         let command_mut = cmd.command_mut();
@@ -741,7 +744,7 @@ impl<'a> ExecutorContext<'a> {
             slow_after: None,
         };
 
-        let (res, leaked) = {
+        let (res, leak_info) = {
             let res = loop {
                 tokio::select! {
                     () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
@@ -871,7 +874,7 @@ impl<'a> ExecutorContext<'a> {
                 })
             });
 
-            let leaked = detect_fd_leaks(
+            let leak_info = detect_fd_leaks(
                 &cx,
                 child_pid,
                 &mut child_acc,
@@ -882,7 +885,7 @@ impl<'a> ExecutorContext<'a> {
             )
             .await;
 
-            (res, leaked)
+            (res, leak_info)
         };
 
         let exit_status = match res {
@@ -894,8 +897,36 @@ impl<'a> ExecutorContext<'a> {
         };
 
         let exit_status = exit_status.expect("None always results in early return");
+
+        let (leaked, time_to_close) = match leak_info {
+            LeakDetectInfo::NoLeak { time_to_close } => (false, Some(time_to_close)),
+            LeakDetectInfo::Leaked => (true, None),
+        };
+
         let exec_result = status.unwrap_or_else(|| {
             create_execution_result(exit_status, &child_acc.errors, leaked, leak_timeout.result)
+        });
+
+        let stopwatch_end = stopwatch.snapshot();
+
+        // Fire the test-attempt-done probe
+        let id = test.test_instance.id();
+        usdt_probes::test__attempt__done!(|| {
+            use crate::usdt::UsdtTestAttemptDone;
+
+            UsdtTestAttemptDone {
+                binary_id: id.binary_id.clone(),
+                test_name: id.test_name.to_owned(),
+                attempt: test.retry_data.attempt,
+                total_attempts: test.retry_data.total_attempts,
+                result: exec_result.as_static_str(),
+                exit_code: exit_status.code(),
+                duration_secs: stopwatch_end.active.as_secs_f64(),
+                leaked,
+                time_to_close_fds_secs: time_to_close.map(|d| d.as_secs_f64()),
+                stress_current: test.stress_index.map(|s| s.current),
+                stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
+            }
         });
 
         Ok(InternalExecuteStatus {
@@ -907,7 +938,7 @@ impl<'a> ExecutorContext<'a> {
                 errors: ErrorList::new(UnitKind::WAITING_ON_TEST_MESSAGE, child_acc.errors),
             },
             result: exec_result,
-            stopwatch_end: stopwatch.snapshot(),
+            stopwatch_end,
         })
     }
 }
@@ -1219,6 +1250,18 @@ async fn handle_delay_between_attempts<'a>(
     }
 }
 
+/// Information about file descriptor leak detection.
+#[derive(Debug, Clone, Copy)]
+enum LeakDetectInfo {
+    /// No leak detected. File descriptors closed within the timeout period.
+    NoLeak {
+        /// Time taken for file descriptors to close.
+        time_to_close: Duration,
+    },
+    /// Leak detected. File descriptors did not close before timeout.
+    Leaked,
+}
+
 /// After a child process has exited, detect if it leaked file handles by
 /// leaving long-running grandchildren open.
 ///
@@ -1234,7 +1277,7 @@ async fn detect_fd_leaks<'a>(
     leak_timeout: LeakTimeout,
     stopwatch: &mut StopwatchStart,
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
-) -> bool {
+) -> LeakDetectInfo {
     loop {
         // Ignore stop and continue events here since the leak timeout should be very small.
         // TODO: we may want to consider them.
@@ -1247,7 +1290,7 @@ async fn detect_fd_leaks<'a>(
             // to hit the `else` block right away.
             () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
             () = &mut sleep, if !child_acc.fds.is_done() => {
-                break true;
+                break LeakDetectInfo::Leaked;
             }
             recv = req_rx.recv(), if !child_acc.fds.is_done() => {
                 // The sender stays open longer than the whole loop, and the
@@ -1288,7 +1331,8 @@ async fn detect_fd_leaks<'a>(
                 }
             }
             else => {
-                break false;
+                let time_to_close = waiting_stopwatch.snapshot().active;
+                break LeakDetectInfo::NoLeak { time_to_close };
             }
         }
     }

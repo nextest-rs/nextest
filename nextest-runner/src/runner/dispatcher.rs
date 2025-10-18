@@ -22,7 +22,7 @@ use crate::{
     },
     runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalInfoEvent},
-    time::StopwatchStart,
+    time::{StopwatchSnapshot, StopwatchStart},
 };
 use chrono::Local;
 use debug_ignore::DebugIgnore;
@@ -437,6 +437,19 @@ where
                     }
                 }
                 self.new_setup_script(script_id.clone(), config, index, total, req_tx);
+
+                // Fire the USDT probe for setup script start.
+                crate::usdt::usdt_probes::setup__script__start!(|| {
+                    use crate::usdt::UsdtSetupScriptStart;
+                    UsdtSetupScriptStart {
+                        script_id: script_id.to_string(),
+                        program: program.clone(),
+                        args: config.command.args.clone(),
+                        stress_current: stress_index.map(|s| s.current),
+                        stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
+                    }
+                });
+
                 self.callback_none_response(TestEventKind::SetupScriptStarted {
                     stress_index,
                     index,
@@ -454,14 +467,30 @@ where
                 program,
                 elapsed,
                 will_terminate,
-            }) => self.callback_none_response(TestEventKind::SetupScriptSlow {
-                stress_index,
-                script_id,
-                program,
-                args: &config.command.args,
-                elapsed,
-                will_terminate: will_terminate.is_some(),
-            }),
+            }) => {
+                // Fire the USDT probe for setup script slow.
+                crate::usdt::usdt_probes::setup__script__slow!(|| {
+                    use crate::usdt::UsdtSetupScriptSlow;
+                    UsdtSetupScriptSlow {
+                        script_id: script_id.to_string(),
+                        program: program.clone(),
+                        args: config.command.args.clone(),
+                        elapsed_secs: elapsed.as_secs_f64(),
+                        will_terminate: will_terminate.is_some(),
+                        stress_current: stress_index.map(|s| s.current),
+                        stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
+                    }
+                });
+
+                self.callback_none_response(TestEventKind::SetupScriptSlow {
+                    stress_index,
+                    script_id,
+                    program,
+                    args: &config.command.args,
+                    elapsed,
+                    will_terminate: will_terminate.is_some(),
+                })
+            }
             InternalEvent::Executor(ExecutorEvent::SetupScriptFinished {
                 stress_index,
                 script_id,
@@ -473,6 +502,32 @@ where
             }) => {
                 self.finish_setup_script();
                 self.run_stats.on_setup_script_finished(&status);
+
+                // Fire the USDT probe for setup script done.
+                crate::usdt::usdt_probes::setup__script__done!(|| {
+                    use crate::{reporter::events::FailureStatus, usdt::UsdtSetupScriptDone};
+
+                    // Extract exit code from the result if available
+                    let exit_code = match status.result {
+                        crate::reporter::events::ExecutionResult::Fail {
+                            failure_status: FailureStatus::ExitCode(code),
+                            ..
+                        } => Some(code),
+                        _ => None,
+                    };
+
+                    UsdtSetupScriptDone {
+                        script_id: script_id.to_string(),
+                        program: program.clone(),
+                        args: config.command.args.clone(),
+                        result: status.result.as_static_str(),
+                        exit_code,
+                        duration_secs: status.time_taken.as_secs_f64(),
+                        stress_current: stress_index.map(|s| s.current),
+                        stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
+                    }
+                });
+
                 // Setup scripts failing always cause the entire test run to be cancelled
                 // (--no-fail-fast is ignored).
                 let fail_cancel = !status.result.is_success();
@@ -529,13 +584,30 @@ where
                 retry_data,
                 elapsed,
                 will_terminate,
-            }) => self.callback_none_response(TestEventKind::TestSlow {
-                stress_index,
-                test_instance,
-                retry_data,
-                elapsed,
-                will_terminate: will_terminate.is_some(),
-            }),
+            }) => {
+                // Fire the test-slow probe.
+                crate::usdt::usdt_probes::test__slow!(|| {
+                    use crate::usdt::UsdtTestSlow;
+                    UsdtTestSlow {
+                        binary_id: test_instance.suite_info.binary_id.clone(),
+                        test_name: test_instance.name.to_owned(),
+                        attempt: retry_data.attempt,
+                        total_attempts: retry_data.total_attempts,
+                        elapsed_secs: elapsed.as_secs_f64(),
+                        will_terminate: will_terminate.is_some(),
+                        stress_current: stress_index.map(|s| s.current),
+                        stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
+                    }
+                });
+
+                self.callback_none_response(TestEventKind::TestSlow {
+                    stress_index,
+                    test_instance,
+                    retry_data,
+                    elapsed,
+                    will_terminate: will_terminate.is_some(),
+                })
+            }
             InternalEvent::Executor(ExecutorEvent::AttemptFailedWillRetry {
                 stress_index,
                 test_instance,
@@ -877,7 +949,7 @@ where
         }
     }
 
-    pub(super) fn run_finished(&mut self) {
+    pub(super) fn run_finished(&mut self) -> StopwatchSnapshot {
         let stopwatch_end = self.stopwatch.snapshot();
         self.basic_callback(TestEventKind::RunFinished {
             start_time: stopwatch_end.start_time.fixed_offset(),
@@ -890,7 +962,8 @@ where
                     || RunFinishedStats::Single(self.run_stats),
                     RunFinishedStats::Stress,
                 ),
-        })
+        });
+        stopwatch_end
     }
 
     pub(super) fn run_stats(&self) -> RunStats {

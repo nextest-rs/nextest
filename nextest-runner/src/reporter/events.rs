@@ -1034,6 +1034,17 @@ impl ExecutionResult {
             | ExecutionResult::Timeout => false,
         }
     }
+
+    /// Returns a static string representation of the result.
+    pub fn as_static_str(&self) -> &'static str {
+        match self {
+            ExecutionResult::Pass => "pass",
+            ExecutionResult::Leak { .. } => "leak",
+            ExecutionResult::Fail { .. } => "fail",
+            ExecutionResult::ExecFail => "exec-fail",
+            ExecutionResult::Timeout => "timeout",
+        }
+    }
 }
 
 /// Failure status: either an exit code or an abort status.
