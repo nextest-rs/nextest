@@ -11,18 +11,20 @@
 //! * x86_64 Linux, via [bpftrace](https://bpftrace.org/) (aarch64 might work as well)
 //! * macOS, illumos and other Solaris derivatives, and FreeBSD, via [DTrace](https://dtrace.org/)
 //!
-//! The probes and their contents are not part of nextest's stable API.
+//! The probes and their contents are not part of nextest's stability guarantees.
+//!
+//! For more information and examples, see the [nextest documentation](https://nexte.st/docs/integrations/usdt).
 
 use nextest_metadata::RustBinaryId;
 use serde::Serialize;
 
-/// Data associated with the `test-attempt-start` probe.
+/// Data associated with the `test-attempt-start` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtTestAttemptStart {
-    /// The binary ID.
+    /// The binary ID. Also available as `arg1`.
     pub binary_id: RustBinaryId,
 
-    /// The name of the test.
+    /// The name of the test. Also available as `arg2`.
     pub test_name: String,
 
     /// The program to run.
@@ -44,13 +46,13 @@ pub struct UsdtTestAttemptStart {
     pub stress_total: Option<u32>,
 }
 
-/// Data associated with the `test-attempt-done` probe.
+/// Data associated with the `test-attempt-done` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtTestAttemptDone {
-    /// The binary ID.
+    /// The binary ID. Also available as `arg1`.
     pub binary_id: RustBinaryId,
 
-    /// The name of the test.
+    /// The name of the test. Also available as `arg2`.
     pub test_name: String,
 
     /// The attempt number, starting at 1 and <= `total_attempts`.
@@ -60,12 +62,13 @@ pub struct UsdtTestAttemptDone {
     pub total_attempts: u32,
 
     /// The test result as a string (e.g., "pass", "fail", "timeout", "exec-fail").
+    /// Also available as `arg3`.
     pub result: &'static str,
 
     /// The exit code of the test process, if available.
     pub exit_code: Option<i32>,
 
-    /// The duration of the test in seconds.
+    /// The duration of the test in seconds. Also available as `arg4`.
     pub duration_secs: f64,
 
     /// Whether file descriptors were leaked.
@@ -82,13 +85,13 @@ pub struct UsdtTestAttemptDone {
     pub stress_total: Option<u32>,
 }
 
-/// Data associated with the `test-slow` probe.
+/// Data associated with the `test-slow` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtTestSlow {
-    /// The binary ID.
+    /// The binary ID. Also available as `arg1`.
     pub binary_id: RustBinaryId,
 
-    /// The name of the test.
+    /// The name of the test. Also available as `arg2`.
     pub test_name: String,
 
     /// The attempt number, starting at 1 and <= `total_attempts`.
@@ -98,6 +101,7 @@ pub struct UsdtTestSlow {
     pub total_attempts: u32,
 
     /// The time elapsed since the test started, in seconds.
+    /// Also available as `arg3`.
     pub elapsed_secs: f64,
 
     /// Whether the test is about to be terminated due to timeout.
@@ -110,10 +114,10 @@ pub struct UsdtTestSlow {
     pub stress_total: Option<u32>,
 }
 
-/// Data associated with the `setup-script-start` probe.
+/// Data associated with the `setup-script-start` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtSetupScriptStart {
-    /// The script ID.
+    /// The script ID. Also available as `arg1`.
     pub script_id: String,
 
     /// The program to run.
@@ -129,10 +133,10 @@ pub struct UsdtSetupScriptStart {
     pub stress_total: Option<u32>,
 }
 
-/// Data associated with the `setup-script-slow` probe.
+/// Data associated with the `setup-script-slow` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtSetupScriptSlow {
-    /// The script ID.
+    /// The script ID. Also available as `arg1`.
     pub script_id: String,
 
     /// The program to run.
@@ -142,6 +146,7 @@ pub struct UsdtSetupScriptSlow {
     pub args: Vec<String>,
 
     /// The time elapsed since the script started, in seconds.
+    /// Also available as `arg2`.
     pub elapsed_secs: f64,
 
     /// Whether the script is about to be terminated due to timeout.
@@ -154,10 +159,10 @@ pub struct UsdtSetupScriptSlow {
     pub stress_total: Option<u32>,
 }
 
-/// Data associated with the `setup-script-done` probe.
+/// Data associated with the `setup-script-done` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtSetupScriptDone {
-    /// The script ID.
+    /// The script ID. Also available as `arg1`.
     pub script_id: String,
 
     /// The program to run.
@@ -182,7 +187,7 @@ pub struct UsdtSetupScriptDone {
     pub stress_total: Option<u32>,
 }
 
-/// Data associated with the `run-start` probe.
+/// Data associated with the `run-start` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtRunStart {
     /// The profile name (e.g., "default", "ci").
@@ -198,7 +203,7 @@ pub struct UsdtRunStart {
     pub test_threads: usize,
 }
 
-/// Data associated with the `run-done` probe.
+/// Data associated with the `run-done` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtRunDone {
     /// The profile name (e.g., "default", "ci").
@@ -227,12 +232,19 @@ pub struct UsdtRunDone {
 pub mod usdt_probes {
     use crate::usdt::*;
 
-    pub fn test__attempt__start(attempt: &UsdtTestAttemptStart) {}
-    pub fn test__attempt__done(attempt: &UsdtTestAttemptDone) {}
-    pub fn test__slow(slow: &UsdtTestSlow) {}
-    pub fn setup__script__start(script: &UsdtSetupScriptStart) {}
-    pub fn setup__script__slow(script: &UsdtSetupScriptSlow) {}
-    pub fn setup__script__done(script: &UsdtSetupScriptDone) {}
+    pub fn test__attempt__start(attempt: &UsdtTestAttemptStart, binary_id: &str, test_name: &str) {}
+    pub fn test__attempt__done(
+        attempt: &UsdtTestAttemptDone,
+        binary_id: &str,
+        test_name: &str,
+        result: &str,
+        duration_secs: f64,
+    ) {
+    }
+    pub fn test__slow(slow: &UsdtTestSlow, binary_id: &str, test_name: &str, elapsed_secs: f64) {}
+    pub fn setup__script__start(script: &UsdtSetupScriptStart, script_id: &str) {}
+    pub fn setup__script__slow(script: &UsdtSetupScriptSlow, script_id: &str, elapsed_secs: f64) {}
+    pub fn setup__script__done(script: &UsdtSetupScriptDone, script_id: &str) {}
     pub fn run__start(run: &UsdtRunStart) {}
     pub fn run__done(run: &UsdtRunDone) {}
 }
