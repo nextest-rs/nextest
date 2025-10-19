@@ -92,7 +92,7 @@ mod tests {
 
     #[test_case(
         "",
-        Ok(LeakTimeout { period: Duration::from_millis(100), result: LeakTimeoutResult::Pass}),
+        Ok(LeakTimeout { period: Duration::from_millis(200), result: LeakTimeoutResult::Pass}),
         None
 
         ; "empty config is expected to use the hardcoded values"

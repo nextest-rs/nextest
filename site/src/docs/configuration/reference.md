@@ -399,7 +399,7 @@ For detailed information, see [_Setup scripts_](setup-scripts.md).
 
 - **Type**: String (duration) or object
 - **Description**: Leak timeout for the setup script
-- **Default**: `100ms`
+- **Default**: `200ms`
 - **Examples**:
   ```toml
   leak-timeout = "500ms"
