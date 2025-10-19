@@ -42,7 +42,8 @@ On macOS, illumos, or FreeBSD, with DTrace:
 
 ```sh
 # Run this in another terminal before starting nextest.
-pfexec dtrace -x strsize=512 -Z -n '*:cargo-nextest::test-attempt-done { printf("%s\n", copyinstr(arg0)); }'
+# (On illumos, use pfexec instead of sudo.)
+sudo dtrace -x strsize=512 -Z -n '*:cargo-nextest::test-attempt-done { printf("%s\n", copyinstr(arg0)); }'
 ```
 
 For more about DTrace, check out the [Dynamic Tracing Guide](https://illumos.org/books/dtrace/preface.html#preface).
