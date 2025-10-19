@@ -1,5 +1,6 @@
 ---
 icon: material/radar
+description: Dynamically trace nextest events with DTrace and bpftrace.
 ---
 
 # USDT probes
@@ -8,8 +9,8 @@ icon: material/radar
 
 Nextest defines [USDT](https://docs.rs/usdt/) probes which can be used for dynamic tracing. Probes are supported on:
 
-* x86_64 Linux, via [bpftrace](https://bpftrace.org/) (aarch64 Linux might work as well)
 * macOS, illumos and other Solaris derivatives, and FreeBSD, via [DTrace](https://dtrace.org/)
+* x86_64 Linux, via [bpftrace](https://bpftrace.org/) (aarch64 Linux might work as well)
 
 ## List of probes
 
