@@ -1285,6 +1285,8 @@ async fn detect_fd_leaks<'a>(
         let waiting_stopwatch = crate::time::stopwatch();
 
         tokio::select! {
+            biased;
+
             // All of the branches here need to check for
             // `!child_acc.fds.is_done()`, because if child_fds is done we want
             // to hit the `else` block right away.

@@ -95,7 +95,7 @@ slow-timeout = { period = "60s" }
 # handles, but doesn't clean the child process up (especially when it fails).
 #
 # See <https://nexte.st/docs/features/leaky-tests> for more information.
-leak-timeout = "100ms"
+leak-timeout = "200ms"
 
 # Stop all tests after the configured global timeout.
 # Defaults to 30 year, which is a large enough value to feel "infinite" without
