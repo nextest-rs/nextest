@@ -46,6 +46,14 @@ pub struct UsdtTestAttemptStart {
     pub stress_total: Option<u32>,
 }
 
+impl UsdtTestAttemptStart {
+    /// Fires the `test-attempt-start` probe.
+    #[inline]
+    pub fn fire(&self) {
+        usdt_probes::test__attempt__start!(|| (self, self.binary_id.as_str(), &self.test_name));
+    }
+}
+
 /// Data associated with the `test-attempt-done` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtTestAttemptDone {
@@ -68,21 +76,35 @@ pub struct UsdtTestAttemptDone {
     /// The exit code of the test process, if available.
     pub exit_code: Option<i32>,
 
-    /// The duration of the test in seconds. Also available as `arg4`.
-    pub duration_secs: f64,
+    /// The duration of the test in nanoseconds. Also available as `arg4`.
+    pub duration_nanos: u64,
 
     /// Whether file descriptors were leaked.
     pub leaked: bool,
 
     /// Time taken for the standard output and standard error file descriptors
-    /// to close, in seconds. None if they didn't close (timed out).
-    pub time_to_close_fds_secs: Option<f64>,
+    /// to close, in nanoseconds. None if they didn't close (timed out).
+    pub time_to_close_fds_nanos: Option<u64>,
 
     /// The 0-indexed stress run index, if running stress tests.
     pub stress_current: Option<u32>,
 
     /// The total number of stress runs, if available.
     pub stress_total: Option<u32>,
+}
+
+impl UsdtTestAttemptDone {
+    /// Fires the `test-attempt-done` probe.
+    #[inline]
+    pub fn fire(&self) {
+        usdt_probes::test__attempt__done!(|| (
+            self,
+            self.binary_id.as_str(),
+            &self.test_name,
+            self.result,
+            self.duration_nanos,
+        ));
+    }
 }
 
 /// Data associated with the `test-slow` probe, JSON-encoded as `arg0`.
@@ -100,9 +122,9 @@ pub struct UsdtTestSlow {
     /// The total number of attempts.
     pub total_attempts: u32,
 
-    /// The time elapsed since the test started, in seconds.
+    /// The time elapsed since the test started, in nanoseconds.
     /// Also available as `arg3`.
-    pub elapsed_secs: f64,
+    pub elapsed_nanos: u64,
 
     /// Whether the test is about to be terminated due to timeout.
     pub will_terminate: bool,
@@ -112,6 +134,19 @@ pub struct UsdtTestSlow {
 
     /// The total number of stress runs, if available.
     pub stress_total: Option<u32>,
+}
+
+impl UsdtTestSlow {
+    /// Fires the `test-slow` probe.
+    #[inline]
+    pub fn fire(&self) {
+        usdt_probes::test__slow!(|| (
+            self,
+            self.binary_id.as_str(),
+            &self.test_name,
+            self.elapsed_nanos
+        ));
+    }
 }
 
 /// Data associated with the `setup-script-start` probe, JSON-encoded as `arg0`.
@@ -133,6 +168,14 @@ pub struct UsdtSetupScriptStart {
     pub stress_total: Option<u32>,
 }
 
+impl UsdtSetupScriptStart {
+    /// Fires the `setup-script-start` probe.
+    #[inline]
+    pub fn fire(&self) {
+        usdt_probes::setup__script__start!(|| (self, &self.script_id));
+    }
+}
+
 /// Data associated with the `setup-script-slow` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtSetupScriptSlow {
@@ -145,9 +188,9 @@ pub struct UsdtSetupScriptSlow {
     /// The arguments to pass to the program.
     pub args: Vec<String>,
 
-    /// The time elapsed since the script started, in seconds.
+    /// The time elapsed since the script started, in nanoseconds.
     /// Also available as `arg2`.
-    pub elapsed_secs: f64,
+    pub elapsed_nanos: u64,
 
     /// Whether the script is about to be terminated due to timeout.
     pub will_terminate: bool,
@@ -157,6 +200,14 @@ pub struct UsdtSetupScriptSlow {
 
     /// The total number of stress runs, if available.
     pub stress_total: Option<u32>,
+}
+
+impl UsdtSetupScriptSlow {
+    /// Fires the `setup-script-slow` probe.
+    #[inline]
+    pub fn fire(&self) {
+        usdt_probes::setup__script__slow!(|| (self, &self.script_id, self.elapsed_nanos));
+    }
 }
 
 /// Data associated with the `setup-script-done` probe, JSON-encoded as `arg0`.
@@ -177,14 +228,22 @@ pub struct UsdtSetupScriptDone {
     /// The exit code of the script process, if available.
     pub exit_code: Option<i32>,
 
-    /// The duration of the script execution in seconds.
-    pub duration_secs: f64,
+    /// The duration of the script execution in nanoseconds.
+    pub duration_nanos: u64,
 
     /// The 0-indexed stress run index, if running stress tests.
     pub stress_current: Option<u32>,
 
     /// The total number of stress runs, if available.
     pub stress_total: Option<u32>,
+}
+
+impl UsdtSetupScriptDone {
+    /// Fires the `setup-script-done` probe.
+    #[inline]
+    pub fn fire(&self) {
+        usdt_probes::setup__script__done!(|| (self, &self.script_id));
+    }
 }
 
 /// Data associated with the `run-start` probe, JSON-encoded as `arg0`.
@@ -201,6 +260,14 @@ pub struct UsdtRunStart {
 
     /// Number of test threads (concurrency level).
     pub test_threads: usize,
+}
+
+impl UsdtRunStart {
+    /// Fires the `run-start` probe.
+    #[inline]
+    pub fn fire(&self) {
+        usdt_probes::run__start!(|| self);
+    }
 }
 
 /// Data associated with the `run-done` probe, JSON-encoded as `arg0`.
@@ -221,11 +288,19 @@ pub struct UsdtRunDone {
     /// Number of tests that were skipped.
     pub skipped: usize,
 
-    /// Total active duration of the run in seconds, not including paused time.
-    pub duration_secs: f64,
+    /// Total active duration of the run in nanoseconds, not including paused time.
+    pub duration_nanos: u64,
 
-    /// The number of seconds the run was paused.
-    pub paused_secs: f64,
+    /// The number of nanoseconds the run was paused.
+    pub paused_nanos: u64,
+}
+
+impl UsdtRunDone {
+    /// Fires the `run-done` probe.
+    #[inline]
+    pub fn fire(&self) {
+        usdt_probes::run__done!(|| self);
+    }
 }
 
 #[usdt::provider(provider = "nextest")]
@@ -238,12 +313,12 @@ pub mod usdt_probes {
         binary_id: &str,
         test_name: &str,
         result: &str,
-        duration_secs: f64,
+        duration_nanos: u64,
     ) {
     }
-    pub fn test__slow(slow: &UsdtTestSlow, binary_id: &str, test_name: &str, elapsed_secs: f64) {}
+    pub fn test__slow(slow: &UsdtTestSlow, binary_id: &str, test_name: &str, elapsed_nanos: u64) {}
     pub fn setup__script__start(script: &UsdtSetupScriptStart, script_id: &str) {}
-    pub fn setup__script__slow(script: &UsdtSetupScriptSlow, script_id: &str, elapsed_secs: f64) {}
+    pub fn setup__script__slow(script: &UsdtSetupScriptSlow, script_id: &str, elapsed_nanos: u64) {}
     pub fn setup__script__done(script: &UsdtSetupScriptDone, script_id: &str) {}
     pub fn run__start(run: &UsdtRunStart) {}
     pub fn run__done(run: &UsdtRunDone) {}

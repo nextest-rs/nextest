@@ -35,7 +35,7 @@ use crate::{
     test_command::{ChildAccumulator, ChildFds},
     test_output::{CaptureStrategy, ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     time::{PausableSleep, StopwatchStart},
-    usdt::usdt_probes,
+    usdt::{UsdtTestAttemptDone, UsdtTestAttemptStart},
 };
 use future_queue::FutureQueueContext;
 use nextest_metadata::FilterMatch;
@@ -651,22 +651,17 @@ impl<'a> ExecutorContext<'a> {
 
         let id = test.test_instance.id();
 
-        usdt_probes::test__attempt__start!(|| {
-            (
-                UsdtTestAttemptStart {
-                    binary_id: id.binary_id.clone(),
-                    test_name: id.test_name.to_owned(),
-                    program: cmd.program().to_owned(),
-                    args: cmd.args().to_owned(),
-                    attempt: test.retry_data.attempt,
-                    total_attempts: test.retry_data.total_attempts,
-                    stress_current: test.stress_index.map(|s| s.current),
-                    stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
-                },
-                id.binary_id.as_str(),
-                &id.test_name,
-            )
-        });
+        UsdtTestAttemptStart {
+            binary_id: id.binary_id.clone(),
+            test_name: id.test_name.to_owned(),
+            program: cmd.program().to_owned(),
+            args: cmd.args().to_owned(),
+            attempt: test.retry_data.attempt,
+            total_attempts: test.retry_data.total_attempts,
+            stress_current: test.stress_index.map(|s| s.current),
+            stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
+        }
+        .fire();
 
         let command_mut = cmd.command_mut();
 
@@ -917,27 +912,20 @@ impl<'a> ExecutorContext<'a> {
 
         // Fire the test-attempt-done probe
         let id = test.test_instance.id();
-        usdt_probes::test__attempt__done!(|| {
-            (
-                UsdtTestAttemptDone {
-                    binary_id: id.binary_id.clone(),
-                    test_name: id.test_name.to_owned(),
-                    attempt: test.retry_data.attempt,
-                    total_attempts: test.retry_data.total_attempts,
-                    result: exec_result.as_static_str(),
-                    exit_code: exit_status.code(),
-                    duration_secs: stopwatch_end.active.as_secs_f64(),
-                    leaked,
-                    time_to_close_fds_secs: time_to_close.map(|d| d.as_secs_f64()),
-                    stress_current: test.stress_index.map(|s| s.current),
-                    stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
-                },
-                id.binary_id.as_str(),
-                &id.test_name,
-                exec_result.as_static_str(),
-                stopwatch_end.active.as_secs_f64(),
-            )
-        });
+        UsdtTestAttemptDone {
+            binary_id: id.binary_id.clone(),
+            test_name: id.test_name.to_owned(),
+            attempt: test.retry_data.attempt,
+            total_attempts: test.retry_data.total_attempts,
+            result: exec_result.as_static_str(),
+            exit_code: exit_status.code(),
+            duration_nanos: stopwatch_end.active.as_nanos() as u64,
+            leaked,
+            time_to_close_fds_nanos: time_to_close.map(|d| d.as_nanos() as u64),
+            stress_current: test.stress_index.map(|s| s.current),
+            stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
+        }
+        .fire();
 
         Ok(InternalExecuteStatus {
             test,
