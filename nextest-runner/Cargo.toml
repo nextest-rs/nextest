@@ -87,7 +87,6 @@ toml_edit = { workspace = true, features = ["serde"] }
 tracing.workspace = true
 unicode-ident.workspace = true
 unicode-normalization.workspace = true
-usdt.workspace = true
 xxhash-rust = { workspace = true, features = ["xxh64"] }
 zstd.workspace = true
 
@@ -110,6 +109,13 @@ tracing-subscriber = { workspace = true, optional = true }
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
 nix.workspace = true
+
+# Enable USDT on these platforms. In particular, don't enable it on aarch64
+# Linux because usdt 0.6.0 crashes with:
+#
+# Message:  unsafe precondition(s) violated: ptr::read_volatile requires that the pointer argument is aligned and non-null
+[target.'cfg(any(all(target_arch = "x86_64", target_os = "linux"), target_os = "macos", target_os = "freebsd", target_os = "illumos"))'.dependencies]
+usdt = "0.6.0"
 
 [target.'cfg(windows)'.dependencies]
 dunce.workspace = true

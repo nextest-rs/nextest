@@ -18,6 +18,147 @@
 use nextest_metadata::RustBinaryId;
 use serde::Serialize;
 
+/// Register USDT probes on supported platforms.
+#[cfg(any(
+    all(target_arch = "x86_64", target_os = "linux"),
+    target_os = "macos",
+    target_os = "freebsd",
+    target_os = "illumos"
+))]
+pub fn register_probes() -> Result<(), usdt::Error> {
+    usdt::register_probes()
+}
+
+/// No-op for unsupported platforms.
+#[cfg(not(any(
+    all(target_arch = "x86_64", target_os = "linux"),
+    target_os = "macos",
+    target_os = "freebsd",
+    target_os = "illumos"
+)))]
+pub fn register_probes() -> Result<(), std::convert::Infallible> {
+    Ok(())
+}
+
+#[cfg(any(
+    all(target_arch = "x86_64", target_os = "linux"),
+    target_os = "macos",
+    target_os = "freebsd",
+    target_os = "illumos"
+))]
+#[usdt::provider(provider = "nextest")]
+pub mod usdt_probes {
+    use crate::usdt::*;
+
+    pub fn test__attempt__start(attempt: &UsdtTestAttemptStart, binary_id: &str, test_name: &str) {}
+    pub fn test__attempt__done(
+        attempt: &UsdtTestAttemptDone,
+        binary_id: &str,
+        test_name: &str,
+        result: &str,
+        duration_nanos: u64,
+    ) {
+    }
+    pub fn test__slow(slow: &UsdtTestSlow, binary_id: &str, test_name: &str, elapsed_nanos: u64) {}
+    pub fn setup__script__start(script: &UsdtSetupScriptStart, script_id: &str) {}
+    pub fn setup__script__slow(script: &UsdtSetupScriptSlow, script_id: &str, elapsed_nanos: u64) {}
+    pub fn setup__script__done(script: &UsdtSetupScriptDone, script_id: &str) {}
+    pub fn run__start(run: &UsdtRunStart) {}
+    pub fn run__done(run: &UsdtRunDone) {}
+}
+
+/// Fires a USDT probe on supported platforms.
+#[cfg(any(
+    all(target_arch = "x86_64", target_os = "linux"),
+    target_os = "macos",
+    target_os = "freebsd",
+    target_os = "illumos"
+))]
+#[macro_export]
+macro_rules! fire_usdt {
+    (UsdtTestAttemptStart { $($tt:tt)* }) => {{
+        $crate::usdt::usdt_probes::test__attempt__start!(|| {
+            let probe = $crate::usdt::UsdtTestAttemptStart { $($tt)* };
+            let binary_id = probe.binary_id.to_string();
+            let test_name = probe.test_name.clone();
+            (probe, binary_id, test_name)
+        })
+    }};
+    (UsdtTestAttemptDone { $($tt:tt)* }) => {{
+        $crate::usdt::usdt_probes::test__attempt__done!(|| {
+            let probe = $crate::usdt::UsdtTestAttemptDone { $($tt)* };
+            let binary_id = probe.binary_id.to_string();
+            let test_name = probe.test_name.clone();
+            let result = probe.result;
+            let duration_nanos = probe.duration_nanos;
+            (
+                probe,
+                binary_id,
+                test_name,
+                result,
+                duration_nanos,
+            )
+        })
+    }};
+    (UsdtTestSlow { $($tt:tt)* }) => {{
+        $crate::usdt::usdt_probes::test__slow!(|| {
+            let probe = $crate::usdt::UsdtTestSlow { $($tt)* };
+            let binary_id = probe.binary_id.to_string();
+            let test_name = probe.test_name.clone();
+            let elapsed_nanos = probe.elapsed_nanos;
+            (probe, binary_id, test_name, elapsed_nanos)
+        })
+    }};
+    (UsdtSetupScriptStart { $($tt:tt)* }) => {{
+        $crate::usdt::usdt_probes::setup__script__start!(|| {
+            let probe = $crate::usdt::UsdtSetupScriptStart { $($tt)* };
+            let script_id = probe.script_id.clone();
+            (probe, script_id)
+        })
+    }};
+    (UsdtSetupScriptSlow { $($tt:tt)* }) => {{
+        $crate::usdt::usdt_probes::setup__script__slow!(|| {
+            let probe = $crate::usdt::UsdtSetupScriptSlow { $($tt)* };
+            let script_id = probe.script_id.clone();
+            let elapsed_nanos = probe.elapsed_nanos;
+            (probe, script_id, elapsed_nanos)
+        })
+    }};
+    (UsdtSetupScriptDone { $($tt:tt)* }) => {{
+        $crate::usdt::usdt_probes::setup__script__done!(|| {
+            let probe = $crate::usdt::UsdtSetupScriptDone { $($tt)* };
+            let script_id = probe.script_id.clone();
+            (probe, script_id)
+        })
+    }};
+    (UsdtRunStart { $($tt:tt)* }) => {{
+        $crate::usdt::usdt_probes::run__start!(|| {
+            let probe = $crate::usdt::UsdtRunStart { $($tt)* };
+            probe
+        })
+    }};
+    (UsdtRunDone { $($tt:tt)* }) => {{
+        $crate::usdt::usdt_probes::run__done!(|| {
+            let probe = $crate::usdt::UsdtRunDone { $($tt)* };
+            probe
+        })
+    }};
+}
+
+/// No-op version of fire_usdt for unsupported platforms.
+#[cfg(not(any(
+    all(target_arch = "x86_64", target_os = "linux"),
+    target_os = "macos",
+    target_os = "freebsd",
+    target_os = "illumos"
+)))]
+#[macro_export]
+macro_rules! fire_usdt {
+    ($($tt:tt)*) => {
+        // No-op: probe struct is never constructed on unsupported platforms
+    };
+}
+
 /// Data associated with the `test-attempt-start` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtTestAttemptStart {
@@ -44,14 +185,6 @@ pub struct UsdtTestAttemptStart {
 
     /// The total number of stress runs, if available.
     pub stress_total: Option<u32>,
-}
-
-impl UsdtTestAttemptStart {
-    /// Fires the `test-attempt-start` probe.
-    #[inline]
-    pub fn fire(&self) {
-        usdt_probes::test__attempt__start!(|| (self, self.binary_id.as_str(), &self.test_name));
-    }
 }
 
 /// Data associated with the `test-attempt-done` probe, JSON-encoded as `arg0`.
@@ -93,20 +226,6 @@ pub struct UsdtTestAttemptDone {
     pub stress_total: Option<u32>,
 }
 
-impl UsdtTestAttemptDone {
-    /// Fires the `test-attempt-done` probe.
-    #[inline]
-    pub fn fire(&self) {
-        usdt_probes::test__attempt__done!(|| (
-            self,
-            self.binary_id.as_str(),
-            &self.test_name,
-            self.result,
-            self.duration_nanos,
-        ));
-    }
-}
-
 /// Data associated with the `test-slow` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtTestSlow {
@@ -136,19 +255,6 @@ pub struct UsdtTestSlow {
     pub stress_total: Option<u32>,
 }
 
-impl UsdtTestSlow {
-    /// Fires the `test-slow` probe.
-    #[inline]
-    pub fn fire(&self) {
-        usdt_probes::test__slow!(|| (
-            self,
-            self.binary_id.as_str(),
-            &self.test_name,
-            self.elapsed_nanos
-        ));
-    }
-}
-
 /// Data associated with the `setup-script-start` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtSetupScriptStart {
@@ -166,14 +272,6 @@ pub struct UsdtSetupScriptStart {
 
     /// The total number of stress runs, if available.
     pub stress_total: Option<u32>,
-}
-
-impl UsdtSetupScriptStart {
-    /// Fires the `setup-script-start` probe.
-    #[inline]
-    pub fn fire(&self) {
-        usdt_probes::setup__script__start!(|| (self, &self.script_id));
-    }
 }
 
 /// Data associated with the `setup-script-slow` probe, JSON-encoded as `arg0`.
@@ -200,14 +298,6 @@ pub struct UsdtSetupScriptSlow {
 
     /// The total number of stress runs, if available.
     pub stress_total: Option<u32>,
-}
-
-impl UsdtSetupScriptSlow {
-    /// Fires the `setup-script-slow` probe.
-    #[inline]
-    pub fn fire(&self) {
-        usdt_probes::setup__script__slow!(|| (self, &self.script_id, self.elapsed_nanos));
-    }
 }
 
 /// Data associated with the `setup-script-done` probe, JSON-encoded as `arg0`.
@@ -238,14 +328,6 @@ pub struct UsdtSetupScriptDone {
     pub stress_total: Option<u32>,
 }
 
-impl UsdtSetupScriptDone {
-    /// Fires the `setup-script-done` probe.
-    #[inline]
-    pub fn fire(&self) {
-        usdt_probes::setup__script__done!(|| (self, &self.script_id));
-    }
-}
-
 /// Data associated with the `run-start` probe, JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtRunStart {
@@ -260,14 +342,6 @@ pub struct UsdtRunStart {
 
     /// Number of test threads (concurrency level).
     pub test_threads: usize,
-}
-
-impl UsdtRunStart {
-    /// Fires the `run-start` probe.
-    #[inline]
-    pub fn fire(&self) {
-        usdt_probes::run__start!(|| self);
-    }
 }
 
 /// Data associated with the `run-done` probe, JSON-encoded as `arg0`.
@@ -293,33 +367,4 @@ pub struct UsdtRunDone {
 
     /// The number of nanoseconds the run was paused.
     pub paused_nanos: u64,
-}
-
-impl UsdtRunDone {
-    /// Fires the `run-done` probe.
-    #[inline]
-    pub fn fire(&self) {
-        usdt_probes::run__done!(|| self);
-    }
-}
-
-#[usdt::provider(provider = "nextest")]
-pub mod usdt_probes {
-    use crate::usdt::*;
-
-    pub fn test__attempt__start(attempt: &UsdtTestAttemptStart, binary_id: &str, test_name: &str) {}
-    pub fn test__attempt__done(
-        attempt: &UsdtTestAttemptDone,
-        binary_id: &str,
-        test_name: &str,
-        result: &str,
-        duration_nanos: u64,
-    ) {
-    }
-    pub fn test__slow(slow: &UsdtTestSlow, binary_id: &str, test_name: &str, elapsed_nanos: u64) {}
-    pub fn setup__script__start(script: &UsdtSetupScriptStart, script_id: &str) {}
-    pub fn setup__script__slow(script: &UsdtSetupScriptSlow, script_id: &str, elapsed_nanos: u64) {}
-    pub fn setup__script__done(script: &UsdtSetupScriptDone, script_id: &str) {}
-    pub fn run__start(run: &UsdtRunStart) {}
-    pub fn run__done(run: &UsdtRunDone) {}
 }

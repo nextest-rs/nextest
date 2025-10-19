@@ -79,8 +79,8 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          # macos-14 for M1 runners
-          - macos-14
+          - ubuntu-24.04-arm
+          - macos-latest
           - windows-latest
         # 1.87 is the MSRV
         rust-version: ["1.87", stable]
@@ -139,7 +139,7 @@ jobs:
       - name: Test with latest nextest release
         run: cargo nextest run --profile ci
       - name: Test without double-spawning
-        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-14' }}
+        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-latest' }}
         env:
           NEXTEST_DOUBLE_SPAWN: 0
         run: cargo local-nt run --profile ci

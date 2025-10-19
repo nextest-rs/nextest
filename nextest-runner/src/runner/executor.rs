@@ -35,7 +35,6 @@ use crate::{
     test_command::{ChildAccumulator, ChildFds},
     test_output::{CaptureStrategy, ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     time::{PausableSleep, StopwatchStart},
-    usdt::{UsdtTestAttemptDone, UsdtTestAttemptStart},
 };
 use future_queue::FutureQueueContext;
 use nextest_metadata::FilterMatch;
@@ -649,19 +648,16 @@ impl<'a> ExecutorContext<'a> {
             test.settings.run_extra_args(),
         );
 
-        let id = test.test_instance.id();
-
-        UsdtTestAttemptStart {
-            binary_id: id.binary_id.clone(),
-            test_name: id.test_name.to_owned(),
+        crate::fire_usdt!(UsdtTestAttemptStart {
+            binary_id: test.test_instance.suite_info.binary_id.clone(),
+            test_name: test.test_instance.name.to_owned(),
             program: cmd.program().to_owned(),
             args: cmd.args().to_owned(),
             attempt: test.retry_data.attempt,
             total_attempts: test.retry_data.total_attempts,
             stress_current: test.stress_index.map(|s| s.current),
             stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
-        }
-        .fire();
+        });
 
         let command_mut = cmd.command_mut();
 
@@ -899,7 +895,7 @@ impl<'a> ExecutorContext<'a> {
 
         let exit_status = exit_status.expect("None always results in early return");
 
-        let (leaked, time_to_close) = match leak_info {
+        let (leaked, _time_to_close) = match leak_info {
             LeakDetectInfo::NoLeak { time_to_close } => (false, Some(time_to_close)),
             LeakDetectInfo::Leaked => (true, None),
         };
@@ -911,21 +907,19 @@ impl<'a> ExecutorContext<'a> {
         let stopwatch_end = stopwatch.snapshot();
 
         // Fire the test-attempt-done probe
-        let id = test.test_instance.id();
-        UsdtTestAttemptDone {
-            binary_id: id.binary_id.clone(),
-            test_name: id.test_name.to_owned(),
+        crate::fire_usdt!(UsdtTestAttemptDone {
+            binary_id: test.test_instance.suite_info.binary_id.clone(),
+            test_name: test.test_instance.name.to_owned(),
             attempt: test.retry_data.attempt,
             total_attempts: test.retry_data.total_attempts,
             result: exec_result.as_static_str(),
             exit_code: exit_status.code(),
             duration_nanos: stopwatch_end.active.as_nanos() as u64,
             leaked,
-            time_to_close_fds_nanos: time_to_close.map(|d| d.as_nanos() as u64),
+            time_to_close_fds_nanos: _time_to_close.map(|d| d.as_nanos() as u64),
             stress_current: test.stress_index.map(|s| s.current),
             stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
-        }
-        .fire();
+        });
 
         Ok(InternalExecuteStatus {
             test,

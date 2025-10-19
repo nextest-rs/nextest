@@ -23,7 +23,6 @@ use crate::{
     runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalInfoEvent},
     time::{StopwatchSnapshot, StopwatchStart},
-    usdt::{UsdtSetupScriptDone, UsdtSetupScriptSlow, UsdtSetupScriptStart, UsdtTestSlow},
 };
 use chrono::Local;
 use debug_ignore::DebugIgnore;
@@ -440,14 +439,13 @@ where
                 self.new_setup_script(script_id.clone(), config, index, total, req_tx);
 
                 // Fire the USDT probe for setup script start.
-                UsdtSetupScriptStart {
+                crate::fire_usdt!(UsdtSetupScriptStart {
                     script_id: script_id.to_string(),
                     program: program.clone(),
                     args: config.command.args.clone(),
                     stress_current: stress_index.map(|s| s.current),
                     stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
-                }
-                .fire();
+                });
 
                 self.callback_none_response(TestEventKind::SetupScriptStarted {
                     stress_index,
@@ -468,7 +466,7 @@ where
                 will_terminate,
             }) => {
                 // Fire the USDT probe for setup script slow.
-                UsdtSetupScriptSlow {
+                crate::fire_usdt!(UsdtSetupScriptSlow {
                     script_id: script_id.to_string(),
                     program: program.clone(),
                     args: config.command.args.clone(),
@@ -476,8 +474,7 @@ where
                     will_terminate: will_terminate.is_some(),
                     stress_current: stress_index.map(|s| s.current),
                     stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
-                }
-                .fire();
+                });
 
                 self.callback_none_response(TestEventKind::SetupScriptSlow {
                     stress_index,
@@ -500,9 +497,9 @@ where
                 self.finish_setup_script();
                 self.run_stats.on_setup_script_finished(&status);
 
-                // Fire the setup-script-done probe.
-                // Extract exit code from the result if available.
-                let exit_code = match status.result {
+                // Fire the setup-script-done probe, extracting the exit code
+                // from the result if available.
+                let _exit_code = match status.result {
                     crate::reporter::events::ExecutionResult::Fail {
                         failure_status: crate::reporter::events::FailureStatus::ExitCode(code),
                         ..
@@ -510,17 +507,16 @@ where
                     _ => None,
                 };
 
-                UsdtSetupScriptDone {
+                crate::fire_usdt!(UsdtSetupScriptDone {
                     script_id: script_id.to_string(),
                     program: program.clone(),
                     args: config.command.args.clone(),
                     result: status.result.as_static_str(),
-                    exit_code,
+                    exit_code: _exit_code,
                     duration_nanos: status.time_taken.as_nanos() as u64,
                     stress_current: stress_index.map(|s| s.current),
                     stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
-                }
-                .fire();
+                });
 
                 // Setup scripts failing always cause the entire test run to be cancelled
                 // (--no-fail-fast is ignored).
@@ -580,7 +576,7 @@ where
                 will_terminate,
             }) => {
                 // Fire the test-slow probe.
-                UsdtTestSlow {
+                crate::fire_usdt!(UsdtTestSlow {
                     binary_id: test_instance.suite_info.binary_id.clone(),
                     test_name: test_instance.name.to_owned(),
                     attempt: retry_data.attempt,
@@ -589,8 +585,7 @@ where
                     will_terminate: will_terminate.is_some(),
                     stress_current: stress_index.map(|s| s.current),
                     stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
-                }
-                .fire();
+                });
 
                 self.callback_none_response(TestEventKind::TestSlow {
                     stress_index,
