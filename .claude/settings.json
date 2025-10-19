@@ -3,7 +3,8 @@
     "allow": [
       "Bash(jj s:*)",
       "WebSearch",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(cargo nextest run:*)"
     ],
     "deny": [],
     "ask": []

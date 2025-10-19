@@ -23,6 +23,7 @@ use crate::{
     runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalInfoEvent},
     time::{StopwatchSnapshot, StopwatchStart},
+    usdt::{UsdtSetupScriptDone, UsdtSetupScriptSlow, UsdtSetupScriptStart, UsdtTestSlow},
 };
 use chrono::Local;
 use debug_ignore::DebugIgnore;
@@ -439,18 +440,14 @@ where
                 self.new_setup_script(script_id.clone(), config, index, total, req_tx);
 
                 // Fire the USDT probe for setup script start.
-                crate::usdt::usdt_probes::setup__script__start!(|| {
-                    (
-                        UsdtSetupScriptStart {
-                            script_id: script_id.to_string(),
-                            program: program.clone(),
-                            args: config.command.args.clone(),
-                            stress_current: stress_index.map(|s| s.current),
-                            stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
-                        },
-                        script_id.as_identifier().as_str(),
-                    )
-                });
+                UsdtSetupScriptStart {
+                    script_id: script_id.to_string(),
+                    program: program.clone(),
+                    args: config.command.args.clone(),
+                    stress_current: stress_index.map(|s| s.current),
+                    stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
+                }
+                .fire();
 
                 self.callback_none_response(TestEventKind::SetupScriptStarted {
                     stress_index,
@@ -471,21 +468,16 @@ where
                 will_terminate,
             }) => {
                 // Fire the USDT probe for setup script slow.
-                crate::usdt::usdt_probes::setup__script__slow!(|| {
-                    (
-                        UsdtSetupScriptSlow {
-                            script_id: script_id.to_string(),
-                            program: program.clone(),
-                            args: config.command.args.clone(),
-                            elapsed_secs: elapsed.as_secs_f64(),
-                            will_terminate: will_terminate.is_some(),
-                            stress_current: stress_index.map(|s| s.current),
-                            stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
-                        },
-                        script_id.as_identifier().as_str(),
-                        elapsed.as_secs_f64(),
-                    )
-                });
+                UsdtSetupScriptSlow {
+                    script_id: script_id.to_string(),
+                    program: program.clone(),
+                    args: config.command.args.clone(),
+                    elapsed_nanos: elapsed.as_nanos() as u64,
+                    will_terminate: will_terminate.is_some(),
+                    stress_current: stress_index.map(|s| s.current),
+                    stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
+                }
+                .fire();
 
                 self.callback_none_response(TestEventKind::SetupScriptSlow {
                     stress_index,
@@ -509,32 +501,26 @@ where
                 self.run_stats.on_setup_script_finished(&status);
 
                 // Fire the setup-script-done probe.
-                crate::usdt::usdt_probes::setup__script__done!(|| {
-                    use crate::reporter::events::FailureStatus;
+                // Extract exit code from the result if available.
+                let exit_code = match status.result {
+                    crate::reporter::events::ExecutionResult::Fail {
+                        failure_status: crate::reporter::events::FailureStatus::ExitCode(code),
+                        ..
+                    } => Some(code),
+                    _ => None,
+                };
 
-                    // Extract exit code from the result if available.
-                    let exit_code = match status.result {
-                        crate::reporter::events::ExecutionResult::Fail {
-                            failure_status: FailureStatus::ExitCode(code),
-                            ..
-                        } => Some(code),
-                        _ => None,
-                    };
-
-                    (
-                        UsdtSetupScriptDone {
-                            script_id: script_id.to_string(),
-                            program: program.clone(),
-                            args: config.command.args.clone(),
-                            result: status.result.as_static_str(),
-                            exit_code,
-                            duration_secs: status.time_taken.as_secs_f64(),
-                            stress_current: stress_index.map(|s| s.current),
-                            stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
-                        },
-                        script_id.as_identifier().as_str(),
-                    )
-                });
+                UsdtSetupScriptDone {
+                    script_id: script_id.to_string(),
+                    program: program.clone(),
+                    args: config.command.args.clone(),
+                    result: status.result.as_static_str(),
+                    exit_code,
+                    duration_nanos: status.time_taken.as_nanos() as u64,
+                    stress_current: stress_index.map(|s| s.current),
+                    stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
+                }
+                .fire();
 
                 // Setup scripts failing always cause the entire test run to be cancelled
                 // (--no-fail-fast is ignored).
@@ -594,23 +580,17 @@ where
                 will_terminate,
             }) => {
                 // Fire the test-slow probe.
-                crate::usdt::usdt_probes::test__slow!(|| {
-                    (
-                        UsdtTestSlow {
-                            binary_id: test_instance.suite_info.binary_id.clone(),
-                            test_name: test_instance.name.to_owned(),
-                            attempt: retry_data.attempt,
-                            total_attempts: retry_data.total_attempts,
-                            elapsed_secs: elapsed.as_secs_f64(),
-                            will_terminate: will_terminate.is_some(),
-                            stress_current: stress_index.map(|s| s.current),
-                            stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
-                        },
-                        test_instance.suite_info.binary_id.as_str(),
-                        &test_instance.name,
-                        elapsed.as_secs_f64(),
-                    )
-                });
+                UsdtTestSlow {
+                    binary_id: test_instance.suite_info.binary_id.clone(),
+                    test_name: test_instance.name.to_owned(),
+                    attempt: retry_data.attempt,
+                    total_attempts: retry_data.total_attempts,
+                    elapsed_nanos: elapsed.as_nanos() as u64,
+                    will_terminate: will_terminate.is_some(),
+                    stress_current: stress_index.map(|s| s.current),
+                    stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
+                }
+                .fire();
 
                 self.callback_none_response(TestEventKind::TestSlow {
                     stress_index,
