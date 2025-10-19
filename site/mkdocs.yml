@@ -103,6 +103,7 @@ nav:
                 - "Miri interpreter": docs/integrations/miri.md
                 - docs/integrations/criterion.md
                 - "cargo-mutants": docs/integrations/cargo-mutants.md
+                - docs/integrations/usdt.md
     - Configuration:
           - "Configuring nextest": docs/configuration/index.md
           - "Configuration reference": docs/configuration/reference.md

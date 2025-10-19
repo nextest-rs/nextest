@@ -4,12 +4,13 @@ icon: material/vector-combine
 
 # Integrations with other tools
 
-A number of other tools in the Rust ecosystem have integrated with nextest. Some of the more prominent ones are:
+Nextest integrates with a number of other tools in the Rust ecosystem and beyond:
 
 - [Test coverage with llvm-cov](test-coverage.md)
 - [The Miri interpreter for Rust](miri.md)
 - [Criterion benchmarks](criterion.md)
 - [Mutation testing with cargo-mutants](cargo-mutants.md)
+- [USDT probes with bpftrace and DTrace](usdt.md)
 
 !!! tip
 
