@@ -100,7 +100,7 @@ impl CargoNextestApp {
         output: OutputContext,
         output_writer: &mut OutputWriter,
     ) -> Result<i32> {
-        if let Err(err) = usdt::register_probes() {
+        if let Err(err) = nextest_runner::usdt::register_probes() {
             warn!("failed to register USDT probes: {}", err);
         }
 

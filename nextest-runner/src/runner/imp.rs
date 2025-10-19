@@ -20,7 +20,6 @@ use crate::{
     signal::{SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
     test_output::CaptureStrategy,
-    usdt::{UsdtRunDone, UsdtRunStart},
 };
 use async_scoped::TokioScope;
 use future_queue::{FutureQueueContext, StreamExt};
@@ -325,13 +324,12 @@ impl<'a> TestRunnerInner<'a> {
         dispatcher_cx.run_started(self.test_list);
 
         // Fire the USDT probe for run start.
-        UsdtRunStart {
+        crate::fire_usdt!(UsdtRunStart {
             profile_name: self.profile.name().to_owned(),
             total_tests: self.test_list.test_count(),
             filter_count: self.test_list.run_count(),
             test_threads: self.test_threads,
-        }
-        .fire();
+        });
 
         let _guard = self.runtime.enter();
 
@@ -376,19 +374,18 @@ impl<'a> TestRunnerInner<'a> {
 
         let run_stats = dispatcher_cx.run_stats();
 
-        let stopwatch_end = dispatcher_cx.run_finished();
+        let _stopwatch_end = dispatcher_cx.run_finished();
 
         // Fire the USDT probe for run completion.
-        UsdtRunDone {
+        crate::fire_usdt!(UsdtRunDone {
             profile_name: self.profile.name().to_owned(),
             total_tests: run_stats.initial_run_count,
             passed: run_stats.passed,
             failed: run_stats.failed_count(),
             skipped: run_stats.skipped,
-            duration_nanos: stopwatch_end.active.as_nanos() as u64,
-            paused_nanos: stopwatch_end.paused.as_nanos() as u64,
-        }
-        .fire();
+            duration_nanos: _stopwatch_end.active.as_nanos() as u64,
+            paused_nanos: _stopwatch_end.paused.as_nanos() as u64,
+        });
 
         Ok(run_stats)
     }

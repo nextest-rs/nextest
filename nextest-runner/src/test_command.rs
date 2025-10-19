@@ -124,10 +124,12 @@ impl TestCommand {
         }
     }
 
+    #[allow(unused)]
     pub(crate) fn program(&self) -> &str {
         &self.program
     }
 
+    #[allow(unused)]
     pub(crate) fn args(&self) -> &[String] {
         &self.args
     }
