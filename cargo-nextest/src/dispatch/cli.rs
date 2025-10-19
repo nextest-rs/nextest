@@ -1056,6 +1056,7 @@ enum ShowProgressOpt {
     None,
     Bar,
     Counter,
+    Running,
 }
 
 impl From<ShowProgressOpt> for ShowProgress {
@@ -1065,6 +1066,7 @@ impl From<ShowProgressOpt> for ShowProgress {
             ShowProgressOpt::None => ShowProgress::None,
             ShowProgressOpt::Bar => ShowProgress::Bar,
             ShowProgressOpt::Counter => ShowProgress::Counter,
+            ShowProgressOpt::Running => ShowProgress::Running,
         }
     }
 }

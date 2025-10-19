@@ -3,9 +3,13 @@
 
 use crate::{
     cargo_config::{CargoConfigs, DiscoveredConfig},
+    helpers::DisplayTestInstance,
+    list::TestInstanceId,
     reporter::{displayer::formatters::DisplayBracketedHhMmSs, events::*, helpers::Styles},
 };
+use chrono::{DateTime, FixedOffset, Local};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use nextest_metadata::RustBinaryId;
 use owo_colors::OwoColorize;
 use std::{
     env, fmt,
@@ -30,11 +34,23 @@ pub enum ShowProgress {
 
     /// Show a counter on each line.
     Counter,
+
+    /// Show a progress bar and the running tests
+    Running,
+}
+
+#[derive(Debug)]
+pub(super) struct RunningTestInstance {
+    binary_id: RustBinaryId,
+    test_name: String,
+    start_time: DateTime<FixedOffset>,
 }
 
 #[derive(Debug)]
 pub(super) struct ProgressBarState {
     bar: ProgressBar,
+    show_running: bool,
+    running: Vec<RunningTestInstance>,
     // Reasons for hiding the progress bar. We show the progress bar if none of
     // these are set and hide it if any of them are set.
     //
@@ -51,7 +67,7 @@ pub(super) struct ProgressBarState {
 }
 
 impl ProgressBarState {
-    pub(super) fn new(test_count: usize, progress_chars: &str) -> Self {
+    pub(super) fn new(test_count: usize, progress_chars: &str, show_running: bool) -> Self {
         let bar = ProgressBar::new(test_count as u64);
 
         let test_count_width = format!("{test_count}").len();
@@ -61,7 +77,7 @@ impl ProgressBarState {
         // statement.
         let template = format!(
             "{{prefix:>12}} [{{elapsed_precise:>9}}] {{wide_bar}} \
-            {{pos:>{test_count_width}}}/{{len:{test_count_width}}}: {{msg}}     "
+            {{pos:>{test_count_width}}}/{{len:{test_count_width}}}: {{msg}}"
         );
         bar.set_style(
             ProgressStyle::default_bar()
@@ -78,6 +94,8 @@ impl ProgressBarState {
 
         Self {
             bar,
+            show_running,
+            running: Vec::new(),
             hidden_no_capture: false,
             hidden_run_paused: false,
             hidden_info_response: false,
@@ -111,21 +129,56 @@ impl ProgressBarState {
             TestEventKind::TestStarted {
                 current_stats,
                 running,
-                ..
-            }
-            | TestEventKind::TestFinished {
-                current_stats,
-                running,
+                test_instance,
                 ..
             } => {
+                self.running.push(RunningTestInstance {
+                    binary_id: test_instance.suite_info.binary_id.clone(),
+                    test_name: test_instance.name.to_owned(),
+                    start_time: Local::now().fixed_offset(),
+                });
                 self.hidden_between_sub_runs = false;
                 self.bar.set_prefix(progress_bar_prefix(
                     current_stats,
                     current_stats.cancel_reason,
                     styles,
                 ));
-                self.bar
-                    .set_message(progress_bar_msg(current_stats, *running, styles));
+                self.bar.set_message(if self.show_running {
+                    progress_bar_msg_with_running_tests(current_stats, &self.running, styles)
+                } else {
+                    format!("{}     ", progress_bar_msg(current_stats, *running, styles))
+                });
+                // If there are skipped tests, the initial run count will be lower than when constructed
+                // in ProgressBar::new.
+                self.bar.set_length(current_stats.initial_run_count as u64);
+                self.bar.set_position(current_stats.finished_count as u64);
+            }
+            TestEventKind::TestFinished {
+                current_stats,
+                running,
+                test_instance,
+                ..
+            } => {
+                self.running.remove(
+                    self.running
+                        .iter()
+                        .position(|e| {
+                            e.binary_id == test_instance.suite_info.binary_id
+                                && e.test_name == test_instance.name
+                        })
+                        .expect("finished test to have started"),
+                );
+                self.hidden_between_sub_runs = false;
+                self.bar.set_prefix(progress_bar_prefix(
+                    current_stats,
+                    current_stats.cancel_reason,
+                    styles,
+                ));
+                self.bar.set_message(if self.show_running {
+                    progress_bar_msg_with_running_tests(current_stats, &self.running, styles)
+                } else {
+                    format!("{}     ", progress_bar_msg(current_stats, *running, styles))
+                });
                 // If there are skipped tests, the initial run count will be lower than when constructed
                 // in ProgressBar::new.
                 self.bar.set_length(current_stats.initial_run_count as u64);
@@ -547,6 +600,42 @@ pub(super) fn progress_bar_msg(
 ) -> String {
     let mut s = format!("{} running, ", running.style(styles.count));
     write_summary_str(current_stats, styles, &mut s);
+    s
+}
+
+pub(super) fn progress_bar_msg_with_running_tests(
+    current_stats: &RunStats,
+    running: &[RunningTestInstance],
+    styles: &Styles,
+) -> String {
+    let mut s = progress_bar_msg(current_stats, running.len(), styles);
+    let now = Local::now().fixed_offset();
+    for t in running {
+        let d = now - t.start_time;
+        s.push_str(&format!(
+            "     \n{:>12} [{:>9}] {}",
+            "Running", // .style(styles.pass),
+            if d.num_seconds() > 0 {
+                format!(
+                    "{:0>2}:{:0>2}:{:0>2}",
+                    d.num_hours(),
+                    d.num_minutes(),
+                    d.num_seconds()
+                )
+            } else {
+                "".to_string()
+            },
+            DisplayTestInstance::new(
+                None,
+                None,
+                TestInstanceId {
+                    binary_id: &t.binary_id,
+                    test_name: &t.test_name
+                },
+                &styles.list_styles
+            )
+        ));
+    }
     s
 }
 
