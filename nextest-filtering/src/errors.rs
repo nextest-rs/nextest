@@ -130,6 +130,10 @@ pub enum ParseSingleError {
     #[error("invalid argument for platform")]
     InvalidPlatformArgument(#[label("expected \"target\" or \"host\"")] SourceSpan),
 
+    /// Contained an unsupported expression.
+    #[error("unsupported expression")]
+    UnsupportedExpression(#[label("contained an unsupported expression")] SourceSpan),
+
     /// An unknown parsing error occurred.
     #[error("unknown parsing error")]
     Unknown,
@@ -193,6 +197,8 @@ impl<'a> State<'a> {
 pub enum BannedPredicateReason {
     /// This predicate causes infinite recursion.
     InfiniteRecursion,
+    /// This predicate is unsupported.
+    Unsupported,
 }
 
 impl fmt::Display for BannedPredicateReason {
@@ -200,6 +206,9 @@ impl fmt::Display for BannedPredicateReason {
         match self {
             BannedPredicateReason::InfiniteRecursion => {
                 write!(f, "infinite recursion")
+            }
+            BannedPredicateReason::Unsupported => {
+                write!(f, "an unsupported expression")
             }
         }
     }

@@ -1,0 +1,12 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: output.stderr_as_str()
+---
+  error: predicate not allowed in `test-archive-filter` expressions
+   ╭────
+ 1 │ test(sample_test)
+   ·      ─────┬─────
+   ·           ╰── this predicate causes an unsupported expression
+   ╰────
+
+error: failed to parse filterset

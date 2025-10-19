@@ -28,7 +28,7 @@ use integration_tests::{
     nextest_cli::{CargoNextestCli, CargoNextestOutput},
 };
 use nextest_metadata::{BuildPlatform, NextestExitCode, TestListSummary};
-use std::{borrow::Cow, fs::File, io::Write};
+use std::{borrow::Cow, ffi::OsStr, fs::File, io::Write, path::PathBuf};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
 
 mod fixtures;
@@ -843,26 +843,110 @@ archive.include = [
 }
 
 #[test]
-fn test_archive_with_build_filters() {
+fn test_archive_with_build_filter() {
     set_env_vars();
 
-    let filters = ["all()", "none()", "package(cdylib-example)"];
-    let expected_file_counts = [27, 11, 12];
+    let all_test_files = [
+        "basic",
+        "cdylib_example",
+        "cdylib_link",
+        "dylib_test",
+        "my_bench",
+        "nextest_derive",
+        "nextest_tests",
+        "nextest_tests",
+        "other",
+        "other",
+        "proc_macro_test",
+        "segfault",
+        "with_build_script",
+        "wrapper",
+        "nextest_tests",
+        "other",
+    ];
 
-    for (&expected_file_count, filter) in expected_file_counts.iter().zip(filters) {
-        let (_p1, archive_file) =
-            create_archive_with_args("", false, "archive_build_filter", &["-E", filter], false)
-                .expect("archive succeeded");
-        let file = File::open(archive_file).unwrap();
-        let decoder = zstd::stream::read::Decoder::new(file).unwrap();
-        let mut archive = tar::Archive::new(decoder);
-        let paths = archive
-            .entries()
-            .unwrap()
-            .map(|e| e.unwrap().path().unwrap().into_owned())
-            .collect::<Vec<_>>();
-        assert_eq!(paths.len(), expected_file_count);
-    }
+    // Check that all test files are present with the `all()` filter.
+    check_archive_contents("all()", |paths| {
+        for file in all_test_files {
+            assert!(paths.iter().any(|path| {
+                let file_name = path.file_name().unwrap();
+                file_name.to_str().unwrap().contains(file)
+            }));
+        }
+    });
+
+    // Check that no test files are present with the `none()` filter.
+    check_archive_contents("none()", |paths| {
+        for file in all_test_files {
+            assert!(
+                !paths
+                    .iter()
+                    .filter(|path| path
+                        .ancestors()
+                        // Test files are in the `deps` folder.
+                        .any(|folder| folder.file_name() == Some(OsStr::new("deps"))))
+                    .any(|path| {
+                        let file_name = path.file_name().unwrap();
+                        file_name
+                            .to_ascii_lowercase()
+                            .to_str()
+                            .unwrap()
+                            .contains(file)
+                    })
+            );
+        }
+    });
+
+    let expected_package_test_file = "cdylib_example";
+    let filtered_test = "nextest_tests";
+    // Check that test files are filtered by the `package()` filter.
+    check_archive_contents("package(cdylib-example)", |paths| {
+        assert!(paths.iter().any(|path| {
+            path.file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .contains(expected_package_test_file)
+        }));
+        assert!(!paths.iter().any(|path| {
+            path.file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .contains(filtered_test)
+        }));
+    });
+}
+
+#[test]
+fn test_archive_with_unsupported_test_filter() {
+    set_env_vars();
+
+    let unsupported_filter = "test(sample_test)";
+    assert!(
+        create_archive_with_args(
+            "",
+            false,
+            "archive_unsupported_build_filter",
+            &["-E", unsupported_filter],
+            true
+        )
+        .is_err()
+    );
+}
+
+fn check_archive_contents(filter: &str, check_archive_contents: impl FnOnce(Vec<PathBuf>)) {
+    let (_p1, archive_file) =
+        create_archive_with_args("", false, "", &["-E", filter], false).expect("archive succeeded");
+    let file = File::open(archive_file).unwrap();
+    let decoder = zstd::stream::read::Decoder::new(file).unwrap();
+    let mut archive = tar::Archive::new(decoder);
+    let paths = archive
+        .entries()
+        .unwrap()
+        .map(|e| e.unwrap().path().unwrap().into_owned())
+        .collect::<Vec<_>>();
+    check_archive_contents(paths);
 }
 
 const APP_DATA_DIR: &str = "application-data";

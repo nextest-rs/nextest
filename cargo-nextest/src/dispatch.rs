@@ -1605,12 +1605,16 @@ impl App {
         Ok(Self { base, build_filter })
     }
 
-    fn build_filtering_expressions(&self, pcx: &ParseContext<'_>) -> Result<Vec<Filterset>> {
+    fn build_filtering_expressions(
+        &self,
+        pcx: &ParseContext<'_>,
+        kind: FiltersetKind,
+    ) -> Result<Vec<Filterset>> {
         let (exprs, all_errors): (Vec<_>, Vec<_>) = self
             .build_filter
             .filterset
             .iter()
-            .map(|input| Filterset::parse(input.clone(), pcx, FiltersetKind::Test))
+            .map(|input| Filterset::parse(input.clone(), pcx, kind))
             .partition_result();
 
         if !all_errors.is_empty() {
@@ -1650,7 +1654,7 @@ impl App {
 
         let (version_only_config, config) = self.base.load_config(&pcx)?;
         let profile = self.base.load_profile(&config)?;
-        let filter_exprs = self.build_filtering_expressions(&pcx)?;
+        let filter_exprs = self.build_filtering_expressions(&pcx, FiltersetKind::Test)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
@@ -1755,8 +1759,9 @@ impl App {
             }
         };
 
-        let filter_exprs = self.build_filtering_expressions(&pcx)?;
+        let filter_exprs = self.build_filtering_expressions(&pcx, FiltersetKind::TestArchive)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+
         let ecx = profile.filterset_ecx();
 
         // Apply filterset to `RustTestArtifact` list.
@@ -1837,7 +1842,7 @@ impl App {
         };
         let settings = ShowTestGroupSettings { mode, show_default };
 
-        let filter_exprs = self.build_filtering_expressions(&pcx)?;
+        let filter_exprs = self.build_filtering_expressions(&pcx, FiltersetKind::Test)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
@@ -1934,7 +1939,7 @@ impl App {
             reporter_opts.to_builder(runner_opts.no_run, no_capture, should_colorize);
         reporter_builder.set_verbose(self.base.output.verbose);
 
-        let filter_exprs = self.build_filtering_expressions(&pcx)?;
+        let filter_exprs = self.build_filtering_expressions(&pcx, FiltersetKind::Test)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
