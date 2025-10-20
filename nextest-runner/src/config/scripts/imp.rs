@@ -28,6 +28,7 @@ use indexmap::IndexMap;
 use nextest_filtering::{
     BinaryQuery, EvalContext, Filterset, FiltersetKind, ParseContext, TestQuery,
 };
+use quick_junit::ReportUuid;
 use serde::{Deserialize, de::Error};
 use smol_str::SmolStr;
 use std::{
@@ -36,6 +37,7 @@ use std::{
     process::Command,
     sync::Arc,
 };
+use swrite::{SWrite, swrite};
 
 /// The scripts defined in nextest configuration.
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -546,6 +548,16 @@ impl ScriptId {
     /// Returns the name of the script as a [`ConfigIdentifier`].
     pub fn as_identifier(&self) -> &ConfigIdentifier {
         &self.0
+    }
+
+    /// Returns a unique ID for this script, consisting of the run ID, the script ID, and the stress index.
+    pub fn unique_id(&self, run_id: ReportUuid, stress_index: Option<u32>) -> String {
+        let mut out = String::new();
+        swrite!(out, "{run_id}:{self}");
+        if let Some(stress_index) = stress_index {
+            swrite!(out, "@stress-{}", stress_index);
+        }
+        out
     }
 
     #[cfg(test)]

@@ -649,6 +649,12 @@ impl<'a> ExecutorContext<'a> {
         );
 
         crate::fire_usdt!(UsdtTestAttemptStart {
+            attempt_id: test.test_instance.id().attempt_id(
+                self.run_id,
+                test.stress_index.map(|s| s.current),
+                test.retry_data.attempt,
+            ),
+            run_id: self.run_id,
             binary_id: test.test_instance.suite_info.binary_id.clone(),
             test_name: test.test_instance.name.to_owned(),
             program: cmd.program().to_owned(),
@@ -908,6 +914,12 @@ impl<'a> ExecutorContext<'a> {
 
         // Fire the test-attempt-done probe
         crate::fire_usdt!(UsdtTestAttemptDone {
+            attempt_id: test.test_instance.id().attempt_id(
+                self.run_id,
+                test.stress_index.map(|s| s.current),
+                test.retry_data.attempt,
+            ),
+            run_id: self.run_id,
             binary_id: test.test_instance.suite_info.binary_id.clone(),
             test_name: test.test_instance.name.to_owned(),
             attempt: test.retry_data.attempt,

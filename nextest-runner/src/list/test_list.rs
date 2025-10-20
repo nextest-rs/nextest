@@ -35,6 +35,7 @@ use nextest_metadata::{
     RustTestSuiteSummary, TestListSummary,
 };
 use owo_colors::OwoColorize;
+use quick_junit::ReportUuid;
 use serde::Serialize;
 use std::{
     borrow::Cow,
@@ -44,6 +45,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, OnceLock},
 };
+use swrite::{SWrite, swrite};
 use tokio::runtime::Runtime;
 use tracing::debug;
 
@@ -1251,6 +1253,30 @@ pub struct TestInstanceId<'a> {
 
     /// The name of the test.
     pub test_name: &'a str,
+}
+
+impl TestInstanceId<'_> {
+    /// Return the attempt ID corresponding to this test instance.
+    ///
+    /// This string uniquely identifies a single test attempt.
+    pub fn attempt_id(
+        &self,
+        run_id: ReportUuid,
+        stress_index: Option<u32>,
+        attempt: u32,
+    ) -> String {
+        let mut out = String::new();
+        swrite!(out, "{run_id}:{}", self.binary_id);
+        if let Some(stress_index) = stress_index {
+            swrite!(out, "@stress-{}", stress_index);
+        }
+        swrite!(out, "${}", self.test_name);
+        if attempt > 1 {
+            swrite!(out, "#{attempt}");
+        }
+
+        out
+    }
 }
 
 impl fmt::Display for TestInstanceId<'_> {
