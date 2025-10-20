@@ -43,7 +43,7 @@ indicatif.workspace = true
 is_ci.workspace = true
 itertools.workspace = true
 miette.workspace = true
-newtype-uuid.workspace = true
+newtype-uuid = { workspace = true, features = ["serde"] }
 nextest-filtering.workspace = true
 nextest-metadata.workspace = true
 nextest-workspace-hack.workspace = true

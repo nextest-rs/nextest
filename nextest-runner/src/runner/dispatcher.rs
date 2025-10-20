@@ -440,6 +440,8 @@ where
 
                 // Fire the USDT probe for setup script start.
                 crate::fire_usdt!(UsdtSetupScriptStart {
+                    id: script_id.unique_id(self.run_id, stress_index.map(|s| s.current)),
+                    run_id: self.run_id,
                     script_id: script_id.to_string(),
                     program: program.clone(),
                     args: config.command.args.clone(),
@@ -467,6 +469,8 @@ where
             }) => {
                 // Fire the USDT probe for setup script slow.
                 crate::fire_usdt!(UsdtSetupScriptSlow {
+                    id: script_id.unique_id(self.run_id, stress_index.map(|s| s.current)),
+                    run_id: self.run_id,
                     script_id: script_id.to_string(),
                     program: program.clone(),
                     args: config.command.args.clone(),
@@ -508,6 +512,8 @@ where
                 };
 
                 crate::fire_usdt!(UsdtSetupScriptDone {
+                    id: script_id.unique_id(self.run_id, stress_index.map(|s| s.current)),
+                    run_id: self.run_id,
                     script_id: script_id.to_string(),
                     program: program.clone(),
                     args: config.command.args.clone(),
@@ -576,7 +582,13 @@ where
                 will_terminate,
             }) => {
                 // Fire the test-slow probe.
-                crate::fire_usdt!(UsdtTestSlow {
+                crate::fire_usdt!(UsdtTestAttemptSlow {
+                    attempt_id: test_instance.id().attempt_id(
+                        self.run_id,
+                        stress_index.map(|s| s.current),
+                        retry_data.attempt,
+                    ),
+                    run_id: self.run_id,
                     binary_id: test_instance.suite_info.binary_id.clone(),
                     test_name: test_instance.name.to_owned(),
                     attempt: retry_data.attempt,

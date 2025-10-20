@@ -325,6 +325,7 @@ impl<'a> TestRunnerInner<'a> {
 
         // Fire the USDT probe for run start.
         crate::fire_usdt!(UsdtRunStart {
+            run_id: self.run_id,
             profile_name: self.profile.name().to_owned(),
             total_tests: self.test_list.test_count(),
             filter_count: self.test_list.run_count(),
@@ -378,6 +379,7 @@ impl<'a> TestRunnerInner<'a> {
 
         // Fire the USDT probe for run completion.
         crate::fire_usdt!(UsdtRunDone {
+            run_id: self.run_id,
             profile_name: self.profile.name().to_owned(),
             total_tests: run_stats.initial_run_count,
             passed: run_stats.passed,

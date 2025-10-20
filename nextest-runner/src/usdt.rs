@@ -16,6 +16,7 @@
 //! For more information and examples, see the [nextest documentation](https://nexte.st/docs/integrations/usdt).
 
 use nextest_metadata::RustBinaryId;
+use quick_junit::ReportUuid;
 use serde::Serialize;
 
 /// Register USDT probes on supported platforms.
@@ -50,21 +51,48 @@ pub fn register_probes() -> Result<(), std::convert::Infallible> {
 pub mod usdt_probes {
     use crate::usdt::*;
 
-    pub fn test__attempt__start(attempt: &UsdtTestAttemptStart, binary_id: &str, test_name: &str) {}
+    pub fn test__attempt__start(
+        attempt: &UsdtTestAttemptStart,
+        attempt_id: &str,
+        binary_id: &str,
+        test_name: &str,
+    ) {
+    }
     pub fn test__attempt__done(
         attempt: &UsdtTestAttemptDone,
+        attempt_id: &str,
         binary_id: &str,
         test_name: &str,
         result: &str,
         duration_nanos: u64,
     ) {
     }
-    pub fn test__slow(slow: &UsdtTestSlow, binary_id: &str, test_name: &str, elapsed_nanos: u64) {}
-    pub fn setup__script__start(script: &UsdtSetupScriptStart, script_id: &str) {}
-    pub fn setup__script__slow(script: &UsdtSetupScriptSlow, script_id: &str, elapsed_nanos: u64) {}
-    pub fn setup__script__done(script: &UsdtSetupScriptDone, script_id: &str) {}
-    pub fn run__start(run: &UsdtRunStart) {}
-    pub fn run__done(run: &UsdtRunDone) {}
+    pub fn test__attempt__slow(
+        slow: &UsdtTestAttemptSlow,
+        attempt_id: &str,
+        binary_id: &str,
+        test_name: &str,
+        elapsed_nanos: u64,
+    ) {
+    }
+    pub fn setup__script__start(script: &UsdtSetupScriptStart, id: &str, script_id: &str) {}
+    pub fn setup__script__slow(
+        script: &UsdtSetupScriptSlow,
+        id: &str,
+        script_id: &str,
+        elapsed_nanos: u64,
+    ) {
+    }
+    pub fn setup__script__done(
+        script: &UsdtSetupScriptDone,
+        id: &str,
+        script_id: &str,
+        result: &str,
+        duration_nanos: u64,
+    ) {
+    }
+    pub fn run__start(run: &UsdtRunStart, run_id: ReportUuid) {}
+    pub fn run__done(run: &UsdtRunDone, run_id: ReportUuid) {}
 }
 
 /// Fires a USDT probe on supported platforms.
@@ -79,20 +107,23 @@ macro_rules! fire_usdt {
     (UsdtTestAttemptStart { $($tt:tt)* }) => {{
         $crate::usdt::usdt_probes::test__attempt__start!(|| {
             let probe = $crate::usdt::UsdtTestAttemptStart { $($tt)* };
+            let attempt_id = probe.attempt_id.clone();
             let binary_id = probe.binary_id.to_string();
             let test_name = probe.test_name.clone();
-            (probe, binary_id, test_name)
+            (probe, attempt_id, binary_id, test_name)
         })
     }};
     (UsdtTestAttemptDone { $($tt:tt)* }) => {{
         $crate::usdt::usdt_probes::test__attempt__done!(|| {
             let probe = $crate::usdt::UsdtTestAttemptDone { $($tt)* };
+            let attempt_id = probe.attempt_id.clone();
             let binary_id = probe.binary_id.to_string();
             let test_name = probe.test_name.clone();
             let result = probe.result;
             let duration_nanos = probe.duration_nanos;
             (
                 probe,
+                attempt_id,
                 binary_id,
                 test_name,
                 result,
@@ -100,47 +131,55 @@ macro_rules! fire_usdt {
             )
         })
     }};
-    (UsdtTestSlow { $($tt:tt)* }) => {{
-        $crate::usdt::usdt_probes::test__slow!(|| {
-            let probe = $crate::usdt::UsdtTestSlow { $($tt)* };
+    (UsdtTestAttemptSlow { $($tt:tt)* }) => {{
+        $crate::usdt::usdt_probes::test__attempt__slow!(|| {
+            let probe = $crate::usdt::UsdtTestAttemptSlow { $($tt)* };
+            let attempt_id = probe.attempt_id.clone();
             let binary_id = probe.binary_id.to_string();
             let test_name = probe.test_name.clone();
             let elapsed_nanos = probe.elapsed_nanos;
-            (probe, binary_id, test_name, elapsed_nanos)
+            (probe, attempt_id, binary_id, test_name, elapsed_nanos)
         })
     }};
     (UsdtSetupScriptStart { $($tt:tt)* }) => {{
         $crate::usdt::usdt_probes::setup__script__start!(|| {
             let probe = $crate::usdt::UsdtSetupScriptStart { $($tt)* };
+            let id = probe.id.clone();
             let script_id = probe.script_id.clone();
-            (probe, script_id)
+            (probe, id, script_id)
         })
     }};
     (UsdtSetupScriptSlow { $($tt:tt)* }) => {{
         $crate::usdt::usdt_probes::setup__script__slow!(|| {
             let probe = $crate::usdt::UsdtSetupScriptSlow { $($tt)* };
+            let id = probe.id.clone();
             let script_id = probe.script_id.clone();
             let elapsed_nanos = probe.elapsed_nanos;
-            (probe, script_id, elapsed_nanos)
+            (probe, id, script_id, elapsed_nanos)
         })
     }};
     (UsdtSetupScriptDone { $($tt:tt)* }) => {{
         $crate::usdt::usdt_probes::setup__script__done!(|| {
             let probe = $crate::usdt::UsdtSetupScriptDone { $($tt)* };
+            let id = probe.id.clone();
             let script_id = probe.script_id.clone();
-            (probe, script_id)
+            let result = probe.result;
+            let duration_nanos = probe.duration_nanos;
+            (probe, id, script_id, result, duration_nanos)
         })
     }};
     (UsdtRunStart { $($tt:tt)* }) => {{
         $crate::usdt::usdt_probes::run__start!(|| {
             let probe = $crate::usdt::UsdtRunStart { $($tt)* };
-            probe
+            let run_id = probe.run_id;
+            (probe, run_id)
         })
     }};
     (UsdtRunDone { $($tt:tt)* }) => {{
         $crate::usdt::usdt_probes::run__done!(|| {
             let probe = $crate::usdt::UsdtRunDone { $($tt)* };
-            probe
+            let run_id = probe.run_id;
+            (probe, run_id)
         })
     }};
 }
@@ -159,13 +198,28 @@ macro_rules! fire_usdt {
     };
 }
 
-/// Data associated with the `test-attempt-start` probe, JSON-encoded as `arg0`.
+/// Data associated with the `test-attempt-start` probe.
+///
+/// This data is JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtTestAttemptStart {
-    /// The binary ID. Also available as `arg1`.
+    /// A unique identifier for this test attempt, comprised of the run ID, the
+    /// binary ID, the test name, the attempt number, and the stress index.
+    ///
+    /// Also available as `arg1`.
+    pub attempt_id: String,
+
+    /// The nextest run ID, unique for each run.
+    pub run_id: ReportUuid,
+
+    /// The binary ID.
+    ///
+    /// Also available as `arg2`.
     pub binary_id: RustBinaryId,
 
-    /// The name of the test. Also available as `arg2`.
+    /// The name of the test.
+    ///
+    /// Also available as `arg3`.
     pub test_name: String,
 
     /// The program to run.
@@ -187,13 +241,28 @@ pub struct UsdtTestAttemptStart {
     pub stress_total: Option<u32>,
 }
 
-/// Data associated with the `test-attempt-done` probe, JSON-encoded as `arg0`.
+/// Data associated with the `test-attempt-done` probe.
+///
+/// This data is JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtTestAttemptDone {
-    /// The binary ID. Also available as `arg1`.
+    /// A unique identifier for this test attempt, comprised of the run ID, the
+    /// binary ID, the test name, the attempt number, and the stress index.
+    ///
+    /// Also available as `arg1`.
+    pub attempt_id: String,
+
+    /// The nextest run ID, unique for each run.
+    pub run_id: ReportUuid,
+
+    /// The binary ID.
+    ///
+    /// Also available as `arg2`.
     pub binary_id: RustBinaryId,
 
-    /// The name of the test. Also available as `arg2`.
+    /// The name of the test.
+    ///
+    /// Also available as `arg3`.
     pub test_name: String,
 
     /// The attempt number, starting at 1 and <= `total_attempts`.
@@ -203,13 +272,16 @@ pub struct UsdtTestAttemptDone {
     pub total_attempts: u32,
 
     /// The test result as a string (e.g., "pass", "fail", "timeout", "exec-fail").
-    /// Also available as `arg3`.
+    ///
+    /// Also available as `arg4`.
     pub result: &'static str,
 
     /// The exit code of the test process, if available.
     pub exit_code: Option<i32>,
 
-    /// The duration of the test in nanoseconds. Also available as `arg4`.
+    /// The duration of the test in nanoseconds.
+    ///
+    /// Also available as `arg5`.
     pub duration_nanos: u64,
 
     /// Whether file descriptors were leaked.
@@ -226,13 +298,24 @@ pub struct UsdtTestAttemptDone {
     pub stress_total: Option<u32>,
 }
 
-/// Data associated with the `test-slow` probe, JSON-encoded as `arg0`.
+/// Data associated with the `test-attempt-slow` probe.
+///
+/// This data is JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
-pub struct UsdtTestSlow {
-    /// The binary ID. Also available as `arg1`.
+pub struct UsdtTestAttemptSlow {
+    /// A unique identifier for this test attempt, comprised of the run ID, the
+    /// binary ID, the test name, the attempt number, and the stress index.
+    ///
+    /// Also available as `arg1`.
+    pub attempt_id: String,
+
+    /// The nextest run ID, unique for each run.
+    pub run_id: ReportUuid,
+
+    /// The binary ID. Also available as `arg2`.
     pub binary_id: RustBinaryId,
 
-    /// The name of the test. Also available as `arg2`.
+    /// The name of the test. Also available as `arg3`.
     pub test_name: String,
 
     /// The attempt number, starting at 1 and <= `total_attempts`.
@@ -242,7 +325,8 @@ pub struct UsdtTestSlow {
     pub total_attempts: u32,
 
     /// The time elapsed since the test started, in nanoseconds.
-    /// Also available as `arg3`.
+    ///
+    /// Also available as `arg4`.
     pub elapsed_nanos: u64,
 
     /// Whether the test is about to be terminated due to timeout.
@@ -255,10 +339,23 @@ pub struct UsdtTestSlow {
     pub stress_total: Option<u32>,
 }
 
-/// Data associated with the `setup-script-start` probe, JSON-encoded as `arg0`.
+/// Data associated with the `setup-script-start` probe.
+///
+/// This data is JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtSetupScriptStart {
-    /// The script ID. Also available as `arg1`.
+    /// A unique identifier for this script run, comprised of the run ID, the
+    /// script ID, and the stress index if relevant.
+    ///
+    /// Also available as `arg1`.
+    pub id: String,
+
+    /// The nextest run ID, unique for each run.
+    pub run_id: ReportUuid,
+
+    /// The script ID.
+    ///
+    /// Also available as `arg2`.
     pub script_id: String,
 
     /// The program to run.
@@ -274,10 +371,23 @@ pub struct UsdtSetupScriptStart {
     pub stress_total: Option<u32>,
 }
 
-/// Data associated with the `setup-script-slow` probe, JSON-encoded as `arg0`.
+/// Data associated with the `setup-script-slow` probe.
+///
+/// This data is JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtSetupScriptSlow {
-    /// The script ID. Also available as `arg1`.
+    /// A unique identifier for this script run, comprised of the run ID, the
+    /// script ID, and the stress index if relevant.
+    ///
+    /// Also available as `arg1`.
+    pub id: String,
+
+    /// The nextest run ID, unique for each run.
+    pub run_id: ReportUuid,
+
+    /// The script ID.
+    ///
+    /// Also available as `arg2`.
     pub script_id: String,
 
     /// The program to run.
@@ -287,7 +397,8 @@ pub struct UsdtSetupScriptSlow {
     pub args: Vec<String>,
 
     /// The time elapsed since the script started, in nanoseconds.
-    /// Also available as `arg2`.
+    ///
+    /// Also available as `arg3`.
     pub elapsed_nanos: u64,
 
     /// Whether the script is about to be terminated due to timeout.
@@ -300,10 +411,23 @@ pub struct UsdtSetupScriptSlow {
     pub stress_total: Option<u32>,
 }
 
-/// Data associated with the `setup-script-done` probe, JSON-encoded as `arg0`.
+/// Data associated with the `setup-script-done` probe.
+///
+/// This data is JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtSetupScriptDone {
-    /// The script ID. Also available as `arg1`.
+    /// A unique identifier for this script run, comprised of the run ID, the
+    /// script ID, and the stress index if relevant.
+    ///
+    /// Also available as `arg1`.
+    pub id: String,
+
+    /// The nextest run ID, unique for each run.
+    pub run_id: ReportUuid,
+
+    /// The script ID.
+    ///
+    /// Also available as `arg2`.
     pub script_id: String,
 
     /// The program to run.
@@ -312,13 +436,18 @@ pub struct UsdtSetupScriptDone {
     /// The arguments to pass to the program.
     pub args: Vec<String>,
 
-    /// The script result as a string (e.g., "pass", "fail", "timeout", "exec-fail").
+    /// The script result as a string (e.g., "pass", "fail", "timeout",
+    /// "exec-fail").
+    ///
+    /// Also available as `arg3`.
     pub result: &'static str,
 
     /// The exit code of the script process, if available.
     pub exit_code: Option<i32>,
 
     /// The duration of the script execution in nanoseconds.
+    ///
+    /// Also available as `arg4`.
     pub duration_nanos: u64,
 
     /// The 0-indexed stress run index, if running stress tests.
@@ -328,9 +457,16 @@ pub struct UsdtSetupScriptDone {
     pub stress_total: Option<u32>,
 }
 
-/// Data associated with the `run-start` probe, JSON-encoded as `arg0`.
+/// Data associated with the `run-start` probe.
+///
+/// This data is JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtRunStart {
+    /// The nextest run ID, unique for each run.
+    ///
+    /// Also available as `arg1`.
+    pub run_id: ReportUuid,
+
     /// The profile name (e.g., "default", "ci").
     pub profile_name: String,
 
@@ -344,9 +480,16 @@ pub struct UsdtRunStart {
     pub test_threads: usize,
 }
 
-/// Data associated with the `run-done` probe, JSON-encoded as `arg0`.
+/// Data associated with the `run-done` probe.
+///
+/// This data is JSON-encoded as `arg0`.
 #[derive(Clone, Debug, Serialize)]
 pub struct UsdtRunDone {
+    /// The nextest run ID, unique for each run.
+    ///
+    /// Also available as `arg1`.
+    pub run_id: ReportUuid,
+
     /// The profile name (e.g., "default", "ci").
     pub profile_name: String,
 
