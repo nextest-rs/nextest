@@ -1,8 +1,10 @@
-use std::{
-    fmt,
-    io::{self, BufWriter, Stderr, Stdout, Write},
-    marker::PhantomData,
-};
+// Copyright (c) The nextest Contributors
+// Copyright (c) The cargo-guppy Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! Configuration of nextest output, such as colorization and style
+
+use std::fmt;
 use clap::ValueEnum;
 use miette::{GraphicalTheme, MietteHandlerOpts, ThemeStyles};
 use owo_colors::{OwoColorize, style, Style};
@@ -20,10 +22,14 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
 };
 
+/// High level specification of nextest output options
 #[derive(Copy, Clone, Debug)]
 #[must_use]
 pub struct OutputContext {
+    /// Request the output to be verbose
     pub verbose: bool,
+
+    /// Specify how colorization is determined (not what color is used)
     pub color: Color,
 }
 
@@ -50,17 +56,24 @@ impl OutputContext {
     }
 }
 
+/// Specifies whether to colorize output
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 #[must_use]
 #[derive(Default)]
 pub enum Color {
+    /// Determine coloration based on whether the actual terminal supports it and whether the 'NO_COLOR' environment variable is
     #[default]
     Auto,
+
+    /// Always try to colorize
     Always,
+
+    /// Never try to colorize
     Never,
 }
 
 impl Color {
+    /// Initialize color-related hooks and logging
     pub fn init(self) {
         // Pass the styles in as a stylesheet to ensure we use the latest supports-color here.
         let mut log_styles = LogStyles::default();
@@ -130,6 +143,7 @@ impl Color {
         });
     }
 
+    /// Determines whether output should be colorized based on whether the given stream supports this
     pub fn should_colorize(self, stream: supports_color::Stream) -> bool {
         match self {
             Color::Auto => supports_color::on_cached(stream).is_some(),
@@ -147,9 +161,13 @@ impl Color {
     }
 }
 
+/// Determines how to style stderr output
 #[derive(Debug, Default)]
 pub struct StderrStyles {
+    /// The style for 'bold' output
     pub bold: Style,
+
+    /// The style for 'warning' output
     pub warning_text: Style,
 }
 
