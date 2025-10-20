@@ -23,6 +23,7 @@
 //! `NEXTEST_BIN_EXE_cargo-nextest-dup`.
 
 use camino::{Utf8Path, Utf8PathBuf};
+use fixture_data::nextest_tests::EXPECTED_TEST_SUITES;
 use integration_tests::{
     env::set_env_vars,
     nextest_cli::{CargoNextestCli, CargoNextestOutput},
@@ -846,38 +847,28 @@ archive.include = [
 fn test_archive_with_build_filter() {
     set_env_vars();
 
-    let all_test_files = [
-        "basic",
-        "cdylib_example",
-        "cdylib_link",
-        "dylib_test",
-        "my_bench",
-        "nextest_derive",
-        "nextest_tests",
-        "nextest_tests",
-        "other",
-        "other",
-        "proc_macro_test",
-        "segfault",
-        "with_build_script",
-        "wrapper",
-        "nextest_tests",
-        "other",
-    ];
+    let all_test_binaries: Vec<String> = EXPECTED_TEST_SUITES
+        .iter()
+        // The test fixture binary name uses hyphens, but the files will use an underscore.
+        .map(|fixture| fixture.binary_name.replace("-", "_"))
+        .collect();
 
     // Check that all test files are present with the `all()` filter.
     check_archive_contents("all()", |paths| {
-        for file in all_test_files {
-            assert!(paths.iter().any(|path| {
-                let file_name = path.file_name().unwrap();
-                file_name.to_str().unwrap().contains(file)
-            }));
+        for file in all_test_binaries.iter() {
+            assert!(
+                paths
+                    .iter()
+                    .any(|path| path_contains_test_fixture_file(path, file)),
+                "{:?} was missing from the test archive",
+                file
+            );
         }
     });
 
     // Check that no test files are present with the `none()` filter.
     check_archive_contents("none()", |paths| {
-        for file in all_test_files {
+        for file in all_test_binaries.iter() {
             assert!(
                 !paths
                     .iter()
@@ -885,14 +876,9 @@ fn test_archive_with_build_filter() {
                         .ancestors()
                         // Test files are in the `deps` folder.
                         .any(|folder| folder.file_name() == Some(OsStr::new("deps"))))
-                    .any(|path| {
-                        let file_name = path.file_name().unwrap();
-                        file_name
-                            .to_ascii_lowercase()
-                            .to_str()
-                            .unwrap()
-                            .contains(file)
-                    })
+                    .any(|path| path_contains_test_fixture_file(path, file)),
+                "{:?} was present in the test archive but it should be missing",
+                file
             );
         }
     });
@@ -901,21 +887,36 @@ fn test_archive_with_build_filter() {
     let filtered_test = "nextest_tests";
     // Check that test files are filtered by the `package()` filter.
     check_archive_contents("package(cdylib-example)", |paths| {
-        assert!(paths.iter().any(|path| {
-            path.file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .contains(expected_package_test_file)
-        }));
-        assert!(!paths.iter().any(|path| {
-            path.file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .contains(filtered_test)
-        }));
+        assert!(
+            paths
+                .iter()
+                .any(|path| path_contains_test_fixture_file(path, expected_package_test_file)),
+            "{:?} was missing from the test archive",
+            expected_package_test_file
+        );
+        assert!(
+            !paths
+                .iter()
+                .any(|path| path_contains_test_fixture_file(path, filtered_test)),
+            "{:?} was present in the test archive but it should be missing",
+            filtered_test
+        );
     });
+}
+
+/// Checks if the file name at `path` contains `expected_file_name`
+/// Returns `true` if it does, otherwise `false`.
+fn path_contains_test_fixture_file(path: &PathBuf, expected_file_name: &str) -> bool {
+    let file_name = path.file_name().unwrap_or_else(|| {
+        panic!(
+            "test fixture path {:?} did not have a file name, does the path contain '..'?",
+            path
+        )
+    });
+    file_name
+        .to_str()
+        .unwrap_or_else(|| panic!("file name: {:?} is not valid utf-8", file_name))
+        .contains(expected_file_name)
 }
 
 #[test]
@@ -935,7 +936,7 @@ fn test_archive_with_unsupported_test_filter() {
     );
 }
 
-fn check_archive_contents(filter: &str, check_archive_contents: impl FnOnce(Vec<PathBuf>)) {
+fn check_archive_contents(filter: &str, cb: impl FnOnce(Vec<PathBuf>)) {
     let (_p1, archive_file) =
         create_archive_with_args("", false, "", &["-E", filter], false).expect("archive succeeded");
     let file = File::open(archive_file).unwrap();
@@ -946,7 +947,7 @@ fn check_archive_contents(filter: &str, check_archive_contents: impl FnOnce(Vec<
         .unwrap()
         .map(|e| e.unwrap().path().unwrap().into_owned())
         .collect::<Vec<_>>();
-    check_archive_contents(paths);
+    cb(paths);
 }
 
 const APP_DATA_DIR: &str = "application-data";

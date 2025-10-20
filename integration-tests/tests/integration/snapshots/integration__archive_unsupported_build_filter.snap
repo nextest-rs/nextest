@@ -6,7 +6,7 @@ expression: output.stderr_as_str()
    ╭────
  1 │ test(sample_test)
    ·      ─────┬─────
-   ·           ╰── this predicate causes an unsupported expression
+   ·           ╰── this predicate is banned because test predicates are not supported while archiving
    ╰────
 
 error: failed to parse filterset
