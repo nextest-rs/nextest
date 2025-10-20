@@ -22,24 +22,9 @@ use nextest_runner::{
     }, double_spawn::DoubleSpawnInfo, errors::{TargetTripleError, WriteTestListError}, input::InputHandlerKind, list::{
         BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestExecuteContext,
         TestList,
-    },
-    partition::PartitionerBuilder,
-    platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
-    redact::Redactor,
-    reporter::{
-        FinalStatusLevel, ReporterBuilder, ShowProgress, StatusLevel, TestOutputDisplay,
-        TestOutputErrorSlice,
-        events::{FinalRunStats, RunStatsFailureKind},
-        highlight_end, structured,
-    },
-    reuse_build::{ArchiveReporter, PathMapper, ReuseBuildInfo, archive_to_file},
-    runner::{StressCondition, StressCount, TestRunnerBuilder, configure_handle_inheritance},
-    show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
-    signal::SignalHandlerKind,
-    target_runner::{PlatformRunner, TargetRunner},
-    test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
-    test_output::CaptureStrategy,
-    write_str::WriteStr,
+    }, output::{OutputContext, StderrStyles}, partition::PartitionerBuilder, platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform}, redact::Redactor, reporter::{
+        events::{FinalRunStats, RunStatsFailureKind}, highlight_end, structured, FinalStatusLevel, ReporterBuilder, ShowProgress, StatusLevel, TestOutputDisplay, TestOutputErrorSlice
+    }, reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo}, runner::{configure_handle_inheritance, StressCondition, StressCount, TestRunnerBuilder}, show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode}, signal::SignalHandlerKind, target_runner::{PlatformRunner, TargetRunner}, test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns}, test_output::CaptureStrategy, write_str::WriteStr, RustcCli
 };
 use owo_colors::OwoColorize;
 use quick_junit::XmlString;
