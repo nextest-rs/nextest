@@ -2,28 +2,9 @@
 // Copyright (c) The cargo-guppy Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use clap::{Args, ValueEnum};
-use miette::{GraphicalTheme, MietteHandlerOpts, ThemeStyles};
+use clap::Args;
 use nextest_runner::{output::{Color, OutputContext}, reporter::ReporterStderr, write_str::WriteStr};
-use owo_colors::{OwoColorize, Style, style};
-use std::{
-    fmt,
-    io::{self, BufWriter, Stderr, Stdout, Write},
-    marker::PhantomData,
-};
-use tracing::{
-    Event, Level, Subscriber,
-    field::{Field, Visit},
-    level_filters::LevelFilter,
-};
-use tracing_subscriber::{
-    Layer,
-    filter::Targets,
-    fmt::{FmtContext, FormatEvent, FormatFields, format},
-    layer::SubscriberExt,
-    registry::LookupSpan,
-    util::SubscriberInitExt,
-};
+use std::{io::{self, BufWriter, Stderr, Stdout, Write}, marker::PhantomData};
 
 pub(crate) mod clap_styles {
     use clap::builder::{
