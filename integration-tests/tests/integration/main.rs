@@ -32,6 +32,7 @@ use std::{borrow::Cow, fs::File, io::Write};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
 
 mod fixtures;
+mod large_alloc;
 mod stuck_signal;
 mod temp_project;
 

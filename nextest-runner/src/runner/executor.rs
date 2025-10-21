@@ -389,6 +389,20 @@ impl<'a> ExecutorContext<'a> {
             .id()
             .expect("child has never been polled so must return a PID");
 
+        // Fire the USDT probe for setup script start.
+        crate::fire_usdt!(UsdtSetupScriptStart {
+            id: script
+                .script_id
+                .unique_id(self.run_id, script.stress_index.map(|s| s.current)),
+            run_id: self.run_id,
+            script_id: script.script_id.to_string(),
+            pid: child_pid,
+            program: script.program.clone(),
+            args: script.config.command.args.clone(),
+            stress_current: script.stress_index.map(|s| s.current),
+            stress_total: script.stress_index.and_then(|s| s.total.map(|t| t.get())),
+        });
+
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
         let _ = super::os::assign_process_to_job(&child, job.as_ref());
@@ -648,23 +662,6 @@ impl<'a> ExecutorContext<'a> {
             test.settings.run_extra_args(),
         );
 
-        crate::fire_usdt!(UsdtTestAttemptStart {
-            attempt_id: test.test_instance.id().attempt_id(
-                self.run_id,
-                test.stress_index.map(|s| s.current),
-                test.retry_data.attempt,
-            ),
-            run_id: self.run_id,
-            binary_id: test.test_instance.suite_info.binary_id.clone(),
-            test_name: test.test_instance.name.to_owned(),
-            program: cmd.program().to_owned(),
-            args: cmd.args().to_owned(),
-            attempt: test.retry_data.attempt,
-            total_attempts: test.retry_data.total_attempts,
-            stress_current: test.stress_index.map(|s| s.current),
-            stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
-        });
-
         let command_mut = cmd.command_mut();
 
         // Debug environment variable for testing.
@@ -711,6 +708,10 @@ impl<'a> ExecutorContext<'a> {
         // best-effort thing.
         let job = super::os::create_job().ok();
 
+        // Capture program and args before spawn moves cmd
+        let _program = cmd.program().to_owned();
+        let _args = cmd.args().to_owned();
+
         let crate::test_command::Child {
             mut child,
             child_fds,
@@ -725,6 +726,24 @@ impl<'a> ExecutorContext<'a> {
         let child_pid = child
             .id()
             .expect("child has never been polled so must return a PID");
+
+        crate::fire_usdt!(UsdtTestAttemptStart {
+            attempt_id: test.test_instance.id().attempt_id(
+                self.run_id,
+                test.stress_index.map(|s| s.current),
+                test.retry_data.attempt,
+            ),
+            run_id: self.run_id,
+            binary_id: test.test_instance.suite_info.binary_id.clone(),
+            test_name: test.test_instance.name.to_owned(),
+            pid: child_pid,
+            program: _program,
+            args: _args,
+            attempt: test.retry_data.attempt,
+            total_attempts: test.retry_data.total_attempts,
+            stress_current: test.stress_index.map(|s| s.current),
+            stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
+        });
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
