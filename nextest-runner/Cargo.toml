@@ -114,7 +114,7 @@ nix.workspace = true
 # Linux because usdt 0.6.0 crashes with:
 #
 # Message:  unsafe precondition(s) violated: ptr::read_volatile requires that the pointer argument is aligned and non-null
-[target.'cfg(any(all(target_arch = "x86_64", target_os = "linux"), target_os = "macos", target_os = "freebsd", target_os = "illumos"))'.dependencies]
+[target.'cfg(any(all(target_arch = "x86_64", target_os = "linux"), all(any(target_arch = "x86_64", target_arch = "aarch64"), any(target_os = "macos", target_os = "freebsd", target_os = "illumos"))))'.dependencies]
 usdt = "0.6.0"
 
 [target.'cfg(windows)'.dependencies]

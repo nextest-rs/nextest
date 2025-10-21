@@ -8,8 +8,8 @@
 //!
 //! USDT probes are supported on:
 //!
-//! * x86_64 Linux, via [bpftrace](https://bpftrace.org/) (aarch64 might work as well)
-//! * macOS, illumos and other Solaris derivatives, and FreeBSD, via [DTrace](https://dtrace.org/)
+//! * On x86_64: Linux, via [bpftrace](https://bpftrace.org/) (aarch64 might work as well)
+//! * On x86_64 and aarch64: macOS, illumos and other Solaris derivatives, and FreeBSD, via [DTrace](https://dtrace.org/)
 //!
 //! The probes and their contents are not part of nextest's stability guarantees.
 //!
@@ -22,9 +22,10 @@ use serde::Serialize;
 /// Register USDT probes on supported platforms.
 #[cfg(any(
     all(target_arch = "x86_64", target_os = "linux"),
-    target_os = "macos",
-    target_os = "freebsd",
-    target_os = "illumos"
+    all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+    ),
 ))]
 pub fn register_probes() -> Result<(), usdt::Error> {
     usdt::register_probes()
@@ -33,9 +34,10 @@ pub fn register_probes() -> Result<(), usdt::Error> {
 /// No-op for unsupported platforms.
 #[cfg(not(any(
     all(target_arch = "x86_64", target_os = "linux"),
-    target_os = "macos",
-    target_os = "freebsd",
-    target_os = "illumos"
+    all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+    ),
 )))]
 pub fn register_probes() -> Result<(), std::convert::Infallible> {
     Ok(())
@@ -43,9 +45,10 @@ pub fn register_probes() -> Result<(), std::convert::Infallible> {
 
 #[cfg(any(
     all(target_arch = "x86_64", target_os = "linux"),
-    target_os = "macos",
-    target_os = "freebsd",
-    target_os = "illumos"
+    all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+    ),
 ))]
 #[usdt::provider(provider = "nextest")]
 pub mod usdt_probes {
@@ -105,9 +108,10 @@ pub mod usdt_probes {
 /// Fires a USDT probe on supported platforms.
 #[cfg(any(
     all(target_arch = "x86_64", target_os = "linux"),
-    target_os = "macos",
-    target_os = "freebsd",
-    target_os = "illumos"
+    all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+    ),
 ))]
 #[macro_export]
 macro_rules! fire_usdt {
@@ -196,9 +200,10 @@ macro_rules! fire_usdt {
 /// No-op version of fire_usdt for unsupported platforms.
 #[cfg(not(any(
     all(target_arch = "x86_64", target_os = "linux"),
-    target_os = "macos",
-    target_os = "freebsd",
-    target_os = "illumos"
+    all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+    ),
 )))]
 #[macro_export]
 macro_rules! fire_usdt {
