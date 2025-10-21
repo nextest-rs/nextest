@@ -5,7 +5,7 @@ description: Dynamically trace nextest events with DTrace and bpftrace.
 
 # USDT probes
 
-<!-- md:version 0.9.107 -->
+<!-- md:version 0.9.108 -->
 
 Nextest defines [USDT](https://docs.rs/usdt/) probes which can be used for dynamic tracing. USDT probes are supported:
 
