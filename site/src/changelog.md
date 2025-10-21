@@ -8,11 +8,7 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.108-b.1] - 2025-10-21
-
-This is a test release.
-
-## [0.9.107] - 2025-10-21
+## [0.9.108] - 2025-10-21
 
 ### Added
 
@@ -26,9 +22,12 @@ This is a test release.
 
 - For leaky tests, default leak timeout increased from 100ms to 200ms.
 - MSRV for building nextest updated to Rust 1.87.
-- Builtin build targets updated to Rust 1.90.
 
 [#2618]: https://github.com/nextest-rs/nextest/pull/2618
+
+## [0.9.107] - 2025-10-21
+
+This version was not published due to a build issue.
 
 ## [0.9.106] - 2025-10-13
 
@@ -1577,6 +1576,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.108]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.108
 [0.9.107]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.107
 [0.9.106]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.106
 [0.9.105]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.105
