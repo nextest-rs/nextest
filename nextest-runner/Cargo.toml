@@ -113,8 +113,12 @@ nix.workspace = true
 # Enable USDT on these platforms. In particular, don't enable it on aarch64
 # Linux because usdt 0.6.0 crashes with:
 #
-# Message:  unsafe precondition(s) violated: ptr::read_volatile requires that the pointer argument is aligned and non-null
-[target.'cfg(any(all(target_arch = "x86_64", target_os = "linux"), all(any(target_arch = "x86_64", target_arch = "aarch64"), any(target_os = "macos", target_os = "freebsd", target_os = "illumos"))))'.dependencies]
+# Message: unsafe precondition(s) violated: ptr::read_volatile requires that the
+# pointer argument is aligned and non-null
+#
+# Also, usdt 0.6.0 fails to compile on x86_64-apple-darwin, so restrict it to
+# aarch64-apple-darwin.
+[target.'cfg(any(all(target_arch = "x86_64", any(target_os = "linux", target_os = "freebsd", target_os = "illumos")), all(target_arch = "aarch64", any(target_os = "macos", target_os = "freebsd", target_os = "illumos"))))'.dependencies]
 usdt = "0.6.0"
 
 [target.'cfg(windows)'.dependencies]
