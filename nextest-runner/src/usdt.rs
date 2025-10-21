@@ -56,6 +56,7 @@ pub mod usdt_probes {
         attempt_id: &str,
         binary_id: &str,
         test_name: &str,
+        pid: u32,
     ) {
     }
     pub fn test__attempt__done(
@@ -75,7 +76,13 @@ pub mod usdt_probes {
         elapsed_nanos: u64,
     ) {
     }
-    pub fn setup__script__start(script: &UsdtSetupScriptStart, id: &str, script_id: &str) {}
+    pub fn setup__script__start(
+        script: &UsdtSetupScriptStart,
+        id: &str,
+        script_id: &str,
+        pid: u32,
+    ) {
+    }
     pub fn setup__script__slow(
         script: &UsdtSetupScriptSlow,
         id: &str,
@@ -110,7 +117,8 @@ macro_rules! fire_usdt {
             let attempt_id = probe.attempt_id.clone();
             let binary_id = probe.binary_id.to_string();
             let test_name = probe.test_name.clone();
-            (probe, attempt_id, binary_id, test_name)
+            let pid = probe.pid;
+            (probe, attempt_id, binary_id, test_name, pid)
         })
     }};
     (UsdtTestAttemptDone { $($tt:tt)* }) => {{
@@ -146,7 +154,8 @@ macro_rules! fire_usdt {
             let probe = $crate::usdt::UsdtSetupScriptStart { $($tt)* };
             let id = probe.id.clone();
             let script_id = probe.script_id.clone();
-            (probe, id, script_id)
+            let pid = probe.pid;
+            (probe, id, script_id, pid)
         })
     }};
     (UsdtSetupScriptSlow { $($tt:tt)* }) => {{
@@ -221,6 +230,11 @@ pub struct UsdtTestAttemptStart {
     ///
     /// Also available as `arg3`.
     pub test_name: String,
+
+    /// The process ID of the test.
+    ///
+    /// Also available as `arg4`.
+    pub pid: u32,
 
     /// The program to run.
     pub program: String,
@@ -357,6 +371,11 @@ pub struct UsdtSetupScriptStart {
     ///
     /// Also available as `arg2`.
     pub script_id: String,
+
+    /// The process ID of the script.
+    ///
+    /// Also available as `arg3`.
+    pub pid: u32,
 
     /// The program to run.
     pub program: String,

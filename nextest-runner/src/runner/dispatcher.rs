@@ -438,17 +438,6 @@ where
                 }
                 self.new_setup_script(script_id.clone(), config, index, total, req_tx);
 
-                // Fire the USDT probe for setup script start.
-                crate::fire_usdt!(UsdtSetupScriptStart {
-                    id: script_id.unique_id(self.run_id, stress_index.map(|s| s.current)),
-                    run_id: self.run_id,
-                    script_id: script_id.to_string(),
-                    program: program.clone(),
-                    args: config.command.args.clone(),
-                    stress_current: stress_index.map(|s| s.current),
-                    stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
-                });
-
                 self.callback_none_response(TestEventKind::SetupScriptStarted {
                     stress_index,
                     index,
