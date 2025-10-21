@@ -7,10 +7,11 @@ description: Dynamically trace nextest events with DTrace and bpftrace.
 
 <!-- md:version 0.9.107 -->
 
-Nextest defines [USDT](https://docs.rs/usdt/) probes which can be used for dynamic tracing. Probes are supported on:
+Nextest defines [USDT](https://docs.rs/usdt/) probes which can be used for dynamic tracing. USDT probes are supported:
 
-* macOS, illumos and other Solaris derivatives, and FreeBSD, via [DTrace](https://dtrace.org/).
-* x86_64 Linux, via [bpftrace](https://bpftrace.org/).
+* On x86_64: Linux, via [bpftrace](https://bpftrace.org/)
+* On aarch64: macOS, via [DTrace](https://dtrace.org/)
+* On x86_64 and aarch64: illumos and other Solaris derivatives, and FreeBSD, via [DTrace](https://dtrace.org/)
 
 ## List of probes
 
