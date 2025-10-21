@@ -1055,6 +1055,8 @@ struct ReporterOpts {
     final_status_level: Option<FinalStatusLevelOpt>,
 
     /// Show progress in a specified way.
+    ///
+    /// **running-only** also implies **--status-level=slow** and **--final-status-level=none**
     #[arg(long, env = "NEXTEST_SHOW_PROGRESS")]
     show_progress: Option<ShowProgressOpt>,
 
@@ -1153,6 +1155,11 @@ impl ReporterOpts {
         builder.set_no_capture(no_capture);
         builder.set_colorize(should_colorize);
 
+        if let Some(ShowProgressOpt::RunningOnly) = self.show_progress {
+            // --show-progress=running-only implies --status-level=slow and --final-status-level=none
+            builder.set_status_level(StatusLevel::Slow);
+            builder.set_final_status_level(FinalStatusLevel::None);
+        }
         if let Some(failure_output) = self.failure_output {
             builder.set_failure_output(failure_output.into());
         }
@@ -1252,6 +1259,7 @@ enum ShowProgressOpt {
     Bar,
     Counter,
     Running,
+    RunningOnly,
 }
 
 impl From<ShowProgressOpt> for ShowProgress {
@@ -1262,6 +1270,7 @@ impl From<ShowProgressOpt> for ShowProgress {
             ShowProgressOpt::Bar => Self::Bar,
             ShowProgressOpt::Counter => Self::Counter,
             ShowProgressOpt::Running => Self::Running,
+            ShowProgressOpt::RunningOnly => Self::Running,
         }
     }
 }
