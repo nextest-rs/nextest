@@ -43,6 +43,7 @@ Most probes also have commonly-used arguments available as `arg2`, `arg3`, and s
 
 * `arg2` is the [binary ID](../running.md#binary-ids) (a string)
 * `arg3` is the test name (a string)
+* `arg4` is the process ID of the test process
 
 For more information on these arguments, consult each probe's documentation.
 
