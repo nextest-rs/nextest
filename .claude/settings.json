@@ -4,7 +4,10 @@
       "Bash(jj s:*)",
       "WebSearch",
       "Bash(cargo check:*)",
-      "Bash(cargo nextest run:*)"
+      "Bash(cargo nextest run:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(gh pr view:*)"
     ],
     "deny": [],
     "ask": []
