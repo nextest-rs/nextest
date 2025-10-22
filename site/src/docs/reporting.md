@@ -6,6 +6,26 @@ icon: material/account-voice
 
 This section covers nextest's output format designed for humans. For output formats more suitable for consumption by other tools, see [_Machine-readable output_](machine-readable/index.md).
 
+## Test execution progress
+
+<!-- md:version 0.9.108 -->
+
+During test execution, the `--show-progress` command-line option (or `NEXTEST_SHOW_PROGRESS` in the environment) determines how progress is displayed.
+
+`--show-progress=auto`
+: Automatically determine how to show progress. This is the default. `auto` resolves to `bar` for interactive terminals, and `counter` for non-interactive ones.
+
+`--show-progress=bar`
+: Show a progress bar.
+
+`--show-progress=counter`
+: Show a progress counter next to each test, once it completes.
+
+`--show-progress=none`
+: Do not show a progress bar or counter.
+
+Nextest versions prior to 0.9.108 show a progress bar in interactive terminals, and do not show any progress in non-interactive terminals. The `--hide-progress-bar` option, now deprecated, hides progress in interactive terminals.
+
 ## Status levels
 
 For non-output-related information (e.g. exit codes, slow tests), there are two options that control which test statuses (**PASS**, **FAIL** etc) are displayed during a test run:
