@@ -12,7 +12,7 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
 ### Added
 
-- Support for [USDT (User-level Statically Defined Tracing) probes](https://nexte.st/docs/experimental/usdt/) for observability and debugging. USDT probes allow tools like [DTrace](https://dtrace.org) and [bpftrace](https://bpftrace.org/) to trace nextest's internal operations. The initial probes cover test execution lifecycle events.
+- Support for [USDT (User Statically Defined Tracing) probes](https://nexte.st/docs/integrations/usdt/) for observability and debugging. USDT probes allow tools like [DTrace](https://dtrace.org) and [bpftrace](https://bpftrace.org/) to trace nextest's internal operations. The initial probes cover test execution lifecycle events.
 
   For more information, see the [USDT documentation](https://nexte.st/docs/integrations/usdt/).
 
