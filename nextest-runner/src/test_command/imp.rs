@@ -330,4 +330,17 @@ impl ChildOutputMut {
             },
         }
     }
+
+    /// Returns the lengths of stdout and stderr in bytes.
+    ///
+    /// Returns `None` for each stream that wasn't captured.
+    pub(crate) fn stdout_stderr_len(&self) -> (Option<u64>, Option<u64>) {
+        match self {
+            Self::Split { stdout, stderr } => (
+                stdout.as_ref().map(|b| b.len() as u64),
+                stderr.as_ref().map(|b| b.len() as u64),
+            ),
+            Self::Combined(combined) => (Some(combined.len() as u64), None),
+        }
+    }
 }

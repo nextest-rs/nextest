@@ -709,8 +709,8 @@ impl<'a> ExecutorContext<'a> {
         let job = super::os::create_job().ok();
 
         // Capture program and args before spawn moves cmd
-        let _program = cmd.program().to_owned();
-        let _args = cmd.args().to_owned();
+        let program = cmd.program().to_owned();
+        let args = cmd.args().to_owned();
 
         let crate::test_command::Child {
             mut child,
@@ -737,8 +737,8 @@ impl<'a> ExecutorContext<'a> {
             binary_id: test.test_instance.suite_info.binary_id.clone(),
             test_name: test.test_instance.name.to_owned(),
             pid: child_pid,
-            program: _program,
-            args: _args,
+            program,
+            args,
             attempt: test.retry_data.attempt,
             total_attempts: test.retry_data.total_attempts,
             stress_current: test.stress_index.map(|s| s.current),
@@ -920,7 +920,7 @@ impl<'a> ExecutorContext<'a> {
 
         let exit_status = exit_status.expect("None always results in early return");
 
-        let (leaked, _time_to_close) = match leak_info {
+        let (leaked, time_to_close) = match leak_info {
             LeakDetectInfo::NoLeak { time_to_close } => (false, Some(time_to_close)),
             LeakDetectInfo::Leaked => (true, None),
         };
@@ -930,6 +930,9 @@ impl<'a> ExecutorContext<'a> {
         });
 
         let stopwatch_end = stopwatch.snapshot();
+
+        // Compute stdout and stderr lengths for USDT probe
+        let (stdout_len, stderr_len) = child_acc.output.stdout_stderr_len();
 
         // Fire the test-attempt-done probe
         crate::fire_usdt!(UsdtTestAttemptDone {
@@ -947,9 +950,11 @@ impl<'a> ExecutorContext<'a> {
             exit_code: exit_status.code(),
             duration_nanos: stopwatch_end.active.as_nanos() as u64,
             leaked,
-            time_to_close_fds_nanos: _time_to_close.map(|d| d.as_nanos() as u64),
+            time_to_close_fds_nanos: time_to_close.map(|d| d.as_nanos() as u64),
             stress_current: test.stress_index.map(|s| s.current),
             stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
+            stdout_len,
+            stderr_len,
         });
 
         Ok(InternalExecuteStatus {

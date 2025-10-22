@@ -146,6 +146,21 @@ pub enum ChildOutput {
     },
 }
 
+impl ChildOutput {
+    /// Returns the lengths of stdout and stderr in bytes.
+    ///
+    /// Returns `None` for each stream that wasn't captured.
+    pub fn stdout_stderr_len(&self) -> (Option<u64>, Option<u64>) {
+        match self {
+            Self::Split(split) => (
+                split.stdout.as_ref().map(|s| s.buf.len() as u64),
+                split.stderr.as_ref().map(|s| s.buf.len() as u64),
+            ),
+            Self::Combined { output } => (Some(output.buf.len() as u64), None),
+        }
+    }
+}
+
 /// The output of a child process (test or setup script) with split stdout and stderr.
 ///
 /// One of the variants of [`ChildOutput`].
