@@ -492,12 +492,20 @@ where
 
                 // Fire the setup-script-done probe, extracting the exit code
                 // from the result if available.
-                let _exit_code = match status.result {
+                let exit_code = match status.result {
                     crate::reporter::events::ExecutionResult::Fail {
                         failure_status: crate::reporter::events::FailureStatus::ExitCode(code),
                         ..
                     } => Some(code),
                     _ => None,
+                };
+
+                // Extract stdout and stderr lengths from the output
+                let (stdout_len, stderr_len) = match &status.output {
+                    crate::test_output::ChildExecutionOutput::Output { output, .. } => {
+                        output.stdout_stderr_len()
+                    }
+                    crate::test_output::ChildExecutionOutput::StartError(_) => (None, None),
                 };
 
                 crate::fire_usdt!(UsdtSetupScriptDone {
@@ -507,10 +515,12 @@ where
                     program: program.clone(),
                     args: config.command.args.clone(),
                     result: status.result.as_static_str(),
-                    exit_code: _exit_code,
+                    exit_code,
                     duration_nanos: status.time_taken.as_nanos() as u64,
                     stress_current: stress_index.map(|s| s.current),
                     stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
+                    stdout_len,
+                    stderr_len,
                 });
 
                 // Setup scripts failing always cause the entire test run to be cancelled

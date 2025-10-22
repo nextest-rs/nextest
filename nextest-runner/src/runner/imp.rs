@@ -375,7 +375,7 @@ impl<'a> TestRunnerInner<'a> {
 
         let run_stats = dispatcher_cx.run_stats();
 
-        let _stopwatch_end = dispatcher_cx.run_finished();
+        let stopwatch_end = dispatcher_cx.run_finished();
 
         // Fire the USDT probe for run completion.
         crate::fire_usdt!(UsdtRunDone {
@@ -385,8 +385,8 @@ impl<'a> TestRunnerInner<'a> {
             passed: run_stats.passed,
             failed: run_stats.failed_count(),
             skipped: run_stats.skipped,
-            duration_nanos: _stopwatch_end.active.as_nanos() as u64,
-            paused_nanos: _stopwatch_end.paused.as_nanos() as u64,
+            duration_nanos: stopwatch_end.active.as_nanos() as u64,
+            paused_nanos: stopwatch_end.paused.as_nanos() as u64,
         });
 
         Ok(run_stats)

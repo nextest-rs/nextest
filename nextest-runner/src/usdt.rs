@@ -224,7 +224,7 @@ macro_rules! fire_usdt {
 #[macro_export]
 macro_rules! fire_usdt {
     ($($tt:tt)*) => {
-        // No-op: probe struct is never constructed on unsupported platforms
+        let _ = $crate::usdt::$($tt)*;
     };
 }
 
@@ -331,6 +331,12 @@ pub struct UsdtTestAttemptDone {
 
     /// The total number of stress runs, if available.
     pub stress_total: Option<u32>,
+
+    /// The length of stdout in bytes, if captured.
+    pub stdout_len: Option<u64>,
+
+    /// The length of stderr in bytes, if captured.
+    pub stderr_len: Option<u64>,
 }
 
 /// Data associated with the `test-attempt-slow` probe.
@@ -495,6 +501,12 @@ pub struct UsdtSetupScriptDone {
 
     /// The total number of stress runs, if available.
     pub stress_total: Option<u32>,
+
+    /// The length of stdout in bytes, if captured.
+    pub stdout_len: Option<u64>,
+
+    /// The length of stderr in bytes, if captured.
+    pub stderr_len: Option<u64>,
 }
 
 /// Data associated with the `run-start` probe.
