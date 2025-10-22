@@ -113,6 +113,18 @@ pub mod usdt_probes {
     }
     pub fn run__start(run: &UsdtRunStart, run_id: ReportUuid) {}
     pub fn run__done(run: &UsdtRunDone, run_id: ReportUuid) {}
+    pub fn stress__sub__run__start(
+        sub_run: &UsdtStressSubRunStart,
+        stress_sub_run_id: &str,
+        stress_current: u32,
+    ) {
+    }
+    pub fn stress__sub__run__done(
+        sub_run: &UsdtStressSubRunDone,
+        stress_sub_run_id: &str,
+        stress_current: u32,
+    ) {
+    }
 }
 
 /// Fires a USDT probe on supported platforms.
@@ -206,6 +218,22 @@ macro_rules! fire_usdt {
             let probe = $crate::usdt::UsdtRunDone { $($tt)* };
             let run_id = probe.run_id;
             (probe, run_id)
+        })
+    }};
+    (UsdtStressSubRunStart { $($tt:tt)* }) => {{
+        $crate::usdt::usdt_probes::stress__sub__run__start!(|| {
+            let probe = $crate::usdt::UsdtStressSubRunStart { $($tt)* };
+            let stress_sub_run_id = probe.stress_sub_run_id.clone();
+            let stress_current = probe.stress_current;
+            (probe, stress_sub_run_id, stress_current)
+        })
+    }};
+    (UsdtStressSubRunDone { $($tt:tt)* }) => {{
+        $crate::usdt::usdt_probes::stress__sub__run__done!(|| {
+            let probe = $crate::usdt::UsdtStressSubRunDone { $($tt)* };
+            let stress_sub_run_id = probe.stress_sub_run_id.clone();
+            let stress_current = probe.stress_current;
+            (probe, stress_sub_run_id, stress_current)
         })
     }};
 }
@@ -528,8 +556,19 @@ pub struct UsdtRunStart {
     /// Number of tests after filtering.
     pub filter_count: usize,
 
-    /// Number of test threads (concurrency level).
+    /// Number of test threads.
     pub test_threads: usize,
+
+    /// If this is a count-based stress run with a finite number of runs, the
+    /// number of stress runs.
+    pub stress_count: Option<u32>,
+
+    /// True if this is a count-based stress run with an infinite number of
+    /// runs.
+    pub stress_infinite: bool,
+
+    /// If this is a duration-based stress run, how long we're going to run for.
+    pub stress_duration_nanos: Option<u64>,
 }
 
 /// Data associated with the `run-done` probe.
@@ -546,20 +585,119 @@ pub struct UsdtRunDone {
     pub profile_name: String,
 
     /// Total number of tests that were run.
+    ///
+    /// For stress runs, this consists of the last run's total test count.
     pub total_tests: usize,
 
     /// Number of tests that passed.
+    ///
+    /// For stress runs, this consists of the last run's passed test count.
     pub passed: usize,
 
     /// Number of tests that failed.
+    ///
+    /// For stress runs, this consists of the last run's failed test count.
     pub failed: usize,
 
     /// Number of tests that were skipped.
+    ///
+    /// For stress runs, this consists of the last run's skipped test count.
     pub skipped: usize,
 
-    /// Total active duration of the run in nanoseconds, not including paused time.
+    /// Total active duration of the run in nanoseconds, not including paused
+    /// time.
+    ///
+    /// For stress runs, this adds up the duration across all sub-runs.
     pub duration_nanos: u64,
 
     /// The number of nanoseconds the run was paused.
+    ///
+    /// For stress runs, this adds up the paused duration across all sub-runs.
     pub paused_nanos: u64,
+
+    /// The number of stress runs completed, if this is a stress run.
+    pub stress_completed: Option<u32>,
+
+    /// The number of stress runs that succeeded, if this is a stress run.
+    pub stress_success: Option<u32>,
+
+    /// The number of stress runs that failed, if this is a stress run.
+    pub stress_failed: Option<u32>,
+}
+
+/// Data associated with the `stress-sub-run-start` probe.
+///
+/// This data is JSON-encoded as `arg0`.
+#[derive(Clone, Debug, Serialize)]
+pub struct UsdtStressSubRunStart {
+    /// A unique identifier for this stress sub-run, of the form
+    /// `{run_id}:@stress-{stress_current}`.
+    ///
+    /// Also available as `arg1`.
+    pub stress_sub_run_id: String,
+
+    /// The nextest run ID, unique for each run.
+    pub run_id: ReportUuid,
+
+    /// The profile name (e.g., "default", "ci").
+    pub profile_name: String,
+
+    /// The 0-indexed current stress run number.
+    ///
+    /// Also available as `arg2`.
+    pub stress_current: u32,
+
+    /// The total number of stress runs, if available (None for infinite or
+    /// duration-based runs).
+    pub stress_total: Option<u32>,
+
+    /// The total elapsed time since the overall stress run started, in
+    /// nanoseconds.
+    pub elapsed_nanos: u64,
+}
+
+/// Data associated with the `stress-sub-run-done` probe.
+///
+/// This data is JSON-encoded as `arg0`.
+#[derive(Clone, Debug, Serialize)]
+pub struct UsdtStressSubRunDone {
+    /// A unique identifier for this stress sub-run, of the form
+    /// `{run_id}:@stress-{stress_current}`.
+    ///
+    /// Also available as `arg1`.
+    pub stress_sub_run_id: String,
+
+    /// The nextest run ID, unique for each run.
+    pub run_id: ReportUuid,
+
+    /// The profile name (e.g., "default", "ci").
+    pub profile_name: String,
+
+    /// The 0-indexed current stress run number.
+    ///
+    /// Also available as `arg2`.
+    pub stress_current: u32,
+
+    /// The total number of stress runs, if available (None for infinite or
+    /// duration-based runs).
+    pub stress_total: Option<u32>,
+
+    /// The total elapsed time since the overall stress run started, in
+    /// nanoseconds.
+    pub elapsed_nanos: u64,
+
+    /// The duration of this sub-run in nanoseconds.
+    pub sub_run_duration_nanos: u64,
+
+    /// Total number of tests that were run in this sub-run.
+    pub total_tests: usize,
+
+    /// Number of tests that passed in this sub-run.
+    pub passed: usize,
+
+    /// Number of tests that failed in this sub-run.
+    pub failed: usize,
+
+    /// Number of tests that were skipped in this sub-run.
+    pub skipped: usize,
 }

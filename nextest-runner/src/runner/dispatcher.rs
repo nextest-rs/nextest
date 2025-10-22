@@ -22,7 +22,7 @@ use crate::{
     },
     runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalInfoEvent},
-    time::{StopwatchSnapshot, StopwatchStart},
+    time::StopwatchStart,
 };
 use chrono::Local;
 use debug_ignore::DebugIgnore;
@@ -338,7 +338,29 @@ where
         }
     }
 
-    pub(super) fn run_started(&mut self, test_list: &'a TestList) {
+    pub(super) fn run_started(&mut self, test_list: &'a TestList, test_threads: usize) {
+        let (stress_count, stress_infinite, stress_duration_nanos) =
+            match self.stress_cx.condition() {
+                Some(StressCondition::Count(StressCount::Count(count))) => {
+                    (Some(count.get()), false, None)
+                }
+                Some(StressCondition::Count(StressCount::Infinite)) => (None, true, None),
+                Some(StressCondition::Duration(duration)) => {
+                    (None, false, Some(duration.as_nanos() as u64))
+                }
+                None => (None, false, None),
+            };
+        crate::fire_usdt!(UsdtRunStart {
+            run_id: self.run_id,
+            profile_name: self.profile_name.clone(),
+            total_tests: test_list.test_count(),
+            filter_count: test_list.run_count(),
+            test_threads,
+            stress_count,
+            stress_infinite,
+            stress_duration_nanos,
+        });
+
         self.basic_callback(TestEventKind::RunStarted {
             test_list,
             run_id: self.run_id,
@@ -359,6 +381,34 @@ where
             ..Default::default()
         };
 
+        // Fire the USDT probe for stress sub-run start.
+        let (stress_current, stress_total) = match &progress {
+            StressProgress::Count {
+                total,
+                completed,
+                elapsed: _,
+            } => {
+                let total = match total {
+                    StressCount::Count(n) => Some(n.get()),
+                    StressCount::Infinite => None,
+                };
+                (*completed, total)
+            }
+            StressProgress::Time {
+                total: _,
+                elapsed: _,
+                completed,
+            } => (*completed, None),
+        };
+        crate::fire_usdt!(UsdtStressSubRunStart {
+            stress_sub_run_id: progress.unique_id(self.run_id),
+            run_id: self.run_id,
+            profile_name: self.profile_name.clone(),
+            stress_current,
+            stress_total,
+            elapsed_nanos: self.stopwatch.snapshot().active.as_nanos() as u64,
+        });
+
         self.basic_callback(TestEventKind::StressSubRunStarted { progress })
     }
 
@@ -369,6 +419,39 @@ where
         let progress = self
             .stress_progress()
             .expect("stress_sub_run_finished called in non-stress test context");
+
+        // Fire the USDT probe for stress sub-run done.
+        let (stress_current, stress_total) = match &progress {
+            StressProgress::Count {
+                total,
+                completed,
+                elapsed: _,
+            } => {
+                let total = match total {
+                    StressCount::Count(n) => Some(n.get()),
+                    StressCount::Infinite => None,
+                };
+                (*completed - 1, total)
+            }
+            StressProgress::Time {
+                total: _,
+                elapsed: _,
+                completed,
+            } => (*completed - 1, None),
+        };
+        crate::fire_usdt!(UsdtStressSubRunDone {
+            stress_sub_run_id: progress.unique_id(self.run_id),
+            run_id: self.run_id,
+            profile_name: self.profile_name.clone(),
+            stress_current,
+            stress_total,
+            elapsed_nanos: self.stopwatch.snapshot().active.as_nanos() as u64,
+            sub_run_duration_nanos: sub_elapsed.as_nanos() as u64,
+            total_tests: self.run_stats.initial_run_count,
+            passed: self.run_stats.passed,
+            failed: self.run_stats.failed_count(),
+            skipped: self.run_stats.skipped,
+        });
 
         self.basic_callback(TestEventKind::StressSubRunFinished {
             progress,
@@ -947,21 +1030,42 @@ where
         }
     }
 
-    pub(super) fn run_finished(&mut self) -> StopwatchSnapshot {
+    pub(super) fn run_finished(&mut self) {
         let stopwatch_end = self.stopwatch.snapshot();
+
+        let stress_stats = self.stress_cx.run_stats(self.run_stats.summarize_final());
+        let (stress_completed, stress_success, stress_failed) = match &stress_stats {
+            Some(stats) => (
+                Some(stats.completed.current),
+                Some(stats.success_count),
+                Some(stats.failed_count),
+            ),
+            None => (None, None, None),
+        };
+
+        crate::fire_usdt!(UsdtRunDone {
+            run_id: self.run_id,
+            profile_name: self.profile_name.clone(),
+            total_tests: self.run_stats.initial_run_count,
+            passed: self.run_stats.passed,
+            failed: self.run_stats.failed_count(),
+            skipped: self.run_stats.skipped,
+            duration_nanos: stopwatch_end.active.as_nanos() as u64,
+            paused_nanos: stopwatch_end.paused.as_nanos() as u64,
+            stress_completed,
+            stress_success,
+            stress_failed,
+        });
+
         self.basic_callback(TestEventKind::RunFinished {
             start_time: stopwatch_end.start_time.fixed_offset(),
             run_id: self.run_id,
             elapsed: stopwatch_end.active,
-            run_stats: self
-                .stress_cx
-                .run_stats(self.run_stats.summarize_final())
-                .map_or_else(
-                    || RunFinishedStats::Single(self.run_stats),
-                    RunFinishedStats::Stress,
-                ),
-        });
-        stopwatch_end
+            run_stats: stress_stats.map_or_else(
+                || RunFinishedStats::Single(self.run_stats),
+                RunFinishedStats::Stress,
+            ),
+        })
     }
 
     pub(super) fn run_stats(&self) -> RunStats {
