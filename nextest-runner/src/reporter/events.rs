@@ -419,6 +419,14 @@ impl StressProgress {
             } => total.checked_sub(*elapsed).map(StressRemaining::Time),
         }
     }
+
+    /// Returns a unique ID for this stress sub-run, consisting of the run ID and stress index.
+    pub fn unique_id(&self, run_id: ReportUuid) -> String {
+        let stress_current = match self {
+            Self::Count { completed, .. } | Self::Time { completed, .. } => *completed,
+        };
+        format!("{}:@stress-{}", run_id, stress_current)
+    }
 }
 
 /// For a stress test, the amount of time or number of stress runs remaining.

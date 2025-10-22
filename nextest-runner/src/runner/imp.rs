@@ -321,16 +321,7 @@ impl<'a> TestRunnerInner<'a> {
         );
 
         // Send the initial event.
-        dispatcher_cx.run_started(self.test_list);
-
-        // Fire the USDT probe for run start.
-        crate::fire_usdt!(UsdtRunStart {
-            run_id: self.run_id,
-            profile_name: self.profile.name().to_owned(),
-            total_tests: self.test_list.test_count(),
-            filter_count: self.test_list.run_count(),
-            test_threads: self.test_threads,
-        });
+        dispatcher_cx.run_started(self.test_list, self.test_threads);
 
         let _guard = self.runtime.enter();
 
@@ -374,20 +365,7 @@ impl<'a> TestRunnerInner<'a> {
         }
 
         let run_stats = dispatcher_cx.run_stats();
-
-        let stopwatch_end = dispatcher_cx.run_finished();
-
-        // Fire the USDT probe for run completion.
-        crate::fire_usdt!(UsdtRunDone {
-            run_id: self.run_id,
-            profile_name: self.profile.name().to_owned(),
-            total_tests: run_stats.initial_run_count,
-            passed: run_stats.passed,
-            failed: run_stats.failed_count(),
-            skipped: run_stats.skipped,
-            duration_nanos: stopwatch_end.active.as_nanos() as u64,
-            paused_nanos: stopwatch_end.paused.as_nanos() as u64,
-        });
+        dispatcher_cx.run_finished();
 
         Ok(run_stats)
     }
