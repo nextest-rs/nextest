@@ -134,7 +134,7 @@ impl ProgressBarState {
                 ..
             } => {
                 self.add_test_bar(
-                    "Running".to_owned(),
+                    "".to_owned(),
                     &test_instance.suite_info.binary_id,
                     test_instance.name,
                     styles,
