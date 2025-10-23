@@ -137,21 +137,21 @@ impl ProgressBarState {
                     let tb = self.multi_progress.add(ProgressBar::new_spinner());
                     tb.set_style(
                         ProgressStyle::default_bar()
-                            .template(&format!(
-                                "     Running [{{elapsed_precise:>9}}] {}",
-                                DisplayTestInstance::new(
-                                    None,
-                                    None,
-                                    TestInstanceId {
-                                        binary_id: &test_instance.suite_info.binary_id,
-                                        test_name: test_instance.name,
-                                    },
-                                    &styles.list_styles
-                                )
-                            ))
+                            .template("     Running [{elapsed_precise:>9}] {wide_msg}")
                             .expect("template to be valid"),
                     );
-                    tb.tick();
+                    tb.set_message(
+                        DisplayTestInstance::new(
+                            None,
+                            None,
+                            TestInstanceId {
+                                binary_id: &test_instance.suite_info.binary_id,
+                                test_name: test_instance.name,
+                            },
+                            &styles.list_styles,
+                        )
+                        .to_string(),
+                    );
                     tb.enable_steady_tick(Duration::from_millis(100));
                     test_bars.insert(
                         RunningTestInstance {
