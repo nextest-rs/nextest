@@ -133,34 +133,12 @@ impl ProgressBarState {
                 test_instance,
                 ..
             } => {
-                if let Some(test_bars) = &mut self.test_bars {
-                    let tb = self.multi_progress.add(ProgressBar::new_spinner());
-                    tb.set_style(
-                        ProgressStyle::default_bar()
-                            .template("     Running [{elapsed_precise:>9}] {wide_msg}")
-                            .expect("template to be valid"),
-                    );
-                    tb.set_message(
-                        DisplayTestInstance::new(
-                            None,
-                            None,
-                            TestInstanceId {
-                                binary_id: &test_instance.suite_info.binary_id,
-                                test_name: test_instance.name,
-                            },
-                            &styles.list_styles,
-                        )
-                        .to_string(),
-                    );
-                    tb.enable_steady_tick(Duration::from_millis(100));
-                    test_bars.insert(
-                        RunningTestInstance {
-                            binary_id: test_instance.suite_info.binary_id.clone(),
-                            test_name: test_instance.name.to_owned(),
-                        },
-                        tb,
-                    );
-                }
+                self.add_test_bar(
+                    "Running".to_owned(),
+                    &test_instance.suite_info.binary_id,
+                    test_instance.name,
+                    styles,
+                );
 
                 self.hidden_between_sub_runs = false;
 
@@ -182,14 +160,7 @@ impl ProgressBarState {
                 test_instance,
                 ..
             } => {
-                if let Some(test_bars) = &mut self.test_bars {
-                    if let Some(tb) = test_bars.remove(&RunningTestInstance {
-                        binary_id: test_instance.suite_info.binary_id.clone(),
-                        test_name: test_instance.name.to_owned(),
-                    }) {
-                        tb.finish_and_clear();
-                    }
-                }
+                self.remove_test_bar(&test_instance.suite_info.binary_id, test_instance.name);
 
                 self.hidden_between_sub_runs = false;
 
@@ -204,6 +175,24 @@ impl ProgressBarState {
                 // in ProgressBar::new.
                 self.bar.set_length(current_stats.initial_run_count as u64);
                 self.bar.set_position(current_stats.finished_count as u64);
+            }
+            TestEventKind::TestAttemptFailedWillRetry { test_instance, .. } => {
+                self.remove_test_bar(&test_instance.suite_info.binary_id, test_instance.name);
+                self.add_test_bar(
+                    "DELAY".style(styles.retry).to_string(),
+                    &test_instance.suite_info.binary_id,
+                    test_instance.name,
+                    styles,
+                );
+            }
+            TestEventKind::TestRetryStarted { test_instance, .. } => {
+                self.remove_test_bar(&test_instance.suite_info.binary_id, test_instance.name);
+                self.add_test_bar(
+                    "RETRY".style(styles.retry).to_string(),
+                    &test_instance.suite_info.binary_id,
+                    test_instance.name,
+                    styles,
+                );
             }
             TestEventKind::InfoStarted { .. } => {
                 // While info is being displayed, hide the progress bar to avoid
@@ -243,6 +232,55 @@ impl ProgressBarState {
             (false, true) => self.multi_progress.set_draw_target(Self::hidden_target()),
             (true, false) => self.multi_progress.set_draw_target(Self::stderr_target()),
             _ => {}
+        }
+    }
+
+    fn add_test_bar(
+        &mut self,
+        status: String,
+        binary_id: &RustBinaryId,
+        test_name: &str,
+        styles: &Styles,
+    ) {
+        if let Some(test_bars) = &mut self.test_bars {
+            let tb = self.multi_progress.add(ProgressBar::new_spinner());
+            tb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{prefix:>12} [{elapsed_precise:>9}] {wide_msg}")
+                    .expect("template to be valid"),
+            );
+            tb.set_prefix(status);
+            tb.set_message(
+                DisplayTestInstance::new(
+                    None,
+                    None,
+                    TestInstanceId {
+                        binary_id,
+                        test_name,
+                    },
+                    &styles.list_styles,
+                )
+                .to_string(),
+            );
+            tb.enable_steady_tick(Duration::from_millis(100));
+            test_bars.insert(
+                RunningTestInstance {
+                    binary_id: binary_id.clone(),
+                    test_name: test_name.to_owned(),
+                },
+                tb,
+            );
+        }
+    }
+
+    fn remove_test_bar(&mut self, binary_id: &RustBinaryId, test_name: &str) {
+        if let Some(test_bars) = &mut self.test_bars {
+            if let Some(tb) = test_bars.remove(&RunningTestInstance {
+                binary_id: binary_id.clone(),
+                test_name: test_name.to_owned(),
+            }) {
+                tb.finish_and_clear();
+            }
         }
     }
 
