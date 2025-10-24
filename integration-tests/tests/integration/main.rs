@@ -864,7 +864,11 @@ fn test_archive_with_build_filter() {
                 file
             );
         }
-        run_archive_with_args(&archive_file, RunProperty::Relocated as u64, None);
+        run_archive_with_args(
+            &archive_file,
+            RunProperty::Relocated as u64,
+            NextestExitCode::TEST_RUN_FAILED,
+        );
     });
 
     // Check that no test files are present with the `none()` filter.
@@ -885,7 +889,7 @@ fn test_archive_with_build_filter() {
         run_archive_with_args(
             &archive_file,
             RunProperty::SkipSummaryCheck as u64 | RunProperty::ExpectNoBinaries as u64,
-            Some(NextestExitCode::NO_TESTS_RUN),
+            NextestExitCode::NO_TESTS_RUN,
         );
     });
 
@@ -910,7 +914,7 @@ fn test_archive_with_build_filter() {
         run_archive_with_args(
             &archive_file,
             RunProperty::CdyLibPackageFilter as u64 | RunProperty::SkipSummaryCheck as u64,
-            Some(NextestExitCode::OK),
+            NextestExitCode::OK,
         );
     });
 }
@@ -1074,19 +1078,21 @@ fn create_archive_with_args(
 }
 
 fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
-    run_archive_with_args(archive_file, RunProperty::Relocated as u64, None)
+    run_archive_with_args(
+        archive_file,
+        RunProperty::Relocated as u64,
+        NextestExitCode::TEST_RUN_FAILED,
+    )
 }
 
 fn run_archive_with_args(
     archive_file: &Utf8Path,
     run_property: u64,
-    expected_exit_code: Option<i32>,
+    expected_exit_code: i32,
 ) -> (TempProject, Utf8PathBuf) {
     let p2 = TempProject::new().unwrap();
     let extract_to = p2.workspace_root().join("extract_to");
     std::fs::create_dir_all(&extract_to).unwrap();
-
-    let exit_code: i32 = expected_exit_code.unwrap_or(NextestExitCode::TEST_RUN_FAILED);
 
     let output = CargoNextestCli::for_test()
         .args([
@@ -1102,7 +1108,7 @@ fn run_archive_with_args(
         .output();
     assert_eq!(
         output.exit_status.code(),
-        Some(exit_code),
+        Some(expected_exit_code),
         "correct exit code for command\n{output}"
     );
     check_run_output(&output.stderr, run_property);
