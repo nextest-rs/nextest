@@ -1768,10 +1768,10 @@ impl App {
         let test_artifacts: BTreeSet<_> = test_artifacts
             .iter()
             .filter(|test_artifact| {
-                matches!(
-                    test_filter_builder.filter_binary_match(test_artifact, &ecx, filter_bound),
-                    FilterBinaryMatch::Definite | FilterBinaryMatch::Possible
-                )
+                let filter_match =
+                    test_filter_builder.filter_binary_match(test_artifact, &ecx, filter_bound);
+                debug_assert!(!matches!(filter_match, FilterBinaryMatch::Possible));
+                matches!(filter_match, FilterBinaryMatch::Definite)
             })
             .map(|test_artifact| &test_artifact.binary_id)
             .collect();
