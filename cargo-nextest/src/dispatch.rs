@@ -201,7 +201,8 @@ impl AppOpts {
                     self.common.manifest_path,
                     output_writer,
                 )?;
-                let app = App::new(app, build_filter)?;
+
+                let app = App::new(app, build_filter.into())?;
                 app.exec_archive(&archive_file, archive_format, zstd_level, output_writer)?;
                 Ok(0)
             }
@@ -395,7 +396,7 @@ enum Command {
         archive_format: ArchiveFormatOpt,
 
         #[clap(flatten)]
-        build_filter: TestBuildFilter,
+        build_filter: ArchiveBuildFilter,
 
         /// Zstandard compression level (-7 to 22, higher is more compressed + slower)
         #[arg(
@@ -761,6 +762,57 @@ impl TestBuildFilter {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Args)]
+#[command(next_help_heading = "Filter options")]
+struct ArchiveBuildFilter {
+    /// Test filterset (see {n}<https://nexte.st/docs/filtersets>).
+    #[arg(
+        long,
+        alias = "filter-expr",
+        short = 'E',
+        value_name = "EXPR",
+        action(ArgAction::Append)
+    )]
+    filterset: Vec<String>,
+
+    /// Ignore the default filter configured in the profile.
+    ///
+    /// By default, all filtersets are intersected with the default filter configured in the
+    /// profile. This flag disables that behavior.
+    ///
+    /// This flag doesn't change the definition of the `default()` filterset.
+    #[arg(long)]
+    ignore_default_filter: bool,
+
+    /// Test name filters.
+    #[arg(help_heading = None, name = "FILTERS")]
+    pre_double_dash_filters: Vec<String>,
+
+    /// Test name filters and emulated test binary arguments.
+    ///
+    /// Supported arguments:{n}
+    /// - --ignored:         Only run ignored tests{n}
+    /// - --include-ignored: Run both ignored and non-ignored tests{n}
+    /// - --skip PATTERN:    Skip tests that match the pattern{n}
+    /// - --exact:           Run tests that exactly match patterns after `--`
+    #[arg(help_heading = None, value_name = "FILTERS_AND_ARGS", last = true)]
+    filters: Vec<String>,
+}
+
+impl From<ArchiveBuildFilter> for TestBuildFilter {
+    fn from(value: ArchiveBuildFilter) -> Self {
+        TestBuildFilter {
+            run_ignored: None,
+            partition: None,
+            platform_filter: PlatformFilterOpts::default(),
+            filterset: value.filterset,
+            ignore_default_filter: value.ignore_default_filter,
+            pre_double_dash_filters: value.pre_double_dash_filters,
+            filters: value.filters,
+        }
     }
 }
 
