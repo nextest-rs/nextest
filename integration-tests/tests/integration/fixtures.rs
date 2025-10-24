@@ -174,6 +174,9 @@ pub enum RunProperty {
     WithSkipCdylibFilter = 4,
     // --exact test_multiply_two tests::test_multiply_two_cdylib
     WithMultiplyTwoExactFilter = 8,
+    CdyLibPackageFilter = 0x21,
+    SkipSummaryCheck = 0x22,
+    ExpectNoBinaries = 0x24,
 }
 
 fn debug_run_properties(properties: u64) -> String {
@@ -189,6 +192,15 @@ fn debug_run_properties(properties: u64) -> String {
     }
     if properties & RunProperty::WithMultiplyTwoExactFilter as u64 != 0 {
         ret.push_str("with-exact-filter ");
+    }
+    if properties & RunProperty::CdyLibPackageFilter as u64 != 0 {
+        ret.push_str("with-dylib-package-filter ");
+    }
+    if properties & RunProperty::SkipSummaryCheck as u64 != 0 {
+        ret.push_str("with-skip-summary-check ");
+    }
+    if properties & RunProperty::ExpectNoBinaries as u64 != 0 {
+        ret.push_str("with-expect-no-binaries ");
     }
     ret
 }
@@ -213,6 +225,7 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
         let binary_id = &fixture.binary_id;
         if fixture.has_property(TestSuiteFixtureProperty::NotInDefaultSet)
             && properties & RunProperty::WithDefaultFilter as u64 != 0
+            && properties & RunProperty::CdyLibPackageFilter as u64 == 0
         {
             eprintln!("*** skipping {binary_id}");
             for test in &fixture.test_cases {
@@ -330,13 +343,35 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
                     continue;
                 }
             };
+
             let name = format!("{} {}", binary_id, test.name);
             let reg = result.make_status_line_regex(&name);
-            assert!(
-                reg.is_match(&output),
-                "{name}: status line result didn't match\n\n\
+            let is_match = reg.is_match(&output);
+
+            if properties & RunProperty::CdyLibPackageFilter as u64
+                == RunProperty::CdyLibPackageFilter as u64
+                && test.name != "tests::test_multiply_two_cdylib"
+            {
+                assert!(
+                    !is_match,
+                    "{name}: should not run when `RunProperty::CdyLibPackageFilter` is set \n\n\
                  --- output ---\n{output}\n--- end output ---"
-            );
+                );
+            } else if properties & RunProperty::ExpectNoBinaries as u64
+                == RunProperty::ExpectNoBinaries as u64
+            {
+                assert!(
+                    !is_match,
+                    "{name}: should not run when `RunProperty::ExpectNoBinaries` is set \n\n\
+                 --- output ---\n{output}\n--- end output ---"
+                );
+            } else {
+                assert!(
+                    is_match,
+                    "{name}: status line result didn't match\n\n\
+                 --- output ---\n{output}\n--- end output ---"
+                );
+            }
 
             // It would be nice to check for output regexes here, but it's a bit
             // inconvenient.
@@ -372,6 +407,11 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
             )
         }
     };
+
+    if properties & RunProperty::SkipSummaryCheck as u64 != 0 {
+        return;
+    }
+
     let summary_reg = Regex::new(&summary_regex_str).unwrap();
     assert!(
         summary_reg.is_match(&output),

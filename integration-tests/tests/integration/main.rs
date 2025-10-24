@@ -854,7 +854,7 @@ fn test_archive_with_build_filter() {
         .collect();
 
     // Check that all test files are present with the `all()` filter.
-    check_archive_contents("all()", |paths| {
+    check_archive_contents("all()", |archive_file, paths| {
         for file in all_test_binaries.iter() {
             assert!(
                 paths
@@ -864,10 +864,11 @@ fn test_archive_with_build_filter() {
                 file
             );
         }
+        run_archive_with_args(&archive_file, RunProperty::Relocated as u64, None);
     });
 
     // Check that no test files are present with the `none()` filter.
-    check_archive_contents("none()", |paths| {
+    check_archive_contents("none()", |archive_file, paths| {
         for file in all_test_binaries.iter() {
             assert!(
                 !paths
@@ -881,12 +882,17 @@ fn test_archive_with_build_filter() {
                 file
             );
         }
+        run_archive_with_args(
+            &archive_file,
+            RunProperty::SkipSummaryCheck as u64 | RunProperty::ExpectNoBinaries as u64,
+            Some(NextestExitCode::NO_TESTS_RUN),
+        );
     });
 
     let expected_package_test_file = "cdylib_example";
     let filtered_test = "nextest_tests";
     // Check that test files are filtered by the `package()` filter.
-    check_archive_contents("package(cdylib-example)", |paths| {
+    check_archive_contents("package(cdylib-example)", |archive_file, paths| {
         assert!(
             paths
                 .iter()
@@ -900,6 +906,11 @@ fn test_archive_with_build_filter() {
                 .any(|path| path_contains_test_fixture_file(path, filtered_test)),
             "{:?} was present in the test archive but it should be missing",
             filtered_test
+        );
+        run_archive_with_args(
+            &archive_file,
+            RunProperty::CdyLibPackageFilter as u64 | RunProperty::SkipSummaryCheck as u64,
+            Some(NextestExitCode::OK),
         );
     });
 }
@@ -936,10 +947,10 @@ fn test_archive_with_unsupported_test_filter() {
     );
 }
 
-fn check_archive_contents(filter: &str, cb: impl FnOnce(Vec<PathBuf>)) {
+fn check_archive_contents(filter: &str, cb: impl FnOnce(Utf8PathBuf, Vec<PathBuf>)) {
     let (_p1, archive_file) =
         create_archive_with_args("", false, "", &["-E", filter], false).expect("archive succeeded");
-    let file = File::open(archive_file).unwrap();
+    let file = File::open(archive_file.clone()).unwrap();
     let decoder = zstd::stream::read::Decoder::new(file).unwrap();
     let mut archive = tar::Archive::new(decoder);
     let paths = archive
@@ -947,7 +958,7 @@ fn check_archive_contents(filter: &str, cb: impl FnOnce(Vec<PathBuf>)) {
         .unwrap()
         .map(|e| e.unwrap().path().unwrap().into_owned())
         .collect::<Vec<_>>();
-    cb(paths);
+    cb(archive_file, paths);
 }
 
 const APP_DATA_DIR: &str = "application-data";
@@ -1063,9 +1074,19 @@ fn create_archive_with_args(
 }
 
 fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
+    run_archive_with_args(archive_file, RunProperty::Relocated as u64, None)
+}
+
+fn run_archive_with_args(
+    archive_file: &Utf8Path,
+    run_property: u64,
+    expected_exit_code: Option<i32>,
+) -> (TempProject, Utf8PathBuf) {
     let p2 = TempProject::new().unwrap();
     let extract_to = p2.workspace_root().join("extract_to");
     std::fs::create_dir_all(&extract_to).unwrap();
+
+    let exit_code: i32 = expected_exit_code.unwrap_or(NextestExitCode::TEST_RUN_FAILED);
 
     let output = CargoNextestCli::for_test()
         .args([
@@ -1079,13 +1100,12 @@ fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
         ])
         .unchecked(true)
         .output();
-
     assert_eq!(
         output.exit_status.code(),
-        Some(NextestExitCode::TEST_RUN_FAILED),
+        Some(exit_code),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, RunProperty::Relocated as u64);
+    check_run_output(&output.stderr, run_property);
 
     // project is included in return value to keep tempdirs alive
     (p2, extract_to.join("target"))
