@@ -777,29 +777,6 @@ struct ArchiveBuildFilter {
         action(ArgAction::Append)
     )]
     filterset: Vec<String>,
-
-    /// Ignore the default filter configured in the profile.
-    ///
-    /// By default, all filtersets are intersected with the default filter configured in the
-    /// profile. This flag disables that behavior.
-    ///
-    /// This flag doesn't change the definition of the `default()` filterset.
-    #[arg(long)]
-    ignore_default_filter: bool,
-
-    /// Test name filters.
-    #[arg(help_heading = None, name = "FILTERS")]
-    pre_double_dash_filters: Vec<String>,
-
-    /// Test name filters and emulated test binary arguments.
-    ///
-    /// Supported arguments:{n}
-    /// - --ignored:         Only run ignored tests{n}
-    /// - --include-ignored: Run both ignored and non-ignored tests{n}
-    /// - --skip PATTERN:    Skip tests that match the pattern{n}
-    /// - --exact:           Run tests that exactly match patterns after `--`
-    #[arg(help_heading = None, value_name = "FILTERS_AND_ARGS", last = true)]
-    filters: Vec<String>,
 }
 
 impl From<ArchiveBuildFilter> for TestBuildFilter {
@@ -809,9 +786,9 @@ impl From<ArchiveBuildFilter> for TestBuildFilter {
             partition: None,
             platform_filter: PlatformFilterOpts::default(),
             filterset: value.filterset,
-            ignore_default_filter: value.ignore_default_filter,
-            pre_double_dash_filters: value.pre_double_dash_filters,
-            filters: value.filters,
+            ignore_default_filter: false,
+            pre_double_dash_filters: Vec::new(),
+            filters: Vec::new(),
         }
     }
 }
