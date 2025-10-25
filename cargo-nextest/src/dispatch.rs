@@ -1618,10 +1618,7 @@ impl App {
     fn new(base: BaseApp, build_filter: TestBuildFilter) -> Result<Self> {
         check_experimental_filtering(base.output);
 
-        Ok(Self {
-            base,
-            build_filter,
-        })
+        Ok(Self { base, build_filter })
     }
 
     fn build_test_list(
