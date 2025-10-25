@@ -46,7 +46,8 @@ use nextest_runner::{
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{
-        FilterBinaryMatch, FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns,
+        BinaryFilter, FilterBinaryMatch, FilterBound, RunIgnored, TestFilterBuilder,
+        TestFilterPatterns,
     },
     test_output::CaptureStrategy,
     write_str::WriteStr,
@@ -190,7 +191,7 @@ impl AppOpts {
                 cargo_options,
                 archive_file,
                 archive_format,
-                build_filter,
+                archive_build_filter,
                 zstd_level,
             } => {
                 let app = BaseApp::new(
@@ -202,7 +203,7 @@ impl AppOpts {
                     output_writer,
                 )?;
 
-                let app = App::new(app, build_filter.into())?;
+                let app = ArchiveApp::new(app, archive_build_filter)?;
                 app.exec_archive(&archive_file, archive_format, zstd_level, output_writer)?;
                 Ok(0)
             }
@@ -396,7 +397,7 @@ enum Command {
         archive_format: ArchiveFormatOpt,
 
         #[clap(flatten)]
-        build_filter: ArchiveBuildFilter,
+        archive_build_filter: ArchiveBuildFilter,
 
         /// Zstandard compression level (-7 to 22, higher is more compressed + slower)
         #[arg(
@@ -777,20 +778,6 @@ struct ArchiveBuildFilter {
         action(ArgAction::Append)
     )]
     filterset: Vec<String>,
-}
-
-impl From<ArchiveBuildFilter> for TestBuildFilter {
-    fn from(value: ArchiveBuildFilter) -> Self {
-        TestBuildFilter {
-            run_ignored: None,
-            partition: None,
-            platform_filter: PlatformFilterOpts::default(),
-            filterset: value.filterset,
-            ignore_default_filter: false,
-            pre_double_dash_filters: Vec::new(),
-            filters: Vec::new(),
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -1631,26 +1618,10 @@ impl App {
     fn new(base: BaseApp, build_filter: TestBuildFilter) -> Result<Self> {
         check_experimental_filtering(base.output);
 
-        Ok(Self { base, build_filter })
-    }
-
-    fn build_filtering_expressions(
-        &self,
-        pcx: &ParseContext<'_>,
-        kind: FiltersetKind,
-    ) -> Result<Vec<Filterset>> {
-        let (exprs, all_errors): (Vec<_>, Vec<_>) = self
-            .build_filter
-            .filterset
-            .iter()
-            .map(|input| Filterset::parse(input.clone(), pcx, kind))
-            .partition_result();
-
-        if !all_errors.is_empty() {
-            Err(ExpectedError::filter_expression_parse_error(all_errors))
-        } else {
-            Ok(exprs)
-        }
+        Ok(Self {
+            base,
+            build_filter: build_filter,
+        })
     }
 
     fn build_test_list(
@@ -1683,7 +1654,8 @@ impl App {
 
         let (version_only_config, config) = self.base.load_config(&pcx)?;
         let profile = self.base.load_profile(&config)?;
-        let filter_exprs = self.build_filtering_expressions(&pcx, FiltersetKind::Test)?;
+        let filter_exprs =
+            build_filtering_expressions(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
@@ -1735,123 +1707,6 @@ impl App {
         Ok(())
     }
 
-    fn exec_archive(
-        &self,
-        output_file: &Utf8Path,
-        format: ArchiveFormatOpt,
-        zstd_level: i32,
-        output_writer: &mut OutputWriter,
-    ) -> Result<()> {
-        // Do format detection first so we fail immediately.
-        let format = format.to_archive_format(output_file)?;
-        let binary_list = self.base.build_binary_list()?;
-        let path_mapper = PathMapper::noop();
-        let build_platforms = &binary_list.rust_build_meta.build_platforms;
-        let pcx = ParseContext::new(self.base.graph());
-        let (_, config) = self.base.load_config(&pcx)?;
-        let profile = self
-            .base
-            .load_profile(&config)?
-            .apply_build_platforms(build_platforms);
-        let redactor = if should_redact() {
-            Redactor::build_active(&binary_list.rust_build_meta)
-                .with_path(output_file.to_path_buf(), "<archive-file>".to_owned())
-                .build()
-        } else {
-            Redactor::noop()
-        };
-        let mut reporter = ArchiveReporter::new(self.base.output.verbose, redactor.clone());
-
-        if self
-            .base
-            .output
-            .color
-            .should_colorize(supports_color::Stream::Stderr)
-        {
-            reporter.colorize();
-        }
-
-        let rust_build_meta = binary_list.rust_build_meta.map_paths(&path_mapper);
-        let test_artifacts = RustTestArtifact::from_binary_list(
-            self.base.graph(),
-            binary_list.clone(),
-            &rust_build_meta,
-            &path_mapper,
-            self.build_filter.platform_filter.into(),
-        )?;
-
-        let filter_bound = {
-            if self.build_filter.ignore_default_filter {
-                FilterBound::All
-            } else {
-                FilterBound::DefaultSet
-            }
-        };
-
-        let filter_exprs = self.build_filtering_expressions(&pcx, FiltersetKind::TestArchive)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
-
-        let ecx = profile.filterset_ecx();
-
-        // Apply filterset to `RustTestArtifact` list.
-        let test_artifacts: BTreeSet<_> = test_artifacts
-            .iter()
-            .filter(|test_artifact| {
-                let filter_match =
-                    test_filter_builder.filter_binary_match(test_artifact, &ecx, filter_bound);
-                debug_assert!(!matches!(filter_match, FilterBinaryMatch::Possible));
-                matches!(filter_match, FilterBinaryMatch::Definite)
-            })
-            .map(|test_artifact| &test_artifact.binary_id)
-            .collect();
-
-        let filtered_binaries: Vec<_> = binary_list
-            .rust_binaries
-            .iter()
-            .filter(|binary| test_artifacts.contains(&binary.id))
-            .cloned()
-            .collect();
-
-        if filtered_binaries.len() < binary_list.rust_binaries.len() {
-            info!(
-                "archiving {} of {} test binaries after filtering",
-                filtered_binaries.len(),
-                binary_list.rust_binaries.len()
-            );
-        }
-
-        let binary_list_to_archive = BinaryList {
-            rust_build_meta: binary_list.rust_build_meta.clone(),
-            rust_binaries: filtered_binaries,
-        };
-
-        let mut writer = output_writer.stderr_writer();
-        archive_to_file(
-            profile,
-            &binary_list_to_archive,
-            &self.base.cargo_metadata_json,
-            &self.base.package_graph,
-            // Note that path_mapper is currently a no-op -- we don't support reusing builds for
-            // archive creation because it's too confusing.
-            &path_mapper,
-            format,
-            zstd_level,
-            output_file,
-            |event| {
-                reporter.report_event(event, &mut writer)?;
-                writer.flush()
-            },
-            redactor.clone(),
-        )
-        .map_err(|err| ExpectedError::ArchiveCreateError {
-            archive_file: output_file.to_owned(),
-            err,
-            redactor,
-        })?;
-
-        Ok(())
-    }
-
     fn exec_show_test_groups(
         &self,
         show_default: bool,
@@ -1871,7 +1726,8 @@ impl App {
         };
         let settings = ShowTestGroupSettings { mode, show_default };
 
-        let filter_exprs = self.build_filtering_expressions(&pcx, FiltersetKind::Test)?;
+        let filter_exprs =
+            build_filtering_expressions(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
@@ -1968,7 +1824,8 @@ impl App {
             reporter_opts.to_builder(runner_opts.no_run, no_capture, should_colorize);
         reporter_builder.set_verbose(self.base.output.verbose);
 
-        let filter_exprs = self.build_filtering_expressions(&pcx, FiltersetKind::Test)?;
+        let filter_exprs =
+            build_filtering_expressions(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
@@ -2055,6 +1912,134 @@ impl App {
                 Err(ExpectedError::test_run_failed())
             }
         }
+    }
+}
+
+#[derive(Debug)]
+struct ArchiveApp {
+    base: BaseApp,
+    archive_filter: ArchiveBuildFilter,
+}
+
+impl ArchiveApp {
+    fn new(base: BaseApp, archive_filter: ArchiveBuildFilter) -> Result<Self> {
+        Ok(Self {
+            base,
+            archive_filter,
+        })
+    }
+
+    fn exec_archive(
+        &self,
+        output_file: &Utf8Path,
+        format: ArchiveFormatOpt,
+        zstd_level: i32,
+        output_writer: &mut OutputWriter,
+    ) -> Result<()> {
+        // Do format detection first so we fail immediately.
+        let format = format.to_archive_format(output_file)?;
+        let binary_list = self.base.build_binary_list()?;
+        let path_mapper = PathMapper::noop();
+        let build_platforms = &binary_list.rust_build_meta.build_platforms;
+        let pcx = ParseContext::new(self.base.graph());
+        let (_, config) = self.base.load_config(&pcx)?;
+        let profile = self
+            .base
+            .load_profile(&config)?
+            .apply_build_platforms(build_platforms);
+        let redactor = if should_redact() {
+            Redactor::build_active(&binary_list.rust_build_meta)
+                .with_path(output_file.to_path_buf(), "<archive-file>".to_owned())
+                .build()
+        } else {
+            Redactor::noop()
+        };
+        let mut reporter = ArchiveReporter::new(self.base.output.verbose, redactor.clone());
+
+        if self
+            .base
+            .output
+            .color
+            .should_colorize(supports_color::Stream::Stderr)
+        {
+            reporter.colorize();
+        }
+
+        let rust_build_meta = binary_list.rust_build_meta.map_paths(&path_mapper);
+        let test_artifacts = RustTestArtifact::from_binary_list(
+            self.base.graph(),
+            binary_list.clone(),
+            &rust_build_meta,
+            &path_mapper,
+            None,
+        )?;
+
+        let filter_exprs = build_filtering_expressions(
+            &pcx,
+            &self.archive_filter.filterset,
+            FiltersetKind::TestArchive,
+        )?;
+
+        let binary_filter = BinaryFilter::new(filter_exprs);
+        let ecx = profile.filterset_ecx();
+
+        // Apply filterset to `RustTestArtifact` list.
+        let test_artifacts: BTreeSet<_> = test_artifacts
+            .iter()
+            .filter(|test_artifact| {
+                let filter_match =
+                    binary_filter.check_match(test_artifact, &ecx, FilterBound::DefaultSet);
+                debug_assert!(!matches!(filter_match, FilterBinaryMatch::Possible));
+                matches!(filter_match, FilterBinaryMatch::Definite)
+            })
+            .map(|test_artifact| &test_artifact.binary_id)
+            .collect();
+
+        let filtered_binaries: Vec<_> = binary_list
+            .rust_binaries
+            .iter()
+            .filter(|binary| test_artifacts.contains(&binary.id))
+            .cloned()
+            .collect();
+
+        if filtered_binaries.len() < binary_list.rust_binaries.len() {
+            info!(
+                "archiving {} of {} test binaries after filtering",
+                filtered_binaries.len(),
+                binary_list.rust_binaries.len()
+            );
+        }
+
+        let binary_list_to_archive = BinaryList {
+            rust_build_meta: binary_list.rust_build_meta.clone(),
+            rust_binaries: filtered_binaries,
+        };
+
+        let mut writer = output_writer.stderr_writer();
+        archive_to_file(
+            profile,
+            &binary_list_to_archive,
+            &self.base.cargo_metadata_json,
+            &self.base.package_graph,
+            // Note that path_mapper is currently a no-op -- we don't support reusing builds for
+            // archive creation because it's too confusing.
+            &path_mapper,
+            format,
+            zstd_level,
+            output_file,
+            |event| {
+                reporter.report_event(event, &mut writer)?;
+                writer.flush()
+            },
+            redactor.clone(),
+        )
+        .map_err(|err| ExpectedError::ArchiveCreateError {
+            archive_file: output_file.to_owned(),
+            err,
+            redactor,
+        })?;
+
+        Ok(())
     }
 }
 
@@ -2626,6 +2611,23 @@ fn warn_on_err(thing: &str, err: &dyn std::error::Error, styles: &StderrStyles) 
     }
 
     warn!("{}", s);
+}
+
+fn build_filtering_expressions(
+    pcx: &ParseContext<'_>,
+    filter_set: &Vec<String>,
+    kind: FiltersetKind,
+) -> Result<Vec<Filterset>> {
+    let (exprs, all_errors): (Vec<_>, Vec<_>) = filter_set
+        .iter()
+        .map(|input| Filterset::parse(input.clone(), pcx, kind))
+        .partition_result();
+
+    if !all_errors.is_empty() {
+        Err(ExpectedError::filter_expression_parse_error(all_errors))
+    } else {
+        Ok(exprs)
+    }
 }
 
 #[cfg(test)]

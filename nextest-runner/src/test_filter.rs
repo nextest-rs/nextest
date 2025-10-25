@@ -41,13 +41,72 @@ pub enum FilterBound {
     All,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Filters Binaries based on `TestFilterExprs`.
+pub struct BinaryFilter {
+    exprs: TestFilterExprs,
+}
+
+impl BinaryFilter {
+    /// Creates a new `BinaryFilter` from `exprs`.
+    ///
+    /// If `exprs` is an empty slice, all binaries will match.
+    pub fn new(exprs: Vec<Filterset>) -> Self {
+        let exprs = if exprs.is_empty() {
+            TestFilterExprs::All
+        } else {
+            TestFilterExprs::Sets(exprs)
+        };
+        Self { exprs }
+    }
+
+    /// Returns a value indicating whether this binary should or should not be run to obtain the
+    /// list of tests within it.
+    pub fn check_match(
+        &self,
+        test_binary: &RustTestArtifact<'_>,
+        ecx: &EvalContext<'_>,
+        bound: FilterBound,
+    ) -> FilterBinaryMatch {
+        let query = test_binary.to_binary_query();
+        let expr_result = match &self.exprs {
+            TestFilterExprs::All => FilterBinaryMatch::Definite,
+            TestFilterExprs::Sets(exprs) => exprs.iter().fold(
+                FilterBinaryMatch::Mismatch {
+                    // Just use this as a placeholder as the lowest possible value.
+                    reason: BinaryMismatchReason::Expression,
+                },
+                |acc, expr| {
+                    acc.logic_or(FilterBinaryMatch::from_result(
+                        expr.matches_binary(&query, ecx),
+                        BinaryMismatchReason::Expression,
+                    ))
+                },
+            ),
+        };
+
+        // If none of the expressions matched, then there's no need to check the default set.
+        if !expr_result.is_match() {
+            return expr_result;
+        }
+
+        match bound {
+            FilterBound::All => expr_result,
+            FilterBound::DefaultSet => expr_result.logic_and(FilterBinaryMatch::from_result(
+                ecx.default_filter.matches_binary(&query, ecx),
+                BinaryMismatchReason::DefaultSet,
+            )),
+        }
+    }
+}
+
 /// A builder for `TestFilter` instances.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TestFilterBuilder {
     run_ignored: RunIgnored,
     partitioner_builder: Option<PartitionerBuilder>,
     patterns: ResolvedFilterPatterns,
-    exprs: TestFilterExprs,
+    binary_filter: BinaryFilter,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -375,28 +434,14 @@ impl TestFilterBuilder {
     ) -> Result<Self, TestFilterBuilderError> {
         let patterns = patterns.resolve()?;
 
-        let exprs = if exprs.is_empty() {
-            TestFilterExprs::All
-        } else {
-            TestFilterExprs::Sets(exprs)
-        };
+        let binary_filter = BinaryFilter::new(exprs);
 
         Ok(Self {
             run_ignored,
             partitioner_builder,
             patterns,
-            exprs,
+            binary_filter,
         })
-    }
-
-    /// Creates a new `TestFilterBuilder` that matches the default set of tests.
-    pub fn default_set(run_ignored: RunIgnored) -> Self {
-        Self {
-            run_ignored,
-            partitioner_builder: None,
-            patterns: ResolvedFilterPatterns::default(),
-            exprs: TestFilterExprs::All,
-        }
     }
 
     /// Returns a value indicating whether this binary should or should not be run to obtain the
@@ -410,34 +455,17 @@ impl TestFilterBuilder {
         ecx: &EvalContext<'_>,
         bound: FilterBound,
     ) -> FilterBinaryMatch {
-        let query = test_binary.to_binary_query();
-        let expr_result = match &self.exprs {
-            TestFilterExprs::All => FilterBinaryMatch::Definite,
-            TestFilterExprs::Sets(exprs) => exprs.iter().fold(
-                FilterBinaryMatch::Mismatch {
-                    // Just use this as a placeholder as the lowest possible value.
-                    reason: BinaryMismatchReason::Expression,
-                },
-                |acc, expr| {
-                    acc.logic_or(FilterBinaryMatch::from_result(
-                        expr.matches_binary(&query, ecx),
-                        BinaryMismatchReason::Expression,
-                    ))
-                },
-            ),
-        };
+        self.binary_filter.check_match(test_binary, ecx, bound)
+    }
 
-        // If none of the expressions matched, then there's no need to check the default set.
-        if !expr_result.is_match() {
-            return expr_result;
-        }
-
-        match bound {
-            FilterBound::All => expr_result,
-            FilterBound::DefaultSet => expr_result.logic_and(FilterBinaryMatch::from_result(
-                ecx.default_filter.matches_binary(&query, ecx),
-                BinaryMismatchReason::DefaultSet,
-            )),
+    /// Creates a new `TestFilterBuilder` that matches the default set of tests.
+    pub fn default_set(run_ignored: RunIgnored) -> Self {
+        let binary_filter = BinaryFilter::new(Vec::new());
+        Self {
+            run_ignored,
+            partitioner_builder: None,
+            patterns: ResolvedFilterPatterns::default(),
+            binary_filter,
         }
     }
 
@@ -653,7 +681,7 @@ impl TestFilter<'_> {
             test_name,
         };
 
-        let expr_result = match &self.builder.exprs {
+        let expr_result = match &self.builder.binary_filter.exprs {
             TestFilterExprs::All => FilterNameMatch::MatchEmptyPatterns,
             TestFilterExprs::Sets(exprs) => {
                 if exprs.iter().any(|expr| expr.matches_test(&query, ecx)) {
