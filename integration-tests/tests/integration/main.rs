@@ -29,7 +29,7 @@ use integration_tests::{
     nextest_cli::{CargoNextestCli, CargoNextestOutput},
 };
 use nextest_metadata::{BuildPlatform, NextestExitCode, TestListSummary};
-use std::{borrow::Cow, ffi::OsStr, fs::File, io::Write, path::PathBuf};
+use std::{borrow::Cow, fs::File, io::Write};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
 
 mod fixtures;
@@ -850,7 +850,8 @@ fn test_archive_with_build_filter() {
 
     let all_test_binaries: Vec<String> = EXPECTED_TEST_SUITES
         .iter()
-        // The test fixture binary name uses hyphens, but the files will use an underscore.
+        // The test fixture binary name uses hyphens, but the files will use an
+        // underscore.
         .map(|fixture| fixture.binary_name.replace("-", "_"))
         .collect();
 
@@ -875,17 +876,20 @@ fn test_archive_with_build_filter() {
     // Check that no test files are present with the `none()` filter.
     check_archive_contents("none()", |archive_file, paths| {
         for file in all_test_binaries.iter() {
-            assert!(
-                !paths
-                    .iter()
-                    .filter(|path| path
-                        .ancestors()
-                        // Test files are in the `deps` folder.
-                        .any(|folder| folder.file_name() == Some(OsStr::new("deps"))))
-                    .any(|path| path_contains_test_fixture_file(path, file)),
-                "{:?} was present in the test archive but it should be missing",
-                file
-            );
+            if let Some(found) = paths
+                .iter()
+                .filter(|path| {
+                    path.ancestors()
+                        // Test binaries are in the `deps` folder.
+                        .any(|folder| folder.file_name() == Some("deps"))
+                })
+                .find(|path| path_contains_test_fixture_file(path, file))
+            {
+                panic!(
+                    "{} was present in the test archive as {}, but it should be missing",
+                    file, found
+                );
+            }
         }
         run_archive_with_args(
             &archive_file,
@@ -922,17 +926,14 @@ fn test_archive_with_build_filter() {
 
 /// Checks if the file name at `path` contains `expected_file_name`
 /// Returns `true` if it does, otherwise `false`.
-fn path_contains_test_fixture_file(path: &PathBuf, expected_file_name: &str) -> bool {
+fn path_contains_test_fixture_file(path: &Utf8Path, expected_file_name: &str) -> bool {
     let file_name = path.file_name().unwrap_or_else(|| {
         panic!(
             "test fixture path {:?} did not have a file name, does the path contain '..'?",
             path
         )
     });
-    file_name
-        .to_str()
-        .unwrap_or_else(|| panic!("file name: {:?} is not valid utf-8", file_name))
-        .contains(expected_file_name)
+    file_name.contains(expected_file_name)
 }
 
 #[test]
@@ -952,7 +953,7 @@ fn test_archive_with_unsupported_test_filter() {
     );
 }
 
-fn check_archive_contents(filter: &str, cb: impl FnOnce(Utf8PathBuf, Vec<PathBuf>)) {
+fn check_archive_contents(filter: &str, cb: impl FnOnce(Utf8PathBuf, Vec<Utf8PathBuf>)) {
     let (_p1, archive_file) =
         create_archive_with_args("", false, "", &["-E", filter], false).expect("archive succeeded");
     let file = File::open(archive_file.clone()).unwrap();
@@ -961,7 +962,7 @@ fn check_archive_contents(filter: &str, cb: impl FnOnce(Utf8PathBuf, Vec<PathBuf
     let paths = archive
         .entries()
         .unwrap()
-        .map(|e| e.unwrap().path().unwrap().into_owned())
+        .map(|e| e.unwrap().path().unwrap().into_owned().try_into().unwrap())
         .collect::<Vec<_>>();
     cb(archive_file, paths);
 }

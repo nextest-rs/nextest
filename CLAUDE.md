@@ -1,3 +1,7 @@
+# General guidelines
+
+- Always use `cargo nextest run` to run tests, and `cargo test --doc` to run doctests. Never use `cargo test` for unit or integration tests.
+
 # Changelog Format Guide
 
 This document describes the format and conventions used in `site/src/changelog.md`.

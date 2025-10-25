@@ -5,10 +5,15 @@ experimental = ["setup-scripts"]
 final-status-level = "slow"
 
 [[profile.default.overrides]]
-# test_subprocess_doesnt_exit runs a sleep command for 360 seconds. If integration tests take longer
-# than 180 seconds, it likely means that nextest is stuck waiting for the sleep command to exit.
-# This is a bug.
+filter = 'package(integration-tests) and test(test_archive_with_build_filter)'
+priority = 20
+
+[[profile.default.overrides]]
 filter = 'package(integration-tests)'
+priority = 10
+# test_subprocess_doesnt_exit runs a sleep command for 360 seconds. If
+# integration tests take longer than 180 seconds, it likely means that nextest
+# is stuck waiting for the sleep command to exit. This is a bug.
 slow-timeout = { period = "60s", terminate-after = 3 }
 test-group = "my-group"
 junit.store-success-output = true

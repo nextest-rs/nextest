@@ -383,7 +383,7 @@ impl fmt::Display for FiltersetKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Test => write!(f, "test"),
-            Self::TestArchive => write!(f, "test-archive-filter"),
+            Self::TestArchive => write!(f, "archive-filter"),
             Self::DefaultFilter => write!(f, "default-filter"),
         }
     }

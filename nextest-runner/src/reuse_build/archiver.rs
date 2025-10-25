@@ -7,24 +7,119 @@ use crate::{
         core::{EvaluatableProfile, get_num_cpus},
         elements::{ArchiveConfig, ArchiveIncludeOnMissing, RecursionDepth},
     },
-    errors::{ArchiveCreateError, UnknownArchiveFormat},
+    errors::{ArchiveCreateError, FromMessagesError, UnknownArchiveFormat},
     helpers::{convert_rel_path_to_forward_slash, rel_path_join},
-    list::{BinaryList, OutputFormat, SerializableFormat},
+    list::{BinaryList, OutputFormat, RustBuildMeta, RustTestArtifact, SerializableFormat},
     redact::Redactor,
-    reuse_build::{LIBDIRS_BASE_DIR, PathMapper},
+    reuse_build::{ArchiveFilterCounts, LIBDIRS_BASE_DIR, PathMapper},
+    test_filter::{BinaryFilter, FilterBinaryMatch, FilterBound},
 };
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use camino::{Utf8Path, Utf8PathBuf};
 use core::fmt;
 use guppy::{PackageId, graph::PackageGraph};
+use nextest_filtering::EvalContext;
 use std::{
-    collections::HashSet,
+    collections::{BTreeSet, HashSet},
     fs,
     io::{self, BufWriter, Write},
+    sync::Arc,
     time::{Instant, SystemTime},
 };
 use tracing::{debug, trace, warn};
 use zstd::Encoder;
+
+/// Applies archive filters to a [`BinaryList`].
+pub fn apply_archive_filters(
+    graph: &PackageGraph,
+    binary_list: Arc<BinaryList>,
+    filter: &BinaryFilter,
+    ecx: &EvalContext<'_>,
+    path_mapper: &PathMapper,
+) -> Result<(BinaryList, ArchiveFilterCounts), FromMessagesError> {
+    let rust_build_meta = binary_list.rust_build_meta.map_paths(path_mapper);
+    let test_artifacts = RustTestArtifact::from_binary_list(
+        graph,
+        binary_list.clone(),
+        &rust_build_meta,
+        path_mapper,
+        None,
+    )?;
+
+    // Apply filterset to `RustTestArtifact` list.
+    let test_artifacts: BTreeSet<_> = test_artifacts
+        .iter()
+        .filter(|test_artifact| {
+            // Don't obey the default filter here. The default filter will
+            // be applied while running tests from the archive (the
+            // configuration is expected to be present at that time).
+            let filter_match = filter.check_match(test_artifact, ecx, FilterBound::All);
+
+            debug_assert!(
+                !matches!(filter_match, FilterBinaryMatch::Possible),
+                "build_filtersets should have errored out on test filters, \
+                 Possible should never be returned"
+            );
+            matches!(filter_match, FilterBinaryMatch::Definite)
+        })
+        .map(|test_artifact| &test_artifact.binary_id)
+        .collect();
+
+    let filtered_binaries: Vec<_> = binary_list
+        .rust_binaries
+        .iter()
+        .filter(|binary| test_artifacts.contains(&binary.id))
+        .cloned()
+        .collect();
+
+    // Build a map of package IDs included in the filtered set, then use that to
+    // filter out non-test binaries not referred to by any package.
+    let relevant_package_ids: HashSet<_> = filtered_binaries
+        .iter()
+        .map(|binary| &binary.package_id)
+        .collect();
+    let mut filtered_non_test_binaries = binary_list.rust_build_meta.non_test_binaries.clone();
+    filtered_non_test_binaries.retain(|package_id, _| relevant_package_ids.contains(package_id));
+
+    // Also filter out build script out directories.
+    let mut filtered_build_script_out_dirs =
+        binary_list.rust_build_meta.build_script_out_dirs.clone();
+    filtered_build_script_out_dirs
+        .retain(|package_id, _| relevant_package_ids.contains(package_id));
+
+    let filtered_out_test_binary_count = binary_list
+        .rust_binaries
+        .len()
+        .saturating_sub(filtered_binaries.len());
+    let filtered_out_non_test_binary_count = binary_list
+        .rust_build_meta
+        .non_test_binaries
+        .len()
+        .saturating_sub(filtered_non_test_binaries.len());
+    let filtered_out_build_script_out_dir_count = binary_list
+        .rust_build_meta
+        .build_script_out_dirs
+        .len()
+        .saturating_sub(filtered_build_script_out_dirs.len());
+
+    let filtered_build_meta = RustBuildMeta {
+        non_test_binaries: filtered_non_test_binaries,
+        build_script_out_dirs: filtered_build_script_out_dirs,
+        ..binary_list.rust_build_meta.clone()
+    };
+
+    Ok((
+        BinaryList {
+            rust_build_meta: filtered_build_meta,
+            rust_binaries: filtered_binaries,
+        },
+        ArchiveFilterCounts {
+            filtered_out_test_binary_count,
+            filtered_out_non_test_binary_count,
+            filtered_out_build_script_out_dir_count,
+        },
+    ))
+}
 
 /// Archive format.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,6 +156,7 @@ impl ArchiveFormat {
 pub fn archive_to_file<'a, F>(
     profile: EvaluatableProfile<'a>,
     binary_list: &'a BinaryList,
+    filter_counts: ArchiveFilterCounts,
     cargo_metadata: &'a str,
     graph: &'a PackageGraph,
     path_mapper: &'a PathMapper,
@@ -134,6 +230,7 @@ where
 
             let counts = ArchiveCounts {
                 test_binary_count,
+                filter_counts,
                 non_test_binary_count,
                 build_script_out_dir_count,
                 linked_path_count,

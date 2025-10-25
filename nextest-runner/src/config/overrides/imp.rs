@@ -1247,7 +1247,7 @@ mod tests {
             message: "predicate not allowed in `default-filter` expressions".to_owned(),
             labels: vec![
                 MietteJsonLabel {
-                    label: "this predicate is banned because it causes infinite recursion".to_owned(),
+                    label: "this predicate causes infinite recursion".to_owned(),
                     span: MietteJsonSpan { offset: 4, length: 9 },
                 },
             ],
@@ -1342,7 +1342,7 @@ mod tests {
         &[MietteJsonReport {
             message: "predicate not allowed in `default-filter` expressions".to_owned(),
             labels: vec![
-                MietteJsonLabel { label: "this predicate is banned because it causes infinite recursion".to_owned(), span: MietteJsonSpan { offset: 13, length: 9 } }
+                MietteJsonLabel { label: "this predicate causes infinite recursion".to_owned(), span: MietteJsonSpan { offset: 13, length: 9 } }
             ]
         }]
 
