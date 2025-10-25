@@ -1620,7 +1620,7 @@ impl App {
 
         Ok(Self {
             base,
-            build_filter: build_filter,
+            build_filter,
         })
     }
 
@@ -2615,7 +2615,7 @@ fn warn_on_err(thing: &str, err: &dyn std::error::Error, styles: &StderrStyles) 
 
 fn build_filtering_expressions(
     pcx: &ParseContext<'_>,
-    filter_set: &Vec<String>,
+    filter_set: &[String],
     kind: FiltersetKind,
 ) -> Result<Vec<Filterset>> {
     let (exprs, all_errors): (Vec<_>, Vec<_>) = filter_set
