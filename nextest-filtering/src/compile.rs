@@ -41,6 +41,19 @@ fn check_banned_predicates(
 ) {
     match kind {
         FiltersetKind::Test => {}
+        FiltersetKind::TestArchive => {
+            // The `test` predicate is unsupported for a test archive since we need to
+            // package the whole binary and it may be cross-compiled.
+            Wrapped(expr).collapse_frames(|layer: ExprFrame<&ParsedLeaf, ()>| {
+                if let ExprFrame::Set(ParsedLeaf::Test(_, span)) = layer {
+                    errors.push(ParseSingleError::BannedPredicate {
+                        kind,
+                        span: *span,
+                        reason: BannedPredicateReason::Unsupported,
+                    });
+                }
+            })
+        }
         FiltersetKind::DefaultFilter => {
             // The `default` predicate is banned.
             Wrapped(expr).collapse_frames(|layer: ExprFrame<&ParsedLeaf, ()>| {

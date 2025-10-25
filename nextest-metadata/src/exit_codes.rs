@@ -10,6 +10,9 @@
 pub enum NextestExitCode {}
 
 impl NextestExitCode {
+    /// No errors occurred and nextest exited normally.
+    pub const OK: i32 = 0;
+
     /// Running `cargo metadata` produced an error.
     pub const CARGO_METADATA_FAILED: i32 = 102;
 

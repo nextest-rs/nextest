@@ -23,12 +23,13 @@
 //! `NEXTEST_BIN_EXE_cargo-nextest-dup`.
 
 use camino::{Utf8Path, Utf8PathBuf};
+use fixture_data::nextest_tests::EXPECTED_TEST_SUITES;
 use integration_tests::{
     env::set_env_vars,
     nextest_cli::{CargoNextestCli, CargoNextestOutput},
 };
 use nextest_metadata::{BuildPlatform, NextestExitCode, TestListSummary};
-use std::{borrow::Cow, fs::File, io::Write};
+use std::{borrow::Cow, ffi::OsStr, fs::File, io::Write, path::PathBuf};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
 
 mod fixtures;
@@ -843,6 +844,128 @@ archive.include = [
         .expect_err("archive should have failed");
 }
 
+#[test]
+fn test_archive_with_build_filter() {
+    set_env_vars();
+
+    let all_test_binaries: Vec<String> = EXPECTED_TEST_SUITES
+        .iter()
+        // The test fixture binary name uses hyphens, but the files will use an underscore.
+        .map(|fixture| fixture.binary_name.replace("-", "_"))
+        .collect();
+
+    // Check that all test files are present with the `all()` filter.
+    check_archive_contents("all()", |archive_file, paths| {
+        for file in all_test_binaries.iter() {
+            assert!(
+                paths
+                    .iter()
+                    .any(|path| path_contains_test_fixture_file(path, file)),
+                "{:?} was missing from the test archive",
+                file
+            );
+        }
+        run_archive_with_args(
+            &archive_file,
+            RunProperty::Relocated as u64,
+            NextestExitCode::TEST_RUN_FAILED,
+        );
+    });
+
+    // Check that no test files are present with the `none()` filter.
+    check_archive_contents("none()", |archive_file, paths| {
+        for file in all_test_binaries.iter() {
+            assert!(
+                !paths
+                    .iter()
+                    .filter(|path| path
+                        .ancestors()
+                        // Test files are in the `deps` folder.
+                        .any(|folder| folder.file_name() == Some(OsStr::new("deps"))))
+                    .any(|path| path_contains_test_fixture_file(path, file)),
+                "{:?} was present in the test archive but it should be missing",
+                file
+            );
+        }
+        run_archive_with_args(
+            &archive_file,
+            RunProperty::SkipSummaryCheck as u64 | RunProperty::ExpectNoBinaries as u64,
+            NextestExitCode::NO_TESTS_RUN,
+        );
+    });
+
+    let expected_package_test_file = "cdylib_example";
+    let filtered_test = "nextest_tests";
+    // Check that test files are filtered by the `package()` filter.
+    check_archive_contents("package(cdylib-example)", |archive_file, paths| {
+        assert!(
+            paths
+                .iter()
+                .any(|path| path_contains_test_fixture_file(path, expected_package_test_file)),
+            "{:?} was missing from the test archive",
+            expected_package_test_file
+        );
+        assert!(
+            !paths
+                .iter()
+                .any(|path| path_contains_test_fixture_file(path, filtered_test)),
+            "{:?} was present in the test archive but it should be missing",
+            filtered_test
+        );
+        run_archive_with_args(
+            &archive_file,
+            RunProperty::CdyLibPackageFilter as u64 | RunProperty::SkipSummaryCheck as u64,
+            NextestExitCode::OK,
+        );
+    });
+}
+
+/// Checks if the file name at `path` contains `expected_file_name`
+/// Returns `true` if it does, otherwise `false`.
+fn path_contains_test_fixture_file(path: &PathBuf, expected_file_name: &str) -> bool {
+    let file_name = path.file_name().unwrap_or_else(|| {
+        panic!(
+            "test fixture path {:?} did not have a file name, does the path contain '..'?",
+            path
+        )
+    });
+    file_name
+        .to_str()
+        .unwrap_or_else(|| panic!("file name: {:?} is not valid utf-8", file_name))
+        .contains(expected_file_name)
+}
+
+#[test]
+fn test_archive_with_unsupported_test_filter() {
+    set_env_vars();
+
+    let unsupported_filter = "test(sample_test)";
+    assert!(
+        create_archive_with_args(
+            "",
+            false,
+            "archive_unsupported_build_filter",
+            &["-E", unsupported_filter],
+            true
+        )
+        .is_err()
+    );
+}
+
+fn check_archive_contents(filter: &str, cb: impl FnOnce(Utf8PathBuf, Vec<PathBuf>)) {
+    let (_p1, archive_file) =
+        create_archive_with_args("", false, "", &["-E", filter], false).expect("archive succeeded");
+    let file = File::open(archive_file.clone()).unwrap();
+    let decoder = zstd::stream::read::Decoder::new(file).unwrap();
+    let mut archive = tar::Archive::new(decoder);
+    let paths = archive
+        .entries()
+        .unwrap()
+        .map(|e| e.unwrap().path().unwrap().into_owned())
+        .collect::<Vec<_>>();
+    cb(archive_file, paths);
+}
+
 const APP_DATA_DIR: &str = "application-data";
 // The default limit is 16, so anything at depth 17 (under d16) is excluded.
 const DIR_TREE: &str = "application-data/d1/d2/d3/d4/d5/d6/d7/d8/d9/d10/d11/d12/d13/d14/d15/d16";
@@ -861,6 +984,16 @@ fn create_archive(
     config_contents: &str,
     make_uds: bool,
     snapshot_name: &str,
+) -> Result<(TempProject, Utf8PathBuf), CargoNextestOutput> {
+    create_archive_with_args(config_contents, make_uds, snapshot_name, &[], true)
+}
+
+fn create_archive_with_args(
+    config_contents: &str,
+    make_uds: bool,
+    snapshot_name: &str,
+    extra_args: &[&str],
+    check_output: bool,
 ) -> Result<(TempProject, Utf8PathBuf), CargoNextestOutput> {
     let custom_target_dir = Utf8TempDir::new().unwrap();
     let custom_target_path = custom_target_dir.path().join("target");
@@ -895,22 +1028,26 @@ fn create_archive(
 
     let archive_file = p.temp_root().join("my-archive.tar.zst");
 
+    let manifest_path = p.manifest_path();
+    let mut cli_args = vec![
+        "--manifest-path",
+        manifest_path.as_str(),
+        "archive",
+        "--archive-file",
+        archive_file.as_str(),
+        "--workspace",
+        "--target-dir",
+        p.target_dir().as_str(),
+        "--all-targets",
+        // Make cargo fully quiet since we're testing just nextest output below.
+        "--cargo-quiet",
+        "--cargo-quiet",
+    ];
+    cli_args.extend(extra_args);
+
     // Write the archive to the archive_file above.
     let output = CargoNextestCli::for_test()
-        .args([
-            "--manifest-path",
-            p.manifest_path().as_str(),
-            "archive",
-            "--archive-file",
-            archive_file.as_str(),
-            "--workspace",
-            "--target-dir",
-            p.target_dir().as_str(),
-            "--all-targets",
-            // Make cargo fully quiet since we're testing just nextest output below.
-            "--cargo-quiet",
-            "--cargo-quiet",
-        ])
+        .args(cli_args)
         .env("__NEXTEST_REDACT", "1")
         // Used for linked path testing. See comment in
         // binary_list.rs:detect_linked_path.
@@ -924,7 +1061,9 @@ fn create_archive(
         UdsStatus::NotCreated => format!("{snapshot_name}_without_uds"),
     };
 
-    insta::assert_snapshot!(snapshot_name, output.stderr_as_str());
+    if check_output {
+        insta::assert_snapshot!(snapshot_name, output.stderr_as_str());
+    }
 
     // Remove the old source and target directories to ensure that any tests that refer to files within
     // it fail.
@@ -940,6 +1079,18 @@ fn create_archive(
 }
 
 fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
+    run_archive_with_args(
+        archive_file,
+        RunProperty::Relocated as u64,
+        NextestExitCode::TEST_RUN_FAILED,
+    )
+}
+
+fn run_archive_with_args(
+    archive_file: &Utf8Path,
+    run_property: u64,
+    expected_exit_code: i32,
+) -> (TempProject, Utf8PathBuf) {
     let p2 = TempProject::new().unwrap();
     let extract_to = p2.workspace_root().join("extract_to");
     std::fs::create_dir_all(&extract_to).unwrap();
@@ -956,13 +1107,12 @@ fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
         ])
         .unchecked(true)
         .output();
-
     assert_eq!(
         output.exit_status.code(),
-        Some(NextestExitCode::TEST_RUN_FAILED),
+        Some(expected_exit_code),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, RunProperty::Relocated as u64);
+    check_run_output(&output.stderr, run_property);
 
     // project is included in return value to keep tempdirs alive
     (p2, extract_to.join("target"))
