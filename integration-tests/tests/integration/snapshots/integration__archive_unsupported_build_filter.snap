@@ -1,12 +1,13 @@
 ---
 source: integration-tests/tests/integration/main.rs
 expression: output.stderr_as_str()
+snapshot_kind: text
 ---
-  error: predicate not allowed in `test-archive-filter` expressions
+  error: predicate not allowed in `archive-filter` expressions
    ╭────
  1 │ test(sample_test)
    ·      ─────┬─────
-   ·           ╰── this predicate is banned because test predicates are not supported while archiving
+   ·           ╰── test() predicates are not supported while archiving
    ╰────
 
 error: failed to parse filterset

@@ -9,6 +9,7 @@ use std::{
     io::{self, Write},
     time::Duration,
 };
+use swrite::{SWrite, swrite};
 
 #[derive(Debug)]
 /// Reporter for archive operations.
@@ -168,6 +169,9 @@ impl ArchiveReporter {
                 self.report_counts(
                     ArchiveCounts {
                         test_binary_count,
+                        // We don't track filtered-out test binaries during
+                        // extraction.
+                        filter_counts: ArchiveFilterCounts::default(),
                         non_test_binary_count,
                         build_script_out_dir_count,
                         linked_path_count,
@@ -208,6 +212,12 @@ impl ArchiveReporter {
     fn report_counts(&mut self, counts: ArchiveCounts, mut writer: impl Write) -> io::Result<()> {
         let ArchiveCounts {
             test_binary_count,
+            filter_counts:
+                ArchiveFilterCounts {
+                    filtered_out_test_binary_count,
+                    filtered_out_non_test_binary_count,
+                    filtered_out_build_script_out_dir_count,
+                },
             non_test_binary_count,
             build_script_out_dir_count,
             linked_path_count,
@@ -216,22 +226,48 @@ impl ArchiveReporter {
         } = counts;
 
         let total_binary_count = test_binary_count + non_test_binary_count;
-        let non_test_text = if non_test_binary_count > 0 {
-            format!(
-                " (including {} non-test {})",
+        let mut in_parens = Vec::new();
+        if non_test_binary_count > 0 {
+            in_parens.push(format!(
+                "including {} non-test {}",
                 non_test_binary_count.style(self.styles.bold),
                 plural::binaries_str(non_test_binary_count),
-            )
-        } else {
-            "".to_owned()
-        };
+            ));
+        }
+        if filtered_out_test_binary_count > 0 || filtered_out_non_test_binary_count > 0 {
+            let mut filtered_out = Vec::new();
+            if filtered_out_test_binary_count > 0 {
+                filtered_out.push(format!(
+                    "{} test {}",
+                    filtered_out_test_binary_count.style(self.styles.bold),
+                    plural::binaries_str(filtered_out_test_binary_count),
+                ));
+            }
+            if filtered_out_non_test_binary_count > 0 {
+                filtered_out.push(format!(
+                    "{} non-test {}",
+                    filtered_out_non_test_binary_count.style(self.styles.bold),
+                    plural::binaries_str(filtered_out_non_test_binary_count),
+                ));
+            }
+
+            in_parens.push(format!("{} filtered out", filtered_out.join(" and ")));
+        }
         let mut more = Vec::new();
         if build_script_out_dir_count > 0 {
-            more.push(format!(
+            let mut s = format!(
                 "{} build script output {}",
                 build_script_out_dir_count.style(self.styles.bold),
                 plural::directories_str(build_script_out_dir_count),
-            ));
+            );
+            if filtered_out_build_script_out_dir_count > 0 {
+                swrite!(
+                    s,
+                    " ({} filtered out)",
+                    filtered_out_build_script_out_dir_count.style(self.styles.bold)
+                );
+            }
+            more.push(s);
         }
         if linked_path_count > 0 {
             more.push(format!(
@@ -255,9 +291,15 @@ impl ArchiveReporter {
             ));
         }
 
+        let parens_text = if in_parens.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", in_parens.join("; "))
+        };
+
         write!(
             writer,
-            "{} {}{non_test_text}",
+            "{} {}{parens_text}",
             total_binary_count.style(self.styles.bold),
             plural::binaries_str(total_binary_count),
         )?;
@@ -409,10 +451,14 @@ pub enum ArchiveEvent<'a> {
 }
 
 /// Counts of various types of files in an archive.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ArchiveCounts {
-    /// The number of test binaries.
+    /// The number of test binaries that will be included in the archive, not
+    /// including filtered out test binaries.
     pub test_binary_count: usize,
+
+    /// Counts for filtered out binaries.
+    pub filter_counts: ArchiveFilterCounts,
 
     /// The number of non-test binaries.
     pub non_test_binary_count: usize,
@@ -428,4 +474,185 @@ pub struct ArchiveCounts {
 
     /// The number of standard libraries.
     pub stdlib_count: usize,
+}
+
+/// Counts the number of filtered out binaries.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ArchiveFilterCounts {
+    /// The number of filtered out test binaries.
+    pub filtered_out_test_binary_count: usize,
+
+    /// The number of filtered out non-test binaries.
+    pub filtered_out_non_test_binary_count: usize,
+
+    /// The number of filtered out build script output directories.
+    pub filtered_out_build_script_out_dir_count: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_case::test_case;
+
+    #[test_case(
+        ArchiveCounts {
+            test_binary_count: 1,
+            ..Default::default()
+        },
+        "1 binary"
+        ; "single test binary"
+    )]
+    #[test_case(
+        ArchiveCounts {
+            test_binary_count: 5,
+            ..Default::default()
+        },
+        "5 binaries"
+        ; "multiple test binaries"
+    )]
+    #[test_case(
+        ArchiveCounts {
+            test_binary_count: 5,
+            non_test_binary_count: 2,
+            ..Default::default()
+        },
+        "7 binaries (including 2 non-test binaries)"
+        ; "with non-test binaries"
+    )]
+    #[test_case(
+        ArchiveCounts {
+            test_binary_count: 5,
+            filter_counts: ArchiveFilterCounts {
+                filtered_out_test_binary_count: 2,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        "5 binaries (2 test binaries filtered out)"
+        ; "with filtered out test binaries"
+    )]
+    #[test_case(
+        ArchiveCounts {
+            test_binary_count: 5,
+            filter_counts: ArchiveFilterCounts {
+                filtered_out_non_test_binary_count: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        "5 binaries (1 non-test binary filtered out)"
+        ; "with filtered out non-test binary"
+    )]
+    #[test_case(
+        ArchiveCounts {
+            test_binary_count: 5,
+            filter_counts: ArchiveFilterCounts {
+                filtered_out_test_binary_count: 2,
+                filtered_out_non_test_binary_count: 3,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        "5 binaries (2 test binaries and 3 non-test binaries filtered out)"
+        ; "with both types filtered out"
+    )]
+    #[test_case(
+        ArchiveCounts {
+            test_binary_count: 5,
+            filter_counts: ArchiveFilterCounts {
+                filtered_out_test_binary_count: 1,
+                filtered_out_non_test_binary_count: 2,
+                ..Default::default()
+            },
+            non_test_binary_count: 3,
+            ..Default::default()
+        },
+        "8 binaries (including 3 non-test binaries; 1 test binary and 2 non-test binaries filtered out)"
+        ; "with non-test binaries and both types filtered out"
+    )]
+    #[test_case(
+        ArchiveCounts {
+            filter_counts: ArchiveFilterCounts {
+                filtered_out_non_test_binary_count: 2,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        "0 binaries (2 non-test binaries filtered out)"
+        ; "zero binaries with filtered out"
+    )]
+    #[test_case(
+        ArchiveCounts {
+            test_binary_count: 5,
+            build_script_out_dir_count: 1,
+            ..Default::default()
+        },
+        "5 binaries and 1 build script output directory"
+        ; "with single more item"
+    )]
+    #[test_case(
+        ArchiveCounts {
+            test_binary_count: 5,
+            build_script_out_dir_count: 3,
+            filter_counts: ArchiveFilterCounts {
+                filtered_out_build_script_out_dir_count: 2,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        "5 binaries and 3 build script output directories (2 filtered out)"
+        ; "with filtered out build script out dirs"
+    )]
+    #[test_case(
+        ArchiveCounts {
+            test_binary_count: 5,
+            linked_path_count: 3,
+            ..Default::default()
+        },
+        "5 binaries and 3 linked paths"
+        ; "with linked paths"
+    )]
+    #[test_case(
+        ArchiveCounts {
+            test_binary_count: 5,
+            build_script_out_dir_count: 2,
+            linked_path_count: 3,
+            extra_path_count: 1,
+            stdlib_count: 4,
+            ..Default::default()
+        },
+        "5 binaries, 2 build script output directories, 3 linked paths, 1 extra path, and 4 standard libraries"
+        ; "with multiple more items"
+    )]
+    #[test_case(
+        ArchiveCounts {
+            test_binary_count: 4,
+            filter_counts: ArchiveFilterCounts {
+                filtered_out_test_binary_count: 1,
+                filtered_out_non_test_binary_count: 2,
+                filtered_out_build_script_out_dir_count: 1,
+            },
+            non_test_binary_count: 2,
+            build_script_out_dir_count: 3,
+            linked_path_count: 2,
+            extra_path_count: 1,
+            stdlib_count: 2,
+        },
+        "6 binaries (including 2 non-test binaries; 1 test binary and 2 non-test binaries filtered out), 3 build script output directories (1 filtered out), 2 linked paths, 1 extra path, and 2 standard libraries"
+        ; "all fields combined"
+    )]
+    #[test_case(
+        ArchiveCounts::default(),
+        "0 binaries"
+        ; "all zeros"
+    )]
+    fn test_report_counts(counts: ArchiveCounts, expected: &str) {
+        let mut reporter = ArchiveReporter::new(false, Redactor::noop());
+        let mut buffer = Vec::new();
+
+        reporter.report_counts(counts, &mut buffer).unwrap();
+
+        let output = String::from_utf8(buffer).unwrap();
+        assert_eq!(output, expected);
+    }
 }

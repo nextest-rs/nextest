@@ -63,7 +63,7 @@ pub enum ParseSingleError {
         kind: FiltersetKind,
 
         /// The span of the banned predicate.
-        #[label("this predicate is banned because {reason}")]
+        #[label("{reason}")]
         span: SourceSpan,
 
         /// The reason why the predicate is banned.
@@ -209,10 +209,10 @@ impl fmt::Display for BannedPredicateReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             BannedPredicateReason::InfiniteRecursion => {
-                write!(f, "it causes infinite recursion")
+                write!(f, "this predicate causes infinite recursion")
             }
             BannedPredicateReason::Unsupported => {
-                write!(f, "test predicates are not supported while archiving")
+                write!(f, "test() predicates are not supported while archiving")
             }
         }
     }

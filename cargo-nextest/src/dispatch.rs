@@ -41,15 +41,14 @@ use nextest_runner::{
         events::{FinalRunStats, RunStatsFailureKind},
         highlight_end, structured,
     },
-    reuse_build::{ArchiveReporter, PathMapper, ReuseBuildInfo, archive_to_file},
+    reuse_build::{
+        ArchiveReporter, PathMapper, ReuseBuildInfo, apply_archive_filters, archive_to_file,
+    },
     runner::{StressCondition, StressCount, TestRunnerBuilder, configure_handle_inheritance},
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
-    test_filter::{
-        BinaryFilter, FilterBinaryMatch, FilterBound, RunIgnored, TestFilterBuilder,
-        TestFilterPatterns,
-    },
+    test_filter::{BinaryFilter, FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
     test_output::CaptureStrategy,
     write_str::WriteStr,
 };
@@ -774,14 +773,10 @@ impl TestBuildFilter {
 #[derive(Debug, Args)]
 #[command(next_help_heading = "Filter options")]
 struct ArchiveBuildFilter {
-    /// Test filterset (see {n}<https://nexte.st/docs/filtersets>).
-    #[arg(
-        long,
-        alias = "filter-expr",
-        short = 'E',
-        value_name = "EXPR",
-        action(ArgAction::Append)
-    )]
+    /// Archive filterset (see <https://nexte.st/docs/filtersets>).
+    ///
+    /// This argument does not accept test predicates.
+    #[arg(long, short = 'E', value_name = "EXPR", action(ArgAction::Append))]
     filterset: Vec<String>,
 }
 
@@ -1691,7 +1686,7 @@ impl App {
         let (version_only_config, config) = self.base.load_config(&pcx)?;
         let profile = self.base.load_profile(&config)?;
         let filter_exprs =
-            build_filtering_expressions(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
+            build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
@@ -1763,7 +1758,7 @@ impl App {
         let settings = ShowTestGroupSettings { mode, show_default };
 
         let filter_exprs =
-            build_filtering_expressions(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
+            build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
@@ -1861,7 +1856,7 @@ impl App {
         reporter_builder.set_verbose(self.base.output.verbose);
 
         let filter_exprs =
-            build_filtering_expressions(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
+            build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
@@ -2001,60 +1996,27 @@ impl ArchiveApp {
             reporter.colorize();
         }
 
-        let rust_build_meta = binary_list.rust_build_meta.map_paths(&path_mapper);
-        let test_artifacts = RustTestArtifact::from_binary_list(
-            self.base.graph(),
-            binary_list.clone(),
-            &rust_build_meta,
-            &path_mapper,
-            None,
-        )?;
-
-        let filter_exprs = build_filtering_expressions(
+        let filtersets = build_filtersets(
             &pcx,
             &self.archive_filter.filterset,
             FiltersetKind::TestArchive,
         )?;
-
-        let binary_filter = BinaryFilter::new(filter_exprs);
+        let binary_filter = BinaryFilter::new(filtersets);
         let ecx = profile.filterset_ecx();
 
-        // Apply filterset to `RustTestArtifact` list.
-        let test_artifacts: BTreeSet<_> = test_artifacts
-            .iter()
-            .filter(|test_artifact| {
-                let filter_match =
-                    binary_filter.check_match(test_artifact, &ecx, FilterBound::DefaultSet);
-                debug_assert!(!matches!(filter_match, FilterBinaryMatch::Possible));
-                matches!(filter_match, FilterBinaryMatch::Definite)
-            })
-            .map(|test_artifact| &test_artifact.binary_id)
-            .collect();
-
-        let filtered_binaries: Vec<_> = binary_list
-            .rust_binaries
-            .iter()
-            .filter(|binary| test_artifacts.contains(&binary.id))
-            .cloned()
-            .collect();
-
-        if filtered_binaries.len() < binary_list.rust_binaries.len() {
-            info!(
-                "archiving {} of {} test binaries after filtering",
-                filtered_binaries.len(),
-                binary_list.rust_binaries.len()
-            );
-        }
-
-        let binary_list_to_archive = BinaryList {
-            rust_build_meta: binary_list.rust_build_meta.clone(),
-            rust_binaries: filtered_binaries,
-        };
+        let (binary_list_to_archive, filter_counts) = apply_archive_filters(
+            self.base.graph(),
+            binary_list.clone(),
+            &binary_filter,
+            &ecx,
+            &path_mapper,
+        )?;
 
         let mut writer = output_writer.stderr_writer();
         archive_to_file(
             profile,
             &binary_list_to_archive,
+            filter_counts,
             &self.base.cargo_metadata_json,
             &self.base.package_graph,
             // Note that path_mapper is currently a no-op -- we don't support reusing builds for
@@ -2649,7 +2611,7 @@ fn warn_on_err(thing: &str, err: &dyn std::error::Error, styles: &StderrStyles) 
     warn!("{}", s);
 }
 
-fn build_filtering_expressions(
+fn build_filtersets(
     pcx: &ParseContext<'_>,
     filter_set: &[String],
     kind: FiltersetKind,

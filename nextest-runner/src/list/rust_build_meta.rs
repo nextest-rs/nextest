@@ -46,7 +46,8 @@ pub struct RustBuildMeta<State> {
     /// The build platforms: host and target triple
     pub build_platforms: BuildPlatforms,
 
-    state: PhantomData<State>,
+    /// A type marker for the state.
+    pub state: PhantomData<State>,
 }
 
 impl RustBuildMeta<BinaryListState> {
