@@ -118,7 +118,7 @@ impl DisplayReporterBuilder {
 
         let show_counter = match self.show_progress {
             ShowProgress::Auto => is_ci::uncached() || !show_progress_bar,
-            ShowProgress::Bar | ShowProgress::None => false,
+            ShowProgress::Bar | ShowProgress::Running | ShowProgress::None => false,
             ShowProgress::Counter => true,
         };
 
@@ -163,13 +163,14 @@ impl DisplayReporterBuilder {
             return None;
         }
 
-        match self.show_progress {
+        let show_running = match self.show_progress {
             ShowProgress::None | ShowProgress::Counter => return None,
             // For auto we enable progress bar if not in ci, and it's checked above.
-            ShowProgress::Auto | ShowProgress::Bar => (),
+            ShowProgress::Auto | ShowProgress::Bar => false,
+            ShowProgress::Running => true,
         };
 
-        let state = ProgressBarState::new(self.test_count, progress_chars);
+        let state = ProgressBarState::new(self.test_count, progress_chars, show_running);
         // Note: even if we create a progress bar here, if stderr is
         // piped, indicatif will not show it.
         Some(state)
