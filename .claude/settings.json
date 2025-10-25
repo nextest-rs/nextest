@@ -4,6 +4,7 @@
       "Bash(jj s:*)",
       "WebSearch",
       "Bash(cargo check:*)",
+      "Bash(cargo build:*)",
       "Bash(cargo nextest run:*)",
       "Bash(git log:*)",
       "Bash(git show:*)",
