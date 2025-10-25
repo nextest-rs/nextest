@@ -369,6 +369,9 @@ pub enum FiltersetKind {
     /// A test filterset.
     Test,
 
+    /// A test archive filterset.
+    TestArchive,
+
     /// A default-filter filterset.
     ///
     /// To prevent recursion, default-filter expressions cannot contain `default()` themselves.
@@ -380,6 +383,7 @@ impl fmt::Display for FiltersetKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Test => write!(f, "test"),
+            Self::TestArchive => write!(f, "test-archive-filter"),
             Self::DefaultFilter => write!(f, "default-filter"),
         }
     }

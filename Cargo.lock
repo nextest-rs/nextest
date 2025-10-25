@@ -1768,10 +1768,12 @@ dependencies = [
  "serde_json",
  "sha2",
  "shell-words",
+ "tar",
  "target-spec",
  "target-spec-miette",
  "tokio",
  "whoami",
+ "zstd",
 ]
 
 [[package]]
