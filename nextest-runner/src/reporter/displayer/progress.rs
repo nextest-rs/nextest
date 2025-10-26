@@ -194,6 +194,16 @@ impl ProgressBarState {
                     styles,
                 );
             }
+            TestEventKind::TestSlow { test_instance, .. } => {
+                if let Some(test_bars) = &mut self.test_bars {
+                    if let Some(tb) = test_bars.get(&RunningTestInstance {
+                        binary_id: test_instance.suite_info.binary_id.clone(),
+                        test_name: test_instance.name.to_owned(),
+                    }) {
+                        tb.set_prefix("SLOW".style(styles.skip).to_string());
+                    }
+                }
+            }
             TestEventKind::InfoStarted { .. } => {
                 // While info is being displayed, hide the progress bar to avoid
                 // it interrupting the info display.
