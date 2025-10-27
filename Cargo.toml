@@ -96,7 +96,7 @@ owo-colors = "4.2.3"
 pathdiff = { version = "0.2.3", features = ["camino"] }
 pin-project-lite = "0.2.16"
 pretty_assertions = "1.4.1"
-proptest = "1.8.0"
+proptest = "1.9.0"
 quick-junit = "0.5.1"
 rand = "0.9.2"
 recursion = "0.5.4"
