@@ -222,9 +222,19 @@ impl ProgressBarState {
                 // Continuing the run should show the progress bar since we'll
                 // continue to output to it.
                 self.hidden_run_paused = false;
+                let current_global_elapsed = self.bar.elapsed();
                 // Wish a mutable form of with_elapsed were supported.
                 let bar = std::mem::replace(&mut self.bar, ProgressBar::hidden());
                 self.bar = bar.with_elapsed(event.elapsed);
+                if let Some(test_bars) = &mut self.test_bars {
+                    for (_, test_bar) in test_bars.iter_mut() {
+                        let current_elapsed = test_bar.elapsed();
+                        let bar = std::mem::replace(test_bar, ProgressBar::hidden());
+                        *test_bar = bar.with_elapsed(
+                            current_elapsed - (current_global_elapsed - event.elapsed),
+                        );
+                    }
+                }
             }
             TestEventKind::RunBeginCancel { current_stats, .. }
             | TestEventKind::RunBeginKill { current_stats, .. } => {
