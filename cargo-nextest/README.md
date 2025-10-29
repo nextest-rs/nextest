@@ -7,15 +7,33 @@
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE-APACHE)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE-MIT)
 
-A new, faster test runner for Rust.
+cargo-nextest is a next-generation test runner for Rust.
 
 For documentation and usage, see [the nextest site](https://nexte.st).
 
 ## Installation
 
-While you can install cargo-nextest from source, using the pre-built binaries is recommended.
-See [Pre-built binaries](https://nexte.st/docs/installation/pre-built-binaries) on the nextest
-site for more information.
+To install nextest binaries (quicker), see [_Pre-built
+binaries_](https://nexte.st/docs/installation/pre-built-binaries).
+
+To install from source, run:
+
+```sh
+cargo install --locked cargo-nextest
+```
+
+**The `--locked` flag is required.** Builds without `--locked` are not
+guaranteed to work.
+
+## Minimum supported Rust versions
+
+Nextest has two minimum supported Rust versions (MSRVs): one for _building_
+nextest itself, and one for _running tests_ with `cargo nextest run`.
+
+For more information about the MSRVs and the stability policy around them,
+see [_Minimum supported Rust
+versions_](https://nexte.st/docs/stability/#minimum-supported-rust-versions)
+on the nextest site.
 
 ## Contributing
 
