@@ -15,7 +15,7 @@ publish = false
 
 ### BEGIN HAKARI SECTION
 [dependencies]
-aho-corasick = { version = "1.1.3" }
+aho-corasick = { version = "1.1.4" }
 bit-set = { version = "0.8.0" }
 bit-vec = { version = "0.8.0" }
 camino = { version = "1.2.1", default-features = false, features = ["serde1"] }
