@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.17.0] - 2025-10-29
+
+### Added
+
+- Support for filtering test archives by binary. The `cargo nextest archive` command now accepts filter expressions, though test-level predicates (like `test(...)`) are not supported since binaries are not executed during archiving.
+- New method `FiltersetLeaf::is_runtime_only()` to check if a filter leaf requires runtime evaluation.
+
+### Changed
+
+- MSRV updated to Rust 1.87.
+- Error messages improved for banned predicates in different contexts.
+
 ## [0.16.0] - 2025-06-04
 
 ### Added
@@ -163,6 +175,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.17.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.17.0
 [0.16.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.16.0
 [0.15.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.15.0
 [0.14.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.14.0

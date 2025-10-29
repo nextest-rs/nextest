@@ -8,6 +8,29 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.109] - 2025-10-29
+
+### Added
+
+- A new [`running` progress mode](https://nexte.st/docs/reporting/#test-execution-progress) that shows currently running tests in addition to the progress bar. Use `--show-progress=running` to see both running tests and information about successful tests, or `--show-progress=only` for a more compact output showing only running tests, without displaying any output related to successful tests.
+
+  Thanks [glehmann](https://github.com/glehmann) for your first contribution!
+
+- The `cargo nextest archive` command now supports [binary filtering](https://nexte.st/docs/ci-features/archiving#filtering-test-binaries-from-an-archive) via the `--filterset` or `-E` options. This allows you to reduce the size of archives by including only a subset of test binaries. Note that test binaries are not executed during archiving, so `test()` predicates are not supported.
+
+  Thanks [clundin55](https://github.com/clundin55) for your first contribution!
+
+### Fixed
+
+- Improvements to `--show-progress=counter` for better output formatting and reliability.
+
+### Other improvements
+
+- USDT probes now include additional events:
+  - Updated `run-start` and `run-done` events to include stress run information.
+  - New `stress-sub-run-start` and `stress-sub-run-done` events for tracking individual stress run iterations.
+  - Test completion events now include `stdout_len` and `stderr_len` fields for output size tracking.
+
 ## [0.9.108] - 2025-10-21
 
 ### Added
@@ -1576,6 +1599,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.109]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.109
 [0.9.108]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.108
 [0.9.107]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.107
 [0.9.106]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.106

@@ -29,7 +29,13 @@ In some cases, it can be useful to separate out building tests from running them
 
 ## Creating archives
 
-`cargo nextest archive --archive-file <name-of-archive.tar.zst>` creates an archive with the following contents:
+Use this command to create archives:
+
+```shell
+cargo nextest archive --archive-file <name-of-archive.tar.zst>
+```
+
+This command creates an archive with the following contents:
 
 - Cargo-related metadata, at the location `target/nextest/cargo-metadata.json`.
 - Metadata about test binaries, at the location `target/nextest/binaries-metadata.json`.
@@ -49,6 +55,22 @@ In some cases, it can be useful to separate out building tests from running them
     Support for this may be added in the future, though there are some tricky matters to handle such as whether to transfer over untracked and ignored files.
 
 Currently, the only format supported is a Zstandard-compressed tarball (`.tar.zst`).
+
+### Filtering test binaries from an archive
+
+<!-- md:version 0.9.109 -->
+
+In some cases, you may wish to include only a subset of test binaries in an archive.
+
+One option is to not build those binaries in the first place, using Cargo's `--package` and `--workspace --exclude` options.
+
+If you would like to build _many_ test binaries but only archive _a subset_ of them, nextest supports using [`--filterset` or `-E`](../filtersets/index.md) to filter the set of test binaries.
+
+For example, to build an entire workspace, but only archive the reverse transitive dependencies of `db-test-utils`, run:
+
+```shell
+cargo nextest archive --workspace -E 'rdeps(db-test-utils)' --archive-file archive.tar.zst
+```
 
 ### Adding extra files to an archive
 
@@ -91,7 +113,7 @@ archive.include = [
 
 ## Running tests from archives
 
-`cargo nextest list` and `run` support a new `--archive-file` option. This option accepts archives created by `cargo nextest archive` as above.
+`cargo nextest list` and `run` support an `--archive-file` option. This option accepts archives created by `cargo nextest archive`.
 
 By default, archives are extracted to a temporary directory, and nextest remaps paths to use the new
 target directory. To specify the directory archives should be extracted to, use the `--extract-to`
