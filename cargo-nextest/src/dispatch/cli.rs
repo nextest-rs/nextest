@@ -856,6 +856,8 @@ pub(super) struct ReporterOpts {
     final_status_level: Option<FinalStatusLevelOpt>,
 
     /// Show progress in a specified way.
+    ///
+    /// **running-only** also implies **--status-level=slow** and **--final-status-level=none**
     #[arg(long, env = "NEXTEST_SHOW_PROGRESS")]
     show_progress: Option<ShowProgressOpt>,
 
@@ -959,6 +961,13 @@ impl ReporterOpts {
         builder.set_no_capture(no_capture);
         builder.set_colorize(should_colorize);
 
+        if let Some(ShowProgressOpt::Only) = self.show_progress {
+            // --show-progress=only implies --status-level=slow and
+            // --final-status-level=none. But we allow overriding these options
+            // explicitly as well.
+            builder.set_status_level(StatusLevel::Slow);
+            builder.set_final_status_level(FinalStatusLevel::None);
+        }
         if let Some(failure_output) = self.failure_output {
             builder.set_failure_output(failure_output.into());
         }
@@ -1051,11 +1060,26 @@ impl From<FinalStatusLevelOpt> for FinalStatusLevel {
 
 #[derive(Default, Clone, Copy, Debug, ValueEnum)]
 enum ShowProgressOpt {
+    /// Automatically choose the best progress display based on whether nextest
+    /// is running in an interactive terminal.
     #[default]
     Auto,
+
+    /// Do not display a progress bar or counter.
     None,
+
+    /// Display a progress bar.
     Bar,
+
+    /// Display a counter.
     Counter,
+
+    /// Display separate progress for each running test.
+    Running,
+
+    /// Display separate progress for each running test, and hide successful
+    /// test output.
+    Only,
 }
 
 impl From<ShowProgressOpt> for ShowProgress {
@@ -1065,6 +1089,8 @@ impl From<ShowProgressOpt> for ShowProgress {
             ShowProgressOpt::None => ShowProgress::None,
             ShowProgressOpt::Bar => ShowProgress::Bar,
             ShowProgressOpt::Counter => ShowProgress::Counter,
+            ShowProgressOpt::Running => ShowProgress::Running,
+            ShowProgressOpt::Only => ShowProgress::Running,
         }
     }
 }

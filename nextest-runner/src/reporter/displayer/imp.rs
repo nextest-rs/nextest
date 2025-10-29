@@ -89,7 +89,10 @@ impl DisplayReporterBuilder {
 
         let stderr = match output {
             ReporterStderr::Terminal => {
-                let progress_bar = self.progress_bar(theme_characters.progress_chars);
+                let progress_bar = self.progress_bar(
+                    theme_characters.progress_chars,
+                    theme_characters.spinner_chars,
+                );
                 let term_progress = TerminalProgress::new(configs, &io::stderr());
 
                 show_progress_bar = progress_bar
@@ -118,7 +121,7 @@ impl DisplayReporterBuilder {
 
         let show_counter = match self.show_progress {
             ShowProgress::Auto => is_ci::uncached() || !show_progress_bar,
-            ShowProgress::Bar | ShowProgress::None => false,
+            ShowProgress::Bar | ShowProgress::Running | ShowProgress::None => false,
             ShowProgress::Counter => true,
         };
 
@@ -142,7 +145,11 @@ impl DisplayReporterBuilder {
         }
     }
 
-    fn progress_bar(&self, progress_chars: &'static str) -> Option<ProgressBarState> {
+    fn progress_bar(
+        &self,
+        progress_chars: &'static str,
+        spinner_chars: &'static str,
+    ) -> Option<ProgressBarState> {
         if self.no_capture {
             // Do not use a progress bar if --no-capture is passed in.
             // This is required since we pass down stderr to the child
@@ -163,13 +170,15 @@ impl DisplayReporterBuilder {
             return None;
         }
 
-        match self.show_progress {
+        let show_running = match self.show_progress {
             ShowProgress::None | ShowProgress::Counter => return None,
             // For auto we enable progress bar if not in ci, and it's checked above.
-            ShowProgress::Auto | ShowProgress::Bar => (),
+            ShowProgress::Auto | ShowProgress::Bar => false,
+            ShowProgress::Running => true,
         };
 
-        let state = ProgressBarState::new(self.test_count, progress_chars);
+        let state =
+            ProgressBarState::new(self.test_count, progress_chars, spinner_chars, show_running);
         // Note: even if we create a progress bar here, if stderr is
         // piped, indicatif will not show it.
         Some(state)
@@ -2164,6 +2173,7 @@ fn write_windows_message_line(
 struct ThemeCharacters {
     hbar: char,
     progress_chars: &'static str,
+    spinner_chars: &'static str,
 }
 
 impl Default for ThemeCharacters {
@@ -2171,6 +2181,7 @@ impl Default for ThemeCharacters {
         Self {
             hbar: '-',
             progress_chars: "=> ",
+            spinner_chars: "-\\|/",
         }
     }
 }
@@ -2180,6 +2191,8 @@ impl ThemeCharacters {
         self.hbar = '─';
         // https://mike42.me/blog/2018-06-make-better-cli-progress-bars-with-unicode-block-characters
         self.progress_chars = "█▉▊▋▌▍▎▏ ";
+        // https://github.com/sindresorhus/cli-spinners/blob/3860701f68e3075511f111a28ca2838fc906fca8/spinners.json#L4
+        self.spinner_chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
     }
 
     fn hbar(&self, width: usize) -> String {

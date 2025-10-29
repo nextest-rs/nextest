@@ -1246,7 +1246,7 @@ impl<'a> TestCommandCli<'a> {
 /// A key for identifying and sorting test instances.
 ///
 /// Returned by [`TestInstance::id`].
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize)]
 pub struct TestInstanceId<'a> {
     /// The binary ID.
     pub binary_id: &'a RustBinaryId,
