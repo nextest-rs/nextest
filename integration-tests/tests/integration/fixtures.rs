@@ -168,9 +168,10 @@ impl CheckResult {
             CheckResult::FailLeak => {
                 Regex::new(&format!(r"FAIL \+ LEAK \[[^\]]+\] \([^\)]+\) *{name}")).unwrap()
             }
-            CheckResult::Abort => {
-                Regex::new(&format!(r"(ABORT|SIGSEGV|SIGABRT) \[[^\]]+\] *{name}")).unwrap()
-            }
+            CheckResult::Abort => Regex::new(&format!(
+                r"(ABORT|SIGSEGV|SIGABRT) \[[^\]]+\] \([^\)]+\) *{name}"
+            ))
+            .unwrap(),
         }
     }
 }

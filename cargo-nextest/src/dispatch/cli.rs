@@ -855,9 +855,7 @@ pub(super) struct ReporterOpts {
     )]
     final_status_level: Option<FinalStatusLevelOpt>,
 
-    /// Show progress in a specified way.
-    ///
-    /// **running-only** also implies **--status-level=slow** and **--final-status-level=none**
+    /// Show nextest progress in the specified manner.
     #[arg(long, env = "NEXTEST_SHOW_PROGRESS")]
     show_progress: Option<ShowProgressOpt>,
 
@@ -1068,17 +1066,18 @@ enum ShowProgressOpt {
     /// Do not display a progress bar or counter.
     None,
 
-    /// Display a progress bar.
+    /// Display a progress bar: default for interactive terminals.
     Bar,
 
-    /// Display a counter.
+    /// Display a counter next to each completed test.
     Counter,
 
-    /// Display separate progress for each running test.
+    /// Display each running test on a separate line.
     Running,
 
-    /// Display separate progress for each running test, and hide successful
-    /// test output.
+    /// Display each running test on a separate line, and hide successful test
+    /// output; equivalent to `--show-progress=running --status-level=slow
+    /// --final-status-level=none`.
     Only,
 }
 
