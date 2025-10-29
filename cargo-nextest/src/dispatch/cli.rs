@@ -961,8 +961,10 @@ impl ReporterOpts {
         builder.set_no_capture(no_capture);
         builder.set_colorize(should_colorize);
 
-        if let Some(ShowProgressOpt::RunningOnly) = self.show_progress {
-            // --show-progress=running-only implies --status-level=slow and --final-status-level=none
+        if let Some(ShowProgressOpt::Only) = self.show_progress {
+            // --show-progress=only implies --status-level=slow and
+            // --final-status-level=none. But we allow overriding these options
+            // explicitly as well.
             builder.set_status_level(StatusLevel::Slow);
             builder.set_final_status_level(FinalStatusLevel::None);
         }
@@ -1058,13 +1060,26 @@ impl From<FinalStatusLevelOpt> for FinalStatusLevel {
 
 #[derive(Default, Clone, Copy, Debug, ValueEnum)]
 enum ShowProgressOpt {
+    /// Automatically choose the best progress display based on whether nextest
+    /// is running in an interactive terminal.
     #[default]
     Auto,
+
+    /// Do not display a progress bar or counter.
     None,
+
+    /// Display a progress bar.
     Bar,
+
+    /// Display a counter.
     Counter,
+
+    /// Display separate progress for each running test.
     Running,
-    RunningOnly,
+
+    /// Display separate progress for each running test, and hide successful
+    /// test output.
+    Only,
 }
 
 impl From<ShowProgressOpt> for ShowProgress {
@@ -1075,7 +1090,7 @@ impl From<ShowProgressOpt> for ShowProgress {
             ShowProgressOpt::Bar => ShowProgress::Bar,
             ShowProgressOpt::Counter => ShowProgress::Counter,
             ShowProgressOpt::Running => ShowProgress::Running,
-            ShowProgressOpt::RunningOnly => ShowProgress::Running,
+            ShowProgressOpt::Only => ShowProgress::Running,
         }
     }
 }
