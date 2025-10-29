@@ -72,9 +72,16 @@ A bump to the minimum supported cargo-nextest version is considered a breaking c
 nextest-runner is an internal crate that contains the core runner logic for nextest.
 Every nextest release is likely to correspond to a breaking change to nextest-runner.
 
-## Minimum supported Rust version (MSRV)
+## Minimum supported Rust versions
 
-The MSRV of cargo-nextest and dependent crates is currently **Rust {{ msrv }}**.
+Nextest has two minimum supported Rust versions (MSRVs): one for _building_ nextest itself, and one for _running tests_ with `cargo nextest run`.
 
-The MSRV may be changed in a patch release. At least the last 3 versions of
-stable Rust will be supported at any time.
+* The MSRV for _building_ nextest is currently **Rust {{ msrv }}**.
+* The MSRV for _running tests_ against is generally quite old: **Rust 1.41** has been known to work.
+
+Either of these MSRVs may be changed in a patch release.
+
+* For _building_ nextest, at least the last 3 versions of
+stable Rust will be supported at any time. If you pin your project's toolchain to an older Rust version, use a pre-built copy of nextest: either the [official release binaries](../installation/pre-built-binaries.md), or your own.
+
+* For _running tests_ against, the MSRV will be bumped conservatively, though this is not actively tested. In general, older versions of Rust back to [Debian stable](https://packages.debian.org/search?keywords=rust) should generally work. If you need to run tests against a version of Rust that's too old, pull requests are welcome.
