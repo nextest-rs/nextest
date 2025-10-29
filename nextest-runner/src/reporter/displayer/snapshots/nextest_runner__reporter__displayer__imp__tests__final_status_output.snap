@@ -4,5 +4,5 @@ expression: "String::from_utf8(out).expect(\"output only consists of UTF-8\")"
 snapshot_kind: text
 ---
         FAIL [   1.000s] my-binary-id test1
-   FLAKY 2/2 [   2.000s] [2] my-binary-id test1
-   FLAKY 2/2 [   2.000s] [3/3] my-binary-id test1
+   FLAKY 2/2 [   2.000s] [2] (─────────) my-binary-id test1
+   FLAKY 2/2 [   2.000s] [3/3] (  20/5000) my-binary-id test1

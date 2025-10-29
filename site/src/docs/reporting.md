@@ -24,6 +24,12 @@ During test execution, the `--show-progress` command-line option (or `NEXTEST_SH
 `--show-progress=none`
 : Do not show a progress bar or counter.
 
+`--show-progress=running` <!-- md:version 0.9.109 -->
+: Display each running test on a separate line.
+
+`--show-progress=only` <!-- md:version 0.9.109 -->
+: Display each running test on a separate line, and hide successful test output; equivalent to `--show-progress=running --status-level=slow --final-status-level=none`.
+
 Nextest versions prior to 0.9.108 show a progress bar in interactive terminals, and do not show any progress in non-interactive terminals. The `--hide-progress-bar` option, now deprecated, hides progress in interactive terminals.
 
 ## Status levels

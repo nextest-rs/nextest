@@ -6,7 +6,7 @@
 use crate::{
     config::scripts::ScriptId,
     list::{Styles, TestInstanceId},
-    reporter::events::{AbortStatus, RunStats, StressIndex},
+    reporter::events::{AbortStatus, StressIndex},
     write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -225,30 +225,42 @@ impl fmt::Display for DisplayStressIndex {
     }
 }
 
-pub(super) struct DisplayCounterIndex(usize, usize);
+pub(super) enum DisplayCounterIndex {
+    Counter { current: usize, total: usize },
+    Padded { character: char, width: usize },
+}
 
 impl DisplayCounterIndex {
-    pub fn new(current_stats: &RunStats) -> Self {
-        Self(
-            current_stats.finished_count,
-            current_stats.initial_run_count,
-        )
+    pub fn new_counter(current: usize, total: usize) -> Self {
+        Self::Counter { current, total }
     }
 
-    pub fn width(&self) -> usize {
-        usize_decimal_char_width(self.1) * 2 + 3
+    pub fn new_padded(character: char, width: usize) -> Self {
+        Self::Padded { character, width }
     }
 }
 
 impl fmt::Display for DisplayCounterIndex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "({:>width$}/{})",
-            self.0,
-            self.1,
-            width = usize_decimal_char_width(self.1)
-        )
+        match self {
+            Self::Counter { current, total } => {
+                write!(
+                    f,
+                    "({:>width$}/{})",
+                    current,
+                    total,
+                    width = usize_decimal_char_width(*total)
+                )
+            }
+            Self::Padded { character, width } => {
+                // Rendered as:
+                //
+                // (  20/5000)
+                // (---------)
+                let s: String = std::iter::repeat_n(*character, 2 * *width + 1).collect();
+                write!(f, "({s})")
+            }
+        }
     }
 }
 

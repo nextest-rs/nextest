@@ -124,6 +124,10 @@ impl DisplayReporterBuilder {
             ShowProgress::Bar | ShowProgress::Running | ShowProgress::None => false,
             ShowProgress::Counter => true,
         };
+        // This is a bit jank -- we don't know the initial run count until we
+        // receive the first RunStarted event -- we'll update the counter width
+        // at that time.
+        let counter_width = show_counter.then_some(0);
 
         DisplayReporter {
             inner: DisplayReporterImpl {
@@ -134,7 +138,7 @@ impl DisplayReporterBuilder {
                 },
                 no_capture: self.no_capture,
                 no_output_indent: self.no_output_indent,
-                no_counter: !show_counter,
+                counter_width,
                 styles,
                 theme_characters,
                 cancel_status: None,
@@ -290,17 +294,59 @@ impl FinalOutput {
     }
 }
 
+struct FinalOutputEntry<'a> {
+    stress_index: Option<StressIndex>,
+    counter: TestInstanceCounter,
+    instance: TestInstance<'a>,
+    output: FinalOutput,
+}
+
+impl<'a> PartialEq for FinalOutputEntry<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == std::cmp::Ordering::Equal
+    }
+}
+
+impl<'a> Eq for FinalOutputEntry<'a> {}
+
+impl<'a> PartialOrd for FinalOutputEntry<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'a> Ord for FinalOutputEntry<'a> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Use the final status level, reversed (i.e.
+        // failing tests are printed at the very end).
+        (
+            Reverse(self.output.final_status_level()),
+            self.stress_index,
+            self.counter,
+            self.instance.id(),
+        )
+            .cmp(&(
+                Reverse(other.output.final_status_level()),
+                other.stress_index,
+                other.counter,
+                other.instance.id(),
+            ))
+    }
+}
+
 struct DisplayReporterImpl<'a> {
     default_filter: CompiledDefaultFilter,
     status_levels: StatusLevels,
     no_capture: bool,
     no_output_indent: bool,
-    no_counter: bool,
+    // None if no counter is displayed. If a counter is displayed, this is the
+    // width of the total number of tests to run.
+    counter_width: Option<usize>,
     styles: Box<Styles>,
     theme_characters: ThemeCharacters,
     cancel_status: Option<CancelReason>,
     unit_output: UnitOutputReporter,
-    final_outputs: DebugIgnore<Vec<(Option<StressIndex>, TestInstance<'a>, FinalOutput)>>,
+    final_outputs: DebugIgnore<Vec<FinalOutputEntry<'a>>>,
 }
 
 impl<'a> DisplayReporterImpl<'a> {
@@ -339,6 +385,10 @@ impl<'a> DisplayReporterImpl<'a> {
                     test_list.run_count().style(count_style),
                     test_list.listed_binary_count().style(count_style),
                 )?;
+
+                if let Some(w) = &mut self.counter_width {
+                    *w = usize_decimal_char_width(test_list.run_count());
+                }
 
                 write_skip_counts(
                     test_list.skip_counts(),
@@ -521,19 +571,21 @@ impl<'a> DisplayReporterImpl<'a> {
                 // In no-capture mode, print out a test start event.
                 if self.no_capture {
                     // The spacing is to align test instances.
-                    let width = 11
-                        + if self.no_counter {
-                            0
-                        } else {
-                            DisplayCounterIndex::new(current_stats).width() + 1
-                        };
                     writeln!(
                         writer,
-                        "{:>12} {:>width$} {}",
+                        "{:>12} {}",
                         "START".style(self.styles.pass),
-                        " ",
-                        self.display_test_instance(*stress_index, None, test_instance.id()),
-                        width = width,
+                        self.display_test_instance(
+                            *stress_index,
+                            TestInstanceCounter::Counter {
+                                // --no-capture implies tests being run
+                                // serially, so the current test is the number
+                                // of finished tests plus one.
+                                current: current_stats.finished_count + 1,
+                                total: current_stats.initial_run_count,
+                            },
+                            test_instance.id()
+                        ),
                     )?;
                 }
             }
@@ -577,7 +629,11 @@ impl<'a> DisplayReporterImpl<'a> {
                     writer,
                     "{}{}",
                     DisplaySlowDuration(*elapsed),
-                    self.display_test_instance(*stress_index, None, test_instance.id())
+                    self.display_test_instance(
+                        *stress_index,
+                        TestInstanceCounter::Padded,
+                        test_instance.id()
+                    )
                 )?;
             }
 
@@ -607,7 +663,11 @@ impl<'a> DisplayReporterImpl<'a> {
                     writeln!(
                         writer,
                         "{}",
-                        self.display_test_instance(*stress_index, None, test_instance.id())
+                        self.display_test_instance(
+                            *stress_index,
+                            TestInstanceCounter::Padded,
+                            test_instance.id()
+                        )
                     )?;
 
                     // This test is guaranteed to have failed.
@@ -644,7 +704,11 @@ impl<'a> DisplayReporterImpl<'a> {
                         writeln!(
                             writer,
                             "{}",
-                            self.display_test_instance(*stress_index, None, test_instance.id())
+                            self.display_test_instance(
+                                *stress_index,
+                                TestInstanceCounter::Padded,
+                                test_instance.id()
+                            )
                         )?;
                     }
                 }
@@ -666,7 +730,11 @@ impl<'a> DisplayReporterImpl<'a> {
                     writer,
                     "[{:<9}] {}",
                     "",
-                    self.display_test_instance(*stress_index, None, test_instance.id())
+                    self.display_test_instance(
+                        *stress_index,
+                        TestInstanceCounter::Padded,
+                        test_instance.id()
+                    )
                 )?;
             }
             TestEventKind::TestFinished {
@@ -692,12 +760,17 @@ impl<'a> DisplayReporterImpl<'a> {
                     describe.final_status_level(),
                 );
 
+                let counter = TestInstanceCounter::Counter {
+                    current: current_stats.finished_count,
+                    total: current_stats.initial_run_count,
+                };
+
                 if output_on_test_finished.write_status_line {
                     self.write_status_line(
                         *stress_index,
+                        counter,
                         *test_instance,
                         describe,
-                        current_stats,
                         writer,
                     )?;
                 }
@@ -707,14 +780,15 @@ impl<'a> DisplayReporterImpl<'a> {
                 if let OutputStoreFinal::Yes { display_output } =
                     output_on_test_finished.store_final
                 {
-                    self.final_outputs.push((
-                        *stress_index,
-                        *test_instance,
-                        FinalOutput::Executed {
+                    self.final_outputs.push(FinalOutputEntry {
+                        stress_index: *stress_index,
+                        counter,
+                        instance: *test_instance,
+                        output: FinalOutput::Executed {
                             run_statuses: run_statuses.clone(),
                             display_output,
                         },
-                    ));
+                    });
                 }
             }
             TestEventKind::TestSkipped {
@@ -726,11 +800,12 @@ impl<'a> DisplayReporterImpl<'a> {
                     self.write_skip_line(*stress_index, test_instance.id(), writer)?;
                 }
                 if self.status_levels.final_status_level >= FinalStatusLevel::Skip {
-                    self.final_outputs.push((
-                        *stress_index,
-                        *test_instance,
-                        FinalOutput::Skipped(*reason),
-                    ));
+                    self.final_outputs.push(FinalOutputEntry {
+                        stress_index: *stress_index,
+                        counter: TestInstanceCounter::Padded,
+                        instance: *test_instance,
+                        output: FinalOutput::Skipped(*reason),
+                    });
                 }
             }
             TestEventKind::RunBeginCancel {
@@ -1127,22 +1202,16 @@ impl<'a> DisplayReporterImpl<'a> {
                 // SIGHUP since those tend to be automated tasks performing kills.
                 if self.cancel_status < Some(CancelReason::Interrupt) {
                     // Sort the final outputs for a friendlier experience.
-                    self.final_outputs.sort_by_key(
-                        |(stress_index, test_instance, final_output)| {
-                            // Use the final status level, reversed (i.e.
-                            // failing tests are printed at the very end).
-                            (
-                                Reverse(final_output.final_status_level()),
-                                *stress_index,
-                                test_instance.id(),
-                            )
-                        },
-                    );
+                    self.final_outputs.sort_unstable();
 
-                    for (stress_index, test_instance, final_output) in &*self.final_outputs {
-                        match final_output {
+                    for entry in &*self.final_outputs {
+                        match &entry.output {
                             FinalOutput::Skipped(_) => {
-                                self.write_skip_line(*stress_index, test_instance.id(), writer)?;
+                                self.write_skip_line(
+                                    entry.stress_index,
+                                    entry.instance.id(),
+                                    writer,
+                                )?;
                             }
                             FinalOutput::Executed {
                                 run_statuses,
@@ -1151,8 +1220,9 @@ impl<'a> DisplayReporterImpl<'a> {
                                 let last_status = run_statuses.last_status();
 
                                 self.write_final_status_line(
-                                    *stress_index,
-                                    test_instance.id(),
+                                    entry.stress_index,
+                                    entry.counter,
+                                    entry.instance.id(),
                                     run_statuses.describe(),
                                     writer,
                                 )?;
@@ -1183,7 +1253,7 @@ impl<'a> DisplayReporterImpl<'a> {
         writeln!(
             writer,
             "[         ] {}",
-            self.display_test_instance(stress_index, None, test_instance)
+            self.display_test_instance(stress_index, TestInstanceCounter::Padded, test_instance)
         )?;
 
         Ok(())
@@ -1233,9 +1303,9 @@ impl<'a> DisplayReporterImpl<'a> {
     fn write_status_line(
         &self,
         stress_index: Option<StressIndex>,
+        counter: TestInstanceCounter,
         test_instance: TestInstance<'a>,
         describe: ExecutionDescription<'_>,
-        current_stats: &RunStats,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         let last_status = describe.last_status();
@@ -1287,7 +1357,7 @@ impl<'a> DisplayReporterImpl<'a> {
         writeln!(
             writer,
             "{}",
-            self.display_test_instance(stress_index, Some(current_stats), test_instance.id())
+            self.display_test_instance(stress_index, counter, test_instance.id())
         )?;
 
         // On Windows, also print out the exception if available.
@@ -1306,6 +1376,7 @@ impl<'a> DisplayReporterImpl<'a> {
     fn write_final_status_line(
         &self,
         stress_index: Option<StressIndex>,
+        counter: TestInstanceCounter,
         test_instance: TestInstanceId<'a>,
         describe: ExecutionDescription<'_>,
         writer: &mut dyn Write,
@@ -1377,7 +1448,7 @@ impl<'a> DisplayReporterImpl<'a> {
             writer,
             "{}{}",
             DisplayBracketedDuration(last_status.time_taken),
-            self.display_test_instance(stress_index, None, test_instance),
+            self.display_test_instance(stress_index, counter, test_instance),
         )?;
 
         // On Windows, also print out the exception if available.
@@ -1396,12 +1467,18 @@ impl<'a> DisplayReporterImpl<'a> {
     fn display_test_instance(
         &self,
         stress_index: Option<StressIndex>,
-        current_stats: Option<&RunStats>,
+        counter: TestInstanceCounter,
         instance: TestInstanceId<'a>,
     ) -> DisplayTestInstance<'_> {
-        let counter_index = current_stats.and_then(|current_stats| {
-            (!self.no_counter).then(|| DisplayCounterIndex::new(current_stats))
-        });
+        let counter_index = match (counter, self.counter_width) {
+            (TestInstanceCounter::Counter { current, total }, Some(_)) => {
+                Some(DisplayCounterIndex::new_counter(current, total))
+            }
+            (TestInstanceCounter::Padded, Some(counter_width)) => Some(
+                DisplayCounterIndex::new_padded(self.theme_characters.hbar, counter_width),
+            ),
+            (TestInstanceCounter::None, _) | (_, None) => None,
+        };
 
         DisplayTestInstance::new(
             stress_index,
@@ -1508,7 +1585,11 @@ impl<'a> DisplayReporterImpl<'a> {
                 writeln!(
                     writer,
                     "{}",
-                    self.display_test_instance(*stress_index, None, *test_instance)
+                    self.display_test_instance(
+                        *stress_index,
+                        TestInstanceCounter::None,
+                        *test_instance
+                    )
                 )?;
 
                 // We want to show an attached attempt string either if this is
@@ -2009,6 +2090,13 @@ impl<'a> DisplayReporterImpl<'a> {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum TestInstanceCounter {
+    Counter { current: usize, total: usize },
+    Padded,
+    None,
+}
+
 const LIBTEST_PANIC_EXIT_CODE: i32 = 101;
 
 // Whether to show a status line for finished units (after STDOUT:/STDERR:).
@@ -2181,7 +2269,9 @@ impl Default for ThemeCharacters {
         Self {
             hbar: '-',
             progress_chars: "=> ",
-            spinner_chars: "-\\|/",
+            // Duplicate every character to halve the refresh rate, which seems
+            // to look better in practice.
+            spinner_chars: "--\\\\||//",
         }
     }
 }
@@ -2192,7 +2282,10 @@ impl ThemeCharacters {
         // https://mike42.me/blog/2018-06-make-better-cli-progress-bars-with-unicode-block-characters
         self.progress_chars = "█▉▊▋▌▍▎▏ ";
         // https://github.com/sindresorhus/cli-spinners/blob/3860701f68e3075511f111a28ca2838fc906fca8/spinners.json#L4
-        self.spinner_chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+        //
+        // Duplicate every character to halve the refresh rate, which seems to
+        // look better in practice.
+        self.spinner_chars = "⠋⠋⠙⠙⠹⠹⠸⠸⠼⠼⠴⠴⠦⠦⠧⠧⠇⠇⠏⠏";
     }
 
     fn hbar(&self, width: usize) -> String {
@@ -2246,7 +2339,7 @@ mod tests {
             failure_output: Some(TestOutputDisplay::Immediate),
             should_colorize: false,
             no_capture: true,
-            show_progress: ShowProgress::default(),
+            show_progress: ShowProgress::Counter,
             no_output_indent: false,
         };
         let output = ReporterStderr::Buffer(out);
@@ -2308,11 +2401,13 @@ mod tests {
 
         with_reporter(
             |mut reporter| {
+                reporter.inner.counter_width = Some(usize_decimal_char_width(5000));
                 // TODO: write a bunch more outputs here.
                 reporter
                     .inner
                     .write_final_status_line(
                         None,
+                        TestInstanceCounter::None,
                         test_instance,
                         fail_describe,
                         reporter.stderr.buf_mut().unwrap(),
@@ -2326,6 +2421,7 @@ mod tests {
                             current: 1,
                             total: None,
                         }),
+                        TestInstanceCounter::Padded,
                         test_instance,
                         flaky_describe,
                         reporter.stderr.buf_mut().unwrap(),
@@ -2339,6 +2435,10 @@ mod tests {
                             current: 2,
                             total: Some(NonZero::new(3).unwrap()),
                         }),
+                        TestInstanceCounter::Counter {
+                            current: 20,
+                            total: 5000,
+                        },
                         test_instance,
                         flaky_describe,
                         reporter.stderr.buf_mut().unwrap(),
