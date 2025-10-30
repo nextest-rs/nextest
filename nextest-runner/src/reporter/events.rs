@@ -161,6 +161,22 @@ pub enum TestEventKind<'a> {
         running: usize,
     },
 
+    /// Show test-specific progress.
+    ///
+    /// This event is emitted shortly after a test starts running, and is used
+    /// as a trigger to show test-related progress. This is to prevent many very
+    /// short-lived tests from overwhelming the display code.
+    TestShowProgress {
+        /// If a stress test is being run, the stress index, starting from 0.
+        stress_index: Option<StressIndex>,
+
+        /// Retry data.
+        retry_data: RetryData,
+
+        /// The test instance that was started.
+        test_instance: TestInstance<'a>,
+    },
+
     /// A test was slower than a configured soft timeout.
     TestSlow {
         /// If a stress test is being run, the stress index, starting from 0.

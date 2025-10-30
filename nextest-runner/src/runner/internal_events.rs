@@ -81,6 +81,11 @@ pub(super) enum ExecutorEvent<'a> {
         // these are low-traffic channels that we don't expect to be backed up.
         req_rx_tx: oneshot::Sender<UnboundedReceiver<RunUnitRequest<'a>>>,
     },
+    ShowProgress {
+        stress_index: Option<StressIndex>,
+        retry_data: RetryData,
+        test_instance: TestInstance<'a>,
+    },
     Slow {
         stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,

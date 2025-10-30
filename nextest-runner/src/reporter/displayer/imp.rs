@@ -589,6 +589,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     )?;
                 }
             }
+            TestEventKind::TestShowProgress { .. } => {}
             TestEventKind::TestSlow {
                 stress_index,
                 test_instance,
@@ -2269,9 +2270,7 @@ impl Default for ThemeCharacters {
         Self {
             hbar: '-',
             progress_chars: "=> ",
-            // Duplicate every character to halve the refresh rate, which seems
-            // to look better in practice.
-            spinner_chars: "--\\\\||//",
+            spinner_chars: "-\\|/",
         }
     }
 }
@@ -2282,10 +2281,7 @@ impl ThemeCharacters {
         // https://mike42.me/blog/2018-06-make-better-cli-progress-bars-with-unicode-block-characters
         self.progress_chars = "█▉▊▋▌▍▎▏ ";
         // https://github.com/sindresorhus/cli-spinners/blob/3860701f68e3075511f111a28ca2838fc906fca8/spinners.json#L4
-        //
-        // Duplicate every character to halve the refresh rate, which seems to
-        // look better in practice.
-        self.spinner_chars = "⠋⠋⠙⠙⠹⠹⠸⠸⠼⠼⠴⠴⠦⠦⠧⠧⠇⠇⠏⠏";
+        self.spinner_chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
     }
 
     fn hbar(&self, width: usize) -> String {
