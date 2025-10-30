@@ -151,16 +151,8 @@ impl ProgressBarState {
             TestEventKind::TestStarted {
                 current_stats,
                 running,
-                test_instance,
                 ..
             } => {
-                self.add_test_bar(
-                    "".to_owned(),
-                    &test_instance.suite_info.binary_id,
-                    test_instance.name,
-                    styles,
-                );
-
                 self.hidden_between_sub_runs = false;
 
                 self.bar.set_prefix(progress_bar_prefix(
@@ -174,6 +166,16 @@ impl ProgressBarState {
                 // in ProgressBar::new.
                 self.bar.set_length(current_stats.initial_run_count as u64);
                 self.bar.set_position(current_stats.finished_count as u64);
+            }
+            TestEventKind::TestShowProgress { test_instance, .. } => {
+                if self.needs_add_test_bar(&test_instance.id()) {
+                    self.add_test_bar(
+                        "".to_owned(),
+                        &test_instance.suite_info.binary_id,
+                        test_instance.name,
+                        styles,
+                    );
+                }
             }
             TestEventKind::TestFinished {
                 current_stats,
@@ -286,7 +288,7 @@ impl ProgressBarState {
         styles: &Styles,
     ) {
         if let Some(test_bars) = &mut self.test_bars {
-            let tb = self.multi_progress.add(ProgressBar::new_spinner());
+            let tb = ProgressBar::hidden();
             tb.set_style(
                 ProgressStyle::default_bar()
                     .template("{prefix:>10} {spinner} [{elapsed_precise:>9}] {wide_msg}")
@@ -306,12 +308,22 @@ impl ProgressBarState {
                 )
                 .to_string(),
             );
-            tb.enable_steady_tick(Duration::from_millis(100));
+            tb.enable_steady_tick(Duration::from_millis(1000));
+
+            let tb = self.multi_progress.add(tb);
+
             test_bars.insert_overwrite(TestProgressBar {
                 binary_id: binary_id.clone(),
                 test_name: test_name.to_owned(),
                 progress_bar: tb,
             });
+        }
+    }
+
+    fn needs_add_test_bar(&self, id: &TestInstanceId<'_>) -> bool {
+        match &self.test_bars {
+            Some(test_bars) => !test_bars.contains_key(id),
+            None => false,
         }
     }
 
@@ -446,7 +458,8 @@ impl TerminalProgress {
                     TerminalProgressValue::Value(percentage)
                 }
             }
-            TestEventKind::TestSlow { .. }
+            TestEventKind::TestShowProgress { .. }
+            | TestEventKind::TestSlow { .. }
             | TestEventKind::TestAttemptFailedWillRetry { .. }
             | TestEventKind::TestRetryStarted { .. }
             | TestEventKind::TestSkipped { .. }

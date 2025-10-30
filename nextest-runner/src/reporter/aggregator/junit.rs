@@ -114,6 +114,7 @@ impl<'cfg> MetadataJunit<'cfg> {
             | TestEventKind::InfoFinished { .. } => {}
             TestEventKind::InputEnter { .. } => {}
             TestEventKind::TestStarted { .. } => {}
+            TestEventKind::TestShowProgress { .. } => {}
             TestEventKind::TestSlow { .. } => {}
             TestEventKind::TestAttemptFailedWillRetry { .. }
             | TestEventKind::TestRetryStarted { .. } => {

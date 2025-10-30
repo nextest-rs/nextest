@@ -656,6 +656,15 @@ where
                     running: self.running_tests.len(),
                 })
             }
+            InternalEvent::Executor(ExecutorEvent::ShowProgress {
+                stress_index,
+                retry_data,
+                test_instance,
+            }) => self.callback_none_response(TestEventKind::TestShowProgress {
+                stress_index,
+                retry_data,
+                test_instance,
+            }),
             InternalEvent::Executor(ExecutorEvent::Slow {
                 stress_index,
                 test_instance,
