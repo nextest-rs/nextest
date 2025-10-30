@@ -287,17 +287,12 @@ pub(super) struct RunOpts {
     pub(super) reuse_build: ReuseBuildOpts,
 }
 
-#[derive(Copy, Clone, Debug, ValueEnum)]
+#[derive(Copy, Clone, Debug, ValueEnum, Default)]
 pub(crate) enum PlatformFilterOpts {
     Target,
     Host,
+    #[default]
     Any,
-}
-
-impl Default for PlatformFilterOpts {
-    fn default() -> Self {
-        Self::Any
-    }
 }
 
 impl From<PlatformFilterOpts> for Option<BuildPlatform> {
@@ -310,20 +305,16 @@ impl From<PlatformFilterOpts> for Option<BuildPlatform> {
     }
 }
 
-#[derive(Copy, Clone, Debug, ValueEnum)]
+#[derive(Copy, Clone, Debug, ValueEnum, Default)]
 pub(super) enum ListType {
+    #[default]
     Full,
     BinariesOnly,
 }
 
-impl Default for ListType {
-    fn default() -> Self {
-        Self::Full
-    }
-}
-
-#[derive(Copy, Clone, Debug, ValueEnum)]
+#[derive(Copy, Clone, Debug, ValueEnum, Default)]
 pub(super) enum MessageFormatOpts {
+    #[default]
     Human,
     Json,
     JsonPretty,
@@ -336,12 +327,6 @@ impl MessageFormatOpts {
             Self::Json => OutputFormat::Serializable(SerializableFormat::Json),
             Self::JsonPretty => OutputFormat::Serializable(SerializableFormat::JsonPretty),
         }
-    }
-}
-
-impl Default for MessageFormatOpts {
-    fn default() -> Self {
-        Self::Human
     }
 }
 
