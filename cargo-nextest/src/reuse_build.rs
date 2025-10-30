@@ -208,8 +208,9 @@ impl ReuseBuildOpts {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum, Default)]
 pub(crate) enum ArchiveFormatOpt {
+    #[default]
     Auto,
     #[clap(alias = "tar-zstd")]
     TarZst,
@@ -226,12 +227,6 @@ impl ArchiveFormatOpt {
                 }
             }),
         }
-    }
-}
-
-impl Default for ArchiveFormatOpt {
-    fn default() -> Self {
-        Self::Auto
     }
 }
 

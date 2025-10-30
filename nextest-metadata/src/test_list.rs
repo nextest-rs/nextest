@@ -65,7 +65,8 @@ impl ListCommand {
         self
     }
 
-    /// Builds a command for `cargo nextest list`. This is the first part of the work of [`self.exec`].
+    /// Builds a command for `cargo nextest list`. This is the first part of the
+    /// work of [`Self::exec`].
     pub fn cargo_command(&self) -> Command {
         let cargo_path: PathBuf = self.cargo_path.as_ref().map_or_else(
             || std::env::var_os("CARGO").map_or("cargo".into(), PathBuf::from),

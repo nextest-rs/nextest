@@ -325,8 +325,10 @@ impl StderrStyles {
 ///
 /// The test pass is gated by `#[cfg(test)]` to allow a better
 /// optimization in the binary.
+#[derive(Default)]
 pub enum OutputWriter {
     /// No capture
+    #[default]
     Normal,
     /// Output captured
     #[cfg(test)]
@@ -336,12 +338,6 @@ pub enum OutputWriter {
         /// stderr capture
         stderr: Vec<u8>,
     },
-}
-
-impl Default for OutputWriter {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 impl OutputWriter {

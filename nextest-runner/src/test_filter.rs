@@ -294,12 +294,13 @@ impl TestFilterPatterns {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 enum ResolvedFilterPatterns {
     /// Match all tests.
     ///
     /// This is mostly for convenience -- it's equivalent to `SkipOnly` with an empty set of skip
     /// patterns.
+    #[default]
     All,
 
     /// Match all tests except those that match the skip patterns.
@@ -318,12 +319,6 @@ enum ResolvedFilterPatterns {
         pattern_matcher: Box<AhoCorasick>,
         skip_pattern_matcher: Box<AhoCorasick>,
     },
-}
-
-impl Default for ResolvedFilterPatterns {
-    fn default() -> Self {
-        Self::All
-    }
 }
 
 impl ResolvedFilterPatterns {
