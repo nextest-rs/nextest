@@ -302,6 +302,15 @@ pub struct UsdtTestAttemptStart {
 
     /// The total number of stress runs, if available.
     pub stress_total: Option<u32>,
+
+    /// The global slot number (0-indexed).
+    pub global_slot: u64,
+
+    /// The group slot number (0-indexed), if the test is in a custom test group.
+    pub group_slot: Option<u64>,
+
+    /// The test group name, if the test is in a custom test group.
+    pub test_group: Option<String>,
 }
 
 /// Data associated with the `test-attempt-done` probe.

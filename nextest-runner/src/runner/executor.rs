@@ -743,6 +743,13 @@ impl<'a> ExecutorContext<'a> {
             total_attempts: test.retry_data.total_attempts,
             stress_current: test.stress_index.map(|s| s.current),
             stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
+            global_slot: test.cx.global_slot(),
+            group_slot: test.cx.group_slot(),
+            test_group: test
+                .settings
+                .test_group()
+                .custom_name()
+                .map(|s| s.to_owned()),
         });
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
