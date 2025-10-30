@@ -23,6 +23,14 @@ impl TestGroup {
     /// The string `"@global"`, indicating the global test group.
     pub const GLOBAL_STR: &'static str = "@global";
 
+    /// Returns the custom group name if this is a custom group, or None if this is the global group.
+    pub fn custom_name(&self) -> Option<&str> {
+        match self {
+            TestGroup::Custom(group) => Some(group.as_str()),
+            TestGroup::Global => None,
+        }
+    }
+
     pub(crate) fn make_all_groups(
         custom_groups: impl IntoIterator<Item = CustomTestGroup>,
     ) -> impl Iterator<Item = Self> {
