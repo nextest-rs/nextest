@@ -517,6 +517,10 @@ fn supports_osc_9_4(stream: &dyn IsTerminal) -> bool {
         debug!("autodetect terminal progress reporting: enabling since TERM_PROGRAM is WezTerm");
         return true;
     }
+    if std::env::var("TERM_PROGRAM").ok() == Some("ghostty".into()) {
+        debug!("autodetect terminal progress reporting: enabling since TERM_PROGRAM is Ghostty");
+        return true;
+    }
 
     false
 }
