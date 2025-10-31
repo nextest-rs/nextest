@@ -209,10 +209,10 @@ impl<'a> TestOutputErrorSlice<'a> {
             }
         }
 
-        if let Some(stdout) = stdout {
-            if let Some(stdout_subslice) = heuristic_should_panic(stdout) {
-                return Some(TestOutputErrorSlice::ShouldPanic { stdout_subslice });
-            }
+        if let Some(stdout) = stdout
+            && let Some(stdout_subslice) = heuristic_should_panic(stdout)
+        {
+            return Some(TestOutputErrorSlice::ShouldPanic { stdout_subslice });
         }
 
         None
@@ -309,10 +309,10 @@ fn heuristic_panic_message(stderr: &[u8]) -> Option<ByteSubslice<'_>> {
     // result-based test failures.
     let mut start = panicked_at_match.start();
     let prefix = stderr[..start].trim_end_with(|c| c == '\n' || c == '\r');
-    if let Some(prev_line_start) = prefix.rfind("\n") {
-        if prefix[prev_line_start..].starts_with_str("\nError:") {
-            start = prev_line_start + 1;
-        }
+    if let Some(prev_line_start) = prefix.rfind("\n")
+        && prefix[prev_line_start..].starts_with_str("\nError:")
+    {
+        start = prev_line_start + 1;
     }
 
     // TODO: this grabs too much -- it is possible that destructors print out further messages so we

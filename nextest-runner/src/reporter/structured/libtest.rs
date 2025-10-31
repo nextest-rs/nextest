@@ -360,10 +360,10 @@ impl<'cfg> LibtestReporter<'cfg> {
 
         // After all the tests have been started or ignored, put the block of
         // tests that were ignored just as libtest does
-        if matches!(event.kind, TestEventKind::TestFinished { .. }) {
-            if let Some(ib) = test_suite_mut.ignore_block.take() {
-                out.extend_from_slice(&ib);
-            }
+        if matches!(event.kind, TestEventKind::TestFinished { .. })
+            && let Some(ib) = test_suite_mut.ignore_block.take()
+        {
+            out.extend_from_slice(&ib);
         }
 
         // This is one place where we deviate from the behavior of libtest, by
@@ -643,10 +643,9 @@ fn strip_human_stdout_or_combined(
                 if let Some(name) = line
                     .strip_prefix(b"test ")
                     .and_then(|np| np.strip_suffix(b" ... FAILED"))
+                    && test_name.as_bytes() == name
                 {
-                    if test_name.as_bytes() == name {
-                        return false;
-                    }
+                    return false;
                 }
 
                 true

@@ -1019,10 +1019,10 @@ impl BackoffIter {
                 let exp_delay = delay.mul_f64(factor);
 
                 // Stop multiplying the exponential factor if delay is greater than max_delay.
-                if let Some(max_delay) = max_delay {
-                    if exp_delay > max_delay {
-                        return (max_delay, jitter);
-                    }
+                if let Some(max_delay) = max_delay
+                    && exp_delay > max_delay
+                {
+                    return (max_delay, jitter);
                 }
 
                 let next_factor = self.current_factor * Self::BACKOFF_EXPONENT;

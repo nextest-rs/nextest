@@ -88,10 +88,10 @@ impl<'a> ShowTestGroups<'a> {
                         panic!("show-test-groups is not set via script section");
                     }
                     SettingSource::Profile | SettingSource::Default => {
-                        if let Some(non_overrides) = non_overrides.as_mut() {
-                            if settings.mode.matches_group(&TestGroup::Global) {
-                                non_overrides.insert(&suite.binary_id, test_name);
-                            }
+                        if let Some(non_overrides) = non_overrides.as_mut()
+                            && settings.mode.matches_group(&TestGroup::Global)
+                        {
+                            non_overrides.insert(&suite.binary_id, test_name);
                         }
                     }
                 }
@@ -195,20 +195,20 @@ impl<'a> ShowTestGroups<'a> {
             }
 
             // Also show tests that don't match an override if they match the global config below.
-            if test_group == &TestGroup::Global {
-                if let Some(non_overrides) = &self.non_overrides {
-                    any_printed = true;
-                    writeln!(writer, "  * from default settings:")?;
-                    let mut inner_writer = indented(writer).with_str(INDENT);
-                    self.test_list.write_human_with_filter(
-                        non_overrides,
-                        &mut inner_writer,
-                        false,
-                        colorize,
-                    )?;
-                    inner_writer.write_str_flush()?;
-                    writer = inner_writer.into_inner();
-                }
+            if test_group == &TestGroup::Global
+                && let Some(non_overrides) = &self.non_overrides
+            {
+                any_printed = true;
+                writeln!(writer, "  * from default settings:")?;
+                let mut inner_writer = indented(writer).with_str(INDENT);
+                self.test_list.write_human_with_filter(
+                    non_overrides,
+                    &mut inner_writer,
+                    false,
+                    colorize,
+                )?;
+                inner_writer.write_str_flush()?;
+                writer = inner_writer.into_inner();
             }
 
             if !any_printed {

@@ -152,17 +152,17 @@ impl PlatformRunner {
     ) -> Result<Option<Self>, TargetRunnerError> {
         if let Some(targets) = &config.target {
             // First lookup by the exact triple, as that one always takes precedence
-            if let Some(parent) = targets.get(target.triple_str()) {
-                if let Some(runner) = &parent.runner {
-                    return Ok(Some(Self::parse_runner(
-                        PlatformRunnerSource::CargoConfig {
-                            source: source.clone(),
-                            target_table: target.triple_str().into(),
-                        },
-                        runner.clone(),
-                        cwd,
-                    )?));
-                }
+            if let Some(parent) = targets.get(target.triple_str())
+                && let Some(runner) = &parent.runner
+            {
+                return Ok(Some(Self::parse_runner(
+                    PlatformRunnerSource::CargoConfig {
+                        source: source.clone(),
+                        target_table: target.triple_str().into(),
+                    },
+                    runner.clone(),
+                    cwd,
+                )?));
             }
 
             // Next check if there are target.'cfg(..)' expressions that match

@@ -194,10 +194,10 @@ impl Visit for MessageVisitor<'_, '_> {
             if let Err(error) = write!(self.writer, "{value:?}") {
                 self.error = Some(error);
             }
-        } else if self.show_other {
-            if let Err(error) = write!(self.writer, "; {} = {:?}", field.name(), value) {
-                self.error = Some(error);
-            }
+        } else if self.show_other
+            && let Err(error) = write!(self.writer, "; {} = {:?}", field.name(), value)
+        {
+            self.error = Some(error);
         }
     }
 }

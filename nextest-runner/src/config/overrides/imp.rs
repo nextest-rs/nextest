@@ -48,22 +48,20 @@ impl<'p, Source: Copy> ListSettings<'p, Source> {
         let mut list_wrapper = None;
 
         for override_ in &profile.compiled_data.scripts {
-            if let Some(wrapper) = &override_.list_wrapper {
-                if list_wrapper.is_none() {
-                    let (wrapper, source) = map_wrapper_script(
-                        profile,
-                        Source::track_script(wrapper.clone(), override_),
-                    );
+            if let Some(wrapper) = &override_.list_wrapper
+                && list_wrapper.is_none()
+            {
+                let (wrapper, source) =
+                    map_wrapper_script(profile, Source::track_script(wrapper.clone(), override_));
 
-                    if !override_
-                        .is_enabled_binary(query, &ecx)
-                        .expect("test() in list-time scripts should have been rejected")
-                    {
-                        continue;
-                    }
-
-                    list_wrapper = Some((wrapper, source));
+                if !override_
+                    .is_enabled_binary(query, &ecx)
+                    .expect("test() in list-time scripts should have been rejected")
+                {
+                    continue;
                 }
+
+                list_wrapper = Some((wrapper, source));
             }
         }
 
@@ -271,67 +269,67 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
                 continue;
             }
 
-            if let Some(expr) = &override_.filter() {
-                if !expr.matches_test(query, &ecx) {
-                    continue;
-                }
-                // If no expression is present, it's equivalent to "all()".
+            if let Some(expr) = &override_.filter()
+                && !expr.matches_test(query, &ecx)
+            {
+                continue;
             }
+            // If no expression is present, it's equivalent to "all()".
 
-            if priority.is_none() {
-                if let Some(p) = override_.data.priority {
-                    priority = Some(Source::track_override(p, override_));
-                }
+            if priority.is_none()
+                && let Some(p) = override_.data.priority
+            {
+                priority = Some(Source::track_override(p, override_));
             }
-            if threads_required.is_none() {
-                if let Some(t) = override_.data.threads_required {
-                    threads_required = Some(Source::track_override(t, override_));
-                }
+            if threads_required.is_none()
+                && let Some(t) = override_.data.threads_required
+            {
+                threads_required = Some(Source::track_override(t, override_));
             }
-            if run_extra_args.is_none() {
-                if let Some(r) = override_.data.run_extra_args.as_deref() {
-                    run_extra_args = Some(Source::track_override(r, override_));
-                }
+            if run_extra_args.is_none()
+                && let Some(r) = override_.data.run_extra_args.as_deref()
+            {
+                run_extra_args = Some(Source::track_override(r, override_));
             }
-            if retries.is_none() {
-                if let Some(r) = override_.data.retries {
-                    retries = Some(Source::track_override(r, override_));
-                }
+            if retries.is_none()
+                && let Some(r) = override_.data.retries
+            {
+                retries = Some(Source::track_override(r, override_));
             }
-            if slow_timeout.is_none() {
-                if let Some(s) = override_.data.slow_timeout {
-                    slow_timeout = Some(Source::track_override(s, override_));
-                }
+            if slow_timeout.is_none()
+                && let Some(s) = override_.data.slow_timeout
+            {
+                slow_timeout = Some(Source::track_override(s, override_));
             }
-            if leak_timeout.is_none() {
-                if let Some(l) = override_.data.leak_timeout {
-                    leak_timeout = Some(Source::track_override(l, override_));
-                }
+            if leak_timeout.is_none()
+                && let Some(l) = override_.data.leak_timeout
+            {
+                leak_timeout = Some(Source::track_override(l, override_));
             }
-            if test_group.is_none() {
-                if let Some(t) = &override_.data.test_group {
-                    test_group = Some(Source::track_override(t.clone(), override_));
-                }
+            if test_group.is_none()
+                && let Some(t) = &override_.data.test_group
+            {
+                test_group = Some(Source::track_override(t.clone(), override_));
             }
-            if success_output.is_none() {
-                if let Some(s) = override_.data.success_output {
-                    success_output = Some(Source::track_override(s, override_));
-                }
+            if success_output.is_none()
+                && let Some(s) = override_.data.success_output
+            {
+                success_output = Some(Source::track_override(s, override_));
             }
-            if failure_output.is_none() {
-                if let Some(f) = override_.data.failure_output {
-                    failure_output = Some(Source::track_override(f, override_));
-                }
+            if failure_output.is_none()
+                && let Some(f) = override_.data.failure_output
+            {
+                failure_output = Some(Source::track_override(f, override_));
             }
-            if junit_store_success_output.is_none() {
-                if let Some(s) = override_.data.junit.store_success_output {
-                    junit_store_success_output = Some(Source::track_override(s, override_));
-                }
+            if junit_store_success_output.is_none()
+                && let Some(s) = override_.data.junit.store_success_output
+            {
+                junit_store_success_output = Some(Source::track_override(s, override_));
             }
-            if junit_store_failure_output.is_none() {
-                if let Some(f) = override_.data.junit.store_failure_output {
-                    junit_store_failure_output = Some(Source::track_override(f, override_));
-                }
+            if junit_store_failure_output.is_none()
+                && let Some(f) = override_.data.junit.store_failure_output
+            {
+                junit_store_failure_output = Some(Source::track_override(f, override_));
             }
         }
 
@@ -340,10 +338,10 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
                 continue;
             }
 
-            if run_wrapper.is_none() {
-                if let Some(wrapper) = &override_.run_wrapper {
-                    run_wrapper = Some(Source::track_script(wrapper.clone(), override_));
-                }
+            if run_wrapper.is_none()
+                && let Some(wrapper) = &override_.run_wrapper
+            {
+                run_wrapper = Some(Source::track_script(wrapper.clone(), override_));
             }
         }
 

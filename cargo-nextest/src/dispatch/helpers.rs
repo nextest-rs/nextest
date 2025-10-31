@@ -186,15 +186,15 @@ pub(super) fn display_output_slice(
 
     match output_format {
         super::commands::ExtractOutputFormat::Raw => {
-            if let Some(kind) = output_slice {
-                if let Some(out) = kind.combined_subslice() {
-                    return std::io::stdout().write_all(out.slice).map_err(|err| {
-                        ExpectedError::DebugExtractWriteError {
-                            format: output_format,
-                            err,
-                        }
-                    });
-                }
+            if let Some(kind) = output_slice
+                && let Some(out) = kind.combined_subslice()
+            {
+                return std::io::stdout().write_all(out.slice).map_err(|err| {
+                    ExpectedError::DebugExtractWriteError {
+                        format: output_format,
+                        err,
+                    }
+                });
             }
         }
         super::commands::ExtractOutputFormat::JunitDescription => {
@@ -203,16 +203,16 @@ pub(super) fn display_output_slice(
             }
         }
         super::commands::ExtractOutputFormat::Highlight => {
-            if let Some(kind) = output_slice {
-                if let Some(out) = kind.combined_subslice() {
-                    let end = highlight_end(out.slice);
-                    return std::io::stdout()
-                        .write_all(&out.slice[..end])
-                        .map_err(|err| ExpectedError::DebugExtractWriteError {
-                            format: output_format,
-                            err,
-                        });
-                }
+            if let Some(kind) = output_slice
+                && let Some(out) = kind.combined_subslice()
+            {
+                let end = highlight_end(out.slice);
+                return std::io::stdout()
+                    .write_all(&out.slice[..end])
+                    .map_err(|err| ExpectedError::DebugExtractWriteError {
+                        format: output_format,
+                        err,
+                    });
             }
         }
     }

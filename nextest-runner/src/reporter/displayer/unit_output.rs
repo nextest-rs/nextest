@@ -179,39 +179,39 @@ impl UnitOutputReporter {
     ) -> io::Result<()> {
         match output {
             ChildOutput::Split(split) => {
-                if let Some(stdout) = &split.stdout {
-                    if self.display_empty_outputs || !stdout.is_empty() {
-                        writeln!(writer, "{}", spec.stdout_header)?;
+                if let Some(stdout) = &split.stdout
+                    && (self.display_empty_outputs || !stdout.is_empty())
+                {
+                    writeln!(writer, "{}", spec.stdout_header)?;
 
-                        // If there's no output indent, this is a no-op, though
-                        // it will bear the perf cost of a vtable indirection +
-                        // whatever internal state IndentWriter tracks. Doubt
-                        // this will be an issue in practice though!
-                        let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
-                        self.write_test_single_output_with_description(
-                            styles,
-                            stdout,
-                            highlight_slice.and_then(|d| d.stdout_subslice()),
-                            &mut indent_writer,
-                        )?;
-                        indent_writer.flush()?;
-                        writer = indent_writer.into_inner();
-                    }
+                    // If there's no output indent, this is a no-op, though
+                    // it will bear the perf cost of a vtable indirection +
+                    // whatever internal state IndentWriter tracks. Doubt
+                    // this will be an issue in practice though!
+                    let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
+                    self.write_test_single_output_with_description(
+                        styles,
+                        stdout,
+                        highlight_slice.and_then(|d| d.stdout_subslice()),
+                        &mut indent_writer,
+                    )?;
+                    indent_writer.flush()?;
+                    writer = indent_writer.into_inner();
                 }
 
-                if let Some(stderr) = &split.stderr {
-                    if self.display_empty_outputs || !stderr.is_empty() {
-                        writeln!(writer, "{}", spec.stderr_header)?;
+                if let Some(stderr) = &split.stderr
+                    && (self.display_empty_outputs || !stderr.is_empty())
+                {
+                    writeln!(writer, "{}", spec.stderr_header)?;
 
-                        let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
-                        self.write_test_single_output_with_description(
-                            styles,
-                            stderr,
-                            highlight_slice.and_then(|d| d.stderr_subslice()),
-                            &mut indent_writer,
-                        )?;
-                        indent_writer.flush()?;
-                    }
+                    let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
+                    self.write_test_single_output_with_description(
+                        styles,
+                        stderr,
+                        highlight_slice.and_then(|d| d.stderr_subslice()),
+                        &mut indent_writer,
+                    )?;
+                    indent_writer.flush()?;
                 }
             }
             ChildOutput::Combined { output } => {

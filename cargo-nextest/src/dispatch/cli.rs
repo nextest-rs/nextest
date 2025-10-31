@@ -693,12 +693,11 @@ impl TestRunnerOpts {
         // Warn on conflicts between options. This is a warning and not an error
         // because these options can be specified via environment variables as
         // well.
-        if self.test_threads.is_some() {
-            if let Some(reasons) =
+        if self.test_threads.is_some()
+            && let Some(reasons) =
                 no_run_no_capture_reasons(self.no_run, cap_strat == CaptureStrategy::None)
-            {
-                warn!("ignoring --test-threads because {reasons}");
-            }
+        {
+            warn!("ignoring --test-threads because {reasons}");
         }
 
         if self.retries.is_some() && self.no_run {
@@ -905,15 +904,15 @@ impl ReporterOpts {
 
         let reasons = no_run_no_capture_reasons(no_run, no_capture);
 
-        if self.failure_output.is_some() {
-            if let Some(reasons) = reasons {
-                warn!("ignoring --failure-output because {}", reasons);
-            }
+        if self.failure_output.is_some()
+            && let Some(reasons) = reasons
+        {
+            warn!("ignoring --failure-output because {}", reasons);
         }
-        if self.success_output.is_some() {
-            if let Some(reasons) = reasons {
-                warn!("ignoring --success-output because {}", reasons);
-            }
+        if self.success_output.is_some()
+            && let Some(reasons) = reasons
+        {
+            warn!("ignoring --success-output because {}", reasons);
         }
         if self.status_level.is_some() && no_run {
             warn!("ignoring --status-level because --no-run is specified");
