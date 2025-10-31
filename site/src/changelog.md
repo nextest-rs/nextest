@@ -8,6 +8,25 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.110] - 2025-10-31
+
+### Added
+
+- OSC 9;4 in-terminal progress bars are automatically enabled when the [Ghostty terminal](https://ghostty.org/) is detected. Thanks [adamchalmers](https://github.com/adamchalmers) and [RGBCube](https://github.com/RGBCube) for your first contribution!
+
+### Fixed
+
+- With `--show-progress=running`, the global progress bar now stays in place more often, providing a smoother visual experience.
+
+### Changed
+
+- MSRV for building nextest updated to Rust 1.88.
+
+### Internal improvements
+
+- USDT probes now include additional context: `global_slot`, `group_slot`, and `test_group` fields for test attempt events.
+- Miscellaneous performance improvements to `--show-progress=running` and `only`.
+
 ## [0.9.109] - 2025-10-29
 
 ### Added
@@ -1599,6 +1618,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.110]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.110
 [0.9.109]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.109
 [0.9.108]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.108
 [0.9.107]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.107
