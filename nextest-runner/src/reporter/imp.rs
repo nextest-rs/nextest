@@ -112,6 +112,7 @@ impl ReporterBuilder {
     pub fn build<'a>(
         &self,
         test_list: &TestList,
+        test_threads: usize,
         profile: &EvaluatableProfile<'a>,
         cargo_configs: &CargoConfigs,
         output: ReporterStderr<'a>,
@@ -131,6 +132,7 @@ impl ReporterBuilder {
                 final_status_level,
             },
             test_count: test_list.test_count(),
+            test_threads,
             success_output: self.success_output,
             failure_output: self.failure_output,
             should_colorize: self.should_colorize,

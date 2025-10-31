@@ -51,6 +51,7 @@ owo-colors.workspace = true
 pin-project-lite.workspace = true
 quick-junit.workspace = true
 rand.workspace = true
+ratatui.workspace = true
 regex.workspace = true
 semver.workspace = true
 serde.workspace = true

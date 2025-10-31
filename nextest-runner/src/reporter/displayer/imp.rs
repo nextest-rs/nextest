@@ -47,6 +47,7 @@ pub(crate) struct DisplayReporterBuilder {
     pub(crate) default_filter: CompiledDefaultFilter,
     pub(crate) status_levels: StatusLevels,
     pub(crate) test_count: usize,
+    pub(crate) test_threads: usize,
     pub(crate) success_output: Option<TestOutputDisplay>,
     pub(crate) failure_output: Option<TestOutputDisplay>,
     pub(crate) should_colorize: bool,
@@ -181,8 +182,13 @@ impl DisplayReporterBuilder {
             ShowProgress::Running => true,
         };
 
-        let state =
-            ProgressBarState::new(self.test_count, progress_chars, spinner_chars, show_running);
+        let state = ProgressBarState::new(
+            self.test_count,
+            self.test_threads,
+            progress_chars,
+            spinner_chars,
+            show_running,
+        );
         // Note: even if we create a progress bar here, if stderr is
         // piped, indicatif will not show it.
         Some(state)
@@ -2331,6 +2337,7 @@ mod tests {
                 final_status_level: FinalStatusLevel::Fail,
             },
             test_count: 0,
+            test_threads: 8,
             success_output: Some(TestOutputDisplay::Immediate),
             failure_output: Some(TestOutputDisplay::Immediate),
             should_colorize: false,

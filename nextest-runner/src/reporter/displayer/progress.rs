@@ -11,13 +11,19 @@ use iddqd::{IdHashItem, IdHashMap, id_upcast};
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::RustBinaryId;
 use owo_colors::OwoColorize;
+use ratatui::{
+    Terminal, TerminalOptions, Viewport,
+    layout::{Constraint, Layout},
+    prelude::CrosstermBackend,
+    widgets::LineGauge,
+};
 use std::{
     env, fmt,
-    io::{self, IsTerminal, Write},
+    io::{self, IsTerminal, Stderr, Write},
     time::Duration,
 };
 use swrite::{SWrite, swrite};
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// How to show progress.
 #[derive(Default, Clone, Copy, Debug)]
@@ -60,9 +66,37 @@ impl IdHashItem for TestProgressBar {
 }
 
 #[derive(Debug)]
+struct TermProgressBar {
+    term: Option<Terminal<CrosstermBackend<Stderr>>>,
+    current_stats: RunStats,
+    message: String,
+}
+
+impl TermProgressBar {
+    fn draw(&mut self) {
+        if let Some(term) = &mut self.term {
+            term.draw(|frame| {
+                let area = frame.area();
+
+                // The first line is the overall progress.
+                let vertical = Layout::vertical([Constraint::Length(1), Constraint::Percentage(0)]);
+                let rects = vertical.split(area);
+                let first_line = rects[0];
+                let rest = rects[1];
+
+                let progress = LineGauge::default().label("Running").ratio(
+                    self.current_stats.finished_count as f64
+                        / self.current_stats.initial_run_count as f64,
+                );
+                frame.render_widget(progress, first_line);
+            });
+        }
+    }
+}
+
+#[derive(Debug)]
 pub(super) struct ProgressBarState {
-    multi_progress: MultiProgress,
-    bar: ProgressBar,
+    bar: TermProgressBar,
     spinner_chars: &'static str,
     test_bars: Option<IdHashMap<TestProgressBar>>,
     // Reasons for hiding the progress bar. We show the progress bar if none of
@@ -83,6 +117,7 @@ pub(super) struct ProgressBarState {
 impl ProgressBarState {
     pub(super) fn new(
         test_count: usize,
+        test_threads: usize,
         progress_chars: &str,
         spinner_chars: &'static str,
         show_running: bool,
@@ -113,8 +148,37 @@ impl ProgressBarState {
 
         let test_bars = show_running.then_some(IdHashMap::new());
 
+        // TODO check if foreground process of controlling terminal
+        let term = if io::stderr().is_terminal() {
+            let backend = CrosstermBackend::new(io::stderr());
+            // XXX cap test threads to u16 rather than this!
+            let inline_height = if show_running {
+                test_threads as u16 + 1
+            } else {
+                1
+            };
+            match Terminal::with_options(
+                backend,
+                TerminalOptions {
+                    viewport: Viewport::Inline(inline_height),
+                },
+            ) {
+                Ok(term) => Some(term),
+                Err(e) => {
+                    warn!("failed to initialize terminal, not showing progress: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        let bar = TermProgressBar {
+            term,
+            current_stats: RunStats::default(),
+        };
+
         Self {
-            multi_progress,
             bar,
             spinner_chars,
             test_bars,
@@ -154,6 +218,8 @@ impl ProgressBarState {
                 ..
             } => {
                 self.hidden_between_sub_runs = false;
+
+                self.bar.current_stats = *current_stats;
 
                 self.bar.set_prefix(progress_bar_prefix(
                     current_stats,

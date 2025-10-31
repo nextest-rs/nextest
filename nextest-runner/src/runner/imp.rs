@@ -191,6 +191,11 @@ impl<'a> TestRunner<'a> {
         self.input_handler.status()
     }
 
+    /// Returns the number of threads used for running tests.
+    pub fn test_threads(&self) -> usize {
+        self.inner.test_threads
+    }
+
     /// Executes the listed tests, each one in its own process.
     ///
     /// The callback is called with the results of each test.

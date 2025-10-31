@@ -681,6 +681,7 @@ impl App {
         // Make the reporter.
         let mut reporter = reporter_builder.build(
             &test_list,
+            runner.test_threads(),
             &profile,
             &self.base.cargo_configs,
             output,
