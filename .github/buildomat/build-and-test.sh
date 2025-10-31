@@ -11,6 +11,10 @@ PLATFORM="$1"
 # Enable ANSI colors in Cargo and nextest output.
 export CARGO_TERM_COLOR=always
 
+# Pin Rust to 1.90 until https://github.com/rust-lang/rust/issues/146312 is addressed.
+rustup toolchain install 1.90
+rustup override set 1.90
+
 cargo --version
 rustc --version
 
