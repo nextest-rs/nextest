@@ -582,13 +582,13 @@ impl NextestConfig {
         // Check that all overrides specify known test groups.
         let mut unknown_group_errors = Vec::new();
         let mut check_test_group = |profile_name: &str, test_group: Option<&TestGroup>| {
-            if let Some(TestGroup::Custom(group)) = test_group {
-                if !known_groups.contains(group) {
-                    unknown_group_errors.push(UnknownTestGroupError {
-                        profile_name: profile_name.to_owned(),
-                        name: TestGroup::Custom(group.clone()),
-                    });
-                }
+            if let Some(TestGroup::Custom(group)) = test_group
+                && !known_groups.contains(group)
+            {
+                unknown_group_errors.push(UnknownTestGroupError {
+                    profile_name: profile_name.to_owned(),
+                    name: TestGroup::Custom(group.clone()),
+                });
             }
         };
 
@@ -639,23 +639,23 @@ impl NextestConfig {
                             },
                         );
                     }
-                    if script_type == ProfileScriptType::ListWrapper {
-                        if let Some(expr) = expr {
-                            let runtime_only_leaves = expr.parsed.runtime_only_leaves();
-                            if !runtime_only_leaves.is_empty() {
-                                let filters = runtime_only_leaves
-                                    .iter()
-                                    .map(|leaf| leaf.to_string())
-                                    .collect();
-                                profile_script_errors.list_scripts_using_run_filters.push(
-                                    ProfileListScriptUsesRunFiltersError {
-                                        profile_name: profile_name.to_owned(),
-                                        name: script.clone(),
-                                        script_type,
-                                        filters,
-                                    },
-                                );
-                            }
+                    if script_type == ProfileScriptType::ListWrapper
+                        && let Some(expr) = expr
+                    {
+                        let runtime_only_leaves = expr.parsed.runtime_only_leaves();
+                        if !runtime_only_leaves.is_empty() {
+                            let filters = runtime_only_leaves
+                                .iter()
+                                .map(|leaf| leaf.to_string())
+                                .collect();
+                            profile_script_errors.list_scripts_using_run_filters.push(
+                                ProfileListScriptUsesRunFiltersError {
+                                    profile_name: profile_name.to_owned(),
+                                    name: script.clone(),
+                                    script_type,
+                                    filters,
+                                },
+                            );
                         }
                     }
                 } else {
