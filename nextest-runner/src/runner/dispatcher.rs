@@ -119,7 +119,7 @@ where
             std::pin::pin!(crate::time::pausable_sleep(self.global_timeout));
 
         // This is the interval at which tick events are sent to the reporter.
-        let mut tick_interval = tokio::time::interval(Duration::from_millis(100));
+        let mut tick_interval = tokio::time::interval(Duration::from_millis(200));
         tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         loop {

@@ -12,6 +12,7 @@ use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::RustBinaryId;
 use owo_colors::OwoColorize;
 use std::{
+    collections::VecDeque,
     env, fmt,
     io::{self, IsTerminal, Write},
     time::Duration,
@@ -40,10 +41,156 @@ pub enum ShowProgress {
 }
 
 #[derive(Debug)]
+pub(super) struct TestProgressBars {
+    // A list of currently unused progress bars.
+    //
+    // Once a test bar is removed, we add an empty bar, then use it to avoid the
+    // overall progress bar shifting rapidly up and down.
+    free_bars: VecDeque<ProgressBar>,
+    used_bars: IdHashMap<TestProgressBar>,
+    spinner_chars: &'static str,
+}
+
+impl TestProgressBars {
+    fn new(spinner_chars: &'static str) -> Self {
+        Self {
+            free_bars: VecDeque::new(),
+            used_bars: IdHashMap::new(),
+            spinner_chars,
+        }
+    }
+
+    /// Adds a test to the bar if it's not present, or reset its duration to zero
+    /// if it is.
+    fn add_test(
+        &mut self,
+        multi: &MultiProgress,
+        id: &TestInstanceId<'_>,
+        prefix: String,
+        styles: &Styles,
+    ) {
+        if let Some(tb) = self.used_bars.get(id) {
+            // Reset the bar to 0.
+            tb.bar.set_prefix(prefix);
+            // `ProgressBar` is a lightweight handle and calling methods like
+            // `with_elapsed` on a clone also affects the original. Ideally
+            // there would be a `set_elapsed` method on self.bar, though.
+            tb.bar.clone().with_elapsed(Duration::ZERO);
+        } else {
+            self.add_test_inner(multi, id, prefix, styles);
+        }
+    }
+
+    /// Sets the prefix for a test bar.
+    fn set_prefix(&mut self, id: &TestInstanceId<'_>, prefix: String) {
+        if let Some(tb) = self.used_bars.get(id) {
+            tb.bar.set_prefix(prefix);
+        }
+    }
+
+    fn remove_test(&mut self, multi: &MultiProgress, id: &TestInstanceId<'_>) {
+        if let Some(data) = self.used_bars.remove(id) {
+            // Remove the progress bar from the multi-progress, and add a free
+            // bar at the end. This avoids output being rapidly shifted up and
+            // down.
+            multi.remove(&data.bar);
+            // Add an empty bar.
+            let free_bar = ProgressBar::hidden();
+            free_bar.set_style(
+                ProgressStyle::default_spinner()
+                    // Use a blank bar for the empty lines at the end -- a
+                    // minimum of one character is needed to force indicatif to
+                    // render this bar.
+                    .template(" ")
+                    .expect("this template is valid"),
+            );
+            let free_bar = multi.add(free_bar);
+            // Do an initial tick to update the display.
+            free_bar.tick();
+            self.free_bars.push_back(free_bar);
+        }
+    }
+
+    fn on_run_continued(&self, delta: Duration) {
+        for tb in &self.used_bars {
+            let current_elapsed = tb.bar.elapsed();
+            // `ProgressBar` is a lightweight handle and calling methods like
+            // `with_elapsed` on a clone also affects the original. Ideally
+            // there would be a `set_elapsed` method on self.bar, though.
+            tb.bar
+                .clone()
+                .with_elapsed(current_elapsed.saturating_sub(delta));
+        }
+    }
+
+    /// Adds a test to the progress display.
+    fn add_test_inner(
+        &mut self,
+        multi: &MultiProgress,
+        id: &TestInstanceId<'_>,
+        prefix: String,
+        styles: &Styles,
+    ) {
+        let free_bar = self.free_bars.pop_front();
+        let new_bar = ProgressBar::hidden();
+
+        new_bar.set_style(
+            ProgressStyle::default_bar()
+                .template("{prefix:>10} {spinner} [{elapsed_precise:>9}] {wide_msg}")
+                .expect("template to be valid")
+                .tick_chars(self.spinner_chars),
+        );
+        if !prefix.is_empty() {
+            new_bar.set_prefix(prefix);
+        }
+        new_bar.set_message(
+            DisplayTestInstance::new(None, None, *id, &styles.list_styles).to_string(),
+        );
+
+        // Remove the free bar from the multi-progress, then immediately insert
+        // the new bar into it. The free bar has done its job of providing
+        // padding.
+        if let Some(bar) = free_bar {
+            multi.remove(&bar);
+        }
+        // Insert at index self.used_bars.len() + 1 (the first bar is overall
+        // progress).
+        let bar = multi.insert(self.used_bars.len() + 1, new_bar);
+        // Do an initial tick after adding to the multi-progress to ensure
+        // that the new test is rendered.
+        bar.tick();
+
+        // Add the bar to the map.
+        self.used_bars.insert_overwrite(TestProgressBar {
+            binary_id: id.binary_id.clone(),
+            test_name: id.test_name.to_owned(),
+            bar,
+        });
+    }
+
+    fn tick_all(&self) {
+        // XXX tick in sequence rather than random order?
+        for tb in &self.used_bars {
+            tb.bar.tick();
+        }
+    }
+
+    fn finish_and_clear_all(&self) {
+        // XXX finish in sequence rather than random order?
+        for tb in &self.used_bars {
+            tb.bar.finish_and_clear();
+        }
+        for bar in &self.free_bars {
+            bar.finish_and_clear();
+        }
+    }
+}
+
+#[derive(Debug)]
 pub(super) struct TestProgressBar {
     binary_id: RustBinaryId,
     test_name: String,
-    progress_bar: ProgressBar,
+    bar: ProgressBar,
 }
 
 impl IdHashItem for TestProgressBar {
@@ -63,8 +210,7 @@ impl IdHashItem for TestProgressBar {
 pub(super) struct ProgressBarState {
     multi_progress: MultiProgress,
     bar: ProgressBar,
-    spinner_chars: &'static str,
-    test_bars: Option<IdHashMap<TestProgressBar>>,
+    test_bars: Option<TestProgressBars>,
     // Reasons for hiding the progress bar. We show the progress bar if none of
     // these are set and hide it if any of them are set.
     //
@@ -88,9 +234,8 @@ impl ProgressBarState {
         show_running: bool,
     ) -> Self {
         let multi_progress = MultiProgress::new();
-        // NOTE: set_draw_target must be called before enable_steady_tick to avoid a
-        // spurious extra line from being printed as the draw target changes.
         multi_progress.set_draw_target(Self::stderr_target());
+        multi_progress.set_move_cursor(true);
 
         let bar = multi_progress.add(ProgressBar::new(test_count as u64));
         let test_count_width = format!("{test_count}").len();
@@ -109,12 +254,11 @@ impl ProgressBarState {
                 .expect("template is known to be valid"),
         );
 
-        let test_bars = show_running.then_some(IdHashMap::new());
+        let test_bars = show_running.then(|| TestProgressBars::new(spinner_chars));
 
         Self {
             multi_progress,
             bar,
-            spinner_chars,
             test_bars,
             hidden_no_capture: false,
             hidden_run_paused: false,
@@ -127,9 +271,7 @@ impl ProgressBarState {
         self.bar.tick();
         // Also tick all test bars.
         if let Some(test_bars) = &mut self.test_bars {
-            for bar in test_bars {
-                bar.progress_bar.tick();
-            }
+            test_bars.tick_all();
         }
     }
 
@@ -138,6 +280,11 @@ impl ProgressBarState {
 
         match &event.kind {
             TestEventKind::StressSubRunFinished { .. } => {
+                // Clear all test bars to remove empty lines of output between
+                // sub-runs.
+                if let Some(test_bars) = &self.test_bars {
+                    test_bars.finish_and_clear_all();
+                }
                 // Hide the progress bar between sub runs to avoid a spurious
                 // progress bar.
                 self.hidden_between_sub_runs = true;
@@ -176,11 +323,11 @@ impl ProgressBarState {
                 self.bar.set_position(current_stats.finished_count as u64);
             }
             TestEventKind::TestShowProgress { test_instance, .. } => {
-                if self.needs_add_test_bar(&test_instance.id()) {
-                    self.add_test_bar(
-                        "".to_owned(),
-                        &test_instance.suite_info.binary_id,
-                        test_instance.name,
+                if let Some(test_bars) = &mut self.test_bars {
+                    test_bars.add_test(
+                        &self.multi_progress,
+                        &test_instance.id(),
+                        String::new(),
                         styles,
                     );
                 }
@@ -191,7 +338,9 @@ impl ProgressBarState {
                 test_instance,
                 ..
             } => {
-                self.remove_test_bar(&test_instance.id());
+                if let Some(test_bars) = &mut self.test_bars {
+                    test_bars.remove_test(&self.multi_progress, &test_instance.id());
+                }
 
                 self.hidden_between_sub_runs = false;
 
@@ -208,32 +357,35 @@ impl ProgressBarState {
                 self.bar.set_position(current_stats.finished_count as u64);
             }
             TestEventKind::TestAttemptFailedWillRetry { test_instance, .. } => {
-                self.remove_test_bar(&test_instance.id());
-                // TODO: it would be nice to count the delay down rather than
-                // up. But it probably will require changes to indicatif to
-                // enable that (or for us to render time ourselves).
-                self.add_test_bar(
-                    "DELAY".style(styles.retry).to_string(),
-                    &test_instance.suite_info.binary_id,
-                    test_instance.name,
-                    styles,
-                );
+                if let Some(test_bars) = &mut self.test_bars {
+                    test_bars.remove_test(&self.multi_progress, &test_instance.id());
+                    // TODO: it would be nice to count the delay down rather
+                    // than up. But it probably will require changes to
+                    // indicatif to enable that (or for us to render time
+                    // ourselves).
+                    test_bars.add_test(
+                        &self.multi_progress,
+                        &test_instance.id(),
+                        "DELAY".style(styles.retry).to_string(),
+                        styles,
+                    );
+                }
             }
             TestEventKind::TestRetryStarted { test_instance, .. } => {
-                self.remove_test_bar(&test_instance.id());
-                self.add_test_bar(
-                    "RETRY".style(styles.retry).to_string(),
-                    &test_instance.suite_info.binary_id,
-                    test_instance.name,
-                    styles,
-                );
+                if let Some(test_bars) = &mut self.test_bars {
+                    test_bars.remove_test(&self.multi_progress, &test_instance.id());
+                    test_bars.add_test(
+                        &self.multi_progress,
+                        &test_instance.id(),
+                        "RETRY".style(styles.retry).to_string(),
+                        styles,
+                    );
+                }
             }
             TestEventKind::TestSlow { test_instance, .. } => {
                 if let Some(test_bars) = &mut self.test_bars {
-                    if let Some(tb) = test_bars.get_mut(&test_instance.id()) {
-                        tb.progress_bar
-                            .set_prefix("SLOW".style(styles.skip).to_string());
-                    }
+                    test_bars
+                        .set_prefix(&test_instance.id(), "SLOW".style(styles.skip).to_string());
                 }
             }
             TestEventKind::InfoStarted { .. } => {
@@ -255,18 +407,16 @@ impl ProgressBarState {
                 // continue to output to it.
                 self.hidden_run_paused = false;
                 let current_global_elapsed = self.bar.elapsed();
-                // Wish a mutable form of with_elapsed were supported.
-                let bar = std::mem::replace(&mut self.bar, ProgressBar::hidden());
-                self.bar = bar.with_elapsed(event.elapsed);
+
+                // `ProgressBar` is a lightweight handle and calling methods
+                // like `with_elapsed` on a clone also affects the original.
+                // Ideally there would be a `set_elapsed` method on self.bar,
+                // though.
+                self.bar.clone().with_elapsed(event.elapsed);
+
+                let delta = current_global_elapsed.saturating_sub(event.elapsed);
                 if let Some(test_bars) = &mut self.test_bars {
-                    for mut test_bar in test_bars.iter_mut() {
-                        let current_elapsed = test_bar.progress_bar.elapsed();
-                        let bar =
-                            std::mem::replace(&mut test_bar.progress_bar, ProgressBar::hidden());
-                        test_bar.progress_bar = bar.with_elapsed(
-                            current_elapsed - (current_global_elapsed - event.elapsed),
-                        );
-                    }
+                    test_bars.on_run_continued(delta);
                 }
             }
             TestEventKind::RunBeginCancel { current_stats, .. }
@@ -288,61 +438,6 @@ impl ProgressBarState {
         }
     }
 
-    fn add_test_bar(
-        &mut self,
-        status: String,
-        binary_id: &RustBinaryId,
-        test_name: &str,
-        styles: &Styles,
-    ) {
-        if let Some(test_bars) = &mut self.test_bars {
-            let tb = ProgressBar::hidden();
-            tb.set_style(
-                ProgressStyle::default_bar()
-                    .template("{prefix:>10} {spinner} [{elapsed_precise:>9}] {wide_msg}")
-                    .expect("template to be valid")
-                    .tick_chars(self.spinner_chars),
-            );
-            tb.set_prefix(status);
-            tb.set_message(
-                DisplayTestInstance::new(
-                    None,
-                    None,
-                    TestInstanceId {
-                        binary_id,
-                        test_name,
-                    },
-                    &styles.list_styles,
-                )
-                .to_string(),
-            );
-            // tb.enable_steady_tick(Duration::from_millis(1000));
-
-            let tb = self.multi_progress.add(tb);
-
-            test_bars.insert_overwrite(TestProgressBar {
-                binary_id: binary_id.clone(),
-                test_name: test_name.to_owned(),
-                progress_bar: tb,
-            });
-        }
-    }
-
-    fn needs_add_test_bar(&self, id: &TestInstanceId<'_>) -> bool {
-        match &self.test_bars {
-            Some(test_bars) => !test_bars.contains_key(id),
-            None => false,
-        }
-    }
-
-    fn remove_test_bar(&mut self, id: &TestInstanceId<'_>) {
-        if let Some(test_bars) = &mut self.test_bars {
-            if let Some(tb) = test_bars.remove(id) {
-                tb.progress_bar.finish_and_clear();
-            }
-        }
-    }
-
     pub(super) fn write_buf(&self, buf: &[u8]) -> io::Result<()> {
         // ProgressBar::println doesn't print status lines if the bar is
         // hidden. The suspend method prints it in all cases.
@@ -354,9 +449,7 @@ impl ProgressBarState {
     pub(super) fn finish_and_clear(&self) {
         self.bar.finish_and_clear();
         if let Some(test_bars) = &self.test_bars {
-            for test_bar in test_bars {
-                test_bar.progress_bar.finish_and_clear();
-            }
+            test_bars.finish_and_clear_all();
         }
     }
 
