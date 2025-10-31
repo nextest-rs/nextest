@@ -768,7 +768,7 @@ impl<'a> ExecutorContext<'a> {
         // Use an event that happens shortly after the test starts to avoid
         // overwhelming progress bar display code.
         let mut show_progress_sleep =
-            std::pin::pin!(crate::time::pausable_sleep(Duration::from_millis(100)));
+            std::pin::pin!(crate::time::pausable_sleep(Duration::from_millis(10)));
         let mut show_progress_sleep_done = false;
 
         let mut timeout_hit = 0;
