@@ -18,6 +18,15 @@ use nextest_metadata::MismatchReason;
 use quick_junit::ReportUuid;
 use std::{collections::BTreeMap, fmt, num::NonZero, process::ExitStatus, time::Duration};
 
+/// A reporter event.
+#[derive(Clone, Debug)]
+pub enum ReporterEvent<'a> {
+    /// A periodic tick.
+    Tick,
+
+    /// A test event.
+    Test(Box<TestEvent<'a>>),
+}
 /// A test event.
 ///
 /// Events are produced by a [`TestRunner`](crate::runner::TestRunner) and

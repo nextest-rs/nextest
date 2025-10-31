@@ -24,7 +24,10 @@ impl<'cfg> EventAggregator<'cfg> {
         }
     }
 
-    pub(crate) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<(), WriteEventError> {
+    pub(crate) fn write_event(
+        &mut self,
+        event: Box<TestEvent<'cfg>>,
+    ) -> Result<(), WriteEventError> {
         if let Some(junit) = &mut self.junit {
             junit.write_event(event)?;
         }

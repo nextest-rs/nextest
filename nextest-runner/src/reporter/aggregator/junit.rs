@@ -46,7 +46,10 @@ impl<'cfg> MetadataJunit<'cfg> {
         }
     }
 
-    pub(super) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<(), WriteEventError> {
+    pub(super) fn write_event(
+        &mut self,
+        event: Box<TestEvent<'cfg>>,
+    ) -> Result<(), WriteEventError> {
         match event.kind {
             TestEventKind::RunStarted { .. }
             | TestEventKind::StressSubRunStarted { .. }

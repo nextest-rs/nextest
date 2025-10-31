@@ -161,8 +161,14 @@ pub struct Reporter<'a> {
 
 impl<'a> Reporter<'a> {
     /// Report a test event.
-    pub fn report_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
-        self.write_event(event)
+    pub fn report_event(&mut self, event: ReporterEvent<'a>) -> Result<(), WriteEventError> {
+        match event {
+            ReporterEvent::Tick => {
+                self.tick();
+                Ok(())
+            }
+            ReporterEvent::Test(event) => self.write_event(event),
+        }
     }
 
     /// Mark the reporter done.
@@ -174,8 +180,13 @@ impl<'a> Reporter<'a> {
     // Helper methods
     // ---
 
+    /// Tick the reporter, updating displayed state.
+    fn tick(&mut self) {
+        self.display_reporter.tick();
+    }
+
     /// Report this test event to the given writer.
-    fn write_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
+    fn write_event(&mut self, event: Box<TestEvent<'a>>) -> Result<(), WriteEventError> {
         // TODO: write to all of these even if one of them fails?
         self.display_reporter.write_event(&event)?;
         self.structured_reporter.write_event(&event)?;

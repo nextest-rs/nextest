@@ -197,6 +197,10 @@ pub(crate) struct DisplayReporter<'a> {
 }
 
 impl<'a> DisplayReporter<'a> {
+    pub(crate) fn tick(&mut self) {
+        self.stderr.tick();
+    }
+
     pub(crate) fn write_event(&mut self, event: &TestEvent<'a>) -> Result<(), WriteEventError> {
         match &mut self.stderr {
             ReporterStderrImpl::Terminal {
@@ -255,6 +259,18 @@ enum ReporterStderrImpl<'a> {
 }
 
 impl ReporterStderrImpl<'_> {
+    fn tick(&mut self) {
+        match self {
+            ReporterStderrImpl::Terminal {
+                progress_bar: Some(state),
+                ..
+            } => {
+                state.tick();
+            }
+            ReporterStderrImpl::Terminal { .. } | ReporterStderrImpl::Buffer(_) => {}
+        }
+    }
+
     fn finish_and_clear_bar(&self) {
         match self {
             ReporterStderrImpl::Terminal {
@@ -2270,6 +2286,7 @@ impl Default for ThemeCharacters {
         Self {
             hbar: '-',
             progress_chars: "=> ",
+            // Duplicate characters to slow down the spinner refresh rate.
             spinner_chars: "-\\|/",
         }
     }
@@ -2281,7 +2298,9 @@ impl ThemeCharacters {
         // https://mike42.me/blog/2018-06-make-better-cli-progress-bars-with-unicode-block-characters
         self.progress_chars = "█▉▊▋▌▍▎▏ ";
         // https://github.com/sindresorhus/cli-spinners/blob/3860701f68e3075511f111a28ca2838fc906fca8/spinners.json#L4
-        self.spinner_chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+        //
+        // Duplicate characters to slow down the spinner refresh rate.
+        self.spinner_chars = "⠋⠋⠙⠙⠹⠹⠸⠸⠼⠼⠴⠴⠦⠦⠧⠧⠇⠇⠏⠏";
     }
 
     fn hbar(&self, width: usize) -> String {

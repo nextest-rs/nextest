@@ -15,7 +15,7 @@ use crate::{
     },
     input::{InputHandler, InputHandlerKind, InputHandlerStatus},
     list::{TestInstanceWithSettings, TestList},
-    reporter::events::{RunStats, StressIndex, TestEvent},
+    reporter::events::{ReporterEvent, RunStats, StressIndex},
     runner::ExecutorEvent,
     signal::{SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
@@ -201,10 +201,10 @@ impl<'a> TestRunner<'a> {
         mut callback: F,
     ) -> Result<RunStats, TestRunnerExecuteErrors<Infallible>>
     where
-        F: FnMut(TestEvent<'a>) + Send,
+        F: FnMut(ReporterEvent<'a>) + Send,
     {
-        self.try_execute::<Infallible, _>(|test_event| {
-            callback(test_event);
+        self.try_execute::<Infallible, _>(|event| {
+            callback(event);
             Ok(())
         })
     }
@@ -220,7 +220,7 @@ impl<'a> TestRunner<'a> {
         mut callback: F,
     ) -> Result<RunStats, TestRunnerExecuteErrors<E>>
     where
-        F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
+        F: FnMut(ReporterEvent<'a>) -> Result<(), E> + Send,
         E: fmt::Debug + Send,
     {
         let (report_cancel_tx, report_cancel_rx) = oneshot::channel();
@@ -295,7 +295,7 @@ impl<'a> TestRunnerInner<'a> {
         callback: F,
     ) -> Result<RunStats, Vec<JoinError>>
     where
-        F: FnMut(TestEvent<'a>) + Send,
+        F: FnMut(ReporterEvent<'a>) + Send,
     {
         // TODO: add support for other test-running approaches, measure performance.
 
@@ -380,7 +380,7 @@ impl<'a> TestRunnerInner<'a> {
         report_cancel_rx: Pin<&mut Fuse<oneshot::Receiver<()>>>,
     ) -> Result<(), Vec<JoinError>>
     where
-        F: FnMut(TestEvent<'a>) + Send,
+        F: FnMut(ReporterEvent<'a>) + Send,
     {
         let ((), results) = TokioScope::scope_and_block(move |scope| {
             let (resp_tx, resp_rx) = unbounded_channel::<ExecutorEvent<'a>>();
