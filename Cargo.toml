@@ -132,7 +132,7 @@ toml_edit = "0.23.7"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", default-features = false, features = ["std", "tracing-log", "fmt"] }
 unicode-ident = "1.0.22"
-unicode-normalization = "0.1.24"
+unicode-normalization = "0.1.25"
 usdt = "0.6.0"
 whoami = "1.6.1"
 win32job = "2.0.3"
