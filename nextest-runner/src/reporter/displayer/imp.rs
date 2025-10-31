@@ -124,10 +124,7 @@ impl DisplayReporterBuilder {
             ShowProgress::Bar | ShowProgress::Running | ShowProgress::None => false,
             ShowProgress::Counter => true,
         };
-        // This is a bit jank -- we don't know the initial run count until we
-        // receive the first RunStarted event -- we'll update the counter width
-        // at that time.
-        let counter_width = show_counter.then_some(0);
+        let counter_width = show_counter.then_some(usize_decimal_char_width(self.test_count));
 
         DisplayReporter {
             inner: DisplayReporterImpl {
@@ -401,10 +398,6 @@ impl<'a> DisplayReporterImpl<'a> {
                     test_list.run_count().style(count_style),
                     test_list.listed_binary_count().style(count_style),
                 )?;
-
-                if let Some(w) = &mut self.counter_width {
-                    *w = usize_decimal_char_width(test_list.run_count());
-                }
 
                 write_skip_counts(
                     test_list.skip_counts(),
@@ -2349,7 +2342,7 @@ mod tests {
                 status_level: StatusLevel::Fail,
                 final_status_level: FinalStatusLevel::Fail,
             },
-            test_count: 0,
+            test_count: 5000,
             success_output: Some(TestOutputDisplay::Immediate),
             failure_output: Some(TestOutputDisplay::Immediate),
             should_colorize: false,
@@ -2416,7 +2409,6 @@ mod tests {
 
         with_reporter(
             |mut reporter| {
-                reporter.inner.counter_width = Some(usize_decimal_char_width(5000));
                 // TODO: write a bunch more outputs here.
                 reporter
                     .inner
