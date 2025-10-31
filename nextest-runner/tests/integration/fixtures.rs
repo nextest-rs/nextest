@@ -26,7 +26,8 @@ use nextest_runner::{
     },
     platform::BuildPlatforms,
     reporter::events::{
-        AbortStatus, ExecutionResult, ExecutionStatuses, FailureStatus, RunStats, TestEventKind,
+        AbortStatus, ExecutionResult, ExecutionStatuses, FailureStatus, ReporterEvent, RunStats,
+        TestEventKind,
     },
     reuse_build::PathMapper,
     runner::{TestRunner, configure_handle_inheritance},
@@ -449,6 +450,10 @@ pub(crate) fn execute_collect(
     configure_handle_inheritance(false).expect("configuring handle inheritance on Windows failed");
     let run_stats = runner
         .execute(|event| {
+            let event = match event {
+                ReporterEvent::Tick => return,
+                ReporterEvent::Test(event) => event,
+            };
             let (test_instance, status) = match event.kind {
                 TestEventKind::TestSkipped {
                     stress_index: _,

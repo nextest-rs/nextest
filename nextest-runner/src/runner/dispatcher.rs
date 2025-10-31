@@ -16,7 +16,7 @@ use crate::{
     input::{InputEvent, InputHandler},
     list::{TestInstance, TestInstanceId, TestList},
     reporter::events::{
-        CancelReason, ExecuteStatus, ExecutionStatuses, FinalRunStats, InfoResponse,
+        CancelReason, ExecuteStatus, ExecutionStatuses, FinalRunStats, InfoResponse, ReporterEvent,
         RunFinishedStats, RunStats, StressIndex, StressProgress, StressRunStats, TestEvent,
         TestEventKind,
     },
@@ -29,9 +29,12 @@ use debug_ignore::DebugIgnore;
 use futures::future::{Fuse, FusedFuture};
 use quick_junit::ReportUuid;
 use std::{collections::BTreeMap, pin::Pin, time::Duration};
-use tokio::sync::{
-    mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
-    oneshot,
+use tokio::{
+    sync::{
+        mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
+        oneshot,
+    },
+    time::MissedTickBehavior,
 };
 use tracing::debug;
 
@@ -60,7 +63,7 @@ pub(super) struct DispatcherContext<'a, F> {
 
 impl<'a, F> DispatcherContext<'a, F>
 where
-    F: FnMut(TestEvent<'a>) + Send,
+    F: FnMut(ReporterEvent<'a>) + Send,
 {
     #[expect(clippy::too_many_arguments)]
     pub(super) fn new(
@@ -115,10 +118,17 @@ where
         let mut global_timeout_sleep =
             std::pin::pin!(crate::time::pausable_sleep(self.global_timeout));
 
+        // This is the interval at which tick events are sent to the reporter.
+        let mut tick_interval = tokio::time::interval(Duration::from_millis(100));
+        tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
         loop {
             let internal_event = tokio::select! {
                 _ = &mut global_timeout_sleep => {
                     InternalEvent::GlobalTimeout
+                },
+                _ = tick_interval.tick() => {
+                    InternalEvent::Tick
                 },
                 internal_event = executor_rx.recv() => {
                     match internal_event {
@@ -485,7 +495,7 @@ where
             elapsed: snapshot.active,
             kind,
         };
-        (self.callback)(event)
+        (self.callback)(ReporterEvent::Test(Box::new(event)))
     }
 
     #[inline]
@@ -496,6 +506,10 @@ where
 
     fn handle_event(&mut self, event: InternalEvent<'a>) -> HandleEventResponse {
         match event {
+            InternalEvent::Tick => {
+                (self.callback)(ReporterEvent::Tick);
+                HandleEventResponse::None
+            }
             InternalEvent::Executor(ExecutorEvent::SetupScriptStarted {
                 stress_index,
                 script_id,
@@ -1292,6 +1306,7 @@ impl ContextTestInstance<'_> {
 #[expect(clippy::large_enum_variant)]
 #[derive(Debug)]
 enum InternalEvent<'a> {
+    Tick,
     Executor(ExecutorEvent<'a>),
     Signal(SignalEvent),
     Input(InputEvent),
@@ -1359,8 +1374,13 @@ mod tests {
         // TODO: also test TestFinished and SetupScriptFinished events.
         let events = Mutex::new(Vec::new());
         let mut cx = DispatcherContext::new(
-            |event| {
-                events.lock().unwrap().push(event);
+            |event| match event {
+                ReporterEvent::Test(event) => {
+                    events.lock().unwrap().push(event);
+                }
+                ReporterEvent::Tick => {
+                    // Ignore tick events here.
+                }
             },
             ReportUuid::new_v4(),
             "default",
@@ -1489,7 +1509,7 @@ mod tests {
     }
 
     #[track_caller]
-    fn assert_noop(response: HandleEventResponse, events: &Mutex<Vec<TestEvent<'_>>>) {
+    fn assert_noop(response: HandleEventResponse, events: &Mutex<Vec<Box<TestEvent<'_>>>>) {
         assert_eq!(response, HandleEventResponse::None, "expected no response");
         assert_eq!(events.lock().unwrap().len(), 0, "expected no new events");
     }

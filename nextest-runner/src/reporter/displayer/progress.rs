@@ -108,8 +108,6 @@ impl ProgressBarState {
                 .template(&template)
                 .expect("template is known to be valid"),
         );
-        // Enable a steady tick 10 times a second.
-        bar.enable_steady_tick(Duration::from_millis(100));
 
         let test_bars = show_running.then_some(IdHashMap::new());
 
@@ -122,6 +120,16 @@ impl ProgressBarState {
             hidden_run_paused: false,
             hidden_info_response: false,
             hidden_between_sub_runs: false,
+        }
+    }
+
+    pub(super) fn tick(&mut self) {
+        self.bar.tick();
+        // Also tick all test bars.
+        if let Some(test_bars) = &mut self.test_bars {
+            for bar in test_bars {
+                bar.progress_bar.tick();
+            }
         }
     }
 
@@ -308,7 +316,7 @@ impl ProgressBarState {
                 )
                 .to_string(),
             );
-            tb.enable_steady_tick(Duration::from_millis(1000));
+            // tb.enable_steady_tick(Duration::from_millis(1000));
 
             let tb = self.multi_progress.add(tb);
 
