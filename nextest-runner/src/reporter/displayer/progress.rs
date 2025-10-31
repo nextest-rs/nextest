@@ -5,7 +5,10 @@ use crate::{
     cargo_config::{CargoConfigs, DiscoveredConfig},
     helpers::DisplayTestInstance,
     list::TestInstanceId,
-    reporter::{displayer::formatters::DisplayBracketedHhMmSs, events::*, helpers::Styles},
+    reporter::{
+        PROGRESS_REFRESH_RATE_HZ, displayer::formatters::DisplayBracketedHhMmSs, events::*,
+        helpers::Styles,
+    },
 };
 use iddqd::{IdHashItem, IdHashMap, id_upcast};
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
@@ -454,10 +457,7 @@ impl ProgressBarState {
     }
 
     fn stderr_target() -> ProgressDrawTarget {
-        // This used to be unbuffered, but that option went away from indicatif
-        // 0.17.0. The refresh rate is now 20hz so that it's double the steady
-        // tick rate.
-        ProgressDrawTarget::stderr_with_hz(20)
+        ProgressDrawTarget::stderr_with_hz(PROGRESS_REFRESH_RATE_HZ)
     }
 
     fn hidden_target() -> ProgressDrawTarget {
