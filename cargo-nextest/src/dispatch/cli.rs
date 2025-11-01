@@ -29,7 +29,10 @@ use nextest_runner::{
     },
     partition::PartitionerBuilder,
     platform::BuildPlatforms,
-    reporter::{FinalStatusLevel, ReporterBuilder, ShowProgress, StatusLevel, TestOutputDisplay},
+    reporter::{
+        FinalStatusLevel, MaxProgressRunning, ReporterBuilder, ShowProgress, StatusLevel,
+        TestOutputDisplay,
+    },
     reuse_build::ReuseBuildInfo,
     runner::{StressCondition, StressCount, TestRunnerBuilder},
     test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
@@ -865,6 +868,20 @@ pub(super) struct ReporterOpts {
     #[arg(long, env = "NEXTEST_NO_INPUT_HANDLER", value_parser = BoolishValueParser::new())]
     pub(super) no_input_handler: bool,
 
+    /// Maximum number of running tests to display progress for.
+    ///
+    /// When more tests are running than this limit, the progress bar will show
+    /// the first N tests and a summary of remaining tests (e.g. "... and 24
+    /// more tests running"). Set to **infinite** for unlimited. This only
+    /// applies when using `--show-progress=running` or `only`.
+    #[arg(
+        long = "max-progress-running",
+        value_name = "N",
+        env = "NEXTEST_MAX_PROGRESS_RUNNING",
+        default_value = "8"
+    )]
+    max_progress_running: MaxProgressRunning,
+
     /// Format to use for test results (experimental).
     #[arg(
         long,
@@ -964,6 +981,7 @@ impl ReporterOpts {
         }
         builder.set_show_progress(show_progress.into());
         builder.set_no_output_indent(self.no_output_indent);
+        builder.set_max_progress_running(self.max_progress_running);
         builder
     }
 }

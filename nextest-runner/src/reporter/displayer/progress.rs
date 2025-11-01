@@ -3,7 +3,7 @@
 
 use crate::{
     cargo_config::{CargoConfigs, DiscoveredConfig},
-    helpers::DisplayTestInstance,
+    helpers::{DisplayTestInstance, plural},
     list::TestInstanceId,
     reporter::{
         PROGRESS_REFRESH_RATE_HZ, displayer::formatters::DisplayBracketedHhMmSs, events::*,
@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use iddqd::{IdHashItem, IdHashMap, id_upcast};
+use indexmap::IndexSet;
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::RustBinaryId;
 use owo_colors::OwoColorize;
@@ -18,10 +19,63 @@ use std::{
     collections::VecDeque,
     env, fmt,
     io::{self, IsTerminal, Write},
+    num::NonZero,
+    str::FromStr,
     time::Duration,
 };
 use swrite::{SWrite, swrite};
 use tracing::debug;
+
+/// The maximum number of running tests to display with
+/// `--show-progress=running` or `only`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MaxProgressRunning {
+    /// Show a specific maximum number of running tests.
+    Count(NonZero<usize>),
+
+    /// Show all running tests (no limit).
+    Infinite,
+}
+
+impl MaxProgressRunning {
+    /// The default value (8 tests).
+    pub const DEFAULT_VALUE: Self = Self::Count(NonZero::new(8).unwrap());
+}
+
+impl Default for MaxProgressRunning {
+    fn default() -> Self {
+        Self::DEFAULT_VALUE
+    }
+}
+
+impl FromStr for MaxProgressRunning {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case("infinite") {
+            return Ok(Self::Infinite);
+        }
+
+        match s.parse::<usize>() {
+            Err(e) => Err(format!("Error: {e} parsing {s}")),
+            Ok(0) => Err(
+                "max-progress-running may not be 0 (use \"infinite\" for unlimited)".to_string(),
+            ),
+            Ok(n) => Ok(Self::Count(
+                NonZero::new(n).expect("we just checked that this isn't 0"),
+            )),
+        }
+    }
+}
+
+impl fmt::Display for MaxProgressRunning {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Infinite => write!(f, "infinite"),
+            Self::Count(n) => write!(f, "{n}"),
+        }
+    }
+}
 
 /// How to show progress.
 #[derive(Default, Clone, Copy, Debug)]
@@ -44,6 +98,59 @@ pub enum ShowProgress {
 }
 
 #[derive(Debug)]
+struct SummaryBar {
+    bar: ProgressBar,
+    overflow_count: usize,
+}
+
+impl SummaryBar {
+    /// Creates a new summary bar and inserts it into the multi-progress display.
+    fn new(
+        multi: &MultiProgress,
+        displayed_count: usize,
+        overflow_count: usize,
+        styles: &Styles,
+    ) -> Self {
+        let bar = ProgressBar::hidden();
+        bar.set_style(
+            ProgressStyle::default_spinner()
+                .template("             ... and {msg}")
+                .expect("template is valid"),
+        );
+
+        // Add the summary bar after all displayed test bars (at the end
+        // of the list). displayed_count is the number of tests
+        // currently visible, so add it at (displayed_count + 1).
+        let insert_pos = displayed_count + 1;
+
+        bar.set_message(format!(
+            "{} more {} running",
+            overflow_count.style(styles.count),
+            plural::tests_str(overflow_count)
+        ));
+
+        let summary_bar = multi.insert(insert_pos, bar);
+        summary_bar.tick();
+
+        Self {
+            bar: summary_bar,
+            overflow_count,
+        }
+    }
+
+    fn set_overflow_count(&mut self, overflow_count: usize, styles: &Styles) {
+        if overflow_count != self.overflow_count {
+            self.bar.set_message(format!(
+                "{} more {} running",
+                overflow_count.style(styles.count),
+                plural::tests_str(overflow_count)
+            ));
+            self.overflow_count = overflow_count;
+        }
+    }
+}
+
+#[derive(Debug)]
 pub(super) struct TestProgressBars {
     // A list of currently unused progress bars.
     //
@@ -51,14 +158,29 @@ pub(super) struct TestProgressBars {
     // overall progress bar shifting rapidly up and down.
     free_bars: VecDeque<ProgressBar>,
     used_bars: IdHashMap<TestProgressBar>,
+
+    // Overflow tests in FIFO order (the IndexSet preserves insertion order).
+    //
+    // Tests are displayed if they're in used_bars but not in overflow_order.
+    overflow_queue: IndexSet<(RustBinaryId, String)>,
+    // Maximum number of tests to display.
+    max_displayed: MaxProgressRunning,
+
+    // Summary bar showing the overflow count. This is Some if the summary bar
+    // is currently displayed.
+    summary_bar: Option<SummaryBar>,
+
     spinner_chars: &'static str,
 }
 
 impl TestProgressBars {
-    fn new(spinner_chars: &'static str) -> Self {
+    fn new(spinner_chars: &'static str, max_displayed: MaxProgressRunning) -> Self {
         Self {
             free_bars: VecDeque::new(),
             used_bars: IdHashMap::new(),
+            overflow_queue: IndexSet::new(),
+            max_displayed,
+            summary_bar: None,
             spinner_chars,
         }
     }
@@ -70,6 +192,7 @@ impl TestProgressBars {
         multi: &MultiProgress,
         id: &TestInstanceId<'_>,
         prefix: String,
+        running_count: usize,
         styles: &Styles,
     ) {
         if let Some(tb) = self.used_bars.get(id) {
@@ -80,7 +203,7 @@ impl TestProgressBars {
             // there would be a `set_elapsed` method on self.bar, though.
             tb.bar.clone().with_elapsed(Duration::ZERO);
         } else {
-            self.add_test_inner(multi, id, prefix, styles);
+            self.add_test_inner(multi, id, prefix, running_count, styles);
         }
     }
 
@@ -91,26 +214,43 @@ impl TestProgressBars {
         }
     }
 
-    fn remove_test(&mut self, multi: &MultiProgress, id: &TestInstanceId<'_>) {
+    fn remove_test(
+        &mut self,
+        multi: &MultiProgress,
+        id: &TestInstanceId<'_>,
+        running_count: usize,
+        styles: &Styles,
+    ) {
         if let Some(data) = self.used_bars.remove(id) {
-            // Remove the progress bar from the multi-progress, and add a free
-            // bar at the end. This avoids output being rapidly shifted up and
-            // down.
-            multi.remove(&data.bar);
-            // Add an empty bar.
-            let free_bar = ProgressBar::hidden();
-            free_bar.set_style(
-                ProgressStyle::default_spinner()
-                    // Use a blank bar for the empty lines at the end -- a
-                    // minimum of one character is needed to force indicatif to
-                    // render this bar.
-                    .template(" ")
-                    .expect("this template is valid"),
-            );
-            let free_bar = multi.add(free_bar);
-            // Do an initial tick to update the display.
-            free_bar.tick();
-            self.free_bars.push_back(free_bar);
+            let test_key = (data.binary_id.clone(), data.test_name.clone());
+
+            let was_overflow = self.overflow_queue.shift_remove(&test_key);
+
+            if !was_overflow {
+                // This test was displayed, so remove its bar from the
+                // multi-progress.
+                multi.remove(&data.bar);
+
+                if self.promote_next_overflow_test(multi) {
+                    // A test was promoted from the overflow queue. The promoted
+                    // test takes this bar's place, so we don't need to add an
+                    // empty bar for spacing.
+                } else {
+                    // No test was promoted: add an empty bar for spacing.
+                    let free_bar = ProgressBar::hidden();
+                    free_bar.set_style(
+                        ProgressStyle::default_spinner()
+                            .template(" ")
+                            .expect("this template is valid"),
+                    );
+                    let free_bar = multi.add(free_bar);
+                    free_bar.tick();
+                    self.free_bars.push_back(free_bar);
+                }
+            }
+
+            // Update summary bar to reflect the new overflow count.
+            self.update_summary_bar(multi, running_count, styles);
         }
     }
 
@@ -132,9 +272,9 @@ impl TestProgressBars {
         multi: &MultiProgress,
         id: &TestInstanceId<'_>,
         prefix: String,
+        running_count: usize,
         styles: &Styles,
     ) {
-        let free_bar = self.free_bars.pop_front();
         let new_bar = ProgressBar::hidden();
 
         new_bar.set_style(
@@ -150,25 +290,145 @@ impl TestProgressBars {
             DisplayTestInstance::new(None, None, *id, &styles.list_styles).to_string(),
         );
 
-        // Remove the free bar from the multi-progress, then immediately insert
-        // the new bar into it. The free bar has done its job of providing
-        // padding.
-        if let Some(bar) = free_bar {
-            multi.remove(&bar);
-        }
-        // Insert at index self.used_bars.len() + 1 (the first bar is overall
-        // progress).
-        let bar = multi.insert(self.used_bars.len() + 1, new_bar);
-        // Do an initial tick after adding to the multi-progress to ensure
-        // that the new test is rendered.
-        bar.tick();
+        let displayed_count = self
+            .used_bars
+            .len()
+            .saturating_sub(self.overflow_queue.len());
 
-        // Add the bar to the map.
+        let should_display = match self.max_displayed {
+            MaxProgressRunning::Infinite => true,
+            MaxProgressRunning::Count(max) => displayed_count < max.get(),
+        };
+
+        let bar = if should_display {
+            // Remove a free bar if available.
+            if let Some(free_bar) = self.free_bars.pop_front() {
+                multi.remove(&free_bar);
+            }
+
+            // Insert the bar at the correct position.
+            //
+            // displayed_count doesn't include this test yet, so insert at
+            // (displayed_count + 1). This places it before the summary bar if
+            // it exists, or before all used bars if not.
+            let insert_pos = displayed_count + 1;
+            let bar = multi.insert(insert_pos, new_bar);
+            bar.tick();
+
+            bar
+        } else {
+            // This test is in the overflow; track it in FIFO order.
+            self.overflow_queue
+                .insert((id.binary_id.clone(), id.test_name.to_owned()));
+            new_bar
+        };
+
+        // We always add to used_bars, regardless of the display state.
         self.used_bars.insert_overwrite(TestProgressBar {
             binary_id: id.binary_id.clone(),
             test_name: id.test_name.to_owned(),
             bar,
         });
+
+        // Update the summary bar to reflect the overflow count.
+        self.update_summary_bar(multi, running_count, styles);
+    }
+
+    /// Updates or creates/removes the summary bar showing the overflow count.
+    fn update_summary_bar(&mut self, multi: &MultiProgress, running_count: usize, styles: &Styles) {
+        // Use the running count rather than the length of the overflow queue.
+        // Since tests are added to the queue with a bit of a delay, using the
+        // running count reduces flickering.
+        let overflow_count = match self.max_displayed {
+            MaxProgressRunning::Count(count) => running_count.saturating_sub(count.get()),
+            MaxProgressRunning::Infinite => {
+                // No summary bar is displayed in this case.
+                return;
+            }
+        };
+
+        if overflow_count > 0 {
+            if let Some(bar) = &mut self.summary_bar {
+                bar.set_overflow_count(overflow_count, styles);
+            } else {
+                // Add a summary bar.
+                //
+                // Remove a free bar if available (the summary bar takes its
+                // place).
+                if let Some(free_bar) = self.free_bars.pop_front() {
+                    multi.remove(&free_bar);
+                }
+
+                let displayed_count = self
+                    .used_bars
+                    .len()
+                    .saturating_sub(self.overflow_queue.len());
+
+                self.summary_bar = Some(SummaryBar::new(
+                    multi,
+                    displayed_count,
+                    overflow_count,
+                    styles,
+                ));
+            }
+        } else if let Some(summary_bar) = self.summary_bar.take() {
+            // The above Option::take removes the summary bar from
+            // self.summary_bar when the overflow count reaches 0.
+            multi.remove(&summary_bar.bar);
+            // Add a free bar for spacing.
+            let free_bar = ProgressBar::hidden();
+            free_bar.set_style(
+                ProgressStyle::default_spinner()
+                    .template(" ")
+                    .expect("this template is valid"),
+            );
+            let free_bar = multi.add(free_bar);
+            free_bar.tick();
+            self.free_bars.push_back(free_bar);
+        }
+    }
+
+    /// Promotes the next overflow test to be displayed.
+    ///
+    /// Returns true if a test was promoted.
+    fn promote_next_overflow_test(&mut self, multi: &MultiProgress) -> bool {
+        // Pop the first (oldest) overflow test from the FIFO IndexSet.
+        let next_test_key = self.overflow_queue.shift_remove_index(0);
+
+        if let Some(test_key) = next_test_key {
+            // Find the test bar in used_bars.
+            let tb = self
+                .used_bars
+                .iter()
+                .find(|tb| tb.binary_id == test_key.0 && tb.test_name == test_key.1);
+
+            if let Some(tb) = tb {
+                // Remove a free bar if available (we're taking up a display
+                // slot).
+                if let Some(free_bar) = self.free_bars.pop_front() {
+                    multi.remove(&free_bar);
+                }
+
+                // Make the bar visible by adding it to the multi-progress.
+                //
+                // We've already removed this test from overflow_order, so it's
+                // included in this count even though it's not visually
+                // displayed yet. Therefore we insert at displayed_count (not
+                // +1) to place it before the summary bar if it exists.
+                let displayed_count = self
+                    .used_bars
+                    .len()
+                    .saturating_sub(self.overflow_queue.len());
+                let insert_pos = displayed_count;
+                multi.insert(insert_pos, tb.bar.clone());
+                tb.bar.tick(); // Initial render
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     }
 
     fn tick_all(&self) {
@@ -185,6 +445,9 @@ impl TestProgressBars {
         }
         for bar in &self.free_bars {
             bar.finish_and_clear();
+        }
+        if let Some(summary_bar) = &self.summary_bar {
+            summary_bar.bar.finish_and_clear();
         }
     }
 }
@@ -235,6 +498,7 @@ impl ProgressBarState {
         progress_chars: &str,
         spinner_chars: &'static str,
         show_running: bool,
+        max_progress_running: MaxProgressRunning,
     ) -> Self {
         let multi_progress = MultiProgress::new();
         multi_progress.set_draw_target(Self::stderr_target());
@@ -257,7 +521,8 @@ impl ProgressBarState {
                 .expect("template is known to be valid"),
         );
 
-        let test_bars = show_running.then(|| TestProgressBars::new(spinner_chars));
+        let test_bars =
+            show_running.then(|| TestProgressBars::new(spinner_chars, max_progress_running));
 
         Self {
             multi_progress,
@@ -324,13 +589,22 @@ impl ProgressBarState {
                 // in ProgressBar::new.
                 self.bar.set_length(current_stats.initial_run_count as u64);
                 self.bar.set_position(current_stats.finished_count as u64);
+
+                if let Some(test_bars) = &mut self.test_bars {
+                    test_bars.update_summary_bar(&self.multi_progress, *running, styles);
+                }
             }
-            TestEventKind::TestShowProgress { test_instance, .. } => {
+            TestEventKind::TestShowProgress {
+                test_instance,
+                running,
+                ..
+            } => {
                 if let Some(test_bars) = &mut self.test_bars {
                     test_bars.add_test(
                         &self.multi_progress,
                         &test_instance.id(),
                         String::new(),
+                        *running,
                         styles,
                     );
                 }
@@ -342,7 +616,12 @@ impl ProgressBarState {
                 ..
             } => {
                 if let Some(test_bars) = &mut self.test_bars {
-                    test_bars.remove_test(&self.multi_progress, &test_instance.id());
+                    test_bars.remove_test(
+                        &self.multi_progress,
+                        &test_instance.id(),
+                        *running,
+                        styles,
+                    );
                 }
 
                 self.hidden_between_sub_runs = false;
@@ -359,9 +638,18 @@ impl ProgressBarState {
                 self.bar.set_length(current_stats.initial_run_count as u64);
                 self.bar.set_position(current_stats.finished_count as u64);
             }
-            TestEventKind::TestAttemptFailedWillRetry { test_instance, .. } => {
+            TestEventKind::TestAttemptFailedWillRetry {
+                test_instance,
+                running,
+                ..
+            } => {
                 if let Some(test_bars) = &mut self.test_bars {
-                    test_bars.remove_test(&self.multi_progress, &test_instance.id());
+                    test_bars.remove_test(
+                        &self.multi_progress,
+                        &test_instance.id(),
+                        *running,
+                        styles,
+                    );
                     // TODO: it would be nice to count the delay down rather
                     // than up. But it probably will require changes to
                     // indicatif to enable that (or for us to render time
@@ -370,17 +658,28 @@ impl ProgressBarState {
                         &self.multi_progress,
                         &test_instance.id(),
                         "DELAY".style(styles.retry).to_string(),
+                        *running,
                         styles,
                     );
                 }
             }
-            TestEventKind::TestRetryStarted { test_instance, .. } => {
+            TestEventKind::TestRetryStarted {
+                test_instance,
+                running,
+                ..
+            } => {
                 if let Some(test_bars) = &mut self.test_bars {
-                    test_bars.remove_test(&self.multi_progress, &test_instance.id());
+                    test_bars.remove_test(
+                        &self.multi_progress,
+                        &test_instance.id(),
+                        *running,
+                        styles,
+                    );
                     test_bars.add_test(
                         &self.multi_progress,
                         &test_instance.id(),
                         "RETRY".style(styles.retry).to_string(),
+                        *running,
                         styles,
                     );
                 }

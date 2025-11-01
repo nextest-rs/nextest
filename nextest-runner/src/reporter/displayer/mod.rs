@@ -10,6 +10,6 @@ mod status_level;
 mod unit_output;
 
 pub use imp::*;
-pub use progress::ShowProgress;
+pub use progress::{MaxProgressRunning, ShowProgress};
 pub use status_level::*;
 pub use unit_output::*;

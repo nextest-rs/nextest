@@ -681,6 +681,7 @@ where
                 stress_index,
                 retry_data,
                 test_instance,
+                running: self.running_tests.len(),
             }),
             InternalEvent::Executor(ExecutorEvent::Slow {
                 stress_index,
@@ -730,6 +731,7 @@ where
                     failure_output,
                     run_status,
                     delay_before_next_attempt,
+                    running: self.running_tests.len(),
                 })
             }
             InternalEvent::Executor(ExecutorEvent::RetryStarted {
@@ -757,6 +759,7 @@ where
                     stress_index,
                     test_instance,
                     retry_data,
+                    running: self.running_tests.len(),
                 })
             }
             InternalEvent::Executor(ExecutorEvent::Finished {

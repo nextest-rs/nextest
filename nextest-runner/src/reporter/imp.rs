@@ -6,7 +6,7 @@
 //! The main structure in this module is [`TestReporter`].
 
 use super::{
-    FinalStatusLevel, StatusLevel, TestOutputDisplay,
+    FinalStatusLevel, MaxProgressRunning, StatusLevel, TestOutputDisplay,
     displayer::{DisplayReporter, DisplayReporterBuilder, StatusLevels},
 };
 use crate::{
@@ -46,6 +46,7 @@ pub struct ReporterBuilder {
     verbose: bool,
     show_progress: ShowProgress,
     no_output_indent: bool,
+    max_progress_running: MaxProgressRunning,
 }
 
 impl ReporterBuilder {
@@ -105,6 +106,18 @@ impl ReporterBuilder {
         self.no_output_indent = no_output_indent;
         self
     }
+
+    /// Sets the maximum number of running tests to display in the progress bar.
+    ///
+    /// When more tests are running than this limit, only the first N tests are shown
+    /// with a summary line indicating how many more tests are running.
+    pub fn set_max_progress_running(
+        &mut self,
+        max_progress_running: MaxProgressRunning,
+    ) -> &mut Self {
+        self.max_progress_running = max_progress_running;
+        self
+    }
 }
 
 impl ReporterBuilder {
@@ -137,6 +150,7 @@ impl ReporterBuilder {
             no_capture: self.no_capture,
             show_progress: self.show_progress,
             no_output_indent: self.no_output_indent,
+            max_progress_running: self.max_progress_running,
         }
         .build(cargo_configs, output);
 

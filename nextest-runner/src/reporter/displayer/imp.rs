@@ -12,7 +12,9 @@ use super::{
         DisplayBracketedDuration, DisplayDurationBy, DisplaySlowDuration, write_final_warnings,
         write_skip_counts,
     },
-    progress::{ProgressBarState, progress_bar_msg, progress_str, write_summary_str},
+    progress::{
+        MaxProgressRunning, ProgressBarState, progress_bar_msg, progress_str, write_summary_str,
+    },
     unit_output::TestOutputDisplay,
 };
 use crate::{
@@ -59,6 +61,7 @@ pub(crate) struct DisplayReporterBuilder {
     pub(crate) no_capture: bool,
     pub(crate) show_progress: ShowProgress,
     pub(crate) no_output_indent: bool,
+    pub(crate) max_progress_running: MaxProgressRunning,
 }
 
 impl DisplayReporterBuilder {
@@ -98,6 +101,7 @@ impl DisplayReporterBuilder {
                 let progress_bar = self.progress_bar(
                     theme_characters.progress_chars,
                     theme_characters.spinner_chars,
+                    self.max_progress_running,
                 );
                 let term_progress = TerminalProgress::new(configs, &io::stderr());
 
@@ -107,7 +111,7 @@ impl DisplayReporterBuilder {
                     .unwrap_or_default();
 
                 ReporterStderrImpl::Terminal {
-                    progress_bar,
+                    progress_bar: progress_bar.map(Box::new),
                     term_progress,
                 }
             }
@@ -156,6 +160,7 @@ impl DisplayReporterBuilder {
         &self,
         progress_chars: &'static str,
         spinner_chars: &'static str,
+        max_progress_running: MaxProgressRunning,
     ) -> Option<ProgressBarState> {
         if self.no_capture {
             // Do not use a progress bar if --no-capture is passed in.
@@ -184,8 +189,13 @@ impl DisplayReporterBuilder {
             ShowProgress::Running => true,
         };
 
-        let state =
-            ProgressBarState::new(self.test_count, progress_chars, spinner_chars, show_running);
+        let state = ProgressBarState::new(
+            self.test_count,
+            progress_chars,
+            spinner_chars,
+            show_running,
+            max_progress_running,
+        );
         // Note: even if we create a progress bar here, if stderr is
         // piped, indicatif will not show it.
         Some(state)
@@ -254,7 +264,7 @@ enum ReporterStderrImpl<'a> {
     Terminal {
         // Reporter-specific progress bar state. None if the progress bar is not
         // enabled.
-        progress_bar: Option<ProgressBarState>,
+        progress_bar: Option<Box<ProgressBarState>>,
         // OSC 9 code progress reporting.
         term_progress: Option<TerminalProgress>,
     },
@@ -659,6 +669,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 run_status,
                 delay_before_next_attempt,
                 failure_output,
+                running: _,
             } => {
                 if self.status_levels.status_level >= StatusLevel::Retry {
                     let try_status_string = format!(
@@ -737,6 +748,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         attempt,
                         total_attempts,
                     },
+                running: _,
             } => {
                 let retry_string = format!("RETRY {attempt}/{total_attempts}");
                 write!(writer, "{:>12} ", retry_string.style(self.styles.retry))?;
@@ -2355,6 +2367,7 @@ mod tests {
             no_capture: true,
             show_progress: ShowProgress::Counter,
             no_output_indent: false,
+            max_progress_running: MaxProgressRunning::default(),
         };
         let output = ReporterStderr::Buffer(out);
         let reporter = builder.build(&configs, output);
