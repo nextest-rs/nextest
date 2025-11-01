@@ -574,6 +574,7 @@ impl ProgressBarState {
             TestEventKind::TestStarted {
                 current_stats,
                 running,
+                test_instance,
                 ..
             } => {
                 self.hidden_between_sub_runs = false;
@@ -593,12 +594,6 @@ impl ProgressBarState {
                 if let Some(test_bars) = &mut self.test_bars {
                     test_bars.update_summary_bar(&self.multi_progress, *running, styles);
                 }
-            }
-            TestEventKind::TestShowProgress {
-                test_instance,
-                running,
-                ..
-            } => {
                 if let Some(test_bars) = &mut self.test_bars {
                     test_bars.add_test(
                         &self.multi_progress,
