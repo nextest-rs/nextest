@@ -743,8 +743,14 @@ impl ProgressBarState {
     pub(super) fn write_buf(&self, buf: &[u8]) -> io::Result<()> {
         // ProgressBar::println doesn't print status lines if the bar is
         // hidden. The suspend method prints it in all cases.
-        self.multi_progress
-            .suspend(|| std::io::stderr().write_all(buf))
+        // suspend forces a full redraw, so we call it only if there is
+        // something in the buffer
+        if !buf.is_empty() {
+            self.multi_progress
+                .suspend(|| std::io::stderr().write_all(buf))
+        } else {
+            Ok(())
+        }
     }
 
     #[inline]
