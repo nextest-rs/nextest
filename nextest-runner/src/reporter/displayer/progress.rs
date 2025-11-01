@@ -502,7 +502,7 @@ impl ProgressBarState {
     ) -> Self {
         let multi_progress = MultiProgress::new();
         multi_progress.set_draw_target(Self::stderr_target());
-        multi_progress.set_move_cursor(true);
+        // multi_progress.set_move_cursor(true);
 
         let bar = multi_progress.add(ProgressBar::new(test_count as u64));
         let test_count_width = format!("{test_count}").len();
@@ -574,6 +574,7 @@ impl ProgressBarState {
             TestEventKind::TestStarted {
                 current_stats,
                 running,
+                test_instance,
                 ..
             } => {
                 self.hidden_between_sub_runs = false;
@@ -593,12 +594,6 @@ impl ProgressBarState {
                 if let Some(test_bars) = &mut self.test_bars {
                     test_bars.update_summary_bar(&self.multi_progress, *running, styles);
                 }
-            }
-            TestEventKind::TestShowProgress {
-                test_instance,
-                running,
-                ..
-            } => {
                 if let Some(test_bars) = &mut self.test_bars {
                     test_bars.add_test(
                         &self.multi_progress,
@@ -743,8 +738,14 @@ impl ProgressBarState {
     pub(super) fn write_buf(&self, buf: &[u8]) -> io::Result<()> {
         // ProgressBar::println doesn't print status lines if the bar is
         // hidden. The suspend method prints it in all cases.
-        self.multi_progress
-            .suspend(|| std::io::stderr().write_all(buf))
+        // suspend forces a full redraw, so we call it only if there is
+        // something in the buffer
+        if !buf.is_empty() {
+            self.multi_progress
+                .suspend(|| std::io::stderr().write_all(buf))
+        } else {
+            Ok(())
+        }
     }
 
     #[inline]
