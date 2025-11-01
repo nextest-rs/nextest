@@ -184,6 +184,9 @@ pub enum TestEventKind<'a> {
 
         /// The test instance that was started.
         test_instance: TestInstance<'a>,
+
+        /// The number of tests currently running, including this one.
+        running: usize,
     },
 
     /// A test was slower than a configured soft timeout.
@@ -222,6 +225,9 @@ pub enum TestEventKind<'a> {
 
         /// Whether failure outputs are printed out.
         failure_output: TestOutputDisplay,
+
+        /// The current number of running tests.
+        running: usize,
     },
 
     /// A retry has started.
@@ -234,6 +240,9 @@ pub enum TestEventKind<'a> {
 
         /// Data related to retries.
         retry_data: RetryData,
+
+        /// The current number of running tests.
+        running: usize,
     },
 
     /// A test finished running.
