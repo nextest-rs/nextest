@@ -502,7 +502,7 @@ impl ProgressBarState {
     ) -> Self {
         let multi_progress = MultiProgress::new();
         multi_progress.set_draw_target(Self::stderr_target());
-        multi_progress.set_move_cursor(true);
+        // multi_progress.set_move_cursor(true);
 
         let bar = multi_progress.add(ProgressBar::new(test_count as u64));
         let test_count_width = format!("{test_count}").len();
