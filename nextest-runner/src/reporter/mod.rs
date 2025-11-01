@@ -13,7 +13,10 @@ mod helpers;
 mod imp;
 pub mod structured;
 
-pub use displayer::{FinalStatusLevel, ShowProgress, StatusLevel, TestOutputDisplay};
+pub use displayer::{
+    FinalStatusLevel, PROGRESS_REFRESH_RATE_HZ, ShowProgress, StatusLevel, TICK_INTERVAL,
+    TestOutputDisplay,
+};
 pub use error_description::*;
 pub use helpers::highlight_end;
 pub use imp::*;

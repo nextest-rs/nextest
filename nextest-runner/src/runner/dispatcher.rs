@@ -15,10 +15,13 @@ use crate::{
     },
     input::{InputEvent, InputHandler},
     list::{TestInstance, TestInstanceId, TestList},
-    reporter::events::{
-        CancelReason, ExecuteStatus, ExecutionStatuses, FinalRunStats, InfoResponse, ReporterEvent,
-        RunFinishedStats, RunStats, StressIndex, StressProgress, StressRunStats, TestEvent,
-        TestEventKind,
+    reporter::{
+        TICK_INTERVAL,
+        events::{
+            CancelReason, ExecuteStatus, ExecutionStatuses, FinalRunStats, InfoResponse,
+            ReporterEvent, RunFinishedStats, RunStats, StressIndex, StressProgress, StressRunStats,
+            TestEvent, TestEventKind,
+        },
     },
     runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalInfoEvent},
@@ -119,7 +122,7 @@ where
             std::pin::pin!(crate::time::pausable_sleep(self.global_timeout));
 
         // This is the interval at which tick events are sent to the reporter.
-        let mut tick_interval = tokio::time::interval(Duration::from_millis(200));
+        let mut tick_interval = tokio::time::interval(TICK_INTERVAL);
         tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         loop {
