@@ -13,10 +13,11 @@ use crate::{
 use iddqd::{IdHashItem, IdHashMap, id_upcast};
 use indexmap::IndexSet;
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
+use itertools::Itertools as _;
 use nextest_metadata::RustBinaryId;
 use owo_colors::OwoColorize;
 use std::{
-    collections::VecDeque,
+    cmp::max,
     env, fmt,
     io::{self, IsTerminal, Write},
     num::NonZero,
@@ -152,11 +153,6 @@ impl SummaryBar {
 
 #[derive(Debug)]
 pub(super) struct TestProgressBars {
-    // A list of currently unused progress bars.
-    //
-    // Once a test bar is removed, we add an empty bar, then use it to avoid the
-    // overall progress bar shifting rapidly up and down.
-    free_bars: VecDeque<ProgressBar>,
     used_bars: IdHashMap<TestProgressBar>,
 
     // Overflow tests in FIFO order (the IndexSet preserves insertion order).
@@ -164,7 +160,9 @@ pub(super) struct TestProgressBars {
     // Tests are displayed if they're in used_bars but not in overflow_order.
     overflow_queue: IndexSet<(RustBinaryId, String)>,
     // Maximum number of tests to display.
-    max_displayed: MaxProgressRunning,
+    max_progress_running: MaxProgressRunning,
+    // Actual maximum number of test displayed
+    max_displayed: usize,
 
     // Summary bar showing the overflow count. This is Some if the summary bar
     // is currently displayed.
@@ -174,12 +172,12 @@ pub(super) struct TestProgressBars {
 }
 
 impl TestProgressBars {
-    fn new(spinner_chars: &'static str, max_displayed: MaxProgressRunning) -> Self {
+    fn new(spinner_chars: &'static str, max_progress_running: MaxProgressRunning) -> Self {
         Self {
-            free_bars: VecDeque::new(),
             used_bars: IdHashMap::new(),
             overflow_queue: IndexSet::new(),
-            max_displayed,
+            max_progress_running,
+            max_displayed: 0,
             summary_bar: None,
             spinner_chars,
         }
@@ -231,22 +229,7 @@ impl TestProgressBars {
                 // multi-progress.
                 multi.remove(&data.bar);
 
-                if self.promote_next_overflow_test(multi) {
-                    // A test was promoted from the overflow queue. The promoted
-                    // test takes this bar's place, so we don't need to add an
-                    // empty bar for spacing.
-                } else {
-                    // No test was promoted: add an empty bar for spacing.
-                    let free_bar = ProgressBar::hidden();
-                    free_bar.set_style(
-                        ProgressStyle::default_spinner()
-                            .template(" ")
-                            .expect("this template is valid"),
-                    );
-                    let free_bar = multi.add(free_bar);
-                    free_bar.tick();
-                    self.free_bars.push_back(free_bar);
-                }
+                self.promote_next_overflow_test(multi);
             }
 
             // Update summary bar to reflect the new overflow count.
@@ -295,17 +278,12 @@ impl TestProgressBars {
             .len()
             .saturating_sub(self.overflow_queue.len());
 
-        let should_display = match self.max_displayed {
+        let should_display = match self.max_progress_running {
             MaxProgressRunning::Infinite => true,
             MaxProgressRunning::Count(max) => displayed_count < max.get(),
         };
 
         let bar = if should_display {
-            // Remove a free bar if available.
-            if let Some(free_bar) = self.free_bars.pop_front() {
-                multi.remove(&free_bar);
-            }
-
             // Insert the bar at the correct position.
             //
             // displayed_count doesn't include this test yet, so insert at
@@ -332,6 +310,8 @@ impl TestProgressBars {
 
         // Update the summary bar to reflect the overflow count.
         self.update_summary_bar(multi, running_count, styles);
+
+        self.max_displayed = max(self.max_displayed, self.len());
     }
 
     /// Updates or creates/removes the summary bar showing the overflow count.
@@ -339,7 +319,7 @@ impl TestProgressBars {
         // Use the running count rather than the length of the overflow queue.
         // Since tests are added to the queue with a bit of a delay, using the
         // running count reduces flickering.
-        let overflow_count = match self.max_displayed {
+        let overflow_count = match self.max_progress_running {
             MaxProgressRunning::Count(count) => running_count.saturating_sub(count.get()),
             MaxProgressRunning::Infinite => {
                 // No summary bar is displayed in this case.
@@ -352,13 +332,6 @@ impl TestProgressBars {
                 bar.set_overflow_count(overflow_count, styles);
             } else {
                 // Add a summary bar.
-                //
-                // Remove a free bar if available (the summary bar takes its
-                // place).
-                if let Some(free_bar) = self.free_bars.pop_front() {
-                    multi.remove(&free_bar);
-                }
-
                 let displayed_count = self
                     .used_bars
                     .len()
@@ -375,16 +348,6 @@ impl TestProgressBars {
             // The above Option::take removes the summary bar from
             // self.summary_bar when the overflow count reaches 0.
             multi.remove(&summary_bar.bar);
-            // Add a free bar for spacing.
-            let free_bar = ProgressBar::hidden();
-            free_bar.set_style(
-                ProgressStyle::default_spinner()
-                    .template(" ")
-                    .expect("this template is valid"),
-            );
-            let free_bar = multi.add(free_bar);
-            free_bar.tick();
-            self.free_bars.push_back(free_bar);
         }
     }
 
@@ -403,12 +366,6 @@ impl TestProgressBars {
                 .find(|tb| tb.binary_id == test_key.0 && tb.test_name == test_key.1);
 
             if let Some(tb) = tb {
-                // Remove a free bar if available (we're taking up a display
-                // slot).
-                if let Some(free_bar) = self.free_bars.pop_front() {
-                    multi.remove(&free_bar);
-                }
-
                 // Make the bar visible by adding it to the multi-progress.
                 //
                 // We've already removed this test from overflow_order, so it's
@@ -443,12 +400,27 @@ impl TestProgressBars {
         for tb in &self.used_bars {
             tb.bar.finish_and_clear();
         }
-        for bar in &self.free_bars {
-            bar.finish_and_clear();
-        }
         if let Some(summary_bar) = &self.summary_bar {
             summary_bar.bar.finish_and_clear();
         }
+    }
+
+    fn len(&self) -> usize {
+        self.used_bars.len() + self.summary_bar.is_some() as usize
+    }
+
+    fn new_free_bar(&self, multi_progress: &MultiProgress) -> ProgressBar {
+        // push an bar with as much line as needed to match the max total lines displayed
+        let missing_lines = self.max_displayed - self.len();
+        let bar = ProgressBar::hidden();
+        bar.set_style(
+            ProgressStyle::default_spinner()
+                .template(&std::iter::repeat_n(" ", missing_lines).join("\n"))
+                .expect("this template is valid"),
+        );
+        let bar = multi_progress.add(bar);
+        bar.tick();
+        bar
     }
 }
 
@@ -741,8 +713,17 @@ impl ProgressBarState {
         // suspend forces a full redraw, so we call it only if there is
         // something in the buffer
         if !buf.is_empty() {
-            self.multi_progress
-                .suspend(|| std::io::stderr().write_all(buf))
+            let mut free_bar = None;
+            if let Some(test_bars) = &self.test_bars {
+                free_bar = Some(test_bars.new_free_bar(&self.multi_progress));
+            }
+            let res = self
+                .multi_progress
+                .suspend(|| std::io::stderr().write_all(buf));
+            if let Some(bar) = &free_bar {
+                self.multi_progress.remove(bar);
+            }
+            res
         } else {
             Ok(())
         }
