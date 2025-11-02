@@ -1086,6 +1086,7 @@ fn progress_bar_cancel_prefix(reason: Option<CancelReason>, styles: &Styles) -> 
         | Some(CancelReason::TestFailure)
         | Some(CancelReason::ReportError)
         | Some(CancelReason::GlobalTimeout)
+        | Some(CancelReason::TestFailureImmediate)
         | Some(CancelReason::Signal)
         | Some(CancelReason::Interrupt)
         | None => "Cancelling",

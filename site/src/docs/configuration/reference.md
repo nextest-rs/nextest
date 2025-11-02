@@ -200,13 +200,22 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 - **Type**: Boolean or object
 - **Description**: Controls when to stop running tests after failures
 - **Documentation**: [_Failing fast_](../running.md#failing-fast)
+- **Default**: `true` (stop after first failure, wait for running tests to complete)
 - **Examples**:
   ```toml
-  fail-fast = true  # Stop after first failure
+  fail-fast = true  # Stop after first failure (waits for running tests)
   fail-fast = false # Run all tests
-  fail-fast = { max-fail = 5 }  # Stop after 5 failures
+  fail-fast = { max-fail = 5 }  # Stop after 5 failures (waits for running tests)
   fail-fast = { max-fail = "all" }  # Run all tests
+
+  # With termination mode (since 0.9.111)
+  fail-fast = { max-fail = 1, terminate = "wait" }  # Wait for running tests (default)
+  fail-fast = { max-fail = 1, terminate = "immediate" }  # Terminate running tests immediately
   ```
+
+When `max-fail` is exceeded:
+- **`terminate = "wait"`** (default): Nextest stops scheduling new tests but waits for currently running tests to finish naturally
+- **`terminate = "immediate"`** <!-- md:version 0.9.111 -->: Nextest sends termination signals to running tests (respecting the grace period configured via `slow-timeout.terminate-after`)
 
 ### Test grouping
 

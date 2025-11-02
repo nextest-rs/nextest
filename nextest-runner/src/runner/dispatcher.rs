@@ -10,7 +10,7 @@
 use super::{RunUnitRequest, RunnerTaskState, ShutdownRequest};
 use crate::{
     config::{
-        elements::MaxFail,
+        elements::{MaxFail, TerminateMode},
         scripts::{ScriptId, SetupScriptConfig},
     },
     input::{InputEvent, InputHandler},
@@ -24,7 +24,10 @@ use crate::{
         },
     },
     runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
-    signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalInfoEvent},
+    signal::{
+        JobControlEvent, ShutdownEvent, ShutdownSignalEvent, SignalEvent, SignalHandler,
+        SignalInfoEvent,
+    },
     time::StopwatchStart,
 };
 use chrono::Local;
@@ -328,7 +331,7 @@ where
                             // The global timeout has expired, causing cancellation to begin.
                             self.broadcast_request(RunUnitRequest::Signal(
                                 SignalRequest::Shutdown(ShutdownRequest::Once(
-                                    ShutdownEvent::GLOBAL_TIMEOUT,
+                                    ShutdownEvent::TERMINATE,
                                 )),
                             ));
                         }
@@ -774,8 +777,9 @@ where
                 let run_statuses = self.finish_test(test_instance.id(), last_run_status);
                 self.run_stats.on_test_finished(&run_statuses);
 
-                // should this run be cancelled because of a failure?
-                let fail_cancel = self.max_fail.is_exceeded(self.run_stats.failed_count());
+                // Check if this run should be cancelled because of a failure.
+                // is_exceeded returns Some(terminate_mode) if max-fail is exceeded.
+                let terminate_mode = self.max_fail.is_exceeded(self.run_stats.failed_count());
 
                 self.basic_callback(TestEventKind::TestFinished {
                     stress_index,
@@ -789,9 +793,21 @@ where
                     running: self.running(),
                 });
 
-                if fail_cancel {
+                if let Some(terminate_mode) = terminate_mode {
                     // A test failed: start cancellation if required.
-                    self.begin_cancel(CancelReason::TestFailure, CancelEvent::TestFailure)
+                    // Check if we should terminate immediately or wait for running tests.
+                    if terminate_mode == TerminateMode::Immediate {
+                        // Terminate running tests immediately by sending a test failure event.
+                        self.broadcast_request(RunUnitRequest::Signal(SignalRequest::Shutdown(
+                            ShutdownRequest::Once(ShutdownEvent::TestFailureImmediate),
+                        )));
+                    }
+                    self.begin_cancel(
+                        CancelReason::TestFailureImmediate,
+                        CancelEvent::Signal(ShutdownRequest::Once(
+                            ShutdownEvent::TestFailureImmediate,
+                        )),
+                    )
                 } else {
                     HandleEventResponse::None
                 }
@@ -944,8 +960,15 @@ where
     fn handle_signal_event(&mut self, event: SignalEvent) -> HandleEventResponse {
         match event {
             SignalEvent::Shutdown(event) => {
-                let signal_count = self.increment_signal_count();
-                let req = signal_count.to_request(event);
+                // TestFailureImmediate doesn't participate in signal count escalation.
+                // It can only happen once and doesn't escalate to Twice on repetition.
+                let req = match event {
+                    ShutdownEvent::TestFailureImmediate => ShutdownRequest::Once(event),
+                    ShutdownEvent::Signal(_) => {
+                        let signal_count = self.increment_signal_count();
+                        signal_count.to_request(event)
+                    }
+                };
                 let cancel_reason = event_to_cancel_reason(event);
 
                 self.begin_cancel(cancel_reason, CancelEvent::Signal(req))
@@ -1267,9 +1290,14 @@ impl DispatcherStressContext {
 
 fn event_to_cancel_reason(event: ShutdownEvent) -> CancelReason {
     match event {
-        #[cfg(unix)]
-        ShutdownEvent::Hangup | ShutdownEvent::Term | ShutdownEvent::Quit => CancelReason::Signal,
-        ShutdownEvent::Interrupt => CancelReason::Interrupt,
+        ShutdownEvent::Signal(sig) => match sig {
+            #[cfg(unix)]
+            ShutdownSignalEvent::Hangup | ShutdownSignalEvent::Term | ShutdownSignalEvent::Quit => {
+                CancelReason::Signal
+            }
+            ShutdownSignalEvent::Interrupt => CancelReason::Interrupt,
+        },
+        ShutdownEvent::TestFailureImmediate => CancelReason::TestFailureImmediate,
     }
 }
 
@@ -1431,27 +1459,77 @@ mod tests {
         let response = cx.handle_event(InternalEvent::ReportCancel);
         assert_noop(response, &events);
 
+        // Save a copy before TestFailureImmediate for later tests.
+        let cx_before_test_failure = cx.clone();
+
+        // Test TestFailureImmediate after ReportCancel - should upgrade.
+        let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+            ShutdownEvent::TestFailureImmediate,
+        )));
+        assert_eq!(
+            response,
+            HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Once(
+                ShutdownEvent::TestFailureImmediate
+            ))),
+            "expected TestFailureImmediate"
+        );
+        {
+            let mut events = events.lock().unwrap();
+            assert_eq!(events.len(), 1, "expected 1 event");
+            let event = events.pop().unwrap();
+            let TestEventKind::RunBeginCancel {
+                setup_scripts_running,
+                current_stats,
+                running,
+            } = event.kind
+            else {
+                panic!("expected RunBeginCancel event, found {:?}", event.kind);
+            };
+            assert_eq!(setup_scripts_running, 0, "expected 0 setup scripts running");
+            assert_eq!(running, 0, "expected 0 tests running");
+            assert_eq!(
+                current_stats.cancel_reason,
+                Some(CancelReason::TestFailureImmediate),
+                "expected test failure immediate"
+            );
+        }
+
+        // Send another TestFailureImmediate, ensuring it's ignored (no escalation like signals).
+        let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+            ShutdownEvent::TestFailureImmediate,
+        )));
+        assert_noop(response, &events);
+
+        // Send a report error after TestFailureImmediate, ensuring it's ignored.
+        let response = cx.handle_event(InternalEvent::ReportCancel);
+        assert_noop(response, &events);
+
         // The rules:
         // * Any one signal will cause that signal.
         // * Any two signals received will cause a SIGKILL.
         // * After a signal is received, any less-important cancel-worthy events
         //   are ignored.
+        // * TestFailureImmediate acts like a signal but doesn't escalate on repetition.
         //
         // Interestingly, this state machine appears to function on Windows too
         // (though of course the only variant is an Interrupt so this only runs
         // one iteration.) Should it be different? No compelling reason to be
         // yet.
-        for sig1 in ShutdownEvent::ALL_VARIANTS {
-            for sig2 in ShutdownEvent::ALL_VARIANTS {
+        for sig1 in ShutdownSignalEvent::ALL_VARIANTS {
+            for sig2 in ShutdownSignalEvent::ALL_VARIANTS {
                 eprintln!("** testing {sig1:?} -> {sig2:?}");
                 // Separate test for each signal to avoid mixing up state.
                 let mut cx = cx.clone();
 
                 // First signal.
-                let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(*sig1)));
+                let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+                    ShutdownEvent::Signal(*sig1),
+                )));
                 assert_eq!(
                     response,
-                    HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Once(*sig1))),
+                    HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Once(
+                        ShutdownEvent::Signal(*sig1)
+                    ))),
                     "expected Once"
                 );
                 {
@@ -1470,7 +1548,7 @@ mod tests {
                     assert_eq!(running, 0, "expected 0 tests running");
                     assert_eq!(
                         current_stats.cancel_reason,
-                        Some(event_to_cancel_reason(*sig1)),
+                        Some(event_to_cancel_reason(ShutdownEvent::Signal(*sig1))),
                         "expected signal"
                     );
                 }
@@ -1480,7 +1558,9 @@ mod tests {
                 assert_noop(response, &events);
 
                 // Second signal.
-                let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(*sig2)));
+                let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+                    ShutdownEvent::Signal(*sig2),
+                )));
                 assert_eq!(
                     response,
                     HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Twice)),
@@ -1510,6 +1590,114 @@ mod tests {
                 // Another report error, ensuring it's ignored.
                 let response = cx.handle_event(InternalEvent::ReportCancel);
                 assert_noop(response, &events);
+
+                // TestFailureImmediate after signal should be ignored (signal is more severe).
+                let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+                    ShutdownEvent::TestFailureImmediate,
+                )));
+                assert_noop(response, &events);
+            }
+        }
+
+        // Test that signals upgrade from TestFailureImmediate.
+        for sig in ShutdownSignalEvent::ALL_VARIANTS {
+            eprintln!("** testing TestFailureImmediate -> {sig:?}");
+            // Separate test for each signal to avoid mixing up state.
+            // Clone from before TestFailureImmediate was sent.
+            let mut cx = cx_before_test_failure.clone();
+
+            // First, send TestFailureImmediate.
+            let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+                ShutdownEvent::TestFailureImmediate,
+            )));
+            assert_eq!(
+                response,
+                HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Once(
+                    ShutdownEvent::TestFailureImmediate
+                ))),
+                "expected TestFailureImmediate"
+            );
+            {
+                let mut events = events.lock().unwrap();
+                assert_eq!(events.len(), 1, "expected 1 event");
+                let event = events.pop().unwrap();
+                let TestEventKind::RunBeginCancel {
+                    setup_scripts_running,
+                    current_stats,
+                    running,
+                } = event.kind
+                else {
+                    panic!("expected RunBeginCancel event, found {:?}", event.kind);
+                };
+                assert_eq!(setup_scripts_running, 0, "expected 0 setup scripts running");
+                assert_eq!(running, 0, "expected 0 tests running");
+                assert_eq!(
+                    current_stats.cancel_reason,
+                    Some(CancelReason::TestFailureImmediate),
+                    "expected test failure immediate"
+                );
+            }
+
+            // Now send a signal - should upgrade.
+            let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+                ShutdownEvent::Signal(*sig),
+            )));
+            assert_eq!(
+                response,
+                HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Once(
+                    ShutdownEvent::Signal(*sig)
+                ))),
+                "expected signal upgrade"
+            );
+            {
+                let mut events = events.lock().unwrap();
+                assert_eq!(events.len(), 1, "expected 1 event");
+                let event = events.pop().unwrap();
+                let TestEventKind::RunBeginCancel {
+                    setup_scripts_running,
+                    current_stats,
+                    running,
+                } = event.kind
+                else {
+                    panic!("expected RunBeginCancel event, found {:?}", event.kind);
+                };
+                assert_eq!(setup_scripts_running, 0, "expected 0 setup scripts running");
+                assert_eq!(running, 0, "expected 0 tests running");
+                assert_eq!(
+                    current_stats.cancel_reason,
+                    Some(event_to_cancel_reason(ShutdownEvent::Signal(*sig))),
+                    "expected signal cancel reason"
+                );
+            }
+
+            // A second signal should cause a kill.
+            let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+                ShutdownEvent::Signal(*sig),
+            )));
+            assert_eq!(
+                response,
+                HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Twice)),
+                "expected kill"
+            );
+            {
+                let mut events = events.lock().unwrap();
+                assert_eq!(events.len(), 1, "expected 1 event");
+                let event = events.pop().unwrap();
+                let TestEventKind::RunBeginKill {
+                    setup_scripts_running,
+                    current_stats,
+                    running,
+                } = event.kind
+                else {
+                    panic!("expected RunBeginKill event, found {:?}", event.kind);
+                };
+                assert_eq!(setup_scripts_running, 0, "expected 0 setup scripts running");
+                assert_eq!(running, 0, "expected 0 tests running");
+                assert_eq!(
+                    current_stats.cancel_reason,
+                    Some(CancelReason::SecondSignal),
+                    "expected second signal"
+                );
             }
         }
     }

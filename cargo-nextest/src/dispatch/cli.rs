@@ -660,11 +660,17 @@ pub struct TestRunnerOpts {
     )]
     no_fail_fast: bool,
 
-    /// Number of tests that can fail before exiting test run [possible values: integer or "all"]
+    /// Number of tests that can fail before exiting test run
+    ///
+    /// To control whether currently running tests are waited for or terminated
+    /// immediately, append ':wait' (default) or ':immediate' to the number
+    /// (e.g., '5:immediate').
+    ///
+    /// [possible values: integer, "all", "N:wait", "N:immediate"]
     #[arg(
         long,
         name = "max-fail",
-        value_name = "N",
+        value_name = "N[:MODE]",
         conflicts_with_all = &["no-run", "fail-fast", "no-fail-fast"],
     )]
     max_fail: Option<MaxFail>,

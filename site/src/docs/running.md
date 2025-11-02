@@ -188,10 +188,25 @@ By default, nextest cancels the test run on encountering a single failure. Tests
 
 This behavior can be customized through either the command-line, or through [configuration](configuration/index.md).
 
-Through the command line:
+### Termination behavior
 
-`--max-fail=N` <!-- md:version 0.9.86 -->
-: Number of tests that can fail before aborting the test run, or `all` to run all tests regardless of the number of failures. Useful for uncovering multiple issues without having to run the whole test suite.
+<!-- md:version 0.9.111 -->
+
+When max-fail is exceeded, nextest supports two termination modes:
+
+- **`wait` (default)**: Nextest stops scheduling new tests but waits for currently running tests to finish naturally. This is the safest option and ensures tests complete their cleanup logic.
+- **`immediate`**: Nextest sends termination signals to running tests (respecting the [grace period](features/slow-tests.md#how-nextest-terminates-tests) configured via `slow-timeout.terminate-after`). This is faster but may interrupt tests mid-execution.
+
+### Command-line options
+
+`--max-fail=N[:MODE]` <!-- md:version 0.9.86 --> (`:MODE` syntax added in <!-- md:version 0.9.111 -->)
+: Number of tests that can fail before aborting the test run, or `all` to run all tests regardless of the number of failures. Optionally specify termination mode as `:wait` or `:immediate`.
+
+  Examples:
+
+  - `--max-fail=5` - Stop after 5 failures, wait for running tests
+  - `--max-fail=1:immediate` - Stop after first failure, terminate running tests immediately
+  - `--max-fail=all` - Run all tests regardless of failures
 
 `--no-fail-fast` (<!-- md:version 0.9.92 --> alias `--nff`)
 : Do not exit the test run in case a test fails. Most useful for CI scenarios. Equivalent to `--max-fail=all`.
@@ -199,7 +214,7 @@ Through the command line:
 `--fail-fast` (<!-- md:version 0.9.92 --> alias `--ff`)
 : Exit the test run on the first failure. This is the default behavior. Equivalent to `--max-fail=1`.
 
-Through configuration:
+### Configuration
 
 ```toml title="Fail-fast behavior in <code>.config/nextest.toml</code>"
 [profile.default]
@@ -216,6 +231,11 @@ fail-fast = { max-fail = 1 }
 fail-fast = false
 # Or:
 fail-fast = { max-fail = "all" }
+
+# With termination mode control (available since 0.9.111)
+fail-fast = { max-fail = 1, terminate = "wait" }       # Wait for running tests (default)
+fail-fast = { max-fail = 1, terminate = "immediate" }  # Terminate running tests immediately
+fail-fast = { max-fail = 5, terminate = "immediate" }  # Stop after 5 failures, terminate immediately
 ```
 
 ## Other runner options
