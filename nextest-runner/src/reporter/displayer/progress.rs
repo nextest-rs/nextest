@@ -199,6 +199,7 @@ pub(super) struct ProgressBarState {
     max_running_displayed: usize,
     // None when the running tests are not displayed
     running_tests: Option<Vec<RunningTest>>,
+    buffer: Vec<u8>,
     // Reasons for hiding the progress bar. We show the progress bar if none of
     // these are set and hide it if any of them are set.
     //
@@ -248,6 +249,7 @@ impl ProgressBarState {
             max_progress_running,
             max_running_displayed: 0,
             running_tests,
+            buffer: Vec::new(),
             hidden_no_capture: false,
             hidden_run_paused: false,
             hidden_info_response: false,
@@ -257,6 +259,26 @@ impl ProgressBarState {
 
     pub(super) fn tick(&mut self) {
         self.update_message();
+        self.print_and_clear_buffer();
+    }
+
+    fn print_and_clear_buffer(&mut self) {
+        self.print_buffer();
+        self.buffer.clear();
+    }
+
+    fn print_buffer(&self) {
+        // ProgressBar::println doesn't print status lines if the bar is
+        // hidden. The suspend method prints it in all cases.
+        // suspend forces a full redraw, so we call it only if there is
+        // something in the buffer
+        if !self.buffer.is_empty() {
+            self.bar.suspend(|| {
+                std::io::stderr()
+                    .write_all(&self.buffer)
+                    .expect("write to succeed")
+            });
+        }
     }
 
     pub(super) fn update_message(&mut self) {
@@ -472,14 +494,13 @@ impl ProgressBarState {
         }
     }
 
-    pub(super) fn write_buf(&self, buf: &[u8]) -> io::Result<()> {
-        // ProgressBar::println doesn't print status lines if the bar is
-        // hidden. The suspend method prints it in all cases.
-        self.bar.suspend(|| std::io::stderr().write_all(buf))
+    pub(super) fn write_buf(&mut self, buf: &[u8]) {
+        self.buffer.extend_from_slice(buf);
     }
 
     #[inline]
     pub(super) fn finish_and_clear(&self) {
+        self.print_buffer();
         self.bar.finish_and_clear();
     }
 

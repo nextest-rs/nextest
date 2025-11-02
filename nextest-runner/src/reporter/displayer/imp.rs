@@ -228,7 +228,8 @@ impl<'a> DisplayReporter<'a> {
                             .update_progress(event, &mut buf)
                             .map_err(WriteEventError::Io)?;
                     }
-                    state.write_buf(&buf).map_err(WriteEventError::Io)
+                    state.write_buf(&buf);
+                    Ok(())
                 } else {
                     // Write to a buffered stderr.
                     let mut writer = BufWriter::new(std::io::stderr());
