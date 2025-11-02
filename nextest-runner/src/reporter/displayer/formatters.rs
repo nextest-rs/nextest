@@ -226,36 +226,39 @@ fn write_final_warnings_for_failure(
     styles: &Styles,
     writer: &mut dyn Write,
 ) -> io::Result<()> {
-    if reason == Some(CancelReason::TestFailure) {
-        writeln!(
-            writer,
-            "{}: {}/{} {} {} not run due to {} (run with {} to run all tests, or run with {})",
-            "warning".style(styles.skip),
-            not_run.style(styles.count),
-            initial_run_count.style(styles.count),
-            plural::tests_plural_if(initial_run_count != 1 || not_run != 1),
-            plural::were_plural_if(initial_run_count != 1 || not_run != 1),
-            CancelReason::TestFailure.to_static_str().style(styles.skip),
-            "--no-fail-fast".style(styles.count),
-            "--max-fail".style(styles.count),
-        )?;
-    } else {
-        let due_to_reason = match reason {
-            Some(reason) => {
-                format!(" due to {}", reason.to_static_str().style(styles.skip))
-            }
-            None => "".to_string(),
-        };
-        writeln!(
-            writer,
-            "{}: {}/{} {} {} not run{}",
-            "warning".style(styles.skip),
-            not_run.style(styles.count),
-            initial_run_count.style(styles.count),
-            plural::tests_plural_if(initial_run_count != 1 || not_run != 1),
-            plural::were_plural_if(initial_run_count != 1 || not_run != 1),
-            due_to_reason,
-        )?;
+    match reason {
+        Some(reason @ CancelReason::TestFailure | reason @ CancelReason::TestFailureImmediate) => {
+            writeln!(
+                writer,
+                "{}: {}/{} {} {} not run due to {} (run with {} to run all tests, or run with {})",
+                "warning".style(styles.skip),
+                not_run.style(styles.count),
+                initial_run_count.style(styles.count),
+                plural::tests_plural_if(initial_run_count != 1 || not_run != 1),
+                plural::were_plural_if(initial_run_count != 1 || not_run != 1),
+                reason.to_static_str().style(styles.skip),
+                "--no-fail-fast".style(styles.count),
+                "--max-fail".style(styles.count),
+            )?;
+        }
+        _ => {
+            let due_to_reason = match reason {
+                Some(reason) => {
+                    format!(" due to {}", reason.to_static_str().style(styles.skip))
+                }
+                None => "".to_string(),
+            };
+            writeln!(
+                writer,
+                "{}: {}/{} {} {} not run{}",
+                "warning".style(styles.skip),
+                not_run.style(styles.count),
+                initial_run_count.style(styles.count),
+                plural::tests_plural_if(initial_run_count != 1 || not_run != 1),
+                plural::were_plural_if(initial_run_count != 1 || not_run != 1),
+                due_to_reason,
+            )?;
+        }
     }
 
     Ok(())

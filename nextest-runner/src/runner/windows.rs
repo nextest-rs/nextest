@@ -8,7 +8,7 @@ use crate::{
         InternalTerminateReason, RunUnitQuery, RunUnitRequest, ShutdownRequest, SignalRequest,
         TerminateChildResult, UnitContext,
     },
-    signal::ShutdownEvent,
+    signal::{ShutdownEvent, ShutdownSignalEvent},
     test_command::ChildAccumulator,
     time::StopwatchStart,
 };
@@ -213,10 +213,11 @@ fn shutdown_terminate_method(req: ShutdownRequest, grace_period: Duration) -> Un
     }
 
     match req {
-        // In case of interrupt events, wait for the grace period to elapse
+        // In case of interrupt events or test failure, wait for the grace period to elapse
         // before terminating the job. We're assuming that if nextest got an
         // interrupt, child processes did as well.
-        ShutdownRequest::Once(ShutdownEvent::Interrupt) => UnitTerminateMethod::Wait,
+        ShutdownRequest::Once(ShutdownEvent::Signal(ShutdownSignalEvent::Interrupt))
+        | ShutdownRequest::Once(ShutdownEvent::TestFailureImmediate) => UnitTerminateMethod::Wait,
         ShutdownRequest::Twice => UnitTerminateMethod::JobObject,
     }
 }

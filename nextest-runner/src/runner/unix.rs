@@ -9,7 +9,7 @@ use crate::{
         UnitTerminatingState,
     },
     runner::{RunUnitQuery, RunUnitRequest, SignalRequest},
-    signal::{JobControlEvent, ShutdownEvent},
+    signal::{JobControlEvent, ShutdownEvent, ShutdownSignalEvent},
     test_command::ChildAccumulator,
     time::StopwatchStart,
 };
@@ -222,17 +222,17 @@ fn shutdown_terminate_method(req: ShutdownRequest, grace_period: Duration) -> Un
     }
 
     match req {
-        ShutdownRequest::Once(ShutdownEvent::Hangup) => {
-            UnitTerminateMethod::Signal(UnitTerminateSignal::Hangup)
-        }
-        ShutdownRequest::Once(ShutdownEvent::Term) => {
+        ShutdownRequest::Once(ShutdownEvent::Signal(sig)) => match sig {
+            ShutdownSignalEvent::Hangup => UnitTerminateMethod::Signal(UnitTerminateSignal::Hangup),
+            ShutdownSignalEvent::Term => UnitTerminateMethod::Signal(UnitTerminateSignal::Term),
+            ShutdownSignalEvent::Quit => UnitTerminateMethod::Signal(UnitTerminateSignal::Quit),
+            ShutdownSignalEvent::Interrupt => {
+                UnitTerminateMethod::Signal(UnitTerminateSignal::Interrupt)
+            }
+        },
+        ShutdownRequest::Once(ShutdownEvent::TestFailureImmediate) => {
+            // Test failure with immediate mode: use SIGTERM like timeout
             UnitTerminateMethod::Signal(UnitTerminateSignal::Term)
-        }
-        ShutdownRequest::Once(ShutdownEvent::Quit) => {
-            UnitTerminateMethod::Signal(UnitTerminateSignal::Quit)
-        }
-        ShutdownRequest::Once(ShutdownEvent::Interrupt) => {
-            UnitTerminateMethod::Signal(UnitTerminateSignal::Interrupt)
         }
         ShutdownRequest::Twice => UnitTerminateMethod::Signal(UnitTerminateSignal::Kill),
     }

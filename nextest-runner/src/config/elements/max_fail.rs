@@ -9,7 +9,12 @@ use std::{fmt, str::FromStr};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MaxFail {
     /// Allow a specific number of tests to fail before exiting.
-    Count(usize),
+    Count {
+        /// The maximum number of tests that can fail before exiting.
+        max_fail: usize,
+        /// Whether to terminate running tests immediately or wait for them to complete.
+        terminate: TerminateMode,
+    },
 
     /// Run all tests. Equivalent to --no-fast-fail.
     All,
@@ -18,14 +23,24 @@ pub enum MaxFail {
 impl MaxFail {
     /// Returns the max-fail corresponding to the fail-fast.
     pub fn from_fail_fast(fail_fast: bool) -> Self {
-        if fail_fast { Self::Count(1) } else { Self::All }
+        if fail_fast {
+            Self::Count {
+                max_fail: 1,
+                terminate: TerminateMode::Wait,
+            }
+        } else {
+            Self::All
+        }
     }
 
-    /// Returns true if the max-fail has been exceeded.
-    pub fn is_exceeded(&self, failed: usize) -> bool {
+    /// Returns the terminate mode if the max-fail has been exceeded, or None otherwise.
+    pub fn is_exceeded(&self, failed: usize) -> Option<TerminateMode> {
         match self {
-            Self::Count(n) => failed >= *n,
-            Self::All => false,
+            Self::Count {
+                max_fail,
+                terminate,
+            } => (failed >= *max_fail).then_some(*terminate),
+            Self::All => None,
         }
     }
 }
@@ -38,11 +53,26 @@ impl FromStr for MaxFail {
             return Ok(Self::All);
         }
 
-        match s.parse::<isize>() {
-            Err(e) => Err(MaxFailParseError::new(format!("Error: {e} parsing {s}"))),
-            Ok(j) if j <= 0 => Err(MaxFailParseError::new("max-fail may not be <= 0")),
-            Ok(j) => Ok(MaxFail::Count(j as usize)),
+        // Check for N:mode syntax
+        let (count_str, terminate) = if let Some((count, mode_str)) = s.split_once(':') {
+            (count, mode_str.parse()?)
+        } else {
+            (s, TerminateMode::default())
+        };
+
+        // Parse and validate count
+        let max_fail = count_str
+            .parse::<isize>()
+            .map_err(|e| MaxFailParseError::new(format!("{e} parsing '{count_str}'")))?;
+
+        if max_fail <= 0 {
+            return Err(MaxFailParseError::new("max-fail may not be <= 0"));
         }
+
+        Ok(MaxFail::Count {
+            max_fail: max_fail as usize,
+            terminate,
+        })
     }
 }
 
@@ -50,7 +80,51 @@ impl fmt::Display for MaxFail {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::All => write!(f, "all"),
-            Self::Count(n) => write!(f, "{n}"),
+            Self::Count {
+                max_fail,
+                terminate,
+            } => {
+                if *terminate == TerminateMode::default() {
+                    write!(f, "{max_fail}")
+                } else {
+                    write!(f, "{max_fail}:{terminate}")
+                }
+            }
+        }
+    }
+}
+
+/// Mode for terminating running tests when max-fail is exceeded.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TerminateMode {
+    /// Wait for running tests to complete (default)
+    #[default]
+    Wait,
+    /// Terminate running tests immediately
+    Immediate,
+}
+
+impl fmt::Display for TerminateMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Wait => write!(f, "wait"),
+            Self::Immediate => write!(f, "immediate"),
+        }
+    }
+}
+
+impl FromStr for TerminateMode {
+    type Err = MaxFailParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "wait" => Ok(Self::Wait),
+            "immediate" => Ok(Self::Immediate),
+            _ => Err(MaxFailParseError::new(format!(
+                "invalid terminate mode '{}', expected 'wait' or 'immediate'",
+                s
+            ))),
         }
     }
 }
@@ -83,79 +157,96 @@ where
             A: serde::de::MapAccess<'de2>,
         {
             let de = serde::de::value::MapAccessDeserializer::new(map);
-            FailFastMap::deserialize(de).map(|helper| Some(helper.max_fail))
+            FailFastMap::deserialize(de).map(|helper| match helper.max_fail_count {
+                MaxFailCount::Count(n) => Some(MaxFail::Count {
+                    max_fail: n,
+                    terminate: helper.terminate,
+                }),
+                MaxFailCount::All => Some(MaxFail::All),
+            })
         }
     }
 
     deserializer.deserialize_any(V)
 }
 
-/// A deserializer for `{ max-fail = xyz }`.
+/// A deserializer for `{ max-fail = xyz, terminate = "..." }`.
 #[derive(Deserialize)]
 struct FailFastMap {
-    #[serde(rename = "max-fail", deserialize_with = "deserialize_max_fail")]
-    max_fail: MaxFail,
+    #[serde(rename = "max-fail")]
+    max_fail_count: MaxFailCount,
+    #[serde(default)]
+    terminate: TerminateMode,
 }
 
-fn deserialize_max_fail<'de, D>(deserializer: D) -> Result<MaxFail, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    struct V;
+/// Represents the max-fail count or "all".
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MaxFailCount {
+    Count(usize),
+    All,
+}
 
-    impl serde::de::Visitor<'_> for V {
-        type Value = MaxFail;
+impl<'de> Deserialize<'de> for MaxFailCount {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct V;
 
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            write!(formatter, "a positive integer or the string \"all\"")
-        }
+        impl serde::de::Visitor<'_> for V {
+            type Value = MaxFailCount;
 
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            if v == "all" {
-                return Ok(MaxFail::All);
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "a positive integer or the string \"all\"")
             }
 
-            // If v is a string that represents a number, suggest using the
-            // integer form.
-            if let Ok(val) = v.parse::<i64>() {
-                if val > 0 {
-                    return Err(serde::de::Error::invalid_value(
-                        serde::de::Unexpected::Str(v),
-                        &"the string \"all\" (numbers must be specified without quotes)",
-                    ));
-                } else {
-                    return Err(serde::de::Error::invalid_value(
-                        serde::de::Unexpected::Str(v),
-                        &"the string \"all\" (numbers must be positive and without quotes)",
-                    ));
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                if v == "all" {
+                    return Ok(MaxFailCount::All);
                 }
-            }
 
-            Err(serde::de::Error::invalid_value(
-                serde::de::Unexpected::Str(v),
-                &"the string \"all\" or a positive integer",
-            ))
-        }
+                // If v is a string that represents a number, suggest using the
+                // integer form.
+                if let Ok(val) = v.parse::<i64>() {
+                    if val > 0 {
+                        return Err(serde::de::Error::invalid_value(
+                            serde::de::Unexpected::Str(v),
+                            &"the string \"all\" (numbers must be specified without quotes)",
+                        ));
+                    } else {
+                        return Err(serde::de::Error::invalid_value(
+                            serde::de::Unexpected::Str(v),
+                            &"the string \"all\" (numbers must be positive and without quotes)",
+                        ));
+                    }
+                }
 
-        fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            if v > 0 {
-                Ok(MaxFail::Count(v as usize))
-            } else {
                 Err(serde::de::Error::invalid_value(
-                    serde::de::Unexpected::Signed(v),
-                    &"a positive integer or the string \"all\"",
+                    serde::de::Unexpected::Str(v),
+                    &"the string \"all\" or a positive integer",
                 ))
             }
-        }
-    }
 
-    deserializer.deserialize_any(V)
+            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                if v > 0 {
+                    Ok(MaxFailCount::Count(v as usize))
+                } else {
+                    Err(serde::de::Error::invalid_value(
+                        serde::de::Unexpected::Signed(v),
+                        &"a positive integer or the string \"all\"",
+                    ))
+                }
+            }
+        }
+
+        deserializer.deserialize_any(V)
+    }
 }
 
 #[cfg(test)]
@@ -175,10 +266,37 @@ mod tests {
         let successes = vec![
             ("all", MaxFail::All),
             ("ALL", MaxFail::All),
-            ("1", MaxFail::Count(1)),
+            (
+                "1",
+                MaxFail::Count {
+                    max_fail: 1,
+                    terminate: TerminateMode::Wait,
+                },
+            ),
+            (
+                "1:wait",
+                MaxFail::Count {
+                    max_fail: 1,
+                    terminate: TerminateMode::Wait,
+                },
+            ),
+            (
+                "1:immediate",
+                MaxFail::Count {
+                    max_fail: 1,
+                    terminate: TerminateMode::Immediate,
+                },
+            ),
+            (
+                "5:immediate",
+                MaxFail::Count {
+                    max_fail: 5,
+                    terminate: TerminateMode::Immediate,
+                },
+            ),
         ];
 
-        let failures = vec!["-1", "0", "foo"];
+        let failures = vec!["-1", "0", "foo", "1:invalid", "1:"];
 
         for (input, output) in successes {
             assert_eq!(
@@ -200,7 +318,7 @@ mod tests {
             [profile.custom]
             fail-fast = true
         "#},
-        MaxFail::Count(1)
+        MaxFail::Count { max_fail: 1, terminate: TerminateMode::Wait }
         ; "boolean true"
     )]
     #[test_case(
@@ -216,7 +334,7 @@ mod tests {
             [profile.custom]
             fail-fast = { max-fail = 1 }
         "#},
-        MaxFail::Count(1)
+        MaxFail::Count { max_fail: 1, terminate: TerminateMode::Wait }
         ; "max-fail 1"
     )]
     #[test_case(
@@ -224,7 +342,7 @@ mod tests {
             [profile.custom]
             fail-fast = { max-fail = 2 }
         "#},
-        MaxFail::Count(2)
+        MaxFail::Count { max_fail: 2, terminate: TerminateMode::Wait }
         ; "max-fail 2"
     )]
     #[test_case(
@@ -234,6 +352,30 @@ mod tests {
         "#},
         MaxFail::All
         ; "max-fail all"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.custom]
+            fail-fast = { max-fail = 1, terminate = "wait" }
+        "#},
+        MaxFail::Count { max_fail: 1, terminate: TerminateMode::Wait }
+        ; "max-fail 1 with explicit wait"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.custom]
+            fail-fast = { max-fail = 1, terminate = "immediate" }
+        "#},
+        MaxFail::Count { max_fail: 1, terminate: TerminateMode::Immediate }
+        ; "max-fail 1 with immediate"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.custom]
+            fail-fast = { max-fail = 5, terminate = "immediate" }
+        "#},
+        MaxFail::Count { max_fail: 5, terminate: TerminateMode::Immediate }
+        ; "max-fail 5 with immediate"
     )]
     fn parse_fail_fast(config_contents: &str, expected: MaxFail) {
         let workspace_dir = tempdir().unwrap();

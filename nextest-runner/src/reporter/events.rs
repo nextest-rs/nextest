@@ -1077,6 +1077,31 @@ impl ExecutionResult {
         }
     }
 
+    /// Returns true if this result represents a test that was terminated by nextest
+    /// (as opposed to failing naturally).
+    ///
+    /// This is used to suppress output spam when immediate termination is active.
+    ///
+    /// TODO: This is a heuristic that checks if the test was terminated by SIGTERM (Unix) or
+    /// job object (Windows). In an edge case, a test could send SIGTERM to itself, which would
+    /// incorrectly be detected as a nextest-initiated termination. A more robust solution would
+    /// track which tests were explicitly sent termination signals by nextest.
+    pub fn is_termination_failure(&self) -> bool {
+        match self {
+            #[cfg(unix)]
+            ExecutionResult::Fail {
+                failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(libc::SIGTERM)),
+                ..
+            } => true,
+            #[cfg(windows)]
+            ExecutionResult::Fail {
+                failure_status: FailureStatus::Abort(AbortStatus::JobObject),
+                ..
+            } => true,
+            _ => false,
+        }
+    }
+
     /// Returns a static string representation of the result.
     pub fn as_static_str(&self) -> &'static str {
         match self {
@@ -1181,6 +1206,9 @@ pub enum CancelReason {
     /// The global timeout was exceeded.
     GlobalTimeout,
 
+    /// A test failed and fail-fast with immediate termination was specified.
+    TestFailureImmediate,
+
     /// A termination signal (on Unix, SIGTERM or SIGHUP) was received.
     Signal,
 
@@ -1198,6 +1226,7 @@ impl CancelReason {
             CancelReason::TestFailure => "test failure",
             CancelReason::ReportError => "reporting error",
             CancelReason::GlobalTimeout => "global timeout",
+            CancelReason::TestFailureImmediate => "test failure",
             CancelReason::Signal => "signal",
             CancelReason::Interrupt => "interrupt",
             CancelReason::SecondSignal => "second signal",

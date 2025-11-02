@@ -6,7 +6,7 @@
 //! Status levels play a role that's similar to log levels in typical loggers.
 
 use super::TestOutputDisplay;
-use crate::reporter::events::CancelReason;
+use crate::reporter::events::{CancelReason, ExecutionResult};
 use serde::Deserialize;
 
 /// Status level to show in the reporter output.
@@ -93,6 +93,7 @@ impl StatusLevels {
         cancel_status: Option<CancelReason>,
         test_status_level: StatusLevel,
         test_final_status_level: FinalStatusLevel,
+        execution_result: ExecutionResult,
     ) -> OutputOnTestFinished {
         let write_status_line = self.status_level >= test_status_level;
 
@@ -100,6 +101,12 @@ impl StatusLevels {
         // We store entries in the final output map if either the final status level is high enough or
         // if `display` says we show the output at the end.
         let is_final = display.is_final() || self.final_status_level >= test_final_status_level;
+
+        // Check if this test was terminated by nextest during immediate termination mode.
+        // This is a heuristic: we check if the test failed with SIGTERM (Unix) or JobObject (Windows)
+        // during TestFailureImmediate cancellation. This suppresses output spam from tests we killed.
+        let terminated_by_nextest = cancel_status == Some(CancelReason::TestFailureImmediate)
+            && execution_result.is_termination_failure();
 
         // This table is tested below. The basic invariant is that we generally follow what
         // is_immediate and is_final suggests, except:
@@ -110,23 +117,40 @@ impl StatusLevels {
         //   of output at the end is likely to not be helpful (though in the future we may want to
         //   at least dump outputs into files and write their names out, or whenever nextest gains
         //   the ability to replay test runs to be able to display it then.)
+        // - if the run is cancelled due to immediate test failure termination, we hide output for
+        //   tests that were terminated by nextest (via SIGTERM/job object), but still show output
+        //   for tests that failed naturally (e.g. due to assertion failures or other exit codes).
         //
-        // is_immediate  is_final  cancel_status  |  show_immediate  store_final
+        // is_immediate  is_final      cancel_status     terminated_by_nextest  |  show_immediate  store_final
         //
-        //     false      false      <= Signal    |     false          false
-        //     false       true      <= Signal    |     false           true  [1]
-        //      true      false      <= Signal    |      true          false  [1]
-        //      true       true       < Signal    |      true           true
-        //      true       true         Signal    |      true          false  [2]
-        //       *           *       Interrupt    |     false          false
+        //     false      false          <= Signal                *             |      false          false
+        //     false       true          <= Signal                *             |      false           true  [1]
+        //      true      false          <= Signal                *             |       true          false  [1]
+        //      true       true           < Signal                *             |       true           true
+        //      true       true             Signal                *             |       true          false  [2]
+        //       *          *            Interrupt                *             |      false          false  [3]
+        //       *          *       TestFailureImmediate         true           |      false          false  [4]
+        //       *          *       TestFailureImmediate        false           |  (use rules above)  [5]
         //
         // [1] In non-interrupt cases, we want to display output if specified once.
         //
         // [2] If there's a signal, we shouldn't display output twice at the end since it's
-        // redundant -- instead, just show the output as part of the immediate display.
-        let show_immediate = is_immediate && cancel_status <= Some(CancelReason::Signal);
+        //     redundant -- instead, just show the output as part of the immediate display.
+        //
+        // [3] For interrupts, hide all output to avoid spam.
+        //
+        // [4] For tests terminated by nextest during immediate mode, hide output to avoid spam.
+        //
+        // [5] For tests that failed naturally during immediate mode (race condition), show output
+        //     normally since these are real failures.
+        let show_immediate =
+            is_immediate && cancel_status <= Some(CancelReason::Signal) && !terminated_by_nextest;
 
-        let store_final = if is_final && cancel_status < Some(CancelReason::Signal)
+        let store_final = if cancel_status == Some(CancelReason::Interrupt) || terminated_by_nextest
+        {
+            // Hide output completely for interrupt and nextest-initiated termination.
+            OutputStoreFinal::No
+        } else if is_final && cancel_status < Some(CancelReason::Signal)
             || !is_immediate && is_final && cancel_status == Some(CancelReason::Signal)
         {
             OutputStoreFinal::Yes {
@@ -189,11 +213,13 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
+        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             cancel_status,
             test_status_level,
             test_final_status_level,
+            execution_result,
         );
 
         assert!(!actual.write_status_line);
@@ -211,11 +237,13 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
+        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             cancel_status,
             test_status_level,
             test_final_status_level,
+            execution_result,
         );
         assert!(actual.write_status_line);
     }
@@ -235,11 +263,13 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
+        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             Some(CancelReason::Interrupt),
             test_status_level,
             test_final_status_level,
+            execution_result,
         );
         assert!(!actual.show_immediate);
         assert_eq!(actual.store_final, OutputStoreFinal::No);
@@ -258,11 +288,13 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
+        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             cancel_status,
             test_status_level,
             test_final_status_level,
+            execution_result,
         );
         assert!(!actual.show_immediate);
     }
@@ -280,11 +312,13 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
+        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             cancel_status,
             test_status_level,
             test_final_status_level,
+            execution_result,
         );
         assert!(actual.show_immediate);
     }
@@ -306,11 +340,13 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
+        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             cancel_status,
             test_status_level,
             test_final_status_level,
+            execution_result,
         );
         assert_eq!(actual.store_final, OutputStoreFinal::No);
     }
@@ -329,11 +365,13 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
+        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             TestOutputDisplay::Final,
             cancel_status,
             test_status_level,
             test_final_status_level,
+            execution_result,
         );
         assert_eq!(
             actual.store_final,
@@ -356,11 +394,13 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
+        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             TestOutputDisplay::ImmediateFinal,
             cancel_status,
             test_status_level,
             test_final_status_level,
+            execution_result,
         );
         assert_eq!(
             actual.store_final,
@@ -382,11 +422,13 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
+        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             TestOutputDisplay::ImmediateFinal,
             Some(CancelReason::Signal),
             test_status_level,
             test_final_status_level,
+            execution_result,
         );
         assert_eq!(
             actual.store_final,
@@ -412,11 +454,13 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
+        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             cancel_status,
             test_status_level,
             test_final_status_level,
+            execution_result,
         );
         assert_eq!(
             actual.store_final,
@@ -424,5 +468,124 @@ mod tests {
                 display_output: false,
             }
         );
+    }
+
+    #[test]
+    fn on_test_finished_terminated_by_nextest() {
+        use crate::reporter::events::{AbortStatus, FailureStatus};
+
+        let status_levels = StatusLevels {
+            status_level: StatusLevel::Pass,
+            final_status_level: FinalStatusLevel::Fail,
+        };
+
+        // Test 1: Terminated by nextest (SIGTERM) during TestFailureImmediate - should hide
+        #[cfg(unix)]
+        {
+            let execution_result = ExecutionResult::Fail {
+                failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(libc::SIGTERM)),
+                leaked: false,
+            };
+
+            let actual = status_levels.compute_output_on_test_finished(
+                TestOutputDisplay::ImmediateFinal,
+                Some(CancelReason::TestFailureImmediate),
+                StatusLevel::Fail,
+                FinalStatusLevel::Fail,
+                execution_result,
+            );
+
+            assert!(
+                !actual.show_immediate,
+                "should not show immediate for SIGTERM during TestFailureImmediate"
+            );
+            assert_eq!(
+                actual.store_final,
+                OutputStoreFinal::No,
+                "should not store final for SIGTERM during TestFailureImmediate"
+            );
+        }
+
+        // Test 2: Terminated by nextest (JobObject) during TestFailureImmediate - should hide
+        #[cfg(windows)]
+        {
+            let execution_result = ExecutionResult::Fail {
+                failure_status: FailureStatus::Abort(AbortStatus::JobObject),
+                leaked: false,
+            };
+
+            let actual = status_levels.compute_output_on_test_finished(
+                TestOutputDisplay::ImmediateFinal,
+                Some(CancelReason::TestFailureImmediate),
+                StatusLevel::Fail,
+                FinalStatusLevel::Fail,
+                execution_result,
+            );
+
+            assert!(
+                !actual.show_immediate,
+                "should not show immediate for JobObject during TestFailureImmediate"
+            );
+            assert_eq!(
+                actual.store_final,
+                OutputStoreFinal::No,
+                "should not store final for JobObject during TestFailureImmediate"
+            );
+        }
+
+        // Test 3: Natural failure (exit code) during TestFailureImmediate - should show
+        let execution_result = ExecutionResult::Fail {
+            failure_status: FailureStatus::ExitCode(1),
+            leaked: false,
+        };
+
+        let actual = status_levels.compute_output_on_test_finished(
+            TestOutputDisplay::ImmediateFinal,
+            Some(CancelReason::TestFailureImmediate),
+            StatusLevel::Fail,
+            FinalStatusLevel::Fail,
+            execution_result,
+        );
+
+        assert!(
+            actual.show_immediate,
+            "should show immediate for natural failure during TestFailureImmediate"
+        );
+        assert_eq!(
+            actual.store_final,
+            OutputStoreFinal::Yes {
+                display_output: true
+            },
+            "should store final for natural failure"
+        );
+
+        // Test 4: SIGTERM but not during TestFailureImmediate (user sent signal) - should show
+        #[cfg(unix)]
+        {
+            let execution_result = ExecutionResult::Fail {
+                failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(libc::SIGTERM)),
+                leaked: false,
+            };
+
+            let actual = status_levels.compute_output_on_test_finished(
+                TestOutputDisplay::ImmediateFinal,
+                Some(CancelReason::Signal), // Regular signal, not TestFailureImmediate
+                StatusLevel::Fail,
+                FinalStatusLevel::Fail,
+                execution_result,
+            );
+
+            assert!(
+                actual.show_immediate,
+                "should show immediate for user-initiated SIGTERM"
+            );
+            assert_eq!(
+                actual.store_final,
+                OutputStoreFinal::Yes {
+                    display_output: false
+                },
+                "should store but not display final"
+            );
+        }
     }
 }

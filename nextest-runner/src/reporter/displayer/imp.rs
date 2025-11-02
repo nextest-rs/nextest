@@ -786,6 +786,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     self.cancel_status,
                     describe.status_level(),
                     describe.final_status_level(),
+                    last_status.result,
                 );
 
                 let counter = TestInstanceCounter::Counter {
@@ -852,19 +853,26 @@ impl<'a> DisplayReporterImpl<'a> {
                     )?;
                 }
 
+                let immediately_terminating_text =
+                    if current_stats.cancel_reason == Some(CancelReason::TestFailureImmediate) {
+                        format!("immediately {} ", "terminating".style(self.styles.fail))
+                    } else {
+                        String::new()
+                    };
+
                 // At the moment, we can have either setup scripts or tests running, but not both.
                 if *setup_scripts_running > 0 {
                     let s = plural::setup_scripts_str(*setup_scripts_running);
                     write!(
                         writer,
-                        "{} {s} still running",
+                        "{immediately_terminating_text}{} {s} still running",
                         setup_scripts_running.style(self.styles.count),
                     )?;
                 } else if *running > 0 {
                     let tests_str = plural::tests_str(*running);
                     write!(
                         writer,
-                        "{} {tests_str} still running",
+                        "{immediately_terminating_text}{} {tests_str} still running",
                         running.style(self.styles.count),
                     )?;
                 }

@@ -118,14 +118,20 @@ mod imp {
 
         pub(super) async fn recv(&mut self) -> Option<SignalEvent> {
             self.map.next().await.map(|(id, _)| match id {
-                SignalId::Int => SignalEvent::Shutdown(ShutdownEvent::Interrupt),
-                SignalId::Hup => SignalEvent::Shutdown(ShutdownEvent::Hangup),
-                SignalId::Term => SignalEvent::Shutdown(ShutdownEvent::Term),
+                SignalId::Int => {
+                    SignalEvent::Shutdown(ShutdownEvent::Signal(ShutdownSignalEvent::Interrupt))
+                }
+                SignalId::Hup => {
+                    SignalEvent::Shutdown(ShutdownEvent::Signal(ShutdownSignalEvent::Hangup))
+                }
+                SignalId::Term => {
+                    SignalEvent::Shutdown(ShutdownEvent::Signal(ShutdownSignalEvent::Term))
+                }
                 SignalId::Quit => {
                     if self.sigquit_as_info {
                         SignalEvent::Info(SignalInfoEvent::Info)
                     } else {
-                        SignalEvent::Shutdown(ShutdownEvent::Quit)
+                        SignalEvent::Shutdown(ShutdownEvent::Signal(ShutdownSignalEvent::Quit))
                     }
                 }
                 SignalId::Tstp => SignalEvent::JobControl(JobControlEvent::Stop),
@@ -196,7 +202,9 @@ mod imp {
             }
 
             match self.ctrl_c.recv().await {
-                Some(()) => Some(SignalEvent::Shutdown(ShutdownEvent::Interrupt)),
+                Some(()) => Some(SignalEvent::Shutdown(ShutdownEvent::Signal(
+                    ShutdownSignalEvent::Interrupt,
+                ))),
                 None => {
                     self.ctrl_c_done = true;
                     None
@@ -226,7 +234,7 @@ pub(crate) enum JobControlEvent {
 
 // A signal event that should cause a shutdown to happen.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ShutdownEvent {
+pub(crate) enum ShutdownSignalEvent {
     #[cfg(unix)]
     Hangup,
     #[cfg(unix)]
@@ -236,15 +244,7 @@ pub(crate) enum ShutdownEvent {
     Interrupt,
 }
 
-impl ShutdownEvent {
-    // On Unix, send SIGTERM on global timeout.
-    #[cfg(unix)]
-    pub(crate) const GLOBAL_TIMEOUT: Self = Self::Term;
-
-    // On Windows, the best we can do is to interrupt the process.
-    #[cfg(not(unix))]
-    pub(crate) const GLOBAL_TIMEOUT: Self = Self::Interrupt;
-
+impl ShutdownSignalEvent {
     #[cfg(test)]
     pub(crate) const ALL_VARIANTS: &'static [Self] = &[
         #[cfg(unix)]
@@ -255,6 +255,25 @@ impl ShutdownEvent {
         Self::Quit,
         Self::Interrupt,
     ];
+}
+
+// An event that should cause a shutdown to happen.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ShutdownEvent {
+    /// A signal was received from the OS.
+    Signal(ShutdownSignalEvent),
+    /// A test failure occurred with immediate termination mode.
+    TestFailureImmediate,
+}
+
+impl ShutdownEvent {
+    // On Unix, send SIGTERM for termination (global timeout, test failure with immediate mode).
+    #[cfg(unix)]
+    pub(crate) const TERMINATE: Self = Self::Signal(ShutdownSignalEvent::Term);
+
+    // On Windows, the best we can do is to interrupt the process.
+    #[cfg(not(unix))]
+    pub(crate) const TERMINATE: Self = Self::Signal(ShutdownSignalEvent::Interrupt);
 }
 
 // A signal event to query information about tests.
