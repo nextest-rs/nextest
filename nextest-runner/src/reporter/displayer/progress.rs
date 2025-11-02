@@ -101,7 +101,7 @@ pub enum ShowProgress {
 pub(super) enum RunningTestStatus {
     Running,
     Slow,
-    Delay,
+    Delay(Duration),
     Retry,
 }
 
@@ -116,11 +116,14 @@ pub(super) struct RunningTest {
 
 impl RunningTest {
     fn message(&self, now: &Instant, width: usize, styles: &Styles) -> String {
-        let elapsed = (*now - self.start_time) - self.paused_for;
+        let mut elapsed = (*now - self.start_time) - self.paused_for;
         let status = match self.status {
             RunningTestStatus::Running => "     ".to_owned(),
             RunningTestStatus::Slow => " SLOW".style(styles.skip).to_string(),
-            RunningTestStatus::Delay => "DELAY".style(styles.retry).to_string(),
+            RunningTestStatus::Delay(d) => {
+                elapsed = d - elapsed;
+                "DELAY".style(styles.retry).to_string()
+            }
             RunningTestStatus::Retry => "RETRY".style(styles.retry).to_string(),
         };
         let elapsed = format!(
@@ -392,13 +395,17 @@ impl ProgressBarState {
                 self.bar.set_length(current_stats.initial_run_count as u64);
                 self.bar.set_position(current_stats.finished_count as u64);
             }
-            TestEventKind::TestAttemptFailedWillRetry { test_instance, .. } => {
+            TestEventKind::TestAttemptFailedWillRetry {
+                test_instance,
+                delay_before_next_attempt,
+                ..
+            } => {
                 self.remove_test(&test_instance.id());
                 if let Some(running_tests) = &mut self.running_tests {
                     running_tests.push(RunningTest {
                         binary_id: test_instance.id().binary_id.clone(),
                         test_name: test_instance.id().test_name.to_owned(),
-                        status: RunningTestStatus::Delay,
+                        status: RunningTestStatus::Delay(*delay_before_next_attempt),
                         start_time: Instant::now(),
                         paused_for: Duration::ZERO,
                     });
