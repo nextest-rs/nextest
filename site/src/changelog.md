@@ -8,6 +8,19 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## Unreleased
+
+### Added
+
+- Nextest now supports immediately terminating currently-running tests on failure. Set `fail-fast = { max-fail = 1, terminate = "immediate" }` in your configuration, or use `--max-fail=1:immediate`, to terminate running tests as soon as the first test fails.
+
+### Changed
+
+- With `--show-progress=running` or `only`, the progress bar now caps the number of currently-running tests displayed to 8 by default. A new `--max-progress-running` option (environment variable `NEXTEST_MAX_PROGRESS_RUNNING`) allows customizing this limit. When more tests are running than the limit, a summary bar shows the overflow count. ([#2727])
+
+[#2727]: https://github.com/nextest-rs/nextest/pull/2727
+[#2733]: https://github.com/nextest-rs/nextest/pull/2733
+
 ## [0.9.110] - 2025-10-31
 
 ### Added

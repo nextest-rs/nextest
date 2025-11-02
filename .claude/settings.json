@@ -13,6 +13,7 @@
             "Bash(git show:*)",
             "Bash(jj diff:*)",
             "Bash(jj s:*)",
+            "Skill(prepare-changelog)",
             "WebSearch"
         ],
         "deny": [],
