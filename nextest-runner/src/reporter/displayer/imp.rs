@@ -46,9 +46,9 @@ use std::{
 };
 
 /// The duration after which ticks are generated.
-pub const TICK_INTERVAL: Duration = Duration::from_millis(200);
+pub const TICK_INTERVAL: Duration = Duration::from_millis(100);
 
-/// The refresh rate for the progress bar, set to half the tick interval in hz.
+/// The refresh rate for the progress bar, set to match the tick interval in hz.
 pub const PROGRESS_REFRESH_RATE_HZ: u8 = 10;
 
 pub(crate) struct DisplayReporterBuilder {
