@@ -10,7 +10,6 @@ use crate::{
         helpers::Styles,
     },
 };
-use console::AnsiCodeIterator;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::RustBinaryId;
 use owo_colors::OwoColorize;
@@ -24,7 +23,6 @@ use std::{
 };
 use swrite::{SWrite, swrite};
 use tracing::debug;
-use unicode_width::UnicodeWidthChar as _;
 
 /// The maximum number of running tests to display with
 /// `--show-progress=running` or `only`.
@@ -132,61 +130,20 @@ impl RunningTest {
             elapsed.as_secs() / 60,
             elapsed.as_secs() % 60,
         );
-        let mut test = format!(
-            "{}",
-            DisplayTestInstance::new(
-                None,
-                None,
-                TestInstanceId {
-                    binary_id: &self.binary_id,
-
-                    test_name: &self.test_name
-                },
-                &styles.list_styles
-            )
-        );
         let max_width = width.saturating_sub(25);
-        let test_width = measure_text_width(&test);
-        if test_width > max_width {
-            test = ansi_get(&test, test_width - max_width, test_width)
-        }
+        let test = DisplayTestInstance::new(
+            None,
+            None,
+            TestInstanceId {
+                binary_id: &self.binary_id,
+
+                test_name: &self.test_name,
+            },
+            &styles.list_styles,
+        )
+        .with_max_width(max_width);
         format!("       {} [{:>9}] {}", status, elapsed, test)
     }
-}
-
-pub fn measure_text_width(s: &str) -> usize {
-    AnsiCodeIterator::new(s)
-        .filter_map(|(s, is_ansi)| match is_ansi {
-            false => Some(s.chars().count()),
-            true => None,
-        })
-        .sum()
-}
-
-pub fn ansi_get(text: &str, start: usize, end: usize) -> String {
-    let mut pos = 0;
-    let mut res = String::new();
-    for (s, is_ansi) in AnsiCodeIterator::new(text) {
-        if is_ansi {
-            res.push_str(s);
-            continue;
-        } else if pos >= end {
-            continue;
-        }
-
-        for c in s.chars() {
-            let c_width = c.width().unwrap_or(0);
-            if start <= pos && pos + c_width <= end {
-                res.push(c);
-            }
-            pos += c_width;
-            if pos > end {
-                // no need to iterate over the rest of s
-                break;
-            }
-        }
-    }
-    res
 }
 
 #[derive(Debug)]
