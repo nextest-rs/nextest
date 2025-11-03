@@ -193,7 +193,6 @@ pub fn ansi_get(text: &str, start: usize, end: usize) -> String {
 pub(super) struct ProgressBarState {
     bar: ProgressBar,
     stats: RunStats,
-    styles: Styles,
     running: usize,
     max_progress_running: MaxProgressRunning,
     // Keep track of the maximum number of lines used. This allows to adapt the
@@ -247,7 +246,6 @@ impl ProgressBarState {
         Self {
             bar,
             stats: RunStats::default(),
-            styles: Styles::default(),
             running: 0,
             max_progress_running,
             max_running_displayed: 0,
@@ -260,8 +258,8 @@ impl ProgressBarState {
         }
     }
 
-    pub(super) fn tick(&mut self) {
-        self.update_message();
+    pub(super) fn tick(&mut self, styles: &Styles) {
+        self.update_message(styles);
         self.print_and_clear_buffer();
     }
 
@@ -284,8 +282,8 @@ impl ProgressBarState {
         }
     }
 
-    pub(super) fn update_message(&mut self) {
-        let mut msg = progress_bar_msg(&self.stats, self.running, &self.styles);
+    pub(super) fn update_message(&mut self, styles: &Styles) {
+        let mut msg = progress_bar_msg(&self.stats, self.running, styles);
         msg += "     ";
 
         if let Some(running_tests) = &self.running_tests {
@@ -298,13 +296,13 @@ impl ProgressBarState {
             };
             for running_test in &running_tests[..count] {
                 msg.push('\n');
-                msg.push_str(&running_test.message(&now, width, &self.styles));
+                msg.push_str(&running_test.message(&now, width, styles));
             }
             if count < running_tests.len() {
                 let overflow_count = running_tests.len() - count;
                 msg.push_str(&format!(
                     "\n             ... and {} more {} running",
-                    overflow_count.style(self.styles.count),
+                    overflow_count.style(styles.count),
                     plural::tests_str(overflow_count),
                 ));
                 count += 1;
@@ -317,7 +315,6 @@ impl ProgressBarState {
 
     pub(super) fn update_progress_bar(&mut self, event: &TestEvent<'_>, styles: &Styles) {
         let before_should_hide = self.should_hide();
-        self.styles = styles.clone();
 
         match &event.kind {
             TestEventKind::StressSubRunStarted { .. } => {
