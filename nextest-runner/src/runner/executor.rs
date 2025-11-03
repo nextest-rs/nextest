@@ -765,11 +765,6 @@ impl<'a> ExecutorContext<'a> {
         // Use a pausable_sleep rather than an interval here because it's much
         // harder to pause and resume an interval.
         let mut interval_sleep = std::pin::pin!(crate::time::pausable_sleep(slow_timeout.period));
-        // Use an event that happens shortly after the test starts to avoid
-        // overwhelming progress bar display code.
-        let mut show_progress_sleep =
-            std::pin::pin!(crate::time::pausable_sleep(Duration::from_millis(10)));
-        let mut show_progress_sleep_done = false;
 
         let mut timeout_hit = 0;
 
@@ -781,10 +776,6 @@ impl<'a> ExecutorContext<'a> {
         let (res, leak_info) = {
             let res = loop {
                 tokio::select! {
-                    _ = &mut show_progress_sleep, if !show_progress_sleep_done => {
-                        _ = resp_tx.send(test.show_progress_event());
-                        show_progress_sleep_done = true;
-                    }
                     () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
                     res = child.wait() => {
                         // The test finished executing.
@@ -1110,14 +1101,6 @@ pub(super) struct TestPacket<'a> {
 }
 
 impl<'a> TestPacket<'a> {
-    fn show_progress_event(&self) -> ExecutorEvent<'a> {
-        ExecutorEvent::ShowProgress {
-            stress_index: self.stress_index,
-            retry_data: self.retry_data,
-            test_instance: self.test_instance,
-        }
-    }
-
     fn slow_event(&self, elapsed: Duration, will_terminate: Option<Duration>) -> ExecutorEvent<'a> {
         ExecutorEvent::Slow {
             stress_index: self.stress_index,

@@ -46,9 +46,9 @@ use std::{
 };
 
 /// The duration after which ticks are generated.
-pub const TICK_INTERVAL: Duration = Duration::from_millis(200);
+pub const TICK_INTERVAL: Duration = Duration::from_millis(100);
 
-/// The refresh rate for the progress bar, set to half the tick interval in hz.
+/// The refresh rate for the progress bar, set to match the tick interval in hz.
 pub const PROGRESS_REFRESH_RATE_HZ: u8 = 10;
 
 pub(crate) struct DisplayReporterBuilder {
@@ -98,11 +98,8 @@ impl DisplayReporterBuilder {
 
         let stderr = match output {
             ReporterStderr::Terminal => {
-                let progress_bar = self.progress_bar(
-                    theme_characters.progress_chars,
-                    theme_characters.spinner_chars,
-                    self.max_progress_running,
-                );
+                let progress_bar =
+                    self.progress_bar(theme_characters.progress_chars, self.max_progress_running);
                 let term_progress = TerminalProgress::new(configs, &io::stderr());
 
                 show_progress_bar = progress_bar
@@ -159,7 +156,6 @@ impl DisplayReporterBuilder {
     fn progress_bar(
         &self,
         progress_chars: &'static str,
-        spinner_chars: &'static str,
         max_progress_running: MaxProgressRunning,
     ) -> Option<ProgressBarState> {
         if self.no_capture {
@@ -192,7 +188,6 @@ impl DisplayReporterBuilder {
         let state = ProgressBarState::new(
             self.test_count,
             progress_chars,
-            spinner_chars,
             show_running,
             max_progress_running,
         );
@@ -233,7 +228,8 @@ impl<'a> DisplayReporter<'a> {
                             .update_progress(event, &mut buf)
                             .map_err(WriteEventError::Io)?;
                     }
-                    state.write_buf(&buf).map_err(WriteEventError::Io)
+                    state.write_buf(&buf);
+                    Ok(())
                 } else {
                     // Write to a buffered stderr.
                     let mut writer = BufWriter::new(std::io::stderr());
@@ -614,7 +610,6 @@ impl<'a> DisplayReporterImpl<'a> {
                     )?;
                 }
             }
-            TestEventKind::TestShowProgress { .. } => {}
             TestEventKind::TestSlow {
                 stress_index,
                 test_instance,

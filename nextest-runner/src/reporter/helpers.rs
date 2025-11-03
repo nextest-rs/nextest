@@ -23,7 +23,7 @@ pub fn highlight_end(slice: &[u8]) -> usize {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(super) struct Styles {
     pub(super) is_colorized: bool,
     pub(super) count: Style,
