@@ -334,9 +334,9 @@ pub enum OutputWriter {
     #[cfg(test)]
     Test {
         /// stdout capture
-        stdout: Vec<u8>,
+        stdout: String,
         /// stderr capture
-        stderr: Vec<u8>,
+        stderr: String,
     },
 }
 
@@ -378,33 +378,15 @@ pub(crate) enum StdoutWriter<'a> {
         _lifetime: PhantomData<&'a ()>,
     },
     #[cfg(test)]
-    Test { buf: &'a mut Vec<u8> },
-}
-
-impl Write for StdoutWriter<'_> {
-    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
-        match self {
-            Self::Normal { buf, .. } => buf.write(data),
-            #[cfg(test)]
-            Self::Test { buf } => buf.write(data),
-        }
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        match self {
-            Self::Normal { buf, .. } => buf.flush(),
-            #[cfg(test)]
-            Self::Test { .. } => Ok(()),
-        }
-    }
+    Test { buf: &'a mut String },
 }
 
 impl WriteStr for StdoutWriter<'_> {
     fn write_str(&mut self, s: &str) -> io::Result<()> {
         match self {
-            Self::Normal { buf, .. } => buf.write_all(s.as_bytes()),
+            Self::Normal { buf, .. } => buf.write_str(s),
             #[cfg(test)]
-            Self::Test { buf } => buf.write_all(s.as_bytes()),
+            Self::Test { buf } => buf.write_str(s),
         }
     }
 
@@ -423,19 +405,22 @@ pub(crate) enum StderrWriter<'a> {
         _lifetime: PhantomData<&'a ()>,
     },
     #[cfg(test)]
-    Test { buf: &'a mut Vec<u8> },
+    Test { buf: &'a mut String },
 }
 
-impl Write for StderrWriter<'_> {
-    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+impl WriteStr for StderrWriter<'_> {
+    fn write_str(&mut self, s: &str) -> io::Result<()> {
         match self {
-            Self::Normal { buf, .. } => buf.write(data),
+            Self::Normal { buf, .. } => buf.write_str(s),
             #[cfg(test)]
-            Self::Test { buf } => buf.write(data),
+            Self::Test { buf } => {
+                buf.push_str(s);
+                Ok(())
+            }
         }
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn write_str_flush(&mut self) -> io::Result<()> {
         match self {
             Self::Normal { buf, .. } => buf.flush(),
             #[cfg(test)]

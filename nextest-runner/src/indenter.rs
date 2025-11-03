@@ -100,6 +100,15 @@ impl<'a, D: ?Sized> Indented<'a, D> {
         self
     }
 
+    /// Skip indenting the initial line.
+    ///
+    /// This is useful when you've already written some content on the current line
+    /// and want to start indenting only from the next line onwards.
+    pub fn skip_initial(mut self) -> Self {
+        self.needs_indent = false;
+        self
+    }
+
     /// Returns the inner writer.
     pub fn into_inner(self) -> &'a mut D {
         self.inner

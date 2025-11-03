@@ -11,13 +11,10 @@ use crate::{
         events::{CancelReason, FinalRunStats, RunStatsFailureKind},
         helpers::Styles,
     },
+    write_str::WriteStr,
 };
 use owo_colors::OwoColorize;
-use std::{
-    fmt,
-    io::{self, Write},
-    time::Duration,
-};
+use std::{fmt, io, time::Duration};
 
 pub(super) struct DisplayBracketedHhMmSs(pub(super) Duration);
 
@@ -102,7 +99,7 @@ pub(super) fn write_skip_counts(
     skip_counts: &SkipCounts,
     default_filter: &CompiledDefaultFilter,
     styles: &Styles,
-    writer: &mut dyn Write,
+    writer: &mut dyn WriteStr,
 ) -> io::Result<()> {
     if skip_counts.skipped_tests > 0 || skip_counts.skipped_binaries > 0 {
         write!(writer, " (")?;
@@ -154,7 +151,7 @@ fn write_skip_counts_impl(
     skipped_tests: usize,
     skipped_binaries: usize,
     styles: &Styles,
-    writer: &mut dyn Write,
+    writer: &mut dyn WriteStr,
 ) -> io::Result<()> {
     // X tests and Y binaries skipped, or X tests skipped, or Y binaries skipped.
     if skipped_tests > 0 && skipped_binaries > 0 {
@@ -188,7 +185,7 @@ fn write_skip_counts_impl(
 pub(super) fn write_final_warnings(
     final_stats: FinalRunStats,
     styles: &Styles,
-    writer: &mut dyn Write,
+    writer: &mut dyn WriteStr,
 ) -> io::Result<()> {
     match final_stats {
         FinalRunStats::Failed(RunStatsFailureKind::Test {
@@ -224,7 +221,7 @@ fn write_final_warnings_for_failure(
     not_run: usize,
     reason: Option<CancelReason>,
     styles: &Styles,
-    writer: &mut dyn Write,
+    writer: &mut dyn WriteStr,
 ) -> io::Result<()> {
     match reason {
         Some(reason @ CancelReason::TestFailure | reason @ CancelReason::TestFailureImmediate) => {
@@ -379,7 +376,7 @@ mod tests {
     }
 
     fn skip_counts_str(skip_counts: &SkipCounts, override_section: bool) -> String {
-        let mut buf = Vec::new();
+        let mut buf = String::new();
         write_skip_counts(
             skip_counts,
             &CompiledDefaultFilter {
@@ -395,7 +392,7 @@ mod tests {
             &mut buf,
         )
         .unwrap();
-        String::from_utf8(buf).unwrap()
+        buf
     }
 
     #[test]
@@ -449,9 +446,9 @@ mod tests {
     }
 
     fn final_warnings_for(stats: FinalRunStats) -> String {
-        let mut buf: Vec<u8> = Vec::new();
+        let mut buf = String::new();
         let styles = Styles::default();
         write_final_warnings(stats, &styles, &mut buf).unwrap();
-        String::from_utf8(buf).unwrap()
+        buf
     }
 }

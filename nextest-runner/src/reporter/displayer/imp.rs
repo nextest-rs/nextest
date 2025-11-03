@@ -25,6 +25,7 @@ use crate::{
         DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, plural,
         usize_decimal_char_width,
     },
+    indenter::indented,
     list::{TestInstance, TestInstanceId},
     reporter::{
         displayer::{ShowProgress, formatters::DisplayHhMmSs, progress::TerminalProgress},
@@ -33,9 +34,9 @@ use crate::{
         imp::ReporterStderr,
     },
     runner::StressCount,
+    write_str::WriteStr,
 };
 use debug_ignore::DebugIgnore;
-use indent_write::io::IndentWriter;
 use nextest_metadata::MismatchReason;
 use owo_colors::OwoColorize;
 use std::{
@@ -217,7 +218,7 @@ impl<'a> DisplayReporter<'a> {
             } => {
                 if let Some(state) = progress_bar {
                     // Write to a string that will be printed as a log line.
-                    let mut buf: Vec<u8> = Vec::new();
+                    let mut buf = String::new();
                     self.inner
                         .write_event_impl(event, &mut buf)
                         .map_err(WriteEventError::Io)?;
@@ -264,7 +265,7 @@ enum ReporterStderrImpl<'a> {
         // OSC 9 code progress reporting.
         term_progress: Option<TerminalProgress>,
     },
-    Buffer(&'a mut Vec<u8>),
+    Buffer(&'a mut String),
 }
 
 impl ReporterStderrImpl<'_> {
@@ -293,7 +294,7 @@ impl ReporterStderrImpl<'_> {
     }
 
     #[cfg(test)]
-    fn buf_mut(&mut self) -> Option<&mut Vec<u8>> {
+    fn buf_mut(&mut self) -> Option<&mut String> {
         match self {
             Self::Buffer(buf) => Some(buf),
             _ => None,
@@ -378,7 +379,7 @@ impl<'a> DisplayReporterImpl<'a> {
     fn write_event_impl(
         &mut self,
         event: &TestEvent<'a>,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         match &event.kind {
             TestEventKind::RunStarted {
@@ -1277,7 +1278,7 @@ impl<'a> DisplayReporterImpl<'a> {
         &self,
         stress_index: Option<StressIndex>,
         test_instance: TestInstanceId<'a>,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         write!(writer, "{:>12} ", "SKIP".style(self.styles.skip))?;
         // same spacing   [   0.034s]
@@ -1297,7 +1298,7 @@ impl<'a> DisplayReporterImpl<'a> {
         command: &str,
         args: &[String],
         status: &SetupScriptExecuteStatus,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         match status.result {
             ExecutionResult::Pass => {
@@ -1337,7 +1338,7 @@ impl<'a> DisplayReporterImpl<'a> {
         counter: TestInstanceCounter,
         test_instance: TestInstance<'a>,
         describe: ExecutionDescription<'_>,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         let last_status = describe.last_status();
         match describe {
@@ -1410,7 +1411,7 @@ impl<'a> DisplayReporterImpl<'a> {
         counter: TestInstanceCounter,
         test_instance: TestInstanceId<'a>,
         describe: ExecutionDescription<'_>,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         let last_status = describe.last_status();
         match describe {
@@ -1541,7 +1542,7 @@ impl<'a> DisplayReporterImpl<'a> {
         index: usize,
         total: usize,
         response: &InfoResponse<'_>,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         if index > 0 {
             // Show a shorter hbar than the hbar surrounding the info started
@@ -1568,7 +1569,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
         // Indent everything a bit to make it clear that this is a
         // response.
-        let mut writer = IndentWriter::new_skip_initial("  ", writer);
+        let mut writer = indented(writer).with_str("  ").skip_initial();
 
         match response {
             InfoResponse::SetupScript(SetupScriptInfoResponse {
@@ -1658,7 +1659,7 @@ impl<'a> DisplayReporterImpl<'a> {
             }
         }
 
-        writer.flush()?;
+        writer.write_str_flush()?;
         let inner_writer = writer.into_inner();
 
         // Add a newline at the end to visually separate the responses.
@@ -1673,7 +1674,7 @@ impl<'a> DisplayReporterImpl<'a> {
         attempt_str: &str,
         state: &UnitState,
         output_has_errors: bool,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         let status_str = "status".style(self.styles.count);
         match state {
@@ -1791,7 +1792,7 @@ impl<'a> DisplayReporterImpl<'a> {
         kind: UnitKind,
         attempt_str: &str,
         state: &UnitTerminatingState,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         let UnitTerminatingState {
             pid,
@@ -1875,7 +1876,7 @@ impl<'a> DisplayReporterImpl<'a> {
         &self,
         result: Option<ExecutionResult>,
         is_slow: bool,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         match result {
             Some(ExecutionResult::Pass) => {
@@ -1962,7 +1963,7 @@ impl<'a> DisplayReporterImpl<'a> {
     fn write_setup_script_execute_status(
         &self,
         run_status: &SetupScriptExecuteStatus,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         let spec = self.output_spec_for_finished(run_status.result, false);
         self.unit_output.write_child_execution_output(
@@ -1989,7 +1990,7 @@ impl<'a> DisplayReporterImpl<'a> {
         &self,
         run_status: &ExecuteStatus,
         is_retry: bool,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         let spec = self.output_spec_for_finished(run_status.result, is_retry);
         self.unit_output.write_child_execution_output(
@@ -2259,14 +2260,14 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
 fn write_windows_message_line(
     status: AbortStatus,
     styles: &Styles,
-    writer: &mut dyn Write,
+    writer: &mut dyn WriteStr,
 ) -> io::Result<()> {
     match status {
         AbortStatus::WindowsNtStatus(nt_status) => {
             // For subsequent lines, use an indented displayer with {:>12}
             // (ensuring that message lines are aligned).
             const INDENT: &str = "           - ";
-            let mut indented = IndentWriter::new_skip_initial(INDENT, writer);
+            let mut indented = indented(writer).with_str(INDENT).skip_initial();
             writeln!(
                 indented,
                 "{:>12} {} {}",
@@ -2274,7 +2275,7 @@ fn write_windows_message_line(
                 "with code".style(styles.fail),
                 crate::helpers::display_nt_status(nt_status, styles.count)
             )?;
-            indented.flush()
+            indented.write_str_flush()
         }
         AbortStatus::JobObject => {
             writeln!(
@@ -2341,7 +2342,7 @@ mod tests {
     /// Creates a test reporter with default settings and calls the given function with it.
     ///
     /// Returns the output written to the reporter.
-    fn with_reporter<'a, F>(f: F, out: &'a mut Vec<u8>)
+    fn with_reporter<'a, F>(f: F, out: &'a mut String)
     where
         F: FnOnce(DisplayReporter<'a>),
     {
@@ -2427,7 +2428,7 @@ mod tests {
         let statuses = ExecutionStatuses::new(vec![fail_status.clone(), flaky_status]);
         let flaky_describe = statuses.describe();
 
-        let mut out = Vec::new();
+        let mut out = String::new();
 
         with_reporter(
             |mut reporter| {
@@ -2477,16 +2478,13 @@ mod tests {
             &mut out,
         );
 
-        insta::assert_snapshot!(
-            "final_status_output",
-            String::from_utf8(out).expect("output only consists of UTF-8"),
-        );
+        insta::assert_snapshot!("final_status_output", out,);
     }
 
     #[test]
     fn test_summary_line() {
         let run_id = ReportUuid::nil();
-        let mut out = Vec::new();
+        let mut out = String::new();
 
         with_reporter(
             |mut reporter| {
@@ -2652,10 +2650,7 @@ mod tests {
             &mut out,
         );
 
-        insta::assert_snapshot!(
-            "summary_line_output",
-            String::from_utf8(out).expect("output only consists of UTF-8"),
-        );
+        insta::assert_snapshot!("summary_line_output", out,);
     }
 
     // ---
@@ -2666,7 +2661,7 @@ mod tests {
         let args = vec!["arg1".to_string(), "arg2".to_string()];
         let binary_id = RustBinaryId::new("my-binary-id");
 
-        let mut out = Vec::new();
+        let mut out = String::new();
 
         with_reporter(
             |mut reporter| {
@@ -3060,10 +3055,7 @@ mod tests {
             &mut out,
         );
 
-        insta::assert_snapshot!(
-            "info_response_output",
-            String::from_utf8(out).expect("output only consists of UTF-8"),
-        );
+        insta::assert_snapshot!("info_response_output", out,);
     }
 
     fn make_split_output(
@@ -3114,7 +3106,7 @@ mod tests {
     #[test]
     fn no_capture_settings() {
         // Ensure that output settings are ignored with no-capture.
-        let mut out = Vec::new();
+        let mut out = String::new();
 
         with_reporter(
             |reporter| {
@@ -3168,8 +3160,8 @@ mod windows_tests {
 
     #[track_caller]
     fn to_message_line(status: AbortStatus) -> String {
-        let mut buf = Vec::new();
+        let mut buf = String::new();
         write_windows_message_line(status, &Styles::default(), &mut buf).unwrap();
-        String::from_utf8(buf).unwrap()
+        buf
     }
 }

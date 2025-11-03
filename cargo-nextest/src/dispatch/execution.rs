@@ -47,7 +47,6 @@ use owo_colors::OwoColorize;
 use semver::Version;
 use std::{
     env::VarError,
-    io::Write,
     sync::{Arc, OnceLock},
 };
 use tracing::{Level, info, warn};
@@ -805,7 +804,7 @@ impl ArchiveApp {
             output_file,
             |event| {
                 reporter.report_event(event, &mut writer)?;
-                writer.flush()
+                writer.write_str_flush()
             },
             redactor.clone(),
         )

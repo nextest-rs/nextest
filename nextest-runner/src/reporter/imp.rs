@@ -30,7 +30,7 @@ pub enum ReporterStderr<'a> {
     Terminal,
 
     /// Write output to a buffer.
-    Buffer(&'a mut Vec<u8>),
+    Buffer(&'a mut String),
 }
 
 /// Test reporter builder.

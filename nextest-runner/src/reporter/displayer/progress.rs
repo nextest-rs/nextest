@@ -9,6 +9,7 @@ use crate::{
         PROGRESS_REFRESH_RATE_HZ, displayer::formatters::DisplayBracketedHhMmSs, events::*,
         helpers::Styles,
     },
+    write_str::WriteStr,
 };
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::RustBinaryId;
@@ -455,8 +456,8 @@ impl ProgressBarState {
         }
     }
 
-    pub(super) fn write_buf(&mut self, buf: &[u8]) {
-        self.buffer.extend_from_slice(buf);
+    pub(super) fn write_buf(&mut self, buf: &str) {
+        self.buffer.extend_from_slice(buf.as_bytes());
     }
 
     #[inline]
@@ -548,7 +549,7 @@ impl TerminalProgress {
     pub(super) fn update_progress(
         &self,
         event: &TestEvent<'_>,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> Result<(), io::Error> {
         let value = match &event.kind {
             TestEventKind::RunStarted { .. }
