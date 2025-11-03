@@ -786,18 +786,25 @@ where
                 if let Some(terminate_mode) = terminate_mode {
                     // A test failed: start cancellation if required.
                     // Check if we should terminate immediately or wait for running tests.
-                    if terminate_mode == TerminateMode::Immediate {
-                        // Terminate running tests immediately by sending a test failure event.
-                        self.broadcast_request(RunUnitRequest::Signal(SignalRequest::Shutdown(
-                            ShutdownRequest::Once(ShutdownEvent::TestFailureImmediate),
-                        )));
+                    match terminate_mode {
+                        TerminateMode::Immediate => {
+                            // Terminate running tests immediately.
+                            self.broadcast_request(RunUnitRequest::Signal(
+                                SignalRequest::Shutdown(ShutdownRequest::Once(
+                                    ShutdownEvent::TestFailureImmediate,
+                                )),
+                            ));
+                            self.begin_cancel(
+                                CancelReason::TestFailureImmediate,
+                                CancelEvent::Signal(ShutdownRequest::Once(
+                                    ShutdownEvent::TestFailureImmediate,
+                                )),
+                            )
+                        }
+                        TerminateMode::Wait => {
+                            self.begin_cancel(CancelReason::TestFailure, CancelEvent::TestFailure)
+                        }
                     }
-                    self.begin_cancel(
-                        CancelReason::TestFailureImmediate,
-                        CancelEvent::Signal(ShutdownRequest::Once(
-                            ShutdownEvent::TestFailureImmediate,
-                        )),
-                    )
                 } else {
                     HandleEventResponse::None
                 }
