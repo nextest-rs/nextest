@@ -10,8 +10,10 @@ use crate::{
     write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
+use console::AnsiCodeIterator;
 use owo_colors::{OwoColorize, Style};
 use std::{fmt, io, path::PathBuf, process::ExitStatus, time::Duration};
+use unicode_width::UnicodeWidthChar;
 
 /// Utilities for pluralizing various words based on count or plurality.
 pub mod plural {
@@ -102,6 +104,7 @@ pub(crate) struct DisplayTestInstance<'a> {
     display_counter_index: Option<DisplayCounterIndex>,
     instance: TestInstanceId<'a>,
     styles: &'a Styles,
+    max_width: Option<usize>,
 }
 
 impl<'a> DisplayTestInstance<'a> {
@@ -116,34 +119,180 @@ impl<'a> DisplayTestInstance<'a> {
             display_counter_index,
             instance,
             styles,
+            max_width: None,
         }
+    }
+
+    pub(crate) fn with_max_width(mut self, max_width: usize) -> Self {
+        self.max_width = Some(max_width);
+        self
     }
 }
 
 impl fmt::Display for DisplayTestInstance<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(stress_index) = self.stress_index {
-            write!(
-                f,
+        // Figure out the widths for each component.
+        let stress_index_str = if let Some(stress_index) = self.stress_index {
+            format!(
                 "[{}] ",
                 DisplayStressIndex {
                     stress_index,
                     count_style: self.styles.count,
                 }
-            )?;
-        }
+            )
+        } else {
+            String::new()
+        };
+        let counter_index_str = if let Some(display_counter_index) = &self.display_counter_index {
+            format!("{display_counter_index} ")
+        } else {
+            String::new()
+        };
+        let binary_id_str = format!("{} ", self.instance.binary_id.style(self.styles.binary_id));
+        let test_name_str = format!(
+            "{}",
+            DisplayTestName::new(self.instance.test_name, self.styles)
+        );
 
-        if let Some(display_counter_index) = &self.display_counter_index {
-            write!(f, "{display_counter_index} ")?
-        }
+        // If a max width is defined, trim strings until they fit into it.
+        if let Some(max_width) = self.max_width {
+            // We have to be careful while computing string width -- the strings
+            // above include ANSI escape codes which have a display width of
+            // zero.
+            let stress_index_width = text_width(&stress_index_str);
+            let counter_index_width = text_width(&counter_index_str);
+            let binary_id_width = text_width(&binary_id_str);
+            let test_name_width = text_width(&test_name_str);
 
-        write!(
-            f,
-            "{} ",
-            self.instance.binary_id.style(self.styles.binary_id),
-        )?;
-        fmt_write_test_name(self.instance.test_name, self.styles, f)
+            // Truncate components in order, from most important to keep to least:
+            //
+            // * stress-index (left-aligned)
+            // * counter index (left-aligned)
+            // * binary ID (left-aligned)
+            // * test name (right-aligned)
+            let mut stress_index_resolved_width = stress_index_width;
+            let mut counter_index_resolved_width = counter_index_width;
+            let mut binary_id_resolved_width = binary_id_width;
+            let mut test_name_resolved_width = test_name_width;
+
+            // Truncate stress-index first.
+            if stress_index_resolved_width > max_width {
+                stress_index_resolved_width = max_width;
+            }
+
+            // Truncate counter index next.
+            let remaining_width = max_width.saturating_sub(stress_index_resolved_width);
+            if counter_index_resolved_width > remaining_width {
+                counter_index_resolved_width = remaining_width;
+            }
+
+            // Truncate binary ID next.
+            let remaining_width = max_width
+                .saturating_sub(stress_index_resolved_width)
+                .saturating_sub(counter_index_resolved_width);
+            if binary_id_resolved_width > remaining_width {
+                binary_id_resolved_width = remaining_width;
+            }
+
+            // Truncate test name last.
+            let remaining_width = max_width
+                .saturating_sub(stress_index_resolved_width)
+                .saturating_sub(counter_index_resolved_width)
+                .saturating_sub(binary_id_resolved_width);
+            if test_name_resolved_width > remaining_width {
+                test_name_resolved_width = remaining_width;
+            }
+
+            // Now truncate the strings if applicable.
+            let test_name_truncated_str = if test_name_resolved_width == test_name_width {
+                test_name_str
+            } else {
+                // Right-align the test name.
+                truncate_ansi_aware(
+                    &test_name_str,
+                    test_name_width.saturating_sub(test_name_resolved_width),
+                    test_name_width,
+                )
+            };
+            let binary_id_truncated_str = if binary_id_resolved_width == binary_id_width {
+                binary_id_str
+            } else {
+                // Left-align the binary ID.
+                truncate_ansi_aware(&binary_id_str, 0, binary_id_resolved_width)
+            };
+            let counter_index_truncated_str = if counter_index_resolved_width == counter_index_width
+            {
+                counter_index_str
+            } else {
+                // Left-align the counter index.
+                truncate_ansi_aware(&counter_index_str, 0, counter_index_resolved_width)
+            };
+            let stress_index_truncated_str = if stress_index_resolved_width == stress_index_width {
+                stress_index_str
+            } else {
+                // Left-align the stress index.
+                truncate_ansi_aware(&stress_index_str, 0, stress_index_resolved_width)
+            };
+
+            write!(
+                f,
+                "{}{}{}{}",
+                stress_index_truncated_str,
+                counter_index_truncated_str,
+                binary_id_truncated_str,
+                test_name_truncated_str,
+            )
+        } else {
+            write!(
+                f,
+                "{}{}{}{}",
+                stress_index_str, counter_index_str, binary_id_str, test_name_str
+            )
+        }
     }
+}
+
+fn text_width(text: &str) -> usize {
+    // Technically, the width of a string may not be the same as the sum of the
+    // widths of its characters. But managing truncation is pretty difficult. See
+    // https://docs.rs/unicode-width/latest/unicode_width/#rules-for-determining-width.
+    //
+    // This is quite difficult to manage truncation for, so we just use the sum
+    // of the widths of the string's characters (both here and in
+    // truncate_ansi_aware below).
+    strip_ansi_escapes::strip_str(text)
+        .chars()
+        .map(|c| c.width().unwrap_or(0))
+        .sum()
+}
+
+fn truncate_ansi_aware(text: &str, start: usize, end: usize) -> String {
+    let mut pos = 0;
+    let mut res = String::new();
+    for (s, is_ansi) in AnsiCodeIterator::new(text) {
+        if is_ansi {
+            res.push_str(s);
+            continue;
+        } else if pos >= end {
+            // We retain ANSI escape codes, so this is `continue` rather than
+            // `break`.
+            continue;
+        }
+
+        for c in s.chars() {
+            let c_width = c.width().unwrap_or(0);
+            if start <= pos && pos + c_width <= end {
+                res.push(c);
+            }
+            pos += c_width;
+            if pos > end {
+                // no need to iterate over the rest of s
+                break;
+            }
+        }
+    }
+
+    res
 }
 
 pub(crate) struct DisplayScriptInstance {
@@ -300,26 +449,35 @@ pub(crate) fn write_test_name(
     Ok(())
 }
 
-/// Write out a test name, `std::fmt::Write` version.
-pub(crate) fn fmt_write_test_name(
-    name: &str,
-    style: &Styles,
-    writer: &mut dyn fmt::Write,
-) -> fmt::Result {
-    // Look for the part of the test after the last ::, if any.
-    let mut splits = name.rsplitn(2, "::");
-    let trailing = splits.next().expect("test should have at least 1 element");
-    if let Some(rest) = splits.next() {
-        write!(
-            writer,
-            "{}{}",
-            rest.style(style.module_path),
-            "::".style(style.module_path)
-        )?;
-    }
-    write!(writer, "{}", trailing.style(style.test_name))?;
+/// Wrapper for displaying a test name with styling.
+pub(crate) struct DisplayTestName<'a> {
+    name: &'a str,
+    styles: &'a Styles,
+}
 
-    Ok(())
+impl<'a> DisplayTestName<'a> {
+    pub(crate) fn new(name: &'a str, styles: &'a Styles) -> Self {
+        Self { name, styles }
+    }
+}
+
+impl fmt::Display for DisplayTestName<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Look for the part of the test after the last ::, if any.
+        let mut splits = self.name.rsplitn(2, "::");
+        let trailing = splits.next().expect("test should have at least 1 element");
+        if let Some(rest) = splits.next() {
+            write!(
+                f,
+                "{}{}",
+                rest.style(self.styles.module_path),
+                "::".style(self.styles.module_path)
+            )?;
+        }
+        write!(f, "{}", trailing.style(self.styles.test_name))?;
+
+        Ok(())
+    }
 }
 
 pub(crate) fn convert_build_platform(
