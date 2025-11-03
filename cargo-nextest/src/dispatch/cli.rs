@@ -878,8 +878,9 @@ pub(super) struct ReporterOpts {
     ///
     /// When more tests are running than this limit, the progress bar will show
     /// the first N tests and a summary of remaining tests (e.g. "... and 24
-    /// more tests running"). Set to **infinite** for unlimited. This only
-    /// applies when using `--show-progress=running` or `only`.
+    /// more tests running"). Set to **0** to hide running tests, or
+    /// **infinite** for unlimited. This applies when using
+    /// `--show-progress=bar` or `--show-progress=only`.
     #[arg(
         long = "max-progress-running",
         value_name = "N",
@@ -1074,16 +1075,15 @@ enum ShowProgressOpt {
     /// Do not display a progress bar or counter.
     None,
 
-    /// Display a progress bar: default for interactive terminals.
+    /// Display a progress bar with running tests: default for interactive
+    /// terminals.
+    #[clap(alias = "running")]
     Bar,
 
     /// Display a counter next to each completed test.
     Counter,
 
-    /// Display each running test on a separate line.
-    Running,
-
-    /// Display each running test on a separate line, and hide successful test
+    /// Display a progress bar with running tests, and hide successful test
     /// output; equivalent to `--show-progress=running --status-level=slow
     /// --final-status-level=none`.
     Only,
@@ -1094,9 +1094,8 @@ impl From<ShowProgressOpt> for ShowProgress {
         match opt {
             ShowProgressOpt::Auto => ShowProgress::Auto,
             ShowProgressOpt::None => ShowProgress::None,
-            ShowProgressOpt::Bar => ShowProgress::Bar,
+            ShowProgressOpt::Bar => ShowProgress::Running,
             ShowProgressOpt::Counter => ShowProgress::Counter,
-            ShowProgressOpt::Running => ShowProgress::Running,
             ShowProgressOpt::Only => ShowProgress::Running,
         }
     }

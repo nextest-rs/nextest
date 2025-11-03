@@ -18,7 +18,6 @@ use std::{
     cmp::{max, min},
     env, fmt,
     io::IsTerminal,
-    num::NonZero,
     str::FromStr,
     time::{Duration, Instant},
 };
@@ -43,7 +42,8 @@ const PROGRESS_REFRESH_RATE_HZ: u8 = 1;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MaxProgressRunning {
     /// Show a specific maximum number of running tests.
-    Count(NonZero<usize>),
+    /// If 0, running tests (including the overflow summary) aren't displayed.
+    Count(usize),
 
     /// Show all running tests (no limit).
     Infinite,
@@ -51,7 +51,7 @@ pub enum MaxProgressRunning {
 
 impl MaxProgressRunning {
     /// The default value (8 tests).
-    pub const DEFAULT_VALUE: Self = Self::Count(NonZero::new(8).unwrap());
+    pub const DEFAULT_VALUE: Self = Self::Count(8);
 }
 
 impl Default for MaxProgressRunning {
@@ -70,12 +70,7 @@ impl FromStr for MaxProgressRunning {
 
         match s.parse::<usize>() {
             Err(e) => Err(format!("Error: {e} parsing {s}")),
-            Ok(0) => Err(
-                "max-progress-running may not be 0 (use \"infinite\" for unlimited)".to_string(),
-            ),
-            Ok(n) => Ok(Self::Count(
-                NonZero::new(n).expect("we just checked that this isn't 0"),
-            )),
+            Ok(n) => Ok(Self::Count(n)),
         }
     }
 }
@@ -98,9 +93,6 @@ pub enum ShowProgress {
 
     /// No progress display.
     None,
-
-    /// Show a progress bar.
-    Bar,
 
     /// Show a counter on each line.
     Counter,
@@ -195,7 +187,6 @@ impl ProgressBarState {
     pub(super) fn new(
         test_count: usize,
         progress_chars: &str,
-        show_running: bool,
         max_progress_running: MaxProgressRunning,
     ) -> Self {
         let bar = ProgressBar::new(test_count as u64);
@@ -215,7 +206,8 @@ impl ProgressBarState {
                 .expect("template is known to be valid"),
         );
 
-        let running_tests = show_running.then(Vec::new);
+        let running_tests =
+            (!matches!(max_progress_running, MaxProgressRunning::Count(0))).then(Vec::new);
 
         // The println chunk size defaults to a value chosen by experimentation,
         // locally and over SSH. This controls how often the progress bar
@@ -287,7 +279,7 @@ impl ProgressBarState {
             let width = max(width as usize, 40);
             let now = Instant::now();
             let mut count = match self.max_progress_running {
-                MaxProgressRunning::Count(count) => min(running_tests.len(), count.into()),
+                MaxProgressRunning::Count(count) => min(running_tests.len(), count),
                 MaxProgressRunning::Infinite => running_tests.len(),
             };
             for running_test in &running_tests[..count] {
