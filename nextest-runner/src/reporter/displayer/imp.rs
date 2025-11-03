@@ -206,7 +206,7 @@ pub(crate) struct DisplayReporter<'a> {
 
 impl<'a> DisplayReporter<'a> {
     pub(crate) fn tick(&mut self) {
-        self.stderr.tick();
+        self.stderr.tick(&self.inner.styles);
     }
 
     pub(crate) fn write_event(&mut self, event: &TestEvent<'a>) -> Result<(), WriteEventError> {
@@ -268,13 +268,13 @@ enum ReporterStderrImpl<'a> {
 }
 
 impl ReporterStderrImpl<'_> {
-    fn tick(&mut self) {
+    fn tick(&mut self, styles: &Styles) {
         match self {
             ReporterStderrImpl::Terminal {
                 progress_bar: Some(state),
                 ..
             } => {
-                state.tick();
+                state.tick(styles);
             }
             ReporterStderrImpl::Terminal { .. } | ReporterStderrImpl::Buffer(_) => {}
         }
