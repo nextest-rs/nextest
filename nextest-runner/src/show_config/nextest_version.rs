@@ -1,10 +1,13 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::config::core::{NextestVersionConfig, NextestVersionEval, NextestVersionReq};
+use crate::{
+    config::core::{NextestVersionConfig, NextestVersionEval, NextestVersionReq},
+    write_str::WriteStr,
+};
 use owo_colors::{OwoColorize, Style};
 use semver::Version;
-use std::io::{self, Write};
+use std::io;
 
 /// Show version-related configuration.
 pub struct ShowNextestVersion<'a> {
@@ -28,7 +31,7 @@ impl<'a> ShowNextestVersion<'a> {
     }
 
     /// Write the version configuration in human-readable form.
-    pub fn write_human(&self, writer: &mut dyn Write, colorize: bool) -> io::Result<()> {
+    pub fn write_human(&self, writer: &mut dyn WriteStr, colorize: bool) -> io::Result<()> {
         let mut styles = Styles::default();
         if colorize {
             styles.colorize();

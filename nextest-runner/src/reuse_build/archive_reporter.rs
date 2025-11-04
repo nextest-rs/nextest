@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::ArchiveStep;
-use crate::{helpers::plural, redact::Redactor};
+use crate::{helpers::plural, redact::Redactor, write_str::WriteStr};
 use camino::Utf8Path;
 use owo_colors::{OwoColorize, Style};
-use std::{
-    io::{self, Write},
-    time::Duration,
-};
+use std::{io, time::Duration};
 use swrite::{SWrite, swrite};
 
 #[derive(Debug)]
@@ -43,7 +40,7 @@ impl ArchiveReporter {
     pub fn report_event(
         &mut self,
         event: ArchiveEvent<'_>,
-        mut writer: impl Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         match event {
             ArchiveEvent::ArchiveStarted {
@@ -52,7 +49,7 @@ impl ArchiveReporter {
             } => {
                 write!(writer, "{:>12} ", "Archiving".style(self.styles.success))?;
 
-                self.report_counts(counts, &mut writer)?;
+                self.report_counts(counts, writer)?;
 
                 writeln!(
                     writer,
@@ -180,7 +177,7 @@ impl ArchiveReporter {
                         extra_path_count: 0,
                         stdlib_count: 0,
                     },
-                    &mut writer,
+                    writer,
                 )?;
 
                 writeln!(writer, " to {}", destination_dir.style(self.styles.bold))?;
@@ -209,7 +206,11 @@ impl ArchiveReporter {
         Ok(())
     }
 
-    fn report_counts(&mut self, counts: ArchiveCounts, mut writer: impl Write) -> io::Result<()> {
+    fn report_counts(
+        &mut self,
+        counts: ArchiveCounts,
+        writer: &mut dyn WriteStr,
+    ) -> io::Result<()> {
         let ArchiveCounts {
             test_binary_count,
             filter_counts:
@@ -648,11 +649,10 @@ mod tests {
     )]
     fn test_report_counts(counts: ArchiveCounts, expected: &str) {
         let mut reporter = ArchiveReporter::new(false, Redactor::noop());
-        let mut buffer = Vec::new();
+        let mut buffer = String::new();
 
         reporter.report_counts(counts, &mut buffer).unwrap();
 
-        let output = String::from_utf8(buffer).unwrap();
-        assert_eq!(output, expected);
+        assert_eq!(buffer, expected);
     }
 }

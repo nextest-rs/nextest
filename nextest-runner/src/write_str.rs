@@ -9,7 +9,10 @@
 //! This is similar to [`std::fmt::Write`], but it returns [`std::io::Error`] instead for better
 //! error handling.
 
-use std::{fmt, io};
+use std::{
+    fmt,
+    io::{self, BufWriter, Write},
+};
 
 /// A trait that abstracts over writing strings to a writer.
 ///
@@ -82,6 +85,20 @@ impl WriteStr for String {
     fn write_char(&mut self, c: char) -> io::Result<()> {
         self.push(c);
         Ok(())
+    }
+}
+
+impl<W: Write> WriteStr for BufWriter<W> {
+    fn write_str(&mut self, s: &str) -> io::Result<()> {
+        self.write_all(s.as_bytes())
+    }
+
+    fn write_str_flush(&mut self) -> io::Result<()> {
+        self.flush()
+    }
+
+    fn write_char(&mut self, c: char) -> io::Result<()> {
+        self.write_all(c.encode_utf8(&mut [0; 4]).as_bytes())
     }
 }
 

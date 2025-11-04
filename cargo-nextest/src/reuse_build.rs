@@ -12,8 +12,8 @@ use nextest_runner::{
         ArchiveFormat, ArchiveReporter, ExtractDestination, MetadataKind, MetadataWithRemap,
         PathMapper, ReuseBuildInfo, ReusedBinaryList, ReusedCargoMetadata,
     },
+    write_str::WriteStr,
 };
-use std::io::Write;
 use tracing::warn;
 
 #[derive(Debug, Default, Args)]
@@ -168,7 +168,7 @@ impl ReuseBuildOpts {
                 dest,
                 |event| {
                     reporter.report_event(event, &mut writer)?;
-                    writer.flush()
+                    writer.write_str_flush()
                 },
                 workspace_remap.as_deref(),
             )

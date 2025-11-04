@@ -5,21 +5,18 @@
 
 use crate::{
     errors::DisplayErrorChain,
+    indenter::indented,
     reporter::{
         ByteSubslice, TestOutputErrorSlice, UnitErrorDescription,
         events::*,
         helpers::{Styles, highlight_end},
     },
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
+    write_str::WriteStr,
 };
-use bstr::ByteSlice;
-use indent_write::io::IndentWriter;
 use owo_colors::Style;
 use serde::Deserialize;
-use std::{
-    fmt,
-    io::{self, Write},
-};
+use std::{fmt, io};
 
 /// When to display test output in the reporter.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -122,7 +119,7 @@ impl UnitOutputReporter {
         styles: &Styles,
         spec: &ChildOutputSpec,
         exec_output: &ChildExecutionOutput,
-        mut writer: &mut dyn Write,
+        mut writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         match exec_output {
             ChildExecutionOutput::Output {
@@ -140,9 +137,9 @@ impl UnitOutputReporter {
 
                     // Indent the displayed error chain.
                     let error_chain = DisplayErrorChain::new(errors);
-                    let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
+                    let mut indent_writer = indented(writer).with_str(spec.output_indent);
                     writeln!(indent_writer, "{error_chain}")?;
-                    indent_writer.flush()?;
+                    indent_writer.write_str_flush()?;
                     writer = indent_writer.into_inner();
                 }
 
@@ -159,9 +156,9 @@ impl UnitOutputReporter {
 
                 // Indent the displayed error chain.
                 let error_chain = DisplayErrorChain::new(error);
-                let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
+                let mut indent_writer = indented(writer).with_str(spec.output_indent);
                 writeln!(indent_writer, "{error_chain}")?;
-                indent_writer.flush()?;
+                indent_writer.write_str_flush()?;
                 writer = indent_writer.into_inner();
             }
         }
@@ -175,7 +172,7 @@ impl UnitOutputReporter {
         spec: &ChildOutputSpec,
         output: &ChildOutput,
         highlight_slice: Option<TestOutputErrorSlice<'_>>,
-        mut writer: &mut dyn Write,
+        mut writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         match output {
             ChildOutput::Split(split) => {
@@ -188,14 +185,14 @@ impl UnitOutputReporter {
                     // it will bear the perf cost of a vtable indirection +
                     // whatever internal state IndentWriter tracks. Doubt
                     // this will be an issue in practice though!
-                    let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
+                    let mut indent_writer = indented(writer).with_str(spec.output_indent);
                     self.write_test_single_output_with_description(
                         styles,
                         stdout,
                         highlight_slice.and_then(|d| d.stdout_subslice()),
                         &mut indent_writer,
                     )?;
-                    indent_writer.flush()?;
+                    indent_writer.write_str_flush()?;
                     writer = indent_writer.into_inner();
                 }
 
@@ -204,28 +201,28 @@ impl UnitOutputReporter {
                 {
                     writeln!(writer, "{}", spec.stderr_header)?;
 
-                    let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
+                    let mut indent_writer = indented(writer).with_str(spec.output_indent);
                     self.write_test_single_output_with_description(
                         styles,
                         stderr,
                         highlight_slice.and_then(|d| d.stderr_subslice()),
                         &mut indent_writer,
                     )?;
-                    indent_writer.flush()?;
+                    indent_writer.write_str_flush()?;
                 }
             }
             ChildOutput::Combined { output } => {
                 if self.display_empty_outputs || !output.is_empty() {
                     writeln!(writer, "{}", spec.combined_header)?;
 
-                    let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
+                    let mut indent_writer = indented(writer).with_str(spec.output_indent);
                     self.write_test_single_output_with_description(
                         styles,
                         output,
                         highlight_slice.and_then(|d| d.combined_subslice()),
                         &mut indent_writer,
                     )?;
-                    indent_writer.flush()?;
+                    indent_writer.write_str_flush()?;
                 }
             }
         }
@@ -242,62 +239,62 @@ impl UnitOutputReporter {
         styles: &Styles,
         output: &ChildSingleOutput,
         description: Option<ByteSubslice<'_>>,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
+        let output_str = output.as_str_lossy();
         if styles.is_colorized {
             if let Some(subslice) = description {
-                write_output_with_highlight(&output.buf, subslice, &styles.fail, writer)?;
+                write_output_with_highlight(output_str, subslice, &styles.fail, writer)?;
             } else {
                 // Output the text without stripping ANSI escapes, then reset the color afterwards
                 // in case the output is malformed.
-                write_output_with_trailing_newline(&output.buf, RESET_COLOR, writer)?;
+                write_output_with_trailing_newline(output_str, RESET_COLOR, writer)?;
             }
         } else {
             // Strip ANSI escapes from the output if nextest itself isn't colorized.
-            let mut no_color = strip_ansi_escapes::Writer::new(writer);
-            write_output_with_trailing_newline(&output.buf, b"", &mut no_color)?;
+            let output_no_color = strip_ansi_escapes::strip_str(output_str);
+            write_output_with_trailing_newline(&output_no_color, "", writer)?;
         }
 
         Ok(())
     }
 }
 
-const RESET_COLOR: &[u8] = b"\x1b[0m";
+const RESET_COLOR: &str = "\x1b[0m";
 
 fn write_output_with_highlight(
-    output: &[u8],
+    output: &str,
     ByteSubslice { slice, start }: ByteSubslice,
     highlight_style: &Style,
-    mut writer: &mut dyn Write,
+    writer: &mut dyn WriteStr,
 ) -> io::Result<()> {
     let end = start + highlight_end(slice);
 
     // Output the start and end of the test without stripping ANSI escapes, then reset
     // the color afterwards in case the output is malformed.
-    writer.write_all(&output[..start])?;
-    writer.write_all(RESET_COLOR)?;
+    writer.write_str(&output[..start])?;
+    writer.write_str(RESET_COLOR)?;
 
     // Some systems (e.g. GitHub Actions, Buildomat) don't handle multiline ANSI
     // coloring -- they reset colors after each line. To work around that,
     // we reset and re-apply colors for each line.
-    for line in output[start..end].lines_with_terminator() {
+    for line in output[start..end].split_inclusive('\n') {
         write!(writer, "{}", FmtPrefix(highlight_style))?;
 
         // Write everything before the newline, stripping ANSI escapes.
-        let mut no_color = strip_ansi_escapes::Writer::new(writer);
-        let trimmed = line.trim_end_with(|c| c == '\n' || c == '\r');
-        no_color.write_all(trimmed.as_bytes())?;
-        writer = no_color.into_inner()?;
+        let trimmed = line.trim_end_matches(['\n', '\r']);
+        let stripped = strip_ansi_escapes::strip_str(trimmed);
+        writer.write_str(&stripped)?;
 
         // End coloring.
         write!(writer, "{}", FmtSuffix(highlight_style))?;
 
         // Now write the newline, if present.
-        writer.write_all(&line[trimmed.len()..])?;
+        writer.write_str(&line[trimmed.len()..])?;
     }
 
-    // `end` is guaranteed to be within the bounds of `output.buf`. (It is actually safe
-    // for it to be equal to `output.buf.len()` -- it gets treated as an empty list in
+    // `end` is guaranteed to be within the bounds of `output`. (It is actually safe
+    // for it to be equal to `output.len()` -- it gets treated as an empty string in
     // that case.)
     write_output_with_trailing_newline(&output[end..], RESET_COLOR, writer)?;
 
@@ -309,19 +306,19 @@ fn write_output_with_highlight(
 ///
 /// `trailer` is written immediately before the trailing newline if any.
 fn write_output_with_trailing_newline(
-    mut output: &[u8],
-    trailer: &[u8],
-    writer: &mut dyn Write,
+    mut output: &str,
+    trailer: &str,
+    writer: &mut dyn WriteStr,
 ) -> io::Result<()> {
     // If there's a trailing newline in the output, insert the trailer right
     // before it.
-    if output.last() == Some(&b'\n') {
+    if output.ends_with('\n') {
         output = &output[..output.len() - 1];
     }
 
-    writer.write_all(output)?;
-    writer.write_all(trailer)?;
-    writer.write_all(b"\n")
+    writer.write_str(output)?;
+    writer.write_str(trailer)?;
+    writeln!(writer)
 }
 
 struct FmtPrefix<'a>(&'a Style);
@@ -386,20 +383,15 @@ mod tests {
     fn write_output_with_highlight_buf(output: &str, start: usize, end: Option<usize>) -> String {
         // We're not really testing non-UTF-8 output here, and using strings results in much more
         // readable error messages.
-        let mut buf = Vec::new();
+        let mut buf = String::new();
         let end = end.unwrap_or(output.len());
 
         let subslice = ByteSubslice {
             start,
             slice: &output.as_bytes()[start..end],
         };
-        write_output_with_highlight(
-            output.as_bytes(),
-            subslice,
-            &Style::new().red().bold(),
-            &mut buf,
-        )
-        .unwrap();
-        String::from_utf8(buf).unwrap()
+        write_output_with_highlight(output, subslice, &Style::new().red().bold(), &mut buf)
+            .unwrap();
+        buf
     }
 }
