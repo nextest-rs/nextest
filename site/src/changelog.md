@@ -8,7 +8,7 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## Unreleased
+## [0.9.111] - 2025-11-04
 
 ### Added
 
@@ -16,10 +16,17 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
 ### Changed
 
-- With `--show-progress=running` or `only`, the progress bar now caps the number of currently-running tests displayed to 8 by default. A new `--max-progress-running` option (environment variable `NEXTEST_MAX_PROGRESS_RUNNING`) allows customizing this limit. When more tests are running than the limit, a summary bar shows the overflow count. ([#2727])
+- In interactive terminals, nextest now shows 8 running tests by default underneath the progress bar. Control the maximum number of tests displayed with the `--max-progress-running` option.
 
-[#2727]: https://github.com/nextest-rs/nextest/pull/2727
-[#2733]: https://github.com/nextest-rs/nextest/pull/2733
+  As part of this change, `--show-progress=running` is now an alias for `--show-progress=bar`. To only show running tests, use `--show-progress=only`.
+
+- Non-UTF-8 test output is now encoded with [`String::from_utf8_lossy`](https://doc.rust-lang.org/std/string/struct.String.html#method.from_utf8_lossy) before being printed out to the terminal. This should generally not be a visible change, since most tests produce UTF-8 output.
+
+- When the progress bar is displayed, nextest now writes to terminal output every 50ms.
+
+### Fixed
+
+- A number of performance improvements to running test output. Thanks [glehmann](https://github.com/glehmann) for your work on polishing this feature!
 
 ## [0.9.110] - 2025-10-31
 
@@ -1631,6 +1638,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.111]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.111
 [0.9.110]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.110
 [0.9.109]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.109
 [0.9.108]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.108
