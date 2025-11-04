@@ -42,7 +42,7 @@ use owo_colors::OwoColorize;
 use std::{
     borrow::Cow,
     cmp::Reverse,
-    io::{self, BufWriter, Write},
+    io::{self, BufWriter, IsTerminal, Write},
     time::Duration,
 };
 
@@ -179,9 +179,17 @@ impl DisplayReporterBuilder {
             return None;
         }
 
+        // If this is not a terminal, don't enable the progress bar. indicatif
+        // also has this logic internally, but we do this check outside so we
+        // know whether we're writing to an external buffer or to indicatif.
+        if !std::io::stderr().is_terminal() {
+            return None;
+        }
+
         let show_running = match self.show_progress {
             ShowProgress::None | ShowProgress::Counter => return None,
-            // For auto we enable progress bar if not in ci, and it's checked above.
+            // For auto we enable progress bar if not in CI and not a terminal.
+            // Both of these conditions are checked above.
             ShowProgress::Auto | ShowProgress::Bar => false,
             ShowProgress::Running => true,
         };
@@ -260,7 +268,7 @@ impl<'a> DisplayReporter<'a> {
 enum ReporterStderrImpl<'a> {
     Terminal {
         // Reporter-specific progress bar state. None if the progress bar is not
-        // enabled.
+        // enabled (which can include the terminal not being a TTY).
         progress_bar: Option<Box<ProgressBarState>>,
         // OSC 9 code progress reporting.
         term_progress: Option<TerminalProgress>,
