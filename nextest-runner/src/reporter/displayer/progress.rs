@@ -6,10 +6,10 @@ use crate::{
     helpers::{DisplayTestInstance, plural},
     list::TestInstanceId,
     reporter::{
-        PROGRESS_REFRESH_RATE_HZ, displayer::formatters::DisplayBracketedHhMmSs, events::*,
-        helpers::Styles,
+        displayer::formatters::DisplayBracketedHhMmSs,
+        events::*,
+        helpers::{Styles, print_lines_in_chunks},
     },
-    write_str::WriteStr,
 };
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::RustBinaryId;
@@ -17,13 +17,26 @@ use owo_colors::OwoColorize;
 use std::{
     cmp::{max, min},
     env, fmt,
-    io::{self, IsTerminal, Write},
+    io::IsTerminal,
     num::NonZero,
     str::FromStr,
     time::{Duration, Instant},
 };
 use swrite::{SWrite, swrite};
 use tracing::debug;
+
+/// The refresh rate for the progress bar, set to a minimal value.
+///
+/// For progress, during each tick, two things happen:
+///
+/// - We update the message, calling self.bar.set_message.
+/// - We print any buffered output.
+///
+/// We want both of these updates to be combined into one terminal flush, so we
+/// set *this* to a minimal value (so self.bar.set_message doesn't do a redraw),
+/// and rely on ProgressBar::print_and_flush_buffer to always flush the
+/// terminal.
+const PROGRESS_REFRESH_RATE_HZ: u8 = 1;
 
 /// The maximum number of running tests to display with
 /// `--show-progress=running` or `only`.
@@ -159,7 +172,10 @@ pub(super) struct ProgressBarState {
     max_running_displayed: usize,
     // None when the running tests are not displayed
     running_tests: Option<Vec<RunningTest>>,
-    buffer: Vec<u8>,
+    buffer: String,
+    // Size in bytes for chunking println calls. Configurable via the
+    // undocumented __NEXTEST_PROGRESS_PRINTLN_CHUNK_SIZE env var.
+    println_chunk_size: usize,
     // Reasons for hiding the progress bar. We show the progress bar if none of
     // these are set and hide it if any of them are set.
     //
@@ -201,6 +217,14 @@ impl ProgressBarState {
 
         let running_tests = show_running.then(Vec::new);
 
+        // The println chunk size defaults to a value chosen by experimentation,
+        // locally and over SSH. This controls how often the progress bar
+        // refreshes during large output bursts.
+        let println_chunk_size = env::var("__NEXTEST_PROGRESS_PRINTLN_CHUNK_SIZE")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(4096);
+
         Self {
             bar,
             stats: RunStats::default(),
@@ -208,7 +232,8 @@ impl ProgressBarState {
             max_progress_running,
             max_running_displayed: 0,
             running_tests,
-            buffer: Vec::new(),
+            buffer: String::new(),
+            println_chunk_size,
             hidden_no_capture: false,
             hidden_run_paused: false,
             hidden_info_response: false,
@@ -222,25 +247,38 @@ impl ProgressBarState {
     }
 
     fn print_and_clear_buffer(&mut self) {
-        self.print_buffer();
+        self.print_and_force_redraw();
         self.buffer.clear();
     }
 
-    fn print_buffer(&self) {
-        // ProgressBar::println doesn't print status lines if the bar is
-        // hidden. The suspend method prints it in all cases.
-        // suspend forces a full redraw, so we call it only if there is
-        // something in the buffer
-        if !self.buffer.is_empty() {
-            self.bar.suspend(|| {
-                std::io::stderr()
-                    .write_all(&self.buffer)
-                    .expect("write to succeed")
-            });
+    /// Prints the contents of the buffer, and always forces a redraw.
+    fn print_and_force_redraw(&self) {
+        if self.buffer.is_empty() {
+            // Force a redraw as part of our contract. See the documentation for
+            // `PROGRESS_REFRESH_RATE_HZ`.
+            self.bar.force_draw();
+            return;
         }
+
+        // println below also forces a redraw, so we don't need to call
+        // force_draw in this case.
+
+        // ProgressBar::println is only called if there's something in the
+        // buffer, for two reasons:
+        //
+        // 1. If passed in nothing at all, it prints an empty line.
+        // 2. It forces a full redraw.
+        //
+        // But if self.buffer is too large, we can overwhelm the terminal with
+        // large amounts of non-progress-bar output, causing the progress bar to
+        // flicker in and out. To avoid those issues, we chunk the output to
+        // maintain progress bar visibility by redrawing it regularly.
+        print_lines_in_chunks(&self.buffer, self.println_chunk_size, |chunk| {
+            self.bar.println(chunk);
+        });
     }
 
-    pub(super) fn update_message(&mut self, styles: &Styles) {
+    fn update_message(&mut self, styles: &Styles) {
         let mut msg = progress_bar_msg(&self.stats, self.running, styles);
         msg += "     ";
 
@@ -457,12 +495,12 @@ impl ProgressBarState {
     }
 
     pub(super) fn write_buf(&mut self, buf: &str) {
-        self.buffer.extend_from_slice(buf.as_bytes());
+        self.buffer.push_str(buf);
     }
 
     #[inline]
     pub(super) fn finish_and_clear(&self) {
-        self.print_buffer();
+        self.print_and_force_redraw();
         self.bar.finish_and_clear();
     }
 
@@ -487,7 +525,10 @@ impl ProgressBarState {
 }
 
 /// OSC 9 terminal progress reporting.
-pub(super) struct TerminalProgress {}
+#[derive(Default)]
+pub(super) struct TerminalProgress {
+    last_value: TerminalProgressValue,
+}
 
 impl TerminalProgress {
     const ENV: &str = "CARGO_TERM_PROGRESS_TERM_INTEGRATION";
@@ -500,7 +541,7 @@ impl TerminalProgress {
                     if let Some(v) = config.term.progress.term_integration {
                         if v {
                             debug!("enabling terminal progress reporting based on {source:?}");
-                            return Some(Self {});
+                            return Some(Self::default());
                         } else {
                             debug!("disabling terminal progress reporting based on {source:?}");
                             return None;
@@ -514,7 +555,7 @@ impl TerminalProgress {
                                 "enabling terminal progress reporting based on \
                                  CARGO_TERM_PROGRESS_TERM_INTEGRATION environment variable"
                             );
-                            return Some(Self {});
+                            return Some(Self::default());
                         } else if v == "false" {
                             debug!(
                                 "disabling terminal progress reporting based on \
@@ -533,7 +574,7 @@ impl TerminalProgress {
                     if let Some(v) = config.term.progress.term_integration {
                         if v {
                             debug!("enabling terminal progress reporting based on {source:?}");
-                            return Some(Self {});
+                            return Some(Self::default());
                         } else {
                             debug!("disabling terminal progress reporting based on {source:?}");
                             return None;
@@ -543,14 +584,10 @@ impl TerminalProgress {
             }
         }
 
-        supports_osc_9_4(stream).then_some(TerminalProgress {})
+        supports_osc_9_4(stream).then(Self::default)
     }
 
-    pub(super) fn update_progress(
-        &self,
-        event: &TestEvent<'_>,
-        writer: &mut dyn WriteStr,
-    ) -> Result<(), io::Error> {
+    pub(super) fn update_progress(&mut self, event: &TestEvent<'_>) {
         let value = match &event.kind {
             TestEventKind::RunStarted { .. }
             | TestEventKind::StressSubRunStarted { .. }
@@ -594,7 +631,11 @@ impl TerminalProgress {
             }
         };
 
-        write!(writer, "{value}")
+        self.last_value = value;
+    }
+
+    pub(super) fn last_value(&self) -> &TerminalProgressValue {
+        &self.last_value
     }
 }
 
@@ -628,9 +669,10 @@ fn supports_osc_9_4(stream: &dyn IsTerminal) -> bool {
 /// A progress status value printable as an ANSI OSC 9;4 escape code.
 ///
 /// Adapted from Cargo 1.87.
-#[derive(PartialEq, Debug)]
-enum TerminalProgressValue {
+#[derive(PartialEq, Debug, Default)]
+pub(super) enum TerminalProgressValue {
     /// No output.
+    #[default]
     None,
     /// Remove progress.
     Remove,
