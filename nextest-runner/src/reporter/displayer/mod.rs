@@ -9,7 +9,7 @@ mod progress;
 mod status_level;
 mod unit_output;
 
-pub use imp::*;
+pub(crate) use imp::*;
 pub use progress::{MaxProgressRunning, ShowProgress};
 pub use status_level::*;
 pub use unit_output::*;

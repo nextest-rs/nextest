@@ -46,12 +46,6 @@ use std::{
     time::Duration,
 };
 
-/// The duration after which ticks are generated.
-pub const TICK_INTERVAL: Duration = Duration::from_millis(100);
-
-/// The refresh rate for the progress bar, set to match the tick interval in hz.
-pub const PROGRESS_REFRESH_RATE_HZ: u8 = 10;
-
 pub(crate) struct DisplayReporterBuilder {
     pub(crate) default_filter: CompiledDefaultFilter,
     pub(crate) status_levels: StatusLevels,
@@ -224,6 +218,10 @@ impl<'a> DisplayReporter<'a> {
                 progress_bar,
                 term_progress,
             } => {
+                if let Some(term_progress) = term_progress {
+                    term_progress.update_progress(event);
+                }
+
                 if let Some(state) = progress_bar {
                     // Write to a string that will be printed as a log line.
                     let mut buf = String::new();
@@ -232,11 +230,6 @@ impl<'a> DisplayReporter<'a> {
                         .map_err(WriteEventError::Io)?;
 
                     state.update_progress_bar(event, &self.inner.styles);
-                    if let Some(term_progress) = term_progress {
-                        term_progress
-                            .update_progress(event, &mut buf)
-                            .map_err(WriteEventError::Io)?;
-                    }
                     state.write_buf(&buf);
                     Ok(())
                 } else {
@@ -245,11 +238,6 @@ impl<'a> DisplayReporter<'a> {
                     self.inner
                         .write_event_impl(event, &mut writer)
                         .map_err(WriteEventError::Io)?;
-                    if let Some(state) = term_progress {
-                        state
-                            .update_progress(event, &mut writer)
-                            .map_err(WriteEventError::Io)?;
-                    }
                     writer.flush().map_err(WriteEventError::Io)
                 }
             }
@@ -280,24 +268,41 @@ impl ReporterStderrImpl<'_> {
     fn tick(&mut self, styles: &Styles) {
         match self {
             ReporterStderrImpl::Terminal {
-                progress_bar: Some(state),
-                ..
+                progress_bar,
+                term_progress,
             } => {
-                state.tick(styles);
+                if let Some(state) = progress_bar {
+                    state.tick(styles);
+                }
+                if let Some(term_progress) = term_progress {
+                    // In this case, write the last value directly to stderr.
+                    // This is a very small amount of data so buffering is not
+                    // required. It also doesn't have newlines or any visible
+                    // text, so it can be directly written out to stderr without
+                    // going through the progress bar (which screws up
+                    // indicatif's calculations).
+                    eprint!("{}", term_progress.last_value())
+                }
             }
-            ReporterStderrImpl::Terminal { .. } | ReporterStderrImpl::Buffer(_) => {}
+            ReporterStderrImpl::Buffer(_) => {}
         }
     }
 
     fn finish_and_clear_bar(&self) {
         match self {
             ReporterStderrImpl::Terminal {
-                progress_bar: Some(state),
-                ..
+                progress_bar,
+                term_progress,
             } => {
-                state.finish_and_clear();
+                if let Some(state) = progress_bar {
+                    state.finish_and_clear();
+                }
+                if let Some(term_progress) = term_progress {
+                    // The last value is expected to be Remove.
+                    eprint!("{}", term_progress.last_value())
+                }
             }
-            ReporterStderrImpl::Terminal { .. } | ReporterStderrImpl::Buffer(_) => {}
+            ReporterStderrImpl::Buffer(_) => {}
         }
     }
 

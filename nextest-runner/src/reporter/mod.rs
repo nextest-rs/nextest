@@ -14,8 +14,7 @@ mod imp;
 pub mod structured;
 
 pub use displayer::{
-    FinalStatusLevel, MaxProgressRunning, PROGRESS_REFRESH_RATE_HZ, ShowProgress, StatusLevel,
-    TICK_INTERVAL, TestOutputDisplay,
+    FinalStatusLevel, MaxProgressRunning, ShowProgress, StatusLevel, TestOutputDisplay,
 };
 pub use error_description::*;
 pub use helpers::highlight_end;

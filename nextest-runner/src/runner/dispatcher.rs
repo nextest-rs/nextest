@@ -15,13 +15,10 @@ use crate::{
     },
     input::{InputEvent, InputHandler},
     list::{TestInstance, TestInstanceId, TestList},
-    reporter::{
-        TICK_INTERVAL,
-        events::{
-            CancelReason, ExecuteStatus, ExecutionStatuses, FinalRunStats, InfoResponse,
-            ReporterEvent, RunFinishedStats, RunStats, StressIndex, StressProgress, StressRunStats,
-            TestEvent, TestEventKind,
-        },
+    reporter::events::{
+        CancelReason, ExecuteStatus, ExecutionStatuses, FinalRunStats, InfoResponse, ReporterEvent,
+        RunFinishedStats, RunStats, StressIndex, StressProgress, StressRunStats, TestEvent,
+        TestEventKind,
     },
     runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
     signal::{
@@ -34,7 +31,7 @@ use chrono::Local;
 use debug_ignore::DebugIgnore;
 use futures::future::{Fuse, FusedFuture};
 use quick_junit::ReportUuid;
-use std::{collections::BTreeMap, pin::Pin, time::Duration};
+use std::{collections::BTreeMap, env, pin::Pin, time::Duration};
 use tokio::{
     sync::{
         mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
@@ -63,6 +60,7 @@ pub(super) struct DispatcherContext<'a, F> {
     running_tests: BTreeMap<TestInstanceId<'a>, ContextTestInstance<'a>>,
     signal_count: Option<SignalCount>,
     stress_cx: DispatcherStressContext,
+    tick_interval: Duration,
     #[cfg(test)]
     disable_signal_3_times_panic: bool,
 }
@@ -82,6 +80,11 @@ where
         global_timeout: Duration,
         stress_condition: Option<StressCondition>,
     ) -> Self {
+        // Tick every 50ms by default.
+        let tick_interval_ms = env::var("NEXTEST_PROGRESS_TICK_INTERVAL_MS")
+            .ok()
+            .and_then(|interval| interval.parse::<u64>().ok())
+            .unwrap_or(50);
         Self {
             callback: DebugIgnore(callback),
             run_id,
@@ -98,6 +101,7 @@ where
             running_tests: BTreeMap::new(),
             signal_count: None,
             stress_cx: DispatcherStressContext::new(stress_condition),
+            tick_interval: Duration::from_millis(tick_interval_ms),
             #[cfg(test)]
             disable_signal_3_times_panic: false,
         }
@@ -125,7 +129,7 @@ where
             std::pin::pin!(crate::time::pausable_sleep(self.global_timeout));
 
         // This is the interval at which tick events are sent to the reporter.
-        let mut tick_interval = tokio::time::interval(TICK_INTERVAL);
+        let mut tick_interval = tokio::time::interval(self.tick_interval);
         tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         loop {
