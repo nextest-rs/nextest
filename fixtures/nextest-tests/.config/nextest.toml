@@ -88,6 +88,9 @@ filter = 'test(=test_slow_timeout_2)'
 slow-timeout = { period = "500ms", terminate-after = 2 }
 test-group = '@global'
 
+[profile.with-timeout-success]
+slow-timeout = { period = "10ms", terminate-after = 2, on-timeout = "pass" }
+
 [profile.with-junit]
 retries = 2
 

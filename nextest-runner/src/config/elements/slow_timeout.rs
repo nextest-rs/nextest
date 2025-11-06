@@ -15,6 +15,8 @@ pub struct SlowTimeout {
     pub(crate) terminate_after: Option<NonZeroUsize>,
     #[serde(with = "humantime_serde", default = "default_grace_period")]
     pub(crate) grace_period: Duration,
+    #[serde(default)]
+    pub(crate) on_timeout: SlowTimeoutResult,
 }
 
 impl SlowTimeout {
@@ -24,6 +26,7 @@ impl SlowTimeout {
         period: far_future_duration(),
         terminate_after: None,
         grace_period: Duration::from_secs(10),
+        on_timeout: SlowTimeoutResult::Fail,
     };
 }
 
@@ -61,6 +64,7 @@ where
                     period,
                     terminate_after: None,
                     grace_period: default_grace_period(),
+                    on_timeout: SlowTimeoutResult::Fail,
                 }))
             }
         }
@@ -76,6 +80,25 @@ where
     deserializer.deserialize_any(V)
 }
 
+/// The result of controlling slow timeout behavior.
+///
+/// In most situations a timed out test should be marked failing. However, there are certain
+/// classes of tests which are expected to run indefinitely long, like fuzzing, which explores a
+/// huge state space. For these tests it's nice to be able to treat a timeout as a success since
+/// they generally check for invariants and other properties of the code under test during their
+/// execution. A timeout in this context doesn't mean that there are no failing inputs, it just
+/// means that they weren't found up until that moment, which is still valuable information.
+#[derive(Clone, Copy, Debug, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum SlowTimeoutResult {
+    #[default]
+    /// The test is marked as failed.
+    Fail,
+
+    /// The test is marked as passed.
+    Pass,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,7 +110,7 @@ mod tests {
 
     #[test_case(
         "",
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10) }),
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail }),
         None
 
         ; "empty config is expected to use the hardcoded values"
@@ -97,7 +120,7 @@ mod tests {
             [profile.default]
             slow-timeout = "30s"
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10) }),
+        Ok(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail }),
         None
 
         ; "overrides the default profile"
@@ -110,8 +133,8 @@ mod tests {
             [profile.ci]
             slow-timeout = { period = "60s", terminate-after = 3 }
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10) }),
-        Some(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), grace_period: Duration::from_secs(10) })
+        Ok(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail }),
+        Some(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail })
 
         ; "adds a custom profile 'ci'"
     )]
@@ -123,8 +146,8 @@ mod tests {
             [profile.ci]
             slow-timeout = "30s"
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), grace_period: Duration::from_secs(10) }),
-        Some(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10) })
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail }),
+        Some(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail })
 
         ; "ci profile uses string notation"
     )]
@@ -136,8 +159,8 @@ mod tests {
             [profile.ci]
             slow-timeout = "30s"
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), grace_period: Duration::from_secs(1) }),
-        Some(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10) })
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), grace_period: Duration::from_secs(1), on_timeout: SlowTimeoutResult::Fail }),
+        Some(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail })
 
         ; "timeout grace period"
     )]
@@ -146,7 +169,7 @@ mod tests {
             [profile.default]
             slow-timeout = { period = "60s" }
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10) }),
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail }),
         None
 
         ; "partial table"
@@ -160,6 +183,26 @@ mod tests {
         None
 
         ; "zero terminate-after should fail"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
+            slow-timeout = { period = "60s", on-timeout = "pass" }
+        "#},
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Pass }),
+        None
+
+        ; "timeout result success"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
+            slow-timeout = { period = "60s", on-timeout = "fail" }
+        "#},
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail }),
+        None
+
+        ; "timeout result failure"
     )]
     #[test_case(
         indoc! {r#"
