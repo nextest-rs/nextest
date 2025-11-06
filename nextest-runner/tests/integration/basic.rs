@@ -14,7 +14,7 @@ use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
     config::{
         core::NextestConfig,
-        elements::{LeakTimeoutResult, RetryPolicy},
+        elements::{LeakTimeoutResult, RetryPolicy, SlowTimeoutResult},
     },
     double_spawn::DoubleSpawnInfo,
     input::InputHandlerKind,
@@ -705,7 +705,7 @@ fn test_termination() -> Result<()> {
         .unwrap();
 
     let (instance_statuses, run_stats) = execute_collect(runner);
-    assert_eq!(run_stats.timed_out, 3, "3 tests timed out");
+    assert_eq!(run_stats.failed_timed_out, 3, "3 tests timed out");
     for test_name in [
         "test_slow_timeout",
         "test_slow_timeout_2",
@@ -733,7 +733,10 @@ fn test_termination() -> Result<()> {
                     "{test_name} should have taken less than 5 seconds, actually took {:?}",
                     run_status.time_taken
                 );
-                run_status.result == ExecutionResult::Timeout
+                run_status.result
+                    == ExecutionResult::Timeout {
+                        result: SlowTimeoutResult::Fail,
+                    }
             }
         };
         if !valid {
