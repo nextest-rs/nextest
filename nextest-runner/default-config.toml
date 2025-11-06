@@ -88,7 +88,11 @@ fail-fast = true
 # which will cause slow tests to be terminated after the specified number of
 # periods have passed.
 # Example: slow-timeout = { period = "60s", terminate-after = 2 }
-slow-timeout = { period = "60s" }
+#
+# The 'on-timeout' parameter controls whether timeouts are treated as failures (the default)
+# or successes.
+# Example: slow-timeout = { period = "60s", on-timeout = "pass" }
+slow-timeout = { period = "60s", on-timeout = "fail" }
 
 # Treat a test as leaky if after the process is shut down, standard output and standard error
 # aren't closed within this duration.

@@ -735,10 +735,11 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         setup_scripts_timed_out: _,
         passed,
         passed_slow,
+        passed_timed_out: _,
         flaky,
         failed,
         failed_slow: _,
-        timed_out,
+        failed_timed_out,
         leaky,
         leaky_failed,
         exec_failed,
@@ -807,11 +808,11 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         );
     }
 
-    if timed_out > 0 {
+    if failed_timed_out > 0 {
         swrite!(
             out,
             "{} {}, ",
-            timed_out.style(styles.count),
+            failed_timed_out.style(styles.count),
             "timed out".style(styles.fail),
         );
     }
@@ -986,7 +987,7 @@ mod tests {
                 RunStats {
                     initial_run_count: 20,
                     finished_count: 10,
-                    timed_out: 1,
+                    failed_timed_out: 1,
                     cancel_reason: Some(CancelReason::TestFailure),
                     ..RunStats::default()
                 },

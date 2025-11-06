@@ -5,7 +5,7 @@
 
 use crate::{
     config::{
-        elements::{JunitConfig, LeakTimeoutResult},
+        elements::{JunitConfig, LeakTimeoutResult, SlowTimeoutResult},
         scripts::ScriptId,
     },
     errors::{DisplayErrorChain, WriteEventError},
@@ -339,7 +339,15 @@ fn non_success_kind_and_type(kind: UnitKind, result: ExecutionResult) -> (NonSuc
             NonSuccessKind::Failure,
             format!("{kind} failure with exit code {code}"),
         ),
-        ExecutionResult::Timeout => (NonSuccessKind::Failure, format!("{kind} timeout")),
+        ExecutionResult::Timeout {
+            result: SlowTimeoutResult::Fail,
+        } => (NonSuccessKind::Failure, format!("{kind} timeout")),
+        ExecutionResult::Timeout {
+            result: SlowTimeoutResult::Pass,
+        } => (
+            NonSuccessKind::Failure,
+            format!("{kind} passed but timed out"),
+        ),
         ExecutionResult::ExecFail => (NonSuccessKind::Error, "execution failure".to_owned()),
         ExecutionResult::Leak {
             result: LeakTimeoutResult::Pass,

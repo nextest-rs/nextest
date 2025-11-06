@@ -478,7 +478,7 @@ impl<'a> ExecutorContext<'a> {
                                 job.as_ref(),
                                 slow_timeout.grace_period,
                             ).await;
-                            status = Some(ExecutionResult::Timeout);
+                            status = Some(ExecutionResult::Timeout {result: slow_timeout.on_timeout});
                             if slow_timeout.grace_period.is_zero() {
                                 break child.wait().await;
                             }
@@ -821,7 +821,7 @@ impl<'a> ExecutorContext<'a> {
                                 job.as_ref(),
                                 slow_timeout.grace_period,
                             ).await;
-                            status = Some(ExecutionResult::Timeout);
+                            status = Some(ExecutionResult::Timeout {result: slow_timeout.on_timeout});
                             if slow_timeout.grace_period.is_zero() {
                                 break child.wait().await;
                             }
