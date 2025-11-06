@@ -534,7 +534,7 @@ pub struct RunStats {
     /// The number of tests that passed on retry.
     pub flaky: usize,
 
-    /// The number of tests that failed.
+    /// The number of tests that failed. Includes `leaky_failed`.
     pub failed: usize,
 
     /// The number of failed tests that were slow.
@@ -701,7 +701,20 @@ impl RunStats {
                     self.failed_slow += 1;
                 }
             }
-            ExecutionResult::Timeout { .. } => self.failed_timed_out += 1,
+            ExecutionResult::Timeout {
+                result: SlowTimeoutResult::Pass,
+            } => {
+                self.passed += 1;
+                self.passed_timed_out += 1;
+                if run_statuses.len() > 1 {
+                    self.flaky += 1;
+                }
+            }
+            ExecutionResult::Timeout {
+                result: SlowTimeoutResult::Fail,
+            } => {
+                self.failed_timed_out += 1;
+            }
             ExecutionResult::ExecFail => self.exec_failed += 1,
         }
     }
@@ -1597,7 +1610,18 @@ mod tests {
                 initial_run_count: 42,
                 not_run: 0
             }),
-            "timed out => failure"
+            "timed out => failure {:?} {:?}",
+            RunStats {
+                initial_run_count: 42,
+                finished_count: 42,
+                failed_timed_out: 1,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::Test {
+                initial_run_count: 42,
+                not_run: 0
+            }),
         );
         assert_eq!(
             RunStats {

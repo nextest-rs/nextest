@@ -91,6 +91,19 @@ test-group = '@global'
 [profile.with-timeout-success]
 slow-timeout = { period = "10ms", terminate-after = 2, on-timeout = "pass" }
 
+[[profile.with-timeout-success.overrides]]
+filter = 'test(=test_slow_timeout_2)'
+slow-timeout = { period = "500ms", terminate-after = 2, on-timeout = "fail" }
+test-group = '@global'
+
+[[profile.with-timeout-success.overrides]]
+filter = 'test(=test_slow_timeout_subprocess)'
+slow-timeout = { period = "10ms", terminate-after = 2, on-timeout = "fail" }
+
+[profile.with-timeout-retries-success]
+slow-timeout = { period = "10ms", terminate-after = 2, on-timeout = "pass" }
+retries = 2
+
 [profile.with-junit]
 retries = 2
 
