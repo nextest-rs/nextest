@@ -8,6 +8,8 @@
             "Bash(cargo nextest run:*)",
             "Bash(cargo test:*)",
             "Bash(cargo xfmt:*)",
+            "Bash(gh issue list:*)",
+            "Bash(gh issue view:*)",
             "Bash(gh pr view:*)",
             "Bash(git log:*)",
             "Bash(git show:*)",
