@@ -1567,9 +1567,9 @@ dependencies = [
 
 [[package]]
 name = "iddqd"
-version = "0.3.15"
+version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe5fb1ad5d42e2c9400f06e2487c56fe9020a3b4d34e2ccaf114b81375558a46"
+checksum = "dda610d939ea51890ca6c827c8365acf0a44b4b53d2ed6f371e8e7e47bc75d25"
 dependencies = [
  "allocator-api2",
  "equivalent",
