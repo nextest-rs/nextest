@@ -523,7 +523,7 @@ impl<'g> TestList<'g> {
             test_suite
                 .status
                 .test_cases()
-                .map(move |(name, test_info)| TestInstance::new(name, test_suite, test_info))
+                .map(move |case| TestInstance::new(case, test_suite))
         })
     }
 
@@ -602,15 +602,15 @@ impl<'g> TestList<'g> {
         non_ignored: impl AsRef<str>,
         ignored: impl AsRef<str>,
     ) -> Result<RustTestSuite<'g>, CreateTestListError> {
-        let mut test_cases = BTreeMap::new();
+        let mut test_cases = IdOrdMap::new();
 
         // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
         // based on one doesn't affect the other.
         let mut non_ignored_filter = filter.build();
         for test_name in Self::parse(&test_binary.binary_id, non_ignored.as_ref())? {
-            test_cases.insert(
-                test_name.into(),
-                RustTestCaseSummary {
+            test_cases.insert_overwrite(RustTestCase {
+                name: test_name.into(),
+                test_info: RustTestCaseSummary {
                     ignored: false,
                     filter_match: non_ignored_filter.filter_match(
                         &test_binary,
@@ -620,7 +620,7 @@ impl<'g> TestList<'g> {
                         false,
                     ),
                 },
-            );
+            });
         }
 
         let mut ignored_filter = filter.build();
@@ -629,9 +629,9 @@ impl<'g> TestList<'g> {
             // * just ignored tests if --ignored is passed in
             // * all tests, both ignored and non-ignored, if --ignored is not passed in
             // Adding ignored tests after non-ignored ones makes everything resolve correctly.
-            test_cases.insert(
-                test_name.into(),
-                RustTestCaseSummary {
+            test_cases.insert_overwrite(RustTestCase {
+                name: test_name.into(),
+                test_info: RustTestCaseSummary {
                     ignored: true,
                     filter_match: ignored_filter.filter_match(
                         &test_binary,
@@ -641,7 +641,7 @@ impl<'g> TestList<'g> {
                         true,
                     ),
                 },
-            );
+            });
         }
 
         Ok(test_binary.into_test_suite(RustTestSuiteStatus::Listed {
@@ -738,7 +738,7 @@ impl<'g> TestList<'g> {
                 && info
                     .status
                     .test_cases()
-                    .all(|(_, test_case)| !test_case.filter_match.is_match())
+                    .all(|case| !case.test_info.filter_match.is_match())
             {
                 continue;
             }
@@ -766,19 +766,19 @@ impl<'g> TestList<'g> {
                 RustTestSuiteStatus::Listed { test_cases } => {
                     let matching_tests: Vec<_> = test_cases
                         .iter()
-                        .filter(|(name, _)| matcher.is_match(name))
+                        .filter(|case| matcher.is_match(&case.name))
                         .collect();
                     if matching_tests.is_empty() {
                         writeln!(indented, "(no tests)")?;
                     } else {
-                        for (name, info) in matching_tests {
-                            match (verbose, info.filter_match.is_match()) {
+                        for case in matching_tests {
+                            match (verbose, case.test_info.filter_match.is_match()) {
                                 (_, true) => {
-                                    write_test_name(name, &styles, &mut indented)?;
+                                    write_test_name(&case.name, &styles, &mut indented)?;
                                     writeln!(indented)?;
                                 }
                                 (true, false) => {
-                                    write_test_name(name, &styles, &mut indented)?;
+                                    write_test_name(&case.name, &styles, &mut indented)?;
                                     writeln!(indented, " (skipped)")?;
                                 }
                                 (false, false) => {
@@ -1002,7 +1002,7 @@ pub enum RustTestSuiteStatus {
     /// The test suite was executed with `--list` and the list of test cases was obtained.
     Listed {
         /// The test cases contained within this test suite.
-        test_cases: DebugIgnore<BTreeMap<String, RustTestCaseSummary>>,
+        test_cases: DebugIgnore<IdOrdMap<RustTestCase>>,
     },
 
     /// The test suite was not executed.
@@ -1012,7 +1012,7 @@ pub enum RustTestSuiteStatus {
     },
 }
 
-static EMPTY_TEST_CASE_MAP: BTreeMap<String, RustTestCaseSummary> = BTreeMap::new();
+static EMPTY_TEST_CASE_MAP: IdOrdMap<RustTestCase> = IdOrdMap::new();
 
 impl RustTestSuiteStatus {
     /// Returns the number of test cases within this suite.
@@ -1024,7 +1024,7 @@ impl RustTestSuiteStatus {
     }
 
     /// Returns the list of test cases within this suite.
-    pub fn test_cases(&self) -> impl Iterator<Item = (&str, &RustTestCaseSummary)> + '_ {
+    pub fn test_cases(&self) -> impl Iterator<Item = &RustTestCase> + '_ {
         match self {
             RustTestSuiteStatus::Listed { test_cases } => test_cases.iter(),
             RustTestSuiteStatus::Skipped { .. } => {
@@ -1032,7 +1032,6 @@ impl RustTestSuiteStatus {
                 EMPTY_TEST_CASE_MAP.iter()
             }
         }
-        .map(|(name, case)| (name.as_str(), case))
     }
 
     /// Converts this status to its serializable form.
@@ -1043,9 +1042,14 @@ impl RustTestSuiteStatus {
         BTreeMap<String, RustTestCaseSummary>,
     ) {
         match self {
-            Self::Listed { test_cases } => {
-                (RustTestSuiteStatusSummary::LISTED, test_cases.clone().0)
-            }
+            Self::Listed { test_cases } => (
+                RustTestSuiteStatusSummary::LISTED,
+                test_cases
+                    .iter()
+                    .cloned()
+                    .map(|case| (case.name, case.test_info))
+                    .collect(),
+            ),
             Self::Skipped {
                 reason: BinaryMismatchReason::Expression,
             } => (RustTestSuiteStatusSummary::SKIPPED, BTreeMap::new()),
@@ -1057,6 +1061,24 @@ impl RustTestSuiteStatus {
             ),
         }
     }
+}
+
+/// A single test case within a test suite.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustTestCase {
+    /// The name of the test.
+    pub name: String,
+
+    /// Information about the test.
+    pub test_info: RustTestCaseSummary,
+}
+
+impl IdOrdItem for RustTestCase {
+    type Key<'a> = &'a str;
+    fn key(&self) -> Self::Key<'_> {
+        &self.name
+    }
+    id_upcast!();
 }
 
 /// Represents a single test with its associated binary.
@@ -1074,15 +1096,11 @@ pub struct TestInstance<'a> {
 
 impl<'a> TestInstance<'a> {
     /// Creates a new `TestInstance`.
-    pub(crate) fn new(
-        name: &'a (impl AsRef<str> + ?Sized),
-        suite_info: &'a RustTestSuite,
-        test_info: &'a RustTestCaseSummary,
-    ) -> Self {
+    pub(crate) fn new(case: &'a RustTestCase, suite_info: &'a RustTestSuite) -> Self {
         Self {
-            name: name.as_ref(),
+            name: &case.name,
             suite_info,
-            test_info,
+            test_info: &case.test_info,
         }
     }
 
@@ -1312,7 +1330,6 @@ mod tests {
     use guppy::CargoMetadata;
     use iddqd::id_ord_map;
     use indoc::indoc;
-    use maplit::btreemap;
     use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext};
     use nextest_metadata::{FilterMatch, MismatchReason, PlatformLibdirUnavailable};
     use pretty_assertions::assert_eq;
@@ -1423,30 +1440,48 @@ mod tests {
             id_ord_map! {
                 RustTestSuite {
                     status: RustTestSuiteStatus::Listed {
-                        test_cases: btreemap! {
-                            "tests::foo::test_bar".to_owned() => RustTestCaseSummary {
-                                ignored: false,
-                                filter_match: FilterMatch::Matches,
+                        test_cases: id_ord_map! {
+                            RustTestCase {
+                                name: "tests::foo::test_bar".to_owned(),
+                                test_info: RustTestCaseSummary {
+                                    ignored: false,
+                                    filter_match: FilterMatch::Matches,
+                                },
                             },
-                            "tests::baz::test_quux".to_owned() => RustTestCaseSummary {
-                                ignored: false,
-                                filter_match: FilterMatch::Matches,
+                            RustTestCase {
+                                name: "tests::baz::test_quux".to_owned(),
+                                test_info: RustTestCaseSummary {
+                                    ignored: false,
+                                    filter_match: FilterMatch::Matches,
+                                },
                             },
-                            "benches::bench_foo".to_owned() => RustTestCaseSummary {
-                                ignored: false,
-                                filter_match: FilterMatch::Matches,
+                            RustTestCase {
+                                name: "benches::bench_foo".to_owned(),
+                                test_info: RustTestCaseSummary {
+                                    ignored: false,
+                                    filter_match: FilterMatch::Matches,
+                                },
                             },
-                            "tests::ignored::test_bar".to_owned() => RustTestCaseSummary {
-                                ignored: true,
-                                filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
+                            RustTestCase {
+                                name: "tests::ignored::test_bar".to_owned(),
+                                test_info: RustTestCaseSummary {
+                                    ignored: true,
+                                    filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
+                                },
                             },
-                            "tests::baz::test_ignored".to_owned() => RustTestCaseSummary {
-                                ignored: true,
-                                filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
+                            RustTestCase {
+                                name: "tests::baz::test_ignored".to_owned(),
+                                test_info: RustTestCaseSummary {
+                                    ignored: true,
+                                    filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
+                                },
                             },
-                            "benches::ignored_bench_foo".to_owned() => RustTestCaseSummary {
-                                ignored: true,
-                                filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
+                            RustTestCase {
+                                name: "benches::ignored_bench_foo".to_owned(),
+                                test_info: RustTestCaseSummary {
+                                    ignored: true,
+                                    filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
+                                },
                             },
                         }.into(),
                     },

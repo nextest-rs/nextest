@@ -67,8 +67,8 @@ impl<'a> ShowTestGroups<'a> {
         let mut non_overrides = settings.show_default.then(TestListDisplayFilter::new);
 
         for suite in test_list.iter() {
-            for (test_name, test_case) in suite.status.test_cases() {
-                let test_instance = TestInstance::new(test_name, suite, test_case);
+            for case in suite.status.test_cases() {
+                let test_instance = TestInstance::new(case, suite);
                 let query = test_instance.to_test_query();
                 let test_settings = profile.settings_with_source_for(&query);
                 let (test_group, source) = test_settings.test_group_with_source();
@@ -82,7 +82,7 @@ impl<'a> ShowTestGroups<'a> {
                         let data = override_map
                             .entry(source.id().clone())
                             .or_insert_with(|| ShowTestGroupsData::new(source));
-                        data.matching_tests.insert(&suite.binary_id, test_name);
+                        data.matching_tests.insert(&suite.binary_id, &case.name);
                     }
                     SettingSource::Script(_) => {
                         panic!("show-test-groups is not set via script section");
@@ -91,7 +91,7 @@ impl<'a> ShowTestGroups<'a> {
                         if let Some(non_overrides) = non_overrides.as_mut()
                             && settings.mode.matches_group(&TestGroup::Global)
                         {
-                            non_overrides.insert(&suite.binary_id, test_name);
+                            non_overrides.insert(&suite.binary_id, &case.name);
                         }
                     }
                 }
