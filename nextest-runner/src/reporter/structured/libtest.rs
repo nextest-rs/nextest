@@ -300,10 +300,10 @@ impl<'cfg> LibtestReporter<'cfg> {
         let mut test_suite = match self.test_suites.entry(&suite_info.binary_id) {
             id_ord_map::Entry::Vacant(e) => {
                 let (running, ignored, filtered) =
-                    suite_info.status.test_cases().fold((0, 0, 0), |acc, tc| {
-                        if tc.1.ignored {
+                    suite_info.status.test_cases().fold((0, 0, 0), |acc, case| {
+                        if case.test_info.ignored {
                             (acc.0, acc.1 + 1, acc.2)
-                        } else if tc.1.filter_match.is_match() {
+                        } else if case.test_info.filter_match.is_match() {
                             (acc.0 + 1, acc.1, acc.2)
                         } else {
                             (acc.0, acc.1, acc.2 + 1)
