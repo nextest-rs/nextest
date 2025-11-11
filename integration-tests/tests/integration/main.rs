@@ -918,7 +918,7 @@ fn test_archive_with_build_filter() {
         );
         run_archive_with_args(
             &archive_file,
-            RunProperty::CdyLibPackageFilter as u64 | RunProperty::SkipSummaryCheck as u64,
+            RunProperty::CdyLibExamplePackageFilter as u64 | RunProperty::SkipSummaryCheck as u64,
             NextestExitCode::OK,
         );
     });

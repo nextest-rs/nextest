@@ -83,7 +83,8 @@ impl TestSuiteFixture {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[repr(u64)]
 pub enum TestSuiteFixtureProperty {
-    NotInDefaultSet = 1,
+    NotInDefaultSet = 0x1,
+    MatchesCdylibExample = 0x2,
 }
 
 #[derive(Clone, Debug)]
@@ -170,9 +171,9 @@ impl TestCaseFixtureStatus {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[repr(u64)]
 pub enum TestCaseFixtureProperty {
-    NeedsSameCwd = 1,
-    NotInDefaultSet = 2,
-    MatchesCdylib = 4,
-    MatchesTestMultiplyTwo = 8,
-    NotInDefaultSetUnix = 16,
+    NeedsSameCwd = 0x1,
+    NotInDefaultSet = 0x2,
+    MatchesCdylib = 0x4,
+    MatchesTestMultiplyTwo = 0x8,
+    NotInDefaultSetUnix = 0x10,
 }
