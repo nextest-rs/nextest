@@ -439,12 +439,7 @@ impl ProgressBarState {
                 // continue to output to it.
                 self.hidden_run_paused = false;
                 let current_global_elapsed = self.bar.elapsed();
-
-                // `ProgressBar` is a lightweight handle and calling methods
-                // like `with_elapsed` on a clone also affects the original.
-                // Ideally there would be a `set_elapsed` method on self.bar,
-                // though.
-                self.bar.clone().with_elapsed(event.elapsed);
+                self.bar.set_elapsed(event.elapsed);
 
                 if let Some(running_tests) = &mut self.running_tests {
                     let delta = current_global_elapsed.saturating_sub(event.elapsed);
