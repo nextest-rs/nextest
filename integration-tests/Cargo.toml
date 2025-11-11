@@ -58,11 +58,13 @@ cfg-if.workspace = true
 cp_r.workspace = true
 datatest-stable.workspace = true
 fixture-data.workspace = true
+iddqd.workspace = true
 insta.workspace = true
 itertools.workspace = true
 libtest-mimic.workspace = true
 nextest-metadata.workspace = true
 pathdiff.workspace = true
+quick-junit.workspace = true
 regex.workspace = true
 target-spec.workspace = true
 target-spec-miette = { workspace = true, features = ["fixtures"] }
