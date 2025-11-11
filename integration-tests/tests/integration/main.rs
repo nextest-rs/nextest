@@ -23,7 +23,7 @@
 //! `NEXTEST_BIN_EXE_cargo-nextest-dup`.
 
 use camino::{Utf8Path, Utf8PathBuf};
-use fixture_data::nextest_tests::EXPECTED_TEST_SUITES;
+use fixture_data::{models::RunProperty, nextest_tests::EXPECTED_TEST_SUITES};
 use integration_tests::{
     env::set_env_vars,
     nextest_cli::{CargoNextestCli, CargoNextestOutput},

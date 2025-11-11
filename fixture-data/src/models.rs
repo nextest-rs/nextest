@@ -6,6 +6,32 @@
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_metadata::{BuildPlatform, FilterMatch, RustBinaryId};
 
+/// The expected result for a test execution.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CheckResult {
+    Pass,
+    Leak,
+    LeakFail,
+    Fail,
+    FailLeak,
+    Abort,
+}
+
+/// Properties that control which tests should be run in integration test invocations.
+#[derive(Clone, Copy, Debug)]
+#[repr(u64)]
+pub enum RunProperty {
+    Relocated = 0x1,
+    WithDefaultFilter = 0x2,
+    // --skip cdylib
+    WithSkipCdylibFilter = 0x4,
+    // --exact test_multiply_two tests::test_multiply_two_cdylib
+    WithMultiplyTwoExactFilter = 0x8,
+    CdyLibExamplePackageFilter = 0x10,
+    SkipSummaryCheck = 0x20,
+    ExpectNoBinaries = 0x40,
+}
+
 #[derive(Clone, Debug)]
 pub struct TestSuiteFixture {
     pub binary_id: RustBinaryId,
@@ -118,6 +144,84 @@ impl TestCaseFixture {
 
     pub fn has_property(&self, property: TestCaseFixtureProperty) -> bool {
         self.properties & property as u64 != 0
+    }
+
+    /// Determines if this test should be skipped based on run properties and filters.
+    pub fn should_skip(&self, properties: u64) -> bool {
+        // NotInDefaultSet filter.
+        if self.has_property(TestCaseFixtureProperty::NotInDefaultSet)
+            && properties & RunProperty::WithDefaultFilter as u64 != 0
+        {
+            return true;
+        }
+
+        // NotInDefaultSetUnix filter (Unix-specific).
+        if cfg!(unix)
+            && self.has_property(TestCaseFixtureProperty::NotInDefaultSetUnix)
+            && properties & RunProperty::WithDefaultFilter as u64 != 0
+        {
+            return true;
+        }
+
+        // MatchesCdylib + WithSkipCdylibFilter.
+        if self.has_property(TestCaseFixtureProperty::MatchesCdylib)
+            && properties & RunProperty::WithSkipCdylibFilter as u64 != 0
+        {
+            return true;
+        }
+
+        // WithMultiplyTwoExactFilter - skip tests that don't match.
+        if !self.has_property(TestCaseFixtureProperty::MatchesTestMultiplyTwo)
+            && properties & RunProperty::WithMultiplyTwoExactFilter as u64 != 0
+        {
+            return true;
+        }
+
+        // CdyLibExamplePackageFilter - only run test_multiply_two_cdylib.
+        if properties & RunProperty::CdyLibExamplePackageFilter as u64 != 0
+            && self.name != "tests::test_multiply_two_cdylib"
+        {
+            return true;
+        }
+
+        // ExpectNoBinaries - all tests should be skipped.
+        if properties & RunProperty::ExpectNoBinaries as u64 != 0 {
+            return true;
+        }
+
+        // Ignored tests are skipped by this test suite.
+        if self.status.is_ignored() {
+            return true;
+        }
+
+        false
+    }
+
+    /// Determines the expected test result based on test status and run properties.
+    pub fn expected_result(&self, properties: u64) -> CheckResult {
+        match self.status {
+            TestCaseFixtureStatus::Pass => {
+                // NeedsSameCwd tests fail when relocated.
+                if self.has_property(TestCaseFixtureProperty::NeedsSameCwd)
+                    && properties & RunProperty::Relocated as u64 != 0
+                {
+                    CheckResult::Fail
+                } else {
+                    CheckResult::Pass
+                }
+            }
+            TestCaseFixtureStatus::Leak => CheckResult::Leak,
+            TestCaseFixtureStatus::LeakFail => CheckResult::LeakFail,
+            TestCaseFixtureStatus::Fail | TestCaseFixtureStatus::Flaky { .. } => {
+                // Flaky tests are not currently retried by this test suite.
+                CheckResult::Fail
+            }
+            TestCaseFixtureStatus::FailLeak => CheckResult::FailLeak,
+            TestCaseFixtureStatus::Segfault => CheckResult::Abort,
+            TestCaseFixtureStatus::IgnoredPass | TestCaseFixtureStatus::IgnoredFail => {
+                unreachable!("ignored tests should be filtered out")
+            }
+        }
     }
 }
 
