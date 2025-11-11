@@ -170,7 +170,8 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
                     .with_property(TestCaseFixtureProperty::MatchesTestMultiplyTwo),
             },
         )
-        .with_property(TestSuiteFixtureProperty::NotInDefaultSet),
+        .with_property(TestSuiteFixtureProperty::NotInDefaultSet)
+        .with_property(TestSuiteFixtureProperty::MatchesCdylibExample),
         // Build script tests
         TestSuiteFixture::new(
             "with-build-script",

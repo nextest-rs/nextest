@@ -179,15 +179,15 @@ impl CheckResult {
 #[derive(Clone, Copy, Debug)]
 #[repr(u64)]
 pub enum RunProperty {
-    Relocated = 1,
-    WithDefaultFilter = 2,
+    Relocated = 0x1,
+    WithDefaultFilter = 0x2,
     // --skip cdylib
-    WithSkipCdylibFilter = 4,
+    WithSkipCdylibFilter = 0x4,
     // --exact test_multiply_two tests::test_multiply_two_cdylib
-    WithMultiplyTwoExactFilter = 8,
-    CdyLibPackageFilter = 0x21,
-    SkipSummaryCheck = 0x22,
-    ExpectNoBinaries = 0x24,
+    WithMultiplyTwoExactFilter = 0x8,
+    CdyLibExamplePackageFilter = 0x10,
+    SkipSummaryCheck = 0x20,
+    ExpectNoBinaries = 0x40,
 }
 
 fn debug_run_properties(properties: u64) -> String {
@@ -204,7 +204,7 @@ fn debug_run_properties(properties: u64) -> String {
     if properties & RunProperty::WithMultiplyTwoExactFilter as u64 != 0 {
         ret.push_str("with-exact-filter ");
     }
-    if properties & RunProperty::CdyLibPackageFilter as u64 != 0 {
+    if properties & RunProperty::CdyLibExamplePackageFilter as u64 != 0 {
         ret.push_str("with-dylib-package-filter ");
     }
     if properties & RunProperty::SkipSummaryCheck as u64 != 0 {
@@ -236,7 +236,9 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
         let binary_id = &fixture.binary_id;
         if fixture.has_property(TestSuiteFixtureProperty::NotInDefaultSet)
             && properties & RunProperty::WithDefaultFilter as u64 != 0
-            && properties & RunProperty::CdyLibPackageFilter as u64 == 0
+            || (!fixture.has_property(TestSuiteFixtureProperty::MatchesCdylibExample)
+                && properties & RunProperty::CdyLibExamplePackageFilter as u64
+                    == RunProperty::CdyLibExamplePackageFilter as u64)
         {
             eprintln!("*** skipping {binary_id}");
             for test in &fixture.test_cases {
@@ -359,8 +361,8 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
             let reg = result.make_status_line_regex(&name);
             let is_match = reg.is_match(&output);
 
-            if properties & RunProperty::CdyLibPackageFilter as u64
-                == RunProperty::CdyLibPackageFilter as u64
+            if properties & RunProperty::CdyLibExamplePackageFilter as u64
+                == RunProperty::CdyLibExamplePackageFilter as u64
                 && test.name != "tests::test_multiply_two_cdylib"
             {
                 assert!(
