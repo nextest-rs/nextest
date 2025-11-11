@@ -2583,14 +2583,14 @@ checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quick-junit"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ed1a693391a16317257103ad06a88c6529ac640846021da7c435a06fffdacd7"
+checksum = "6ee9342d671fae8d66b3ae9fd7a9714dfd089c04d2a8b1ec0436ef77aee15e5f"
 dependencies = [
  "chrono",
  "indexmap",
  "newtype-uuid",
- "quick-xml",
+ "quick-xml 0.38.3",
  "strip-ansi-escapes",
  "thiserror 2.0.17",
  "uuid",
@@ -2601,6 +2601,15 @@ name = "quick-xml"
 version = "0.37.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "331e97a1af0bf59823e6eadffe373d7b27f485be8748f71471c662c1f269b7fb"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.38.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42a232e7487fc2ef313d96dde7948e7a3c05101870d8985e4fd8d26aedd27b89"
 dependencies = [
  "memchr",
 ]
@@ -3035,7 +3044,7 @@ dependencies = [
  "hyper",
  "indicatif 0.17.11",
  "log",
- "quick-xml",
+ "quick-xml 0.37.5",
  "regex",
  "reqwest",
  "self-replace",
