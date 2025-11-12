@@ -11,6 +11,9 @@ experimental = ["setup-scripts", "wrapper-scripts"]
 # disable fail-fast to ensure a deterministic test run
 fail-fast = false
 
+[profile.default.junit]
+path = "junit.xml"
+
 [[profile.default.scripts]]
 platform = { host = "cfg(unix)" }
 filter = "test(=test_cargo_env_vars)"
@@ -100,6 +103,9 @@ retries = { backoff = "exponential", count = 2, jitter = true, delay = "1s" }
 
 [profile.with-default-filter]
 default-filter = "not (test(test_flaky) | package(cdylib-example))"
+
+[profile.with-default-filter.junit]
+path = "junit.xml"
 
 # Platform-specific default filters.
 [[profile.with-default-filter.overrides]]

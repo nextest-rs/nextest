@@ -163,6 +163,19 @@ impl TempProject {
     pub fn manifest_path(&self) -> Utf8PathBuf {
         self.workspace_root.join("Cargo.toml")
     }
+
+    pub fn junit_path(&self, profile_name: &str) -> Utf8PathBuf {
+        // The JUnit path is currently always under workspace-root/target, not
+        // self.target_dir. This doesn't respect --target-dir overrides and will
+        // break for tests using custom target directories. This should be fixed
+        // to use self.target_dir.join("nextest").join(profile_name).join("junit.xml")
+        // once nextest respects custom target directories for JUnit output.
+        self.workspace_root
+            .join("target")
+            .join("nextest")
+            .join(profile_name)
+            .join("junit.xml")
+    }
 }
 
 #[cfg(target_os = "macos")]

@@ -15,6 +15,7 @@
             "Bash(git show:*)",
             "Bash(jj diff:*)",
             "Bash(jj s:*)",
+            "Bash(jj show:*)",
             "Skill(prepare-changelog)",
             "WebSearch"
         ],

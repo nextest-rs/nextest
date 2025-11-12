@@ -446,7 +446,7 @@ fn test_run() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, 0);
+    check_run_output_with_junit(&output.stderr, &p.junit_path("default"), 0);
 
     // --exact with nothing else should be the same as above.
     let output = CargoNextestCli::for_test()
@@ -467,7 +467,7 @@ fn test_run() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, 0);
+    check_run_output_with_junit(&output.stderr, &p.junit_path("default"), 0);
 
     // Check the output with --skip.
     let output = CargoNextestCli::for_test()
@@ -488,7 +488,11 @@ fn test_run() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, RunProperty::WithSkipCdylibFilter as u64);
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("default"),
+        RunProperty::WithSkipCdylibFilter as u64,
+    );
 
     // Equivalent filterset to the above.
     let output = CargoNextestCli::for_test()
@@ -508,7 +512,11 @@ fn test_run() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, RunProperty::WithSkipCdylibFilter as u64);
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("default"),
+        RunProperty::WithSkipCdylibFilter as u64,
+    );
 
     // Check the output with --exact.
     let output = CargoNextestCli::for_test()
@@ -525,8 +533,9 @@ fn test_run() {
         ])
         // The above tests pass so don't pass in unchecked(true) here.
         .output();
-    check_run_output(
+    check_run_output_with_junit(
         &output.stderr,
+        &p.junit_path("default"),
         RunProperty::WithMultiplyTwoExactFilter as u64,
     );
 
@@ -543,8 +552,9 @@ fn test_run() {
         ])
         // The above tests pass so don't pass in unchecked(true) here.
         .output();
-    check_run_output(
+    check_run_output_with_junit(
         &output.stderr,
+        &p.junit_path("default"),
         RunProperty::WithMultiplyTwoExactFilter as u64,
     );
 
@@ -567,8 +577,9 @@ fn test_run() {
         // This should only select the one test_multiply_two test, which pass. So don't pass in
         // unchecked(true) here.
         .output();
-    check_run_output(
+    check_run_output_with_junit(
         &output.stderr,
+        &p.junit_path("default"),
         RunProperty::WithSkipCdylibFilter as u64 | RunProperty::WithMultiplyTwoExactFilter as u64,
     );
 
@@ -586,8 +597,9 @@ fn test_run() {
         // This should only select the test_multiply_two test, which passes. So don't pass in
         // unchecked(true) here.
         .output();
-    check_run_output(
+    check_run_output_with_junit(
         &output.stderr,
+        &p.junit_path("default"),
         RunProperty::WithSkipCdylibFilter as u64 | RunProperty::WithMultiplyTwoExactFilter as u64,
     );
 
@@ -608,8 +620,9 @@ fn test_run() {
         // This should only select the test_multiply_two test, which passes. So don't pass in
         // unchecked(true) here.
         .output();
-    check_run_output(
+    check_run_output_with_junit(
         &output.stderr,
+        &p.junit_path("default"),
         RunProperty::WithSkipCdylibFilter as u64 | RunProperty::WithMultiplyTwoExactFilter as u64,
     );
 
@@ -631,8 +644,9 @@ fn test_run() {
         // This should only select the test_multiply_two test, which passes. So don't pass in
         // unchecked(true) here.
         .output();
-    check_run_output(
+    check_run_output_with_junit(
         &output.stderr,
+        &p.junit_path("default"),
         RunProperty::WithSkipCdylibFilter as u64 | RunProperty::WithMultiplyTwoExactFilter as u64,
     );
 }
@@ -660,7 +674,7 @@ fn test_run_after_build() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, 0);
+    check_run_output_with_junit(&output.stderr, &p.junit_path("default"), 0);
 }
 
 #[test]
@@ -719,7 +733,11 @@ fn test_relocated_run() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, RunProperty::Relocated as u64);
+    check_run_output_with_junit(
+        &output.stderr,
+        &p2.junit_path("default"),
+        RunProperty::Relocated as u64,
+    );
 }
 
 #[test]
@@ -1113,7 +1131,7 @@ fn run_archive_with_args(
         Some(expected_exit_code),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, run_property);
+    check_run_output_with_junit(&output.stderr, &p2.junit_path("default"), run_property);
 
     // project is included in return value to keep tempdirs alive
     (p2, extract_to.join("target"))
@@ -1414,7 +1432,11 @@ fn test_run_with_default_filter() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, RunProperty::WithDefaultFilter as u64);
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("with-default-filter"),
+        RunProperty::WithDefaultFilter as u64,
+    );
 }
 
 #[test]
