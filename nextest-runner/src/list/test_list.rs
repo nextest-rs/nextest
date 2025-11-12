@@ -675,8 +675,14 @@ impl<'g> TestList<'g> {
         // <test name>: test
         // ...
 
-        list_output.lines().map(move |line| {
-            line.strip_suffix(": test")
+        list_output.lines().filter_map(move |line| {
+            // we filter out empty lines here
+            // as certain wasm-bindgen-test-runner versions
+            // emit an empty line in the end of the output
+            if line.trim().is_empty() {
+                None
+            } else {
+                Some(line.strip_suffix(": test")
                 .or_else(|| line.strip_suffix(": benchmark"))
                 .ok_or_else(|| {
                     CreateTestListError::parse_line(
@@ -686,7 +692,8 @@ impl<'g> TestList<'g> {
                         ),
                         list_output,
                     )
-                })
+                }))
+            }
         })
     }
 
