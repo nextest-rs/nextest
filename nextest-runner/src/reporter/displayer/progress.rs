@@ -180,7 +180,6 @@ pub(super) struct ProgressBarState {
     hidden_no_capture: bool,
     hidden_run_paused: bool,
     hidden_info_response: bool,
-    hidden_between_sub_runs: bool,
 }
 
 impl ProgressBarState {
@@ -229,7 +228,6 @@ impl ProgressBarState {
             hidden_no_capture: false,
             hidden_run_paused: false,
             hidden_info_response: false,
-            hidden_between_sub_runs: false,
         }
     }
 
@@ -312,23 +310,18 @@ impl ProgressBarState {
                 // Clear all test bars to remove empty lines of output between
                 // sub-runs.
                 self.bar.finish_and_clear();
-                // Hide the progress bar between sub runs to avoid a spurious
-                // progress bar.
-                self.hidden_between_sub_runs = true;
             }
             TestEventKind::SetupScriptStarted { no_capture, .. } => {
                 // Hide the progress bar if either stderr or stdout are being passed through.
                 if *no_capture {
                     self.hidden_no_capture = true;
                 }
-                self.hidden_between_sub_runs = false;
             }
             TestEventKind::SetupScriptFinished { no_capture, .. } => {
                 // Restore the progress bar if it was hidden.
                 if *no_capture {
                     self.hidden_no_capture = false;
                 }
-                self.hidden_between_sub_runs = false;
             }
             TestEventKind::TestStarted {
                 current_stats,
@@ -337,7 +330,6 @@ impl ProgressBarState {
                 ..
             } => {
                 self.running = *running;
-                self.hidden_between_sub_runs = false;
 
                 self.bar.set_prefix(progress_bar_prefix(
                     current_stats,
@@ -367,8 +359,6 @@ impl ProgressBarState {
             } => {
                 self.running = *running;
                 self.remove_test(&test_instance.id());
-
-                self.hidden_between_sub_runs = false;
 
                 self.bar.set_prefix(progress_bar_prefix(
                     current_stats,
@@ -500,10 +490,7 @@ impl ProgressBarState {
     }
 
     fn should_hide(&self) -> bool {
-        self.hidden_no_capture
-            || self.hidden_run_paused
-            || self.hidden_info_response
-            || self.hidden_between_sub_runs
+        self.hidden_no_capture || self.hidden_run_paused || self.hidden_info_response
     }
 
     pub(super) fn is_hidden(&self) -> bool {
