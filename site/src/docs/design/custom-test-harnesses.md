@@ -31,18 +31,34 @@ For your test harness to work with nextest, follow these rules (keywords are as 
 
 [RFC 2119]: https://datatracker.ietf.org/doc/html/rfc2119
 
-- **The test harness MUST support being run with `--list --format terse`.** This command MUST print to stdout all tests in _exactly_ the format
+- **The test harness MUST support being run with `--list --format terse`.** This command MUST print to standard out either of the following two options:
+  - all tests; or,
+  - all non-ignored tests (however the harness defines ignored tests).
+  
+  Each test must be printed out on a separate line. Each line must be of the form:
 
   ```
-  my-test-1: test
-  my-test-2: test
+  <TEST_NAME>: test
+  ```
+  or
+
+  ```
+  <TEST_NAME>: benchmark
   ```
 
-  Other output MUST NOT be written to stdout.
+  Some examples of valid output:
 
-  Custom test harnesses that are meant to be run as a single unit MUST produce just one line in the output.
+  ```
+  my_test_1: test
+  my-test-2.txt: test
+  my_module::my_bench_1: benchmark
+  ```
 
-- **The test harness MUST support being run with `--list --format terse --ignored`**. This command MUST print to stdout exactly the set of ignored tests (however the harness defines them) in the same format as above. If there are no ignored tests or if the test harness doesn't support ignored tests, the output MUST be empty. The set of ignored tests MUST be either of the following two options:
+  Other output, such as empty lines or debugging output, MUST NOT be written to standard out. (It is okay to send debugging output to standard error.)
+
+  Custom test harnesses that are meant to be run as a single unit MUST write exactly one line to standard out.
+
+- **The test harness MUST support being run with `--list --format terse --ignored`**. This command MUST print to standard out exactly the set of ignored tests (however the harness defines them) in the same format as above. If there are no ignored tests or if the test harness doesn't support ignored tests, the output MUST be empty. The set of ignored tests MUST be either of the following two options:
   - A subset of the tests printed out without `--ignored`; this is what libtest does.
   - A completely disjoint set of tests from those printed out without `--ignored`.
 - **Test names that are not at the top level (however the harness defines this) SHOULD be returned as `path::to::test::test_name`.** This is recommended because the cargo-nextest UI uses `::` as a separator to format test names nicely.
