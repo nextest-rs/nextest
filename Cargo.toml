@@ -40,7 +40,7 @@ cfg-if = "1.0.4"
 color-eyre = "0.6.5"
 # config's "preserve_order" feature is needed for preserving the order of
 # setup scripts in .config/nextest.toml.
-config = { version = "0.15.18", default-features = false, features = [
+config = { version = "0.15.19", default-features = false, features = [
     "toml",
     "preserve_order",
 ] }
