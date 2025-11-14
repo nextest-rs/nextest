@@ -1,0 +1,10 @@
+---
+source: nextest-runner/src/list/test_list.rs
+expression: result.unwrap_err()
+snapshot_kind: text
+---
+for `test-package::test-binary`, line "invalid_line" did not end with the string ": test" or ": benchmark"
+full output:
+valid_test: test
+invalid_line
+another_valid: benchmark

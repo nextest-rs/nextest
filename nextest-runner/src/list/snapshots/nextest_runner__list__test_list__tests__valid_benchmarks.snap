@@ -1,0 +1,9 @@
+---
+source: nextest-runner/src/list/test_list.rs
+expression: results
+snapshot_kind: text
+---
+[
+    "simple_bench",
+    "benches::module::my_benchmark",
+]
