@@ -119,13 +119,16 @@ pub(super) struct RunningTest {
 }
 
 impl RunningTest {
-    fn message(&self, now: &Instant, width: usize, styles: &Styles) -> String {
-        let mut elapsed = (*now - self.start_time) - self.paused_for;
+    fn message(&self, now: Instant, width: usize, styles: &Styles) -> String {
+        let mut elapsed = (now - self.start_time).saturating_sub(self.paused_for);
         let status = match self.status {
             RunningTestStatus::Running => "     ".to_owned(),
             RunningTestStatus::Slow => " SLOW".style(styles.skip).to_string(),
             RunningTestStatus::Delay(d) => {
-                elapsed = d - elapsed;
+                // The elapsed might be greater than the delay duration in case
+                // we ticked past the delay duration without receiving a
+                // notification that the test retry started.
+                elapsed = d.saturating_sub(elapsed);
                 "DELAY".style(styles.retry).to_string()
             }
             RunningTestStatus::Retry => "RETRY".style(styles.retry).to_string(),
@@ -282,7 +285,7 @@ impl ProgressBarState {
             };
             for running_test in &running_tests[..count] {
                 msg.push('\n');
-                msg.push_str(&running_test.message(&now, width, styles));
+                msg.push_str(&running_test.message(now, width, styles));
             }
             if count < running_tests.len() {
                 let overflow_count = running_tests.len() - count;
@@ -928,6 +931,86 @@ mod tests {
             let s = progress_str(elapsed, &stats, running, &styles);
             insta::assert_snapshot!(format!("{name}_without_cancel_reason"), s);
         }
+    }
+
+    #[test]
+    fn running_test_snapshots() {
+        let styles = Styles::default();
+        let now = Instant::now();
+
+        for (name, running_test) in running_test_examples(now) {
+            let msg = running_test.message(now, 80, &styles);
+            insta::assert_snapshot!(name, msg);
+        }
+    }
+
+    fn running_test_examples(now: Instant) -> Vec<(&'static str, RunningTest)> {
+        let binary_id = RustBinaryId::new("my-binary");
+        let test_name = "test::my_test".to_string();
+        let start_time = now - Duration::from_secs(125); // 2 minutes 5 seconds ago
+
+        vec![
+            (
+                "running_status",
+                RunningTest {
+                    binary_id: binary_id.clone(),
+                    test_name: test_name.clone(),
+                    status: RunningTestStatus::Running,
+                    start_time,
+                    paused_for: Duration::ZERO,
+                },
+            ),
+            (
+                "slow_status",
+                RunningTest {
+                    binary_id: binary_id.clone(),
+                    test_name: test_name.clone(),
+                    status: RunningTestStatus::Slow,
+                    start_time,
+                    paused_for: Duration::ZERO,
+                },
+            ),
+            (
+                "delay_status",
+                RunningTest {
+                    binary_id: binary_id.clone(),
+                    test_name: test_name.clone(),
+                    status: RunningTestStatus::Delay(Duration::from_secs(130)),
+                    start_time,
+                    paused_for: Duration::ZERO,
+                },
+            ),
+            (
+                "delay_status_underflow",
+                RunningTest {
+                    binary_id: binary_id.clone(),
+                    test_name: test_name.clone(),
+                    status: RunningTestStatus::Delay(Duration::from_secs(124)),
+                    start_time,
+                    paused_for: Duration::ZERO,
+                },
+            ),
+            (
+                "retry_status",
+                RunningTest {
+                    binary_id: binary_id.clone(),
+                    test_name: test_name.clone(),
+                    status: RunningTestStatus::Retry,
+                    start_time,
+                    paused_for: Duration::ZERO,
+                },
+            ),
+            (
+                "with_paused_duration",
+                RunningTest {
+                    binary_id: binary_id.clone(),
+                    test_name: test_name.clone(),
+                    status: RunningTestStatus::Running,
+                    start_time,
+                    paused_for: Duration::from_secs(30),
+                },
+            ),
+        ]
     }
 
     fn run_stats_test_failure_examples() -> Vec<(&'static str, RunStats)> {

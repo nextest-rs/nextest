@@ -1,0 +1,6 @@
+---
+source: nextest-runner/src/reporter/displayer/progress.rs
+expression: msg
+snapshot_kind: text
+---
+       DELAY [ 00:00:00] my-binary test::my_test
