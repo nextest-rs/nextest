@@ -1,0 +1,10 @@
+---
+source: nextest-runner/src/list/test_list.rs
+expression: results
+snapshot_kind: text
+---
+[
+    "test_with_underscore_123",
+    "test::with::colons",
+    "test_with_numbers_42",
+]

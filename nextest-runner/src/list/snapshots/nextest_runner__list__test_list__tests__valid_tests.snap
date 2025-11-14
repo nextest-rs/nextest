@@ -1,0 +1,10 @@
+---
+source: nextest-runner/src/list/test_list.rs
+expression: results
+snapshot_kind: text
+---
+[
+    "simple_test",
+    "module::nested_test",
+    "deeply::nested::module::test_name",
+]

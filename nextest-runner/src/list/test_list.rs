@@ -661,33 +661,9 @@ impl<'g> TestList<'g> {
         binary_id: &'a RustBinaryId,
         list_output: &'a str,
     ) -> Result<Vec<&'a str>, CreateTestListError> {
-        let mut list = Self::parse_impl(binary_id, list_output).collect::<Result<Vec<_>, _>>()?;
+        let mut list = parse_list_lines(binary_id, list_output).collect::<Result<Vec<_>, _>>()?;
         list.sort_unstable();
         Ok(list)
-    }
-
-    fn parse_impl<'a>(
-        binary_id: &'a RustBinaryId,
-        list_output: &'a str,
-    ) -> impl Iterator<Item = Result<&'a str, CreateTestListError>> + 'a + use<'a> {
-        // The output is in the form:
-        // <test name>: test
-        // <test name>: test
-        // ...
-
-        list_output.lines().map(move |line| {
-            line.strip_suffix(": test")
-                .or_else(|| line.strip_suffix(": benchmark"))
-                .ok_or_else(|| {
-                    CreateTestListError::parse_line(
-                        binary_id.clone(),
-                        format!(
-                            "line '{line}' did not end with the string ': test' or ': benchmark'"
-                        ),
-                        list_output,
-                    )
-                })
-        })
     }
 
     /// Writes this test list out in a human-friendly format.
@@ -797,6 +773,30 @@ impl<'g> TestList<'g> {
         }
         Ok(())
     }
+}
+
+fn parse_list_lines<'a>(
+    binary_id: &'a RustBinaryId,
+    list_output: &'a str,
+) -> impl Iterator<Item = Result<&'a str, CreateTestListError>> + 'a + use<'a> {
+    // The output is in the form:
+    // <test name>: test
+    // <test name>: test
+    // ...
+
+    list_output.lines().map(move |line| {
+        line.strip_suffix(": test")
+            .or_else(|| line.strip_suffix(": benchmark"))
+            .ok_or_else(|| {
+                CreateTestListError::parse_line(
+                    binary_id.clone(),
+                    format!(
+                        "line {line:?} did not end with the string \": test\" or \": benchmark\""
+                    ),
+                    list_output,
+                )
+            })
+    })
 }
 
 /// Profile implementation for test lists.
@@ -1944,5 +1944,93 @@ mod tests {
         PACKAGE_GRAPH_FIXTURE
             .metadata(&PackageId::new(PACKAGE_METADATA_ID))
             .expect("package ID is valid")
+    }
+
+    #[test]
+    fn test_parse_list_lines() {
+        let binary_id = RustBinaryId::new("test-package::test-binary");
+
+        // Valid: tests only.
+        let input = indoc! {"
+            simple_test: test
+            module::nested_test: test
+            deeply::nested::module::test_name: test
+        "};
+        let results: Vec<_> = parse_list_lines(&binary_id, input)
+            .collect::<Result<_, _>>()
+            .expect("parsed valid test output");
+        insta::assert_debug_snapshot!("valid_tests", results);
+
+        // Valid: benchmarks only.
+        let input = indoc! {"
+            simple_bench: benchmark
+            benches::module::my_benchmark: benchmark
+        "};
+        let results: Vec<_> = parse_list_lines(&binary_id, input)
+            .collect::<Result<_, _>>()
+            .expect("parsed valid benchmark output");
+        insta::assert_debug_snapshot!("valid_benchmarks", results);
+
+        // Valid: mixed tests and benchmarks.
+        let input = indoc! {"
+            test_one: test
+            bench_one: benchmark
+            test_two: test
+            bench_two: benchmark
+        "};
+        let results: Vec<_> = parse_list_lines(&binary_id, input)
+            .collect::<Result<_, _>>()
+            .expect("parsed mixed output");
+        insta::assert_debug_snapshot!("mixed_tests_and_benchmarks", results);
+
+        // Valid: special characters.
+        let input = indoc! {r#"
+            test_with_underscore_123: test
+            test::with::colons: test
+            test_with_numbers_42: test
+        "#};
+        let results: Vec<_> = parse_list_lines(&binary_id, input)
+            .collect::<Result<_, _>>()
+            .expect("parsed tests with special characters");
+        insta::assert_debug_snapshot!("special_characters", results);
+
+        // Valid: empty input.
+        let input = "";
+        let results: Vec<_> = parse_list_lines(&binary_id, input)
+            .collect::<Result<_, _>>()
+            .expect("parsed empty output");
+        insta::assert_debug_snapshot!("empty_input", results);
+
+        // Invalid: wrong suffix.
+        let input = "invalid_test: wrong_suffix";
+        let result = parse_list_lines(&binary_id, input).collect::<Result<Vec<_>, _>>();
+        assert!(result.is_err());
+        insta::assert_snapshot!("invalid_suffix_error", result.unwrap_err());
+
+        // Invalid: missing suffix.
+        let input = "test_without_suffix";
+        let result = parse_list_lines(&binary_id, input).collect::<Result<Vec<_>, _>>();
+        assert!(result.is_err());
+        insta::assert_snapshot!("missing_suffix_error", result.unwrap_err());
+
+        // Invalid: partial valid (stops at first error).
+        let input = indoc! {"
+            valid_test: test
+            invalid_line
+            another_valid: benchmark
+        "};
+        let result = parse_list_lines(&binary_id, input).collect::<Result<Vec<_>, _>>();
+        assert!(result.is_err());
+        insta::assert_snapshot!("partial_valid_error", result.unwrap_err());
+
+        // Invalid: control character.
+        let input = indoc! {"
+            valid_test: test
+            \rinvalid_line
+            another_valid: benchmark
+        "};
+        let result = parse_list_lines(&binary_id, input).collect::<Result<Vec<_>, _>>();
+        assert!(result.is_err());
+        insta::assert_snapshot!("control_character_error", result.unwrap_err());
     }
 }
