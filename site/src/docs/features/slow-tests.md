@@ -42,6 +42,21 @@ Nextest lets you optionally specify a number of `slow-timeout` periods after whi
 slow-timeout = { period = "30s", terminate-after = 4 }
 ```
 
+### Configuring timeout behavior
+
+<!-- md:version 0.9.112 -->
+
+By default, tests that time out are treated as failures. For fuzz and property tests with very large state spaces (or on a constrained environment like CI), it may be useful to treat timeouts as successes, since they're not expected to test every possible input. A timeout in this context is not the same as a failure, it just means they weren't able to find any input that caused the test to fail. You can configure this behavior using the `on-timeout` parameter. For example, to treat timeouts as successes:
+
+```toml title="Timeouts as successes"
+[profile.default]
+slow-timeout = { period = "30s", terminate-after = 4, on-timeout = "pass" }
+```
+
+The possible values for `on-timeout` are:
+- `"fail"` (default): Tests that time out are treated as failures
+- `"pass"`: Tests that time out are treated as successes
+
 ### Example
 
 The run below is configured with:

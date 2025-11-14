@@ -19,7 +19,11 @@ use super::{
 };
 use crate::{
     cargo_config::CargoConfigs,
-    config::{elements::LeakTimeoutResult, overrides::CompiledDefaultFilter, scripts::ScriptId},
+    config::{
+        elements::{LeakTimeoutResult, SlowTimeoutResult},
+        overrides::CompiledDefaultFilter,
+        scripts::ScriptId,
+    },
     errors::WriteEventError,
     helpers::{
         DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, plural,
@@ -1906,7 +1910,14 @@ impl<'a> DisplayReporterImpl<'a> {
                 "{}: exited with code 0, but leaked handles",
                 "failed".style(self.styles.fail),
             ),
-            Some(ExecutionResult::Timeout) => {
+            Some(ExecutionResult::Timeout {
+                result: SlowTimeoutResult::Pass,
+            }) => {
+                write!(writer, "{}", "passed with timeout".style(self.styles.skip))
+            }
+            Some(ExecutionResult::Timeout {
+                result: SlowTimeoutResult::Fail,
+            }) => {
                 write!(writer, "{}", "timed out".style(self.styles.fail))
             }
             Some(ExecutionResult::Fail {
@@ -2173,7 +2184,7 @@ fn show_finished_status_info_line(result: ExecutionResult) -> bool {
             // again.
             false
         }
-        ExecutionResult::Timeout => {
+        ExecutionResult::Timeout { .. } => {
             // Show this to be clear what happened.
             true
         }
@@ -2218,7 +2229,12 @@ fn status_str(result: ExecutionResult) -> Cow<'static, str> {
         ExecutionResult::Leak {
             result: LeakTimeoutResult::Fail,
         } => "LEAK-FAIL".into(),
-        ExecutionResult::Timeout => "TIMEOUT".into(),
+        ExecutionResult::Timeout {
+            result: SlowTimeoutResult::Pass,
+        } => "TIMEOUT-PASS".into(),
+        ExecutionResult::Timeout {
+            result: SlowTimeoutResult::Fail,
+        } => "TIMEOUT".into(),
     }
 }
 
@@ -2256,7 +2272,12 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
         ExecutionResult::Leak {
             result: LeakTimeoutResult::Fail,
         } => "LKFAIL".into(),
-        ExecutionResult::Timeout => "TMT".into(),
+        ExecutionResult::Timeout {
+            result: SlowTimeoutResult::Pass,
+        } => "TMPASS".into(),
+        ExecutionResult::Timeout {
+            result: SlowTimeoutResult::Fail,
+        } => "TMT".into(),
     }
 }
 
@@ -2504,10 +2525,11 @@ mod tests {
                     setup_scripts_timed_out: 0,
                     passed: 5,
                     passed_slow: 0,
+                    passed_timed_out: 0,
                     flaky: 0,
                     failed: 0,
                     failed_slow: 0,
-                    timed_out: 0,
+                    failed_timed_out: 0,
                     leaky: 0,
                     leaky_failed: 0,
                     exec_failed: 0,
@@ -2540,10 +2562,11 @@ mod tests {
                     setup_scripts_timed_out: 0,
                     passed: 5,
                     passed_slow: 1,
+                    passed_timed_out: 2,
                     flaky: 1,
                     failed: 2,
                     failed_slow: 0,
-                    timed_out: 1,
+                    failed_timed_out: 1,
                     leaky: 1,
                     leaky_failed: 0,
                     exec_failed: 1,
@@ -2627,10 +2650,11 @@ mod tests {
                     setup_scripts_timed_out: 0,
                     passed: 0,
                     passed_slow: 0,
+                    passed_timed_out: 0,
                     flaky: 0,
                     failed: 0,
                     failed_slow: 0,
-                    timed_out: 0,
+                    failed_timed_out: 0,
                     leaky: 0,
                     leaky_failed: 0,
                     exec_failed: 0,
@@ -2687,10 +2711,11 @@ mod tests {
                                 setup_scripts_timed_out: 0,
                                 passed: 17,
                                 passed_slow: 4,
+                                passed_timed_out: 3,
                                 flaky: 2,
                                 failed: 2,
                                 failed_slow: 1,
-                                timed_out: 1,
+                                failed_timed_out: 1,
                                 leaky: 1,
                                 leaky_failed: 2,
                                 exec_failed: 1,
