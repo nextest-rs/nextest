@@ -971,6 +971,9 @@ fn test_override_timeout_result() -> Result<()> {
 
     let (instance_statuses, run_stats) = execute_collect(runner);
 
+    println!("run_stats: {:?}", run_stats);
+    println!("profile: {profile:?}");
+
     assert_eq!(run_stats.passed_timed_out, 1, "only 1 test should pass");
     assert_eq!(run_stats.failed_timed_out, 2, "only 2 tests should fail");
 
