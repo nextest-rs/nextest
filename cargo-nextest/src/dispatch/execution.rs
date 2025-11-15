@@ -612,7 +612,7 @@ impl App {
             }
         };
 
-        let cap_strat = if no_capture {
+        let cap_strat = if no_capture || runner_opts.debugger.is_some() {
             CaptureStrategy::None
         } else if matches!(message_format, MessageFormat::Human) {
             CaptureStrategy::Split
@@ -629,8 +629,11 @@ impl App {
         // Make the runner and reporter builders. Do them now so warnings are
         // emitted before we start doing the build.
         let runner_builder = runner_opts.to_builder(cap_strat);
-        let mut reporter_builder =
-            reporter_opts.to_builder(runner_opts.no_run, no_capture, should_colorize);
+        let mut reporter_builder = reporter_opts.to_builder(
+            runner_opts.no_run,
+            no_capture || runner_opts.debugger.is_some(),
+            should_colorize,
+        );
         reporter_builder.set_verbose(self.base.output.verbose);
 
         let filter_exprs =
@@ -651,10 +654,41 @@ impl App {
 
         let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
 
+        // Validate debugger mode requirements.
+        if let Some(debugger) = &runner_opts.debugger {
+            let test_count = test_list.run_count();
+
+            if test_count == 0 {
+                return Err(ExpectedError::DebuggerNoTests {
+                    debugger: debugger.clone(),
+                });
+            } else if test_count > 1 {
+                // Collect the first 8 matching test instances for the error
+                // message.
+                let test_instances: Vec<_> = test_list
+                    .iter_tests()
+                    .filter(|test| test.test_info.filter_match.is_match())
+                    .take(8)
+                    .map(|test| test.id().to_owned())
+                    .collect();
+
+                return Err(ExpectedError::DebuggerTooManyTests {
+                    debugger: debugger.clone(),
+                    test_count,
+                    test_instances,
+                });
+            }
+        }
+
         let output = output_writer.reporter_output();
 
-        let signal_handler = SignalHandlerKind::Standard;
-        let input_handler = if reporter_opts.no_input_handler {
+        let signal_handler = if runner_opts.debugger.is_some() {
+            SignalHandlerKind::DebuggerMode
+        } else {
+            SignalHandlerKind::Standard
+        };
+
+        let input_handler = if reporter_opts.no_input_handler || runner_opts.debugger.is_some() {
             InputHandlerKind::Noop
         } else {
             // This means that the input handler determines whether it should be

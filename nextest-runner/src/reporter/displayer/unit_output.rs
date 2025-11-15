@@ -73,6 +73,7 @@ pub(super) struct ChildOutputSpec {
 pub(super) struct UnitOutputReporter {
     force_success_output: Option<TestOutputDisplay>,
     force_failure_output: Option<TestOutputDisplay>,
+    force_exec_fail_output: Option<TestOutputDisplay>,
     display_empty_outputs: bool,
 }
 
@@ -80,6 +81,7 @@ impl UnitOutputReporter {
     pub(super) fn new(
         force_success_output: Option<TestOutputDisplay>,
         force_failure_output: Option<TestOutputDisplay>,
+        force_exec_fail_output: Option<TestOutputDisplay>,
     ) -> Self {
         // Ordinarily, empty stdout and stderr are not displayed. This
         // environment variable is set in integration tests to ensure that they
@@ -90,6 +92,7 @@ impl UnitOutputReporter {
         Self {
             force_success_output,
             force_failure_output,
+            force_exec_fail_output,
             display_empty_outputs,
         }
     }
@@ -100,6 +103,10 @@ impl UnitOutputReporter {
 
     pub(super) fn failure_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
         self.force_failure_output.unwrap_or(test_setting)
+    }
+
+    pub(super) fn exec_fail_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
+        self.force_exec_fail_output.unwrap_or(test_setting)
     }
 
     // These are currently only used by tests, but there's no principled

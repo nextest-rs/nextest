@@ -6,6 +6,7 @@ use crate::{
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     helpers::dylib_path_envvar,
     list::{RustBuildMeta, TestListState},
+    runner::DebuggerCommand,
     test_output::CaptureStrategy,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -62,8 +63,13 @@ impl TestCommand {
         cwd: &Utf8Path,
         package: &PackageMetadata<'_>,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
+        debugger: Option<&DebuggerCommand>,
     ) -> Self {
-        let mut cmd = create_command(program.clone(), args, lctx.double_spawn);
+        let mut cmd = if let Some(debugger_cmd) = debugger {
+            create_command_with_debugger(program.clone(), args, debugger_cmd)
+        } else {
+            create_command(program.clone(), args, lctx.double_spawn)
+        };
 
         // NB: we will always override user-provided environment variables with the
         // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
@@ -139,8 +145,12 @@ impl TestCommand {
         &mut self.command
     }
 
-    pub(crate) fn spawn(self, capture_strategy: CaptureStrategy) -> std::io::Result<imp::Child> {
-        let res = imp::spawn(self.command, capture_strategy);
+    pub(crate) fn spawn(
+        self,
+        capture_strategy: CaptureStrategy,
+        stdin_passthrough: bool,
+    ) -> std::io::Result<imp::Child> {
+        let res = imp::spawn(self.command, capture_strategy, stdin_passthrough);
         if let Some(ctx) = self.double_spawn {
             ctx.finish();
         }
@@ -180,6 +190,28 @@ where
         cmd.args(args.into_iter().map(|arg| arg.as_ref().to_owned()));
         cmd
     }
+}
+
+pub(crate) fn create_command_with_debugger<I, S>(
+    program: String,
+    args: I,
+    debugger: &DebuggerCommand,
+) -> std::process::Command
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    // When creating a command with a debugger, we do not use the double-spawn
+    // mechanism. Double-spawn is used to solve races between rapid process
+    // creation and SIGTSTP, but with a debugger we're creating processes
+    // serially so this is not really a concern.
+
+    let mut cmd = std::process::Command::new(debugger.program());
+    cmd.args(debugger.args());
+    cmd.arg(&program);
+    cmd.args(args.into_iter().map(|arg| arg.as_ref().to_owned()));
+
+    cmd
 }
 
 fn apply_package_env(cmd: &mut std::process::Command, package: &PackageMetadata<'_>) {

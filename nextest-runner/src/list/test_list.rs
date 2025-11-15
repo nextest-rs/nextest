@@ -15,6 +15,7 @@ use crate::{
     indenter::indented,
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
     reuse_build::PathMapper,
+    runner::DebuggerCommand,
     target_runner::{PlatformRunner, TargetRunner},
     test_command::{LocalExecuteContext, TestCommand, TestCommandPhase},
     test_filter::{BinaryMismatchReason, FilterBinaryMatch, FilterBound, TestFilterBuilder},
@@ -964,6 +965,7 @@ impl RustTestArtifact<'_> {
             &self.cwd,
             &self.package,
             &self.non_test_binaries,
+            None, // Debuggers are not used during the test list phase.
         );
 
         let output =
@@ -1135,6 +1137,7 @@ impl<'a> TestInstance<'a> {
         test_list: &TestList<'_>,
         wrapper_script: Option<&'a WrapperScriptConfig>,
         extra_args: &[String],
+        debugger: Option<&DebuggerCommand>,
     ) -> TestCommand {
         // TODO: non-rust tests
 
@@ -1176,6 +1179,7 @@ impl<'a> TestInstance<'a> {
             &self.suite_info.cwd,
             &self.suite_info.package,
             &self.suite_info.non_test_binaries,
+            debugger,
         )
     }
 }
@@ -1300,6 +1304,36 @@ impl TestInstanceId<'_> {
 impl fmt::Display for TestInstanceId<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}", self.binary_id, self.test_name)
+    }
+}
+
+/// An owned version of [`TestInstanceId`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OwnedTestInstanceId {
+    /// The binary ID.
+    pub binary_id: RustBinaryId,
+
+    /// The name of the test.
+    pub test_name: String,
+}
+
+impl OwnedTestInstanceId {
+    /// Borrow this as a [`TestInstanceId`].
+    pub fn as_ref(&self) -> TestInstanceId<'_> {
+        TestInstanceId {
+            binary_id: &self.binary_id,
+            test_name: &self.test_name,
+        }
+    }
+}
+
+impl TestInstanceId<'_> {
+    /// Convert this to an owned version.
+    pub fn to_owned(&self) -> OwnedTestInstanceId {
+        OwnedTestInstanceId {
+            binary_id: self.binary_id.clone(),
+            test_name: self.test_name.to_string(),
+        }
     }
 }
 

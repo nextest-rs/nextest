@@ -717,6 +717,19 @@ impl StressCountParseError {
     }
 }
 
+/// An error that occurred while parsing a debugger command.
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum DebuggerCommandParseError {
+    /// The command string could not be parsed as shell words.
+    #[error(transparent)]
+    ShellWordsParse(shell_words::ParseError),
+
+    /// The command was empty.
+    #[error("debugger command cannot be empty")]
+    EmptyCommand,
+}
+
 /// Error returned while parsing a [`TestThreads`](crate::config::elements::TestThreads) value.
 #[derive(Clone, Debug, Error)]
 #[error(

@@ -110,14 +110,19 @@ impl DisplayReporterBuilder {
             ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
         };
 
-        // failure_output and success_output are meaningless if the runner isn't capturing any
-        // output.
+        // success_output is meaningless if the runner isn't capturing any
+        // output. However, failure output is still meaningful for exec fail
+        // events.
         let force_success_output = match self.no_capture {
             true => Some(TestOutputDisplay::Never),
             false => self.success_output,
         };
         let force_failure_output = match self.no_capture {
             true => Some(TestOutputDisplay::Never),
+            false => self.failure_output,
+        };
+        let force_exec_fail_output = match self.no_capture {
+            true => Some(TestOutputDisplay::Immediate),
             false => self.failure_output,
         };
 
@@ -141,7 +146,11 @@ impl DisplayReporterBuilder {
                 styles,
                 theme_characters,
                 cancel_status: None,
-                unit_output: UnitOutputReporter::new(force_success_output, force_failure_output),
+                unit_output: UnitOutputReporter::new(
+                    force_success_output,
+                    force_failure_output,
+                    force_exec_fail_output,
+                ),
                 final_outputs: DebugIgnore(Vec::new()),
             },
             stderr,
@@ -776,9 +785,17 @@ impl<'a> DisplayReporterImpl<'a> {
             } => {
                 let describe = run_statuses.describe();
                 let last_status = run_statuses.last_status();
-                let test_output_display = match last_status.result.is_success() {
-                    true => self.unit_output.success_output(*success_output),
-                    false => self.unit_output.failure_output(*failure_output),
+                let test_output_display = match last_status.result {
+                    ExecutionResult::Pass
+                    | ExecutionResult::Leak {
+                        result: LeakTimeoutResult::Pass,
+                    } => self.unit_output.success_output(*success_output),
+                    ExecutionResult::Leak {
+                        result: LeakTimeoutResult::Fail,
+                    }
+                    | ExecutionResult::Fail { .. }
+                    | ExecutionResult::Timeout => self.unit_output.failure_output(*failure_output),
+                    ExecutionResult::ExecFail => self.unit_output.exec_fail_output(*failure_output),
                 };
 
                 let output_on_test_finished = self.status_levels.compute_output_on_test_finished(

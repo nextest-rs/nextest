@@ -5,8 +5,8 @@ use crate::{
     errors::ConfigureHandleInheritanceError,
     reporter::events::{UnitState, UnitTerminateMethod, UnitTerminateReason, UnitTerminatingState},
     runner::{
-        InternalTerminateReason, RunUnitQuery, RunUnitRequest, ShutdownRequest, SignalRequest,
-        TerminateChildResult, UnitContext,
+        ChildPid, InternalTerminateReason, RunUnitQuery, RunUnitRequest, ShutdownRequest,
+        SignalRequest, TerminateChildResult, UnitContext,
     },
     signal::{ShutdownEvent, ShutdownSignalEvent},
     test_command::ChildAccumulator,
@@ -88,6 +88,7 @@ pub(super) async fn terminate_child<'a>(
     cx: &UnitContext<'a>,
     child: &mut Child,
     child_acc: &mut ChildAccumulator,
+    _child_pid: ChildPid,
     reason: InternalTerminateReason,
     stopwatch: &mut StopwatchStart,
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,

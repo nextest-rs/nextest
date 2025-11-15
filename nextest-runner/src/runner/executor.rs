@@ -11,7 +11,7 @@
 //! just a better abstraction, it also provides a better user experience (less
 //! inconsistent state).
 
-use super::HandleSignalResult;
+use super::{ChildPid, DebuggerCommand, HandleSignalResult};
 use crate::{
     config::{
         core::EvaluatableProfile,
@@ -67,9 +67,11 @@ pub(super) struct ExecutorContext<'a> {
     capture_strategy: CaptureStrategy,
     // This is Some if the user specifies a retry policy over the command-line.
     force_retries: Option<RetryPolicy>,
+    debugger: Option<DebuggerCommand>,
 }
 
 impl<'a> ExecutorContext<'a> {
+    #[expect(clippy::too_many_arguments)]
     pub(super) fn new(
         run_id: ReportUuid,
         profile: &'a EvaluatableProfile<'a>,
@@ -78,6 +80,7 @@ impl<'a> ExecutorContext<'a> {
         target_runner: TargetRunner,
         capture_strategy: CaptureStrategy,
         force_retries: Option<RetryPolicy>,
+        debugger: Option<DebuggerCommand>,
     ) -> Self {
         Self {
             run_id,
@@ -87,6 +90,7 @@ impl<'a> ExecutorContext<'a> {
             target_runner,
             capture_strategy,
             force_retries,
+            debugger,
         }
     }
 
@@ -389,6 +393,13 @@ impl<'a> ExecutorContext<'a> {
             .id()
             .expect("child has never been polled so must return a PID");
 
+        // Debuggers are not supported for setup scripts, so we always create a
+        // new process group.
+        #[cfg(unix)]
+        let child_pid_for_kill = ChildPid::ProcessGroup(child_pid);
+        #[cfg(not(unix))]
+        let child_pid_for_kill = ChildPid::Process(child_pid);
+
         // Fire the USDT probe for setup script start.
         crate::fire_usdt!(UsdtSetupScriptStart {
             id: script
@@ -472,6 +483,7 @@ impl<'a> ExecutorContext<'a> {
                                 &cx,
                                 &mut child,
                                 &mut child_acc,
+                                child_pid_for_kill,
                                 InternalTerminateReason::Timeout,
                                 stopwatch,
                                 req_rx,
@@ -500,6 +512,8 @@ impl<'a> ExecutorContext<'a> {
                                     &cx,
                                     &mut child,
                                     &mut child_acc,
+                                    child_pid_for_kill,
+                                    self.debugger.is_some(),
                                     req,
                                     stopwatch,
                                     interval_sleep.as_mut(),
@@ -660,6 +674,7 @@ impl<'a> ExecutorContext<'a> {
             self.test_list,
             test.settings.run_wrapper(),
             test.settings.run_extra_args(),
+            self.debugger.as_ref(),
         );
 
         let command_mut = cmd.command_mut();
@@ -696,27 +711,49 @@ impl<'a> ExecutorContext<'a> {
             command_mut.env("NEXTEST_TEST_GROUP_SLOT", "none");
         }
 
-        command_mut.stdin(Stdio::null());
         test.setup_script_data.apply(
             &test.test_instance.to_test_query(),
             &self.profile.filterset_ecx(),
             command_mut,
         );
-        super::os::set_process_group(command_mut);
+        if self.debugger.is_none() {
+            // If a debugger is active, we want the child (debugger) process to
+            // have terminal control. In order to do that, we must ensure that a
+            // process group is *not* created for the child. (The alternative is
+            // to do a tcsetpgrp dance which seems both unnecessarily
+            // complicated and somewhat unreliable, particularly around SIGTSTP
+            // and SIGCONT).
+            super::os::set_process_group(command_mut);
+        }
 
-        // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
-        // best-effort thing.
+        // If creating a job fails, we might be on an old system. Ignore this --
+        // job objects are a best-effort thing.
         let job = super::os::create_job().ok();
 
         // Capture program and args before spawn moves cmd
         let program = cmd.program().to_owned();
         let args = cmd.args().to_owned();
 
+        if self.debugger.is_some() {
+            // Print out the command being executed -- this can be helpful to
+            // tell how a debugger is being invoked.
+            let command = cmd.command_mut();
+            let actual_program = command.get_program().to_string_lossy();
+            let actual_args = command
+                .get_args()
+                .map(|arg| arg.to_string_lossy())
+                .collect::<Vec<_>>();
+            tracing::info!(
+                "executing debugger command: {}",
+                shell_words::join(std::iter::once(&actual_program).chain(&actual_args))
+            );
+        }
+
         let crate::test_command::Child {
             mut child,
             child_fds,
         } = cmd
-            .spawn(self.capture_strategy)
+            .spawn(self.capture_strategy, self.debugger.is_some())
             .map_err(|error| ChildStartError::Spawn(Arc::new(error)))?;
 
         // Note: The PID stored here must be used with care -- it might be
@@ -726,6 +763,18 @@ impl<'a> ExecutorContext<'a> {
         let child_pid = child
             .id()
             .expect("child has never been polled so must return a PID");
+
+        // If a debugger is active, we do not create a process group for the
+        // child. So we must ensure that kill is called with a positive PID
+        // (process) rather than a negative one (process group).
+        #[cfg(unix)]
+        let child_pid_for_kill = if self.debugger.is_some() {
+            ChildPid::Process(child_pid)
+        } else {
+            ChildPid::ProcessGroup(child_pid)
+        };
+        #[cfg(not(unix))]
+        let child_pid_for_kill = ChildPid::Process(child_pid);
 
         crate::fire_usdt!(UsdtTestAttemptStart {
             attempt_id: test.test_instance.id().attempt_id(
@@ -762,6 +811,9 @@ impl<'a> ExecutorContext<'a> {
         let slow_timeout = test.settings.slow_timeout();
         let leak_timeout = test.settings.leak_timeout();
 
+        // When running under a debugger, disable all timeouts.
+        let debugger_active = self.debugger.is_some();
+
         // Use a pausable_sleep rather than an interval here because it's much
         // harder to pause and resume an interval.
         let mut interval_sleep = std::pin::pin!(crate::time::pausable_sleep(slow_timeout.period));
@@ -781,7 +833,7 @@ impl<'a> ExecutorContext<'a> {
                         // The test finished executing.
                         break res;
                     }
-                    _ = &mut interval_sleep, if status.is_none() => {
+                    _ = &mut interval_sleep, if status.is_none() && !debugger_active => {
                         // Mark the test as slow.
                         cx.slow_after = Some(slow_timeout.period);
 
@@ -815,6 +867,7 @@ impl<'a> ExecutorContext<'a> {
                                 &cx,
                                 &mut child,
                                 &mut child_acc,
+                                child_pid_for_kill,
                                 InternalTerminateReason::Timeout,
                                 stopwatch,
                                 req_rx,
@@ -842,6 +895,8 @@ impl<'a> ExecutorContext<'a> {
                                     &cx,
                                     &mut child,
                                     &mut child_acc,
+                                    child_pid_for_kill,
+                                    self.debugger.is_some(),
                                     req,
                                     stopwatch,
                                     interval_sleep.as_mut(),
@@ -903,16 +958,21 @@ impl<'a> ExecutorContext<'a> {
                 })
             });
 
-            let leak_info = detect_fd_leaks(
-                &cx,
-                child_pid,
-                &mut child_acc,
-                tentative_status,
-                leak_timeout,
-                stopwatch,
-                req_rx,
-            )
-            .await;
+            let leak_info = if debugger_active {
+                // Skip leak detection when running under a debugger.
+                LeakDetectInfo::SkippedForDebugger
+            } else {
+                detect_fd_leaks(
+                    &cx,
+                    child_pid,
+                    &mut child_acc,
+                    tentative_status,
+                    leak_timeout,
+                    stopwatch,
+                    req_rx,
+                )
+                .await
+            };
 
             (res, leak_info)
         };
@@ -930,6 +990,7 @@ impl<'a> ExecutorContext<'a> {
         let (leaked, time_to_close) = match leak_info {
             LeakDetectInfo::NoLeak { time_to_close } => (false, Some(time_to_close)),
             LeakDetectInfo::Leaked => (true, None),
+            LeakDetectInfo::SkippedForDebugger => (false, None),
         };
 
         let exec_result = status.unwrap_or_else(|| {
@@ -1295,6 +1356,8 @@ enum LeakDetectInfo {
     },
     /// Leak detected. File descriptors did not close before timeout.
     Leaked,
+    /// Leak detection skipped because a debugger is active.
+    SkippedForDebugger,
 }
 
 /// After a child process has exited, detect if it leaked file handles by
@@ -1383,6 +1446,8 @@ async fn handle_signal_request<'a>(
     cx: &UnitContext<'a>,
     child: &mut Child,
     child_acc: &mut ChildAccumulator,
+    child_pid_for_kill: ChildPid,
+    #[cfg_attr(not(unix), expect(unused))] debugger_active: bool,
     req: SignalRequest,
     stopwatch: &mut StopwatchStart,
     #[cfg_attr(not(unix), expect(unused_mut, unused_variables))] mut interval_sleep: Pin<
@@ -1399,7 +1464,17 @@ async fn handle_signal_request<'a>(
             // debounced in the main signal handler.
             stopwatch.pause();
             interval_sleep.as_mut().pause();
-            super::os::job_control_child(child, crate::signal::JobControlEvent::Stop);
+
+            // When a debugger is active, don't send SIGTSTP to the child. The
+            // child (debugger) will receive it directly from the terminal.
+            if !debugger_active {
+                super::os::job_control_child(
+                    child,
+                    child_pid_for_kill,
+                    crate::signal::JobControlEvent::Stop,
+                );
+            }
+
             // The receiver being dead probably means the main thread panicked
             // or similar.
             let _ = sender.send(());
@@ -1412,7 +1487,16 @@ async fn handle_signal_request<'a>(
             if stopwatch.is_paused() {
                 stopwatch.resume();
                 interval_sleep.as_mut().resume();
-                super::os::job_control_child(child, crate::signal::JobControlEvent::Continue);
+
+                // Always send SIGCONT to the child, even when a debugger is
+                // active. This avoids a race where the child wakes up before
+                // the parent and receives SIGTTIN when trying to read from the
+                // terminal.
+                super::os::job_control_child(
+                    child,
+                    child_pid_for_kill,
+                    crate::signal::JobControlEvent::Continue,
+                );
             }
             HandleSignalResult::JobControl
         }
@@ -1421,6 +1505,7 @@ async fn handle_signal_request<'a>(
                 cx,
                 child,
                 child_acc,
+                child_pid_for_kill,
                 InternalTerminateReason::Signal(event),
                 stopwatch,
                 req_rx,

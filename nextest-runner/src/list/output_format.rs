@@ -51,8 +51,9 @@ impl SerializableFormat {
     }
 }
 
+/// Styles for displaying test list output.
 #[derive(Clone, Debug, Default)]
-pub(crate) struct Styles {
+pub struct Styles {
     pub(crate) binary_id: Style,
     pub(crate) test_name: Style,
     pub(crate) module_path: Style,
@@ -61,7 +62,8 @@ pub(crate) struct Styles {
 }
 
 impl Styles {
-    pub(crate) fn colorize(&mut self) {
+    /// Colorizes the styles for terminal output.
+    pub fn colorize(&mut self) {
         self.binary_id = Style::new().magenta().bold();
         self.test_name = Style::new().blue().bold();
         self.field = Style::new().yellow().bold();
