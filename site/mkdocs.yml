@@ -83,6 +83,7 @@ nav:
           - docs/installation/release-urls.md
     - "Using nextest":
           - docs/running.md
+          - docs/selecting.md
           - docs/listing.md
           - docs/reporting.md
     - "Features":

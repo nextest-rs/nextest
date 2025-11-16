@@ -7,7 +7,7 @@ icon: material/account-filter
 Nextest supports a domain-specific language (DSL) for choosing sets of tests called **filtersets** (formerly **filter expressions**). The DSL is inspired by [Bazel's query language](https://bazel.build/query/quickstart), and
 is most similar to _revsets_ as implemented in the [Jujutsu](https://martinvonz.github.io/jj/latest/revsets/) and [Mercurial](https://www.mercurial-scm.org/repo/hg/help/revsets) source control systems.
 
-Filtersets are specified on the command line with `-E`, or `--filterset` <!-- md:version 0.9.76 -->. (In prior versions of nextest, use `--filter-expr`.)
+Filtersets are specified on the command line with `-E` or `--filterset`.
 
 ## Example: Running all tests in a crate and its dependencies
 
@@ -58,7 +58,7 @@ cargo nextest run -E 'test(my_test) + package(my-crate)'
 
 <!-- md:version 0.9.77 -->
 
-If [a default filter](../running.md#running-a-subset-of-tests-by-default) for tests is configured,
+If [a default filter](../selecting.md#running-a-subset-of-tests-by-default) for tests is configured,
 filtersets on the command line are intersected with the default filter.
 
 To match against all tests, not just the default set, pass in `--ignore-default-filter`.

@@ -36,10 +36,10 @@ This section contains the full set of operators supported by the filterset DSL.
 : Include all tests in binary names matching `name-matcher`. For unit tests, the binary name is the same as the name of the crate. Otherwise, it's the name of the integration test, benchmark, or binary target.
 
 `platform(host)` or `platform(target)`
-: Include all tests that are [built for the host or target platform](../running.md#filtering-by-build-platform), respectively.
+: Include all tests that are [built for the host or target platform](../selecting.md#filtering-by-build-platform), respectively.
 
 `default()` <!-- md:version 0.9.75 -->
-: The default set of tests to run; see [_Running a subset of tests by default_](../running.md#running-a-subset-of-tests-by-default) for more information.
+: The default set of tests to run; see [_Running a subset of tests by default_](../selecting.md#running-a-subset-of-tests-by-default) for more information.
 
 !!! tip "Binary exclusions"
 

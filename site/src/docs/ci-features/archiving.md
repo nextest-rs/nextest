@@ -147,7 +147,7 @@ See [this working example](https://github.com/nextest-rs/reuse-build-partition-e
 
 ## Example: Cross-compilation
 
-While cross-compiling code, some tests may need to be run on the host platform. (See [_Filtering by build platform_](../running.md#filtering-by-build-platform) for more.)
+While cross-compiling code, some tests may need to be run on the host platform. (See [_Filtering by build platform_](../selecting.md#filtering-by-build-platform) for more.)
 
 ### On the build machine
 

@@ -59,7 +59,7 @@ With this configuration:
 
 ### Host tests
 
-While cross-compiling code, some tests may need to be run on the host platform. (See the note about [Filtering by build platform](../running.md#filtering-by-build-platform) for more.)
+While cross-compiling code, some tests may need to be run on the host platform. (See the note about [Filtering by build platform](../selecting.md#filtering-by-build-platform) for more.)
 
 For tests that run on the host platform, to figure out if an override applies nextest will compute the result of the _target_ filter against the _host_ platform. (If the `host` key is specified, it will be considered as well based on the AND semantics listed above.)
 

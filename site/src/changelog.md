@@ -1,5 +1,6 @@
 ---
 icon: material/list-box
+description: Changelog for cargo-nextest.
 toc_depth: 1
 ---
 
@@ -7,6 +8,27 @@ toc_depth: 1
 
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
+
+## Unreleased
+
+### Added
+
+- Nextest now supports running tests under a debugger! Use `--debugger` to run a single test under gdb, lldb, WinDbg, CodeLLDB in Visual Studio Code, and other debuggers. For more information, see [_Debugger integration_](https://nexte.st/docs/integrations/debuggers/).
+
+### Changed
+
+- Nextest now sets `NEXTEST_BIN_EXE_*` environment variables with hyphens in binary names replaced by underscores, in addition to the existing variables with hyphens. This works around some shells and debuggers that drop environment variables containing hyphens. ([#2777])
+
+### Fixed
+
+- Fixed a panic when attempting to display progress during retries. ([#2771])
+- With [stress tests](https://nexte.st/docs/features/stress-tests/), the progress bar no longer overwrites unrelated output. ([#2765])
+- During [the list phase](https://nexte.st/docs/listing/), invalid output lines with control characters in them are now properly escaped. ([#2772])
+
+[#2777]: https://github.com/nextest-rs/nextest/pull/2777
+[#2771]: https://github.com/nextest-rs/nextest/pull/2771
+[#2765]: https://github.com/nextest-rs/nextest/pull/2765
+[#2772]: https://github.com/nextest-rs/nextest/pull/2772
 
 ## [0.9.111] - 2025-11-04
 

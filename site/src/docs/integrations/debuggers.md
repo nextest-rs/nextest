@@ -1,5 +1,6 @@
 ---
 icon: material/debug-step-over
+description: Integrating with gdb, lldb, Visual Studio Code, and other debuggers.
 ---
 
 # Debugger integration
@@ -8,8 +9,8 @@ icon: material/debug-step-over
 
 With nextest, you can run individual tests under a text-based or graphical debugger. Supported debuggers include:
 
-* [GDB](https://sourceware.org/gdb/)
-* [LLDB](https://lldb.llvm.org/)
+* [gdb](https://sourceware.org/gdb/)
+* [lldb](https://lldb.llvm.org/)
 * [WinDbg](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/)
 * [CodeLLDB](https://github.com/vadimcn/codelldb) in Visual Studio Code, via [`codelldb-launch`](https://github.com/vadimcn/codelldb/tree/master/src/codelldb-launch).
 
@@ -25,13 +26,13 @@ In debugger mode, nextest will:
 
 ## Examples
 
-Run the test matching `my_test` under [GDB](https://sourceware.org/gdb/), using `rust-gdb`:
+Run the test matching `my_test` under [gdb](https://sourceware.org/gdb/), using `rust-gdb`:
 
 ```sh
 cargo nextest run --debugger "rust-gdb --args" my_test
 ```
 
-Run the test matching `my_test` under [LLDB](https://lldb.llvm.org/), using `rust-lldb`:
+Run the test matching `my_test` under [lldb](https://lldb.llvm.org/), using `rust-lldb`:
 
 ```sh
 cargo nextest run --debugger "rust-lldb --" my_test

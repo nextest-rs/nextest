@@ -47,7 +47,7 @@ cargo nextest list
 
 <!-- md:version 0.9.75 -->
 
-`cargo nextest list` has the same behavior as `run` with default sets; see [_Running a subset of tests by default_](running.md#running-a-subset-of-tests-by-default) for more information.
+`cargo nextest list` has the same behavior as `run` with default filters; see [_Running a subset of tests by default_](selecting.md#running-a-subset-of-tests-by-default) for more information.
 
 ## Options and arguments
 

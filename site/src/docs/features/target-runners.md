@@ -40,7 +40,7 @@ cargo nextest run --target x86_64-pc-windows-msvc
 
 ## Cross-compiling
 
-While cross-compiling code, some tests may need to be run on the host platform. (See [_Filtering by build platform_](../running.md#filtering-by-build-platform) for more.)
+While cross-compiling code, some tests may need to be run on the host platform. (See [_Filtering by build platform_](../selecting.md#filtering-by-build-platform) for more.)
 
 For tests that run on the host platform, nextest uses the target runner defined for the host.
 

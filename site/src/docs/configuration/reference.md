@@ -75,7 +75,7 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 
 - **Type**: String (filterset expression)
 - **Description**: The default set of tests to run
-- **Documentation**: [_Running a subset of tests by default_](../running.md#running-a-subset-of-tests-by-default)
+- **Documentation**: [_Running a subset of tests by default_](../selecting.md#running-a-subset-of-tests-by-default)
 - **Default**: `all()`: all tests are run
 - **Example**: `default-filter = "not test(very_slow_tests)"`
 
@@ -326,7 +326,7 @@ At least one of these filters must be specified.
 
 - **Type**: String (filterset expression)
 - **Description**: Override the default filter for specific platforms
-- **Documentation**: [_Running a subset of tests by default_](../running.md#running-a-subset-of-tests-by-default)
+- **Documentation**: [_Running a subset of tests by default_](../selecting.md#running-a-subset-of-tests-by-default)
 - **Note**: Can only be used with `platform` specification
 
 #### `priority`

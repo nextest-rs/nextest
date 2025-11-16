@@ -47,7 +47,7 @@ for more information.
 : In [JUnit reports](../machine-readable/junit.md), whether to store output for passing and failing tests, respectively.
 
 `default-filter` <!-- md:version 0.9.84 -->
-: The [default filter](../running.md#running-a-subset-of-tests-by-default) on this platform. Only supported for overrides that specify `platform` and not `filter`.
+: The [default filter](../selecting.md#running-a-subset-of-tests-by-default) on this platform. Only supported for overrides that specify `platform` and not `filter`.
 
 `run-extra-args` <!-- md:version 0.9.86 -->
 : [Extra arguments](extra-args.md) to pass to the test binary.
