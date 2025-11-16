@@ -5,7 +5,7 @@ description: Integrating with gdb, lldb, Visual Studio Code, and other debuggers
 
 # Debugger integration
 
-<!-- md:version 0.9.112 -->
+<!-- md:version 0.9.113 -->
 
 With nextest, you can run individual tests under a text-based or graphical debugger. Supported debuggers include:
 

@@ -9,11 +9,7 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.113-b.1] - 2025-11-16
-
-This is a test release.
-
-## [0.9.112] - 2025-11-16
+## [0.9.113] - 2025-11-16
 
 ### Added
 
@@ -29,10 +25,18 @@ This is a test release.
 - With [stress tests](https://nexte.st/docs/features/stress-tests/), the progress bar no longer overwrites unrelated output. ([#2765])
 - During [the list phase](https://nexte.st/docs/listing/), invalid output lines with control characters in them are now properly escaped. ([#2772])
 
+### Other
+
+- Nextest's GitHub releases are now marked immutable, so for a particular version, its release binaries can't be changed by anybody after publication. (Release binaries have never changed as a matter of policy. The improvement here is that for 0.9.113 and future versions, this fact is now cryptographically attested by GitHub.)
+
 [#2777]: https://github.com/nextest-rs/nextest/pull/2777
 [#2771]: https://github.com/nextest-rs/nextest/pull/2771
 [#2765]: https://github.com/nextest-rs/nextest/pull/2765
 [#2772]: https://github.com/nextest-rs/nextest/pull/2772
+ 
+## [0.9.112] - 2025-11-16
+
+This version was not published due to a GitHub release issue.
 
 ## [0.9.111] - 2025-11-04
 
@@ -1664,6 +1668,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.113]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.113
 [0.9.112]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.112
 [0.9.111]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.111
 [0.9.110]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.110

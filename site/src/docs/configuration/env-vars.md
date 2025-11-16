@@ -112,7 +112,7 @@ Nextest exposes these environment variables to your tests _at runtime only_. The
 
     When [reusing builds](../ci-features/archiving.md) from an archive, this is set to the remapped path within the target directory.
     
-    <!-- md:version 0.9.112 --> Because some shells and [debuggers](../integrations/debuggers.md) drop [environment variables with hyphens in their names](https://unix.stackexchange.com/a/23714), nextest also sets an alternative form of these variables where hyphens in the name are replaced with underscores. For example, for a binary named `my-program`, the environment variable `NEXTEST_BIN_EXE_my_program` is also set to the absolute path of the executable.
+    <!-- md:version 0.9.113 --> Because some shells and [debuggers](../integrations/debuggers.md) drop [environment variables with hyphens in their names](https://unix.stackexchange.com/a/23714), nextest also sets an alternative form of these variables where hyphens in the name are replaced with underscores. For example, for a binary named `my-program`, the environment variable `NEXTEST_BIN_EXE_my_program` is also set to the absolute path of the executable.
 
 `NEXTEST_LD_*` and `NEXTEST_DYLD_*`
 : Replicate the values of any environment variables that start with the prefixes `LD_` or `DYLD_`, such as `LD_PRELOAD` or `DYLD_FALLBACK_LIBRARY_PATH`.
