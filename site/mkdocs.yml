@@ -16,8 +16,10 @@ theme:
         - navigation.sections
         - navigation.footer
         - navigation.instant
+        - navigation.instant.prefetch
+        - navigation.instant.preview
         - navigation.instant.progress
-          # Makes "summarized/full" and "colorized/plaintext" tabs linked
+        # Makes "summarized/full" and "colorized/plaintext" tabs linked
         - content.tabs.link
         - content.action.edit
         - content.action.view
