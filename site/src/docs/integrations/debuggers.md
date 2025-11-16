@@ -17,7 +17,7 @@ Many other debuggers should work out of the box as well.
 
 In debugger mode, nextest will:
 
-* Do the same [environment setup](../configuration/env-vars.md#environment-variables-nextest-sets) that happens while running tests, including those created by [setup scripts](../configuration/setup-scripts.md#environment-variables)
+* Do the same [environment setup](../configuration/env-vars.md#environment-variables-nextest-sets) that happens while running tests, including environment variables defined by [setup scripts](../configuration/setup-scripts.md#environment-variables).
 * Disable [timeouts](../features/slow-tests.md) so that they don't interfere with the debugging process.
 * Turn off [keyboard input handling such as `t`](../reporting.md#live-output), and on Unix, most signal handling.
 * Disable output capturing, similar to the `--no-capture` argument.
