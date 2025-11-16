@@ -22,6 +22,8 @@ jobs:
           prefix: internal-test
           title: $prefix $version
           branch: main
+          # Uploads can't be made to immutable releases, so we set this to draft for now.
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:

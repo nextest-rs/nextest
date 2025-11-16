@@ -9,6 +9,10 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.113-b.1] - 2025-11-16
+
+This is a test release.
+
 ## [0.9.112] - 2025-11-16
 
 ### Added

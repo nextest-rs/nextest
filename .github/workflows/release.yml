@@ -99,6 +99,8 @@ jobs:
           changelog: site/src/changelog.md
           title: $prefix $version
           branch: main
+          # Uploads can't be made to immutable releases, so we set this to draft for now.
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
@@ -398,3 +400,5 @@ jobs:
           PUBLISH_CARGO_NEXTEST=1 ./scripts/cargo-release-publish.sh
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          NEXTEST_TAG: ${{ github.ref_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
