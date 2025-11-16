@@ -17,6 +17,10 @@ path = "test-helpers/build-seed-archive.rs"
 name = "rustc-shim"
 path = "test-helpers/rustc-shim.rs"
 
+[[bin]]
+name = "fake-debugger"
+path = "test-helpers/fake-debugger.rs"
+
 [[test]]
 name = "custom-harness"
 harness = false

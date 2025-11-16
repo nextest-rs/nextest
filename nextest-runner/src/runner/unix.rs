@@ -1,7 +1,9 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{InternalTerminateReason, ShutdownRequest, TerminateChildResult, UnitContext};
+use super::{
+    ChildPid, InternalTerminateReason, ShutdownRequest, TerminateChildResult, UnitContext,
+};
 use crate::{
     errors::ConfigureHandleInheritanceError,
     reporter::events::{
@@ -45,18 +47,15 @@ pub(super) fn assign_process_to_job(
     Ok(())
 }
 
-pub(super) fn job_control_child(child: &Child, event: JobControlEvent) {
-    if let Some(pid) = child.id() {
-        let pid = pid as i32;
-        // Send the signal to the process group.
+pub(super) fn job_control_child(child: &Child, child_pid: ChildPid, event: JobControlEvent) {
+    if child.id().is_some() {
+        // Send the signal to the process or process group.
         let signal = match event {
             JobControlEvent::Stop => SIGTSTP,
             JobControlEvent::Continue => SIGCONT,
         };
         unsafe {
-            // We set up a process group while starting the test -- now send a signal to that
-            // group.
-            libc::kill(-pid, signal);
+            libc::kill(child_pid.for_kill(), signal);
         }
     } else {
         // The child exited already -- don't send a signal.
@@ -79,6 +78,7 @@ pub(super) async fn terminate_child<'a>(
     cx: &UnitContext<'a>,
     child: &mut Child,
     child_acc: &mut ChildAccumulator,
+    child_pid: ChildPid,
     reason: InternalTerminateReason,
     stopwatch: &mut StopwatchStart,
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
@@ -89,7 +89,6 @@ pub(super) async fn terminate_child<'a>(
         return TerminateChildResult::Exited;
     };
 
-    let pid_i32 = pid as i32;
     let (term_reason, term_method) = to_terminate_reason_and_method(&reason, grace_period);
 
     // This is infallible in regular mode and fallible with cfg(test).
@@ -102,11 +101,7 @@ pub(super) async fn terminate_child<'a>(
         }
     };
 
-    unsafe {
-        // We set up a process group while starting the test -- now send a signal to that
-        // group.
-        libc::kill(-pid_i32, term_signal.signal())
-    };
+    unsafe { libc::kill(child_pid.for_kill(), term_signal.signal()) };
 
     if term_signal == UnitTerminateSignal::Kill {
         // SIGKILL guarantees the process group is dead.
@@ -135,7 +130,7 @@ pub(super) async fn terminate_child<'a>(
                         sleep.as_mut().pause();
                         waiting_stopwatch.pause();
 
-                        job_control_child(child, JobControlEvent::Stop);
+                        job_control_child(child, child_pid, JobControlEvent::Stop);
                         let _ = sender.send(());
                     }
                     RunUnitRequest::Signal(SignalRequest::Continue) => {
@@ -145,14 +140,14 @@ pub(super) async fn terminate_child<'a>(
                             sleep.as_mut().resume();
                             waiting_stopwatch.resume();
                         }
-                        job_control_child(child, JobControlEvent::Continue);
+                        job_control_child(child, child_pid, JobControlEvent::Continue);
                     }
                     RunUnitRequest::Signal(SignalRequest::Shutdown(_)) => {
                         // Receiving a shutdown signal while in this state always means kill
                         // immediately.
                         unsafe {
-                            // Send SIGKILL to the entire process group.
-                            libc::kill(-pid_i32, SIGKILL);
+                            // Send SIGKILL to the process or process group.
+                            libc::kill(child_pid.for_kill(), SIGKILL);
                         }
                         break TerminateChildResult::Killed;
                     }
@@ -183,8 +178,8 @@ pub(super) async fn terminate_child<'a>(
             _ = &mut sleep => {
                 // The process didn't exit -- need to do a hard shutdown.
                 unsafe {
-                    // Send SIGKILL to the entire process group.
-                    libc::kill(-pid_i32, SIGKILL);
+                    // Send SIGKILL to the process or process group.
+                    libc::kill(child_pid.for_kill(), SIGKILL);
                 }
                 break TerminateChildResult::Killed;
             }

@@ -312,12 +312,14 @@ impl LogStyles {
 pub struct StderrStyles {
     pub(crate) bold: Style,
     pub(crate) warning_text: Style,
+    pub(crate) list_styles: nextest_runner::list::Styles,
 }
 
 impl StderrStyles {
     fn colorize(&mut self) {
         self.bold = style().bold();
         self.warning_text = style().yellow();
+        self.list_styles.colorize();
     }
 }
 

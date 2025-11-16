@@ -40,8 +40,13 @@ pub(crate) struct Child {
 pub(super) fn spawn(
     mut cmd: std::process::Command,
     strategy: CaptureStrategy,
+    stdin_passthrough: bool,
 ) -> std::io::Result<Child> {
-    cmd.stdin(Stdio::null());
+    if stdin_passthrough {
+        cmd.stdin(Stdio::inherit());
+    } else {
+        cmd.stdin(Stdio::null());
+    }
 
     let combined_rx: Option<PipeReader> = match strategy {
         CaptureStrategy::None => None,

@@ -15,6 +15,11 @@ pub enum SignalHandlerKind {
     /// platform.
     Standard,
 
+    /// Debugger mode signal handler. Only handles termination signals (SIGTERM,
+    /// SIGHUP) to allow graceful cleanup. Other signals are ignored by nextest
+    /// and are expected to be handled by the debugger.
+    DebuggerMode,
+
     /// A no-op signal handler. Useful for tests.
     Noop,
 }
@@ -23,6 +28,7 @@ impl SignalHandlerKind {
     pub(crate) fn build(self) -> Result<SignalHandler, SignalHandlerSetupError> {
         match self {
             Self::Standard => SignalHandler::new(),
+            Self::DebuggerMode => SignalHandler::debugger_mode(),
             Self::Noop => Ok(SignalHandler::noop()),
         }
     }
@@ -39,6 +45,15 @@ impl SignalHandler {
     #[cfg(any(unix, windows))]
     pub(crate) fn new() -> Result<Self, SignalHandlerSetupError> {
         let signals = imp::Signals::new()?;
+        Ok(Self {
+            signals: Some(signals),
+        })
+    }
+
+    /// Creates a new `SignalHandler` for debugger mode that only handles termination signals.
+    #[cfg(any(unix, windows))]
+    pub(crate) fn debugger_mode() -> Result<Self, SignalHandlerSetupError> {
+        let signals = imp::Signals::debugger_mode()?;
         Ok(Self {
             signals: Some(signals),
         })
@@ -113,6 +128,45 @@ mod imp {
             Ok(Self {
                 map,
                 sigquit_as_info,
+            })
+        }
+
+        /// Creates a signal handler for debugger mode.
+        ///
+        /// SIGINT and SIGQUIT are set to SIG_IGN so nextest ignores them. The
+        /// debugger will also receive these signals and will handle them as
+        /// appropriate.
+        ///
+        /// SIGTSTP and SIGCONT are handled for internal bookkeeping (pausing/
+        /// resuming timers) but are not propagated to child processes.
+        pub(super) fn debugger_mode() -> io::Result<Self> {
+            use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction};
+
+            // Set SIGINT and SIGQUIT to SIG_IGN so nextest ignores them
+            // and they only affect the debugger process.
+            let ignore_action =
+                SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty());
+
+            unsafe {
+                let _ = sigaction(Signal::SIGINT, &ignore_action);
+                let _ = sigaction(Signal::SIGQUIT, &ignore_action);
+            }
+
+            let mut map = StreamMap::new();
+
+            // Set up termination signals and job control signals.
+            // Job control signals are handled for internal bookkeeping but not
+            // propagated to children.
+            map.extend([
+                (SignalId::Hup, signal_stream(SignalKind::hangup())?),
+                (SignalId::Term, signal_stream(SignalKind::terminate())?),
+                (SignalId::Tstp, signal_stream(tstp_kind())?),
+                (SignalId::Cont, signal_stream(cont_kind())?),
+            ]);
+
+            Ok(Self {
+                map,
+                sigquit_as_info: false,
             })
         }
 
@@ -193,6 +247,18 @@ mod imp {
             Ok(Self {
                 ctrl_c,
                 ctrl_c_done: false,
+            })
+        }
+
+        /// Creates a signal handler for debugger mode.
+        /// On Windows, we don't handle Ctrl-C in debugger mode, allowing the debugger to handle it.
+        pub(super) fn debugger_mode() -> std::io::Result<Self> {
+            // Create a ctrl_c handler but mark it as done immediately,
+            // so recv() will always return None
+            let ctrl_c = ctrl_c()?;
+            Ok(Self {
+                ctrl_c,
+                ctrl_c_done: true,
             })
         }
 

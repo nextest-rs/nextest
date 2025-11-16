@@ -7,11 +7,17 @@ use indent_write::indentable::Indented;
 use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
-use nextest_runner::{errors::*, helpers::plural, redact::Redactor};
+use nextest_runner::{
+    errors::*,
+    helpers::{DisplayTestInstance, plural},
+    list::OwnedTestInstanceId,
+    redact::Redactor,
+    runner::DebuggerCommand,
+};
 use owo_colors::OwoColorize;
 use semver::Version;
 use std::{error::Error, io, path::PathBuf, process::ExitStatus, string::FromUtf8Error};
-use swrite::{SWrite, swriteln};
+use swrite::{SWrite, swrite, swriteln};
 use thiserror::Error;
 use tracing::{Level, error, info};
 
@@ -215,6 +221,20 @@ pub enum ExpectedError {
         /// The no-tests-run error was chosen because it was the default (we show a hint in this
         /// case)
         is_default: bool,
+    },
+    #[error(
+        "--debugger requires exactly one test, but \
+         no tests were selected"
+    )]
+    DebuggerNoTests { debugger: DebuggerCommand },
+    #[error(
+        "--debugger requires exactly one test, but \
+         {test_count} tests were selected"
+    )]
+    DebuggerTooManyTests {
+        debugger: DebuggerCommand,
+        test_count: usize,
+        test_instances: Vec<OwnedTestInstanceId>,
     },
     #[cfg(feature = "self-update")]
     #[error("failed to parse --version")]
@@ -458,6 +478,7 @@ impl ExpectedError {
             Self::SetupScriptFailed => NextestExitCode::SETUP_SCRIPT_FAILED,
             Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
             Self::NoTestsRun { .. } => NextestExitCode::NO_TESTS_RUN,
+            Self::DebuggerNoTests { .. } | Self::DebuggerTooManyTests { .. } => NextestExitCode::SETUP_ERROR,
             Self::ArchiveCreateError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
             Self::WriteTestListError { .. }
             | Self::WriteEventError { .. }
@@ -877,6 +898,45 @@ impl ExpectedError {
                     ""
                 };
                 error!("no tests to run{hint_str}");
+                None
+            }
+            Self::DebuggerNoTests { debugger: _ } => {
+                error!("--debugger requires exactly one test, but no tests were selected");
+                None
+            }
+            Self::DebuggerTooManyTests {
+                debugger: _,
+                test_count,
+                test_instances,
+            } => {
+                let mut msg = format!(
+                    "--debugger requires exactly one test, but {} {} were selected:",
+                    test_count.style(styles.bold),
+                    plural::tests_str(*test_count)
+                );
+
+                for test_instance in test_instances {
+                    let display = DisplayTestInstance::new(
+                        None,
+                        None,
+                        test_instance.as_ref(),
+                        &styles.list_styles,
+                    );
+                    swrite!(msg, "\n  {}", display);
+                }
+
+                if *test_count > test_instances.len() {
+                    let remaining = test_count - test_instances.len();
+                    swrite!(
+                        msg,
+                        "\n  ... and {} more {}",
+                        remaining.style(styles.bold),
+                        plural::tests_str(remaining)
+                    );
+                }
+
+                error!("{}", msg);
+
                 None
             }
             Self::ShowTestGroupsError { err } => {

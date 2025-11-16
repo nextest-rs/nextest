@@ -10,8 +10,8 @@ use crate::{
     },
     double_spawn::DoubleSpawnInfo,
     errors::{
-        ConfigureHandleInheritanceError, StressCountParseError, TestRunnerBuildError,
-        TestRunnerExecuteErrors,
+        ConfigureHandleInheritanceError, DebuggerCommandParseError, StressCountParseError,
+        TestRunnerBuildError, TestRunnerExecuteErrors,
     },
     input::{InputHandler, InputHandlerKind, InputHandlerStatus},
     list::{TestInstanceWithSettings, TestList},
@@ -36,6 +36,70 @@ use tokio::{
 };
 use tracing::{debug, warn};
 
+/// A parsed debugger command.
+#[derive(Clone, Debug)]
+pub struct DebuggerCommand {
+    program: String,
+    args: Vec<String>,
+}
+
+impl DebuggerCommand {
+    /// Gets the program.
+    pub fn program(&self) -> &str {
+        // The from_str constructor ensures that there is at least one part.
+        &self.program
+    }
+
+    /// Gets the arguments.
+    pub fn args(&self) -> &[String] {
+        &self.args
+    }
+}
+
+impl FromStr for DebuggerCommand {
+    type Err = DebuggerCommandParseError;
+
+    fn from_str(command: &str) -> Result<Self, Self::Err> {
+        let mut parts =
+            shell_words::split(command).map_err(DebuggerCommandParseError::ShellWordsParse)?;
+        if parts.is_empty() {
+            return Err(DebuggerCommandParseError::EmptyCommand);
+        }
+        let program = parts.remove(0);
+        Ok(Self {
+            program,
+            args: parts,
+        })
+    }
+}
+
+/// A child process identifier: either a single process or a process group.
+#[derive(Copy, Clone, Debug)]
+pub(super) enum ChildPid {
+    /// A single process ID.
+    Process(#[cfg_attr(not(unix), expect(unused))] u32),
+
+    /// A process group ID.
+    #[cfg(unix)]
+    ProcessGroup(u32),
+}
+
+impl ChildPid {
+    /// Returns the PID value to use with `libc::kill`.
+    ///
+    /// - `Process(pid)` returns `pid as i32` (positive, kills single process).
+    /// - `ProcessGroup(pid)` returns `-(pid as i32)` (negative, kills process group).
+    ///
+    /// On Windows, always returns `pid as i32`.
+    #[cfg(unix)]
+    pub(super) fn for_kill(self) -> i32 {
+        match self {
+            ChildPid::Process(pid) => pid as i32,
+            ChildPid::ProcessGroup(pid) => -(pid as i32),
+        }
+    }
+}
+
 /// Test runner options.
 #[derive(Debug, Default)]
 pub struct TestRunnerBuilder {
@@ -44,6 +108,7 @@ pub struct TestRunnerBuilder {
     max_fail: Option<MaxFail>,
     test_threads: Option<TestThreads>,
     stress_condition: Option<StressCondition>,
+    debugger: Option<DebuggerCommand>,
 }
 
 impl TestRunnerBuilder {
@@ -83,6 +148,12 @@ impl TestRunnerBuilder {
     /// Sets the stress testing condition.
     pub fn set_stress_condition(&mut self, stress_condition: StressCondition) -> &mut Self {
         self.stress_condition = Some(stress_condition);
+        self
+    }
+
+    /// Sets the debugger to use for running tests.
+    pub fn set_debugger(&mut self, debugger: DebuggerCommand) -> &mut Self {
+        self.debugger = Some(debugger);
         self
     }
 
@@ -132,6 +203,7 @@ impl TestRunnerBuilder {
                 cli_args,
                 max_fail,
                 stress_condition: self.stress_condition,
+                debugger: self.debugger,
                 runtime,
             },
             signal_handler,
@@ -283,6 +355,7 @@ struct TestRunnerInner<'a> {
     cli_args: Vec<String>,
     max_fail: MaxFail,
     stress_condition: Option<StressCondition>,
+    debugger: Option<DebuggerCommand>,
     runtime: Runtime,
 }
 
@@ -299,6 +372,13 @@ impl<'a> TestRunnerInner<'a> {
     {
         // TODO: add support for other test-running approaches, measure performance.
 
+        // Disable the global timeout when a debugger is active.
+        let global_timeout = if self.debugger.is_some() {
+            crate::time::far_future_duration()
+        } else {
+            self.profile.global_timeout().period
+        };
+
         let mut dispatcher_cx = DispatcherContext::new(
             callback,
             self.run_id,
@@ -306,7 +386,7 @@ impl<'a> TestRunnerInner<'a> {
             self.cli_args.clone(),
             self.test_list.run_count(),
             self.max_fail,
-            self.profile.global_timeout().period,
+            global_timeout,
             self.stress_condition.clone(),
         );
 
@@ -318,6 +398,7 @@ impl<'a> TestRunnerInner<'a> {
             self.target_runner.clone(),
             self.capture_strategy,
             self.force_retries,
+            self.debugger.clone(),
         );
 
         // Send the initial event.
@@ -613,5 +694,30 @@ mod tests {
             .unwrap();
         assert_eq!(runner.inner.capture_strategy, CaptureStrategy::None);
         assert_eq!(runner.inner.test_threads, 1, "tests run serially");
+    }
+
+    #[test]
+    fn test_debugger_command_parsing() {
+        // Valid commands
+        let cmd = DebuggerCommand::from_str("gdb --args").unwrap();
+        assert_eq!(cmd.program(), "gdb");
+        assert_eq!(cmd.args(), &["--args"]);
+
+        let cmd = DebuggerCommand::from_str("rust-gdb -ex run --args").unwrap();
+        assert_eq!(cmd.program(), "rust-gdb");
+        assert_eq!(cmd.args(), &["-ex", "run", "--args"]);
+
+        // With quotes
+        let cmd = DebuggerCommand::from_str(r#"gdb -ex "set print pretty on" --args"#).unwrap();
+        assert_eq!(cmd.program(), "gdb");
+        assert_eq!(cmd.args(), &["-ex", "set print pretty on", "--args"]);
+
+        // Empty command
+        let err = DebuggerCommand::from_str("").unwrap_err();
+        assert!(matches!(err, DebuggerCommandParseError::EmptyCommand));
+
+        // Whitespace only
+        let err = DebuggerCommand::from_str("   ").unwrap_err();
+        assert!(matches!(err, DebuggerCommandParseError::EmptyCommand));
     }
 }

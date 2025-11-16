@@ -99,7 +99,8 @@ pub mod plural {
     }
 }
 
-pub(crate) struct DisplayTestInstance<'a> {
+/// A helper for displaying test instances with formatting.
+pub struct DisplayTestInstance<'a> {
     stress_index: Option<StressIndex>,
     display_counter_index: Option<DisplayCounterIndex>,
     instance: TestInstanceId<'a>,
@@ -108,7 +109,8 @@ pub(crate) struct DisplayTestInstance<'a> {
 }
 
 impl<'a> DisplayTestInstance<'a> {
-    pub(crate) fn new(
+    /// Creates a new display formatter for a test instance.
+    pub fn new(
         stress_index: Option<StressIndex>,
         display_counter_index: Option<DisplayCounterIndex>,
         instance: TestInstanceId<'a>,
@@ -374,16 +376,31 @@ impl fmt::Display for DisplayStressIndex {
     }
 }
 
-pub(super) enum DisplayCounterIndex {
-    Counter { current: usize, total: usize },
-    Padded { character: char, width: usize },
+/// Counter index display for test instances.
+pub enum DisplayCounterIndex {
+    /// A counter with current and total counts.
+    Counter {
+        /// Current count.
+        current: usize,
+        /// Total count.
+        total: usize,
+    },
+    /// A padded display.
+    Padded {
+        /// Character to use for padding.
+        character: char,
+        /// Width to pad to.
+        width: usize,
+    },
 }
 
 impl DisplayCounterIndex {
+    /// Creates a new counter display.
     pub fn new_counter(current: usize, total: usize) -> Self {
         Self::Counter { current, total }
     }
 
+    /// Creates a new padded display.
     pub fn new_padded(character: char, width: usize) -> Self {
         Self::Padded { character, width }
     }

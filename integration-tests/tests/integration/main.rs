@@ -32,6 +32,7 @@ use nextest_metadata::{BuildPlatform, NextestExitCode, TestListSummary};
 use std::{borrow::Cow, fs::File, io::Write};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
 
+mod debugger;
 mod fixtures;
 mod large_alloc;
 mod stuck_signal;

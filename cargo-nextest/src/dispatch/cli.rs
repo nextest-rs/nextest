@@ -34,7 +34,7 @@ use nextest_runner::{
         TestOutputDisplay,
     },
     reuse_build::ReuseBuildInfo,
-    runner::{StressCondition, StressCount, TestRunnerBuilder},
+    runner::{DebuggerCommand, StressCondition, StressCount, TestRunnerBuilder},
     test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
     test_output::CaptureStrategy,
 };
@@ -675,13 +675,29 @@ pub struct TestRunnerOpts {
     )]
     max_fail: Option<MaxFail>,
 
+    /// Debug a single test using a text-based or graphical debugger.
+    ///
+    /// Debugger mode automatically:
+    ///
+    /// - disables timeouts
+    /// - disables output capture
+    /// - passes standard input through to the debugger
+    ///
+    /// Example: `--debugger "rust-gdb --args"`
+    #[arg(
+        long,
+        value_name = "DEBUGGER",
+        conflicts_with_all = ["stress_condition", "no-run"]
+    )]
+    pub(super) debugger: Option<DebuggerCommand>,
+
     /// Behavior if there are no tests to run [default: fail]
     #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
     pub(super) no_tests: Option<NoTestsBehavior>,
 
     /// Stress testing options
     #[clap(flatten)]
-    stress: StressOptions,
+    pub(super) stress: StressOptions,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -747,6 +763,10 @@ impl TestRunnerOpts {
             builder.set_stress_condition(condition.stress_condition());
         }
 
+        if let Some(debugger) = &self.debugger {
+            builder.set_debugger(debugger.clone());
+        }
+
         Some(builder)
     }
 }
@@ -780,16 +800,16 @@ pub(super) enum MessageFormat {
 
 #[derive(Debug, Default, Args)]
 #[command(next_help_heading = "Stress testing options")]
-struct StressOptions {
+pub(super) struct StressOptions {
     /// Stress testing condition.
     #[clap(flatten)]
-    condition: Option<StressConditionOpt>,
+    pub(super) condition: Option<StressConditionOpt>,
     // TODO: modes other than serial
 }
 
 #[derive(Clone, Debug, Default, Args)]
 #[group(id = "stress_condition", multiple = false)]
-struct StressConditionOpt {
+pub(super) struct StressConditionOpt {
     /// The number of times to run each test, or `infinite` to run indefinitely.
     #[arg(long, value_name = "COUNT")]
     stress_count: Option<StressCount>,
@@ -1493,6 +1513,21 @@ mod tests {
             ("cargo nextest run --stress-count 0", ValueValidation),
             // Invalid stress duration: 0
             ("cargo nextest run --stress-duration 0m", ValueValidation),
+            // ---
+            // --debugger conflicts with stress testing and --no-run
+            // ---
+            (
+                "cargo nextest run --debugger gdb --stress-count 4",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest run --debugger gdb --stress-duration 1h",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest run --debugger gdb --no-run",
+                ArgumentConflict,
+            ),
         ];
 
         // Unset all NEXTEST_ env vars because they can conflict with the try_parse_from below.
