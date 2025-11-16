@@ -114,10 +114,21 @@ impl TestCommand {
 
         apply_ld_dyld_env(&mut cmd, lctx.dylib_path);
 
-        // Expose paths to non-test binaries at runtime so that relocated paths work.
-        // These paths aren't exposed by Cargo at runtime, so use a NEXTEST_BIN_EXE prefix.
+        // Expose paths to non-test binaries at runtime so that relocated paths
+        // work. These paths aren't exposed by Cargo at runtime, so use a
+        // NEXTEST_BIN_EXE prefix.
         for (name, path) in non_test_binaries {
+            // Some shells and debuggers have been known to drop environment
+            // variables with hyphens in their names. Provide an alternative
+            // name with underscores instead.
+            //
+            // See
+            // https://unix.stackexchange.com/questions/23659/can-shell-variable-name-include-a-hyphen-or-dash.
+            let with_underscores = name.replace('-', "_");
             cmd.env(format!("NEXTEST_BIN_EXE_{name}"), path);
+            if &with_underscores != name {
+                cmd.env(format!("NEXTEST_BIN_EXE_{with_underscores}"), path);
+            }
         }
 
         let double_spawn = lctx.double_spawn.spawn_context();

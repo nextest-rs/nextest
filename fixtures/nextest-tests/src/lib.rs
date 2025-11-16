@@ -10,6 +10,9 @@ use std::path::Path;
 pub fn test_execute_bin_helper() {
     let binary_path = std::env::var("NEXTEST_BIN_EXE_nextest-tests")
         .expect("NEXTEST_BIN_EXE_nextest-tests should be present");
+    let with_underscores = std::env::var("NEXTEST_BIN_EXE_nextest_tests")
+        .expect("NEXTEST_BIN_EXE_nextest_tests (with underscores) should be present");
+    assert_eq!(binary_path, with_underscores);
     assert!(
         Path::new(&binary_path).is_absolute(),
         "binary path {} is absolute",
