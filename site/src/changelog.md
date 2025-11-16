@@ -9,13 +9,13 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## Unreleased
+## [0.9.112] - 2025-11-16
 
 ### Added
 
-- Nextest now supports running tests under a debugger! Use `--debugger` to run a single test under gdb, lldb, WinDbg, CodeLLDB in Visual Studio Code, and other debuggers. For more information, see [_Debugger integration_](https://nexte.st/docs/integrations/debuggers/).
+- Nextest now supports running tests [under a debugger](https://nexte.st/docs/integrations/debuggers/). Use `--debugger` to run a single test under gdb, lldb, WinDbg, CodeLLDB in Visual Studio Code, and other debuggers, while preserving all the environment setup done by nextest.
 
-### Changed
+  Nextest's debugger support will likely see some iteration and improvements over time. If it's missing a feature, please [open a feature request](https://github.com/nextest-rs/nextest/discussions/new?category=feature-requests), or even better, [send a pull request](https://github.com/nextest-rs/nextest/pulls)!
 
 - Nextest now sets [`NEXTEST_BIN_EXE_*` environment variables](https://nexte.st/docs/configuration/env-vars/#environment-variables-nextest-sets) with hyphens in binary names replaced by underscores, in addition to the existing variables with hyphens. This works around some shells and debuggers that drop environment variables containing hyphens. ([#2777])
 
@@ -1660,6 +1660,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.112]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.112
 [0.9.111]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.111
 [0.9.110]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.110
 [0.9.109]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.109

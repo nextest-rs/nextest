@@ -202,6 +202,8 @@ Some tests may need to be modified to handle changes in the workspace and target
 
 - To obtain the path to a crate's executables, Cargo provides the [`CARGO_BIN_EXE_<name>`] option to integration tests at build time. To handle target directory remapping, use the value of `NEXTEST_BIN_EXE_<name>` at runtime.
 
+  <!-- md:version 0.9.112 --> Because some shells and [debuggers](../integrations/debuggers.md) drop [environment variables with hyphens in their names](https://unix.stackexchange.com/a/23714), nextest also sets `NEXTEST_BIN_EXE_<name>`, where hyphens in the name are replaced with underscores. This form is now recommended.
+
   To retain compatibility with `cargo test`, you can fall back to the value of `CARGO_BIN_EXE_<name>` at build time.
 
 [`CARGO_BIN_EXE_<name>`]: https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates

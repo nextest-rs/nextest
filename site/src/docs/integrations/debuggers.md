@@ -24,6 +24,8 @@ In debugger mode, nextest will:
 * Disable output capturing, similar to the `--no-capture` argument.
 * Pass through standard input to the debugger for interactive terminal use.
 
+Debugger mode is intended primarily for interactive use, so some of the specifics of how the environment is set up may be tweaked over time.
+
 ## Examples
 
 Run the test matching `my_test` under [gdb](https://sourceware.org/gdb/), using `rust-gdb`:
@@ -50,7 +52,7 @@ Debugging tests with [CodeLLDB](https://github.com/vadimcn/codelldb) in Visual S
 
 Install the [CodeLLDB extension](https://marketplace.visualstudio.com/items?itemName=vadimcn.vscode-lldb) if you haven't already.
 
-Then, install `codelldb-launch`:
+Then, install [the `codelldb-launch` tool](https://github.com/vadimcn/codelldb/tree/master/src/codelldb-launch):
 
 ```
 cargo install --locked --git https://github.com/vadimcn/codelldb codelldb-launch
