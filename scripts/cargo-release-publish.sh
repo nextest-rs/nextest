@@ -35,10 +35,6 @@ if [[ $PUBLISH_CARGO_NEXTEST == "1" ]]; then
 
     # Publish cargo-nextest.
     cargo release publish --publish --execute --no-confirm -p cargo-nextest
-
-    # Mark the release as published (must be done as the very last step, since
-    # releases are immutable).
-    gh release edit $NEXTEST_TAG --draft=false
 fi
 
 git checkout -

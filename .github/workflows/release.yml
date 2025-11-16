@@ -342,6 +342,14 @@ jobs:
         uses: taiki-e/install-action@0be4756f42223b67aa4b7df5effad59010cbf4b9 # v2
         with:
           tool: cargo-release@0.25.0
+      # The GitHub release must be marked as published (immutable) before Mukti
+      # metadata is generated, since that fetches release artifacts based on the
+      # tag name (which isn't available until the release is created).
+      - name: Mark GitHub release published
+        run: |
+          gh release edit ${{ github.ref_name }} --draft=false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Download mukti
         run: |
           mkdir -p ~/bin
@@ -400,5 +408,3 @@ jobs:
           PUBLISH_CARGO_NEXTEST=1 ./scripts/cargo-release-publish.sh
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          NEXTEST_TAG: ${{ github.ref_name }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
