@@ -17,7 +17,7 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
 ### Changed
 
-- Nextest now sets `NEXTEST_BIN_EXE_*` environment variables with hyphens in binary names replaced by underscores, in addition to the existing variables with hyphens. This works around some shells and debuggers that drop environment variables containing hyphens. ([#2777])
+- Nextest now sets [`NEXTEST_BIN_EXE_*` environment variables](https://nexte.st/docs/configuration/env-vars/#environment-variables-nextest-sets) with hyphens in binary names replaced by underscores, in addition to the existing variables with hyphens. This works around some shells and debuggers that drop environment variables containing hyphens. ([#2777])
 
 ### Fixed
 
