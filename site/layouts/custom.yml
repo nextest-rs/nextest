@@ -6,6 +6,9 @@ definitions:
           {{ page.meta.get("title", page.title) }}
         {%- endif -%}
 
+    - &page_icon >-
+        {{ page.meta.get("icon", config.site_icon) or "" }}
+
     - &page_description >-
         {{ page.meta.get("description", config.site_description) or "" }}
 
@@ -46,6 +49,11 @@ layers:
           font:
               family: Inter
               style: Regular
+    - size: { width: 144, height: 144 }
+      offset: { x: 992, y: 64 }
+      icon:
+          value: *page_icon
+          color: white
 
 tags:
     og:type: website
