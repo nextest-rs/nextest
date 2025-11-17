@@ -43,8 +43,7 @@ should be expected to do.
     units of work.
 
 Nextest's core runner loop consists of two main components, the _dispatcher_ and
-the _executor_. These components do not share state directly—instead, both
-components are event-driven and use message passing to communicate with each
+the _executor_. These components do not share state directly—instead, they use the actor model. The components (actors) are event-driven and use message passing to communicate with each
 other.
 
 ## The dispatcher { #dispatcher }
