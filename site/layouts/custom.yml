@@ -1,0 +1,63 @@
+definitions:
+    - &page_title_with_site_name >-
+        {%- if not page.is_homepage -%}
+          {{ page.meta.get("title", page.title) }} - {{ config.site_name }}
+        {%- else -%}
+          {{ page.meta.get("title", page.title) }}
+        {%- endif -%}
+
+    - &page_description >-
+        {{ page.meta.get("description", config.site_description) or "" }}
+
+size: { width: 1200, height: 630 }
+layers:
+    - background:
+          color: "#045"
+    - size: { width: 832, height: 50 }
+      offset: { x: 62, y: 70 }
+      typography:
+          content: "cargo-nextest"
+          align: start
+          color: white
+          font:
+              family: Inter Tight
+              style: SemiBold
+    - size: { width: 832, height: 310 }
+      offset: { x: 62, y: 160 }
+      typography:
+          content: "{{ page.title }}"
+          align: start
+          color: white
+          line:
+              amount: 3
+              height: 1.25
+          font:
+              family: Inter Tight
+              style: Bold
+    - size: { width: 832, height: 110 }
+      offset: { x: 62, y: 450 }
+      typography:
+          content: *page_description
+          align: start
+          color: white
+          line:
+              amount: 3
+              height: 1.25
+          font:
+              family: Inter
+              style: Regular
+
+tags:
+    og:type: website
+    og:title: *page_title_with_site_name
+    og:description: *page_description
+    og:image: "{{ image.url }}"
+    og:image:type: "{{ image.type }}"
+    og:image:width: "{{ image.width }}"
+    og:image:height: "{{ image.height }}"
+    og:url: "{{ page.canonical_url }}"
+
+    twitter:card: summary_large_image
+    twitter:title: *page_title_with_site_name
+    twitter:description: *page_description
+    twitter:image: "{{ image.url }}"
