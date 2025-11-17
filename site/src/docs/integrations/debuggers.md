@@ -1,13 +1,15 @@
 ---
 icon: material/debug-step-over
-description: Integrating with gdb, lldb, Visual Studio Code, and other debuggers.
+description: Integrating with gdb, lldb, Visual Studio Code, and other debuggers, and with syscall tracers like strace and truss.
 ---
 
 # Debugger integration
 
 <!-- md:version 0.9.113 -->
 
-With nextest, you can run individual tests under a text-based or graphical debugger. Supported debuggers include:
+With nextest, you can run individual tests under a text-based or graphical debugger, or a syscall tracer.
+
+Supported debuggers include:
 
 * [gdb](https://sourceware.org/gdb/)
 * [lldb](https://lldb.llvm.org/)
@@ -15,6 +17,11 @@ With nextest, you can run individual tests under a text-based or graphical debug
 * [CodeLLDB](https://github.com/vadimcn/codelldb) in Visual Studio Code, via [`codelldb-launch`](https://github.com/vadimcn/codelldb/tree/master/src/codelldb-launch).
 
 Many other debuggers should work out of the box as well.
+
+Supported syscall tracers include:
+
+* [strace](https://strace.io/) on Linux
+* truss and/or dtruss on other Unix platforms
 
 In debugger mode, nextest will:
 
@@ -27,6 +34,8 @@ In debugger mode, nextest will:
 Debugger mode is intended primarily for interactive use, so some of the specifics of how the environment is set up may be tweaked over time.
 
 ## Examples
+
+### Debuggers
 
 Run the test matching `my_test` under [gdb](https://sourceware.org/gdb/), using `rust-gdb`:
 
@@ -44,6 +53,30 @@ Run the test matching `my_test` under [WinDbg](https://learn.microsoft.com/en-us
 
 ```sh
 cargo nextest run --debugger windbgx my_test
+```
+
+### Syscall tracers
+
+Log all system calls performed by the test matching `my_test`:
+
+```sh
+# Linux
+cargo nextest run --debugger strace my_test
+# macOS
+cargo nextest run --debugger dtruss my_test
+# illumos and other platforms with truss
+cargo nextest run --debugger truss my_test
+```
+
+These utilities accept a variety of options for filtering and redirecting output; see their corresponding man pages for more information. For example, to also follow any child processes your test might create:
+
+```sh
+# Linux
+cargo nextest run --debugger "strace -f" my_test
+# macOS
+cargo nextest run --debugger "dtruss -f" my_test
+# illumos and other platforms with truss
+cargo nextest run --debugger "truss -f" my_test
 ```
 
 ### Debugging tests in Visual Studio Code
