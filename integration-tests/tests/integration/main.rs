@@ -20,7 +20,7 @@
 //!
 //! To solve this issue, we introduce a "cargo-nextest-dup" binary which is exactly the same as
 //! cargo-nextest, except it isn't used as the actual test runner. We refer to it with
-//! `NEXTEST_BIN_EXE_cargo-nextest-dup`.
+//! `NEXTEST_BIN_EXE_cargo_nextest_dup`.
 
 use camino::{Utf8Path, Utf8PathBuf};
 use fixture_data::{models::RunProperty, nextest_tests::EXPECTED_TEST_SUITES};
@@ -1681,7 +1681,7 @@ fn test_rustc_version_verbose_errors() {
     set_env_vars();
 
     // Set RUSTC to the shim.
-    let shim_rustc = std::env::var("NEXTEST_BIN_EXE_rustc-shim").unwrap();
+    let shim_rustc = std::env::var("NEXTEST_BIN_EXE_rustc_shim").unwrap();
 
     let mut command = CargoNextestCli::for_test();
     command
