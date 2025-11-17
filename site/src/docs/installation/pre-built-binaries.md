@@ -1,5 +1,6 @@
 ---
 icon: material/download
+description: Installing pre-built nextest binaries with cargo-binstall or platform-specific commands.
 ---
 
 # Installing pre-built binaries

@@ -1,6 +1,7 @@
 ---
 icon: material/microsoft-windows
 title: Windows
+description: "Performance tips for nextest on Windows: Dev Drive and antivirus exclusions."
 ---
 
 # Nextest on Windows

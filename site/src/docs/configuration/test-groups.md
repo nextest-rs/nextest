@@ -1,5 +1,6 @@
 ---
 icon: material/set-none
+description: Defining logical mutexes or semaphores for subsets of tests; running tests serially; global and group slot numbers.
 ---
 
 # Test groups for mutual exclusion

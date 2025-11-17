@@ -1,6 +1,7 @@
 ---
 icon: material/apple
 title: macOS
+description: "Performance tips for nextest on macOS: Gatekeeper and Developer Tools."
 ---
 
 # Nextest on macOS

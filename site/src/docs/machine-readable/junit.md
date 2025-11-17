@@ -1,5 +1,6 @@
 ---
 icon: material/xml
+description: Producing JUnit/XUnit XML output for test results.
 ---
 
 # JUnit support

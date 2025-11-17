@@ -1,5 +1,6 @@
 ---
 icon: material/tag-outline
+description: Setting required and recommended nextest versions in .config/nextest.toml.
 ---
 
 # Minimum nextest versions

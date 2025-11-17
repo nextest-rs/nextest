@@ -1,5 +1,6 @@
 ---
 icon: octicons/gear-24
+description: Writing custom test harnesses that work with nextest, using libtest-mimic or through manual implementation.
 ---
 
 # Custom test harnesses

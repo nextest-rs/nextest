@@ -1,5 +1,6 @@
 ---
 icon: material/reload
+description: Retrying failed tests with optional delays and backoff, and handling flaky tests.
 ---
 
 # Retries and flaky tests

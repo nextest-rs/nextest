@@ -1,5 +1,6 @@
 ---
 icon: material/refresh-auto
+description: Running tests repeatedly in a loop with nextest.
 ---
 
 # Stress tests

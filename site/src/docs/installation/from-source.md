@@ -1,5 +1,6 @@
 ---
 icon: material/language-rust
+description: Installing cargo-nextest from source with cargo install --locked.
 ---
 
 # Installing from source

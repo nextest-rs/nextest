@@ -1,5 +1,6 @@
 ---
 icon: material/vector-combine
+description: Integrations with test coverage tools, Miri, Criterion, cargo-mutants, and USDT probes.
 ---
 
 # Integrations with other tools

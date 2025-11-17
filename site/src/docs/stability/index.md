@@ -1,5 +1,6 @@
 ---
 icon: material/ship-wheel
+description: Nextest's stability policy for binaries and libraries, and information about minimum supported Rust versions.
 ---
 
 # Stability policy

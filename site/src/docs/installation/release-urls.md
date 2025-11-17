@@ -1,5 +1,6 @@
 ---
 icon: material/link
+description: Stable URLs for downloading nextest binaries by version and platform.
 ---
 
 # Release URLs

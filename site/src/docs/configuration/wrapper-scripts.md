@@ -1,6 +1,7 @@
 ---
 icon: material/layers-outline
 status: experimental
+description: Wrapping test execution with custom commands using filtersets and platform-specific scoping.
 ---
 
 # Wrapper scripts

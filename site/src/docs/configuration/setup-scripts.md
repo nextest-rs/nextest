@@ -1,6 +1,7 @@
 ---
 icon: material/ray-start-arrow
 status: experimental
+description: Running scripts before tests with filtersets and platform-specific scoping.
 ---
 
 # Setup scripts

@@ -1,6 +1,7 @@
 ---
 icon: material/lightbulb-on-outline
 title: How it works
+description: How nextest's execution model differs from cargo test's model.
 ---
 
 # How nextest works

@@ -1,5 +1,6 @@
 ---
 icon: material/pipe-leak
+description: Detecting tests that leak subprocesses.
 ---
 
 # Leaky tests

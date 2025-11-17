@@ -1,5 +1,6 @@
 ---
 icon: material/tune
+description: "Configuring nextest: information about profiles and hierarchical configuration."
 ---
 
 # Configuring nextest

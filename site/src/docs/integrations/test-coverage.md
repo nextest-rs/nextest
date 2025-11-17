@@ -1,5 +1,6 @@
 ---
 icon: material/chart-donut
+description: Collecting test coverage data with cargo-llvm-cov and nextest.
 ---
 
 # Test coverage

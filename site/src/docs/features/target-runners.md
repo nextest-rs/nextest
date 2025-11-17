@@ -1,5 +1,6 @@
 ---
 icon: material/select-group
+description: Running tests through wrapper executables for cross-compilation and emulation.
 ---
 
 # Target runners

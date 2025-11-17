@@ -1,5 +1,6 @@
 ---
 icon: material/filter-check
+description: Reference documentation for nextest's filterset DSL operators and predicates.
 ---
 
 # Filterset DSL reference

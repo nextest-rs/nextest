@@ -1,5 +1,6 @@
 ---
 icon: material/account-voice
+description: Test execution progress display and human-readable output formats.
 ---
 
 # Reporting test results

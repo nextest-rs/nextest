@@ -1,5 +1,6 @@
 ---
 icon: material/chevron-double-right
+description: Configuring settings for subsets of tests using filterset and Cargo platform specifiers.
 ---
 
 # Per-test settings

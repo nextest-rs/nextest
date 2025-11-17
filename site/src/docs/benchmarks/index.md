@@ -1,5 +1,6 @@
 ---
 icon: material/speedometer
+description: Benchmarks comparing nextest to cargo test.
 ---
 
 # Benchmarks

@@ -1,5 +1,6 @@
 ---
 icon: material/archive-cog
+description: Archiving and reusing builds to run on another machine.
 ---
 
 # Archiving and reusing builds

@@ -1,5 +1,6 @@
 ---
 icon: material/server
+description: Machine-readable JSON output for test and binary lists.
 ---
 
 # Machine-readable listings

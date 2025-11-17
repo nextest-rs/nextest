@@ -1,5 +1,6 @@
 ---
 icon: octicons/shield-24
+description: Running tests under the Miri interpreter for undefined behavior detection.
 ---
 
 # Miri and nextest

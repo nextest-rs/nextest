@@ -1,5 +1,6 @@
 ---
 icon: material/laptop
+description: Using target triples and cfg() expressions to filter per-test settings by platform.
 ---
 
 # Specifying platforms for per-test settings

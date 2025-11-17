@@ -1,5 +1,6 @@
 ---
 icon: material/alien-outline
+description: Using cargo-mutants for mutation testing with nextest.
 ---
 
 # Mutation testing with cargo-mutants

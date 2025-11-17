@@ -1,5 +1,6 @@
 ---
 icon: material/chart-scatter-plot
+description: Running Criterion.rs benchmarks in test mode with nextest.
 ---
 
 # Criterion benchmarks

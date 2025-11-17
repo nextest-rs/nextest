@@ -1,5 +1,6 @@
 ---
 icon: material/weight-lifter
+description: Marking some tests as consuming more resources than others.
 ---
 
 # Heavy tests and `threads-required`

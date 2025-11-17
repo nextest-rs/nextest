@@ -1,5 +1,6 @@
 ---
 icon: material/update
+description: Updating nextest with self update or from source.
 ---
 
 # Updating nextest
