@@ -35,7 +35,7 @@ pub struct CargoNextestCli {
 
 impl CargoNextestCli {
     pub fn for_test() -> Self {
-        let bin = std::env::var("NEXTEST_BIN_EXE_cargo-nextest-dup")
+        let bin = std::env::var("NEXTEST_BIN_EXE_cargo_nextest_dup")
             .expect("unable to find cargo-nextest-dup");
         Self {
             bin: bin.into(),
@@ -47,7 +47,7 @@ impl CargoNextestCli {
 
     /// Creates a new CargoNextestCli instance for use in a setup script.
     ///
-    /// Scripts don't have access to the `NEXTEST_BIN_EXE_cargo-nextest-dup` environment variable,
+    /// Scripts don't have access to the `NEXTEST_BIN_EXE_cargo_nextest_dup` environment variable,
     /// so we run `cargo run --bin cargo-nextest-dup nextest debug current-exe` instead.
     pub fn for_script() -> Result<Self> {
         let cargo_bin = cargo_bin();

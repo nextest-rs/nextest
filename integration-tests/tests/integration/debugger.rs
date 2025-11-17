@@ -8,9 +8,8 @@ use integration_tests::{env::set_env_vars, nextest_cli::CargoNextestCli};
 use nextest_metadata::NextestExitCode;
 
 fn fake_debugger_path() -> String {
-    // This env var is set by nextest when running tests
-    std::env::var("NEXTEST_BIN_EXE_fake-debugger")
-        .expect("NEXTEST_BIN_EXE_fake-debugger should be set by nextest")
+    std::env::var("NEXTEST_BIN_EXE_fake_debugger")
+        .expect("NEXTEST_BIN_EXE_fake_debugger should be set by nextest")
 }
 
 #[test]
