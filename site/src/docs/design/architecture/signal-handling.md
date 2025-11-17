@@ -1,6 +1,6 @@
 ---
 icon: material/broadcast
-description: Design document describing how nextest performs signal handling
+description: Design document describing how nextest performs signal handling.
 ---
 
 # Signal handling
