@@ -34,7 +34,10 @@ use nextest_runner::{
         TestOutputDisplay,
     },
     reuse_build::ReuseBuildInfo,
-    runner::{DebuggerCommand, StressCondition, StressCount, TestRunnerBuilder},
+    runner::{
+        DebuggerCommand, Interceptor, StressCondition, StressCount, TestRunnerBuilder,
+        TracerCommand,
+    },
     test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
     test_output::CaptureStrategy,
 };
@@ -149,37 +152,7 @@ pub(super) enum Command {
     /// Use --message-format json to get machine-readable output.
     ///
     /// For more information, see <https://nexte.st/docs/listing>.
-    List {
-        #[clap(flatten)]
-        cargo_options: CargoOptions,
-
-        #[clap(flatten)]
-        build_filter: TestBuildFilter,
-
-        /// Output format
-        #[arg(
-            short = 'T',
-            long,
-            value_enum,
-            default_value_t,
-            help_heading = "Output options",
-            value_name = "FMT"
-        )]
-        message_format: MessageFormatOpts,
-
-        /// Type of listing
-        #[arg(
-            long,
-            value_enum,
-            default_value_t,
-            help_heading = "Output options",
-            value_name = "TYPE"
-        )]
-        list_type: ListType,
-
-        #[clap(flatten)]
-        reuse_build: ReuseBuildOpts,
-    },
+    List(Box<ListOpts>),
     /// Build and run tests
     ///
     /// This command builds test binaries and queries them for the tests they contain,
@@ -187,7 +160,7 @@ pub(super) enum Command {
     ///
     /// For more information, see <https://nexte.st/docs/running>.
     #[command(visible_alias = "r")]
-    Run(RunOpts),
+    Run(Box<RunOpts>),
     /// Build and archive tests
     ///
     /// This command builds test binaries and archives them to a file. The archive can then be
@@ -195,46 +168,7 @@ pub(super) enum Command {
     /// --archive-file`.
     ///
     /// The archive is a tarball compressed with Zstandard (.tar.zst).
-    Archive {
-        #[clap(flatten)]
-        cargo_options: CargoOptions,
-
-        /// File to write archive to
-        #[arg(
-            long,
-            name = "archive-file",
-            help_heading = "Archive options",
-            value_name = "PATH"
-        )]
-        archive_file: Utf8PathBuf,
-
-        /// Archive format
-        ///
-        /// `auto` uses the file extension to determine the archive format. Currently supported is
-        /// `.tar.zst`.
-        #[arg(
-            long,
-            value_enum,
-            help_heading = "Archive options",
-            value_name = "FORMAT",
-            default_value_t
-        )]
-        archive_format: ArchiveFormatOpt,
-
-        #[clap(flatten)]
-        archive_build_filter: ArchiveBuildFilter,
-
-        /// Zstandard compression level (-7 to 22, higher is more compressed + slower)
-        #[arg(
-            long,
-            help_heading = "Archive options",
-            value_name = "LEVEL",
-            default_value_t = 0,
-            allow_negative_numbers = true
-        )]
-        zstd_level: i32,
-        // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
-    },
+    Archive(Box<ArchiveOpts>),
     /// Show information about nextest's configuration in this workspace.
     ///
     /// This command shows configuration information about nextest, including overrides applied to
@@ -260,6 +194,81 @@ pub(super) enum Command {
         #[clap(subcommand)]
         command: super::commands::DebugCommand,
     },
+}
+
+#[derive(Debug, Args)]
+pub(super) struct ArchiveOpts {
+    #[clap(flatten)]
+    pub(super) cargo_options: CargoOptions,
+
+    /// File to write archive to
+    #[arg(
+        long,
+        name = "archive-file",
+        help_heading = "Archive options",
+        value_name = "PATH"
+    )]
+    pub(super) archive_file: Utf8PathBuf,
+
+    /// Archive format
+    ///
+    /// `auto` uses the file extension to determine the archive format. Currently supported is
+    /// `.tar.zst`.
+    #[arg(
+        long,
+        value_enum,
+        help_heading = "Archive options",
+        value_name = "FORMAT",
+        default_value_t
+    )]
+    pub(super) archive_format: ArchiveFormatOpt,
+
+    #[clap(flatten)]
+    pub(super) archive_build_filter: ArchiveBuildFilter,
+
+    /// Zstandard compression level (-7 to 22, higher is more compressed + slower)
+    #[arg(
+        long,
+        help_heading = "Archive options",
+        value_name = "LEVEL",
+        default_value_t = 0,
+        allow_negative_numbers = true
+    )]
+    pub(super) zstd_level: i32,
+    // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
+}
+
+#[derive(Debug, Args)]
+pub(super) struct ListOpts {
+    #[clap(flatten)]
+    pub(super) cargo_options: CargoOptions,
+
+    #[clap(flatten)]
+    pub(super) build_filter: TestBuildFilter,
+
+    /// Output format
+    #[arg(
+        short = 'T',
+        long,
+        value_enum,
+        default_value_t,
+        help_heading = "Output options",
+        value_name = "FMT"
+    )]
+    pub(super) message_format: MessageFormatOpts,
+
+    /// Type of listing
+    #[arg(
+        long,
+        value_enum,
+        default_value_t,
+        help_heading = "Output options",
+        value_name = "TYPE"
+    )]
+    pub(super) list_type: ListType,
+
+    #[clap(flatten)]
+    pub(super) reuse_build: ReuseBuildOpts,
 }
 
 #[derive(Debug, Args)]
@@ -675,6 +684,22 @@ pub struct TestRunnerOpts {
     )]
     max_fail: Option<MaxFail>,
 
+    /// Interceptor options (debugger or tracer)
+    #[clap(flatten)]
+    pub(super) interceptor: InterceptorOpt,
+
+    /// Behavior if there are no tests to run [default: fail]
+    #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
+    pub(super) no_tests: Option<NoTestsBehavior>,
+
+    /// Stress testing options
+    #[clap(flatten)]
+    pub(super) stress: StressOptions,
+}
+
+#[derive(Debug, Default, Args)]
+#[group(id = "interceptor", multiple = false)]
+pub(super) struct InterceptorOpt {
     /// Debug a single test using a text-based or graphical debugger.
     ///
     /// Debugger mode automatically:
@@ -684,20 +709,40 @@ pub struct TestRunnerOpts {
     /// - passes standard input through to the debugger
     ///
     /// Example: `--debugger "rust-gdb --args"`
-    #[arg(
-        long,
-        value_name = "DEBUGGER",
-        conflicts_with_all = ["stress_condition", "no-run"]
-    )]
+    #[arg(long, value_name = "DEBUGGER", conflicts_with_all = ["stress_condition", "no-run"])]
     pub(super) debugger: Option<DebuggerCommand>,
 
-    /// Behavior if there are no tests to run [default: fail]
-    #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
-    pub(super) no_tests: Option<NoTestsBehavior>,
+    /// Trace a single test using a syscall tracer like `strace` or `truss`.
+    ///
+    /// Tracer mode automatically:
+    ///
+    /// - disables timeouts
+    /// - disables output capture
+    ///
+    /// Unlike `--debugger`, tracers do not need stdin passthrough or special signal handling.
+    ///
+    /// Example: `--tracer "strace -tt"`
+    #[arg(long, value_name = "TRACER", conflicts_with_all = ["stress_condition", "no-run"])]
+    pub(super) tracer: Option<TracerCommand>,
+}
 
-    /// Stress testing options
-    #[clap(flatten)]
-    pub(super) stress: StressOptions,
+impl InterceptorOpt {
+    /// Returns true if either a debugger or a tracer is active.
+    pub(super) fn is_active(&self) -> bool {
+        self.debugger.is_some() || self.tracer.is_some()
+    }
+
+    /// Converts to an [`Interceptor`] enum.
+    pub(super) fn to_interceptor(&self) -> Interceptor {
+        match (&self.debugger, &self.tracer) {
+            (Some(debugger), None) => Interceptor::Debugger(debugger.clone()),
+            (None, Some(tracer)) => Interceptor::Tracer(tracer.clone()),
+            (None, None) => Interceptor::None,
+            (Some(_), Some(_)) => {
+                unreachable!("clap group ensures debugger and tracer are mutually exclusive")
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -763,9 +808,7 @@ impl TestRunnerOpts {
             builder.set_stress_condition(condition.stress_condition());
         }
 
-        if let Some(debugger) = &self.debugger {
-            builder.set_debugger(debugger.clone());
-        }
+        builder.set_interceptor(self.interceptor.to_interceptor());
 
         Some(builder)
     }
@@ -1207,23 +1250,17 @@ impl AppOpts {
         output_writer: &mut crate::output::OutputWriter,
     ) -> Result<i32> {
         match self.command {
-            Command::List {
-                cargo_options,
-                build_filter,
-                message_format,
-                list_type,
-                reuse_build,
-            } => {
+            Command::List(list_opts) => {
                 let base = super::execution::BaseApp::new(
                     output,
-                    reuse_build,
-                    cargo_options,
+                    list_opts.reuse_build,
+                    list_opts.cargo_options,
                     self.common.config_opts,
                     self.common.manifest_path,
                     output_writer,
                 )?;
-                let app = super::execution::App::new(base, build_filter)?;
-                app.exec_list(message_format, list_type, output_writer)?;
+                let app = super::execution::App::new(base, list_opts.build_filter)?;
+                app.exec_list(list_opts.message_format, list_opts.list_type, output_writer)?;
                 Ok(0)
             }
             Command::Run(run_opts) => {
@@ -1245,24 +1282,24 @@ impl AppOpts {
                 )?;
                 Ok(0)
             }
-            Command::Archive {
-                cargo_options,
-                archive_file,
-                archive_format,
-                archive_build_filter,
-                zstd_level,
-            } => {
+            Command::Archive(archive_opts) => {
                 let app = super::execution::BaseApp::new(
                     output,
                     ReuseBuildOpts::default(),
-                    cargo_options,
+                    archive_opts.cargo_options,
                     self.common.config_opts,
                     self.common.manifest_path,
                     output_writer,
                 )?;
 
-                let app = super::execution::ArchiveApp::new(app, archive_build_filter)?;
-                app.exec_archive(&archive_file, archive_format, zstd_level, output_writer)?;
+                let app =
+                    super::execution::ArchiveApp::new(app, archive_opts.archive_build_filter)?;
+                app.exec_archive(
+                    &archive_opts.archive_file,
+                    archive_opts.archive_format,
+                    archive_opts.zstd_level,
+                    output_writer,
+                )?;
                 Ok(0)
             }
             Command::ShowConfig { command } => command.exec(

@@ -5,7 +5,7 @@
 
 use crate::{
     config::scripts::ScriptId,
-    list::{Styles, TestInstanceId},
+    list::{OwnedTestInstanceId, Styles, TestInstanceId},
     reporter::events::{AbortStatus, StressIndex},
     write_str::WriteStr,
 };
@@ -13,6 +13,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use console::AnsiCodeIterator;
 use owo_colors::{OwoColorize, Style};
 use std::{fmt, io, path::PathBuf, process::ExitStatus, time::Duration};
+use swrite::{SWrite, swrite};
 use unicode_width::UnicodeWidthChar;
 
 /// Utilities for pluralizing various words based on count or plurality.
@@ -696,6 +697,39 @@ where
 // From https://twitter.com/8051Enthusiast/status/1571909110009921538
 unsafe extern "C" {
     fn __nextest_external_symbol_that_does_not_exist();
+}
+
+/// Formats an interceptor (debugger or tracer) error message for too many tests.
+pub fn format_interceptor_too_many_tests(
+    cli_opt_name: &str,
+    test_count: usize,
+    test_instances: &[OwnedTestInstanceId],
+    list_styles: &Styles,
+    count_style: Style,
+) -> String {
+    let mut msg = format!(
+        "--{} requires exactly one test, but {} {} were selected:",
+        cli_opt_name,
+        test_count.style(count_style),
+        plural::tests_str(test_count)
+    );
+
+    for test_instance in test_instances {
+        let display = DisplayTestInstance::new(None, None, test_instance.as_ref(), list_styles);
+        swrite!(msg, "\n  {}", display);
+    }
+
+    if test_count > test_instances.len() {
+        let remaining = test_count - test_instances.len();
+        swrite!(
+            msg,
+            "\n  ... and {} more {}",
+            remaining.style(count_style),
+            plural::tests_str(remaining)
+        );
+    }
+
+    msg
 }
 
 #[inline]

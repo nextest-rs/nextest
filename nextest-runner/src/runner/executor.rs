@@ -11,7 +11,7 @@
 //! just a better abstraction, it also provides a better user experience (less
 //! inconsistent state).
 
-use super::{ChildPid, DebuggerCommand, HandleSignalResult};
+use super::{ChildPid, HandleSignalResult, Interceptor};
 use crate::{
     config::{
         core::EvaluatableProfile,
@@ -67,7 +67,7 @@ pub(super) struct ExecutorContext<'a> {
     capture_strategy: CaptureStrategy,
     // This is Some if the user specifies a retry policy over the command-line.
     force_retries: Option<RetryPolicy>,
-    debugger: Option<DebuggerCommand>,
+    interceptor: Interceptor,
 }
 
 impl<'a> ExecutorContext<'a> {
@@ -80,7 +80,7 @@ impl<'a> ExecutorContext<'a> {
         target_runner: TargetRunner,
         capture_strategy: CaptureStrategy,
         force_retries: Option<RetryPolicy>,
-        debugger: Option<DebuggerCommand>,
+        interceptor: Interceptor,
     ) -> Self {
         Self {
             run_id,
@@ -90,7 +90,7 @@ impl<'a> ExecutorContext<'a> {
             target_runner,
             capture_strategy,
             force_retries,
-            debugger,
+            interceptor,
         }
     }
 
@@ -513,7 +513,7 @@ impl<'a> ExecutorContext<'a> {
                                     &mut child,
                                     &mut child_acc,
                                     child_pid_for_kill,
-                                    self.debugger.is_some(),
+                                    self.interceptor.should_send_sigtstp(),
                                     req,
                                     stopwatch,
                                     interval_sleep.as_mut(),
@@ -674,7 +674,7 @@ impl<'a> ExecutorContext<'a> {
             self.test_list,
             test.settings.run_wrapper(),
             test.settings.run_extra_args(),
-            self.debugger.as_ref(),
+            &self.interceptor,
         );
 
         let command_mut = cmd.command_mut();
@@ -716,13 +716,15 @@ impl<'a> ExecutorContext<'a> {
             &self.profile.filterset_ecx(),
             command_mut,
         );
-        if self.debugger.is_none() {
+        if self.interceptor.should_create_process_group() {
             // If a debugger is active, we want the child (debugger) process to
             // have terminal control. In order to do that, we must ensure that a
             // process group is *not* created for the child. (The alternative is
             // to do a tcsetpgrp dance which seems both unnecessarily
             // complicated and somewhat unreliable, particularly around SIGTSTP
             // and SIGCONT).
+            //
+            // Tracers work fine with process groups, so we create one for them.
             super::os::set_process_group(command_mut);
         }
 
@@ -734,9 +736,9 @@ impl<'a> ExecutorContext<'a> {
         let program = cmd.program().to_owned();
         let args = cmd.args().to_owned();
 
-        if self.debugger.is_some() {
+        if self.interceptor.should_show_wrapper_command() {
             // Print out the command being executed -- this can be helpful to
-            // tell how a debugger is being invoked.
+            // tell how an interceptor (debugger or tracer) is being invoked.
             let command = cmd.command_mut();
             let actual_program = command.get_program().to_string_lossy();
             let actual_args = command
@@ -753,7 +755,10 @@ impl<'a> ExecutorContext<'a> {
             mut child,
             child_fds,
         } = cmd
-            .spawn(self.capture_strategy, self.debugger.is_some())
+            .spawn(
+                self.capture_strategy,
+                self.interceptor.should_passthrough_stdin(),
+            )
             .map_err(|error| ChildStartError::Spawn(Arc::new(error)))?;
 
         // Note: The PID stored here must be used with care -- it might be
@@ -764,11 +769,11 @@ impl<'a> ExecutorContext<'a> {
             .id()
             .expect("child has never been polled so must return a PID");
 
-        // If a debugger is active, we do not create a process group for the
-        // child. So we must ensure that kill is called with a positive PID
-        // (process) rather than a negative one (process group).
+        // If we did not create a process group (e.g. for debuggers), we must
+        // ensure that kill is called with a positive PID (process) rather than
+        // a negative one (process group).
         #[cfg(unix)]
-        let child_pid_for_kill = if self.debugger.is_some() {
+        let child_pid_for_kill = if !self.interceptor.should_create_process_group() {
             ChildPid::Process(child_pid)
         } else {
             ChildPid::ProcessGroup(child_pid)
@@ -811,8 +816,8 @@ impl<'a> ExecutorContext<'a> {
         let slow_timeout = test.settings.slow_timeout();
         let leak_timeout = test.settings.leak_timeout();
 
-        // When running under a debugger, disable all timeouts.
-        let debugger_active = self.debugger.is_some();
+        // When running under an interceptor (debugger or tracer), disable all timeouts.
+        let should_disable_timeouts = self.interceptor.should_disable_timeouts();
 
         // Use a pausable_sleep rather than an interval here because it's much
         // harder to pause and resume an interval.
@@ -833,7 +838,7 @@ impl<'a> ExecutorContext<'a> {
                         // The test finished executing.
                         break res;
                     }
-                    _ = &mut interval_sleep, if status.is_none() && !debugger_active => {
+                    _ = &mut interval_sleep, if status.is_none() && !should_disable_timeouts => {
                         // Mark the test as slow.
                         cx.slow_after = Some(slow_timeout.period);
 
@@ -896,7 +901,7 @@ impl<'a> ExecutorContext<'a> {
                                     &mut child,
                                     &mut child_acc,
                                     child_pid_for_kill,
-                                    self.debugger.is_some(),
+                                    self.interceptor.should_send_sigtstp(),
                                     req,
                                     stopwatch,
                                     interval_sleep.as_mut(),
@@ -958,9 +963,9 @@ impl<'a> ExecutorContext<'a> {
                 })
             });
 
-            let leak_info = if debugger_active {
-                // Skip leak detection when running under a debugger.
-                LeakDetectInfo::SkippedForDebugger
+            let leak_info = if self.interceptor.should_skip_leak_detection() {
+                // Skip leak detection when running under an interceptor.
+                LeakDetectInfo::SkippedForInterceptor
             } else {
                 detect_fd_leaks(
                     &cx,
@@ -990,7 +995,7 @@ impl<'a> ExecutorContext<'a> {
         let (leaked, time_to_close) = match leak_info {
             LeakDetectInfo::NoLeak { time_to_close } => (false, Some(time_to_close)),
             LeakDetectInfo::Leaked => (true, None),
-            LeakDetectInfo::SkippedForDebugger => (false, None),
+            LeakDetectInfo::SkippedForInterceptor => (false, None),
         };
 
         let exec_result = status.unwrap_or_else(|| {
@@ -1356,8 +1361,8 @@ enum LeakDetectInfo {
     },
     /// Leak detected. File descriptors did not close before timeout.
     Leaked,
-    /// Leak detection skipped because a debugger is active.
-    SkippedForDebugger,
+    /// Leak detection skipped because an interceptor (debugger or tracer) is active.
+    SkippedForInterceptor,
 }
 
 /// After a child process has exited, detect if it leaked file handles by
@@ -1447,7 +1452,7 @@ async fn handle_signal_request<'a>(
     child: &mut Child,
     child_acc: &mut ChildAccumulator,
     child_pid_for_kill: ChildPid,
-    #[cfg_attr(not(unix), expect(unused))] debugger_active: bool,
+    #[cfg_attr(not(unix), expect(unused))] should_send_sigtstp: bool,
     req: SignalRequest,
     stopwatch: &mut StopwatchStart,
     #[cfg_attr(not(unix), expect(unused_mut, unused_variables))] mut interval_sleep: Pin<
@@ -1467,7 +1472,7 @@ async fn handle_signal_request<'a>(
 
             // When a debugger is active, don't send SIGTSTP to the child. The
             // child (debugger) will receive it directly from the terminal.
-            if !debugger_active {
+            if should_send_sigtstp {
                 super::os::job_control_child(
                     child,
                     child_pid_for_kill,

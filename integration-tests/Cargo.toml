@@ -18,8 +18,8 @@ name = "rustc-shim"
 path = "test-helpers/rustc-shim.rs"
 
 [[bin]]
-name = "fake-debugger"
-path = "test-helpers/fake-debugger.rs"
+name = "fake-interceptor"
+path = "test-helpers/fake-interceptor.rs"
 
 [[test]]
 name = "custom-harness"
@@ -47,6 +47,7 @@ clap = { workspace = true, features = ["env"] }
 enable-ansi-support.workspace = true
 fs-err.workspace = true
 hex.workspace = true
+libc.workspace = true
 nextest-metadata.workspace = true
 nextest-workspace-hack.workspace = true
 serde_json.workspace = true

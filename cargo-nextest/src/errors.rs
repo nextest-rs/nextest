@@ -9,15 +9,15 @@ use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{
     errors::*,
-    helpers::{DisplayTestInstance, plural},
+    helpers::{format_interceptor_too_many_tests, plural},
     list::OwnedTestInstanceId,
     redact::Redactor,
-    runner::DebuggerCommand,
+    runner::{DebuggerCommand, TracerCommand},
 };
 use owo_colors::OwoColorize;
 use semver::Version;
 use std::{error::Error, io, path::PathBuf, process::ExitStatus, string::FromUtf8Error};
-use swrite::{SWrite, swrite, swriteln};
+use swrite::{SWrite, swriteln};
 use thiserror::Error;
 use tracing::{Level, error, info};
 
@@ -233,6 +233,20 @@ pub enum ExpectedError {
     )]
     DebuggerTooManyTests {
         debugger: DebuggerCommand,
+        test_count: usize,
+        test_instances: Vec<OwnedTestInstanceId>,
+    },
+    #[error(
+        "--tracer requires exactly one test, but \
+         no tests were selected"
+    )]
+    TracerNoTests { tracer: TracerCommand },
+    #[error(
+        "--tracer requires exactly one test, but \
+         {test_count} tests were selected"
+    )]
+    TracerTooManyTests {
+        tracer: TracerCommand,
         test_count: usize,
         test_instances: Vec<OwnedTestInstanceId>,
     },
@@ -478,7 +492,8 @@ impl ExpectedError {
             Self::SetupScriptFailed => NextestExitCode::SETUP_SCRIPT_FAILED,
             Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
             Self::NoTestsRun { .. } => NextestExitCode::NO_TESTS_RUN,
-            Self::DebuggerNoTests { .. } | Self::DebuggerTooManyTests { .. } => NextestExitCode::SETUP_ERROR,
+            Self::DebuggerNoTests { .. } | Self::DebuggerTooManyTests { .. }
+            | Self::TracerNoTests { .. } | Self::TracerTooManyTests { .. } => NextestExitCode::SETUP_ERROR,
             Self::ArchiveCreateError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
             Self::WriteTestListError { .. }
             | Self::WriteEventError { .. }
@@ -909,34 +924,33 @@ impl ExpectedError {
                 test_count,
                 test_instances,
             } => {
-                let mut msg = format!(
-                    "--debugger requires exactly one test, but {} {} were selected:",
-                    test_count.style(styles.bold),
-                    plural::tests_str(*test_count)
+                let msg = format_interceptor_too_many_tests(
+                    "debugger",
+                    *test_count,
+                    test_instances,
+                    &styles.list_styles,
+                    styles.bold,
                 );
-
-                for test_instance in test_instances {
-                    let display = DisplayTestInstance::new(
-                        None,
-                        None,
-                        test_instance.as_ref(),
-                        &styles.list_styles,
-                    );
-                    swrite!(msg, "\n  {}", display);
-                }
-
-                if *test_count > test_instances.len() {
-                    let remaining = test_count - test_instances.len();
-                    swrite!(
-                        msg,
-                        "\n  ... and {} more {}",
-                        remaining.style(styles.bold),
-                        plural::tests_str(remaining)
-                    );
-                }
-
                 error!("{}", msg);
-
+                None
+            }
+            Self::TracerNoTests { tracer: _ } => {
+                error!("--tracer requires exactly one test, but no tests were selected");
+                None
+            }
+            Self::TracerTooManyTests {
+                tracer: _,
+                test_count,
+                test_instances,
+            } => {
+                let msg = format_interceptor_too_many_tests(
+                    "tracer",
+                    *test_count,
+                    test_instances,
+                    &styles.list_styles,
+                    styles.bold,
+                );
+                error!("{}", msg);
                 None
             }
             Self::ShowTestGroupsError { err } => {

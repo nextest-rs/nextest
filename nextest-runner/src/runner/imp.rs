@@ -11,7 +11,7 @@ use crate::{
     double_spawn::DoubleSpawnInfo,
     errors::{
         ConfigureHandleInheritanceError, DebuggerCommandParseError, StressCountParseError,
-        TestRunnerBuildError, TestRunnerExecuteErrors,
+        TestRunnerBuildError, TestRunnerExecuteErrors, TracerCommandParseError,
     },
     input::{InputHandler, InputHandlerKind, InputHandlerStatus},
     list::{TestInstanceWithSettings, TestList},
@@ -73,6 +73,122 @@ impl FromStr for DebuggerCommand {
     }
 }
 
+/// A parsed tracer command.
+#[derive(Clone, Debug)]
+pub struct TracerCommand {
+    program: String,
+    args: Vec<String>,
+}
+
+impl TracerCommand {
+    /// Gets the program.
+    pub fn program(&self) -> &str {
+        &self.program
+    }
+
+    /// Gets the arguments.
+    pub fn args(&self) -> &[String] {
+        &self.args
+    }
+}
+
+impl FromStr for TracerCommand {
+    type Err = TracerCommandParseError;
+
+    fn from_str(command: &str) -> Result<Self, Self::Err> {
+        let mut parts =
+            shell_words::split(command).map_err(TracerCommandParseError::ShellWordsParse)?;
+        if parts.is_empty() {
+            return Err(TracerCommandParseError::EmptyCommand);
+        }
+        let program = parts.remove(0);
+        Ok(Self {
+            program,
+            args: parts,
+        })
+    }
+}
+
+/// An interceptor wraps test execution with a debugger or tracer.
+#[derive(Clone, Debug, Default)]
+pub enum Interceptor {
+    /// No interceptor - standard test execution.
+    #[default]
+    None,
+
+    /// Run the test under a debugger.
+    Debugger(DebuggerCommand),
+
+    /// Run the test under a syscall tracer.
+    Tracer(TracerCommand),
+}
+
+impl Interceptor {
+    /// Returns true if timeouts should be disabled.
+    ///
+    /// Both debuggers and tracers disable timeouts.
+    pub fn should_disable_timeouts(&self) -> bool {
+        match self {
+            Interceptor::None => false,
+            Interceptor::Debugger(_) | Interceptor::Tracer(_) => true,
+        }
+    }
+
+    /// Returns true if stdin should be passed through to child test processes.
+    ///
+    /// Only debuggers need stdin passthrough for interactive debugging.
+    pub fn should_passthrough_stdin(&self) -> bool {
+        match self {
+            Interceptor::None | Interceptor::Tracer(_) => false,
+            Interceptor::Debugger(_) => true,
+        }
+    }
+
+    /// Returns true if a process group should be created for the child.
+    ///
+    /// Debuggers need terminal control, so no process group is created. Tracers
+    /// work fine with process groups.
+    pub fn should_create_process_group(&self) -> bool {
+        match self {
+            Interceptor::None | Interceptor::Tracer(_) => true,
+            Interceptor::Debugger(_) => false,
+        }
+    }
+
+    /// Returns true if leak detection should be skipped.
+    ///
+    /// Both debuggers and tracers skip leak detection to avoid interference.
+    pub fn should_skip_leak_detection(&self) -> bool {
+        match self {
+            Interceptor::None => false,
+            Interceptor::Debugger(_) | Interceptor::Tracer(_) => true,
+        }
+    }
+
+    /// Returns true if the test command should be displayed.
+    ///
+    /// Used to determine if we should print the wrapper command for debugging.
+    pub fn should_show_wrapper_command(&self) -> bool {
+        match self {
+            Interceptor::None => false,
+            Interceptor::Debugger(_) | Interceptor::Tracer(_) => true,
+        }
+    }
+
+    /// Returns true if, on receiving SIGTSTP, we should send SIGTSTP to the
+    /// child.
+    ///
+    /// Debugger mode has special signal handling where we don't send SIGTSTP to
+    /// the child (it receives it directly from the terminal, since no process
+    /// group is created). Tracers use standard signal handling.
+    pub fn should_send_sigtstp(&self) -> bool {
+        match self {
+            Interceptor::None | Interceptor::Tracer(_) => true,
+            Interceptor::Debugger(_) => false,
+        }
+    }
+}
+
 /// A child process identifier: either a single process or a process group.
 #[derive(Copy, Clone, Debug)]
 pub(super) enum ChildPid {
@@ -108,7 +224,7 @@ pub struct TestRunnerBuilder {
     max_fail: Option<MaxFail>,
     test_threads: Option<TestThreads>,
     stress_condition: Option<StressCondition>,
-    debugger: Option<DebuggerCommand>,
+    interceptor: Interceptor,
 }
 
 impl TestRunnerBuilder {
@@ -151,9 +267,9 @@ impl TestRunnerBuilder {
         self
     }
 
-    /// Sets the debugger to use for running tests.
-    pub fn set_debugger(&mut self, debugger: DebuggerCommand) -> &mut Self {
-        self.debugger = Some(debugger);
+    /// Sets the interceptor (debugger or tracer) to use for running tests.
+    pub fn set_interceptor(&mut self, interceptor: Interceptor) -> &mut Self {
+        self.interceptor = interceptor;
         self
     }
 
@@ -203,7 +319,7 @@ impl TestRunnerBuilder {
                 cli_args,
                 max_fail,
                 stress_condition: self.stress_condition,
-                debugger: self.debugger,
+                interceptor: self.interceptor,
                 runtime,
             },
             signal_handler,
@@ -355,7 +471,7 @@ struct TestRunnerInner<'a> {
     cli_args: Vec<String>,
     max_fail: MaxFail,
     stress_condition: Option<StressCondition>,
-    debugger: Option<DebuggerCommand>,
+    interceptor: Interceptor,
     runtime: Runtime,
 }
 
@@ -372,8 +488,8 @@ impl<'a> TestRunnerInner<'a> {
     {
         // TODO: add support for other test-running approaches, measure performance.
 
-        // Disable the global timeout when a debugger is active.
-        let global_timeout = if self.debugger.is_some() {
+        // Disable the global timeout when an interceptor is active.
+        let global_timeout = if self.interceptor.should_disable_timeouts() {
             crate::time::far_future_duration()
         } else {
             self.profile.global_timeout().period
@@ -398,7 +514,7 @@ impl<'a> TestRunnerInner<'a> {
             self.target_runner.clone(),
             self.capture_strategy,
             self.force_retries,
-            self.debugger.clone(),
+            self.interceptor.clone(),
         );
 
         // Send the initial event.

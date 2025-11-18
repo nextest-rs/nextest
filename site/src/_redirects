@@ -42,4 +42,6 @@
 /book/updating* /docs/installation/updating/ 302
 /book/usage* /docs/running/ 302
 
+/docs/integrations/debuggers/ /docs/integrations/debuggers-tracers/ 302
+
 # TODO: installing from source afterwards
