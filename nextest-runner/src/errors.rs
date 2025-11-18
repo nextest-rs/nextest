@@ -178,6 +178,9 @@ pub enum ConfigParseErrorKind {
         /// The features that were not enabled.
         missing_features: BTreeSet<ConfigExperimental>,
     },
+    /// An inheritance cycle was detected in the profile configuration.
+    #[error("inheritance cycle detected in profile configuration from: {}", .0.iter().join(", "))]
+    InheritanceCycle(Vec<String>),
 }
 
 /// An error that occurred while compiling overrides or scripts specified in

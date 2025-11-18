@@ -37,6 +37,7 @@ use config::{
 use iddqd::IdOrdMap;
 use indexmap::IndexMap;
 use nextest_filtering::{BinaryQuery, EvalContext, Filterset, ParseContext, TestQuery};
+use petgraph::{Directed, Graph, algo::{scc::kosaraju_scc},};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, hash_map},
@@ -575,6 +576,9 @@ impl NextestConfig {
             );
         }
 
+        // Observe if the config file has a cycle in the inheritance chain
+        this_config.check_inheritance_cycles()?;
+
         // Compile the overrides for this file.
         let this_compiled = CompiledByProfile::new(pcx, &this_config)
             .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
@@ -791,8 +795,15 @@ impl NextestConfig {
         Config::builder().add_source(File::from_str(Self::DEFAULT_CONFIG, FileFormat::Toml))
     }
 
-    fn make_profile(&self, name: &str) -> Result<EarlyProfile<'_>, ProfileNotFound> {
+    fn make_profile(&self, name: &str) -> Result<EarlyProfile<'_>, ProfileNotFound> {        
         let custom_profile = self.inner.get_profile(name)?;
+        
+        // Resolves the inherit setting into a profile chain
+        let inheritance_chain = if let Some(_) = custom_profile {
+            self.inner.resolve_profile_chain(name)?
+        } else {
+            Vec::new()
+        };
 
         // The profile was found: construct it.
         let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
@@ -809,6 +820,7 @@ impl NextestConfig {
             store_dir,
             default_profile: &self.inner.default_profile,
             custom_profile,
+            inheritance_chain,
             test_groups: &self.inner.test_groups,
             scripts: &self.inner.scripts,
             compiled_data,
@@ -874,6 +886,7 @@ pub struct EarlyProfile<'cfg> {
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
+    inheritance_chain: Vec<&'cfg CustomProfileImpl>,
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     // This is ordered because the scripts are used in the order they're defined.
     scripts: &'cfg ScriptConfig,
@@ -924,6 +937,7 @@ impl<'cfg> EarlyProfile<'cfg> {
             store_dir: self.store_dir,
             default_profile: self.default_profile,
             custom_profile: self.custom_profile,
+            inheritance_chain: self.inheritance_chain,
             scripts: self.scripts,
             test_groups: self.test_groups,
             compiled_data,
@@ -941,6 +955,7 @@ pub struct EvaluatableProfile<'cfg> {
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
+    inheritance_chain: Vec<&'cfg CustomProfileImpl>,
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     // This is ordered because the scripts are used in the order they're defined.
     scripts: &'cfg ScriptConfig,
@@ -949,6 +964,14 @@ pub struct EvaluatableProfile<'cfg> {
     // The default filter that's been resolved after considering overrides (i.e.
     // platforms).
     resolved_default_filter: CompiledDefaultFilter,
+}
+
+// TODO: macros for profile_config_field with consideration
+// of inheritance chain
+macro_rules! profile_config_field {
+    () => {
+        
+    };
 }
 
 impl<'cfg> EvaluatableProfile<'cfg> {
@@ -1154,6 +1177,75 @@ impl NextestConfigImpl {
             .iter()
             .map(|(key, value)| (key.as_str(), value))
     }
+
+    /// Resolves a profile with an inheritance chain recursively
+    /// 
+    /// This function does not check for cycles. Use `check_inheritance_cycles()`
+    /// to observe for cycles in an inheritance chain.
+    fn resolve_profile_chain(&self, profile_name: &str) -> Result<Vec<&CustomProfileImpl>, ProfileNotFound> {
+        // let mut visited = HashSet::new();
+        let mut chain = Vec::new();
+
+        self.resolve_profile_chain_recursive(profile_name, &mut chain)?;
+        Ok(chain)
+    }
+
+    /// Helper function for resolving an inheritance chain
+    fn resolve_profile_chain_recursive<'cfg>(
+        &'cfg self,
+        profile_name: &str,
+        chain: &mut Vec<&'cfg CustomProfileImpl>,
+    ) -> Result<(), ProfileNotFound> {
+        let profile = self.get_profile(profile_name)?;
+        if let Some(profile) = profile {
+            if let Some(parent_name) = &profile.inherits {
+                self.resolve_profile_chain_recursive(&parent_name, chain)?;
+            }
+            chain.push(profile);
+        }
+
+        Ok(())
+    }
+
+    /// Checks if a cycle exists in an inheritance chain
+    fn check_inheritance_cycles(&self) -> Result<(), ConfigParseError> {
+        let mut profile_graph = Graph::<&str, (), Directed>::new();
+        let mut profile_map = HashMap::new();
+
+        // Grab all profile names and insert into map
+        for profile in self.all_profiles() {
+            let profile_node = profile_graph.add_node(profile);
+            profile_map.insert(profile.to_string(), profile_node);
+        }
+
+        // For each custom profile, we add a directed edge from the inherited node
+        // to the current custom profile node
+        for (profile_name, profile) in &self.other_profiles {
+            if let Some(inherit_name) = &profile.inherits {
+                if let (Some(&from), Some(&to)) = (profile_map.get(inherit_name), profile_map.get(profile_name)) {
+                    profile_graph.add_edge(from, to, ());
+                }
+            }
+        }
+
+        // Detects all strongly connected components (SCCs) within the graph
+        // and if there are exists any (or multiple), returns an error with 
+        // all SCCs
+        let profile_sccs = kosaraju_scc(&profile_graph);
+        if profile_sccs.len() != 0 {
+            return Err(ConfigParseError::new(
+                "inheritance cycle detected in profile configuration",
+                None,
+                ConfigParseErrorKind::InheritanceCycle(
+                    profile_sccs.iter().map( |profile_scc|
+                        profile_graph[profile_scc[0]].to_string()
+                    ).collect()
+                )
+            ))
+        }
+
+        Ok(())
+    }
 }
 
 // This is the form of `NextestConfig` that gets deserialized.
@@ -1337,6 +1429,8 @@ pub(in crate::config) struct CustomProfileImpl {
     junit: JunitImpl,
     #[serde(default)]
     archive: Option<ArchiveConfig>,
+    #[serde(default)]
+    inherits: Option<String>,
 }
 
 impl CustomProfileImpl {
