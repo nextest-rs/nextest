@@ -24,7 +24,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
       - name: Install nextest for help text in docs
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@8cd2ac21dc357ca7dd807fe294d11e9ef84f60ec # v2.62.53
+        with:
+          tool: nextest
       - name: Install uv
         uses: eifinger/setup-uv@5a7eac68fb9809dea845d802897dc5c723910fa3 # v7.1.3
         with:

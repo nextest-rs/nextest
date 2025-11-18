@@ -204,7 +204,9 @@ jobs:
 
       - name: Install just on Windows
         if: endsWith(matrix.target, '-pc-windows-msvc')
-        uses: taiki-e/install-action@just
+        uses: taiki-e/install-action@8cd2ac21dc357ca7dd807fe294d11e9ef84f60ec # v2.62.53
+        with:
+          tool: just
       - name: Download verpatch on Windows
         if: endsWith(matrix.target, '-pc-windows-msvc')
         shell: bash
