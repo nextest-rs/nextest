@@ -116,7 +116,7 @@ jobs:
       - name: Upload results
         # Run this step even if the test step fails
         if: "!cancelled()"
-        uses: trunk-io/analytics-uploader@main
+        uses: trunk-io/analytics-uploader@e15a1f52c853d03426af5aff6bad7321fda0f7a4 # v2.0.2
         with:
           # Path to your test results.
           junit-paths: target/nextest/ci/junit.xml
