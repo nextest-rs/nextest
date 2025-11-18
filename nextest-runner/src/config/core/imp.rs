@@ -37,7 +37,7 @@ use config::{
 use iddqd::IdOrdMap;
 use indexmap::IndexMap;
 use nextest_filtering::{BinaryQuery, EvalContext, Filterset, ParseContext, TestQuery};
-use petgraph::{Directed, Graph, algo::{scc::kosaraju_scc},};
+use petgraph::{Directed, Graph, algo::scc::kosaraju_scc};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, hash_map},
@@ -795,9 +795,9 @@ impl NextestConfig {
         Config::builder().add_source(File::from_str(Self::DEFAULT_CONFIG, FileFormat::Toml))
     }
 
-    fn make_profile(&self, name: &str) -> Result<EarlyProfile<'_>, ProfileNotFound> {        
+    fn make_profile(&self, name: &str) -> Result<EarlyProfile<'_>, ProfileNotFound> {
         let custom_profile = self.inner.get_profile(name)?;
-        
+
         // Resolves the inherit setting into a profile chain
         let inheritance_chain = if let Some(_) = custom_profile {
             self.inner.resolve_profile_chain(name)?
@@ -969,9 +969,7 @@ pub struct EvaluatableProfile<'cfg> {
 // TODO: macros for profile_config_field with consideration
 // of inheritance chain
 macro_rules! profile_config_field {
-    () => {
-        
-    };
+    () => {};
 }
 
 impl<'cfg> EvaluatableProfile<'cfg> {
@@ -1179,10 +1177,13 @@ impl NextestConfigImpl {
     }
 
     /// Resolves a profile with an inheritance chain recursively
-    /// 
+    ///
     /// This function does not check for cycles. Use `check_inheritance_cycles()`
     /// to observe for cycles in an inheritance chain.
-    fn resolve_profile_chain(&self, profile_name: &str) -> Result<Vec<&CustomProfileImpl>, ProfileNotFound> {
+    fn resolve_profile_chain(
+        &self,
+        profile_name: &str,
+    ) -> Result<Vec<&CustomProfileImpl>, ProfileNotFound> {
         // let mut visited = HashSet::new();
         let mut chain = Vec::new();
 
@@ -1222,14 +1223,16 @@ impl NextestConfigImpl {
         // to the current custom profile node
         for (profile_name, profile) in &self.other_profiles {
             if let Some(inherit_name) = &profile.inherits {
-                if let (Some(&from), Some(&to)) = (profile_map.get(inherit_name), profile_map.get(profile_name)) {
+                if let (Some(&from), Some(&to)) =
+                    (profile_map.get(inherit_name), profile_map.get(profile_name))
+                {
                     profile_graph.add_edge(from, to, ());
                 }
             }
         }
 
         // Detects all strongly connected components (SCCs) within the graph
-        // and if there are exists any (or multiple), returns an error with 
+        // and if there are exists any (or multiple), returns an error with
         // all SCCs
         let profile_sccs = kosaraju_scc(&profile_graph);
         if profile_sccs.len() != 0 {
@@ -1237,11 +1240,12 @@ impl NextestConfigImpl {
                 "inheritance cycle detected in profile configuration",
                 None,
                 ConfigParseErrorKind::InheritanceCycle(
-                    profile_sccs.iter().map( |profile_scc|
-                        profile_graph[profile_scc[0]].to_string()
-                    ).collect()
-                )
-            ))
+                    profile_sccs
+                        .iter()
+                        .map(|profile_scc| profile_graph[profile_scc[0]].to_string())
+                        .collect(),
+                ),
+            ));
         }
 
         Ok(())
