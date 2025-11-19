@@ -1252,17 +1252,14 @@ impl NextestConfigImpl {
         // Connect only the outgoing edges
         // It's guaranteed that an inherited profile has 1 outgoing edge
         for profile_node in connected_profiles.iter() {
-            if let Some(from_profile) = conn_profile_map.get(conn_profile_graph[*profile_node]) {
-                if let Some(outgoing_edge) = profile_graph
+            if let Some(from_profile) = conn_profile_map.get(conn_profile_graph[*profile_node])
+                && let Some(outgoing_edge) = profile_graph
                     .edges_directed(*profile_node, Direction::Outgoing)
                     .next()
-                {
-                    if let Some(to_profile) =
-                        conn_profile_map.get(conn_profile_graph[outgoing_edge.target()])
-                    {
-                        profile_graph.add_edge(*from_profile, *to_profile, ());
-                    }
-                }
+                && let Some(to_profile) =
+                    conn_profile_map.get(conn_profile_graph[outgoing_edge.target()])
+            {
+                profile_graph.add_edge(*from_profile, *to_profile, ());
             }
         }
 
