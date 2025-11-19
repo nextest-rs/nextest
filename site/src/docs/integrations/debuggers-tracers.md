@@ -31,7 +31,7 @@ Supported syscall tracers include:
 
 ## Behavior comparison
 
-Both `--debugger` and `--tracer` modify how nextest runs tests, but with somewhat different behaviors. Here's a table comparing behaviors under standard, `--no-capture`, `--tracer`, and `--debugger` modes, with differences from the standard mode bolded:
+Both `--debugger` and `--tracer` modify how nextest runs tests, but with somewhat different behaviors. Here's a table comparing behaviors under standard, `--no-capture`, `--tracer`, and `--debugger` modes, with differences from the standard mode **bolded**:
 
 | Feature                       | Standard                        | `--no-capture`                  | `--tracer`                      | `--debugger`                    |
 |:-----------------------------:|:-------------------------------:|:-------------------------------:|:-------------------------------:|:-------------------------------:|
@@ -53,13 +53,14 @@ Both `--debugger` and `--tracer` modify how nextest runs tests, but with somewha
 Key differences:
 
 * **`--debugger`**: Optimized for interactive debugging.
-    * Passes stdin through for debugger commands.
-    * On Unix, disables most signal handling to prevent interference.
-    * On Unix, doesn't create process groups so the debugger can control the terminal.
+  * Passes stdin through for debugger commands.
+  * On Unix, disables most signal handling to prevent nextest from interfering with the debugger.
+  * On Unix, doesn't create process groups so the debugger can control the terminal.
+
 * **`--tracer`**: Optimized for non-interactive syscall tracing.
-    * Uses null stdin.
-    * On Unix, uses standard signal handling.
-    * On Unix, creates process groups for better test isolation.
+  * Uses null stdin.
+  * On Unix, uses standard signal handling.
+  * On Unix, creates process groups for better test isolation.
 
 Both modes:
 
