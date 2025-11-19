@@ -37,7 +37,9 @@ use config::{
 use iddqd::IdOrdMap;
 use indexmap::IndexMap;
 use nextest_filtering::{BinaryQuery, EvalContext, Filterset, ParseContext, TestQuery};
-use petgraph::{Directed, Graph, algo::scc::kosaraju_scc};
+use petgraph::{
+    Directed, Direction, Graph, algo::scc::kosaraju_scc, graph::NodeIndex, visit::EdgeRef,
+};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, hash_map},
@@ -1176,7 +1178,6 @@ impl NextestConfigImpl {
         &self,
         profile_name: &str,
     ) -> Result<Vec<&CustomProfileImpl>, ProfileNotFound> {
-        // let mut visited = HashSet::new();
         let mut chain = Vec::new();
 
         self.resolve_profile_chain_recursive(profile_name, &mut chain)?;
@@ -1222,10 +1223,53 @@ impl NextestConfigImpl {
             }
         }
 
+        // Collect all profile nodes that do not have an edge (a self referential inherited
+        // profile will have an edge) and remove them from the graph
+        let mut conn_profile_graph = Graph::<&str, (), Directed>::new();
+        let mut conn_profile_map = HashMap::new();
+
+        // Collects all nodes with incoming/outgoing edges
+        let connected_profiles: Vec<NodeIndex> = profile_graph
+            .node_indices()
+            .filter(|&node_idx| {
+                profile_graph
+                    .edges_directed(node_idx, Direction::Incoming)
+                    .next()
+                    .is_some()
+                    || profile_graph
+                        .edges_directed(node_idx, Direction::Outgoing)
+                        .next()
+                        .is_some()
+            })
+            .collect();
+
+        // Add those connected nodes into the new graph
+        for profile in connected_profiles.iter() {
+            let profile_node = conn_profile_graph.add_node(profile_graph[*profile]);
+            conn_profile_map.insert(profile_graph[*profile], profile_node);
+        }
+
+        // Connect only the outgoing edges
+        // It's guaranteed that an inherited profile has 1 outgoing edge
+        for profile_node in connected_profiles.iter() {
+            if let Some(from_profile) = conn_profile_map.get(conn_profile_graph[*profile_node]) {
+                if let Some(outgoing_edge) = profile_graph
+                    .edges_directed(*profile_node, Direction::Outgoing)
+                    .next()
+                {
+                    if let Some(to_profile) =
+                        conn_profile_map.get(conn_profile_graph[outgoing_edge.target()])
+                    {
+                        profile_graph.add_edge(*from_profile, *to_profile, ());
+                    }
+                }
+            }
+        }
+
         // Detects all strongly connected components (SCCs) within the graph
         // and if there are exists any (or multiple), returns an error with
         // all SCCs
-        let profile_sccs = kosaraju_scc(&profile_graph);
+        let profile_sccs = kosaraju_scc(&conn_profile_graph);
         if !profile_sccs.is_empty() {
             return Err(ConfigParseError::new(
                 "inheritance cycle detected in profile configuration",
@@ -1233,7 +1277,7 @@ impl NextestConfigImpl {
                 ConfigParseErrorKind::InheritanceCycle(
                     profile_sccs
                         .iter()
-                        .map(|profile_scc| profile_graph[profile_scc[0]].to_string())
+                        .map(|profile_scc| conn_profile_graph[profile_scc[0]].to_string())
                         .collect(),
                 ),
             ));
