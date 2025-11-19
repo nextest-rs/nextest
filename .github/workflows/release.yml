@@ -347,6 +347,7 @@ jobs:
       # tag name (which isn't available until the release is created).
       - name: Mark GitHub release published
         run: |
+          cd nextest
           gh release edit ${{ github.ref_name }} --draft=false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

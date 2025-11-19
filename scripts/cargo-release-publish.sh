@@ -13,12 +13,6 @@ git checkout -B to-release
 cargo release publish --publish --execute --no-confirm --workspace --exclude cargo-nextest --exclude internal-test
 
 if [[ $PUBLISH_CARGO_NEXTEST == "1" ]]; then
-    # Check that NEXTEST_TAG is set.
-    if [[ -z $NEXTEST_TAG ]]; then
-        echo "NEXTEST_TAG is not set"
-        exit 1
-    fi
-
     # Write out commit-related metadata. This matches cargo-nextest's build.rs.
     git log -1 --date=short --format="%H %h %cd" --abbrev=9 > cargo-nextest/nextest-commit-info
 
