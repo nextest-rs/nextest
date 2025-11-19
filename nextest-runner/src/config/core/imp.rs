@@ -798,8 +798,8 @@ impl NextestConfig {
     fn make_profile(&self, name: &str) -> Result<EarlyProfile<'_>, ProfileNotFound> {
         let custom_profile = self.inner.get_profile(name)?;
 
-        // Resolves the inherit setting into a profile chain
-        let inheritance_chain = if let Some(_) = custom_profile {
+        // Resolves the inherited profile into a profile chain
+        let inheritance_chain = if custom_profile.is_some() {
             self.inner.resolve_profile_chain(name)?
         } else {
             Vec::new()
@@ -1192,7 +1192,7 @@ impl NextestConfigImpl {
         let profile = self.get_profile(profile_name)?;
         if let Some(profile) = profile {
             if let Some(parent_name) = &profile.inherits {
-                self.resolve_profile_chain_recursive(&parent_name, chain)?;
+                self.resolve_profile_chain_recursive(parent_name, chain)?;
             }
             chain.push(profile);
         }
@@ -1214,12 +1214,11 @@ impl NextestConfigImpl {
         // For each custom profile, we add a directed edge from the inherited node
         // to the current custom profile node
         for (profile_name, profile) in &self.other_profiles {
-            if let Some(inherit_name) = &profile.inherits {
-                if let (Some(&from), Some(&to)) =
+            if let Some(inherit_name) = &profile.inherits
+                && let (Some(&from), Some(&to)) =
                     (profile_map.get(inherit_name), profile_map.get(profile_name))
-                {
-                    profile_graph.add_edge(from, to, ());
-                }
+            {
+                profile_graph.add_edge(from, to, ());
             }
         }
 
@@ -1227,7 +1226,7 @@ impl NextestConfigImpl {
         // and if there are exists any (or multiple), returns an error with
         // all SCCs
         let profile_sccs = kosaraju_scc(&profile_graph);
-        if profile_sccs.len() != 0 {
+        if !profile_sccs.is_empty() {
             return Err(ConfigParseError::new(
                 "inheritance cycle detected in profile configuration",
                 None,
