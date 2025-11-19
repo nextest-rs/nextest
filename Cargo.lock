@@ -2177,6 +2177,7 @@ dependencies = [
  "miniz_oxide",
  "mio",
  "num-traits",
+ "petgraph",
  "ppv-lite86",
  "proc-macro2",
  "quote",
