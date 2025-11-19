@@ -15,7 +15,7 @@ use crate::{
     indenter::indented,
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
     reuse_build::PathMapper,
-    runner::DebuggerCommand,
+    runner::Interceptor,
     target_runner::{PlatformRunner, TargetRunner},
     test_command::{LocalExecuteContext, TestCommand, TestCommandPhase},
     test_filter::{BinaryMismatchReason, FilterBinaryMatch, FilterBound, TestFilterBuilder},
@@ -965,7 +965,7 @@ impl RustTestArtifact<'_> {
             &self.cwd,
             &self.package,
             &self.non_test_binaries,
-            None, // Debuggers are not used during the test list phase.
+            &Interceptor::None, // Interceptors are not used during the test list phase.
         );
 
         let output =
@@ -1137,7 +1137,7 @@ impl<'a> TestInstance<'a> {
         test_list: &TestList<'_>,
         wrapper_script: Option<&'a WrapperScriptConfig>,
         extra_args: &[String],
-        debugger: Option<&DebuggerCommand>,
+        interceptor: &Interceptor,
     ) -> TestCommand {
         // TODO: non-rust tests
 
@@ -1179,7 +1179,7 @@ impl<'a> TestInstance<'a> {
             &self.suite_info.cwd,
             &self.suite_info.package,
             &self.suite_info.non_test_binaries,
-            debugger,
+            interceptor,
         )
     }
 }

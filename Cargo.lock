@@ -1719,6 +1719,7 @@ dependencies = [
  "iddqd",
  "insta",
  "itertools",
+ "libc",
  "libtest-mimic",
  "nextest-metadata",
  "nextest-workspace-hack",

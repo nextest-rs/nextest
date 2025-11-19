@@ -102,7 +102,7 @@ nav:
                 - "Overview": docs/integrations/index.md
                 - docs/integrations/test-coverage.md
                 - "Miri interpreter": docs/integrations/miri.md
-                - "Debuggers": docs/integrations/debuggers.md
+                - "Debuggers and tracers": docs/integrations/debuggers-tracers.md
                 - docs/integrations/criterion.md
                 - "cargo-mutants": docs/integrations/cargo-mutants.md
                 - docs/integrations/usdt.md

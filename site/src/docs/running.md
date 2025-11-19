@@ -146,7 +146,10 @@ fail-fast = { max-fail = 5, terminate = "immediate" }  # Stop after 5 failures, 
     <!-- md:version 0.9.85 --> The default is `fail`. In prior versions, the default was `pass` or `warn`.
     
 `--debugger=DEBUGGER` <!-- md:version 0.9.113 -->
-: Run an individual test with the specified debugger, such as `"rust-gdb --args"`. For more, see [_Debugger integration_](integrations/debuggers.md).
+: Run an individual test with the specified debugger, such as `"rust-gdb --args"`. For more, see [_Debuggers_](integrations/debuggers-tracers.md#debuggers).
+
+`--tracer=TRACER` <!-- md:version 0.9.114 -->
+: Run an individual test with the specified syscall tracer, such as `strace`. Similar to `--debugger`, but optimized for non-interactive tracing with null stdin and process groups. For more, see [_System call tracers_](integrations/debuggers-tracers.md#system-call-tracers).
 
 [available parallelism]: https://doc.rust-lang.org/std/thread/fn.available_parallelism.html
 

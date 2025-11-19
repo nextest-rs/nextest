@@ -730,6 +730,19 @@ pub enum DebuggerCommandParseError {
     EmptyCommand,
 }
 
+/// An error that occurred while parsing a tracer command.
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum TracerCommandParseError {
+    /// The command string could not be parsed as shell words.
+    #[error(transparent)]
+    ShellWordsParse(shell_words::ParseError),
+
+    /// The command was empty.
+    #[error("tracer command cannot be empty")]
+    EmptyCommand,
+}
+
 /// Error returned while parsing a [`TestThreads`](crate::config::elements::TestThreads) value.
 #[derive(Clone, Debug, Error)]
 #[error(

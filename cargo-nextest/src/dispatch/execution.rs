@@ -612,7 +612,7 @@ impl App {
             }
         };
 
-        let cap_strat = if no_capture || runner_opts.debugger.is_some() {
+        let cap_strat = if no_capture || runner_opts.interceptor.is_active() {
             CaptureStrategy::None
         } else if matches!(message_format, MessageFormat::Human) {
             CaptureStrategy::Split
@@ -631,7 +631,7 @@ impl App {
         let runner_builder = runner_opts.to_builder(cap_strat);
         let mut reporter_builder = reporter_opts.to_builder(
             runner_opts.no_run,
-            no_capture || runner_opts.debugger.is_some(),
+            no_capture || runner_opts.interceptor.is_active(),
             should_colorize,
         );
         reporter_builder.set_verbose(self.base.output.verbose);
@@ -654,14 +654,22 @@ impl App {
 
         let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
 
-        // Validate debugger mode requirements.
-        if let Some(debugger) = &runner_opts.debugger {
+        // Validate interceptor mode requirements.
+        if runner_opts.interceptor.is_active() {
             let test_count = test_list.run_count();
 
             if test_count == 0 {
-                return Err(ExpectedError::DebuggerNoTests {
-                    debugger: debugger.clone(),
-                });
+                if let Some(debugger) = &runner_opts.interceptor.debugger {
+                    return Err(ExpectedError::DebuggerNoTests {
+                        debugger: debugger.clone(),
+                    });
+                } else if let Some(tracer) = &runner_opts.interceptor.tracer {
+                    return Err(ExpectedError::TracerNoTests {
+                        tracer: tracer.clone(),
+                    });
+                } else {
+                    unreachable!("interceptor is active but neither debugger nor tracer is set");
+                }
             } else if test_count > 1 {
                 // Collect the first 8 matching test instances for the error
                 // message.
@@ -672,29 +680,43 @@ impl App {
                     .map(|test| test.id().to_owned())
                     .collect();
 
-                return Err(ExpectedError::DebuggerTooManyTests {
-                    debugger: debugger.clone(),
-                    test_count,
-                    test_instances,
-                });
+                if let Some(debugger) = &runner_opts.interceptor.debugger {
+                    return Err(ExpectedError::DebuggerTooManyTests {
+                        debugger: debugger.clone(),
+                        test_count,
+                        test_instances,
+                    });
+                } else if let Some(tracer) = &runner_opts.interceptor.tracer {
+                    return Err(ExpectedError::TracerTooManyTests {
+                        tracer: tracer.clone(),
+                        test_count,
+                        test_instances,
+                    });
+                } else {
+                    unreachable!("interceptor is active but neither debugger nor tracer is set");
+                }
             }
         }
 
         let output = output_writer.reporter_output();
 
-        let signal_handler = if runner_opts.debugger.is_some() {
+        let signal_handler = if runner_opts.interceptor.debugger.is_some() {
+            // Only debuggers use special signal handling. Tracers use standard
+            // handling.
             SignalHandlerKind::DebuggerMode
         } else {
             SignalHandlerKind::Standard
         };
 
-        let input_handler = if reporter_opts.no_input_handler || runner_opts.debugger.is_some() {
-            InputHandlerKind::Noop
-        } else {
-            // This means that the input handler determines whether it should be
-            // enabled.
-            InputHandlerKind::Standard
-        };
+        let input_handler =
+            if reporter_opts.no_input_handler || runner_opts.interceptor.debugger.is_some() {
+                // Only debuggers disable the input handler.
+                InputHandlerKind::Noop
+            } else {
+                // This means that the input handler determines whether it
+                // should be enabled.
+                InputHandlerKind::Standard
+            };
 
         // Make the runner.
         let Some(runner_builder) = runner_builder else {

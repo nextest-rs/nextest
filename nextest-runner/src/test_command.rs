@@ -6,7 +6,7 @@ use crate::{
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     helpers::dylib_path_envvar,
     list::{RustBuildMeta, TestListState},
-    runner::DebuggerCommand,
+    runner::Interceptor,
     test_output::CaptureStrategy,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -63,10 +63,10 @@ impl TestCommand {
         cwd: &Utf8Path,
         package: &PackageMetadata<'_>,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
-        debugger: Option<&DebuggerCommand>,
+        interceptor: &Interceptor,
     ) -> Self {
-        let mut cmd = if let Some(debugger_cmd) = debugger {
-            create_command_with_debugger(program.clone(), args, debugger_cmd)
+        let mut cmd = if interceptor.should_show_wrapper_command() {
+            create_command_with_interceptor(program.clone(), args, interceptor)
         } else {
             create_command(program.clone(), args, lctx.double_spawn)
         };
@@ -203,22 +203,28 @@ where
     }
 }
 
-pub(crate) fn create_command_with_debugger<I, S>(
+pub(crate) fn create_command_with_interceptor<I, S>(
     program: String,
     args: I,
-    debugger: &DebuggerCommand,
+    interceptor: &Interceptor,
 ) -> std::process::Command
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    // When creating a command with a debugger, we do not use the double-spawn
+    // When creating a command with an interceptor, we do not use the double-spawn
     // mechanism. Double-spawn is used to solve races between rapid process
-    // creation and SIGTSTP, but with a debugger we're creating processes
+    // creation and SIGTSTP, but with interceptors we're creating processes
     // serially so this is not really a concern.
 
-    let mut cmd = std::process::Command::new(debugger.program());
-    cmd.args(debugger.args());
+    let (interceptor_program, interceptor_args) = match interceptor {
+        Interceptor::None => unreachable!("create_command_with_interceptor called with None"),
+        Interceptor::Debugger(cmd) => (cmd.program(), cmd.args()),
+        Interceptor::Tracer(cmd) => (cmd.program(), cmd.args()),
+    };
+
+    let mut cmd = std::process::Command::new(interceptor_program);
+    cmd.args(interceptor_args);
     cmd.arg(&program);
     cmd.args(args.into_iter().map(|arg| arg.as_ref().to_owned()));
 
