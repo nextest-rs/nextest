@@ -13,6 +13,7 @@ mod helpers;
 mod imp;
 pub mod structured;
 
+pub use aggregator::EventAggregator;
 pub use displayer::{
     FinalStatusLevel, MaxProgressRunning, ShowProgress, StatusLevel, TestOutputDisplay,
 };

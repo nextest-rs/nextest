@@ -29,6 +29,7 @@ use nextest_runner::{
     platform::BuildPlatforms,
     redact::Redactor,
     reporter::{
+        EventAggregator,
         events::{FinalRunStats, RunStatsFailureKind},
         structured,
     },
@@ -387,11 +388,6 @@ impl BaseApp {
         let profile = config
             .profile(profile_name)
             .map_err(ExpectedError::profile_not_found)?;
-        let store_dir = profile.store_dir();
-        std::fs::create_dir_all(store_dir).map_err(|err| ExpectedError::StoreDirCreateError {
-            store_dir: store_dir.to_owned(),
-            err,
-        })?;
         Ok(profile)
     }
 }
@@ -489,7 +485,7 @@ impl App {
                     .base
                     .load_runner(&binary_list.rust_build_meta.build_platforms);
                 let profile =
-                    profile.apply_build_platforms(&binary_list.rust_build_meta.build_platforms);
+                    profile.into_evaluatable(&binary_list.rust_build_meta.build_platforms);
                 let ctx = TestExecuteContext {
                     profile_name: profile.name(),
                     double_spawn,
@@ -545,7 +541,7 @@ impl App {
 
         let double_spawn = self.base.load_double_spawn();
         let target_runner = self.base.load_runner(&build_platforms);
-        let profile = profile.apply_build_platforms(&build_platforms);
+        let profile = profile.into_evaluatable(&build_platforms);
         let ctx = TestExecuteContext {
             profile_name: profile.name(),
             double_spawn,
@@ -642,10 +638,16 @@ impl App {
 
         let binary_list = self.base.build_binary_list()?;
         let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
+        let target_dir = &binary_list.rust_build_meta.target_directory;
         let double_spawn = self.base.load_double_spawn();
         let target_runner = self.base.load_runner(build_platforms);
 
-        let profile = profile.apply_build_platforms(build_platforms);
+        let profile = profile.into_evaluatable(build_platforms);
+
+        // Create the aggregator early so that any errors are reported before
+        // running tests. This also creates the store directory.
+        let aggregator = EventAggregator::new(&profile, target_dir)?;
+
         let ctx = TestExecuteContext {
             profile_name: profile.name(),
             double_spawn,
@@ -739,6 +741,7 @@ impl App {
             &profile,
             &self.base.cargo_configs,
             output,
+            aggregator,
             structured_reporter,
         );
 
@@ -810,7 +813,7 @@ impl ArchiveApp {
         let profile = self
             .base
             .load_profile(&config)?
-            .apply_build_platforms(build_platforms);
+            .into_evaluatable(build_platforms);
         let redactor = if crate::output::should_redact() {
             Redactor::build_active(&binary_list.rust_build_meta)
                 .with_path(output_file.to_path_buf(), "<archive-file>".to_owned())
