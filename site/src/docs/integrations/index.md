@@ -9,6 +9,7 @@ Nextest integrates with a number of other tools in the Rust ecosystem and beyond
 
 - [Test coverage with llvm-cov](test-coverage.md)
 - [The Miri interpreter for Rust](miri.md)
+- [Debuggers and system call tracers](debuggers-tracers.md)
 - [Criterion benchmarks](criterion.md)
 - [Mutation testing with cargo-mutants](cargo-mutants.md)
 - [USDT probes with bpftrace and DTrace](usdt.md)
