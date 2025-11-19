@@ -17,7 +17,7 @@ If the limit is set to 1, this is similar to `cargo test` with [the `serial_test
 
 !!! warning "No support for in-process mutexes"
 
-    With `cargo test`, some projects use in-process mutexes or semaphores for this purpose. Because nextest's execution model is process-per-test, does not support them directly. Instead, you can emulate them by using test groups.
+    With `cargo test`, some projects use in-process mutexes or semaphores for this purpose. Because nextest's execution model is process-per-test, it does not support them directly. Instead, you can emulate them by using test groups.
 
 ## Use cases
 
