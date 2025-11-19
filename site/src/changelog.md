@@ -9,6 +9,12 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.114] - 2025-11-18
+
+### Added
+
+- A new config option `--tracer` enables running a test [under a system call tracer](https://nexte.st/docs/integrations/debuggers-tracers/) like `strace` or `truss`. This mode is similar to `--debugger` added in version 0.9.113, but is optimized for non-interactive sessions. See [this table](https://nexte.st/docs/integrations/debuggers-tracers/#behavior-comparison) for a comparison of behaviors.
+
 ## [0.9.113] - 2025-11-16
 
 ### Added
