@@ -576,7 +576,7 @@ impl NextestConfig {
             );
         }
 
-        // Observe if the config file has a cycle in the inheritance chain
+        // Observe if the config file has cycle(s) in the inheritance chain
         this_config.check_inheritance_cycles()?;
 
         // Compile the overrides for this file.
@@ -966,10 +966,28 @@ pub struct EvaluatableProfile<'cfg> {
     resolved_default_filter: CompiledDefaultFilter,
 }
 
-// TODO: macros for profile_config_field with consideration
-// of inheritance chain
-macro_rules! profile_config_field {
-    () => {};
+/// Returns a specific config field from an EvaluatableProfile
+/// given priority in the following order:
+/// it's current custom profile, the first custom profile
+/// in the inheritance chain that contains the field,
+/// or the default profile
+macro_rules! profile_field {
+    ($eval_prof:ident.$field:ident) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|inherit_profile| inherit_profile.$field)
+            .unwrap_or($eval_prof.default_profile.$field)
+    };
+    ($eval_prof:ident.$field:ident.$ref_func:ident()) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|inherit_profile| inherit_profile.$field.$ref_func())
+            .unwrap_or(&$eval_prof.default_profile.$field)
+    };
 }
 
 impl<'cfg> EvaluatableProfile<'cfg> {
@@ -1007,94 +1025,68 @@ impl<'cfg> EvaluatableProfile<'cfg> {
 
     /// Returns the retry count for this profile.
     pub fn retries(&self) -> RetryPolicy {
-        self.custom_profile
-            .and_then(|profile| profile.retries)
-            .unwrap_or(self.default_profile.retries)
+        profile_field!(self.retries)
     }
 
     /// Returns the number of threads to run against for this profile.
     pub fn test_threads(&self) -> TestThreads {
-        self.custom_profile
-            .and_then(|profile| profile.test_threads)
-            .unwrap_or(self.default_profile.test_threads)
+        profile_field!(self.test_threads)
     }
 
     /// Returns the number of threads required for each test.
     pub fn threads_required(&self) -> ThreadsRequired {
-        self.custom_profile
-            .and_then(|profile| profile.threads_required)
-            .unwrap_or(self.default_profile.threads_required)
+        profile_field!(self.threads_required)
     }
 
     /// Returns extra arguments to be passed to the test binary at runtime.
     pub fn run_extra_args(&self) -> &'cfg [String] {
-        self.custom_profile
-            .and_then(|profile| profile.run_extra_args.as_deref())
-            .unwrap_or(&self.default_profile.run_extra_args)
+        profile_field!(self.run_extra_args.as_deref())
     }
 
     /// Returns the time after which tests are treated as slow for this profile.
     pub fn slow_timeout(&self) -> SlowTimeout {
-        self.custom_profile
-            .and_then(|profile| profile.slow_timeout)
-            .unwrap_or(self.default_profile.slow_timeout)
+        profile_field!(self.slow_timeout)
     }
 
     /// Returns the time after which we should stop running tests.
     pub fn global_timeout(&self) -> GlobalTimeout {
-        self.custom_profile
-            .and_then(|profile| profile.global_timeout)
-            .unwrap_or(self.default_profile.global_timeout)
+        profile_field!(self.global_timeout)
     }
 
     /// Returns the time after which a child process that hasn't closed its handles is marked as
     /// leaky.
     pub fn leak_timeout(&self) -> LeakTimeout {
-        self.custom_profile
-            .and_then(|profile| profile.leak_timeout)
-            .unwrap_or(self.default_profile.leak_timeout)
+        profile_field!(self.leak_timeout)
     }
 
     /// Returns the test status level.
     pub fn status_level(&self) -> StatusLevel {
-        self.custom_profile
-            .and_then(|profile| profile.status_level)
-            .unwrap_or(self.default_profile.status_level)
+        profile_field!(self.status_level)
     }
 
     /// Returns the test status level at the end of the run.
     pub fn final_status_level(&self) -> FinalStatusLevel {
-        self.custom_profile
-            .and_then(|profile| profile.final_status_level)
-            .unwrap_or(self.default_profile.final_status_level)
+        profile_field!(self.final_status_level)
     }
 
     /// Returns the failure output config for this profile.
     pub fn failure_output(&self) -> TestOutputDisplay {
-        self.custom_profile
-            .and_then(|profile| profile.failure_output)
-            .unwrap_or(self.default_profile.failure_output)
+        profile_field!(self.failure_output)
     }
 
     /// Returns the failure output config for this profile.
     pub fn success_output(&self) -> TestOutputDisplay {
-        self.custom_profile
-            .and_then(|profile| profile.success_output)
-            .unwrap_or(self.default_profile.success_output)
+        profile_field!(self.success_output)
     }
 
     /// Returns the max-fail config for this profile.
     pub fn max_fail(&self) -> MaxFail {
-        self.custom_profile
-            .and_then(|profile| profile.max_fail)
-            .unwrap_or(self.default_profile.max_fail)
+        profile_field!(self.max_fail)
     }
 
     /// Returns the archive configuration for this profile.
     pub fn archive_config(&self) -> &'cfg ArchiveConfig {
-        self.custom_profile
-            .and_then(|profile| profile.archive.as_ref())
-            .unwrap_or(&self.default_profile.archive)
+        profile_field!(self.archive.as_ref())
     }
 
     /// Returns the list of setup scripts.
