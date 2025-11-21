@@ -1231,16 +1231,13 @@ impl NextestConfigImpl {
             }
             // covers for other and any future default profiles reserved by Nextest
             // (i.e. "default-miri")
-            else {
-                if let Ok(ok_default) = self.get_profile(&default_profile) {
-                    if let Some(other_default) = ok_default {
-                        if other_default.inherits().is_some() {
-                            inherit_err_collector.push(InheritError::DefaultProfileInheritance(
-                                default_profile.to_string(),
-                            ));
-                        }
-                    }
-                }
+            else if let Ok(ok_default) = self.get_profile(default_profile)
+                && let Some(other_default) = ok_default
+                && other_default.inherits().is_some()
+            {
+                inherit_err_collector.push(InheritError::DefaultProfileInheritance(
+                    default_profile.to_string(),
+                ));
             }
         }
     }
@@ -1258,38 +1255,36 @@ impl NextestConfigImpl {
             // certain reserved default profile are in other_profiles (i.e. "default-miri")
             // ignore them
             let profile_type = self.get_profile(name).expect("profile should exist");
-            if let Some(_) = profile_type {
-                if let Some(inherits_name) = custom_profile.inherits() {
-                    if inherits_name == name {
-                        inherit_err_collector
-                            .push(InheritError::SelfReferentialInheritance(name.to_string()))
-                    } else {
-                        if let Ok(_) = self.get_profile(&inherits_name) {
-                            // inherited profile exists, create the edge in the graph
-                            let from_node = match profile_map.get(name) {
-                                None => {
-                                    let profile_node = profile_graph.add_node(name);
-                                    profile_map.insert(name, profile_node);
-                                    profile_node
-                                }
-                                Some(node_idx) => *node_idx,
-                            };
-                            let to_node = match profile_map.get(inherits_name) {
-                                None => {
-                                    let profile_node = profile_graph.add_node(&inherits_name);
-                                    profile_map.insert(&inherits_name, profile_node);
-                                    profile_node
-                                }
-                                Some(node_idx) => *node_idx,
-                            };
-                            profile_graph.add_edge(from_node, to_node, ());
-                        } else {
-                            inherit_err_collector.push(InheritError::UnknownInheritance(
-                                name.to_string(),
-                                inherits_name.to_string(),
-                            ))
+            if profile_type.is_some()
+                && let Some(inherits_name) = custom_profile.inherits()
+            {
+                if inherits_name == name {
+                    inherit_err_collector
+                        .push(InheritError::SelfReferentialInheritance(name.to_string()))
+                } else if self.get_profile(inherits_name).is_ok() {
+                    // inherited profile exists, create the edge in the graph
+                    let from_node = match profile_map.get(name) {
+                        None => {
+                            let profile_node = profile_graph.add_node(name);
+                            profile_map.insert(name, profile_node);
+                            profile_node
                         }
-                    }
+                        Some(node_idx) => *node_idx,
+                    };
+                    let to_node = match profile_map.get(inherits_name) {
+                        None => {
+                            let profile_node = profile_graph.add_node(inherits_name);
+                            profile_map.insert(inherits_name, profile_node);
+                            profile_node
+                        }
+                        Some(node_idx) => *node_idx,
+                    };
+                    profile_graph.add_edge(from_node, to_node, ());
+                } else {
+                    inherit_err_collector.push(InheritError::UnknownInheritance(
+                        name.to_string(),
+                        inherits_name.to_string(),
+                    ))
                 }
             }
         }
@@ -1306,7 +1301,7 @@ impl NextestConfigImpl {
                         for node_idx in node_idxs {
                             scc.push_str(profile_graph[*node_idx]);
                         }
-                        scc.push_str("]");
+                        scc.push(']');
                         scc
                     })
                     .collect(),
