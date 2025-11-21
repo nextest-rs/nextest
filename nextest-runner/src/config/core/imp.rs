@@ -1139,7 +1139,7 @@ pub(in crate::config) struct NextestConfigImpl {
 impl NextestConfigImpl {
     fn get_profile(&self, profile: &str) -> Result<Option<&CustomProfileImpl>, ProfileNotFound> {
         let custom_profile = match profile {
-            default if NextestConfig::DEFAULT_PROFILES.contains(&default) => None,
+            NextestConfig::DEFAULT_PROFILE => None,
             other => Some(
                 self.other_profiles
                     .get(other)
@@ -1252,12 +1252,13 @@ impl NextestConfigImpl {
         // a reduced graph of the inheritance chain(s) after handling nonexistent
         // inheritance and self referential inheritance
         for (name, custom_profile) in self.other_profiles() {
-            // certain reserved default profile are in other_profiles (i.e. "default-miri")
-            // ignore them
-            let profile_type = self.get_profile(name).expect("profile should exist");
-            if profile_type.is_some()
-                && let Some(inherits_name) = custom_profile.inherits()
-            {
+            // Certain reserved default profile are in other_profiles (i.e. "default-miri")
+            // which should be ignored. Note that DEFAULT_PROFILES contains 2 strings, so this
+            // check is pretty much constant time, but if more reserved default profile were to
+            // be added, we should consider having a Hashmap impl to check if current profile name
+            // is a default profile
+            let profile_type = NextestConfig::DEFAULT_PROFILES.contains(&name);
+            if !profile_type && let Some(inherits_name) = custom_profile.inherits() {
                 if inherits_name == name {
                     inherit_err_collector
                         .push(InheritError::SelfReferentialInheritance(name.to_string()))
