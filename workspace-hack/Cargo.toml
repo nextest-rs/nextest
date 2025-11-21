@@ -23,9 +23,9 @@ clap = { version = "4.5.53", features = ["derive", "env", "unicode", "unstable-m
 clap_builder = { version = "4.5.53", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
 either = { version = "1.15.0", features = ["use_std"] }
 getrandom = { version = "0.3.3", default-features = false, features = ["std"] }
-hashbrown = { version = "0.16.0", default-features = false, features = ["allocator-api2", "inline-more"] }
+hashbrown = { version = "0.16.1", default-features = false, features = ["allocator-api2", "inline-more"] }
 idna_adapter = { version = "1.0.0", default-features = false, features = ["compiled_data"] }
-indexmap = { version = "2.12.0", features = ["serde"] }
+indexmap = { version = "2.12.1", features = ["serde"] }
 log = { version = "0.4.28", default-features = false, features = ["std"] }
 memchr = { version = "2.7.5" }
 miette = { version = "7.6.0", features = ["fancy"] }
