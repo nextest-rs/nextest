@@ -6,7 +6,7 @@ use crate::{
     config::{
         core::ConfigExperimental,
         elements::{
-            ArchiveConfig, CustomTestGroup, DefaultJunitImpl, GlobalTimeout, JunitConfig,
+            ArchiveConfig, CustomTestGroup, DefaultJunitImpl, GlobalTimeout, Inherits, JunitConfig,
             JunitImpl, LeakTimeout, MaxFail, RetryPolicy, SlowTimeout, TestGroup, TestGroupConfig,
             TestThreads, ThreadsRequired, deserialize_fail_fast, deserialize_leak_timeout,
             deserialize_retry_policy, deserialize_slow_timeout,
@@ -21,7 +21,7 @@ use crate::{
         },
     },
     errors::{
-        ConfigParseError, ConfigParseErrorKind, ProfileListScriptUsesRunFiltersError,
+        ConfigParseError, ConfigParseErrorKind, InheritError, ProfileListScriptUsesRunFiltersError,
         ProfileNotFound, ProfileScriptErrors, ProfileUnknownScriptError,
         ProfileWrongConfigScriptTypeError, UnknownTestGroupError, provided_by_tool,
     },
@@ -37,9 +37,7 @@ use config::{
 use iddqd::IdOrdMap;
 use indexmap::IndexMap;
 use nextest_filtering::{BinaryQuery, EvalContext, Filterset, ParseContext, TestQuery};
-use petgraph::{
-    Directed, Direction, Graph, algo::scc::kosaraju_scc, graph::NodeIndex, visit::EdgeRef,
-};
+use petgraph::{Directed, Graph, algo::scc::kosaraju_scc};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, hash_map},
@@ -579,7 +577,7 @@ impl NextestConfig {
         }
 
         // Observe if the config file has cycle(s) in the inheritance chain
-        this_config.check_inheritance_cycles()?;
+        this_config.sanitize_profile_inherits()?;
 
         // Compile the overrides for this file.
         let this_compiled = CompiledByProfile::new(pcx, &this_config)
@@ -1141,7 +1139,7 @@ pub(in crate::config) struct NextestConfigImpl {
 impl NextestConfigImpl {
     fn get_profile(&self, profile: &str) -> Result<Option<&CustomProfileImpl>, ProfileNotFound> {
         let custom_profile = match profile {
-            NextestConfig::DEFAULT_PROFILE => None,
+            default if NextestConfig::DEFAULT_PROFILES.contains(&default) => None,
             other => Some(
                 self.other_profiles
                     .get(other)
@@ -1201,86 +1199,119 @@ impl NextestConfigImpl {
         Ok(())
     }
 
-    /// Checks if a cycle exists in an inheritance chain
-    fn check_inheritance_cycles(&self) -> Result<(), ConfigParseError> {
-        let mut profile_graph = Graph::<&str, (), Directed>::new();
-        let mut profile_map = HashMap::new();
+    /// Sanitize inherits settings on default and custom profiles
+    fn sanitize_profile_inherits(&self) -> Result<(), ConfigParseError> {
+        let mut inherit_err_collector = Vec::new();
 
-        // Grab all profile names and insert into map
-        for profile in self.all_profiles() {
-            let profile_node = profile_graph.add_node(profile);
-            profile_map.insert(profile.to_string(), profile_node);
-        }
+        self.default_profile_inheritance(&mut inherit_err_collector);
+        self.check_inheritance_cycles(&mut inherit_err_collector);
 
-        // For each custom profile, we add a directed edge from the inherited node
-        // to the current custom profile node
-        for (profile_name, profile) in &self.other_profiles {
-            if let Some(inherit_name) = &profile.inherits
-                && let (Some(&from), Some(&to)) =
-                    (profile_map.get(inherit_name), profile_map.get(profile_name))
-            {
-                profile_graph.add_edge(from, to, ());
-            }
-        }
-
-        // Collect all profile nodes that do not have an edge (a self referential inherited
-        // profile will have an edge) and remove them from the graph
-        let mut conn_profile_graph = Graph::<&str, (), Directed>::new();
-        let mut conn_profile_map = HashMap::new();
-
-        // Collects all nodes with incoming/outgoing edges
-        let connected_profiles: Vec<NodeIndex> = profile_graph
-            .node_indices()
-            .filter(|&node_idx| {
-                profile_graph
-                    .edges_directed(node_idx, Direction::Incoming)
-                    .next()
-                    .is_some()
-                    || profile_graph
-                        .edges_directed(node_idx, Direction::Outgoing)
-                        .next()
-                        .is_some()
-            })
-            .collect();
-
-        // Add those connected nodes into the new graph
-        for profile in connected_profiles.iter() {
-            let profile_node = conn_profile_graph.add_node(profile_graph[*profile]);
-            conn_profile_map.insert(profile_graph[*profile], profile_node);
-        }
-
-        // Connect only the outgoing edges
-        // It's guaranteed that an inherited profile has 1 outgoing edge
-        for profile_node in connected_profiles.iter() {
-            if let Some(from_profile) = conn_profile_map.get(conn_profile_graph[*profile_node])
-                && let Some(outgoing_edge) = profile_graph
-                    .edges_directed(*profile_node, Direction::Outgoing)
-                    .next()
-                && let Some(to_profile) =
-                    conn_profile_map.get(conn_profile_graph[outgoing_edge.target()])
-            {
-                profile_graph.add_edge(*from_profile, *to_profile, ());
-            }
-        }
-
-        // Detects all strongly connected components (SCCs) within the graph
-        // and if there are exists any (or multiple), returns an error with
-        // all SCCs
-        let profile_sccs = kosaraju_scc(&conn_profile_graph);
-        if !profile_sccs.is_empty() {
+        if !inherit_err_collector.is_empty() {
             return Err(ConfigParseError::new(
-                "inheritance cycle detected in profile configuration",
+                "inheritance error(s) detected",
                 None,
-                ConfigParseErrorKind::InheritanceCycle(
-                    profile_sccs
-                        .iter()
-                        .map(|profile_scc| conn_profile_graph[profile_scc[0]].to_string())
-                        .collect(),
-                ),
+                ConfigParseErrorKind::InheritanceErrors(inherit_err_collector),
             ));
         }
 
         Ok(())
+    }
+
+    /// Check that default profiles do not attempt to inherit from other
+    /// profiles
+    fn default_profile_inheritance(&self, inherit_err_collector: &mut Vec<InheritError>) {
+        for default_profile in NextestConfig::DEFAULT_PROFILES {
+            // covers for "default" profile
+            if *default_profile == NextestConfig::DEFAULT_PROFILE {
+                if self.default_profile().inherits().is_some() {
+                    inherit_err_collector.push(InheritError::DefaultProfileInheritance(
+                        default_profile.to_string(),
+                    ));
+                }
+            }
+            // covers for other and any future default profiles reserved by Nextest
+            // (i.e. "default-miri")
+            else {
+                if let Ok(ok_default) = self.get_profile(&default_profile) {
+                    if let Some(other_default) = ok_default {
+                        if other_default.inherits().is_some() {
+                            inherit_err_collector.push(InheritError::DefaultProfileInheritance(
+                                default_profile.to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Checks for the following: invalid inheritance, self referential inheritance,
+    /// and inheritance chain cycle
+    fn check_inheritance_cycles(&self, inherit_err_collector: &mut Vec<InheritError>) {
+        let mut profile_graph = Graph::<&str, (), Directed>::new();
+        let mut profile_map = HashMap::new();
+
+        // Iterates through all custom profiles within the config file and constructs
+        // a reduced graph of the inheritance chain(s) after handling nonexistent
+        // inheritance and self referential inheritance
+        for (name, custom_profile) in self.other_profiles() {
+            // certain reserved default profile are in other_profiles (i.e. "default-miri")
+            // ignore them
+            let profile_type = self.get_profile(name).expect("profile should exist");
+            if let Some(_) = profile_type {
+                if let Some(inherits_name) = custom_profile.inherits() {
+                    if inherits_name == name {
+                        inherit_err_collector
+                            .push(InheritError::SelfReferentialInheritance(name.to_string()))
+                    } else {
+                        if let Ok(_) = self.get_profile(&inherits_name) {
+                            // inherited profile exists, create the edge in the graph
+                            let from_node = match profile_map.get(name) {
+                                None => {
+                                    let profile_node = profile_graph.add_node(name);
+                                    profile_map.insert(name, profile_node);
+                                    profile_node
+                                }
+                                Some(node_idx) => *node_idx,
+                            };
+                            let to_node = match profile_map.get(inherits_name) {
+                                None => {
+                                    let profile_node = profile_graph.add_node(&inherits_name);
+                                    profile_map.insert(&inherits_name, profile_node);
+                                    profile_node
+                                }
+                                Some(node_idx) => *node_idx,
+                            };
+                            profile_graph.add_edge(from_node, to_node, ());
+                        } else {
+                            inherit_err_collector.push(InheritError::UnknownInheritance(
+                                name.to_string(),
+                                inherits_name.to_string(),
+                            ))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Detects all strongly connected components (SCCs) within the graph
+        // and appends them to the
+        let profile_sccs = kosaraju_scc(&profile_graph);
+        if !profile_sccs.is_empty() {
+            inherit_err_collector.push(InheritError::InheritanceCycle(
+                profile_sccs
+                    .iter()
+                    .map(|node_idxs| {
+                        let mut scc = String::from("[");
+                        for node_idx in node_idxs {
+                            scc.push_str(profile_graph[*node_idx]);
+                        }
+                        scc.push_str("]");
+                        scc
+                    })
+                    .collect(),
+            ));
+        }
     }
 }
 
@@ -1363,6 +1394,7 @@ pub(in crate::config) struct DefaultProfileImpl {
     scripts: Vec<DeserializedProfileScriptConfig>,
     junit: DefaultJunitImpl,
     archive: ArchiveConfig,
+    inherits: Inherits,
 }
 
 impl DefaultProfileImpl {
@@ -1407,11 +1439,16 @@ impl DefaultProfileImpl {
             scripts: p.scripts,
             junit: DefaultJunitImpl::for_default_profile(p.junit),
             archive: p.archive.expect("archive present in default profile"),
+            inherits: Inherits::new(p.inherits),
         }
     }
 
     pub(in crate::config) fn default_filter(&self) -> &str {
         &self.default_filter
+    }
+
+    pub(in crate::config) fn inherits(&self) -> Option<&str> {
+        self.inherits.inherits_from()
     }
 
     pub(in crate::config) fn overrides(&self) -> &[DeserializedOverride] {
@@ -1477,6 +1514,10 @@ impl CustomProfileImpl {
 
     pub(in crate::config) fn default_filter(&self) -> Option<&str> {
         self.default_filter.as_deref()
+    }
+
+    pub(in crate::config) fn inherits(&self) -> Option<&str> {
+        self.inherits.as_deref()
     }
 
     pub(in crate::config) fn overrides(&self) -> &[DeserializedOverride] {

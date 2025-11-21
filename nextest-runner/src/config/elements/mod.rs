@@ -5,6 +5,7 @@
 
 mod archive;
 mod global_timeout;
+mod inherits;
 mod junit;
 mod leak_timeout;
 mod max_fail;
@@ -17,6 +18,7 @@ mod threads_required;
 
 pub use archive::*;
 pub use global_timeout::*;
+pub use inherits::*;
 pub use junit::*;
 pub use leak_timeout::*;
 pub use max_fail::*;

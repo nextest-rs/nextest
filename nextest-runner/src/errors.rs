@@ -179,8 +179,8 @@ pub enum ConfigParseErrorKind {
         missing_features: BTreeSet<ConfigExperimental>,
     },
     /// An inheritance cycle was detected in the profile configuration.
-    #[error("inheritance cycle detected in profile configuration from: {}", .0.iter().join(", "))]
-    InheritanceCycle(Vec<String>),
+    #[error("inheritance error(s) detected: {}", .0.iter().join(", "))]
+    InheritanceErrors(Vec<InheritError>),
 }
 
 /// An error that occurred while compiling overrides or scripts specified in
@@ -1810,6 +1810,23 @@ pub enum ShowTestGroupsError {
         /// All known test groups.
         known_groups: BTreeSet<TestGroup>,
     },
+}
+
+/// An error occurred while processing profile's inherits setting
+#[derive(Debug, Error)]
+pub enum InheritError {
+    /// The default profile should not be able to inherit from other profiles
+    #[error("the {} profile should not inherit from other profiles", .0)]
+    DefaultProfileInheritance(String),
+    /// An unknown/unfound profile was detected to inherit from in profile configuration
+    #[error("profile {} inherits from an unknown profile {}", .0, .1)]
+    UnknownInheritance(String, String),
+    /// A self referential inheritance is detected from this profile
+    #[error("a self referential inheritance is detected from profile: {}", .0)]
+    SelfReferentialInheritance(String),
+    /// An inheritance cycle was detected in the profile configuration.
+    #[error("inheritance cycle detected in profile configuration from: {}", .0.iter().join(", "))]
+    InheritanceCycle(Vec<String>),
 }
 
 #[cfg(feature = "self-update")]
