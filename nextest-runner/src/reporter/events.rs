@@ -8,7 +8,10 @@
 
 use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 use crate::{
-    config::{elements::LeakTimeoutResult, scripts::ScriptId},
+    config::{
+        elements::{LeakTimeoutResult, SlowTimeoutResult},
+        scripts::ScriptId,
+    },
     list::{TestInstance, TestInstanceId, TestList},
     runner::{StressCondition, StressCount},
     test_output::ChildExecutionOutput,
@@ -519,23 +522,26 @@ pub struct RunStats {
     /// The number of setup scripts that timed out.
     pub setup_scripts_timed_out: usize,
 
-    /// The number of tests that passed. Includes `passed_slow`, `flaky` and `leaky`.
+    /// The number of tests that passed. Includes `passed_slow`, `passed_timed_out`, `flaky` and `leaky`.
     pub passed: usize,
 
     /// The number of slow tests that passed.
     pub passed_slow: usize,
 
+    /// The number of timed out tests that passed.
+    pub passed_timed_out: usize,
+
     /// The number of tests that passed on retry.
     pub flaky: usize,
 
-    /// The number of tests that failed.
+    /// The number of tests that failed. Includes `leaky_failed`.
     pub failed: usize,
 
     /// The number of failed tests that were slow.
     pub failed_slow: usize,
 
-    /// The number of tests that timed out.
-    pub timed_out: usize,
+    /// The number of timed out tests that failed.
+    pub failed_timed_out: usize,
 
     /// The number of tests that passed but leaked handles.
     pub leaky: usize,
@@ -567,7 +573,7 @@ impl RunStats {
 
     /// Returns count of tests that did not pass.
     pub fn failed_count(&self) -> usize {
-        self.failed + self.exec_failed + self.timed_out
+        self.failed + self.exec_failed + self.failed_timed_out
     }
 
     /// Summarizes the stats as an enum at the end of a test run.
@@ -640,7 +646,8 @@ impl RunStats {
             ExecutionResult::ExecFail => {
                 self.setup_scripts_exec_failed += 1;
             }
-            ExecutionResult::Timeout => {
+            // Timed out setup scripts are always treated as failures
+            ExecutionResult::Timeout { .. } => {
                 self.setup_scripts_timed_out += 1;
             }
         }
@@ -694,7 +701,20 @@ impl RunStats {
                     self.failed_slow += 1;
                 }
             }
-            ExecutionResult::Timeout => self.timed_out += 1,
+            ExecutionResult::Timeout {
+                result: SlowTimeoutResult::Pass,
+            } => {
+                self.passed += 1;
+                self.passed_timed_out += 1;
+                if run_statuses.len() > 1 {
+                    self.flaky += 1;
+                }
+            }
+            ExecutionResult::Timeout {
+                result: SlowTimeoutResult::Fail,
+            } => {
+                self.failed_timed_out += 1;
+            }
             ExecutionResult::ExecFail => self.exec_failed += 1,
         }
     }
@@ -1038,7 +1058,10 @@ pub enum ExecutionResult {
     /// An error occurred while executing the test.
     ExecFail,
     /// The test was terminated due to a timeout.
-    Timeout,
+    Timeout {
+        /// Whether this timeout was treated as a failure.
+        result: SlowTimeoutResult,
+    },
 }
 
 impl ExecutionResult {
@@ -1046,6 +1069,9 @@ impl ExecutionResult {
     pub fn is_success(self) -> bool {
         match self {
             ExecutionResult::Pass
+            | ExecutionResult::Timeout {
+                result: SlowTimeoutResult::Pass,
+            }
             | ExecutionResult::Leak {
                 result: LeakTimeoutResult::Pass,
             } => true,
@@ -1054,7 +1080,9 @@ impl ExecutionResult {
             }
             | ExecutionResult::Fail { .. }
             | ExecutionResult::ExecFail
-            | ExecutionResult::Timeout => false,
+            | ExecutionResult::Timeout {
+                result: SlowTimeoutResult::Fail,
+            } => false,
         }
     }
 
@@ -1090,7 +1118,7 @@ impl ExecutionResult {
             ExecutionResult::Leak { .. } => "leak",
             ExecutionResult::Fail { .. } => "fail",
             ExecutionResult::ExecFail => "exec-fail",
-            ExecutionResult::Timeout => "timeout",
+            ExecutionResult::Timeout { .. } => "timeout",
         }
     }
 }
@@ -1574,7 +1602,7 @@ mod tests {
             RunStats {
                 initial_run_count: 42,
                 finished_count: 42,
-                timed_out: 1,
+                failed_timed_out: 1,
                 ..RunStats::default()
             }
             .summarize_final(),
@@ -1582,7 +1610,18 @@ mod tests {
                 initial_run_count: 42,
                 not_run: 0
             }),
-            "timed out => failure"
+            "timed out => failure {:?} {:?}",
+            RunStats {
+                initial_run_count: 42,
+                finished_count: 42,
+                failed_timed_out: 1,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::Test {
+                initial_run_count: 42,
+                not_run: 0
+            }),
         );
         assert_eq!(
             RunStats {

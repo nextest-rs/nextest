@@ -320,6 +320,16 @@ fn test_slow_timeout_subprocess() {
 }
 
 #[test]
+#[ignore]
+fn test_flaky_slow_timeout_mod_3() {
+    let nextest_attempt = nextest_attempt();
+    if nextest_attempt % 3 != 0 {
+        panic!("Failed because attempt {} % 3 != 0", nextest_attempt)
+    }
+    std::thread::sleep(std::time::Duration::from_secs(4));
+}
+
+#[test]
 fn test_result_failure() -> Result<(), std::io::Error> {
     Err(std::io::Error::new(
         std::io::ErrorKind::InvalidData,

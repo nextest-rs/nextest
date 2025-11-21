@@ -23,7 +23,7 @@
 //! using before
 
 use crate::{
-    config::elements::LeakTimeoutResult,
+    config::elements::{LeakTimeoutResult, SlowTimeoutResult},
     errors::{DisplayErrorChain, FormatVersionError, FormatVersionErrorInner, WriteEventError},
     list::RustTestSuite,
     reporter::events::{ExecutionResult, StressIndex, TestEvent, TestEventKind},
@@ -268,6 +268,9 @@ impl<'cfg> LibtestReporter<'cfg> {
                     KIND_TEST,
                     match run_statuses.last_status().result {
                         ExecutionResult::Pass
+                        | ExecutionResult::Timeout {
+                            result: SlowTimeoutResult::Pass,
+                        }
                         | ExecutionResult::Leak {
                             result: LeakTimeoutResult::Pass,
                         } => EVENT_OK,
@@ -276,7 +279,9 @@ impl<'cfg> LibtestReporter<'cfg> {
                         }
                         | ExecutionResult::Fail { .. }
                         | ExecutionResult::ExecFail
-                        | ExecutionResult::Timeout => EVENT_FAILED,
+                        | ExecutionResult::Timeout {
+                            result: SlowTimeoutResult::Fail,
+                        } => EVENT_FAILED,
                     },
                     stress_index,
                     test_instance,
@@ -425,7 +430,9 @@ impl<'cfg> LibtestReporter<'cfg> {
                         )?;
                         out.extend_from_slice(b"\"");
                     }
-                    ExecutionResult::Timeout => {
+                    ExecutionResult::Timeout {
+                        result: SlowTimeoutResult::Fail,
+                    } => {
                         test_suite_mut.failed += 1;
                         out.extend_from_slice(br#","reason":"time limit exceeded""#);
                     }
