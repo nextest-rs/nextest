@@ -144,6 +144,10 @@ macro_rules! assert_env {
     };
 }
 
+fn check_env(env: &str) -> String {
+    std::env::var(env).expect(&format!("{env} must be set"))
+}
+
 /// Assert that test environment variables are correctly set.
 #[test]
 fn test_cargo_env_vars() {
@@ -156,7 +160,7 @@ fn test_cargo_env_vars() {
         Ok("1"),
         "NEXTEST environment variable set to 1"
     );
-    std::env::var("NEXTEST_RUN_ID")
+    let run_id = std::env::var("NEXTEST_RUN_ID")
         .expect("NEXTEST_RUN_ID must be set")
         .parse::<uuid::Uuid>()
         .expect("NEXTEST_RUN_ID must be a UUID");
@@ -171,6 +175,35 @@ fn test_cargo_env_vars() {
         Ok("process-per-test"),
         "NEXTEST_EXECUTION_MODE set to process-per-test"
     );
+
+    assert_eq!(
+        check_env("NEXTEST_ATTEMPT"),
+        nextest_attempt().to_string(),
+        "NEXTEST_ATTEMPT and __NEXTEST_ATTEMPT must be equal"
+    );
+
+    let test_name = "test_cargo_env_vars";
+    assert_eq!(check_env("NEXTEST_TEST_NAME"), test_name);
+    let binary_id = "nextest-tests::basic";
+    assert_eq!(check_env("NEXTEST_BINARY_ID"), binary_id);
+    assert_eq!(check_env("NEXTEST_TOTAL_ATTEMPTS"), "1");
+    assert_eq!(check_env("NEXTEST_STRESS_CURRENT"), "none");
+    assert_eq!(check_env("NEXTEST_STRESS_TOTAL"), "none");
+
+    let attempt_id = check_env("NEXTEST_ATTEMPT_ID");
+
+    let (attempt_id_run_id, attempt_id) = attempt_id
+        .split_once(':')
+        .expect("NEXTEST_ATTEMPT_ID must contain ':'");
+    let attempt_id_run_id = attempt_id_run_id
+        .parse::<uuid::Uuid>()
+        .expect("NEXTEST_ATTEMPT_ID Run ID must be a UUID");
+    let (attempt_id_binary_id, attempt_id_test_name) = attempt_id
+        .split_once('$')
+        .expect("NEXTEST_ATTEMPT_ID must contain '$'");
+    assert_eq!(attempt_id_run_id, run_id);
+    assert_eq!(attempt_id_binary_id, binary_id);
+    assert_eq!(attempt_id_test_name, test_name);
 
     // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
 
