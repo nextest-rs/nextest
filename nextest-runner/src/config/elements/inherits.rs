@@ -84,7 +84,10 @@ mod tests {
         indoc! {r#"
             [profile.default]
             inherits = "prof_a"
-            
+
+            [profile.default-miri]
+            inherits = "prof_c"
+
             [profile.prof_a]
             inherits = "prof_b"
             
@@ -103,6 +106,7 @@ mod tests {
         Err(
             vec![
                 InheritsError::DefaultProfileInheritance("default".to_string()),
+                InheritsError::DefaultProfileInheritance("default-miri".to_string()),
                 InheritsError::SelfReferentialInheritance("prof_d".to_string()),
                 InheritsError::UnknownInheritance("prof_e".to_string(), "nonexistent_profile".to_string()),
                 InheritsError::InheritanceCycle(vec![vec!["prof_a".to_string(),"prof_b".to_string(), "prof_c".to_string()]]),
@@ -129,10 +133,15 @@ mod tests {
         match expected {
             Ok(custom_profile) => {
                 let config = config_res.expect("config is valid");
+                let default_profile = config
+                    .profile("default")
+                    .unwrap_or_else(|_| panic!("default profile is known"));
+                let default_profile = default_profile.apply_build_platforms(&build_platforms());
                 let profile = config
                     .profile(&custom_profile.name)
                     .unwrap_or_else(|_| panic!("{} profile is known", &custom_profile.name));
                 let profile = profile.apply_build_platforms(&build_platforms());
+                assert_eq!(default_profile.inherits(), None);
                 assert_eq!(profile.inherits(), custom_profile.inherits.as_deref());
                 assert_eq!(
                     profile.max_fail(),
