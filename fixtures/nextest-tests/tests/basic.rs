@@ -186,7 +186,10 @@ fn test_cargo_env_vars() {
     assert_eq!(check_env("NEXTEST_TEST_NAME"), test_name);
     let binary_id = "nextest-tests::basic";
     assert_eq!(check_env("NEXTEST_BINARY_ID"), binary_id);
-    assert_eq!(check_env("NEXTEST_TOTAL_ATTEMPTS"), "1");
+
+    // The test might run with 1 or 3 total attempts
+    assert!(&["1", "3"].contains(&check_env("NEXTEST_TOTAL_ATTEMPTS").as_str()));
+
     assert_eq!(check_env("NEXTEST_STRESS_CURRENT"), "none");
     assert_eq!(check_env("NEXTEST_STRESS_TOTAL"), "none");
 
