@@ -131,7 +131,7 @@ mod tests {
                 let config = config_res.expect("config is valid");
                 let profile = config
                     .profile(&custom_profile.name)
-                    .expect(&format!("{} profile is known", &custom_profile.name));
+                    .unwrap_or_else(|_| panic!("{} profile is known", &custom_profile.name));
                 let profile = profile.apply_build_platforms(&build_platforms());
                 assert_eq!(profile.inherits(), custom_profile.inherits.as_deref());
                 assert_eq!(
@@ -161,14 +161,14 @@ mod tests {
                                         scc.sort()
                                     }
                                     assert!(
-                                        expected_err.get(&InheritanceCycle(sccs)).is_some(),
+                                        expected_err.contains(&InheritanceCycle(sccs)),
                                         "unexpected inherit error {:?}",
                                         actual_err
                                     )
                                 }
                                 _ => {
                                     assert!(
-                                        expected_err.get(&actual_err).is_some(),
+                                        expected_err.contains(&actual_err),
                                         "unexpected inherit error {:?}",
                                         actual_err
                                     )
