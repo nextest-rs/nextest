@@ -686,10 +686,10 @@ impl<'a> ExecutorContext<'a> {
 
         command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
 
-        command_mut.env("NEXTEST_TEST_NAME", &test.test_instance.name);
+        command_mut.env("NEXTEST_TEST_NAME", test.test_instance.name);
         command_mut.env(
             "NEXTEST_BINARY_ID",
-            &test.test_instance.suite_info.binary_id.as_str(),
+            test.test_instance.suite_info.binary_id.as_str(),
         );
 
         let attempt_id = test.test_instance.id().attempt_id(
@@ -700,7 +700,7 @@ impl<'a> ExecutorContext<'a> {
         command_mut.env("NEXTEST_ATTEMPT_ID", &attempt_id);
         command_mut.env(
             "NEXTEST_TOTAL_ATTEMPTS",
-            &test.retry_data.total_attempts.to_string(),
+            test.retry_data.total_attempts.to_string(),
         );
 
         let stress_current = test
