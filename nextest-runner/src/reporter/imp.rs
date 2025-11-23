@@ -148,6 +148,7 @@ impl ReporterBuilder {
             failure_output: self.failure_output,
             should_colorize: self.should_colorize,
             no_capture: self.no_capture,
+            verbose: self.verbose,
             show_progress: self.show_progress,
             no_output_indent: self.no_output_indent,
             max_progress_running: self.max_progress_running,

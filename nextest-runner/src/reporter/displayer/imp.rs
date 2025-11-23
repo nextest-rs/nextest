@@ -54,6 +54,7 @@ pub(crate) struct DisplayReporterBuilder {
     pub(crate) failure_output: Option<TestOutputDisplay>,
     pub(crate) should_colorize: bool,
     pub(crate) no_capture: bool,
+    pub(crate) verbose: bool,
     pub(crate) show_progress: ShowProgress,
     pub(crate) no_output_indent: bool,
     pub(crate) max_progress_running: MaxProgressRunning,
@@ -141,6 +142,7 @@ impl DisplayReporterBuilder {
                     final_status_level: self.status_levels.final_status_level,
                 },
                 no_capture: self.no_capture,
+                verbose: self.verbose,
                 no_output_indent: self.no_output_indent,
                 counter_width,
                 styles,
@@ -377,6 +379,7 @@ struct DisplayReporterImpl<'a> {
     default_filter: CompiledDefaultFilter,
     status_levels: StatusLevels,
     no_capture: bool,
+    verbose: bool,
     no_output_indent: bool,
     // None if no counter is displayed. If a counter is displayed, this is the
     // width of the total number of tests to run.
@@ -601,6 +604,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 stress_index,
                 test_instance,
                 current_stats,
+                command_line,
                 ..
             } => {
                 // In no-capture mode, print out a test start event.
@@ -621,6 +625,15 @@ impl<'a> DisplayReporterImpl<'a> {
                             },
                             test_instance.id()
                         ),
+                    )?;
+                }
+
+                if self.verbose {
+                    writeln!(
+                        writer,
+                        "{:>12} {}",
+                        "COMMAND".style(self.styles.count),
+                        command_line,
                     )?;
                 }
             }
@@ -2390,10 +2403,12 @@ mod tests {
             failure_output: Some(TestOutputDisplay::Immediate),
             should_colorize: false,
             no_capture: true,
+            verbose: false,
             show_progress: ShowProgress::Counter,
             no_output_indent: false,
             max_progress_running: MaxProgressRunning::default(),
         };
+
         let output = ReporterStderr::Buffer(out);
         let reporter = builder.build(&configs, output);
         f(reporter);
