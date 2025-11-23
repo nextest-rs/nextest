@@ -1187,6 +1187,36 @@ impl<'a> TestInstance<'a> {
             interceptor,
         )
     }
+
+    /// Returns the command line string for running this test.
+    pub(crate) fn command_line(
+        &self,
+        ctx: &TestExecuteContext<'_>,
+        test_list: &TestList<'_>,
+        wrapper_script: Option<&'a WrapperScriptConfig>,
+        extra_args: &[String],
+    ) -> String {
+        let platform_runner = ctx
+            .target_runner
+            .for_build_platform(self.suite_info.build_platform);
+
+        let mut cli = TestCommandCli::default();
+        cli.apply_wrappers(
+            wrapper_script,
+            platform_runner,
+            test_list.workspace_root(),
+            &test_list.rust_build_meta().target_directory,
+        );
+        cli.push(self.suite_info.binary_path.as_str());
+
+        cli.extend(["--exact", self.name, "--nocapture"]);
+        if self.test_info.ignored {
+            cli.push("--ignored");
+        }
+        cli.extend(extra_args.iter().map(String::as_str));
+
+        shell_words::join(cli.to_owned_cli())
+    }
 }
 
 #[derive(Clone, Debug, Default)]

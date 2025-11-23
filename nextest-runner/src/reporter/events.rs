@@ -171,6 +171,9 @@ pub enum TestEventKind<'a> {
 
         /// The number of tests currently running, including this one.
         running: usize,
+
+        /// The command line that will be used to run this test.
+        command_line: String,
     },
 
     /// A test was slower than a configured soft timeout.
