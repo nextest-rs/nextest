@@ -81,6 +81,46 @@ mod tests {
         ; "custom profile a inherits from another custom profile b"
     )]
     #[test_case(
+        indoc! {r#"            
+            [profile.prof_a]
+            inherits = "prof_b"
+            
+            [profile.prof_b]
+            inherits = "prof_c"
+
+            [profile.prof_c]
+            inherits = "prof_c"
+        "#},
+        Err(
+            vec![
+                InheritsError::SelfReferentialInheritance("prof_c".to_string()),
+            ]
+        ) ; "self referential error not inheritance cycle"
+    )]
+    #[test_case(
+        indoc! {r#"            
+            [profile.prof_a]
+            inherits = "prof_b"
+            
+            [profile.prof_b]
+            inherits = "prof_c"
+
+            [profile.prof_c]
+            inherits = "prof_d"
+
+            [profile.prof_d]
+            inherits = "prof_e"
+
+            [profile.prof_e]
+            inherits = "prof_c"
+        "#},
+        Err(
+            vec![
+                InheritsError::InheritanceCycle(vec![vec!["prof_c".to_string(),"prof_d".to_string(), "prof_e".to_string()]]),
+            ]
+        ) ; "C to D to E SCC cycle"
+    )]
+    #[test_case(
         indoc! {r#"
             [profile.default]
             inherits = "prof_a"
@@ -143,6 +183,9 @@ mod tests {
                 let profile = profile.apply_build_platforms(&build_platforms());
                 assert_eq!(default_profile.inherits(), None);
                 assert_eq!(profile.inherits(), custom_profile.inherits.as_deref());
+                // This is a confirmation on a custom profile inheriting another custom
+                // profile's configs properly; however, this should cross check the all expected
+                // field with the inherited custom profile fields fully
                 assert_eq!(
                     profile.max_fail(),
                     custom_profile.max_fail.expect("max fail should exist")
