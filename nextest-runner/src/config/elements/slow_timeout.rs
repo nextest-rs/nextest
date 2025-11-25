@@ -207,6 +207,19 @@ mod tests {
     #[test_case(
         indoc! {r#"
             [profile.default]
+            slow-timeout = { period = "60s", on-timeout = "pass" }
+
+            [profile.ci]
+            slow-timeout = { period = "30s", on-timeout = "fail" }
+        "#},
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Pass }),
+        Some(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail })
+
+        ; "override on-timeout option"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
             slow-timeout = "60s"
 
             [profile.ci]
