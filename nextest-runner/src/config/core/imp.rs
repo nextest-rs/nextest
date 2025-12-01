@@ -577,7 +577,7 @@ impl NextestConfig {
             );
         }
 
-        // Checks that the profiles correctly use the inherits setting.
+        // Check that the profiles correctly use the inherits setting.
         this_config.sanitize_profile_inherits()?;
 
         // Compile the overrides for this file.
