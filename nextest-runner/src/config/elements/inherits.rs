@@ -11,7 +11,7 @@ impl Inherits {
         Self(inherits)
     }
 
-    /// Returns the profile that the custom profile inherits from
+    /// Returns the profile that the custom profile inherits from.
     pub fn inherits_from(&self) -> Option<&str> {
         self.0.as_deref()
     }

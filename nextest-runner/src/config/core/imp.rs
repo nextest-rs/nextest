@@ -799,7 +799,7 @@ impl NextestConfig {
     fn make_profile(&self, name: &str) -> Result<EarlyProfile<'_>, ProfileNotFound> {
         let custom_profile = self.inner.get_profile(name)?;
 
-        // Resolves the inherited profile into a profile chain
+        // Resolve the inherited profile into a profile chain.
         let inheritance_chain = if custom_profile.is_some() {
             self.inner.resolve_profile_chain(name)?
         } else {
@@ -1177,7 +1177,7 @@ impl NextestConfigImpl {
             .map(|(key, value)| (key.as_str(), value))
     }
 
-    /// Resolves a profile with an inheritance chain recursively
+    /// Resolves a profile with an inheritance chain recursively.
     ///
     /// This function does not check for cycles. Use `check_inheritance_cycles()`
     /// to observe for cycles in an inheritance chain.
