@@ -1277,14 +1277,11 @@ impl NextestConfigImpl {
     ) -> bool {
         let profile_type = name.starts_with("default-");
 
-        if profile_type {
-            if custom_profile.inherits().is_some() {
-                inherit_err_collector
-                    .push(InheritsError::DefaultProfileInheritance(name.to_string()));
-            }
+        if profile_type && custom_profile.inherits().is_some() {
+            inherit_err_collector.push(InheritsError::DefaultProfileInheritance(name.to_string()));
         }
 
-        return profile_type;
+        profile_type
     }
 
     // Add the custom profile to the profile graph and collect any inheritance errors like
@@ -1328,9 +1325,13 @@ impl NextestConfigImpl {
             }
         }
     }
-    
+
     /// Given a profile graph, reports all SCC cycles within the graph using kosaraju algorithm.
-    fn check_inheritance_cycles(&self, profile_graph: Graph<&str, ()>, inherit_err_collector: &mut Vec<InheritsError>) {
+    fn check_inheritance_cycles(
+        &self,
+        profile_graph: Graph<&str, ()>,
+        inherit_err_collector: &mut Vec<InheritsError>,
+    ) {
         let profile_sccs: Vec<Vec<NodeIndex>> = kosaraju_scc(&profile_graph);
         let profile_sccs: Vec<Vec<NodeIndex>> = profile_sccs
             .into_iter()
