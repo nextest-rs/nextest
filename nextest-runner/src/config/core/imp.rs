@@ -800,11 +800,13 @@ impl NextestConfig {
         let custom_profile = self.inner.get_profile(name)?;
 
         // Resolve the inherited profile into a profile chain.
-        let inheritance_chain = if custom_profile.is_some() {
-            self.inner.resolve_profile_chain(name)?
-        } else {
-            Vec::new()
-        };
+        // let inheritance_chain = if custom_profile.is_some() {
+        //     self.inner.resolve_profile_chain(name)?
+        // } else {
+        //     Vec::new()
+        // };
+        // Resolve the inherited profile into a profile chain
+        let inheritance_chain = self.inner.resolve_profile_chain(name)?;
 
         // The profile was found: construct it.
         let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
@@ -967,8 +969,8 @@ pub struct EvaluatableProfile<'cfg> {
     resolved_default_filter: CompiledDefaultFilter,
 }
 
-/// Returns a specific config field from an EvaluatableProfile
-/// given priority in the following order:
+/// Both of thse return a specific config field from an
+/// EvaluatableProfile given priority in the following order:
 /// it's current custom profile, the first custom profile
 /// in the inheritance chain that contains the field,
 /// or the default profile
@@ -981,6 +983,8 @@ macro_rules! profile_field {
             .find_map(|inherit_profile| inherit_profile.$field)
             .unwrap_or($eval_prof.default_profile.$field)
     };
+}
+macro_rules! profile_field_from_ref {
     ($eval_prof:ident.$field:ident.$ref_func:ident()) => {
         $eval_prof
             .custom_profile
@@ -1041,7 +1045,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
 
     /// Returns extra arguments to be passed to the test binary at runtime.
     pub fn run_extra_args(&self) -> &'cfg [String] {
-        profile_field!(self.run_extra_args.as_deref())
+        profile_field_from_ref!(self.run_extra_args.as_deref())
     }
 
     /// Returns the time after which tests are treated as slow for this profile.
@@ -1087,7 +1091,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
 
     /// Returns the archive configuration for this profile.
     pub fn archive_config(&self) -> &'cfg ArchiveConfig {
-        profile_field!(self.archive.as_ref())
+        profile_field_from_ref!(self.archive.as_ref())
     }
 
     /// Returns the list of setup scripts.
@@ -1177,7 +1181,7 @@ impl NextestConfigImpl {
             .map(|(key, value)| (key.as_str(), value))
     }
 
-    /// Resolves a profile with an inheritance chain recursively.
+    /// Resolve a profile with an inheritance chain recursively.
     ///
     /// This function does not check for cycles. Use `check_inheritance_cycles()`
     /// to observe for cycles in an inheritance chain.
@@ -1213,7 +1217,7 @@ impl NextestConfigImpl {
         let mut inherit_err_collector = Vec::new();
 
         self.default_profile_inheritance(&mut inherit_err_collector);
-        self.check_inheritance_cycles(&mut inherit_err_collector);
+        self.custom_profile_inheritances(&mut inherit_err_collector);
 
         if !inherit_err_collector.is_empty() {
             return Err(ConfigParseError::new(
@@ -1226,80 +1230,107 @@ impl NextestConfigImpl {
         Ok(())
     }
 
-    /// Check that default profiles do not attempt to inherit from other
+    /// Check the DefaultProfileImpl and make sure that it doesn't inherit from other
     /// profiles
     fn default_profile_inheritance(&self, inherit_err_collector: &mut Vec<InheritsError>) {
-        for default_profile in NextestConfig::DEFAULT_PROFILES {
-            // covers for "default" profile
-            if *default_profile == NextestConfig::DEFAULT_PROFILE {
-                if self.default_profile().inherits().is_some() {
-                    inherit_err_collector.push(InheritsError::DefaultProfileInheritance(
-                        default_profile.to_string(),
-                    ));
-                }
-            }
-            // covers for other and any future default profiles reserved by Nextest
-            // (i.e. "default-miri")
-            else if let Ok(ok_default) = self.get_profile(default_profile)
-                && let Some(other_default) = ok_default
-                && other_default.inherits().is_some()
-            {
-                inherit_err_collector.push(InheritsError::DefaultProfileInheritance(
-                    default_profile.to_string(),
-                ));
-            }
+        if self.default_profile().inherits().is_some() {
+            inherit_err_collector.push(InheritsError::DefaultProfileInheritance(
+                NextestConfig::DEFAULT_PROFILE.to_string(),
+            ));
         }
     }
 
-    /// Checks for the following: invalid inheritance, self referential inheritance,
-    /// and inheritance chain cycle
-    fn check_inheritance_cycles(&self, inherit_err_collector: &mut Vec<InheritsError>) {
+    /// Iterate through each custom profile inherits and report any inheritance error(s)
+    fn custom_profile_inheritances(&self, inherit_err_collector: &mut Vec<InheritsError>) {
         let mut profile_graph = Graph::<&str, (), Directed>::new();
         let mut profile_map = HashMap::new();
 
-        // Iterates through all custom profiles within the config file and constructs
-        // a reduced graph of the inheritance chain(s) after handling nonexistent
-        // inheritance and self referential inheritance
+        // Iterate through all custom profiles within the config file and constructs
+        // a reduced graph of the inheritance chain(s)
         for (name, custom_profile) in self.other_profiles() {
-            // Certain reserved default profile are in other_profiles (i.e. "default-miri")
-            // which should be ignored. Note that DEFAULT_PROFILES contains 2 strings, so this
-            // check is pretty much constant time, but if more reserved default profile were to
-            // be added, we should consider having a Hashmap impl to check if current profile name
-            // is a default profile
-            let profile_type = NextestConfig::DEFAULT_PROFILES.contains(&name);
-            if !profile_type && let Some(inherits_name) = custom_profile.inherits() {
-                if inherits_name == name {
-                    inherit_err_collector
-                        .push(InheritsError::SelfReferentialInheritance(name.to_string()))
-                } else if self.get_profile(inherits_name).is_ok() {
-                    // inherited profile exists, create the edge in the graph
-                    let from_node = match profile_map.get(name) {
-                        None => {
-                            let profile_node = profile_graph.add_node(name);
-                            profile_map.insert(name, profile_node);
-                            profile_node
-                        }
-                        Some(node_idx) => *node_idx,
-                    };
-                    let to_node = match profile_map.get(inherits_name) {
-                        None => {
-                            let profile_node = profile_graph.add_node(inherits_name);
-                            profile_map.insert(inherits_name, profile_node);
-                            profile_node
-                        }
-                        Some(node_idx) => *node_idx,
-                    };
-                    profile_graph.add_edge(from_node, to_node, ());
-                } else {
-                    inherit_err_collector.push(InheritsError::UnknownInheritance(
-                        name.to_string(),
-                        inherits_name.to_string(),
-                    ))
-                }
+            let profile_type = self.custom_default_profile_inheritance(
+                name,
+                custom_profile,
+                inherit_err_collector,
+            );
+            if !profile_type {
+                self.add_profile_to_graph(
+                    name,
+                    custom_profile,
+                    &mut profile_map,
+                    &mut profile_graph,
+                    inherit_err_collector,
+                );
             }
         }
 
-        // Detects all *cyclic* strongly connected components (SCCs) within the graph
+        self.check_inheritance_cycles(profile_graph, inherit_err_collector);
+    }
+
+    /// Check any CustomProfileImpl that have a "default-" name and make sure they
+    /// do not inherit from other profiles
+    fn custom_default_profile_inheritance(
+        &self,
+        name: &str,
+        custom_profile: &CustomProfileImpl,
+        inherit_err_collector: &mut Vec<InheritsError>,
+    ) -> bool {
+        let profile_type = name.starts_with("default-");
+
+        if profile_type {
+            if custom_profile.inherits().is_some() {
+                inherit_err_collector
+                    .push(InheritsError::DefaultProfileInheritance(name.to_string()));
+            }
+        }
+
+        return profile_type;
+    }
+
+    // Add the custom profile to the profile graph and collect any inheritance errors like
+    // self referential profiles and nonexisting profiles.
+    fn add_profile_to_graph<'cfg>(
+        &self,
+        name: &'cfg str,
+        custom_profile: &'cfg CustomProfileImpl,
+        profile_map: &mut HashMap<&'cfg str, NodeIndex>,
+        profile_graph: &mut Graph<&'cfg str, ()>,
+        inherit_err_collector: &mut Vec<InheritsError>,
+    ) {
+        if let Some(inherits_name) = custom_profile.inherits() {
+            if inherits_name == name {
+                inherit_err_collector
+                    .push(InheritsError::SelfReferentialInheritance(name.to_string()))
+            } else if self.get_profile(inherits_name).is_ok() {
+                // Inherited profile exist, create the edge in the graph
+                let from_node = match profile_map.get(name) {
+                    None => {
+                        let profile_node = profile_graph.add_node(name);
+                        profile_map.insert(name, profile_node);
+                        profile_node
+                    }
+                    Some(node_idx) => *node_idx,
+                };
+                let to_node = match profile_map.get(inherits_name) {
+                    None => {
+                        let profile_node = profile_graph.add_node(inherits_name);
+                        profile_map.insert(inherits_name, profile_node);
+                        profile_node
+                    }
+                    Some(node_idx) => *node_idx,
+                };
+                profile_graph.add_edge(from_node, to_node, ());
+            } else {
+                inherit_err_collector.push(InheritsError::UnknownInheritance(
+                    name.to_string(),
+                    inherits_name.to_string(),
+                ))
+            }
+        }
+    }
+    
+    /// Given a profile graph, reports all SCC cycles within the graph using kosaraju algorithm.
+    fn check_inheritance_cycles(&self, profile_graph: Graph<&str, ()>, inherit_err_collector: &mut Vec<InheritsError>) {
         let profile_sccs: Vec<Vec<NodeIndex>> = kosaraju_scc(&profile_graph);
         let profile_sccs: Vec<Vec<NodeIndex>> = profile_sccs
             .into_iter()

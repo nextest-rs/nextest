@@ -17,7 +17,6 @@ impl Inherits {
     }
 }
 
-// TODO: Need to write test cases  for this
 #[cfg(test)]
 mod tests {
     use super::super::*;
@@ -38,10 +37,11 @@ mod tests {
     use std::collections::HashSet;
     use test_case::test_case;
 
+    // Used to check if Custom Profiles are able to
+    // inherit from other profiles
     #[derive(Default)]
     #[allow(dead_code)]
     pub struct CustomProfileTest {
-        /// The default set of tests run by `cargo nextest run`.
         name: String,
         default_filter: Option<String>,
         retries: Option<RetryPolicy>,
@@ -183,9 +183,7 @@ mod tests {
                 let profile = profile.apply_build_platforms(&build_platforms());
                 assert_eq!(default_profile.inherits(), None);
                 assert_eq!(profile.inherits(), custom_profile.inherits.as_deref());
-                // This is a confirmation on a custom profile inheriting another custom
-                // profile's configs properly; however, this should cross check the all expected
-                // field with the inherited custom profile fields fully
+                // Spot check that inheritance works correctly
                 assert_eq!(
                     profile.max_fail(),
                     custom_profile.max_fail.expect("max fail should exist")
@@ -196,18 +194,17 @@ mod tests {
                 assert_eq!(error.tool(), None);
                 match error.kind() {
                     ConfigParseErrorKind::InheritanceErrors(inherits_err) => {
-                        // because inheritance errors are not in a deterministic order in the Vec<InheritsError>
+                        // Because inheritance errors are not in a deterministic order in the Vec<InheritsError>
                         // we use a Hashset here to test whether the error seen by the expected err
                         let expected_err: HashSet<&InheritsError> =
                             expected_inherits_err.iter().collect();
                         for actual_err in inherits_err.iter() {
                             match actual_err {
                                 InheritanceCycle(sccs) => {
-                                    // to check if the sccs exists in our expected errors,
-                                    // we must sort the SCC (since these SCC chain are also
-                                    // in a non-deterministic order). this runs under the
-                                    // assumption that our expected_err contains the SCC cycle
-                                    // in alphabetical sorting order as well
+                                    // SCC vectors do show the cycle, but
+                                    // we can't deterministically represent the cycle
+                                    // (i.e. A->B->C->A could be {A,B,C}, {C,A,B}, or
+                                    // {B,C,A})
                                     let mut sccs = sccs.clone();
                                     for scc in sccs.iter_mut() {
                                         scc.sort()
