@@ -1,0 +1,5 @@
+---
+source: nextest-runner/src/reporter/displayer/progress.rs
+expression: s
+---
+[31;1m     Running[0m [ 34:17:36] 10/20: [1m10[0m running, [1m0[0m [32;1mpassed[0m, [1m1[0m [31;1mtimed out[0m, [1m0[0m [33;1mskipped[0m
