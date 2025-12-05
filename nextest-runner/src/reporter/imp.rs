@@ -122,16 +122,18 @@ impl ReporterBuilder {
 
 impl ReporterBuilder {
     /// Creates a new test reporter.
+    ///
+    /// The `aggregator` must be created by the caller using
+    /// [`EventAggregator::new`].
     pub fn build<'a>(
         &self,
         test_list: &TestList,
         profile: &EvaluatableProfile<'a>,
         cargo_configs: &CargoConfigs,
         output: ReporterStderr<'a>,
+        aggregator: EventAggregator<'a>,
         structured_reporter: StructuredReporter<'a>,
     ) -> Reporter<'a> {
-        let aggregator = EventAggregator::new(profile);
-
         let status_level = self.status_level.unwrap_or_else(|| profile.status_level());
         let final_status_level = self
             .final_status_level

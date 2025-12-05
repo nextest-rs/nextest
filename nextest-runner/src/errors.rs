@@ -1445,6 +1445,22 @@ pub enum ArchiveExtractError {
     ReporterIo(std::io::Error),
 }
 
+/// An error occurred while setting up the JUnit reporter.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum JunitSetupError {
+    /// An error occurred while creating the JUnit directory.
+    #[error("error creating JUnit directory `{path}`")]
+    CreateJunitDir {
+        /// The path that could not be created.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+}
+
 /// An error that occurs while writing an event.
 #[derive(Debug, Error)]
 #[non_exhaustive]
