@@ -799,12 +799,6 @@ impl NextestConfig {
     fn make_profile(&self, name: &str) -> Result<EarlyProfile<'_>, ProfileNotFound> {
         let custom_profile = self.inner.get_profile(name)?;
 
-        // Resolve the inherited profile into a profile chain.
-        // let inheritance_chain = if custom_profile.is_some() {
-        //     self.inner.resolve_profile_chain(name)?
-        // } else {
-        //     Vec::new()
-        // };
         // Resolve the inherited profile into a profile chain
         let inheritance_chain = self.inner.resolve_profile_chain(name)?;
 
