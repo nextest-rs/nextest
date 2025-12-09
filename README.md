@@ -1,5 +1,8 @@
 # Nextest
 
+[![Run in Smithery](https://smithery.ai/badge/skills/nextest-rs)](https://smithery.ai/skills?ns=nextest-rs&utm_source=github&utm_medium=badge)
+
+
 Nextest is a next-generation test runner for Rust. For more information, **check out [the website](https://nexte.st/)**.
 
 This repository contains the source code for:
