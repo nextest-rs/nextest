@@ -210,11 +210,25 @@ impl<'a> ExecutorContext<'a> {
 
         let (req_rx_tx, req_rx_rx) = oneshot::channel();
 
+        // Compute the command line for this test.
+        let ctx = TestExecuteContext {
+            profile_name: self.profile.name(),
+            double_spawn: &self.double_spawn,
+            target_runner: &self.target_runner,
+        };
+        let command_line = test.instance.command_line(
+            &ctx,
+            self.test_list,
+            settings.run_wrapper(),
+            settings.run_extra_args(),
+        );
+
         // Wait for the Started event to be processed by the
         // execution future.
         _ = resp_tx.send(ExecutorEvent::Started {
             stress_index,
             test_instance: test.instance,
+            command_line,
             req_rx_tx,
         });
         let mut req_rx = match req_rx_rx.await {
