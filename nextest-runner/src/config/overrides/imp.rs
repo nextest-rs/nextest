@@ -1019,7 +1019,11 @@ impl<'de> Deserialize<'de> for PlatformStrings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{core::NextestConfig, elements::LeakTimeoutResult, utils::test_helpers::*};
+    use crate::config::{
+        core::NextestConfig,
+        elements::{LeakTimeoutResult, SlowTimeoutResult},
+        utils::test_helpers::*,
+    };
     use camino_tempfile::tempdir;
     use indoc::indoc;
     use std::{num::NonZeroUsize, time::Duration};
@@ -1066,6 +1070,11 @@ mod tests {
             filter = "test(override5)"
             retries = 8
 
+            # Override 6 -- timeout result success
+            [[profile.default.overrides]]
+            filter = "test(timeout_success)"
+            slow-timeout = { period = "30s", on-timeout = "pass" }
+
             [profile.default.junit]
             path = "my-path.xml"
 
@@ -1108,6 +1117,7 @@ mod tests {
             overrides.slow_timeout(),
             SlowTimeout {
                 period: Duration::from_secs(60),
+                on_timeout: SlowTimeoutResult::default(),
                 terminate_after: None,
                 grace_period: Duration::from_secs(10),
             }
@@ -1159,6 +1169,7 @@ mod tests {
                 period: Duration::from_secs(120),
                 terminate_after: Some(NonZeroUsize::new(1).unwrap()),
                 grace_period: Duration::ZERO,
+                on_timeout: SlowTimeoutResult::default(),
             }
         );
         assert_eq!(
@@ -1196,6 +1207,22 @@ mod tests {
         };
         let overrides = profile.settings_for(&query);
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(8));
+
+        // This query matches override 6.
+        let query = TestQuery {
+            binary_query: target_binary_query.to_query(),
+            test_name: "timeout_success",
+        };
+        let overrides = profile.settings_for(&query);
+        assert_eq!(
+            overrides.slow_timeout(),
+            SlowTimeout {
+                period: Duration::from_secs(30),
+                on_timeout: SlowTimeoutResult::Pass,
+                terminate_after: None,
+                grace_period: Duration::from_secs(10),
+            }
+        );
 
         // This query does not match any overrides.
         let query = TestQuery {

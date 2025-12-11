@@ -145,7 +145,15 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
   slow-timeout = "60s"
   # or
   slow-timeout = { period = "120s", terminate-after = 2, grace-period = "10s" }
+  # or
+  slow-timeout = { period = "30s", terminate-after = 4, on-timeout = "pass" }
   ```
+
+The `slow-timeout` object accepts the following parameters:
+- `period`: Time period after which a test is considered slow
+- `terminate-after`: Number of periods after which to terminate the test
+- `grace-period`: Time to wait for graceful shutdown before force termination
+- `on-timeout`: <!-- md:version 0.9.115 --> What to do when a test times out (`"fail"` or `"pass"`)
 
 #### `profile.<name>.leak-timeout`
 
