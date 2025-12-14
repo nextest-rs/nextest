@@ -7,9 +7,9 @@ use crate::{
         core::ConfigExperimental,
         elements::{
             ArchiveConfig, CustomTestGroup, DefaultJunitImpl, GlobalTimeout, Inherits, JunitConfig,
-            JunitImpl, LeakTimeout, MaxFail, RetryPolicy, SlowTimeout, TestGroup, TestGroupConfig,
-            TestThreads, ThreadsRequired, deserialize_fail_fast, deserialize_leak_timeout,
-            deserialize_retry_policy, deserialize_slow_timeout,
+            JunitImpl, JunitSettings, LeakTimeout, MaxFail, RetryPolicy, SlowTimeout, TestGroup,
+            TestGroupConfig, TestThreads, ThreadsRequired, deserialize_fail_fast,
+            deserialize_leak_timeout, deserialize_retry_policy, deserialize_slow_timeout,
         },
         overrides::{
             CompiledByProfile, CompiledData, CompiledDefaultFilter, DeserializedOverride,
@@ -963,19 +963,24 @@ pub struct EvaluatableProfile<'cfg> {
     resolved_default_filter: CompiledDefaultFilter,
 }
 
-/// Both of thse return a specific config field from an
-/// EvaluatableProfile given priority in the following order:
-/// it's current custom profile, the first custom profile
-/// in the inheritance chain that contains the field,
-/// or the default profile
+/// These macros return a specific config field from an EvaluatableProfile,
+/// checking in order: custom profile, inheritance chain, then default profile.
 macro_rules! profile_field {
     ($eval_prof:ident.$field:ident) => {
         $eval_prof
             .custom_profile
             .iter()
             .chain($eval_prof.inheritance_chain.iter())
-            .find_map(|inherit_profile| inherit_profile.$field)
+            .find_map(|p| p.$field)
             .unwrap_or($eval_prof.default_profile.$field)
+    };
+    ($eval_prof:ident.$nested:ident.$field:ident) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$nested.$field)
+            .unwrap_or($eval_prof.default_profile.$nested.$field)
     };
 }
 macro_rules! profile_field_from_ref {
@@ -984,8 +989,27 @@ macro_rules! profile_field_from_ref {
             .custom_profile
             .iter()
             .chain($eval_prof.inheritance_chain.iter())
-            .find_map(|inherit_profile| inherit_profile.$field.$ref_func())
+            .find_map(|p| p.$field.$ref_func())
             .unwrap_or(&$eval_prof.default_profile.$field)
+    };
+    ($eval_prof:ident.$nested:ident.$field:ident.$ref_func:ident()) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$nested.$field.$ref_func())
+            .unwrap_or(&$eval_prof.default_profile.$nested.$field)
+    };
+}
+// Variant for fields where both custom and default are Option.
+macro_rules! profile_field_optional {
+    ($eval_prof:ident.$nested:ident.$field:ident.$ref_func:ident()) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$nested.$field.$ref_func())
+            .or($eval_prof.default_profile.$nested.$field.$ref_func())
     };
 }
 
@@ -1113,11 +1137,13 @@ impl<'cfg> EvaluatableProfile<'cfg> {
 
     /// Returns the JUnit configuration for this profile.
     pub fn junit(&self) -> Option<JunitConfig<'cfg>> {
-        JunitConfig::new(
-            self.store_dir(),
-            self.custom_profile.map(|p| &p.junit),
-            &self.default_profile.junit,
-        )
+        let settings = JunitSettings {
+            path: profile_field_optional!(self.junit.path.as_deref()),
+            report_name: profile_field_from_ref!(self.junit.report_name.as_deref()),
+            store_success_output: profile_field!(self.junit.store_success_output),
+            store_failure_output: profile_field!(self.junit.store_failure_output),
+        };
+        JunitConfig::new(self.store_dir(), settings)
     }
 
     /// Returns the profile that this profile inherits from.
