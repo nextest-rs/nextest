@@ -110,9 +110,13 @@ mod tests {
 
     #[test_case(
         "",
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail }),
+        Ok(SlowTimeout {
+            period: Duration::from_secs(60),
+            terminate_after: None,
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        }),
         None
-
         ; "empty config is expected to use the hardcoded values"
     )]
     #[test_case(
@@ -120,9 +124,13 @@ mod tests {
             [profile.default]
             slow-timeout = "30s"
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail }),
+        Ok(SlowTimeout {
+            period: Duration::from_secs(30),
+            terminate_after: None,
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        }),
         None
-
         ; "overrides the default profile"
     )]
     #[test_case(
@@ -133,9 +141,18 @@ mod tests {
             [profile.ci]
             slow-timeout = { period = "60s", terminate-after = 3 }
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail }),
-        Some(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail })
-
+        Ok(SlowTimeout {
+            period: Duration::from_secs(30),
+            terminate_after: None,
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        }),
+        Some(SlowTimeout {
+            period: Duration::from_secs(60),
+            terminate_after: Some(NonZeroUsize::new(3).unwrap()),
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        })
         ; "adds a custom profile 'ci'"
     )]
     #[test_case(
@@ -146,9 +163,18 @@ mod tests {
             [profile.ci]
             slow-timeout = "30s"
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail }),
-        Some(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail })
-
+        Ok(SlowTimeout {
+            period: Duration::from_secs(60),
+            terminate_after: Some(NonZeroUsize::new(3).unwrap()),
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        }),
+        Some(SlowTimeout {
+            period: Duration::from_secs(30),
+            terminate_after: None,
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        })
         ; "ci profile uses string notation"
     )]
     #[test_case(
@@ -159,9 +185,18 @@ mod tests {
             [profile.ci]
             slow-timeout = "30s"
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), grace_period: Duration::from_secs(1), on_timeout: SlowTimeoutResult::Fail }),
-        Some(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail })
-
+        Ok(SlowTimeout {
+            period: Duration::from_secs(60),
+            terminate_after: Some(NonZeroUsize::new(3).unwrap()),
+            grace_period: Duration::from_secs(1),
+            on_timeout: SlowTimeoutResult::Fail,
+        }),
+        Some(SlowTimeout {
+            period: Duration::from_secs(30),
+            terminate_after: None,
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        })
         ; "timeout grace period"
     )]
     #[test_case(
@@ -169,9 +204,13 @@ mod tests {
             [profile.default]
             slow-timeout = { period = "60s" }
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail }),
+        Ok(SlowTimeout {
+            period: Duration::from_secs(60),
+            terminate_after: None,
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        }),
         None
-
         ; "partial table"
     )]
     #[test_case(
@@ -181,7 +220,6 @@ mod tests {
         "#},
         Err("original: invalid value: integer `0`, expected a nonzero usize"),
         None
-
         ; "zero terminate-after should fail"
     )]
     #[test_case(
@@ -189,9 +227,13 @@ mod tests {
             [profile.default]
             slow-timeout = { period = "60s", on-timeout = "pass" }
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Pass }),
+        Ok(SlowTimeout {
+            period: Duration::from_secs(60),
+            terminate_after: None,
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Pass,
+        }),
         None
-
         ; "timeout result success"
     )]
     #[test_case(
@@ -199,9 +241,13 @@ mod tests {
             [profile.default]
             slow-timeout = { period = "60s", on-timeout = "fail" }
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail }),
+        Ok(SlowTimeout {
+            period: Duration::from_secs(60),
+            terminate_after: None,
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        }),
         None
-
         ; "timeout result failure"
     )]
     #[test_case(
@@ -212,9 +258,18 @@ mod tests {
             [profile.ci]
             slow-timeout = { period = "30s", on-timeout = "fail" }
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Pass }),
-        Some(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10), on_timeout: SlowTimeoutResult::Fail })
-
+        Ok(SlowTimeout {
+            period: Duration::from_secs(60),
+            terminate_after: None,
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Pass,
+        }),
+        Some(SlowTimeout {
+            period: Duration::from_secs(30),
+            terminate_after: None,
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        })
         ; "override on-timeout option"
     )]
     #[test_case(
