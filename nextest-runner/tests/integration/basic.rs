@@ -139,7 +139,8 @@ fn test_timeout_with_retries() -> Result<()> {
                 assert_eq!(
                     run_statuses.len(),
                     1,
-                    "{test_name} should have been run 3 times (1 initial + 2 retries)",
+                    "{test_name} should have been run exactly once \
+                     (timed out tests that pass are not retried)",
                 );
 
                 let status = run_statuses.last_status();
@@ -972,7 +973,7 @@ fn test_override_timeout_result() -> Result<()> {
     let (instance_statuses, run_stats) = execute_collect(runner);
 
     println!("{instance_statuses:?}");
-    assert_eq!(run_stats.finished_count, 3, "4 tests should have finished");
+    assert_eq!(run_stats.finished_count, 3, "3 tests should have finished");
     assert_eq!(
         run_stats.passed_timed_out, 1,
         "1 test should pass with timeout"
