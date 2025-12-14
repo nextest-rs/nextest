@@ -310,11 +310,11 @@ mod tests {
         let tool_configs = [
             ToolConfigFile {
                 tool: "tool1".to_string(),
-                config_file: tool1_config.try_into().unwrap(),
+                config_file: tool1_config,
             },
             ToolConfigFile {
                 tool: "tool2".to_string(),
-                config_file: tool2_config.try_into().unwrap(),
+                config_file: tool2_config,
             },
         ];
 
@@ -380,11 +380,11 @@ mod tests {
         let tool_configs = [
             ToolConfigFile {
                 tool: "tool1".to_string(),
-                config_file: tool1_config.try_into().unwrap(),
+                config_file: tool1_config,
             },
             ToolConfigFile {
                 tool: "tool2".to_string(),
-                config_file: tool2_config.try_into().unwrap(),
+                config_file: tool2_config,
             },
         ];
 
