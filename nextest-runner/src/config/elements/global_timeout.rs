@@ -87,7 +87,7 @@ mod tests {
                     nextest_config
                         .profile("default")
                         .expect("default profile should exist")
-                        .apply_build_platforms(&build_platforms())
+                        .into_evaluatable(&build_platforms())
                         .global_timeout(),
                     expected_default,
                 );
@@ -97,7 +97,7 @@ mod tests {
                         nextest_config
                             .profile("ci")
                             .expect("ci profile should exist")
-                            .apply_build_platforms(&build_platforms())
+                            .into_evaluatable(&build_platforms())
                             .global_timeout(),
                         expected_ci,
                     );

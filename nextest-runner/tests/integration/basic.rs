@@ -132,7 +132,7 @@ fn test_run() -> Result<()> {
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
     let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
-    let profile = profile.apply_build_platforms(&build_platforms);
+    let profile = profile.into_evaluatable(&build_platforms);
 
     let runner = TestRunnerBuilder::default()
         .build(
@@ -270,7 +270,7 @@ fn test_run_ignored() -> Result<()> {
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
     let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
-    let profile = profile.apply_build_platforms(&build_platforms);
+    let profile = profile.into_evaluatable(&build_platforms);
 
     let runner = TestRunnerBuilder::default()
         .build(
@@ -514,7 +514,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
         .profile("with-retries")
         .expect("with-retries config is valid");
     let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
-    let profile = profile.apply_build_platforms(&build_platforms);
+    let profile = profile.into_evaluatable(&build_platforms);
 
     let profile_retries = profile.retries();
     assert_eq!(
@@ -690,7 +690,7 @@ fn test_termination() -> Result<()> {
         .profile("with-termination")
         .expect("with-termination config is valid");
     let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
-    let profile = profile.apply_build_platforms(&build_platforms);
+    let profile = profile.into_evaluatable(&build_platforms);
 
     let runner = TestRunnerBuilder::default()
         .build(

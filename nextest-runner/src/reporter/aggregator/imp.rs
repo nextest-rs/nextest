@@ -3,25 +3,39 @@
 
 use super::junit::MetadataJunit;
 use crate::{
-    config::core::EvaluatableProfile, errors::WriteEventError, reporter::events::TestEvent,
+    config::core::EvaluatableProfile,
+    errors::{JunitSetupError, WriteEventError},
+    reporter::events::TestEvent,
 };
-use camino::Utf8PathBuf;
+use camino::Utf8Path;
 
+/// Aggregator for test events.
+///
+/// Currently, this aggregator supports JUnit XML output.
 #[derive(Clone, Debug)]
-#[expect(dead_code)]
-pub(crate) struct EventAggregator<'cfg> {
-    store_dir: Utf8PathBuf,
+pub struct EventAggregator<'cfg> {
     // TODO: log information in a JSONable report (converting that to XML later) instead of directly
     // writing it to XML
     junit: Option<MetadataJunit<'cfg>>,
 }
 
 impl<'cfg> EventAggregator<'cfg> {
-    pub(crate) fn new(profile: &EvaluatableProfile<'cfg>) -> Self {
-        Self {
-            store_dir: profile.store_dir().to_owned(),
-            junit: profile.junit().map(MetadataJunit::new),
-        }
+    /// Creates a new `EventAggregator`.
+    ///
+    /// The `target_dir` is needed to resolve the store directory when it is
+    /// configured relative to the target directory.
+    pub fn new(
+        profile: &EvaluatableProfile<'cfg>,
+        target_dir: &Utf8Path,
+    ) -> Result<Self, JunitSetupError> {
+        let junit = profile
+            .junit()
+            .map(|config| {
+                let store_dir = profile.store_dir(target_dir);
+                MetadataJunit::new(store_dir, config)
+            })
+            .transpose()?;
+        Ok(Self { junit })
     }
 
     pub(crate) fn write_event(
