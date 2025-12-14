@@ -106,7 +106,9 @@ mod tests {
         "#},
         Err(
             vec![
-                InheritsError::InheritanceCycle(vec![vec!["prof_c".to_string(),"prof_d".to_string(), "prof_e".to_string()]]),
+                InheritsError::InheritanceCycle(
+                    vec![vec!["prof_c".to_string(),"prof_d".to_string(), "prof_e".to_string()]],
+                ),
             ]
         ) ; "C to D to E SCC cycle"
     )]
@@ -138,11 +140,51 @@ mod tests {
                 InheritsError::DefaultProfileInheritance("default".to_string()),
                 InheritsError::DefaultProfileInheritance("default-miri".to_string()),
                 InheritsError::SelfReferentialInheritance("prof_d".to_string()),
-                InheritsError::UnknownInheritance("prof_e".to_string(), "nonexistent_profile".to_string()),
-                InheritsError::InheritanceCycle(vec![vec!["prof_a".to_string(),"prof_b".to_string(), "prof_c".to_string()]]),
+                InheritsError::UnknownInheritance(
+                    "prof_e".to_string(),
+                    "nonexistent_profile".to_string(),
+                ),
+                InheritsError::InheritanceCycle(
+                    vec![
+                        vec!["prof_a".to_string(),"prof_b".to_string(), "prof_c".to_string()],
+                    ]
+                ),
             ]
         )
         ; "inheritance errors detected"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.my-profile]
+            inherits = "default-nonexistent"
+            retries = 5
+        "#},
+        Err(
+            vec![
+                InheritsError::UnknownInheritance(
+                    "my-profile".to_string(),
+                    "default-nonexistent".to_string(),
+                ),
+            ]
+        )
+        ; "inherit from nonexistent default profile"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default-custom]
+            retries = 3
+
+            [profile.my-profile]
+            inherits = "default-custom"
+            fail-fast = { max-fail = 5 }
+        "#},
+        Ok(InheritSettings {
+            name: "my-profile".to_string(),
+            inherits: Some("default-custom".to_string()),
+            max_fail: Some(MaxFail::Count { max_fail: 5, terminate: TerminateMode::Wait }),
+            retries: Some(RetryPolicy::new_without_delay(3)),
+        })
+        ; "inherit from defined default profile"
     )]
     fn profile_inheritance(
         config_contents: &str,
