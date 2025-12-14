@@ -6,10 +6,10 @@ use crate::{
     config::{
         core::ConfigExperimental,
         elements::{
-            ArchiveConfig, CustomTestGroup, DefaultJunitImpl, GlobalTimeout, JunitConfig,
-            JunitImpl, LeakTimeout, MaxFail, RetryPolicy, SlowTimeout, TestGroup, TestGroupConfig,
-            TestThreads, ThreadsRequired, deserialize_fail_fast, deserialize_leak_timeout,
-            deserialize_retry_policy, deserialize_slow_timeout,
+            ArchiveConfig, CustomTestGroup, DefaultJunitImpl, GlobalTimeout, Inherits, JunitConfig,
+            JunitImpl, JunitSettings, LeakTimeout, MaxFail, RetryPolicy, SlowTimeout, TestGroup,
+            TestGroupConfig, TestThreads, ThreadsRequired, deserialize_fail_fast,
+            deserialize_leak_timeout, deserialize_retry_policy, deserialize_slow_timeout,
         },
         overrides::{
             CompiledByProfile, CompiledData, CompiledDefaultFilter, DeserializedOverride,
@@ -21,9 +21,10 @@ use crate::{
         },
     },
     errors::{
-        ConfigParseError, ConfigParseErrorKind, ProfileListScriptUsesRunFiltersError,
-        ProfileNotFound, ProfileScriptErrors, ProfileUnknownScriptError,
-        ProfileWrongConfigScriptTypeError, UnknownTestGroupError, provided_by_tool,
+        ConfigParseError, ConfigParseErrorKind, InheritsError,
+        ProfileListScriptUsesRunFiltersError, ProfileNotFound, ProfileScriptErrors,
+        ProfileUnknownScriptError, ProfileWrongConfigScriptTypeError, UnknownTestGroupError,
+        provided_by_tool,
     },
     helpers::plural,
     list::TestList,
@@ -37,6 +38,7 @@ use config::{
 use iddqd::IdOrdMap;
 use indexmap::IndexMap;
 use nextest_filtering::{BinaryQuery, EvalContext, Filterset, ParseContext, TestQuery};
+use petgraph::{Directed, Graph, algo::scc::kosaraju_scc, graph::NodeIndex};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, hash_map},
@@ -371,6 +373,9 @@ impl NextestConfig {
 
         let mut known_groups = BTreeSet::new();
         let mut known_scripts = IdOrdMap::new();
+        // Track known profiles for inheritance validation. Profiles can only inherit
+        // from profiles defined in the same file or in previously loaded (lower priority) files.
+        let mut known_profiles = BTreeSet::new();
 
         // Next, merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
@@ -386,6 +391,7 @@ impl NextestConfig {
                 warnings,
                 &mut known_groups,
                 &mut known_scripts,
+                &mut known_profiles,
             )?;
 
             // This is the final, composite builder used at the end.
@@ -413,6 +419,7 @@ impl NextestConfig {
             warnings,
             &mut known_groups,
             &mut known_scripts,
+            &mut known_profiles,
         )?;
 
         composite_builder = composite_builder.add_source(source);
@@ -420,7 +427,7 @@ impl NextestConfig {
         // The unknown set is ignored here because any values in it have already been reported in
         // deserialize_individual_config.
         let (config, _unknown) = Self::build_and_deserialize_config(&composite_builder)
-            .map_err(|kind| ConfigParseError::new(config_file, None, kind))?;
+            .map_err(|kind| ConfigParseError::new(&config_file, None, kind))?;
 
         // Reverse all the compiled data at the end.
         compiled.default.reverse();
@@ -443,6 +450,7 @@ impl NextestConfig {
         warnings: &mut impl ConfigWarnings,
         known_groups: &mut BTreeSet<CustomTestGroup>,
         known_scripts: &mut IdOrdMap<ScriptInfo>,
+        known_profiles: &mut BTreeSet<String>,
     ) -> Result<(), ConfigParseError> {
         // Try building default builder + this file to get good error attribution and handle
         // overrides additively.
@@ -574,6 +582,20 @@ impl NextestConfig {
                 &unknown_default_profiles,
             );
         }
+
+        // Check that the profiles correctly use the inherits setting.
+        // Profiles can only inherit from profiles in the same file or in previously
+        // loaded (lower priority) files.
+        this_config
+            .sanitize_profile_inherits(known_profiles)
+            .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
+
+        // Add this file's profiles to known_profiles for subsequent files.
+        known_profiles.extend(
+            this_config
+                .other_profiles()
+                .map(|(name, _)| name.to_owned()),
+        );
 
         // Compile the overrides for this file.
         let this_compiled = CompiledByProfile::new(pcx, &this_config)
@@ -794,6 +816,9 @@ impl NextestConfig {
     fn make_profile(&self, name: &str) -> Result<EarlyProfile<'_>, ProfileNotFound> {
         let custom_profile = self.inner.get_profile(name)?;
 
+        // Resolve the inherited profile into a profile chain
+        let inheritance_chain = self.inner.resolve_inheritance_chain(name)?;
+
         // The profile was found: construct it.
         let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
         store_dir.push(name);
@@ -809,6 +834,7 @@ impl NextestConfig {
             store_dir,
             default_profile: &self.inner.default_profile,
             custom_profile,
+            inheritance_chain,
             test_groups: &self.inner.test_groups,
             scripts: &self.inner.scripts,
             compiled_data,
@@ -874,6 +900,7 @@ pub struct EarlyProfile<'cfg> {
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
+    inheritance_chain: Vec<&'cfg CustomProfileImpl>,
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     // This is ordered because the scripts are used in the order they're defined.
     scripts: &'cfg ScriptConfig,
@@ -924,6 +951,7 @@ impl<'cfg> EarlyProfile<'cfg> {
             store_dir: self.store_dir,
             default_profile: self.default_profile,
             custom_profile: self.custom_profile,
+            inheritance_chain: self.inheritance_chain,
             scripts: self.scripts,
             test_groups: self.test_groups,
             compiled_data,
@@ -941,6 +969,7 @@ pub struct EvaluatableProfile<'cfg> {
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
+    inheritance_chain: Vec<&'cfg CustomProfileImpl>,
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     // This is ordered because the scripts are used in the order they're defined.
     scripts: &'cfg ScriptConfig,
@@ -949,6 +978,56 @@ pub struct EvaluatableProfile<'cfg> {
     // The default filter that's been resolved after considering overrides (i.e.
     // platforms).
     resolved_default_filter: CompiledDefaultFilter,
+}
+
+/// These macros return a specific config field from an EvaluatableProfile,
+/// checking in order: custom profile, inheritance chain, then default profile.
+macro_rules! profile_field {
+    ($eval_prof:ident.$field:ident) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$field)
+            .unwrap_or($eval_prof.default_profile.$field)
+    };
+    ($eval_prof:ident.$nested:ident.$field:ident) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$nested.$field)
+            .unwrap_or($eval_prof.default_profile.$nested.$field)
+    };
+}
+macro_rules! profile_field_from_ref {
+    ($eval_prof:ident.$field:ident.$ref_func:ident()) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$field.$ref_func())
+            .unwrap_or(&$eval_prof.default_profile.$field)
+    };
+    ($eval_prof:ident.$nested:ident.$field:ident.$ref_func:ident()) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$nested.$field.$ref_func())
+            .unwrap_or(&$eval_prof.default_profile.$nested.$field)
+    };
+}
+// Variant for fields where both custom and default are Option.
+macro_rules! profile_field_optional {
+    ($eval_prof:ident.$nested:ident.$field:ident.$ref_func:ident()) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$nested.$field.$ref_func())
+            .or($eval_prof.default_profile.$nested.$field.$ref_func())
+    };
 }
 
 impl<'cfg> EvaluatableProfile<'cfg> {
@@ -986,94 +1065,68 @@ impl<'cfg> EvaluatableProfile<'cfg> {
 
     /// Returns the retry count for this profile.
     pub fn retries(&self) -> RetryPolicy {
-        self.custom_profile
-            .and_then(|profile| profile.retries)
-            .unwrap_or(self.default_profile.retries)
+        profile_field!(self.retries)
     }
 
     /// Returns the number of threads to run against for this profile.
     pub fn test_threads(&self) -> TestThreads {
-        self.custom_profile
-            .and_then(|profile| profile.test_threads)
-            .unwrap_or(self.default_profile.test_threads)
+        profile_field!(self.test_threads)
     }
 
     /// Returns the number of threads required for each test.
     pub fn threads_required(&self) -> ThreadsRequired {
-        self.custom_profile
-            .and_then(|profile| profile.threads_required)
-            .unwrap_or(self.default_profile.threads_required)
+        profile_field!(self.threads_required)
     }
 
     /// Returns extra arguments to be passed to the test binary at runtime.
     pub fn run_extra_args(&self) -> &'cfg [String] {
-        self.custom_profile
-            .and_then(|profile| profile.run_extra_args.as_deref())
-            .unwrap_or(&self.default_profile.run_extra_args)
+        profile_field_from_ref!(self.run_extra_args.as_deref())
     }
 
     /// Returns the time after which tests are treated as slow for this profile.
     pub fn slow_timeout(&self) -> SlowTimeout {
-        self.custom_profile
-            .and_then(|profile| profile.slow_timeout)
-            .unwrap_or(self.default_profile.slow_timeout)
+        profile_field!(self.slow_timeout)
     }
 
     /// Returns the time after which we should stop running tests.
     pub fn global_timeout(&self) -> GlobalTimeout {
-        self.custom_profile
-            .and_then(|profile| profile.global_timeout)
-            .unwrap_or(self.default_profile.global_timeout)
+        profile_field!(self.global_timeout)
     }
 
     /// Returns the time after which a child process that hasn't closed its handles is marked as
     /// leaky.
     pub fn leak_timeout(&self) -> LeakTimeout {
-        self.custom_profile
-            .and_then(|profile| profile.leak_timeout)
-            .unwrap_or(self.default_profile.leak_timeout)
+        profile_field!(self.leak_timeout)
     }
 
     /// Returns the test status level.
     pub fn status_level(&self) -> StatusLevel {
-        self.custom_profile
-            .and_then(|profile| profile.status_level)
-            .unwrap_or(self.default_profile.status_level)
+        profile_field!(self.status_level)
     }
 
     /// Returns the test status level at the end of the run.
     pub fn final_status_level(&self) -> FinalStatusLevel {
-        self.custom_profile
-            .and_then(|profile| profile.final_status_level)
-            .unwrap_or(self.default_profile.final_status_level)
+        profile_field!(self.final_status_level)
     }
 
     /// Returns the failure output config for this profile.
     pub fn failure_output(&self) -> TestOutputDisplay {
-        self.custom_profile
-            .and_then(|profile| profile.failure_output)
-            .unwrap_or(self.default_profile.failure_output)
+        profile_field!(self.failure_output)
     }
 
     /// Returns the failure output config for this profile.
     pub fn success_output(&self) -> TestOutputDisplay {
-        self.custom_profile
-            .and_then(|profile| profile.success_output)
-            .unwrap_or(self.default_profile.success_output)
+        profile_field!(self.success_output)
     }
 
     /// Returns the max-fail config for this profile.
     pub fn max_fail(&self) -> MaxFail {
-        self.custom_profile
-            .and_then(|profile| profile.max_fail)
-            .unwrap_or(self.default_profile.max_fail)
+        profile_field!(self.max_fail)
     }
 
     /// Returns the archive configuration for this profile.
     pub fn archive_config(&self) -> &'cfg ArchiveConfig {
-        self.custom_profile
-            .and_then(|profile| profile.archive.as_ref())
-            .unwrap_or(&self.default_profile.archive)
+        profile_field_from_ref!(self.archive.as_ref())
     }
 
     /// Returns the list of setup scripts.
@@ -1101,11 +1154,21 @@ impl<'cfg> EvaluatableProfile<'cfg> {
 
     /// Returns the JUnit configuration for this profile.
     pub fn junit(&self) -> Option<JunitConfig<'cfg>> {
-        JunitConfig::new(
-            self.store_dir(),
-            self.custom_profile.map(|p| &p.junit),
-            &self.default_profile.junit,
-        )
+        let settings = JunitSettings {
+            path: profile_field_optional!(self.junit.path.as_deref()),
+            report_name: profile_field_from_ref!(self.junit.report_name.as_deref()),
+            store_success_output: profile_field!(self.junit.store_success_output),
+            store_failure_output: profile_field!(self.junit.store_failure_output),
+        };
+        JunitConfig::new(self.store_dir(), settings)
+    }
+
+    /// Returns the profile that this profile inherits from.
+    pub fn inherits(&self) -> Option<&str> {
+        if let Some(custom_profile) = self.custom_profile {
+            return custom_profile.inherits();
+        }
+        None
     }
 
     #[cfg(test)]
@@ -1153,6 +1216,199 @@ impl NextestConfigImpl {
         self.other_profiles
             .iter()
             .map(|(key, value)| (key.as_str(), value))
+    }
+
+    /// Resolve a profile's inheritance chain (ancestors only, not including the
+    /// profile itself).
+    ///
+    /// Returns the chain ordered from immediate parent to furthest ancestor.
+    /// Cycles are assumed to have been checked by `sanitize_profile_inherits()`.
+    fn resolve_inheritance_chain(
+        &self,
+        profile_name: &str,
+    ) -> Result<Vec<&CustomProfileImpl>, ProfileNotFound> {
+        let mut chain = Vec::new();
+
+        // Start from the profile's parent, not the profile itself (the profile
+        // is already available via custom_profile).
+        let mut curr = self
+            .get_profile(profile_name)?
+            .and_then(|p| p.inherits.as_deref());
+
+        while let Some(name) = curr {
+            let profile = self.get_profile(name)?;
+            if let Some(profile) = profile {
+                chain.push(profile);
+                curr = profile.inherits.as_deref();
+            } else {
+                // Reached the default profile -- stop.
+                break;
+            }
+        }
+
+        Ok(chain)
+    }
+
+    /// Sanitize inherits settings on default and custom profiles.
+    ///
+    /// `known_profiles` contains profiles from previously loaded (lower priority) files.
+    /// A profile can inherit from profiles in the same file or in `known_profiles`.
+    fn sanitize_profile_inherits(
+        &self,
+        known_profiles: &BTreeSet<String>,
+    ) -> Result<(), ConfigParseErrorKind> {
+        let mut inherit_err_collector = Vec::new();
+
+        self.sanitize_default_profile_inherits(&mut inherit_err_collector);
+        self.sanitize_custom_profile_inherits(&mut inherit_err_collector, known_profiles);
+
+        if !inherit_err_collector.is_empty() {
+            return Err(ConfigParseErrorKind::InheritanceErrors(
+                inherit_err_collector,
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Check the DefaultProfileImpl and make sure that it doesn't inherit from other
+    /// profiles
+    fn sanitize_default_profile_inherits(&self, inherit_err_collector: &mut Vec<InheritsError>) {
+        if self.default_profile().inherits().is_some() {
+            inherit_err_collector.push(InheritsError::DefaultProfileInheritance(
+                NextestConfig::DEFAULT_PROFILE.to_string(),
+            ));
+        }
+    }
+
+    /// Iterate through each custom profile inherits and report any inheritance error(s).
+    fn sanitize_custom_profile_inherits(
+        &self,
+        inherit_err_collector: &mut Vec<InheritsError>,
+        known_profiles: &BTreeSet<String>,
+    ) {
+        let mut profile_graph = Graph::<&str, (), Directed>::new();
+        let mut profile_map = HashMap::new();
+
+        // Iterate through all custom profiles within the config file and constructs
+        // a reduced graph of the inheritance chain(s)
+        for (name, custom_profile) in self.other_profiles() {
+            let starts_with_default = self.sanitize_custom_default_profile_inherits(
+                name,
+                custom_profile,
+                inherit_err_collector,
+            );
+            if !starts_with_default {
+                // We don't need to add default- profiles. Since they cannot
+                // have inherits specified on them (they effectively always
+                // inherit from default), they cannot participate in inheritance
+                // cycles.
+                self.add_profile_to_graph(
+                    name,
+                    custom_profile,
+                    &mut profile_map,
+                    &mut profile_graph,
+                    inherit_err_collector,
+                    known_profiles,
+                );
+            }
+        }
+
+        self.check_inheritance_cycles(profile_graph, inherit_err_collector);
+    }
+
+    /// Check any CustomProfileImpl that have a "default-" name and make sure they
+    /// do not inherit from other profiles.
+    fn sanitize_custom_default_profile_inherits(
+        &self,
+        name: &str,
+        custom_profile: &CustomProfileImpl,
+        inherit_err_collector: &mut Vec<InheritsError>,
+    ) -> bool {
+        let starts_with_default = name.starts_with("default-");
+
+        if starts_with_default && custom_profile.inherits().is_some() {
+            inherit_err_collector.push(InheritsError::DefaultProfileInheritance(name.to_string()));
+        }
+
+        starts_with_default
+    }
+
+    /// Add the custom profile to the profile graph and collect any inheritance errors like
+    /// self-referential profiles and nonexisting profiles.
+    ///
+    /// `known_profiles` contains profiles from previously loaded (lower priority) files.
+    fn add_profile_to_graph<'cfg>(
+        &self,
+        name: &'cfg str,
+        custom_profile: &'cfg CustomProfileImpl,
+        profile_map: &mut HashMap<&'cfg str, NodeIndex>,
+        profile_graph: &mut Graph<&'cfg str, ()>,
+        inherit_err_collector: &mut Vec<InheritsError>,
+        known_profiles: &BTreeSet<String>,
+    ) {
+        if let Some(inherits_name) = custom_profile.inherits() {
+            if inherits_name == name {
+                inherit_err_collector
+                    .push(InheritsError::SelfReferentialInheritance(name.to_string()))
+            } else if self.get_profile(inherits_name).is_ok() {
+                // Inherited profile exists in this file -- create edge for cycle detection.
+                let from_node = match profile_map.get(name) {
+                    None => {
+                        let profile_node = profile_graph.add_node(name);
+                        profile_map.insert(name, profile_node);
+                        profile_node
+                    }
+                    Some(node_idx) => *node_idx,
+                };
+                let to_node = match profile_map.get(inherits_name) {
+                    None => {
+                        let profile_node = profile_graph.add_node(inherits_name);
+                        profile_map.insert(inherits_name, profile_node);
+                        profile_node
+                    }
+                    Some(node_idx) => *node_idx,
+                };
+                profile_graph.add_edge(from_node, to_node, ());
+            } else if known_profiles.contains(inherits_name) {
+                // Inherited profile exists in a previously loaded file -- valid, no
+                // cycle detection needed (cross-file cycles are impossible with
+                // downward-only inheritance).
+            } else {
+                inherit_err_collector.push(InheritsError::UnknownInheritance(
+                    name.to_string(),
+                    inherits_name.to_string(),
+                ))
+            }
+        }
+    }
+
+    /// Given a profile graph, reports all SCC cycles within the graph using kosaraju algorithm.
+    fn check_inheritance_cycles(
+        &self,
+        profile_graph: Graph<&str, ()>,
+        inherit_err_collector: &mut Vec<InheritsError>,
+    ) {
+        let profile_sccs: Vec<Vec<NodeIndex>> = kosaraju_scc(&profile_graph);
+        let profile_sccs: Vec<Vec<NodeIndex>> = profile_sccs
+            .into_iter()
+            .filter(|scc| scc.len() >= 2)
+            .collect();
+
+        if !profile_sccs.is_empty() {
+            inherit_err_collector.push(InheritsError::InheritanceCycle(
+                profile_sccs
+                    .iter()
+                    .map(|node_idxs| {
+                        let profile_names: Vec<String> = node_idxs
+                            .iter()
+                            .map(|node_idx| profile_graph[*node_idx].to_string())
+                            .collect();
+                        profile_names
+                    })
+                    .collect(),
+            ));
+        }
     }
 }
 
@@ -1235,6 +1491,7 @@ pub(in crate::config) struct DefaultProfileImpl {
     scripts: Vec<DeserializedProfileScriptConfig>,
     junit: DefaultJunitImpl,
     archive: ArchiveConfig,
+    inherits: Inherits,
 }
 
 impl DefaultProfileImpl {
@@ -1279,11 +1536,16 @@ impl DefaultProfileImpl {
             scripts: p.scripts,
             junit: DefaultJunitImpl::for_default_profile(p.junit),
             archive: p.archive.expect("archive present in default profile"),
+            inherits: Inherits::new(p.inherits),
         }
     }
 
     pub(in crate::config) fn default_filter(&self) -> &str {
         &self.default_filter
+    }
+
+    pub(in crate::config) fn inherits(&self) -> Option<&str> {
+        self.inherits.inherits_from()
     }
 
     pub(in crate::config) fn overrides(&self) -> &[DeserializedOverride] {
@@ -1337,6 +1599,8 @@ pub(in crate::config) struct CustomProfileImpl {
     junit: JunitImpl,
     #[serde(default)]
     archive: Option<ArchiveConfig>,
+    #[serde(default)]
+    inherits: Option<String>,
 }
 
 impl CustomProfileImpl {
@@ -1347,6 +1611,10 @@ impl CustomProfileImpl {
 
     pub(in crate::config) fn default_filter(&self) -> Option<&str> {
         self.default_filter.as_deref()
+    }
+
+    pub(in crate::config) fn inherits(&self) -> Option<&str> {
+        self.inherits.as_deref()
     }
 
     pub(in crate::config) fn overrides(&self) -> &[DeserializedOverride] {

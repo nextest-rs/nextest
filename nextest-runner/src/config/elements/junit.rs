@@ -18,31 +18,14 @@ pub struct JunitConfig<'cfg> {
 impl<'cfg> JunitConfig<'cfg> {
     pub(in crate::config) fn new(
         store_dir: &Utf8Path,
-        custom_data: Option<&'cfg JunitImpl>,
-        default_data: &'cfg DefaultJunitImpl,
+        settings: JunitSettings<'cfg>,
     ) -> Option<Self> {
-        let path = custom_data
-            .map(|custom| &custom.path)
-            .unwrap_or(&default_data.path)
-            .as_deref();
-
-        path.map(|path| {
-            let path = store_dir.join(path);
-            let report_name = custom_data
-                .and_then(|custom| custom.report_name.as_deref())
-                .unwrap_or(&default_data.report_name);
-            let store_success_output = custom_data
-                .and_then(|custom| custom.store_success_output)
-                .unwrap_or(default_data.store_success_output);
-            let store_failure_output = custom_data
-                .and_then(|custom| custom.store_failure_output)
-                .unwrap_or(default_data.store_failure_output);
-            Self {
-                path,
-                report_name,
-                store_success_output,
-                store_failure_output,
-            }
+        let path = settings.path?;
+        Some(Self {
+            path: store_dir.join(path),
+            report_name: settings.report_name,
+            store_success_output: settings.store_success_output,
+            store_failure_output: settings.store_failure_output,
         })
     }
 
@@ -67,12 +50,21 @@ impl<'cfg> JunitConfig<'cfg> {
     }
 }
 
+/// Pre-resolved JUnit settings from the profile inheritance chain.
+#[derive(Clone, Debug)]
+pub(in crate::config) struct JunitSettings<'cfg> {
+    pub(in crate::config) path: Option<&'cfg Utf8Path>,
+    pub(in crate::config) report_name: &'cfg str,
+    pub(in crate::config) store_success_output: bool,
+    pub(in crate::config) store_failure_output: bool,
+}
+
 #[derive(Clone, Debug)]
 pub(in crate::config) struct DefaultJunitImpl {
-    path: Option<Utf8PathBuf>,
-    report_name: String,
-    store_success_output: bool,
-    store_failure_output: bool,
+    pub(in crate::config) path: Option<Utf8PathBuf>,
+    pub(in crate::config) report_name: String,
+    pub(in crate::config) store_success_output: bool,
+    pub(in crate::config) store_failure_output: bool,
 }
 
 impl DefaultJunitImpl {
@@ -97,11 +89,11 @@ impl DefaultJunitImpl {
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct JunitImpl {
     #[serde(default)]
-    path: Option<Utf8PathBuf>,
+    pub(in crate::config) path: Option<Utf8PathBuf>,
     #[serde(default)]
-    report_name: Option<String>,
+    pub(in crate::config) report_name: Option<String>,
     #[serde(default)]
-    store_success_output: Option<bool>,
+    pub(in crate::config) store_success_output: Option<bool>,
     #[serde(default)]
-    store_failure_output: Option<bool>,
+    pub(in crate::config) store_failure_output: Option<bool>,
 }
