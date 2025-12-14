@@ -64,27 +64,35 @@ mod tests {
     }
 
     #[test_case(
-        indoc! {r#"            
+        indoc! {r#"
             [profile.prof_a]
             inherits = "prof_b"
-            
+
             [profile.prof_b]
-            inherits = "default"
+            inherits = "prof_c"
             fail-fast = { max-fail = 4 }
+
+            [profile.prof_c]
+            inherits = "default"
+            fail-fast = { max-fail = 10 }
+            retries = 3
         "#},
         Ok(CustomProfileTest {
             name: "prof_a".to_string(),
             inherits: Some("prof_b".to_string()),
+            // prof_b's max-fail (4) should override prof_c's (10)
             max_fail: Some(MaxFail::Count { max_fail: 4, terminate: TerminateMode::Wait }),
+            // prof_c's retries should be inherited through prof_b
+            retries: Some(RetryPolicy::new_without_delay(3)),
             ..Default::default()
         })
-        ; "custom profile a inherits from another custom profile b"
+        ; "three-level inheritance"
     )]
     #[test_case(
-        indoc! {r#"            
+        indoc! {r#"
             [profile.prof_a]
             inherits = "prof_b"
-            
+
             [profile.prof_b]
             inherits = "prof_c"
 
@@ -98,10 +106,10 @@ mod tests {
         ) ; "self referential error not inheritance cycle"
     )]
     #[test_case(
-        indoc! {r#"            
+        indoc! {r#"
             [profile.prof_a]
             inherits = "prof_b"
-            
+
             [profile.prof_b]
             inherits = "prof_c"
 
@@ -130,7 +138,7 @@ mod tests {
 
             [profile.prof_a]
             inherits = "prof_b"
-            
+
             [profile.prof_b]
             inherits = "prof_c"
 
@@ -183,19 +191,25 @@ mod tests {
                 let profile = profile.apply_build_platforms(&build_platforms());
                 assert_eq!(default_profile.inherits(), None);
                 assert_eq!(profile.inherits(), custom_profile.inherits.as_deref());
-                // Spot check that inheritance works correctly
+
+                // Spot check that inheritance works correctly.
                 assert_eq!(
                     profile.max_fail(),
                     custom_profile.max_fail.expect("max fail should exist")
                 );
+                if let Some(expected_retries) = custom_profile.retries {
+                    assert_eq!(profile.retries(), expected_retries);
+                }
             }
             Err(expected_inherits_err) => {
                 let error = config_res.expect_err("config is invalid");
                 assert_eq!(error.tool(), None);
                 match error.kind() {
                     ConfigParseErrorKind::InheritanceErrors(inherits_err) => {
-                        // Because inheritance errors are not in a deterministic order in the Vec<InheritsError>
-                        // we use a Hashset here to test whether the error seen by the expected err
+                        // Because inheritance errors are not in a deterministic
+                        // order in the Vec<InheritsError>, we use a HashSet
+                        // here to test whether the error seen by the expected
+                        // err.
                         let expected_err: HashSet<&InheritsError> =
                             expected_inherits_err.iter().collect();
                         for actual_err in inherits_err.iter() {

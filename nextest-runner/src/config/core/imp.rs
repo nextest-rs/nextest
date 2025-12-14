@@ -800,7 +800,7 @@ impl NextestConfig {
         let custom_profile = self.inner.get_profile(name)?;
 
         // Resolve the inherited profile into a profile chain
-        let inheritance_chain = self.inner.resolve_profile_chain(name)?;
+        let inheritance_chain = self.inner.resolve_inheritance_chain(name)?;
 
         // The profile was found: construct it.
         let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
@@ -1175,35 +1175,35 @@ impl NextestConfigImpl {
             .map(|(key, value)| (key.as_str(), value))
     }
 
-    /// Resolve a profile with an inheritance chain recursively.
+    /// Resolve a profile's inheritance chain (ancestors only, not including the
+    /// profile itself).
     ///
-    /// This function does not check for cycles. Use `check_inheritance_cycles()`
-    /// to observe for cycles in an inheritance chain.
-    fn resolve_profile_chain(
+    /// Returns the chain ordered from immediate parent to furthest ancestor.
+    /// Cycles are assumed to have been checked by `sanitize_profile_inherits()`.
+    fn resolve_inheritance_chain(
         &self,
         profile_name: &str,
     ) -> Result<Vec<&CustomProfileImpl>, ProfileNotFound> {
         let mut chain = Vec::new();
 
-        self.resolve_profile_chain_recursive(profile_name, &mut chain)?;
-        Ok(chain)
-    }
+        // Start from the profile's parent, not the profile itself (the profile
+        // is already available via custom_profile).
+        let mut curr = self
+            .get_profile(profile_name)?
+            .and_then(|p| p.inherits.as_deref());
 
-    /// Helper function for resolving an inheritance chain
-    fn resolve_profile_chain_recursive<'cfg>(
-        &'cfg self,
-        profile_name: &str,
-        chain: &mut Vec<&'cfg CustomProfileImpl>,
-    ) -> Result<(), ProfileNotFound> {
-        let profile = self.get_profile(profile_name)?;
-        if let Some(profile) = profile {
-            if let Some(parent_name) = &profile.inherits {
-                self.resolve_profile_chain_recursive(parent_name, chain)?;
+        while let Some(name) = curr {
+            let profile = self.get_profile(name)?;
+            if let Some(profile) = profile {
+                chain.push(profile);
+                curr = profile.inherits.as_deref();
+            } else {
+                // Reached the default profile -- stop.
+                break;
             }
-            chain.push(profile);
         }
 
-        Ok(())
+        Ok(chain)
     }
 
     /// Sanitize inherits settings on default and custom profiles
