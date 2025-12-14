@@ -373,6 +373,9 @@ impl NextestConfig {
 
         let mut known_groups = BTreeSet::new();
         let mut known_scripts = IdOrdMap::new();
+        // Track known profiles for inheritance validation. Profiles can only inherit
+        // from profiles defined in the same file or in previously loaded (lower priority) files.
+        let mut known_profiles = BTreeSet::new();
 
         // Next, merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
@@ -388,6 +391,7 @@ impl NextestConfig {
                 warnings,
                 &mut known_groups,
                 &mut known_scripts,
+                &mut known_profiles,
             )?;
 
             // This is the final, composite builder used at the end.
@@ -415,6 +419,7 @@ impl NextestConfig {
             warnings,
             &mut known_groups,
             &mut known_scripts,
+            &mut known_profiles,
         )?;
 
         composite_builder = composite_builder.add_source(source);
@@ -422,7 +427,7 @@ impl NextestConfig {
         // The unknown set is ignored here because any values in it have already been reported in
         // deserialize_individual_config.
         let (config, _unknown) = Self::build_and_deserialize_config(&composite_builder)
-            .map_err(|kind| ConfigParseError::new(config_file, None, kind))?;
+            .map_err(|kind| ConfigParseError::new(&config_file, None, kind))?;
 
         // Reverse all the compiled data at the end.
         compiled.default.reverse();
@@ -445,6 +450,7 @@ impl NextestConfig {
         warnings: &mut impl ConfigWarnings,
         known_groups: &mut BTreeSet<CustomTestGroup>,
         known_scripts: &mut IdOrdMap<ScriptInfo>,
+        known_profiles: &mut BTreeSet<String>,
     ) -> Result<(), ConfigParseError> {
         // Try building default builder + this file to get good error attribution and handle
         // overrides additively.
@@ -578,9 +584,18 @@ impl NextestConfig {
         }
 
         // Check that the profiles correctly use the inherits setting.
+        // Profiles can only inherit from profiles in the same file or in previously
+        // loaded (lower priority) files.
         this_config
-            .sanitize_profile_inherits()
+            .sanitize_profile_inherits(known_profiles)
             .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
+
+        // Add this file's profiles to known_profiles for subsequent files.
+        known_profiles.extend(
+            this_config
+                .other_profiles()
+                .map(|(name, _)| name.to_owned()),
+        );
 
         // Compile the overrides for this file.
         let this_compiled = CompiledByProfile::new(pcx, &this_config)
@@ -1235,11 +1250,17 @@ impl NextestConfigImpl {
     }
 
     /// Sanitize inherits settings on default and custom profiles.
-    fn sanitize_profile_inherits(&self) -> Result<(), ConfigParseErrorKind> {
+    ///
+    /// `known_profiles` contains profiles from previously loaded (lower priority) files.
+    /// A profile can inherit from profiles in the same file or in `known_profiles`.
+    fn sanitize_profile_inherits(
+        &self,
+        known_profiles: &BTreeSet<String>,
+    ) -> Result<(), ConfigParseErrorKind> {
         let mut inherit_err_collector = Vec::new();
 
-        self.default_profile_inheritance(&mut inherit_err_collector);
-        self.custom_profile_inheritances(&mut inherit_err_collector);
+        self.sanitize_default_profile_inherits(&mut inherit_err_collector);
+        self.sanitize_custom_profile_inherits(&mut inherit_err_collector, known_profiles);
 
         if !inherit_err_collector.is_empty() {
             return Err(ConfigParseErrorKind::InheritanceErrors(
@@ -1252,7 +1273,7 @@ impl NextestConfigImpl {
 
     /// Check the DefaultProfileImpl and make sure that it doesn't inherit from other
     /// profiles
-    fn default_profile_inheritance(&self, inherit_err_collector: &mut Vec<InheritsError>) {
+    fn sanitize_default_profile_inherits(&self, inherit_err_collector: &mut Vec<InheritsError>) {
         if self.default_profile().inherits().is_some() {
             inherit_err_collector.push(InheritsError::DefaultProfileInheritance(
                 NextestConfig::DEFAULT_PROFILE.to_string(),
@@ -1260,26 +1281,35 @@ impl NextestConfigImpl {
         }
     }
 
-    /// Iterate through each custom profile inherits and report any inheritance error(s)
-    fn custom_profile_inheritances(&self, inherit_err_collector: &mut Vec<InheritsError>) {
+    /// Iterate through each custom profile inherits and report any inheritance error(s).
+    fn sanitize_custom_profile_inherits(
+        &self,
+        inherit_err_collector: &mut Vec<InheritsError>,
+        known_profiles: &BTreeSet<String>,
+    ) {
         let mut profile_graph = Graph::<&str, (), Directed>::new();
         let mut profile_map = HashMap::new();
 
         // Iterate through all custom profiles within the config file and constructs
         // a reduced graph of the inheritance chain(s)
         for (name, custom_profile) in self.other_profiles() {
-            let profile_type = self.custom_default_profile_inheritance(
+            let starts_with_default = self.sanitize_custom_default_profile_inherits(
                 name,
                 custom_profile,
                 inherit_err_collector,
             );
-            if !profile_type {
+            if !starts_with_default {
+                // We don't need to add default- profiles. Since they cannot
+                // have inherits specified on them (they effectively always
+                // inherit from default), they cannot participate in inheritance
+                // cycles.
                 self.add_profile_to_graph(
                     name,
                     custom_profile,
                     &mut profile_map,
                     &mut profile_graph,
                     inherit_err_collector,
+                    known_profiles,
                 );
             }
         }
@@ -1288,24 +1318,26 @@ impl NextestConfigImpl {
     }
 
     /// Check any CustomProfileImpl that have a "default-" name and make sure they
-    /// do not inherit from other profiles
-    fn custom_default_profile_inheritance(
+    /// do not inherit from other profiles.
+    fn sanitize_custom_default_profile_inherits(
         &self,
         name: &str,
         custom_profile: &CustomProfileImpl,
         inherit_err_collector: &mut Vec<InheritsError>,
     ) -> bool {
-        let profile_type = name.starts_with("default-");
+        let starts_with_default = name.starts_with("default-");
 
-        if profile_type && custom_profile.inherits().is_some() {
+        if starts_with_default && custom_profile.inherits().is_some() {
             inherit_err_collector.push(InheritsError::DefaultProfileInheritance(name.to_string()));
         }
 
-        profile_type
+        starts_with_default
     }
 
-    // Add the custom profile to the profile graph and collect any inheritance errors like
-    // self referential profiles and nonexisting profiles.
+    /// Add the custom profile to the profile graph and collect any inheritance errors like
+    /// self-referential profiles and nonexisting profiles.
+    ///
+    /// `known_profiles` contains profiles from previously loaded (lower priority) files.
     fn add_profile_to_graph<'cfg>(
         &self,
         name: &'cfg str,
@@ -1313,13 +1345,14 @@ impl NextestConfigImpl {
         profile_map: &mut HashMap<&'cfg str, NodeIndex>,
         profile_graph: &mut Graph<&'cfg str, ()>,
         inherit_err_collector: &mut Vec<InheritsError>,
+        known_profiles: &BTreeSet<String>,
     ) {
         if let Some(inherits_name) = custom_profile.inherits() {
             if inherits_name == name {
                 inherit_err_collector
                     .push(InheritsError::SelfReferentialInheritance(name.to_string()))
             } else if self.get_profile(inherits_name).is_ok() {
-                // Inherited profile exists -- create the edge in the graph.
+                // Inherited profile exists in this file -- create edge for cycle detection.
                 let from_node = match profile_map.get(name) {
                     None => {
                         let profile_node = profile_graph.add_node(name);
@@ -1337,6 +1370,10 @@ impl NextestConfigImpl {
                     Some(node_idx) => *node_idx,
                 };
                 profile_graph.add_edge(from_node, to_node, ());
+            } else if known_profiles.contains(inherits_name) {
+                // Inherited profile exists in a previously loaded file -- valid, no
+                // cycle detection needed (cross-file cycles are impossible with
+                // downward-only inheritance).
             } else {
                 inherit_err_collector.push(InheritsError::UnknownInheritance(
                     name.to_string(),

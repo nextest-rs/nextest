@@ -19,48 +19,31 @@ impl Inherits {
 
 #[cfg(test)]
 mod tests {
-    use super::super::*;
     use crate::{
         config::{
-            core::NextestConfig, overrides::DeserializedOverride,
-            scripts::DeserializedProfileScriptConfig, utils::test_helpers::*,
+            core::{NextestConfig, ToolConfigFile},
+            elements::{MaxFail, RetryPolicy, TerminateMode},
+            utils::test_helpers::*,
         },
         errors::{
             ConfigParseErrorKind,
             InheritsError::{self, *},
         },
-        reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
     };
     use camino_tempfile::tempdir;
     use indoc::indoc;
     use nextest_filtering::ParseContext;
-    use std::collections::HashSet;
+    use std::{collections::HashSet, fs};
     use test_case::test_case;
 
-    // Used to check if Custom Profiles are able to
-    // inherit from other profiles
+    /// Settings checked for inheritance below.
     #[derive(Default)]
     #[allow(dead_code)]
-    pub struct CustomProfileTest {
+    pub struct InheritSettings {
         name: String,
-        default_filter: Option<String>,
-        retries: Option<RetryPolicy>,
-        test_threads: Option<TestThreads>,
-        threads_required: Option<ThreadsRequired>,
-        run_extra_args: Option<Vec<String>>,
-        status_level: Option<StatusLevel>,
-        final_status_level: Option<FinalStatusLevel>,
-        failure_output: Option<TestOutputDisplay>,
-        success_output: Option<TestOutputDisplay>,
-        max_fail: Option<MaxFail>,
-        slow_timeout: Option<SlowTimeout>,
-        global_timeout: Option<GlobalTimeout>,
-        leak_timeout: Option<LeakTimeout>,
-        overrides: Vec<DeserializedOverride>,
-        scripts: Vec<DeserializedProfileScriptConfig>,
-        junit: JunitImpl,
-        archive: Option<ArchiveConfig>,
         inherits: Option<String>,
+        max_fail: Option<MaxFail>,
+        retries: Option<RetryPolicy>,
     }
 
     #[test_case(
@@ -77,14 +60,13 @@ mod tests {
             fail-fast = { max-fail = 10 }
             retries = 3
         "#},
-        Ok(CustomProfileTest {
+        Ok(InheritSettings {
             name: "prof_a".to_string(),
             inherits: Some("prof_b".to_string()),
             // prof_b's max-fail (4) should override prof_c's (10)
             max_fail: Some(MaxFail::Count { max_fail: 4, terminate: TerminateMode::Wait }),
             // prof_c's retries should be inherited through prof_b
             retries: Some(RetryPolicy::new_without_delay(3)),
-            ..Default::default()
         })
         ; "three-level inheritance"
     )]
@@ -164,7 +146,7 @@ mod tests {
     )]
     fn profile_inheritance(
         config_contents: &str,
-        expected: Result<CustomProfileTest, Vec<InheritsError>>,
+        expected: Result<InheritSettings, Vec<InheritsError>>,
     ) {
         let workspace_dir = tempdir().unwrap();
         let graph = temp_workspace(&workspace_dir, config_contents);
@@ -243,6 +225,155 @@ mod tests {
                         panic!("expected ConfigParseErrorKind::InheritanceErrors, got {other}")
                     }
                 }
+            }
+        }
+    }
+
+    /// Test that higher-priority files can inherit from lower-priority files.
+    #[test]
+    fn valid_downward_inheritance() {
+        let workspace_dir = tempdir().unwrap();
+
+        // Tool config 1 (higher priority): defines prof_a inheriting from prof_b
+        let tool1_config = workspace_dir.path().join("tool1.toml");
+        fs::write(
+            &tool1_config,
+            indoc! {r#"
+                    [profile.prof_a]
+                    inherits = "prof_b"
+                    retries = 5
+                "#},
+        )
+        .unwrap();
+
+        // Tool config 2 (lower priority): defines prof_b
+        let tool2_config = workspace_dir.path().join("tool2.toml");
+        fs::write(
+            &tool2_config,
+            indoc! {r#"
+                    [profile.prof_b]
+                    retries = 3
+                "#},
+        )
+        .unwrap();
+
+        let workspace_config = indoc! {r#"
+                [profile.default]
+            "#};
+
+        let graph = temp_workspace(&workspace_dir, workspace_config);
+        let pcx = ParseContext::new(&graph);
+
+        // tool1 is first = higher priority, tool2 is second = lower priority
+        let tool_configs = [
+            ToolConfigFile {
+                tool: "tool1".to_string(),
+                config_file: tool1_config.try_into().unwrap(),
+            },
+            ToolConfigFile {
+                tool: "tool2".to_string(),
+                config_file: tool2_config.try_into().unwrap(),
+            },
+        ];
+
+        let config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &tool_configs,
+            &Default::default(),
+        )
+        .expect("config should be valid");
+
+        // prof_a should inherit retries=3 from prof_b, but override with retries=5
+        let profile = config
+            .profile("prof_a")
+            .unwrap()
+            .apply_build_platforms(&build_platforms());
+        assert_eq!(profile.retries(), RetryPolicy::new_without_delay(5));
+
+        // prof_b should have retries=3
+        let profile = config
+            .profile("prof_b")
+            .unwrap()
+            .apply_build_platforms(&build_platforms());
+        assert_eq!(profile.retries(), RetryPolicy::new_without_delay(3));
+    }
+
+    /// Test that lower-priority files cannot inherit from higher-priority files.
+    /// This is reported as an unknown profile error.
+    #[test]
+    fn invalid_upward_inheritance() {
+        let workspace_dir = tempdir().unwrap();
+
+        // Tool config 1 (higher priority): defines prof_a
+        let tool1_config = workspace_dir.path().join("tool1.toml");
+        fs::write(
+            &tool1_config,
+            indoc! {r#"
+                    [profile.prof_a]
+                    retries = 5
+                "#},
+        )
+        .unwrap();
+
+        // Tool config 2 (lower priority): tries to inherit from prof_a (not yet loaded)
+        let tool2_config = workspace_dir.path().join("tool2.toml");
+        fs::write(
+            &tool2_config,
+            indoc! {r#"
+                    [profile.prof_b]
+                    inherits = "prof_a"
+                "#},
+        )
+        .unwrap();
+
+        let workspace_config = indoc! {r#"
+                [profile.default]
+            "#};
+
+        let graph = temp_workspace(&workspace_dir, workspace_config);
+        let pcx = ParseContext::new(&graph);
+
+        let tool_configs = [
+            ToolConfigFile {
+                tool: "tool1".to_string(),
+                config_file: tool1_config.try_into().unwrap(),
+            },
+            ToolConfigFile {
+                tool: "tool2".to_string(),
+                config_file: tool2_config.try_into().unwrap(),
+            },
+        ];
+
+        let error = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &tool_configs,
+            &Default::default(),
+        )
+        .expect_err("config should fail: upward inheritance not allowed");
+
+        // Error should be attributed to tool2 since that's where the invalid
+        // inheritance is defined.
+        assert_eq!(error.tool(), Some("tool2"));
+
+        match error.kind() {
+            ConfigParseErrorKind::InheritanceErrors(errors) => {
+                assert_eq!(errors.len(), 1);
+                assert!(
+                    matches!(
+                        &errors[0],
+                        InheritsError::UnknownInheritance(from, to)
+                        if from == "prof_b" && to == "prof_a"
+                    ),
+                    "expected UnknownInheritance(prof_b, prof_a), got {:?}",
+                    errors[0]
+                );
+            }
+            other => {
+                panic!("expected ConfigParseErrorKind::InheritanceErrors, got {other}")
             }
         }
     }
