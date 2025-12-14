@@ -63,6 +63,32 @@ slow-timeout = { period = "1s", terminate-after = 2 }
     cat src/outputs/timeout-output.ansi | ../scripts/strip-ansi.sh
     ```
 
+### Configuring timeout behavior
+
+<!-- md:version 0.9.115 -->
+
+By default, tests that time out are treated as failures. However, for fuzz tests with very large state spaces (or on a constrained environment like CI), it may be useful to treat timeouts as successes, since they're usually not expected to run until completion. A timeout in this context means that no failing input was found up until this point.
+
+For these kinds of tests, you can configure timeouts to be marked as successes. For example, to run tests in the `fuzz-targets` crate for 30 seconds, then mark them as successes:
+
+```toml title="Timeouts as successes"
+[[profile.default.overrides]]
+filter = 'package(fuzz-targets)'
+slow-timeout = { period = "30s", terminate-after = 1, on-timeout = "pass" }
+```
+
+The possible values for `on-timeout` are:
+
+`fail`
+
+: Tests that time out are treated as failures. This is the default.
+
+`pass`
+
+: Tests that time out are treated as successes.
+
+Tests that time out and are treated as successes are marked `TMPASS`.
+
 ### How nextest terminates tests
 
 On Unix platforms, nextest creates a [process group] for each test. On timing out, nextest attempts a graceful shutdown: it first sends the [SIGTERM](https://www.gnu.org/software/libc/manual/html_node/Termination-Signals.html) signal to the process group, then waits for a grace period (by default 10 seconds) for the test to shut down. If the test doesn't shut itself down within that time, nextest sends SIGKILL (`kill -9`) to the process group to terminate it immediately.

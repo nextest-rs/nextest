@@ -47,6 +47,10 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
                     "test_slow_timeout_subprocess",
                     TestCaseFixtureStatus::IgnoredPass,
                 ),
+                TestCaseFixture::new(
+                    "test_flaky_slow_timeout_mod_3",
+                    TestCaseFixtureStatus::IgnoredFail
+                ),
                 TestCaseFixture::new("test_stdin_closed", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_subprocess_doesnt_exit", TestCaseFixtureStatus::Leak),
                 TestCaseFixture::new("test_subprocess_doesnt_exit_fail", TestCaseFixtureStatus::FailLeak),
