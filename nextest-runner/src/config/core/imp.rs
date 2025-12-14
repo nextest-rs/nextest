@@ -578,7 +578,9 @@ impl NextestConfig {
         }
 
         // Check that the profiles correctly use the inherits setting.
-        this_config.sanitize_profile_inherits()?;
+        this_config
+            .sanitize_profile_inherits()
+            .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
 
         // Compile the overrides for this file.
         let this_compiled = CompiledByProfile::new(pcx, &this_config)
@@ -1232,18 +1234,16 @@ impl NextestConfigImpl {
         Ok(chain)
     }
 
-    /// Sanitize inherits settings on default and custom profiles
-    fn sanitize_profile_inherits(&self) -> Result<(), ConfigParseError> {
+    /// Sanitize inherits settings on default and custom profiles.
+    fn sanitize_profile_inherits(&self) -> Result<(), ConfigParseErrorKind> {
         let mut inherit_err_collector = Vec::new();
 
         self.default_profile_inheritance(&mut inherit_err_collector);
         self.custom_profile_inheritances(&mut inherit_err_collector);
 
         if !inherit_err_collector.is_empty() {
-            return Err(ConfigParseError::new(
-                "inheritance error(s) detected",
-                None,
-                ConfigParseErrorKind::InheritanceErrors(inherit_err_collector),
+            return Err(ConfigParseErrorKind::InheritanceErrors(
+                inherit_err_collector,
             ));
         }
 
@@ -1319,7 +1319,7 @@ impl NextestConfigImpl {
                 inherit_err_collector
                     .push(InheritsError::SelfReferentialInheritance(name.to_string()))
             } else if self.get_profile(inherits_name).is_ok() {
-                // Inherited profile exist, create the edge in the graph
+                // Inherited profile exists -- create the edge in the graph.
                 let from_node = match profile_map.get(name) {
                     None => {
                         let profile_node = profile_graph.add_node(name);
