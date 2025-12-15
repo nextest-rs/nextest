@@ -81,6 +81,7 @@ Configuration is resolved in the following order:
 
 5. If a profile is specified, tool-specific configuration for the given profile.
 6. For each profile in the inheritance chain, which always terminates at the `default` profile:
+
   1. Repository-specific configuration for that profile profile. For example, if the repository-specific configuration looks like:
    ```toml
    [profile.ci-extended]
@@ -90,8 +91,10 @@ Configuration is resolved in the following order:
    retries = 5
    ```
    then, with the `ci-extended` profile, failing tests are retried up to 5 times.
-  b. Tool-specific configuration for that profile.
-8. The [default configuration](reference.md#default-configuration), which is that tests are never retried.
+  
+  2. Tool-specific configuration for that profile.
+
+7. The [default configuration](reference.md#default-configuration), which is that tests are never retried.
 
 ## See also
 
