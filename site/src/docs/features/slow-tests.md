@@ -1,6 +1,6 @@
 ---
 icon: material/speedometer-slow
-description: Identifying slow tests and configuring per-test timeouts.
+description: "Identifying slow tests and configuring per-test timeouts."
 ---
 
 # Slow tests and timeouts
