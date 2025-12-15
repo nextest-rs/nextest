@@ -69,6 +69,17 @@ These parameters are specified at the root level of the configuration file.
 
 Profiles are configured under `[profile.<name>]`. The default profile is called `[profile.default]`.
 
+### General configuration
+
+#### `profile.<name>.inherits`
+
+<!-- md:version 0.9.115 -->
+
+- **Type**: String
+- **Description**: The profile to inherit configuration settings from
+- **Documentation**: [_Profile inheritance_](index.md#profile-inheritance)
+- **Default**: `default`: the default profile
+
 ### Core test execution
 
 #### `profile.<name>.default-filter`

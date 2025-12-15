@@ -28,6 +28,28 @@ After checking the profile into `.config/nextest.toml`, use `cargo nextest --pro
 !!! note "Default profiles"
 
     Nextest's embedded configuration may define new profiles whose names start with `default-` in the future. To avoid backwards compatibility issues, do not name custom profiles starting with `default-`.
+  
+### Profile inheritance
+
+<!-- md:version 0.9.115 -->
+
+By default, all custom profiles inherit their configuration from the profile named `default`. To inherit from another profile, specify the `inherits` key:
+
+```toml title="Inheriting from another profile in <code>.config/nextest.toml</code>"
+[profile.ci]
+fail-fast = false
+slow-timeout = "60s"
+
+[profile.ci-extended]
+inherits = "ci"
+slow-timeout = "300s"
+```
+
+A series of profile `inherits` keys form an _inheritance chain_, and configuration lookups are done by iterating over the chain.
+
+!!! note "The default profile cannot inherit from another profile"
+
+    The `default` profile cannot be made to inherit from another profile; it is always at the root of any inheritance chain.
 
 ## Tool-specific configuration
 
@@ -58,13 +80,17 @@ Configuration is resolved in the following order:
    then, if `--profile ci` is selected, failing tests are retried up to 2 times.
 
 5. If a profile is specified, tool-specific configuration for the given profile.
-6. Repository-specific configuration for the `default` profile. For example, if the repository-specific configuration looks like:
+6. For each profile in the inheritance chain, which always terminates at the `default` profile:
+  1. Repository-specific configuration for that profile profile. For example, if the repository-specific configuration looks like:
    ```toml
-   [profile.default]
+   [profile.ci-extended]
+   inherits = "ci"
+   
+   [profile.ci]
    retries = 5
    ```
-   then failing tests are retried up to 5 times.
-7. Tool-specific configuration for the `default` profile.
+   then, with the `ci-extended` profile, failing tests are retried up to 5 times.
+  b. Tool-specific configuration for that profile.
 8. The [default configuration](reference.md#default-configuration), which is that tests are never retried.
 
 ## See also

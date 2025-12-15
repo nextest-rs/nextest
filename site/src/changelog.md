@@ -9,6 +9,42 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.115] - 2025-12-14
+
+### Added
+
+- Nextest profiles now support [inheritance](https://nexte.st/docs/configuration/#profile-inheritance) via the `inherits` key. For example:
+
+  ```toml
+  [profile.ci]
+  retries = 2
+
+  [profile.ci-extended]
+  inherits = "ci"
+  slow-timeout = "120s"
+  ```
+
+  Thanks [asder8215](https://github.com/asder8215) for your first contribution! ([#2786])
+
+- A new `on-timeout` option for `slow-timeout` allows tests that time out to be treated as successes instead of failures. This is useful for fuzz tests, or other tests where a timeout indicates no failing input was found. For example:
+
+  ```toml
+  [[profile.default.overrides]]
+  filter = 'package(fuzz-targets)'
+  slow-timeout = { period = "30s", terminate-after = 1, on-timeout = "pass" }
+  ```
+
+  Tests that time out and pass are marked `TMPASS`. See [_Configuring timeout behavior_](https://nexte.st/docs/features/slow-tests/#configuring-timeout-behavior) for more information.
+
+  Thanks [eduardorittner](https://github.com/eduardorittner) for your first contribution! ([#2742])
+
+### Changed
+
+- MSRV updated to Rust 1.89.
+
+[#2786]: https://github.com/nextest-rs/nextest/pull/2786
+[#2742]: https://github.com/nextest-rs/nextest/pull/2742
+
 ## [0.9.114] - 2025-11-18
 
 ### Added
@@ -1674,6 +1710,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.115]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.115
 [0.9.114]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.114
 [0.9.113]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.113
 [0.9.112]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.112
