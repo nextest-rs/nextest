@@ -106,7 +106,7 @@ self_update = { workspace = true, optional = true }
 ###
 console-subscriber = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
-console = "0.16.1"
+console = "0.16.2"
 unicode-width = "0.2.2"
 
 [target.'cfg(unix)'.dependencies]
