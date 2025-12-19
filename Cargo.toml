@@ -130,7 +130,7 @@ tokio = "1.48.0"
 tokio-stream = "0.1.17"
 toml = "0.8.23"
 toml_edit = "0.23.10"
-tracing = "0.1.43"
+tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", default-features = false, features = ["std", "tracing-log", "fmt"] }
 unicode-ident = "1.0.22"
 unicode-normalization = "0.1.25"
