@@ -94,6 +94,14 @@ impl<'a> ExecutorContext<'a> {
         }
     }
 
+    fn test_execute_context(&self) -> TestExecuteContext<'_> {
+        TestExecuteContext {
+            profile_name: self.profile.name(),
+            double_spawn: &self.double_spawn,
+            target_runner: &self.target_runner,
+        }
+    }
+
     /// Run scripts, returning data about each successfully executed script.
     pub(super) async fn run_setup_scripts(
         &self,
@@ -210,12 +218,7 @@ impl<'a> ExecutorContext<'a> {
 
         let (req_rx_tx, req_rx_rx) = oneshot::channel();
 
-        // Compute the command line for this test.
-        let ctx = TestExecuteContext {
-            profile_name: self.profile.name(),
-            double_spawn: &self.double_spawn,
-            target_runner: &self.target_runner,
-        };
+        let ctx = self.test_execute_context();
         let command_line = test.instance.command_line(
             &ctx,
             self.test_list,
@@ -680,11 +683,7 @@ impl<'a> ExecutorContext<'a> {
         resp_tx: &UnboundedSender<ExecutorEvent<'a>>,
         req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     ) -> Result<InternalExecuteStatus<'a>, ChildStartError> {
-        let ctx = TestExecuteContext {
-            profile_name: self.profile.name(),
-            double_spawn: &self.double_spawn,
-            target_runner: &self.target_runner,
-        };
+        let ctx = self.test_execute_context();
         let mut cmd = test.test_instance.make_command(
             &ctx,
             self.test_list,

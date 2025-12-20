@@ -637,7 +637,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         writer,
                         "{:>12} {}",
                         "COMMAND".style(self.styles.count),
-                        command_line,
+                        shell_words::join(command_line),
                     )?;
                 }
             }

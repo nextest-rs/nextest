@@ -1138,32 +1138,14 @@ impl<'a> TestInstance<'a> {
     /// Creates the command for this test instance.
     pub(crate) fn make_command(
         &self,
-        ctx: &TestExecuteContext<'_>,
+        ctx: &'a TestExecuteContext<'a>,
         test_list: &TestList<'_>,
         wrapper_script: Option<&'a WrapperScriptConfig>,
-        extra_args: &[String],
+        extra_args: &'a [String],
         interceptor: &Interceptor,
     ) -> TestCommand {
         // TODO: non-rust tests
-
-        let platform_runner = ctx
-            .target_runner
-            .for_build_platform(self.suite_info.build_platform);
-
-        let mut cli = TestCommandCli::default();
-        cli.apply_wrappers(
-            wrapper_script,
-            platform_runner,
-            test_list.workspace_root(),
-            &test_list.rust_build_meta().target_directory,
-        );
-        cli.push(self.suite_info.binary_path.as_str());
-
-        cli.extend(["--exact", self.name, "--nocapture"]);
-        if self.test_info.ignored {
-            cli.push("--ignored");
-        }
-        cli.extend(extra_args.iter().map(String::as_str));
+        let cli = self.compute_cli(ctx, test_list, wrapper_script, extra_args);
 
         let lctx = LocalExecuteContext {
             phase: TestCommandPhase::Run,
@@ -1188,14 +1170,24 @@ impl<'a> TestInstance<'a> {
         )
     }
 
-    /// Returns the command line string for running this test.
     pub(crate) fn command_line(
         &self,
-        ctx: &TestExecuteContext<'_>,
+        ctx: &'a TestExecuteContext<'a>,
         test_list: &TestList<'_>,
         wrapper_script: Option<&'a WrapperScriptConfig>,
-        extra_args: &[String],
-    ) -> String {
+        extra_args: &'a [String],
+    ) -> Vec<String> {
+        self.compute_cli(ctx, test_list, wrapper_script, extra_args)
+            .to_owned_cli()
+    }
+
+    fn compute_cli(
+        &self,
+        ctx: &'a TestExecuteContext<'a>,
+        test_list: &TestList<'_>,
+        wrapper_script: Option<&'a WrapperScriptConfig>,
+        extra_args: &'a [String],
+    ) -> TestCommandCli<'a> {
         let platform_runner = ctx
             .target_runner
             .for_build_platform(self.suite_info.build_platform);
@@ -1215,7 +1207,7 @@ impl<'a> TestInstance<'a> {
         }
         cli.extend(extra_args.iter().map(String::as_str));
 
-        shell_words::join(cli.to_owned_cli())
+        cli
     }
 }
 

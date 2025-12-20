@@ -173,7 +173,7 @@ pub enum TestEventKind<'a> {
         running: usize,
 
         /// The command line that will be used to run this test.
-        command_line: String,
+        command_line: Vec<String>,
     },
 
     /// A test was slower than a configured soft timeout.
