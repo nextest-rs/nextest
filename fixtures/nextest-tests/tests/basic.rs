@@ -23,11 +23,11 @@ fn test_failure_error() -> Result<(), String> {
 }
 
 fn nextest_attempt() -> usize {
-    static NEXTEST_ATTEMPT_ENV: &str = "__NEXTEST_ATTEMPT";
+    static NEXTEST_ATTEMPT_ENV: &str = "NEXTEST_ATTEMPT";
     match env::var(NEXTEST_ATTEMPT_ENV) {
         Ok(var) => var
             .parse()
-            .expect("__NEXTEST_ATTEMPT should be a positive integer"),
+            .expect("NEXTEST_ATTEMPT should be a positive integer"),
         Err(_) => 1,
     }
 }
@@ -176,11 +176,8 @@ fn test_cargo_env_vars() {
         "NEXTEST_EXECUTION_MODE set to process-per-test"
     );
 
-    assert_eq!(
-        check_env("NEXTEST_ATTEMPT"),
-        nextest_attempt().to_string(),
-        "NEXTEST_ATTEMPT and __NEXTEST_ATTEMPT must be equal"
-    );
+    // Assert NEXTEST_ATTEMPT is defined and is a positive integer
+    assert!(check_env("NEXTEST_ATTEMPT").parse::<usize>().is_ok());
 
     let test_name = "test_cargo_env_vars";
     assert_eq!(check_env("NEXTEST_TEST_NAME"), test_name);

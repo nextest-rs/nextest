@@ -680,9 +680,7 @@ impl<'a> ExecutorContext<'a> {
         let command_mut = cmd.command_mut();
 
         // Debug environment variable for testing.
-        let attempt = format!("{}", test.retry_data.attempt);
-        command_mut.env("__NEXTEST_ATTEMPT", &attempt);
-        command_mut.env("NEXTEST_ATTEMPT", attempt);
+        command_mut.env("NEXTEST_ATTEMPT", test.retry_data.attempt.to_string());
 
         command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
 
