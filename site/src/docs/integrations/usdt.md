@@ -26,23 +26,18 @@ For all probes:
 
 * The second argument (`arg1`) contains a globally unique string identifier for this kind of event, suitable for indexing into arrays.
 
-  * For `run-*` events, `arg1` is the nextest run ID (a UUID).
+  * For `run-*` events, `arg1` is the nextest [run ID](../glossary.md#run-id).
 
-  * For `test-attempt-*` events, `arg1` is a test attempt ID, comprised of:
-    * the nextest run ID
-    * the [binary ID](../running.md#binary-ids)
-    * the test name
-    * the stress index if this is a [stress run](../features/stress-tests.md)
-    * and the current attempt, if the test is being retried.
+  * For `test-attempt-*` events, `arg1` is a [test attempt ID](../glossary.md#attempt-id).
 
   * For `setup-script-*` events, `arg1` is comprised of:
     * the nextest run ID
     * the name of the setup script
     * the stress index if this is a [stress run](../features/stress-tests.md)
 
-Most probes also have commonly-used arguments available as `arg2`, `arg3`, and so on. For example, for the [`test-attempt-start` probe](https://nexte.st/rustdoc/nextest_runner/usdt/struct.UsdtTestAttemptStart):
+Most probes also have commonly-used arguments available as `arg2`, `arg3`, and so on. For example, for the [`test-attempt-start` probe](https://nexte.st/rustdoc/nextest_runner/usdt/struct.UsdtTestAttemptStart):P
 
-* `arg2` is the [binary ID](../running.md#binary-ids) (a string)
+* `arg2` is the [binary ID](../glossary.md#binary-id) (a string)
 * `arg3` is the test name (a string)
 * `arg4` is the process ID of the test process
 

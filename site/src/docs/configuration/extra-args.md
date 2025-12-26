@@ -75,7 +75,7 @@ run-extra-args = ["--test-threads=1"]
 The `binary_id` predicate accepts names shown during `cargo nextest run`; see
 [*Binary IDs*] for more.
 
-[*Binary IDs*]: https://nexte.st/docs/running/#binary-ids
+[*Binary IDs*]: ../glossary.md#binary-id
 
 You can also define extra arguments that apply to all tests:
 

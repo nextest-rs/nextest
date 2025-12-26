@@ -103,26 +103,7 @@ This command accepts [all the same options](../listing.md#options-and-arguments)
 
 Nextest assigns each test a *global slot number*. Additionally, if a test is in a group, the test is also assigned a *group slot number*.
 
-Slot numbers are integers that start from 0 and go up from there. They are useful to assign resources such as blocks of port numbers to tests.
-
-Slot numbers are:
-
-* **Unique** for the lifetime of the test, either globally or within the group.
-
-  For example, if a test in the group `resource-limited` is assigned the global slot 10 and the group slot 5, then while this test is running:
-
-  - No other test within the same run will be assigned the global slot 10.
-  - No other tests in the `resource-limited` group will be assigned the group slot 5.
-
-  After this test finishes, the global slot number 10 and the group slot number 5 are freed up, and can be reused for other tests.
-
-* **Stable** across [retries](../features/retries.md) within the same run (though not across runs).
-
-* **Compact**, in the sense that each test is always assigned the smallest possible slot number starting from 0, depending on which numbers are free at the time the test starts.
-
-  For example, if a test group is limited to serial execution, the group slot number is always 0 for those tests.
-
-Global and group slot numbers can be accessed via the `NEXTEST_TEST_GLOBAL_SLOT` and `NEXTEST_TEST_GROUP_SLOT` [environment variables](env-vars.md#environment-variables-nextest-sets), respectively. (If a test is not within a group, `NEXTEST_TEST_GROUP_SLOT` is set to `none`.)
+For more on slot numbers, see the [glossary](../glossary.md#slot-numbers).
 
 ## Comparison with `threads-required`
 

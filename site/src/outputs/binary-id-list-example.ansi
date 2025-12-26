@@ -1,0 +1,4 @@
+[35;1mnextest-runner[0m: <-- binary id
+    [36mconfig::nextest_version::tests::test_valid_nextest_version[0m[36m::[0m[34;1mbasic[0m
+    [36mconfig::nextest_version::tests::test_valid_nextest_version[0m[36m::[0m[34;1mbasic_with_patch[0m
+    ...
