@@ -611,12 +611,13 @@ impl<'a> DisplayReporterImpl<'a> {
                 command_line,
                 ..
             } => {
-                // In no-capture mode, print out a test start event.
-                if self.no_capture {
+                // In no-capture and verbose modes, print out a test start
+                // event.
+                if self.no_capture || self.verbose {
                     // The spacing is to align test instances.
                     writeln!(
                         writer,
-                        "{:>12} {}",
+                        "{:>12} [         ] {}",
                         "START".style(self.styles.pass),
                         self.display_test_instance(
                             *stress_index,
@@ -633,12 +634,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 }
 
                 if self.verbose {
-                    writeln!(
-                        writer,
-                        "{:>12} {}",
-                        "COMMAND".style(self.styles.count),
-                        shell_words::join(command_line),
-                    )?;
+                    self.write_command_line(command_line, writer)?;
                 }
             }
             TestEventKind::TestSlow {
@@ -1561,6 +1557,20 @@ impl<'a> DisplayReporterImpl<'a> {
         )
     }
 
+    fn write_command_line(
+        &self,
+        command_line: &[String],
+        writer: &mut dyn WriteStr,
+    ) -> io::Result<()> {
+        // Indent under START (13 spaces + "command").
+        writeln!(
+            writer,
+            "{:>20}: {}",
+            "command".style(self.styles.count),
+            shell_words::join(command_line),
+        )
+    }
+
     fn display_script_instance(
         &self,
         stress_index: Option<StressIndex>,
@@ -2404,6 +2414,21 @@ mod tests {
     where
         F: FnOnce(DisplayReporter<'a>),
     {
+        with_reporter_impl(f, out, false)
+    }
+
+    /// Creates a test reporter with verbose mode enabled.
+    fn with_verbose_reporter<'a, F>(f: F, out: &'a mut String)
+    where
+        F: FnOnce(DisplayReporter<'a>),
+    {
+        with_reporter_impl(f, out, true)
+    }
+
+    fn with_reporter_impl<'a, F>(f: F, out: &'a mut String, verbose: bool)
+    where
+        F: FnOnce(DisplayReporter<'a>),
+    {
         // Start and end the search at the cwd -- we expect this to not match
         // any results since it'll be the nextest-runner directory.
         let current_dir = Utf8PathBuf::try_from(std::env::current_dir().expect("obtained cwd"))
@@ -2427,7 +2452,7 @@ mod tests {
             failure_output: Some(TestOutputDisplay::Immediate),
             should_colorize: false,
             no_capture: true,
-            verbose: false,
+            verbose,
             show_progress: ShowProgress::Counter,
             no_output_indent: false,
             max_progress_running: MaxProgressRunning::default(),
@@ -3165,6 +3190,92 @@ mod tests {
             },
             errors: ErrorList::new("testing split output", errors),
         }
+    }
+
+    #[test]
+    fn verbose_command_line() {
+        let binary_id = RustBinaryId::new("my-binary-id");
+        let mut out = String::new();
+
+        with_verbose_reporter(
+            |mut reporter| {
+                let current_stats = RunStats {
+                    initial_run_count: 10,
+                    finished_count: 0,
+                    ..Default::default()
+                };
+
+                // Test a simple command.
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::TestStarted {
+                            stress_index: None,
+                            test_instance: TestInstanceId {
+                                binary_id: &binary_id,
+                                test_name: "test_name",
+                            },
+                            current_stats,
+                            running: 1,
+                            command_line: vec![
+                                "/path/to/binary".to_string(),
+                                "--exact".to_string(),
+                                "test_name".to_string(),
+                            ],
+                        },
+                    })
+                    .unwrap();
+
+                // Test a command with arguments that need quoting.
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::TestStarted {
+                            stress_index: None,
+                            test_instance: TestInstanceId {
+                                binary_id: &binary_id,
+                                test_name: "test_with_spaces",
+                            },
+                            current_stats,
+                            running: 2,
+                            command_line: vec![
+                                "/path/to/binary".to_string(),
+                                "--exact".to_string(),
+                                "test with spaces".to_string(),
+                                "--flag=value".to_string(),
+                            ],
+                        },
+                    })
+                    .unwrap();
+
+                // Test a command with special characters.
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::TestStarted {
+                            stress_index: None,
+                            test_instance: TestInstanceId {
+                                binary_id: &binary_id,
+                                test_name: "test_special_chars",
+                            },
+                            current_stats,
+                            running: 3,
+                            command_line: vec![
+                                "/path/to/binary".to_string(),
+                                "test\"with\"quotes".to_string(),
+                                "test'with'single".to_string(),
+                            ],
+                        },
+                    })
+                    .unwrap();
+            },
+            &mut out,
+        );
+
+        insta::assert_snapshot!("verbose_command_line", out);
     }
 
     #[test]

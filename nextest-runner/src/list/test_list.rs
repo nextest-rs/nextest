@@ -1138,10 +1138,10 @@ impl<'a> TestInstance<'a> {
     /// Creates the command for this test instance.
     pub(crate) fn make_command(
         &self,
-        ctx: &'a TestExecuteContext<'a>,
+        ctx: &TestExecuteContext<'_>,
         test_list: &TestList<'_>,
-        wrapper_script: Option<&'a WrapperScriptConfig>,
-        extra_args: &'a [String],
+        wrapper_script: Option<&WrapperScriptConfig>,
+        extra_args: &[String],
         interceptor: &Interceptor,
     ) -> TestCommand {
         // TODO: non-rust tests
@@ -1172,10 +1172,10 @@ impl<'a> TestInstance<'a> {
 
     pub(crate) fn command_line(
         &self,
-        ctx: &'a TestExecuteContext<'a>,
+        ctx: &TestExecuteContext<'_>,
         test_list: &TestList<'_>,
-        wrapper_script: Option<&'a WrapperScriptConfig>,
-        extra_args: &'a [String],
+        wrapper_script: Option<&WrapperScriptConfig>,
+        extra_args: &[String],
     ) -> Vec<String> {
         self.compute_cli(ctx, test_list, wrapper_script, extra_args)
             .to_owned_cli()
@@ -1183,7 +1183,7 @@ impl<'a> TestInstance<'a> {
 
     fn compute_cli(
         &self,
-        ctx: &'a TestExecuteContext<'a>,
+        ctx: &'a TestExecuteContext<'_>,
         test_list: &TestList<'_>,
         wrapper_script: Option<&'a WrapperScriptConfig>,
         extra_args: &'a [String],
