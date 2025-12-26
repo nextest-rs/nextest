@@ -130,7 +130,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 junit_store_failure_output,
                 ..
             } => {
-                let testsuite = self.testsuite_for_test(stress_index, test_instance.id());
+                let testsuite = self.testsuite_for_test(stress_index, test_instance);
 
                 let (mut testcase_status, main_status, reruns) = match run_statuses.describe() {
                     ExecutionDescription::Success { single_status } => {
@@ -171,9 +171,9 @@ impl<'cfg> MetadataJunit<'cfg> {
                     testcase_status.add_rerun(test_rerun);
                 }
 
-                let mut testcase = TestCase::new(test_instance.name, testcase_status);
+                let mut testcase = TestCase::new(test_instance.test_name, testcase_status);
                 testcase
-                    .set_classname(test_instance.suite_info.binary_id.as_str())
+                    .set_classname(test_instance.binary_id.as_str())
                     .set_timestamp(main_status.start_time)
                     .set_time(main_status.time_taken);
 

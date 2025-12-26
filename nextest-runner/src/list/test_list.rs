@@ -518,6 +518,11 @@ impl<'g> TestList<'g> {
         self.rust_suites.iter()
     }
 
+    /// Looks up a test suite by binary ID.
+    pub fn get_suite(&self, binary_id: &RustBinaryId) -> Option<&RustTestSuite<'_>> {
+        self.rust_suites.get(binary_id)
+    }
+
     /// Iterates over the list of tests, returning the path and test name.
     pub fn iter_tests(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
         self.rust_suites.iter().flat_map(|test_suite| {

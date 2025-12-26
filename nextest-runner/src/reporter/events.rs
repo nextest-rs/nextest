@@ -12,7 +12,7 @@ use crate::{
         elements::{LeakTimeoutResult, SlowTimeoutResult},
         scripts::ScriptId,
     },
-    list::{TestInstance, TestInstanceId, TestList},
+    list::{TestInstanceId, TestList},
     runner::{StressCondition, StressCount},
     test_output::ChildExecutionOutput,
 };
@@ -164,7 +164,7 @@ pub enum TestEventKind<'a> {
         stress_index: Option<StressIndex>,
 
         /// The test instance that was started.
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstanceId<'a>,
 
         /// Current run statistics so far.
         current_stats: RunStats,
@@ -179,7 +179,7 @@ pub enum TestEventKind<'a> {
         stress_index: Option<StressIndex>,
 
         /// The test instance that was slow.
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstanceId<'a>,
 
         /// Retry data.
         retry_data: RetryData,
@@ -199,7 +199,7 @@ pub enum TestEventKind<'a> {
         stress_index: Option<StressIndex>,
 
         /// The test instance that is being retried.
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstanceId<'a>,
 
         /// The status of this attempt to run the test. Will never be success.
         run_status: ExecuteStatus,
@@ -220,7 +220,7 @@ pub enum TestEventKind<'a> {
         stress_index: Option<StressIndex>,
 
         /// The test instance that is being retried.
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstanceId<'a>,
 
         /// Data related to retries.
         retry_data: RetryData,
@@ -235,7 +235,7 @@ pub enum TestEventKind<'a> {
         stress_index: Option<StressIndex>,
 
         /// The test instance that finished running.
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstanceId<'a>,
 
         /// Test setting for success output.
         success_output: TestOutputDisplay,
@@ -265,7 +265,7 @@ pub enum TestEventKind<'a> {
         stress_index: Option<StressIndex>,
 
         /// The test instance that was skipped.
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstanceId<'a>,
 
         /// The reason this test was skipped.
         reason: MismatchReason,

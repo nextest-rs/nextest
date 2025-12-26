@@ -36,6 +36,7 @@ This document captures code conventions for the nextest project. It is intended 
 
 - Use inline comments to explain "why," not just "what".
 - Module-level documentation should explain purpose and responsibilities.
+- **Always** use periods at the end of code comments.
 
 ## Code style
 

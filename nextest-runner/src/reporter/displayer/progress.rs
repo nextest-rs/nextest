@@ -346,8 +346,8 @@ impl ProgressBarState {
 
                 if let Some(running_tests) = &mut self.running_tests {
                     running_tests.push(RunningTest {
-                        binary_id: test_instance.id().binary_id.clone(),
-                        test_name: test_instance.id().test_name.to_owned(),
+                        binary_id: test_instance.binary_id.clone(),
+                        test_name: test_instance.test_name.to_owned(),
                         status: RunningTestStatus::Running,
                         start_time: Instant::now(),
                         paused_for: Duration::ZERO,
@@ -361,7 +361,7 @@ impl ProgressBarState {
                 ..
             } => {
                 self.running = *running;
-                self.remove_test(&test_instance.id());
+                self.remove_test(test_instance);
 
                 self.bar.set_prefix(progress_bar_prefix(
                     current_stats,
@@ -378,11 +378,11 @@ impl ProgressBarState {
                 delay_before_next_attempt,
                 ..
             } => {
-                self.remove_test(&test_instance.id());
+                self.remove_test(test_instance);
                 if let Some(running_tests) = &mut self.running_tests {
                     running_tests.push(RunningTest {
-                        binary_id: test_instance.id().binary_id.clone(),
-                        test_name: test_instance.id().test_name.to_owned(),
+                        binary_id: test_instance.binary_id.clone(),
+                        test_name: test_instance.test_name.to_owned(),
                         status: RunningTestStatus::Delay(*delay_before_next_attempt),
                         start_time: Instant::now(),
                         paused_for: Duration::ZERO,
@@ -390,11 +390,11 @@ impl ProgressBarState {
                 }
             }
             TestEventKind::TestRetryStarted { test_instance, .. } => {
-                self.remove_test(&test_instance.id());
+                self.remove_test(test_instance);
                 if let Some(running_tests) = &mut self.running_tests {
                     running_tests.push(RunningTest {
-                        binary_id: test_instance.id().binary_id.clone(),
-                        test_name: test_instance.id().test_name.to_owned(),
+                        binary_id: test_instance.binary_id.clone(),
+                        test_name: test_instance.test_name.to_owned(),
                         status: RunningTestStatus::Retry,
                         start_time: Instant::now(),
                         paused_for: Duration::ZERO,
@@ -406,8 +406,8 @@ impl ProgressBarState {
                     running_tests
                         .iter_mut()
                         .find(|rt| {
-                            &rt.binary_id == test_instance.id().binary_id
-                                && rt.test_name == test_instance.id().test_name
+                            &rt.binary_id == test_instance.binary_id
+                                && rt.test_name == test_instance.test_name
                         })
                         .expect("a slow test to be already running")
                         .status = RunningTestStatus::Slow;
