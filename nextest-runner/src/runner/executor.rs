@@ -682,9 +682,38 @@ impl<'a> ExecutorContext<'a> {
         let command_mut = cmd.command_mut();
 
         // Debug environment variable for testing.
-        command_mut.env("__NEXTEST_ATTEMPT", format!("{}", test.retry_data.attempt));
+        command_mut.env("NEXTEST_ATTEMPT", test.retry_data.attempt.to_string());
 
         command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
+
+        command_mut.env("NEXTEST_TEST_NAME", test.test_instance.name);
+        command_mut.env(
+            "NEXTEST_BINARY_ID",
+            test.test_instance.suite_info.binary_id.as_str(),
+        );
+
+        let attempt_id = test.test_instance.id().attempt_id(
+            self.run_id,
+            test.stress_index.map(|s| s.current),
+            test.retry_data.attempt,
+        );
+        command_mut.env("NEXTEST_ATTEMPT_ID", &attempt_id);
+        command_mut.env(
+            "NEXTEST_TOTAL_ATTEMPTS",
+            test.retry_data.total_attempts.to_string(),
+        );
+
+        let stress_current = test
+            .stress_index
+            .map(|s| s.current.to_string())
+            .unwrap_or_else(|| "none".into());
+        let stress_total = test
+            .stress_index
+            .and_then(|s| s.total)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "none".into());
+        command_mut.env("NEXTEST_STRESS_CURRENT", stress_current);
+        command_mut.env("NEXTEST_STRESS_TOTAL", stress_total);
 
         // Set group and slot environment variables.
         command_mut.env(
@@ -784,11 +813,7 @@ impl<'a> ExecutorContext<'a> {
         let child_pid_for_kill = ChildPid::Process(child_pid);
 
         crate::fire_usdt!(UsdtTestAttemptStart {
-            attempt_id: test.test_instance.id().attempt_id(
-                self.run_id,
-                test.stress_index.map(|s| s.current),
-                test.retry_data.attempt,
-            ),
+            attempt_id,
             run_id: self.run_id,
             binary_id: test.test_instance.suite_info.binary_id.clone(),
             test_name: test.test_instance.name.to_owned(),
