@@ -9,6 +9,34 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.116] - 2025-12-26
+
+### Added
+
+- Nextest now sets several new [environment variables](https://nexte.st/docs/configuration/env-vars/#environment-variables-nextest-sets) for each test execution:
+
+  - `NEXTEST_TEST_NAME`: The name of the test being run.
+  - `NEXTEST_ATTEMPT`: The current attempt number (starting from 1).
+  - `NEXTEST_TOTAL_ATTEMPTS`: The total number of attempts that will be made.
+  - `NEXTEST_BINARY_ID`: The binary ID of the test.
+  - `NEXTEST_ATTEMPT_ID`: A unique identifier for this specific attempt.
+  - `NEXTEST_STRESS_CURRENT` and `NEXTEST_STRESS_TOTAL`: For [stress tests](https://nexte.st/docs/features/stress-tests/), the current and total iteration counts.
+
+  These variables allow tests to be aware of their execution context, enabling conditional behavior based on retry attempts or stress test iterations.
+
+  Thanks [liranco](https://github.com/liranco) for your first contribution! ([#2797])
+
+- With `cargo nextest run --verbose`, nextest now displays the command line used to run each test. Thanks [dangvu0502](https://github.com/dangvu0502) for your first contribution! ([#2800])
+
+- A new [glossary page](https://nexte.st/docs/glossary/) documents key nextest terminology.
+
+### Changed
+
+- The internal `__NEXTEST_ATTEMPT` environment variable has been removed and replaced by the public `NEXTEST_ATTEMPT` variable.
+
+[#2797]: https://github.com/nextest-rs/nextest/pull/2797
+[#2800]: https://github.com/nextest-rs/nextest/pull/2800
+
 ## [0.9.115] - 2025-12-14
 
 ### Added
@@ -1710,6 +1738,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.116]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.116
 [0.9.115]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.115
 [0.9.114]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.114
 [0.9.113]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.113
