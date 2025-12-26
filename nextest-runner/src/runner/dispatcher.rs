@@ -656,6 +656,7 @@ where
             InternalEvent::Executor(ExecutorEvent::Started {
                 stress_index,
                 test_instance,
+                command_line,
                 req_rx_tx,
             }) => {
                 if self.run_stats.cancel_reason.is_some() {
@@ -678,6 +679,7 @@ where
                     test_instance: test_instance.id(),
                     current_stats: self.run_stats,
                     running: self.running_tests.len(),
+                    command_line,
                 })
             }
             InternalEvent::Executor(ExecutorEvent::Slow {

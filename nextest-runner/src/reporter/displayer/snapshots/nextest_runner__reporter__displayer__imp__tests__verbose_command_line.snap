@@ -1,0 +1,11 @@
+---
+source: nextest-runner/src/reporter/displayer/imp.rs
+expression: out
+snapshot_kind: text
+---
+       START [         ] ( 1/10) my-binary-id test_name
+             command: /path/to/binary --exact test_name
+       START [         ] ( 1/10) my-binary-id test_with_spaces
+             command: /path/to/binary --exact 'test with spaces' '--flag=value'
+       START [         ] ( 1/10) my-binary-id test_special_chars
+             command: /path/to/binary 'test"with"quotes' 'test'\''with'\''single'

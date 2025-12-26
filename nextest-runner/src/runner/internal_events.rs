@@ -69,6 +69,7 @@ pub(super) enum ExecutorEvent<'a> {
     Started {
         stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
+        command_line: Vec<String>,
         // The channel over which to return the unit request.
         //
         // The callback context is solely responsible for coordinating the
