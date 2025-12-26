@@ -230,6 +230,9 @@ pub enum TestEventKind<'a> {
 
         /// The current number of running tests.
         running: usize,
+
+        /// The command line that will be used to run this test.
+        command_line: Vec<String>,
     },
 
     /// A test finished running.

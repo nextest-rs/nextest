@@ -100,6 +100,7 @@ pub(super) enum ExecutorEvent<'a> {
         stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
         retry_data: RetryData,
+        command_line: Vec<String>,
         // This is used to indicate that the dispatcher still wants to run the test.
         tx: oneshot::Sender<()>,
     },

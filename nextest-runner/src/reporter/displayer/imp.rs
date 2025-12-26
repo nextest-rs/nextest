@@ -765,27 +765,28 @@ impl<'a> DisplayReporterImpl<'a> {
             TestEventKind::TestRetryStarted {
                 stress_index,
                 test_instance,
-                retry_data:
-                    RetryData {
-                        attempt,
-                        total_attempts,
-                    },
+                retry_data: RetryData { attempt, .. },
                 running: _,
+                command_line,
             } => {
-                let retry_string = format!("RETRY {attempt}/{total_attempts}");
-                write!(writer, "{:>12} ", retry_string.style(self.styles.retry))?;
+                // In no-capture and verbose modes, print out a retry start event.
+                if self.no_capture || self.verbose {
+                    let retry_string = format!("TRY {attempt} START");
+                    writeln!(
+                        writer,
+                        "{:>12} [         ] {}",
+                        retry_string.style(self.styles.retry),
+                        self.display_test_instance(
+                            *stress_index,
+                            TestInstanceCounter::Padded,
+                            *test_instance
+                        )
+                    )?;
+                }
 
-                // Add spacing to align test instances, then print the name of the test.
-                writeln!(
-                    writer,
-                    "[{:<9}] {}",
-                    "",
-                    self.display_test_instance(
-                        *stress_index,
-                        TestInstanceCounter::Padded,
-                        *test_instance
-                    )
-                )?;
+                if self.verbose {
+                    self.write_command_line(command_line, writer)?;
+                }
             }
             TestEventKind::TestFinished {
                 stress_index,
@@ -3267,6 +3268,56 @@ mod tests {
                                 "/path/to/binary".to_string(),
                                 "test\"with\"quotes".to_string(),
                                 "test'with'single".to_string(),
+                            ],
+                        },
+                    })
+                    .unwrap();
+
+                // Test a retry (attempt 2) - should show "TRY 2 START".
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::TestRetryStarted {
+                            stress_index: None,
+                            test_instance: TestInstanceId {
+                                binary_id: &binary_id,
+                                test_name: "test_retry",
+                            },
+                            retry_data: RetryData {
+                                attempt: 2,
+                                total_attempts: 3,
+                            },
+                            running: 1,
+                            command_line: vec![
+                                "/path/to/binary".to_string(),
+                                "--exact".to_string(),
+                                "test_retry".to_string(),
+                            ],
+                        },
+                    })
+                    .unwrap();
+
+                // Test a retry (attempt 3) - should show "TRY 3 START".
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::TestRetryStarted {
+                            stress_index: None,
+                            test_instance: TestInstanceId {
+                                binary_id: &binary_id,
+                                test_name: "test_retry",
+                            },
+                            retry_data: RetryData {
+                                attempt: 3,
+                                total_attempts: 3,
+                            },
+                            running: 1,
+                            command_line: vec![
+                                "/path/to/binary".to_string(),
+                                "--exact".to_string(),
+                                "test_retry".to_string(),
                             ],
                         },
                     })

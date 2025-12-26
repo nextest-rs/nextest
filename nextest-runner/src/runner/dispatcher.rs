@@ -737,6 +737,7 @@ where
                 stress_index,
                 test_instance,
                 retry_data,
+                command_line,
                 tx,
             }) => {
                 if self.run_stats.cancel_reason.is_some() {
@@ -759,6 +760,7 @@ where
                     test_instance: test_instance.id(),
                     retry_data,
                     running: self.running_tests.len(),
+                    command_line,
                 })
             }
             InternalEvent::Executor(ExecutorEvent::Finished {
