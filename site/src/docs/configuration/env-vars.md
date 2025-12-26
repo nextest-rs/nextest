@@ -81,29 +81,52 @@ Nextest delegates to Cargo for the build, which recognizes a number of environme
 Nextest exposes these environment variables to your tests _at runtime only_. They are not set at build time because cargo-nextest may reuse builds done outside of the nextest environment.
 
 `NEXTEST`
-: Always set to `"1"`.
+: Always `"1"`.
 
 `NEXTEST_RUN_ID`
-: Set to a UUID corresponding to a particular nextest run.
+: A UUID corresponding to a particular nextest run. Set for both tests and [setup scripts](setup-scripts.md).
 
 `NEXTEST_PROFILE` <!-- md:version 0.9.89 -->
-: Set to the [nextest profile](index.md#profiles) in use.
-
-    In previous versions, this would only be set if the profile was configured via `NEXTEST_PROFILE`, as a side effect of the environment being passed through. This would not be set if the profile was configured via `--profile`.
+: The [nextest profile](index.md#profiles) in use.
 
 `NEXTEST_EXECUTION_MODE`
-: Currently, always set to `process-per-test`. More options may be added in the future if nextest gains the ability to run all tests within the same process ([#27]).
+: Currently, always `process-per-test`. More options may be added in the future if nextest gains the ability to run multiple tests within the same process ([#27]).
+
+`NEXTEST_BINARY_ID` <!-- md:version 0.9.116 -->
+: The [binary ID](../glossary.md#binary-id) corresponding to the test.
+
+`NEXTEST_TEST_NAME` <!-- md:version 0.9.116 -->
+: The name of the test.
+
+`NEXTEST_ATTEMPT` <!-- md:version 0.9.116 -->
+: The 1-indexed attempt number for the test. In the default case where no [retries](../features/retries.md) are configured for the test, this is always `"1"`.
+
+`NEXTEST_TOTAL_ATTEMPTS` <!-- md:version 0.9.116 -->
+: The total number of attempts configured for the test. In the default case where no [retries](../features/retries.md) are configured for the test, this is always `"1"`.
+
+`NEXTEST_ATTEMPT_ID` <!-- md:version 0.9.116 -->
+: A [unique identifier](../glossary.md#attempt-id) for this test attempt.
+
+  !!! note "Quote this environment variable within shells"
+
+      `NEXTEST_ATTEMPT_ID` contains an embedded `$`. If accessing `NEXTEST_ATTEMPT_ID` within a shell, be sure to put it in quotes. (Quoting environment variables is always good practice; a linter like [shellcheck](https://www.shellcheck.net/) can warn you about this.)
+
+`NEXTEST_STRESS_CURRENT` <!-- md:version 0.9.116 -->
+: For [stress tests](../features/stress-tests.md), the 0-indexed stress index. If not a stress run, this is set to `none`.
+
+`NEXTEST_STRESS_TOTAL` <!-- md:version 0.9.116 -->
+: For [stress tests](../features/stress-tests.md), the total number of stress runs that will be performed. If the total number is not unknown, this is set to `unknown`. If not a stress run, this is set to `none`.
 
 `NEXTEST_TEST_GROUP` <!-- md:version 0.9.90 -->
-: Set to the [test group](test-groups.md) the test is in, or `"@global"` if the test is not in any groups.
+: The [test group](test-groups.md) the test is in, or `"@global"` if the test is not in any groups.
 
 `NEXTEST_TEST_GLOBAL_SLOT` <!-- md:version 0.9.90 -->
-: Set to the [global slot number](test-groups.md#slot-numbers). Global slot numbers are non-negative integers starting from 0 that are unique within the run for the lifetime of the test, but are reused after the test finishes.
+: The [global slot number](../glossary.md#slot-numbers). Global slot numbers are non-negative integers starting from 0 that are unique within the run for the lifetime of the test, but are reused after the test finishes.
 
 `NEXTEST_TEST_GROUP_SLOT` <!-- md:version 0.9.90 -->
-: If the test is in a group, set to the [group slot number](test-groups.md#slot-numbers). Group slot numbers are non-negative integers that are unique within the test group for the lifetime of the test, but are reused after the test finishes.
+: If the test is in a group, the [group slot number](../glossary.md#slot-numbers). Group slot numbers are non-negative integers that are unique within the test group for the lifetime of the test, but are reused after the test finishes.
 
-    If the test is not in any groups, this is set to `"none"`.
+    If the test is not in any groups, this is `"none"`.
 
 `NEXTEST_BIN_EXE_<name>`
 : The absolute path to a binary target's executable. This is only set when running an [integration test] or benchmark. The `<name>` is the name of the binary target, exactly as-is. For example, `NEXTEST_BIN_EXE_my-program` for a binary named `my-program`.
@@ -115,7 +138,7 @@ Nextest exposes these environment variables to your tests _at runtime only_. The
     <!-- md:version 0.9.113 --> Because some shells and [debuggers](../integrations/debuggers-tracers.md) drop [environment variables with hyphens in their names](https://unix.stackexchange.com/a/23714), nextest also sets an alternative form of these variables where hyphens in the name are replaced with underscores. For example, for a binary named `my-program`, the environment variable `NEXTEST_BIN_EXE_my_program` is also set to the absolute path of the executable.
 
 `NEXTEST_LD_*` and `NEXTEST_DYLD_*`
-: Replicate the values of any environment variables that start with the prefixes `LD_` or `DYLD_`, such as `LD_PRELOAD` or `DYLD_FALLBACK_LIBRARY_PATH`.
+: Replicates the values of any environment variables that start with the prefixes `LD_` or `DYLD_`, such as `LD_PRELOAD` or `DYLD_FALLBACK_LIBRARY_PATH`.
 
     This is a workaround for [macOS's System Integrity Protection](https://developer.apple.com/library/archive/documentation/Security/Conceptual/System_Integrity_Protection_Guide/RuntimeProtections/RuntimeProtections.html) environment sanitization. For more, see [_Dynamic linker environment variables_](../installation/macos.md#dynamic-linker-environment-variables).
 

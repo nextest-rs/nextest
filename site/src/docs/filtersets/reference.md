@@ -28,7 +28,7 @@ This section contains the full set of operators supported by the filterset DSL.
 : Include all tests in crates matching `name-matcher`, and all the crates that (possibly transitively) depend on `name-matcher`.
 
 `binary_id(name-matcher)`
-: Include all tests in [binary IDs](../running.md#binary-ids) matching `name-matcher`. Covers all of `package()`, `kind()` and `binary()`.
+: Include all tests in [binary IDs](../glossary.md#binary-id) matching `name-matcher`. Covers all of `package()`, `kind()` and `binary()`.
 
 `kind(name-matcher)`
 : Include all tests in binary kinds matching `name-matcher`. See [_Binary kinds_](#binary-kinds) below.

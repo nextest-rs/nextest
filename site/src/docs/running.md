@@ -29,7 +29,7 @@ In nextest's run output:
 
 - Tests are marked **`PASS`** or **`FAIL`**, and the amount of wall-clock time each test takes is listed within square brackets.
 - Tests that take more than a specified amount of time (60 seconds by default) are marked **SLOW**. See [*Slow tests and timeouts*](features/slow-tests.md).
-- The part of the test in magenta is the _binary ID_ for a unit test binary (see [Binary IDs](#binary-ids) below).
+- The part of the test in magenta is the _binary ID_ for a unit test binary (see the [glossary](glossary.md#binary-id)).
 
 - The part after the binary ID is the _test name_, including the module the test is in. The final part of the test name is highlighted in bold blue text.
 
@@ -43,13 +43,7 @@ For a full list of options accepted by `cargo nextest run`, see [Options and arg
 
 ## Binary IDs
 
-A test binary can be any of:
-
-- A _unit test binary_ built from tests within `lib.rs` or its submodules. The binary ID for these are shown by nextest as just the crate name, without a `::` separator inside them.
-- An _integration test binary_ built from tests in the `[[test]]` section of `Cargo.toml` (typically tests in the `tests` directory.) The binary ID for these is has the format `crate-name::bin-name`.
-- Some other kind of test binary, such as a benchmark. In this case, the binary ID is `crate-name::kind/bin-name`. For example, `nextest-runner::bench/my-bench` or `quick-junit::example/show-junit`.
-
-For more about unit and integration tests, see [the documentation for `cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html).
+The _binary ID_ uniquely identifies a test binary within a workspace. For more information, see the [glossary](glossary.md#binary-id).
 
 ## Selecting tests
 

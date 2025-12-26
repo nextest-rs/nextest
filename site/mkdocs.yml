@@ -135,6 +135,8 @@ nav:
                 - "The runner loop": docs/design/architecture/runner-loop.md
                 - "Signal handling": docs/design/architecture/signal-handling.md
                 - "Input handling": docs/design/architecture/input-handling.md
+
+    - docs/glossary.md
     - "Benchmarks": docs/benchmarks/index.md
     - changelog.md
 
@@ -169,7 +171,8 @@ markdown_extensions:
     - pymdownx.snippets:
           base_path:
               - "."
-    - pymdownx.smartsymbols
+    - pymdownx.smartsymbols:
+          ordinal_numbers: false
     - pymdownx.superfences:
           custom_fences:
               - name: mermaid

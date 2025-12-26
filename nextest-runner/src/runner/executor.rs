@@ -679,39 +679,38 @@ impl<'a> ExecutorContext<'a> {
             &self.interceptor,
         );
 
-        let command_mut = cmd.command_mut();
-
-        // Debug environment variable for testing.
-        command_mut.env("NEXTEST_ATTEMPT", test.retry_data.attempt.to_string());
-
-        command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
-
-        command_mut.env("NEXTEST_TEST_NAME", test.test_instance.name);
-        command_mut.env(
-            "NEXTEST_BINARY_ID",
-            test.test_instance.suite_info.binary_id.as_str(),
-        );
-
         let attempt_id = test.test_instance.id().attempt_id(
             self.run_id,
             test.stress_index.map(|s| s.current),
             test.retry_data.attempt,
         );
-        command_mut.env("NEXTEST_ATTEMPT_ID", &attempt_id);
+
+        let command_mut = cmd.command_mut();
+
+        // Test-related environment variables.
+        command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
+        command_mut.env(
+            "NEXTEST_BINARY_ID",
+            test.test_instance.suite_info.binary_id.as_str(),
+        );
+        command_mut.env("NEXTEST_TEST_NAME", test.test_instance.name);
+        command_mut.env("NEXTEST_ATTEMPT", test.retry_data.attempt.to_string());
         command_mut.env(
             "NEXTEST_TOTAL_ATTEMPTS",
             test.retry_data.total_attempts.to_string(),
         );
+        command_mut.env("NEXTEST_ATTEMPT_ID", &attempt_id);
 
         let stress_current = test
             .stress_index
             .map(|s| s.current.to_string())
-            .unwrap_or_else(|| "none".into());
-        let stress_total = test
-            .stress_index
-            .and_then(|s| s.total)
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "none".into());
+            .unwrap_or_else(|| "none".to_owned());
+        let stress_total = match test.stress_index {
+            Some(stress_index) => stress_index
+                .total
+                .map_or_else(|| "unknown".to_owned(), |total| total.to_string()),
+            None => "none".to_owned(),
+        };
         command_mut.env("NEXTEST_STRESS_CURRENT", stress_current);
         command_mut.env("NEXTEST_STRESS_TOTAL", stress_total);
 
