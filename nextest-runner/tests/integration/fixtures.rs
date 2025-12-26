@@ -447,6 +447,7 @@ pub(crate) fn execute_collect(
     RunStats,
 ) {
     let mut instance_statuses = HashMap::new();
+    let mut test_list: Option<&TestList<'_>> = None;
     configure_handle_inheritance(false).expect("configuring handle inheritance on Windows failed");
     let run_stats = runner
         .execute(|event| {
@@ -454,6 +455,13 @@ pub(crate) fn execute_collect(
                 ReporterEvent::Tick => return,
                 ReporterEvent::Test(event) => event,
             };
+
+            // Capture the test list when the run starts.
+            if let TestEventKind::RunStarted { test_list: tl, .. } = &event.kind {
+                test_list = Some(*tl);
+                return;
+            }
+
             let (test_instance, status) = match event.kind {
                 TestEventKind::TestSkipped {
                     stress_index: _,
@@ -468,14 +476,17 @@ pub(crate) fn execute_collect(
                 _ => return,
             };
 
+            // Look up the suite info from the test list.
+            let test_list = test_list.expect("test list should be set before test events");
+            let suite_info = test_list
+                .get_suite(test_instance.binary_id)
+                .expect("suite should exist in test list");
+
             instance_statuses.insert(
-                (
-                    test_instance.suite_info.binary_path.as_path(),
-                    test_instance.name,
-                ),
+                (suite_info.binary_path.as_path(), test_instance.test_name),
                 InstanceValue {
-                    binary_id: test_instance.suite_info.binary_id.as_str(),
-                    cwd: test_instance.suite_info.cwd.as_path(),
+                    binary_id: suite_info.binary_id.as_str(),
+                    cwd: suite_info.cwd.as_path(),
                     status,
                 },
             );

@@ -675,7 +675,7 @@ where
                 self.new_test(test_instance, req_tx);
                 self.callback_none_response(TestEventKind::TestStarted {
                     stress_index,
-                    test_instance,
+                    test_instance: test_instance.id(),
                     current_stats: self.run_stats,
                     running: self.running_tests.len(),
                 })
@@ -707,7 +707,7 @@ where
 
                 self.callback_none_response(TestEventKind::TestSlow {
                     stress_index,
-                    test_instance,
+                    test_instance: test_instance.id(),
                     retry_data,
                     elapsed,
                     will_terminate: will_terminate.is_some(),
@@ -724,7 +724,7 @@ where
                 instance.attempt_failed_will_retry(run_status.clone());
                 self.callback_none_response(TestEventKind::TestAttemptFailedWillRetry {
                     stress_index,
-                    test_instance,
+                    test_instance: test_instance.id(),
                     failure_output,
                     run_status,
                     delay_before_next_attempt,
@@ -754,7 +754,7 @@ where
 
                 self.callback_none_response(TestEventKind::TestRetryStarted {
                     stress_index,
-                    test_instance,
+                    test_instance: test_instance.id(),
                     retry_data,
                     running: self.running_tests.len(),
                 })
@@ -777,7 +777,7 @@ where
 
                 self.basic_callback(TestEventKind::TestFinished {
                     stress_index,
-                    test_instance,
+                    test_instance: test_instance.id(),
                     success_output,
                     failure_output,
                     junit_store_success_output,
@@ -821,7 +821,7 @@ where
                 self.run_stats.skipped += 1;
                 self.callback_none_response(TestEventKind::TestSkipped {
                     stress_index,
-                    test_instance,
+                    test_instance: test_instance.id(),
                     reason,
                 })
             }

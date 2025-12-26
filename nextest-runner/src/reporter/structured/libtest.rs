@@ -25,7 +25,7 @@
 use crate::{
     config::elements::{LeakTimeoutResult, SlowTimeoutResult},
     errors::{DisplayErrorChain, FormatVersionError, FormatVersionErrorInner, WriteEventError},
-    list::RustTestSuite,
+    list::{RustTestSuite, TestList},
     reporter::events::{ExecutionResult, StressIndex, TestEvent, TestEventKind},
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
@@ -141,6 +141,7 @@ fn fmt_err(err: std::fmt::Error) -> WriteEventError {
 pub struct LibtestReporter<'cfg> {
     _minor: FormatMinorVersion,
     _major: FormatMajorVersion,
+    test_list: Option<&'cfg TestList<'cfg>>,
     test_suites: IdOrdMap<LibtestSuite<'cfg>>,
     /// If true, we emit a `nextest` subobject with additional metadata in it
     /// that consumers can use for easier integration if they wish
@@ -168,6 +169,7 @@ impl<'cfg> LibtestReporter<'cfg> {
             return Ok(Self {
                 _minor: FormatMinorVersion::First,
                 _major: FormatMajorVersion::Unstable,
+                test_list: None,
                 test_suites: IdOrdMap::new(),
                 emit_nextest_obj,
             });
@@ -229,6 +231,7 @@ impl<'cfg> LibtestReporter<'cfg> {
         Ok(Self {
             _major: major,
             _minor: minor,
+            test_list: None,
             test_suites: IdOrdMap::new(),
             emit_nextest_obj,
         })
@@ -287,6 +290,10 @@ impl<'cfg> LibtestReporter<'cfg> {
                     test_instance,
                 )
             }
+            TestEventKind::RunStarted { test_list, .. } => {
+                self.test_list = Some(*test_list);
+                return Ok(());
+            }
             TestEventKind::StressSubRunFinished { .. } | TestEventKind::RunFinished { .. } => {
                 for test_suite in std::mem::take(&mut self.test_suites) {
                     self.finalize(test_suite)?;
@@ -297,7 +304,13 @@ impl<'cfg> LibtestReporter<'cfg> {
             _ => return Ok(()),
         };
 
-        let suite_info = test_instance.suite_info;
+        // Look up the suite info from the test list.
+        let test_list = self
+            .test_list
+            .expect("test_list should be set by RunStarted before any test events");
+        let suite_info = test_list
+            .get_suite(test_instance.binary_id)
+            .expect("suite should exist in test list");
         let crate_name = suite_info.package.name();
         let binary_name = &suite_info.binary_name;
 
@@ -351,7 +364,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                     ignored,
                     filtered,
                     stress_index: *stress_index,
-                    meta: test_instance.suite_info,
+                    meta: suite_info,
                     total: std::time::Duration::new(0, 0),
                     ignore_block: None,
                     output_block: out,
@@ -390,7 +403,7 @@ impl<'cfg> LibtestReporter<'cfg> {
         if let Some(stress_index) = stress_index {
             write!(out, "@stress-{}", stress_index.current).map_err(fmt_err)?;
         }
-        write!(out, "${}", test_instance.name).map_err(fmt_err)?;
+        write!(out, "${}", test_instance.test_name).map_err(fmt_err)?;
         if let Some(retry_count) = retries {
             write!(out, "#{retry_count}\"").map_err(fmt_err)?;
         } else {
@@ -426,7 +439,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                         strip_human_output_from_failed_test(
                             &last_status.output,
                             out,
-                            test_instance.name,
+                            test_instance.test_name,
                         )?;
                         out.extend_from_slice(b"\"");
                     }
@@ -457,7 +470,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                     r#"{{"type":"{kind}","event":"{EVENT_IGNORED}","name":"{}::{}${}"}}"#,
                     suite_info.package.name(),
                     suite_info.binary_name,
-                    test_instance.name,
+                    test_instance.test_name,
                 )
                 .map_err(fmt_err)?;
             }

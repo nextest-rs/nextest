@@ -30,7 +30,7 @@ use crate::{
         usize_decimal_char_width,
     },
     indenter::indented,
-    list::{TestInstance, TestInstanceId},
+    list::TestInstanceId,
     reporter::{
         displayer::{ShowProgress, formatters::DisplayHhMmSs, progress::TerminalProgress},
         events::*,
@@ -340,7 +340,7 @@ impl FinalOutput {
 struct FinalOutputEntry<'a> {
     stress_index: Option<StressIndex>,
     counter: TestInstanceCounter,
-    instance: TestInstance<'a>,
+    instance: TestInstanceId<'a>,
     output: FinalOutput,
 }
 
@@ -366,13 +366,13 @@ impl<'a> Ord for FinalOutputEntry<'a> {
             Reverse(self.output.final_status_level()),
             self.stress_index,
             self.counter,
-            self.instance.id(),
+            self.instance,
         )
             .cmp(&(
                 Reverse(other.output.final_status_level()),
                 other.stress_index,
                 other.counter,
-                other.instance.id(),
+                other.instance,
             ))
     }
 }
@@ -623,7 +623,7 @@ impl<'a> DisplayReporterImpl<'a> {
                                 current: current_stats.finished_count + 1,
                                 total: current_stats.initial_run_count,
                             },
-                            test_instance.id()
+                            *test_instance
                         ),
                     )?;
                 }
@@ -671,7 +671,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     self.display_test_instance(
                         *stress_index,
                         TestInstanceCounter::Padded,
-                        test_instance.id()
+                        *test_instance
                     )
                 )?;
             }
@@ -706,7 +706,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         self.display_test_instance(
                             *stress_index,
                             TestInstanceCounter::Padded,
-                            test_instance.id()
+                            *test_instance
                         )
                     )?;
 
@@ -747,7 +747,7 @@ impl<'a> DisplayReporterImpl<'a> {
                             self.display_test_instance(
                                 *stress_index,
                                 TestInstanceCounter::Padded,
-                                test_instance.id()
+                                *test_instance
                             )
                         )?;
                     }
@@ -774,7 +774,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     self.display_test_instance(
                         *stress_index,
                         TestInstanceCounter::Padded,
-                        test_instance.id()
+                        *test_instance
                     )
                 )?;
             }
@@ -854,7 +854,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 reason,
             } => {
                 if self.status_levels.status_level >= StatusLevel::Skip {
-                    self.write_skip_line(*stress_index, test_instance.id(), writer)?;
+                    self.write_skip_line(*stress_index, *test_instance, writer)?;
                 }
                 if self.status_levels.final_status_level >= FinalStatusLevel::Skip {
                     self.final_outputs.push(FinalOutputEntry {
@@ -1271,11 +1271,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     for entry in &*self.final_outputs {
                         match &entry.output {
                             FinalOutput::Skipped(_) => {
-                                self.write_skip_line(
-                                    entry.stress_index,
-                                    entry.instance.id(),
-                                    writer,
-                                )?;
+                                self.write_skip_line(entry.stress_index, entry.instance, writer)?;
                             }
                             FinalOutput::Executed {
                                 run_statuses,
@@ -1286,7 +1282,7 @@ impl<'a> DisplayReporterImpl<'a> {
                                 self.write_final_status_line(
                                     entry.stress_index,
                                     entry.counter,
-                                    entry.instance.id(),
+                                    entry.instance,
                                     run_statuses.describe(),
                                     writer,
                                 )?;
@@ -1368,7 +1364,7 @@ impl<'a> DisplayReporterImpl<'a> {
         &self,
         stress_index: Option<StressIndex>,
         counter: TestInstanceCounter,
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstanceId<'a>,
         describe: ExecutionDescription<'_>,
         writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
@@ -1421,7 +1417,7 @@ impl<'a> DisplayReporterImpl<'a> {
         writeln!(
             writer,
             "{}",
-            self.display_test_instance(stress_index, counter, test_instance.id())
+            self.display_test_instance(stress_index, counter, test_instance)
         )?;
 
         // On Windows, also print out the exception if available.
