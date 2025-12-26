@@ -231,7 +231,7 @@ impl<'a> ExecutorContext<'a> {
         _ = resp_tx.send(ExecutorEvent::Started {
             stress_index,
             test_instance: test.instance,
-            command_line,
+            command_line: command_line.clone(),
             req_rx_tx,
         });
         let mut req_rx = match req_rx_rx.await {
@@ -262,6 +262,7 @@ impl<'a> ExecutorContext<'a> {
                     stress_index,
                     test_instance: test.instance,
                     retry_data,
+                    command_line: command_line.clone(),
                     tx,
                 });
 

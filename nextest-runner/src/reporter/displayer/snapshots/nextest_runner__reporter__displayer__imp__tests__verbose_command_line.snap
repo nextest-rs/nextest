@@ -9,3 +9,7 @@ snapshot_kind: text
              command: /path/to/binary --exact 'test with spaces' '--flag=value'
        START [         ] ( 1/10) my-binary-id test_special_chars
              command: /path/to/binary 'test"with"quotes' 'test'\''with'\''single'
+ TRY 2 START [         ] (─────────) my-binary-id test_retry
+             command: /path/to/binary --exact test_retry
+ TRY 3 START [         ] (─────────) my-binary-id test_retry
+             command: /path/to/binary --exact test_retry
