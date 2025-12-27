@@ -5,10 +5,24 @@
 
 extern crate test;
 
-// TODO: add benchmarks
 #[bench]
 fn bench_add_two(b: &mut test::Bencher) {
     b.iter(|| 2 + 2);
+}
+
+#[bench]
+#[ignore]
+fn bench_ignored(b: &mut test::Bencher) {
+    b.iter(|| 2 + 2);
+}
+
+#[bench]
+#[ignore]
+fn bench_slow_timeout(_b: &mut test::Bencher) {
+    // Sleep long enough to trigger timeout when bench.slow-timeout uses
+    // period = "500ms", terminate-after = 2 (1 second total).
+    // But not long enough to trigger when using default bench.slow-timeout (30y).
+    std::thread::sleep(std::time::Duration::from_secs(4));
 }
 
 #[cfg(test)]

@@ -10,6 +10,7 @@ use crate::{
         events::*,
         helpers::{Styles, print_lines_in_chunks},
     },
+    run_mode::NextestRunMode,
 };
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::RustBinaryId;
@@ -289,10 +290,11 @@ impl ProgressBarState {
             }
             if count < running_tests.len() {
                 let overflow_count = running_tests.len() - count;
+                // TODO: pass mode through to show "benchmarks" in benchmark mode.
                 msg.push_str(&format!(
                     "\n             ... and {} more {} running",
                     overflow_count.style(styles.count),
-                    plural::tests_str(overflow_count),
+                    plural::tests_str(NextestRunMode::Test, overflow_count),
                 ));
                 count += 1;
             }

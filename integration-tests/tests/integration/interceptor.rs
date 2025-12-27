@@ -339,3 +339,191 @@ fn test_tracer_integration() {
         "stderr should contain conflict error message: {stderr}"
     );
 }
+
+#[test]
+fn test_bench_debugger_integration() {
+    set_env_vars();
+
+    let p = TempProject::new().unwrap();
+    save_binaries_metadata(&p);
+    let fake_interceptor = fake_interceptor_path();
+    let fake_debugger = shell_words::join([fake_interceptor.as_str(), "--mode=debugger"]);
+
+    // Test: Too many benchmarks selected (use --run-ignored all to include the
+    // ignored benchmark).
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "bench",
+            "--workspace",
+            "--debugger",
+            &fake_debugger,
+            "--run-ignored",
+            "all",
+            "-E",
+            "test(~bench_)",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "should fail with SETUP_ERROR when multiple benchmarks selected"
+    );
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr
+            .contains("--debugger requires exactly one benchmark, but 3 benchmarks were selected:"),
+        "stderr should contain error message with 'benchmark': {stderr}"
+    );
+
+    // Test: No benchmarks selected.
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "bench",
+            "--workspace",
+            "--debugger",
+            &fake_debugger,
+            "-E",
+            "none()",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "should fail with SETUP_ERROR when no benchmarks selected"
+    );
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("no benchmarks were selected"),
+        "stderr should contain 'no benchmarks' message: {stderr}"
+    );
+
+    // Test: Debugger runs successfully with exactly one benchmark.
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "bench",
+            "--workspace",
+            "--debugger",
+            &fake_debugger,
+            "-E",
+            "test(=bench_add_two)",
+        ])
+        .output();
+
+    assert!(
+        output.exit_status.success(),
+        "should succeed with debugger on benchmark: {output}"
+    );
+
+    let stderr = output.stderr_as_str();
+
+    // Verify the fake-interceptor ran in debugger mode.
+    assert!(
+        stderr.contains("[fake-interceptor] mode: debugger"),
+        "stderr should show debugger mode was used: {stderr}"
+    );
+
+    // Test: --debugger conflicts with --no-run.
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "bench",
+            "--workspace",
+            "--debugger",
+            &fake_debugger,
+            "--no-run",
+        ])
+        .unchecked(true)
+        .output();
+
+    // clap should reject this with an error.
+    assert!(
+        !output.exit_status.success(),
+        "should fail when --debugger and --no-run are both specified"
+    );
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("the argument '--debugger <DEBUGGER>' cannot be used with '--no-run'"),
+        "stderr should contain conflict error message: {stderr}"
+    );
+}
+
+#[test]
+fn test_bench_tracer_integration() {
+    set_env_vars();
+
+    let p = TempProject::new().unwrap();
+    save_binaries_metadata(&p);
+    let fake_interceptor = fake_interceptor_path();
+    let fake_tracer = shell_words::join([fake_interceptor.as_str(), "--mode=tracer"]);
+
+    // Test: Too many benchmarks selected (use --run-ignored all to include the
+    // ignored benchmark).
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "bench",
+            "--workspace",
+            "--tracer",
+            &fake_tracer,
+            "--run-ignored",
+            "all",
+            "-E",
+            "test(~bench_)",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "should fail with SETUP_ERROR when multiple benchmarks selected"
+    );
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("--tracer requires exactly one benchmark, but 3 benchmarks were selected:"),
+        "stderr should contain error message with 'benchmark': {stderr}"
+    );
+
+    // Test: Tracer runs successfully with exactly one benchmark.
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "bench",
+            "--workspace",
+            "--tracer",
+            &fake_tracer,
+            "-E",
+            "test(=bench_add_two)",
+        ])
+        .output();
+
+    assert!(
+        output.exit_status.success(),
+        "should succeed with tracer on benchmark: {output}"
+    );
+
+    let stderr = output.stderr_as_str();
+
+    // Verify the fake-interceptor ran in tracer mode.
+    assert!(
+        stderr.contains("[fake-interceptor] mode: tracer"),
+        "stderr should show tracer mode was used: {stderr}"
+    );
+}

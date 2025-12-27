@@ -30,6 +30,7 @@ pub enum RunProperty {
     CdyLibExamplePackageFilter = 0x10,
     SkipSummaryCheck = 0x20,
     ExpectNoBinaries = 0x40,
+    Benchmarks = 0x80,
 }
 
 #[derive(Clone, Debug)]
@@ -280,4 +281,5 @@ pub enum TestCaseFixtureProperty {
     MatchesCdylib = 0x4,
     MatchesTestMultiplyTwo = 0x8,
     NotInDefaultSetUnix = 0x10,
+    IsBenchmark = 0x20,
 }

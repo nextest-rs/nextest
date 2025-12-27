@@ -26,6 +26,7 @@ use nextest_runner::{
             ExecutionDescription, ExecutionResult, FinalRunStats, RunStatsFailureKind, UnitKind,
         },
     },
+    run_mode::NextestRunMode,
     runner::TestRunnerBuilder,
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
@@ -82,6 +83,7 @@ fn test_timeout_with_retries() -> Result<()> {
     )
     .unwrap();
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Only,
         None,
         TestFilterPatterns::default(),
@@ -170,6 +172,7 @@ fn test_timeout_with_flaky() -> Result<()> {
     )
     .unwrap();
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Only,
         None,
         TestFilterPatterns::default(),
@@ -254,7 +257,7 @@ fn test_timeout_with_flaky() -> Result<()> {
 fn test_list_tests() -> Result<()> {
     test_init();
 
-    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
         NextestConfig::DEFAULT_PROFILE,
         &test_filter,
@@ -300,7 +303,7 @@ fn test_list_tests() -> Result<()> {
 fn test_run() -> Result<()> {
     test_init();
 
-    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
         NextestConfig::DEFAULT_PROFILE,
         &test_filter,
@@ -426,13 +429,14 @@ fn test_run_ignored() -> Result<()> {
 
     let pcx = ParseContext::new(&PACKAGE_GRAPH);
     let expr = Filterset::parse(
-        "not test(test_slow_timeout)".to_owned(),
+        "not test(test_slow_timeout) and not test(bench_slow_timeout)".to_owned(),
         &pcx,
         FiltersetKind::Test,
     )
     .unwrap();
 
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Only,
         None,
         TestFilterPatterns::default(),
@@ -471,7 +475,9 @@ fn test_run_ignored() -> Result<()> {
             .get(&expected.binary_id)
             .unwrap_or_else(|| panic!("unexpected binary ID {}", expected.binary_id));
         for fixture in &expected.test_cases {
-            if fixture.name.contains("test_slow_timeout") {
+            if fixture.name.contains("test_slow_timeout")
+                || fixture.name.contains("bench_slow_timeout")
+            {
                 // These tests are filtered out by the expression above.
                 continue;
             }
@@ -533,6 +539,7 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
     .expect("filterset is valid");
 
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Default,
         None,
         TestFilterPatterns::new(vec![
@@ -605,6 +612,7 @@ fn test_filter_expr_without_string_filters() -> Result<()> {
     .expect("filterset is valid");
 
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Default,
         None,
         TestFilterPatterns::default(),
@@ -638,6 +646,7 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
     test_init();
 
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Default,
         None,
         TestFilterPatterns::new(vec![
@@ -682,7 +691,7 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
 fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
     test_init();
 
-    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
         NextestConfig::DEFAULT_PROFILE,
         &test_filter,
@@ -855,6 +864,7 @@ fn test_termination() -> Result<()> {
     )
     .unwrap();
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Only,
         None,
         TestFilterPatterns::default(),
@@ -941,6 +951,7 @@ fn test_override_timeout_result() -> Result<()> {
     )
     .unwrap();
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Only,
         None,
         TestFilterPatterns::default(),
@@ -1028,6 +1039,167 @@ fn test_override_timeout_result() -> Result<()> {
             "for test_slow_timeout, mismatch in status: expected {:?}, actual {:?}",
             expected, actual
         );
+    }
+
+    Ok(())
+}
+
+/// Test that bench.slow-timeout causes benchmarks to time out.
+#[test]
+fn test_bench_termination() -> Result<()> {
+    test_init();
+
+    let pcx = ParseContext::new(&PACKAGE_GRAPH);
+    let expr = Filterset::parse(
+        "test(=bench_slow_timeout)".to_owned(),
+        &pcx,
+        FiltersetKind::Test,
+    )
+    .unwrap();
+    let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Benchmark,
+        RunIgnored::Only,
+        None,
+        TestFilterPatterns::default(),
+        vec![expr],
+    )
+    .unwrap();
+
+    let test_list = FIXTURE_TARGETS.make_test_list(
+        "with-bench-termination",
+        &test_filter,
+        &TargetRunner::empty(),
+    )?;
+    let config = load_config();
+    let profile = config
+        .profile("with-bench-termination")
+        .expect("with-bench-termination config is valid");
+    let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
+    let profile = profile.apply_build_platforms(&build_platforms);
+
+    let runner = TestRunnerBuilder::default()
+        .build(
+            &test_list,
+            &profile,
+            vec![],
+            SignalHandlerKind::Noop,
+            InputHandlerKind::Noop,
+            DoubleSpawnInfo::disabled(),
+            TargetRunner::empty(),
+        )
+        .unwrap();
+
+    let (instance_statuses, run_stats) = execute_collect(runner);
+    assert_eq!(run_stats.failed_timed_out, 1, "1 benchmark timed out");
+
+    let (_, instance_value) = instance_statuses
+        .iter()
+        .find(|&(&(_, name), _)| name == "bench_slow_timeout")
+        .expect("bench_slow_timeout should be present");
+
+    match &instance_value.status {
+        InstanceStatus::Skipped(_) => panic!("bench_slow_timeout should have been run"),
+        InstanceStatus::Finished(run_statuses) => {
+            assert_eq!(
+                run_statuses.len(),
+                1,
+                "bench_slow_timeout should have been run exactly once",
+            );
+            let run_status = run_statuses.last_status();
+            // The benchmark should have taken less than 5 seconds (it sleeps for 4s but
+            // the timeout should terminate it after ~1s).
+            assert!(
+                run_status.time_taken < Duration::from_secs(5),
+                "bench_slow_timeout should have taken less than 5 seconds, actually took {:?}",
+                run_status.time_taken
+            );
+            assert_eq!(
+                run_status.result,
+                ExecutionResult::Timeout {
+                    result: SlowTimeoutResult::Fail,
+                },
+                "bench_slow_timeout should have timed out with failure"
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Test that benchmarks ignore the regular slow-timeout and only use bench.slow-timeout.
+#[test]
+fn test_bench_ignores_test_slow_timeout() -> Result<()> {
+    test_init();
+
+    let pcx = ParseContext::new(&PACKAGE_GRAPH);
+    // Use bench_add_two which completes quickly (doesn't sleep).
+    let expr =
+        Filterset::parse("test(=bench_add_two)".to_owned(), &pcx, FiltersetKind::Test).unwrap();
+    let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Benchmark,
+        RunIgnored::Default,
+        None,
+        TestFilterPatterns::default(),
+        vec![expr],
+    )
+    .unwrap();
+
+    // Use the profile that has aggressive slow-timeout for tests but default
+    // bench.slow-timeout (30 years).
+    let test_list = FIXTURE_TARGETS.make_test_list(
+        "with-test-termination-only",
+        &test_filter,
+        &TargetRunner::empty(),
+    )?;
+    let config = load_config();
+    let profile = config
+        .profile("with-test-termination-only")
+        .expect("with-test-termination-only config is valid");
+    let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
+    let profile = profile.apply_build_platforms(&build_platforms);
+
+    let runner = TestRunnerBuilder::default()
+        .build(
+            &test_list,
+            &profile,
+            vec![],
+            SignalHandlerKind::Noop,
+            InputHandlerKind::Noop,
+            DoubleSpawnInfo::disabled(),
+            TargetRunner::empty(),
+        )
+        .unwrap();
+
+    let (instance_statuses, run_stats) = execute_collect(runner);
+
+    // The benchmark should not time out because bench.slow-timeout wasn't set
+    // (uses 30 year default), even though slow-timeout is set to 500ms.
+    assert_eq!(
+        run_stats.failed_timed_out, 0,
+        "benchmark should not time out"
+    );
+    assert_eq!(run_stats.passed, 1, "benchmark should pass");
+
+    let (_, instance_value) = instance_statuses
+        .iter()
+        .find(|&(&(_, name), _)| name == "bench_add_two")
+        .expect("bench_add_two should be present");
+
+    match &instance_value.status {
+        InstanceStatus::Skipped(_) => panic!("bench_add_two should have been run"),
+        InstanceStatus::Finished(run_statuses) => {
+            assert_eq!(
+                run_statuses.len(),
+                1,
+                "bench_add_two should have been run exactly once",
+            );
+            let run_status = run_statuses.last_status();
+            assert_eq!(
+                run_status.result,
+                ExecutionResult::Pass,
+                "bench_add_two should have passed (not timed out)"
+            );
+        }
     }
 
     Ok(())

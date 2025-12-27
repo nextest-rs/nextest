@@ -9,6 +9,7 @@ mod progress;
 mod status_level;
 mod unit_output;
 
+pub(crate) use formatters::DisplayUnitKind;
 pub(crate) use imp::*;
 pub use progress::{MaxProgressRunning, ShowProgress};
 pub use status_level::*;

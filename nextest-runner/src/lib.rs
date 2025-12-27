@@ -24,6 +24,7 @@ pub mod platform;
 pub mod redact;
 pub mod reporter;
 pub mod reuse_build;
+pub mod run_mode;
 pub mod runner;
 // TODO: move this module to the cargo-nextest crate and make it a private module once we get rid of
 // the tests in nextest-runner/tests/integration which depend on this to provide correct host and
