@@ -4,8 +4,28 @@ expression: results
 snapshot_kind: text
 ---
 [
-    "test_one",
-    "bench_one",
-    "test_two",
-    "bench_two",
+    (
+        "test_one",
+        RustTestKind(
+            "test",
+        ),
+    ),
+    (
+        "bench_one",
+        RustTestKind(
+            "bench",
+        ),
+    ),
+    (
+        "test_two",
+        RustTestKind(
+            "test",
+        ),
+    ),
+    (
+        "bench_two",
+        RustTestKind(
+            "bench",
+        ),
+    ),
 ]

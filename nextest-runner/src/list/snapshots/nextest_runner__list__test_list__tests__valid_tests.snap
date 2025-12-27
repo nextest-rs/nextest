@@ -4,7 +4,22 @@ expression: results
 snapshot_kind: text
 ---
 [
-    "simple_test",
-    "module::nested_test",
-    "deeply::nested::module::test_name",
+    (
+        "simple_test",
+        RustTestKind(
+            "test",
+        ),
+    ),
+    (
+        "module::nested_test",
+        RustTestKind(
+            "test",
+        ),
+    ),
+    (
+        "deeply::nested::module::test_name",
+        RustTestKind(
+            "test",
+        ),
+    ),
 ]

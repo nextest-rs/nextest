@@ -4,7 +4,22 @@ expression: results
 snapshot_kind: text
 ---
 [
-    "test_with_underscore_123",
-    "test::with::colons",
-    "test_with_numbers_42",
+    (
+        "test_with_underscore_123",
+        RustTestKind(
+            "test",
+        ),
+    ),
+    (
+        "test::with::colons",
+        RustTestKind(
+            "test",
+        ),
+    ),
+    (
+        "test_with_numbers_42",
+        RustTestKind(
+            "test",
+        ),
+    ),
 ]

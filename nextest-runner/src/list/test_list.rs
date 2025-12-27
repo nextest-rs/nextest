@@ -32,8 +32,8 @@ use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_filtering::{BinaryQuery, EvalContext, TestQuery};
 use nextest_metadata::{
     BuildPlatform, FilterMatch, MismatchReason, RustBinaryId, RustNonTestBinaryKind,
-    RustTestBinaryKind, RustTestBinarySummary, RustTestCaseSummary, RustTestSuiteStatusSummary,
-    RustTestSuiteSummary, TestListSummary,
+    RustTestBinaryKind, RustTestBinarySummary, RustTestCaseSummary, RustTestKind,
+    RustTestSuiteStatusSummary, RustTestSuiteSummary, TestListSummary,
 };
 use owo_colors::OwoColorize;
 use quick_junit::ReportUuid;
@@ -613,10 +613,11 @@ impl<'g> TestList<'g> {
         // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
         // based on one doesn't affect the other.
         let mut non_ignored_filter = filter.build();
-        for test_name in Self::parse(&test_binary.binary_id, non_ignored.as_ref())? {
+        for (test_name, kind) in Self::parse(&test_binary.binary_id, non_ignored.as_ref())? {
             test_cases.insert_overwrite(RustTestCase {
                 name: test_name.into(),
                 test_info: RustTestCaseSummary {
+                    kind: Some(kind),
                     ignored: false,
                     filter_match: non_ignored_filter.filter_match(
                         &test_binary,
@@ -630,7 +631,7 @@ impl<'g> TestList<'g> {
         }
 
         let mut ignored_filter = filter.build();
-        for test_name in Self::parse(&test_binary.binary_id, ignored.as_ref())? {
+        for (test_name, kind) in Self::parse(&test_binary.binary_id, ignored.as_ref())? {
             // Note that libtest prints out:
             // * just ignored tests if --ignored is passed in
             // * all tests, both ignored and non-ignored, if --ignored is not passed in
@@ -638,6 +639,7 @@ impl<'g> TestList<'g> {
             test_cases.insert_overwrite(RustTestCase {
                 name: test_name.into(),
                 test_info: RustTestCaseSummary {
+                    kind: Some(kind),
                     ignored: true,
                     filter_match: ignored_filter.filter_match(
                         &test_binary,
@@ -666,7 +668,7 @@ impl<'g> TestList<'g> {
     fn parse<'a>(
         binary_id: &'a RustBinaryId,
         list_output: &'a str,
-    ) -> Result<Vec<&'a str>, CreateTestListError> {
+    ) -> Result<Vec<(&'a str, RustTestKind)>, CreateTestListError> {
         let mut list = parse_list_lines(binary_id, list_output).collect::<Result<Vec<_>, _>>()?;
         list.sort_unstable();
         Ok(list)
@@ -784,25 +786,27 @@ impl<'g> TestList<'g> {
 fn parse_list_lines<'a>(
     binary_id: &'a RustBinaryId,
     list_output: &'a str,
-) -> impl Iterator<Item = Result<&'a str, CreateTestListError>> + 'a + use<'a> {
+) -> impl Iterator<Item = Result<(&'a str, RustTestKind), CreateTestListError>> + 'a + use<'a> {
     // The output is in the form:
     // <test name>: test
     // <test name>: test
     // ...
 
-    list_output.lines().map(move |line| {
-        line.strip_suffix(": test")
-            .or_else(|| line.strip_suffix(": benchmark"))
-            .ok_or_else(|| {
-                CreateTestListError::parse_line(
+    list_output
+        .lines()
+        .map(move |line| match line.strip_suffix(": test") {
+            Some(test_name) => Ok((test_name, RustTestKind::TEST)),
+            None => match line.strip_suffix(": benchmark") {
+                Some(test_name) => Ok((test_name, RustTestKind::BENCH)),
+                None => Err(CreateTestListError::parse_line(
                     binary_id.clone(),
                     format!(
                         "line {line:?} did not end with the string \": test\" or \": benchmark\""
                     ),
                     list_output,
-                )
-            })
-    })
+                )),
+            },
+        })
 }
 
 /// Profile implementation for test lists.
@@ -1392,7 +1396,7 @@ mod tests {
     use iddqd::id_ord_map;
     use indoc::indoc;
     use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext};
-    use nextest_metadata::{FilterMatch, MismatchReason, PlatformLibdirUnavailable};
+    use nextest_metadata::{FilterMatch, MismatchReason, PlatformLibdirUnavailable, RustTestKind};
     use pretty_assertions::assert_eq;
     use std::sync::LazyLock;
     use target_spec::Platform;
@@ -1505,6 +1509,7 @@ mod tests {
                             RustTestCase {
                                 name: "tests::foo::test_bar".to_owned(),
                                 test_info: RustTestCaseSummary {
+                                    kind: Some(RustTestKind::TEST),
                                     ignored: false,
                                     filter_match: FilterMatch::Matches,
                                 },
@@ -1512,6 +1517,7 @@ mod tests {
                             RustTestCase {
                                 name: "tests::baz::test_quux".to_owned(),
                                 test_info: RustTestCaseSummary {
+                                    kind: Some(RustTestKind::TEST),
                                     ignored: false,
                                     filter_match: FilterMatch::Matches,
                                 },
@@ -1519,6 +1525,7 @@ mod tests {
                             RustTestCase {
                                 name: "benches::bench_foo".to_owned(),
                                 test_info: RustTestCaseSummary {
+                                    kind: Some(RustTestKind::BENCH),
                                     ignored: false,
                                     filter_match: FilterMatch::Matches,
                                 },
@@ -1526,6 +1533,7 @@ mod tests {
                             RustTestCase {
                                 name: "tests::ignored::test_bar".to_owned(),
                                 test_info: RustTestCaseSummary {
+                                    kind: Some(RustTestKind::TEST),
                                     ignored: true,
                                     filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                                 },
@@ -1533,6 +1541,7 @@ mod tests {
                             RustTestCase {
                                 name: "tests::baz::test_ignored".to_owned(),
                                 test_info: RustTestCaseSummary {
+                                    kind: Some(RustTestKind::TEST),
                                     ignored: true,
                                     filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                                 },
@@ -1540,6 +1549,7 @@ mod tests {
                             RustTestCase {
                                 name: "benches::ignored_bench_foo".to_owned(),
                                 test_info: RustTestCaseSummary {
+                                    kind: Some(RustTestKind::BENCH),
                                     ignored: true,
                                     filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                                 },
@@ -1649,12 +1659,14 @@ mod tests {
                   "status": "listed",
                   "testcases": {
                     "benches::bench_foo": {
+                      "kind": "bench",
                       "ignored": false,
                       "filter-match": {
                         "status": "matches"
                       }
                     },
                     "benches::ignored_bench_foo": {
+                      "kind": "bench",
                       "ignored": true,
                       "filter-match": {
                         "status": "mismatch",
@@ -1662,6 +1674,7 @@ mod tests {
                       }
                     },
                     "tests::baz::test_ignored": {
+                      "kind": "test",
                       "ignored": true,
                       "filter-match": {
                         "status": "mismatch",
@@ -1669,18 +1682,21 @@ mod tests {
                       }
                     },
                     "tests::baz::test_quux": {
+                      "kind": "test",
                       "ignored": false,
                       "filter-match": {
                         "status": "matches"
                       }
                     },
                     "tests::foo::test_bar": {
+                      "kind": "test",
                       "ignored": false,
                       "filter-match": {
                         "status": "matches"
                       }
                     },
                     "tests::ignored::test_bar": {
+                      "kind": "test",
                       "ignored": true,
                       "filter-match": {
                         "status": "mismatch",
