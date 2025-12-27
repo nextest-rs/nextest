@@ -18,6 +18,7 @@ use crate::{
     },
     platform::BuildPlatforms,
     reporter::TestOutputDisplay,
+    run_mode::NextestRunMode,
 };
 use guppy::graph::cargo::BuildPlatform;
 use nextest_filtering::{
@@ -237,7 +238,11 @@ impl<'p> TestSettings<'p> {
 
 #[expect(dead_code)]
 impl<'p, Source: Copy> TestSettings<'p, Source> {
-    pub(in crate::config) fn new(profile: &'p EvaluatableProfile<'_>, query: &TestQuery<'_>) -> Self
+    pub(in crate::config) fn new(
+        profile: &'p EvaluatableProfile<'_>,
+        run_mode: NextestRunMode,
+        query: &TestQuery<'_>,
+    ) -> Self
     where
         Source: TrackSource<'p>,
     {
@@ -296,10 +301,16 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             {
                 retries = Some(Source::track_override(r, override_));
             }
-            if slow_timeout.is_none()
-                && let Some(s) = override_.data.slow_timeout
-            {
-                slow_timeout = Some(Source::track_override(s, override_));
+            if slow_timeout.is_none() {
+                // Use the appropriate slow timeout based on run mode. Note that
+                // there's no fallback from bench to test timeout.
+                let timeout_for_mode = match run_mode {
+                    NextestRunMode::Test => override_.data.slow_timeout,
+                    NextestRunMode::Benchmark => override_.data.bench_slow_timeout,
+                };
+                if let Some(s) = timeout_for_mode {
+                    slow_timeout = Some(Source::track_override(s, override_));
+                }
             }
             if leak_timeout.is_none()
                 && let Some(l) = override_.data.leak_timeout
@@ -354,7 +365,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             run_extra_args.unwrap_or_else(|| Source::track_profile(profile.run_extra_args()));
         let retries = retries.unwrap_or_else(|| Source::track_profile(profile.retries()));
         let slow_timeout =
-            slow_timeout.unwrap_or_else(|| Source::track_profile(profile.slow_timeout()));
+            slow_timeout.unwrap_or_else(|| Source::track_profile(profile.slow_timeout(run_mode)));
         let leak_timeout =
             leak_timeout.unwrap_or_else(|| Source::track_profile(profile.leak_timeout()));
         let test_group = test_group.unwrap_or_else(|| Source::track_profile(TestGroup::Global));
@@ -700,6 +711,7 @@ pub(in crate::config) struct ProfileOverrideData {
     run_extra_args: Option<Vec<String>>,
     retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
+    bench_slow_timeout: Option<SlowTimeout>,
     leak_timeout: Option<LeakTimeout>,
     pub(in crate::config) test_group: Option<TestGroup>,
     success_output: Option<TestOutputDisplay>,
@@ -782,6 +794,7 @@ impl CompiledOverride<PreBuildPlatform> {
                         run_extra_args: source.run_extra_args.clone(),
                         retries: source.retries,
                         slow_timeout: source.slow_timeout,
+                        bench_slow_timeout: source.bench.slow_timeout,
                         leak_timeout: source.leak_timeout,
                         test_group: source.test_group.clone(),
                         success_output: source.success_output,
@@ -950,6 +963,9 @@ pub(in crate::config) struct DeserializedOverride {
     failure_output: Option<TestOutputDisplay>,
     #[serde(default)]
     junit: DeserializedJunitOutput,
+    /// Benchmark-specific overrides.
+    #[serde(default)]
+    bench: DeserializedOverrideBench,
 }
 
 #[derive(Copy, Clone, Debug, Default, Deserialize)]
@@ -957,6 +973,17 @@ pub(in crate::config) struct DeserializedOverride {
 pub(in crate::config) struct DeserializedJunitOutput {
     store_success_output: Option<bool>,
     store_failure_output: Option<bool>,
+}
+
+/// Deserialized form of benchmark-specific overrides.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(in crate::config) struct DeserializedOverrideBench {
+    #[serde(
+        default,
+        deserialize_with = "crate::config::elements::deserialize_slow_timeout"
+    )]
+    slow_timeout: Option<SlowTimeout>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1109,7 +1136,7 @@ mod tests {
             binary_query: host_binary_query.to_query(),
             test_name: "test",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
 
         assert_eq!(overrides.threads_required(), ThreadsRequired::Count(8));
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(3));
@@ -1151,7 +1178,7 @@ mod tests {
             binary_query: target_binary_query.to_query(),
             test_name: "test",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
 
         assert_eq!(overrides.threads_required(), ThreadsRequired::Count(8));
         assert_eq!(
@@ -1197,7 +1224,7 @@ mod tests {
             binary_query: target_binary_query.to_query(),
             test_name: "override3",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(5));
 
         // This query matches override 5.
@@ -1205,7 +1232,7 @@ mod tests {
             binary_query: target_binary_query.to_query(),
             test_name: "override5",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(8));
 
         // This query matches override 6.
@@ -1213,7 +1240,7 @@ mod tests {
             binary_query: target_binary_query.to_query(),
             test_name: "timeout_success",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(
             overrides.slow_timeout(),
             SlowTimeout {
@@ -1229,8 +1256,114 @@ mod tests {
             binary_query: target_binary_query.to_query(),
             test_name: "no_match",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(0));
+    }
+
+    /// Test that bench.slow-timeout works correctly in overrides.
+    #[test]
+    fn test_overrides_bench_slow_timeout() {
+        let config_contents = indoc! {r#"
+            # Profile-level benchmark slow-timeout (used as fallback).
+            [profile.default]
+            bench.slow-timeout = { period = "30y" }
+
+            # Override 1: Both test and bench slow-timeout specified.
+            [[profile.default.overrides]]
+            filter = "test(both_specified)"
+            slow-timeout = "60s"
+            bench.slow-timeout = { period = "5m", terminate-after = 2 }
+
+            # Override 2: Only test slow-timeout specified.
+            [[profile.default.overrides]]
+            filter = "test(test_only)"
+            slow-timeout = "90s"
+
+            # Override 3: Only bench slow-timeout specified.
+            [[profile.default.overrides]]
+            filter = "test(bench_only)"
+            bench.slow-timeout = "10m"
+        "#};
+
+        let workspace_dir = tempdir().unwrap();
+        let graph = temp_workspace(&workspace_dir, config_contents);
+        let package_id = graph.workspace().iter().next().unwrap().id();
+        let pcx = ParseContext::new(&graph);
+
+        let nextest_config_result = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &[][..],
+            &Default::default(),
+        )
+        .expect("config is valid");
+        let profile = nextest_config_result
+            .profile("default")
+            .expect("valid profile name")
+            .apply_build_platforms(&build_platforms());
+
+        let host_binary_query =
+            binary_query(&graph, package_id, "lib", "my-binary", BuildPlatform::Host);
+
+        // Test "both_specified": tests get slow-timeout, benchmarks get
+        // bench.slow-timeout.
+        let query = TestQuery {
+            binary_query: host_binary_query.to_query(),
+            test_name: "both_specified",
+        };
+
+        let test_settings = profile.settings_for(NextestRunMode::Test, &query);
+        assert_eq!(test_settings.slow_timeout().period, Duration::from_secs(60));
+
+        let bench_settings = profile.settings_for(NextestRunMode::Benchmark, &query);
+        assert_eq!(
+            bench_settings.slow_timeout(),
+            SlowTimeout {
+                period: Duration::from_secs(5 * 60),
+                terminate_after: Some(NonZeroUsize::new(2).unwrap()),
+                grace_period: Duration::from_secs(10),
+                on_timeout: SlowTimeoutResult::default(),
+            }
+        );
+
+        // Test "test_only": tests get the override, benchmarks fall back to
+        // profile default (no fallback from slow-timeout to
+        // bench.slow-timeout).
+        let query = TestQuery {
+            binary_query: host_binary_query.to_query(),
+            test_name: "test_only",
+        };
+
+        let test_settings = profile.settings_for(NextestRunMode::Test, &query);
+        assert_eq!(test_settings.slow_timeout().period, Duration::from_secs(90));
+
+        let bench_settings = profile.settings_for(NextestRunMode::Benchmark, &query);
+        // Should use profile-level bench.slow-timeout (30 years), not the
+        // override's slow-timeout. humantime parses "30y" accounting for leap
+        // years, so we check >= VERY_LARGE rather than an exact value.
+        assert!(
+            bench_settings.slow_timeout().period >= SlowTimeout::VERY_LARGE.period,
+            "should be >= VERY_LARGE, got {:?}",
+            bench_settings.slow_timeout().period
+        );
+
+        // Test "bench_only": tests get profile default, benchmarks get the
+        // override.
+        let query = TestQuery {
+            binary_query: host_binary_query.to_query(),
+            test_name: "bench_only",
+        };
+
+        let test_settings = profile.settings_for(NextestRunMode::Test, &query);
+        // Tests use the default slow-timeout (60s from default-config.toml).
+        assert_eq!(test_settings.slow_timeout().period, Duration::from_secs(60));
+
+        let bench_settings = profile.settings_for(NextestRunMode::Benchmark, &query);
+        assert_eq!(
+            bench_settings.slow_timeout().period,
+            Duration::from_secs(10 * 60)
+        );
     }
 
     #[test_case(
@@ -1476,7 +1609,7 @@ mod tests {
             binary_query: target_binary_query.to_query(),
             test_name: "test",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(
             overrides.retries(),
             RetryPolicy::new_without_delay(5),

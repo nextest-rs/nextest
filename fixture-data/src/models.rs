@@ -15,6 +15,7 @@ pub enum CheckResult {
     Fail,
     FailLeak,
     Abort,
+    Timeout,
 }
 
 /// Properties that control which tests should be run in integration test invocations.
@@ -30,6 +31,13 @@ pub enum RunProperty {
     CdyLibExamplePackageFilter = 0x10,
     SkipSummaryCheck = 0x20,
     ExpectNoBinaries = 0x40,
+    Benchmarks = 0x80,
+    /// Run ignored benchmarks with the `with-bench-override` profile.
+    BenchOverrideTimeout = 0x100,
+    /// Run ignored benchmarks with the `with-bench-termination` profile.
+    BenchTermination = 0x200,
+    /// Run benchmarks with the `with-test-termination-only` profile.
+    BenchIgnoresTestTimeout = 0x400,
 }
 
 #[derive(Clone, Debug)]
@@ -189,6 +197,21 @@ impl TestCaseFixture {
             return true;
         }
 
+        // BenchOverrideTimeout - only run the specific benchmark that times out.
+        if properties & RunProperty::BenchOverrideTimeout as u64 != 0 {
+            return !self.has_property(TestCaseFixtureProperty::BenchOverrideTimeout);
+        }
+
+        // BenchTermination - only run the specific benchmark that times out.
+        if properties & RunProperty::BenchTermination as u64 != 0 {
+            return !self.has_property(TestCaseFixtureProperty::BenchTermination);
+        }
+
+        // BenchIgnoresTestTimeout - only run the specific benchmark that passes.
+        if properties & RunProperty::BenchIgnoresTestTimeout as u64 != 0 {
+            return !self.has_property(TestCaseFixtureProperty::BenchIgnoresTestTimeout);
+        }
+
         // Ignored tests are skipped by this test suite.
         if self.status.is_ignored() {
             return true;
@@ -199,6 +222,28 @@ impl TestCaseFixture {
 
     /// Determines the expected test result based on test status and run properties.
     pub fn expected_result(&self, properties: u64) -> CheckResult {
+        // BenchOverrideTimeout - the benchmark times out due to override.
+        if self.has_property(TestCaseFixtureProperty::BenchOverrideTimeout)
+            && properties & RunProperty::BenchOverrideTimeout as u64 != 0
+        {
+            return CheckResult::Timeout;
+        }
+
+        // BenchTermination - the benchmark times out due to bench.slow-timeout.
+        if self.has_property(TestCaseFixtureProperty::BenchTermination)
+            && properties & RunProperty::BenchTermination as u64 != 0
+        {
+            return CheckResult::Timeout;
+        }
+
+        // BenchIgnoresTestTimeout - the benchmark passes because it uses
+        // bench.slow-timeout (30 years default) instead of slow-timeout.
+        if self.has_property(TestCaseFixtureProperty::BenchIgnoresTestTimeout)
+            && properties & RunProperty::BenchIgnoresTestTimeout as u64 != 0
+        {
+            return CheckResult::Pass;
+        }
+
         match self.status {
             TestCaseFixtureStatus::Pass => {
                 // NeedsSameCwd tests fail when relocated.
@@ -280,4 +325,11 @@ pub enum TestCaseFixtureProperty {
     MatchesCdylib = 0x4,
     MatchesTestMultiplyTwo = 0x8,
     NotInDefaultSetUnix = 0x10,
+    IsBenchmark = 0x20,
+    /// Benchmark that times out with the with-bench-override profile.
+    BenchOverrideTimeout = 0x40,
+    /// Benchmark that times out with the with-bench-termination profile.
+    BenchTermination = 0x80,
+    /// Benchmark that passes with the with-test-termination-only profile.
+    BenchIgnoresTestTimeout = 0x100,
 }

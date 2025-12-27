@@ -678,6 +678,132 @@ fn test_run_after_build() {
     check_run_output_with_junit(&output.stderr, &p.junit_path("default"), 0);
 }
 
+/// Test that per-benchmark override for bench.slow-timeout is respected.
+///
+/// The profile has a 30-year bench.slow-timeout at the profile level, but an
+/// override that sets a 1s timeout for `bench_slow_timeout`. The benchmark
+/// sleeps for 4 seconds, so it should time out.
+#[test]
+fn test_bench_override_slow_timeout() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "bench",
+            "--profile",
+            "with-bench-override",
+            // Set the dev profile here to avoid a rebuild.
+            "--cargo-profile",
+            "dev",
+            "--run-ignored",
+            "only",
+            "-E",
+            "test(=bench_slow_timeout)",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command (benchmark should time out)\n{output}",
+    );
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("with-bench-override"),
+        RunProperty::BenchOverrideTimeout as u64
+            | RunProperty::Benchmarks as u64
+            | RunProperty::SkipSummaryCheck as u64,
+    );
+}
+
+/// Test that bench.slow-timeout causes benchmarks to time out.
+#[test]
+fn test_bench_termination() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "bench",
+            "--profile",
+            "with-bench-termination",
+            // Use test profile to avoid rebuilding: `cargo nextest bench`
+            // defaults to the `bench` cargo profile, but the fixture is already
+            // built with `test`.
+            "--cargo-profile",
+            "test",
+            "--run-ignored",
+            "only",
+            "-E",
+            "test(=bench_slow_timeout)",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command (benchmark should time out)\n{output}",
+    );
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("with-bench-termination"),
+        RunProperty::BenchTermination as u64
+            | RunProperty::Benchmarks as u64
+            | RunProperty::SkipSummaryCheck as u64,
+    );
+}
+
+/// Test that benchmarks ignore regular slow-timeout and only use bench.slow-timeout.
+///
+/// The benchmark sleeps for 2 seconds. The profile has slow-timeout = 1s but no
+/// bench.slow-timeout (defaults to 30 years). If benchmarks incorrectly used
+/// slow-timeout, this would fail. But it passes because benchmarks use
+/// bench.slow-timeout.
+#[test]
+fn test_bench_ignores_test_slow_timeout() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "bench",
+            "--profile",
+            "with-test-termination-only",
+            // Use test profile to avoid rebuilding: `cargo nextest bench`
+            // defaults to the `bench` cargo profile, but the fixture is already
+            // built with `test`.
+            "--cargo-profile",
+            "test",
+            "--run-ignored",
+            "only",
+            "-E",
+            "test(=bench_slow_timeout)",
+        ])
+        .output();
+
+    // The benchmark should pass (not time out), even though slow-timeout is 1s,
+    // because benchmarks only use bench.slow-timeout which defaults to 30
+    // years.
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::OK),
+        "correct exit code for command (benchmark should succeed)\n{output}",
+    );
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("with-test-termination-only"),
+        RunProperty::BenchIgnoresTestTimeout as u64
+            | RunProperty::Benchmarks as u64
+            | RunProperty::SkipSummaryCheck as u64,
+    );
+}
+
 #[test]
 fn test_relocated_run() {
     set_env_vars();
@@ -1136,6 +1262,30 @@ fn run_archive_with_args(
 
     // project is included in return value to keep tempdirs alive
     (p2, extract_to.join("target"))
+}
+
+#[test]
+fn test_bench() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "bench",
+            // Set the dev profile here to avoid a rebuild.
+            "--cargo-profile",
+            "dev",
+            "--no-capture",
+        ])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        output.exit_status.code(),
+        Some(0),
+        "correct exit code for command\n{output}",
+    );
+    check_run_output(&output.stderr, RunProperty::Benchmarks as u64);
 }
 
 #[test]

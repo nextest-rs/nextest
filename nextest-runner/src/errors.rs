@@ -600,7 +600,7 @@ impl ProfileScriptErrors {
 
 /// An error which indicates that a profile was requested but not known to nextest.
 #[derive(Clone, Debug, Error)]
-#[error("profile `{profile} not found (known profiles: {})`", .all_profiles.join(", "))]
+#[error("profile `{profile}` not found (known profiles: {})", .all_profiles.join(", "))]
 pub struct ProfileNotFound {
     profile: String,
     all_profiles: Vec<String>,

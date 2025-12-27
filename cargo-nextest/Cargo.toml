@@ -49,6 +49,7 @@ camino.workspace = true
 
 [dev-dependencies]
 camino-tempfile.workspace = true
+insta.workspace = true
 
 [features]
 default = ["default-no-update", "self-update"]

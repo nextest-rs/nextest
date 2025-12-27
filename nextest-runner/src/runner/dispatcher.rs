@@ -30,6 +30,7 @@ use crate::{
 use chrono::Local;
 use debug_ignore::DebugIgnore;
 use futures::future::{Fuse, FusedFuture};
+use nextest_metadata::MismatchReason;
 use quick_junit::ReportUuid;
 use std::{collections::BTreeMap, env, pin::Pin, time::Duration};
 use tokio::{
@@ -822,7 +823,12 @@ where
                 test_instance,
                 reason,
             }) => {
-                self.run_stats.skipped += 1;
+                // If the mismatch reason is that this test isn't a benchmark,
+                // we don't display it in the skip counts (but still keep track
+                // of it internally).
+                if !matches!(reason, MismatchReason::NotBenchmark) {
+                    self.run_stats.skipped += 1;
+                }
                 self.callback_none_response(TestEventKind::TestSkipped {
                     stress_index,
                     test_instance: test_instance.id(),

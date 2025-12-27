@@ -4,6 +4,7 @@
 use super::junit::MetadataJunit;
 use crate::{
     config::core::EvaluatableProfile, errors::WriteEventError, reporter::events::TestEvent,
+    run_mode::NextestRunMode,
 };
 use camino::Utf8PathBuf;
 
@@ -17,10 +18,10 @@ pub(crate) struct EventAggregator<'cfg> {
 }
 
 impl<'cfg> EventAggregator<'cfg> {
-    pub(crate) fn new(profile: &EvaluatableProfile<'cfg>) -> Self {
+    pub(crate) fn new(mode: NextestRunMode, profile: &EvaluatableProfile<'cfg>) -> Self {
         Self {
             store_dir: profile.store_dir().to_owned(),
-            junit: profile.junit().map(MetadataJunit::new),
+            junit: profile.junit().map(|cfg| MetadataJunit::new(mode, cfg)),
         }
     }
 

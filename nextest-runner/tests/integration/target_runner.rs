@@ -13,6 +13,7 @@ use nextest_runner::{
     input::InputHandlerKind,
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
     reporter::events::{FinalRunStats, RunStatsFailureKind},
+    run_mode::NextestRunMode,
     runner::TestRunnerBuilder,
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
@@ -190,7 +191,7 @@ fn current_runner_env_var() -> String {
 fn test_listing_with_target_runner() -> Result<()> {
     test_init();
 
-    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
         NextestConfig::DEFAULT_PROFILE,
         &test_filter,
@@ -235,7 +236,7 @@ fn test_listing_with_target_runner() -> Result<()> {
 fn test_run_with_target_runner() -> Result<()> {
     test_init();
 
-    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
 
     // SAFETY:
     // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests

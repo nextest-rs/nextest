@@ -4,7 +4,7 @@
 use super::temp_project::TempProject;
 use camino::Utf8Path;
 use fixture_data::{
-    models::{CheckResult, RunProperty, TestSuiteFixtureProperty},
+    models::{CheckResult, RunProperty, TestCaseFixtureProperty, TestSuiteFixtureProperty},
     nextest_tests::EXPECTED_TEST_SUITES,
 };
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
@@ -201,6 +201,13 @@ impl ExpectedTestResults {
             for test in &fixture.test_cases {
                 let id = TestInstanceId::new(binary_id.as_str(), test.name);
 
+                if properties & RunProperty::Benchmarks as u64 != 0 {
+                    // We don't consider skipped tests while running benchmarks.
+                    if !test.has_property(TestCaseFixtureProperty::IsBenchmark) {
+                        continue;
+                    }
+                }
+
                 // Determine if this specific test should be filtered out.
                 if test.should_skip(properties) {
                     should_not_run.insert(id);
@@ -279,6 +286,9 @@ impl ExpectedSummary {
             CheckResult::Abort => {
                 self.fail_count += 1;
             }
+            CheckResult::Timeout => {
+                self.fail_count += 1;
+            }
         }
     }
 }
@@ -341,6 +351,18 @@ fn debug_run_properties(properties: u64) -> String {
     if properties & RunProperty::ExpectNoBinaries as u64 != 0 {
         ret.push_str("with-expect-no-binaries ");
     }
+    if properties & RunProperty::Benchmarks as u64 != 0 {
+        ret.push_str("benchmarks ");
+    }
+    if properties & RunProperty::BenchOverrideTimeout as u64 != 0 {
+        ret.push_str("bench-override-timeout ");
+    }
+    if properties & RunProperty::BenchTermination as u64 != 0 {
+        ret.push_str("bench-termination ");
+    }
+    if properties & RunProperty::BenchIgnoresTestTimeout as u64 != 0 {
+        ret.push_str("bench-ignores-test-timeout ");
+    }
     ret
 }
 
@@ -360,8 +382,11 @@ static FAIL_LEAK_RE: LazyLock<Regex> =
 static ABORT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^\s+(?:ABORT|SIGSEGV|SIGABRT) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
 });
+static TIMEOUT_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s+TIMEOUT \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap());
 static SUMMARY_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"Summary \[.*\] +(\d+) tests? run: (\d+) passed(?: \((\d+) leaky\))?,?(?: (\d+) failed(?: \((\d+) due to being leaky\))?,?)? (\d+) skipped").unwrap()
+    // Note: "failed" can also be "timed out" for timeout failures.
+    Regex::new(r"Summary \[.*\] +(\d+) (?:tests?|benchmarks?) run: (\d+) passed(?: \((\d+) leaky\))?,?(?: (\d+) (?:failed|timed out)(?: \((\d+) due to being leaky\))?,?)? (\d+) skipped").unwrap()
 });
 
 impl ActualTestResults {
@@ -395,6 +420,14 @@ impl ActualTestResults {
                     .insert_unique(ActualOutcome {
                         id,
                         result: CheckResult::Abort,
+                    })
+                    .unwrap();
+            } else if let Some(caps) = TIMEOUT_RE.captures(line) {
+                let id = TestInstanceId::new(&caps[1], &caps[2]);
+                tests
+                    .insert_unique(ActualOutcome {
+                        id,
+                        result: CheckResult::Timeout,
                     })
                     .unwrap();
             } else if let Some(caps) = LEAK_RE.captures(line) {
@@ -618,6 +651,11 @@ fn verify_summary(
 }
 
 #[track_caller]
+pub fn check_run_output(stderr: &[u8], properties: u64) {
+    check_run_output_impl(stderr, None, properties);
+}
+
+#[track_caller]
 pub fn check_run_output_with_junit(stderr: &[u8], junit_path: &Utf8Path, properties: u64) {
     check_run_output_impl(stderr, Some(junit_path), properties);
 }
@@ -631,6 +669,9 @@ fn check_run_output_impl(stderr: &[u8], junit_path: Option<&Utf8Path>, propertie
     // Build the expected and actual test result maps.
     let expected = ExpectedTestResults::new(properties);
     let actual = ActualTestResults::parse(&output);
+
+    eprintln!("expected: {expected:?}");
+    eprintln!("actual: {actual:?}");
 
     // Check that all expected tests appear (or don't appear) as required.
     verify_expected_in_actual(&expected, &actual, &output);
@@ -768,6 +809,14 @@ fn verify_expected_in_junit(
                     CheckResult::Abort => {
                         Some((quick_junit::NonSuccessKind::Failure, "test abort"))
                     }
+                    CheckResult::Timeout => {
+                        let timeout_kind = if properties & RunProperty::Benchmarks as u64 != 0 {
+                            "benchmark timeout"
+                        } else {
+                            "test timeout"
+                        };
+                        Some((quick_junit::NonSuccessKind::Failure, timeout_kind))
+                    }
                 };
 
                 match (expected_junit, &actual.non_success) {
@@ -793,12 +842,12 @@ fn verify_expected_in_junit(
                             );
                         }
 
-                        // For Fail/FailLeak, we check that the type string
-                        // contains the pattern (since we don't know the exact
-                        // exit code). For others, we check an exact match.
+                        // For Fail/FailLeak/Timeout, we check that the type
+                        // string contains the pattern (since we don't know the
+                        // exact exit code). For others, we check an exact match.
                         let type_matches = if matches!(
                             expected_outcome.result,
-                            CheckResult::Fail | CheckResult::FailLeak
+                            CheckResult::Fail | CheckResult::FailLeak | CheckResult::Timeout
                         ) {
                             actual_type.contains(expected_type_pattern)
                                 && (expected_outcome.result == CheckResult::FailLeak)

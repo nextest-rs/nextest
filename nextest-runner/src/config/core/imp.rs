@@ -6,10 +6,11 @@ use crate::{
     config::{
         core::ConfigExperimental,
         elements::{
-            ArchiveConfig, CustomTestGroup, DefaultJunitImpl, GlobalTimeout, Inherits, JunitConfig,
-            JunitImpl, JunitSettings, LeakTimeout, MaxFail, RetryPolicy, SlowTimeout, TestGroup,
-            TestGroupConfig, TestThreads, ThreadsRequired, deserialize_fail_fast,
-            deserialize_leak_timeout, deserialize_retry_policy, deserialize_slow_timeout,
+            ArchiveConfig, BenchConfig, CustomTestGroup, DefaultBenchConfig, DefaultJunitImpl,
+            GlobalTimeout, Inherits, JunitConfig, JunitImpl, JunitSettings, LeakTimeout, MaxFail,
+            RetryPolicy, SlowTimeout, TestGroup, TestGroupConfig, TestThreads, ThreadsRequired,
+            deserialize_fail_fast, deserialize_leak_timeout, deserialize_retry_policy,
+            deserialize_slow_timeout,
         },
         overrides::{
             CompiledByProfile, CompiledData, CompiledDefaultFilter, DeserializedOverride,
@@ -30,6 +31,7 @@ use crate::{
     list::TestList,
     platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
+    run_mode::NextestRunMode,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{
@@ -999,6 +1001,15 @@ macro_rules! profile_field {
             .find_map(|p| p.$nested.$field)
             .unwrap_or($eval_prof.default_profile.$nested.$field)
     };
+    // Variant for method calls with arguments.
+    ($eval_prof:ident.$method:ident($($arg:expr),*)) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$method($($arg),*))
+            .unwrap_or_else(|| $eval_prof.default_profile.$method($($arg),*))
+    };
 }
 macro_rules! profile_field_from_ref {
     ($eval_prof:ident.$field:ident.$ref_func:ident()) => {
@@ -1084,13 +1095,13 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     }
 
     /// Returns the time after which tests are treated as slow for this profile.
-    pub fn slow_timeout(&self) -> SlowTimeout {
-        profile_field!(self.slow_timeout)
+    pub fn slow_timeout(&self, run_mode: NextestRunMode) -> SlowTimeout {
+        profile_field!(self.slow_timeout(run_mode))
     }
 
     /// Returns the time after which we should stop running tests.
-    pub fn global_timeout(&self) -> GlobalTimeout {
-        profile_field!(self.global_timeout)
+    pub fn global_timeout(&self, run_mode: NextestRunMode) -> GlobalTimeout {
+        profile_field!(self.global_timeout(run_mode))
     }
 
     /// Returns the time after which a child process that hasn't closed its handles is marked as
@@ -1140,16 +1151,21 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     }
 
     /// Returns settings for individual tests.
-    pub fn settings_for(&self, query: &TestQuery<'_>) -> TestSettings<'_> {
-        TestSettings::new(self, query)
+    pub fn settings_for(
+        &self,
+        run_mode: NextestRunMode,
+        query: &TestQuery<'_>,
+    ) -> TestSettings<'_> {
+        TestSettings::new(self, run_mode, query)
     }
 
     /// Returns override settings for individual tests, with sources attached.
     pub(crate) fn settings_with_source_for(
         &self,
+        run_mode: NextestRunMode,
         query: &TestQuery<'_>,
     ) -> TestSettings<'_, SettingSource<'_>> {
-        TestSettings::new(self, query)
+        TestSettings::new(self, run_mode, query)
     }
 
     /// Returns the JUnit configuration for this profile.
@@ -1491,6 +1507,7 @@ pub(in crate::config) struct DefaultProfileImpl {
     scripts: Vec<DeserializedProfileScriptConfig>,
     junit: DefaultJunitImpl,
     archive: ArchiveConfig,
+    bench: DefaultBenchConfig,
     inherits: Inherits,
 }
 
@@ -1536,6 +1553,9 @@ impl DefaultProfileImpl {
             scripts: p.scripts,
             junit: DefaultJunitImpl::for_default_profile(p.junit),
             archive: p.archive.expect("archive present in default profile"),
+            bench: DefaultBenchConfig::for_default_profile(
+                p.bench.expect("bench present in default profile"),
+            ),
             inherits: Inherits::new(p.inherits),
         }
     }
@@ -1554,6 +1574,20 @@ impl DefaultProfileImpl {
 
     pub(in crate::config) fn setup_scripts(&self) -> &[DeserializedProfileScriptConfig] {
         &self.scripts
+    }
+
+    pub(in crate::config) fn slow_timeout(&self, run_mode: NextestRunMode) -> SlowTimeout {
+        match run_mode {
+            NextestRunMode::Test => self.slow_timeout,
+            NextestRunMode::Benchmark => self.bench.slow_timeout,
+        }
+    }
+
+    pub(in crate::config) fn global_timeout(&self, run_mode: NextestRunMode) -> GlobalTimeout {
+        match run_mode {
+            NextestRunMode::Test => self.global_timeout,
+            NextestRunMode::Benchmark => self.bench.global_timeout,
+        }
     }
 }
 
@@ -1600,6 +1634,8 @@ pub(in crate::config) struct CustomProfileImpl {
     #[serde(default)]
     archive: Option<ArchiveConfig>,
     #[serde(default)]
+    bench: Option<BenchConfig>,
+    #[serde(default)]
     inherits: Option<String>,
 }
 
@@ -1611,6 +1647,23 @@ impl CustomProfileImpl {
 
     pub(in crate::config) fn default_filter(&self) -> Option<&str> {
         self.default_filter.as_deref()
+    }
+
+    pub(in crate::config) fn slow_timeout(&self, run_mode: NextestRunMode) -> Option<SlowTimeout> {
+        match run_mode {
+            NextestRunMode::Test => self.slow_timeout,
+            NextestRunMode::Benchmark => self.bench.as_ref().and_then(|b| b.slow_timeout),
+        }
+    }
+
+    pub(in crate::config) fn global_timeout(
+        &self,
+        run_mode: NextestRunMode,
+    ) -> Option<GlobalTimeout> {
+        match run_mode {
+            NextestRunMode::Test => self.global_timeout,
+            NextestRunMode::Benchmark => self.bench.as_ref().and_then(|b| b.global_timeout),
+        }
     }
 
     pub(in crate::config) fn inherits(&self) -> Option<&str> {

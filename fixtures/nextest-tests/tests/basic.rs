@@ -175,6 +175,11 @@ fn test_cargo_env_vars() {
         Ok("process-per-test"),
         "NEXTEST_EXECUTION_MODE set to process-per-test"
     );
+    assert_eq!(
+        std::env::var("NEXTEST_RUN_MODE").as_deref(),
+        Ok("test"),
+        "NEXTEST_RUN_MODE set to test"
+    );
 
     // Assert NEXTEST_ATTEMPT is defined and is a positive integer
     assert!(check_env("NEXTEST_ATTEMPT").parse::<usize>().is_ok());
