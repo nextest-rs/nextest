@@ -122,7 +122,7 @@ fn test_timeout_with_retries() -> Result<()> {
 
     let (instance_statuses, _run_stats) = execute_collect(runner);
 
-    // With retries and on-timeout=pass, timed out tests should not be retried
+    // With retries and on-timeout=pass, timed out tests should not be retried.
     for test_name in [
         "test_slow_timeout",
         "test_slow_timeout_2",
@@ -148,7 +148,8 @@ fn test_timeout_with_retries() -> Result<()> {
                     status.result,
                     ExecutionResult::Timeout {
                         result: SlowTimeoutResult::Pass
-                    }
+                    },
+                    "{test_name} should have timed out with on-timeout=pass"
                 );
             }
         };

@@ -337,7 +337,8 @@ fn test_slow_timeout() {
 #[test]
 #[ignore]
 fn test_slow_timeout_2() {
-    // There's a per-test override for the with-termination profile for this test: it is set to 1 second.
+    // There's a per-test override for the with-termination profile for this
+    // test: it is set to 1 second.
     std::thread::sleep(std::time::Duration::from_millis(1500));
 }
 
@@ -345,9 +346,9 @@ fn test_slow_timeout_2() {
 #[test]
 #[ignore]
 fn test_slow_timeout_subprocess() {
-    // Set a time greater than 5 seconds (that's the maximum amount the with_termination tests
-    // thinks tests should run for). Without job objects on Windows, the test wouldn't return until
-    // the sleep command exits.
+    // Set a time greater than 5 seconds (that's the maximum amount the
+    // with_termination tests thinks tests should run for). Without job objects
+    // on Windows, the test wouldn't return until the sleep command exits.
     let mut cmd = sleep_cmd(15);
     cmd.output().unwrap();
 }
@@ -359,8 +360,8 @@ fn test_flaky_slow_timeout_mod_3() {
     if nextest_attempt % 3 != 0 {
         panic!("Failed because attempt {} % 3 != 0", nextest_attempt)
     }
-    // The timeout for the with-timeout-success profile is set to 2 seconds.
-    std::thread::sleep(std::time::Duration::from_secs(4));
+    // The timeout for the with-timeout-retries-success profile is set to 1 second.
+    std::thread::sleep(std::time::Duration::from_millis(1500));
 }
 
 #[test]
