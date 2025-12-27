@@ -39,7 +39,7 @@ regex-syntax = { version = "0.8.8" }
 serde_core = { version = "1.0.228", features = ["alloc"] }
 serde_json = { version = "1.0.145", features = ["unbounded_depth"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
-target-spec = { version = "3.5.4", default-features = false, features = ["custom", "summaries"] }
+target-spec = { version = "3.5.5", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.5", default-features = false, features = ["fixtures"] }
 tokio = { version = "1.48.0", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 tracing-core = { version = "0.1.36" }
