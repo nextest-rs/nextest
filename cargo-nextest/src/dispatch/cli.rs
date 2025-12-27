@@ -1345,7 +1345,8 @@ impl NtrOpts {
             &self.run_opts.reporter_opts,
             cli_args,
             output_writer,
-        )
+        )?;
+        Ok(0)
     }
 }
 
