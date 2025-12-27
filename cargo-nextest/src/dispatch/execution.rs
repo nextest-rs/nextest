@@ -578,7 +578,7 @@ impl App {
         reporter_opts: &ReporterOpts,
         cli_args: Vec<String>,
         output_writer: &mut OutputWriter,
-    ) -> Result<i32> {
+    ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
         let (version_only_config, config) = self.base.load_config(&pcx)?;
         let profile = self.base.load_profile(&config)?;
@@ -721,7 +721,7 @@ impl App {
         // Make the runner.
         let Some(runner_builder) = runner_builder else {
             // This means --no-run was passed in. Exit.
-            return Ok(0);
+            return Ok(());
         };
         let runner = runner_builder.build(
             &test_list,
@@ -752,12 +752,12 @@ impl App {
             .check_version_config_final(version_only_config.nextest_version())?;
 
         match run_stats.summarize_final() {
-            FinalRunStats::Success => Ok(0),
+            FinalRunStats::Success => Ok(()),
             FinalRunStats::NoTestsRun => match runner_opts.no_tests {
-                Some(NoTestsBehavior::Pass) => Ok(0),
+                Some(NoTestsBehavior::Pass) => Ok(()),
                 Some(NoTestsBehavior::Warn) => {
                     warn!("no tests to run");
-                    Ok(0)
+                    Ok(())
                 }
                 Some(NoTestsBehavior::Fail) => Err(ExpectedError::NoTestsRun { is_default: false }),
                 None => Err(ExpectedError::NoTestsRun { is_default: true }),
