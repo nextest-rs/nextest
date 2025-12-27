@@ -119,7 +119,13 @@ impl VersionOnlyConfig {
                 ConfigParseErrorKind::VersionOnlyReadError(error),
             )
         })?;
-        let toml_de = toml::de::Deserializer::new(&toml_str);
+        let toml_de = toml::de::Deserializer::parse(&toml_str).map_err(|error| {
+            ConfigParseError::new(
+                config_file,
+                tool,
+                ConfigParseErrorKind::TomlParseError(Box::new(error)),
+            )
+        })?;
         let v: VersionOnlyDeserialize =
             serde_path_to_error::deserialize(toml_de).map_err(|error| {
                 ConfigParseError::new(
