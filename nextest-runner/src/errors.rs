@@ -93,6 +93,9 @@ pub enum ConfigParseErrorKind {
     /// An error occurred while building the config.
     #[error(transparent)]
     BuildError(Box<ConfigError>),
+    /// An error occurred while parsing the config into a table.
+    #[error(transparent)]
+    TomlParseError(Box<toml::de::Error>),
     #[error(transparent)]
     /// An error occurred while deserializing the config.
     DeserializeError(Box<serde_path_to_error::Error<ConfigError>>),
