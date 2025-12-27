@@ -210,6 +210,7 @@ fn test_timeout_with_flaky() -> Result<()> {
     match &instance_value.status {
         InstanceStatus::Skipped(_) => panic!("test_flaky_slow_timeout_mod_3 should have been run"),
         InstanceStatus::Finished(run_statuses) => {
+            eprintln!("test_flaky_slow_timeout_mod_3 run statuses: {run_statuses:#?}");
             assert!(
                 run_statuses.len() == 3,
                 "test_flaky_slow_timeout_mod_3 should have been run 3 times, was run {} times",
@@ -240,7 +241,7 @@ fn test_timeout_with_flaky() -> Result<()> {
                         last_status.result
                     );
                 }
-                _ => panic!("test_flaky_slow_timeout_mod_3 should be flaky"),
+                other => panic!("test_flaky_slow_timeout_mod_3 should be flaky, found {other:?}"),
             }
         }
     };
