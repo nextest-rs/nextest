@@ -7,6 +7,7 @@ use crate::{
     config::scripts::ScriptId,
     list::{OwnedTestInstanceId, Styles, TestInstanceId},
     reporter::events::{AbortStatus, StressIndex},
+    run_mode::NextestRunMode,
     write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -18,6 +19,8 @@ use unicode_width::UnicodeWidthChar;
 
 /// Utilities for pluralizing various words based on count or plurality.
 pub mod plural {
+    use crate::run_mode::NextestRunMode;
+
     /// Returns "were" if `plural` is true, otherwise "was".
     pub fn were_plural_if(plural: bool) -> &'static str {
         if plural { "were" } else { "was" }
@@ -32,14 +35,33 @@ pub mod plural {
         }
     }
 
-    /// Returns "test" if `count` is 1, otherwise "tests".
-    pub fn tests_str(count: usize) -> &'static str {
-        tests_plural_if(count != 1)
+    /// Returns:
+    ///
+    /// * If `mode` is `Test`: "test" if `count` is 1, otherwise "tests".
+    /// * If `mode` is `Benchmark`: "benchmark" if `count` is 1, otherwise "benchmarks".
+    pub fn tests_str(mode: NextestRunMode, count: usize) -> &'static str {
+        tests_plural_if(mode, count != 1)
     }
 
-    /// Returns "tests" if `plural` is true, otherwise "test".
-    pub fn tests_plural_if(plural: bool) -> &'static str {
-        if plural { "tests" } else { "test" }
+    /// Returns:
+    ///
+    /// * If `mode` is `Test`: "tests" if `plural` is true, otherwise "test".
+    /// * If `mode` is `Benchmark`: "benchmarks" if `plural` is true, otherwise "benchmark".
+    pub fn tests_plural_if(mode: NextestRunMode, plural: bool) -> &'static str {
+        match (mode, plural) {
+            (NextestRunMode::Test, true) => "tests",
+            (NextestRunMode::Test, false) => "test",
+            (NextestRunMode::Benchmark, true) => "benchmarks",
+            (NextestRunMode::Benchmark, false) => "benchmark",
+        }
+    }
+
+    /// Returns "tests" or "benchmarks" based on the run mode.
+    pub fn tests_plural(mode: NextestRunMode) -> &'static str {
+        match mode {
+            NextestRunMode::Test => "tests",
+            NextestRunMode::Benchmark => "benchmarks",
+        }
     }
 
     /// Returns "binary" if `count` is 1, otherwise "binaries".
@@ -702,16 +724,18 @@ unsafe extern "C" {
 /// Formats an interceptor (debugger or tracer) error message for too many tests.
 pub fn format_interceptor_too_many_tests(
     cli_opt_name: &str,
+    mode: NextestRunMode,
     test_count: usize,
     test_instances: &[OwnedTestInstanceId],
     list_styles: &Styles,
     count_style: Style,
 ) -> String {
     let mut msg = format!(
-        "--{} requires exactly one test, but {} {} were selected:",
+        "--{} requires exactly one {}, but {} {} were selected:",
         cli_opt_name,
+        plural::tests_plural_if(mode, false),
         test_count.style(count_style),
-        plural::tests_str(test_count)
+        plural::tests_str(mode, test_count)
     );
 
     for test_instance in test_instances {
@@ -725,7 +749,7 @@ pub fn format_interceptor_too_many_tests(
             msg,
             "\n  ... and {} more {}",
             remaining.style(count_style),
-            plural::tests_str(remaining)
+            plural::tests_str(mode, remaining)
         );
     }
 

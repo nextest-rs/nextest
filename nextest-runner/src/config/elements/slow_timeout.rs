@@ -102,7 +102,10 @@ pub enum SlowTimeoutResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{core::NextestConfig, utils::test_helpers::*};
+    use crate::{
+        config::{core::NextestConfig, utils::test_helpers::*},
+        run_mode::NextestRunMode,
+    };
     use camino_tempfile::tempdir;
     use indoc::indoc;
     use nextest_filtering::ParseContext;
@@ -313,7 +316,7 @@ mod tests {
                         .profile("default")
                         .expect("default profile should exist")
                         .apply_build_platforms(&build_platforms())
-                        .slow_timeout(),
+                        .slow_timeout(NextestRunMode::Test),
                     expected_default,
                 );
 
@@ -323,7 +326,7 @@ mod tests {
                             .profile("ci")
                             .expect("ci profile should exist")
                             .apply_build_platforms(&build_platforms())
-                            .slow_timeout(),
+                            .slow_timeout(NextestRunMode::Test),
                         expected_ci,
                     );
                 }
@@ -336,6 +339,149 @@ mod tests {
                     err_str.contains(expected_err_str),
                     "expected error string not found: {err_str}",
                 )
+            }
+        }
+    }
+
+    // Default test slow-timeout is 60 seconds.
+    const DEFAULT_TEST_SLOW_TIMEOUT: SlowTimeout = SlowTimeout {
+        period: Duration::from_secs(60),
+        terminate_after: None,
+        grace_period: Duration::from_secs(10),
+        on_timeout: SlowTimeoutResult::Fail,
+    };
+
+    /// Expected bench timeout: either a specific value or "very large" (default).
+    #[derive(Debug)]
+    enum ExpectedBenchTimeout {
+        /// Expect a specific timeout value.
+        Exact(SlowTimeout),
+        /// Expect the default very large timeout (>= VERY_LARGE, accounting for
+        /// leap years in humantime parsing).
+        VeryLarge,
+    }
+
+    #[test_case(
+        "",
+        DEFAULT_TEST_SLOW_TIMEOUT,
+        ExpectedBenchTimeout::VeryLarge
+        ; "empty config uses defaults for both modes"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
+            slow-timeout = { period = "10s", terminate-after = 2 }
+        "#},
+        SlowTimeout {
+            period: Duration::from_secs(10),
+            terminate_after: Some(NonZeroUsize::new(2).unwrap()),
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        },
+        // bench.slow-timeout should still be 30 years (default).
+        ExpectedBenchTimeout::VeryLarge
+        ; "slow-timeout does not affect bench.slow-timeout"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
+            bench.slow-timeout = { period = "20s", terminate-after = 3 }
+        "#},
+        // slow-timeout should still be 60s (default).
+        DEFAULT_TEST_SLOW_TIMEOUT,
+        ExpectedBenchTimeout::Exact(SlowTimeout {
+            period: Duration::from_secs(20),
+            terminate_after: Some(NonZeroUsize::new(3).unwrap()),
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        })
+        ; "bench.slow-timeout does not affect slow-timeout"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
+            slow-timeout = { period = "10s", terminate-after = 2 }
+            bench.slow-timeout = { period = "20s", terminate-after = 3 }
+        "#},
+        SlowTimeout {
+            period: Duration::from_secs(10),
+            terminate_after: Some(NonZeroUsize::new(2).unwrap()),
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        },
+        ExpectedBenchTimeout::Exact(SlowTimeout {
+            period: Duration::from_secs(20),
+            terminate_after: Some(NonZeroUsize::new(3).unwrap()),
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        })
+        ; "both slow-timeout and bench.slow-timeout can be set independently"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
+            bench.slow-timeout = "30s"
+        "#},
+        DEFAULT_TEST_SLOW_TIMEOUT,
+        ExpectedBenchTimeout::Exact(SlowTimeout {
+            period: Duration::from_secs(30),
+            terminate_after: None,
+            grace_period: Duration::from_secs(10),
+            on_timeout: SlowTimeoutResult::Fail,
+        })
+        ; "bench.slow-timeout string notation"
+    )]
+    fn bench_slowtimeout_is_independent(
+        config_contents: &str,
+        expected_test_timeout: SlowTimeout,
+        expected_bench_timeout: ExpectedBenchTimeout,
+    ) {
+        let workspace_dir = tempdir().unwrap();
+
+        let graph = temp_workspace(&workspace_dir, config_contents);
+
+        let pcx = ParseContext::new(&graph);
+
+        let nextest_config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &[][..],
+            &Default::default(),
+        )
+        .expect("config file should parse");
+
+        let profile = nextest_config
+            .profile("default")
+            .expect("default profile should exist")
+            .apply_build_platforms(&build_platforms());
+
+        assert_eq!(
+            profile.slow_timeout(NextestRunMode::Test),
+            expected_test_timeout,
+            "Test mode slow-timeout mismatch"
+        );
+
+        let actual_bench_timeout = profile.slow_timeout(NextestRunMode::Benchmark);
+        match expected_bench_timeout {
+            ExpectedBenchTimeout::Exact(expected) => {
+                assert_eq!(
+                    actual_bench_timeout, expected,
+                    "Benchmark mode slow-timeout mismatch"
+                );
+            }
+            ExpectedBenchTimeout::VeryLarge => {
+                // The default is "30y" which humantime parses accounting for
+                // leap years, so it is slightly larger than VERY_LARGE.
+                assert!(
+                    actual_bench_timeout.period >= SlowTimeout::VERY_LARGE.period,
+                    "Benchmark mode slow-timeout should be >= VERY_LARGE, got {:?}",
+                    actual_bench_timeout.period
+                );
+                assert_eq!(
+                    actual_bench_timeout.terminate_after, None,
+                    "Benchmark mode terminate_after should be None"
+                );
             }
         }
     }

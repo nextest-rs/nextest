@@ -4,6 +4,16 @@ expression: results
 snapshot_kind: text
 ---
 [
-    "simple_bench",
-    "benches::module::my_benchmark",
+    (
+        "simple_bench",
+        RustTestKind(
+            "bench",
+        ),
+    ),
+    (
+        "benches::module::my_benchmark",
+        RustTestKind(
+            "bench",
+        ),
+    ),
 ]

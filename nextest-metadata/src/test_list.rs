@@ -738,6 +738,12 @@ impl RustTestSuiteStatusSummary {
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct RustTestCaseSummary {
+    /// The kind of Rust test this is.
+    ///
+    /// This field is present since cargo-nextest 0.9.117. In earlier versions
+    /// it is set to null.
+    pub kind: Option<RustTestKind>,
+
     /// Returns true if this test is marked ignored.
     ///
     /// Ignored tests, if run, are executed with the `--ignored` argument.
@@ -747,6 +753,38 @@ pub struct RustTestCaseSummary {
     ///
     /// Only tests that match the filter are run.
     pub filter_match: FilterMatch,
+}
+
+/// The kind of Rust test something is.
+///
+/// Part of a [`RustTestCaseSummary`].
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct RustTestKind(pub Cow<'static, str>);
+
+impl RustTestKind {
+    /// Creates a new `RustTestKind` from a string.
+    #[inline]
+    pub fn new(kind: impl Into<Cow<'static, str>>) -> Self {
+        Self(kind.into())
+    }
+
+    /// Creates a new `RustTestKind` from a static string.
+    #[inline]
+    pub const fn new_const(kind: &'static str) -> Self {
+        Self(Cow::Borrowed(kind))
+    }
+
+    /// Returns the kind as a string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// The "test" kind, used for functions annotated with `#[test]`.
+    pub const TEST: Self = Self::new_const("test");
+
+    /// The "bench" kind, used for functions annotated with `#[bench]`.
+    pub const BENCH: Self = Self::new_const("bench");
 }
 
 /// An enum describing whether a test matches a filter.
@@ -775,6 +813,9 @@ impl FilterMatch {
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum MismatchReason {
+    /// Nextest is running in benchmark mode and this test is not a benchmark.
+    NotBenchmark,
+
     /// This test does not match the run-ignored option in the filter.
     Ignored,
 
@@ -796,6 +837,7 @@ pub enum MismatchReason {
 impl fmt::Display for MismatchReason {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            MismatchReason::NotBenchmark => write!(f, "is not a benchmark"),
             MismatchReason::Ignored => write!(f, "does not match the run-ignored option"),
             MismatchReason::String => write!(f, "does not match the provided string filters"),
             MismatchReason::Expression => {

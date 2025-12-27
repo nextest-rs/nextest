@@ -240,11 +240,35 @@ pub enum ConfigExperimental {
     SetupScripts,
     /// Enable support for wrapper scripts.
     WrapperScripts,
+    /// Enable support for benchmarks.
+    Benchmarks,
 }
 
 impl ConfigExperimental {
     fn known() -> impl Iterator<Item = Self> {
-        vec![Self::SetupScripts, Self::WrapperScripts].into_iter()
+        vec![Self::SetupScripts, Self::WrapperScripts, Self::Benchmarks].into_iter()
+    }
+
+    /// Returns the environment variable name for this feature, if any.
+    pub fn env_var(self) -> Option<&'static str> {
+        match self {
+            Self::SetupScripts => None,
+            Self::WrapperScripts => None,
+            Self::Benchmarks => Some("NEXTEST_EXPERIMENTAL_BENCHMARKS"),
+        }
+    }
+
+    /// Returns the set of experimental features enabled via environment variables.
+    pub fn from_env() -> std::collections::BTreeSet<Self> {
+        let mut set = std::collections::BTreeSet::new();
+        for feature in Self::known() {
+            if let Some(env_var) = feature.env_var()
+                && std::env::var(env_var).as_deref() == Ok("1")
+            {
+                set.insert(feature);
+            }
+        }
+        set
     }
 }
 
@@ -255,6 +279,7 @@ impl FromStr for ConfigExperimental {
         match s {
             "setup-scripts" => Ok(Self::SetupScripts),
             "wrapper-scripts" => Ok(Self::WrapperScripts),
+            "benchmarks" => Ok(Self::Benchmarks),
             _ => Err(()),
         }
     }
@@ -265,6 +290,7 @@ impl fmt::Display for ConfigExperimental {
         match self {
             Self::SetupScripts => write!(f, "setup-scripts"),
             Self::WrapperScripts => write!(f, "wrapper-scripts"),
+            Self::Benchmarks => write!(f, "benchmarks"),
         }
     }
 }
@@ -609,5 +635,33 @@ mod tests {
                 },
             }
         );
+    }
+
+    #[test]
+    fn test_from_env_benchmarks() {
+        // SAFETY:
+        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+        unsafe { std::env::set_var("NEXTEST_EXPERIMENTAL_BENCHMARKS", "1") };
+        assert!(ConfigExperimental::from_env().contains(&ConfigExperimental::Benchmarks));
+
+        // Other values do not enable the feature.
+        // SAFETY:
+        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+        unsafe { std::env::set_var("NEXTEST_EXPERIMENTAL_BENCHMARKS", "0") };
+        assert!(!ConfigExperimental::from_env().contains(&ConfigExperimental::Benchmarks));
+
+        // SAFETY:
+        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+        unsafe { std::env::set_var("NEXTEST_EXPERIMENTAL_BENCHMARKS", "true") };
+        assert!(!ConfigExperimental::from_env().contains(&ConfigExperimental::Benchmarks));
+
+        // SetupScripts and WrapperScripts have no env vars, so they are never
+        // enabled via from_env.
+        // SAFETY:
+        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+        unsafe { std::env::set_var("NEXTEST_EXPERIMENTAL_BENCHMARKS", "1") };
+        let set = ConfigExperimental::from_env();
+        assert!(!set.contains(&ConfigExperimental::SetupScripts));
+        assert!(!set.contains(&ConfigExperimental::WrapperScripts));
     }
 }

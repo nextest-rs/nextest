@@ -4,7 +4,7 @@
 use super::temp_project::TempProject;
 use camino::Utf8Path;
 use fixture_data::{
-    models::{CheckResult, RunProperty, TestSuiteFixtureProperty},
+    models::{CheckResult, RunProperty, TestCaseFixtureProperty, TestSuiteFixtureProperty},
     nextest_tests::EXPECTED_TEST_SUITES,
 };
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
@@ -201,6 +201,13 @@ impl ExpectedTestResults {
             for test in &fixture.test_cases {
                 let id = TestInstanceId::new(binary_id.as_str(), test.name);
 
+                if properties & RunProperty::Benchmarks as u64 != 0 {
+                    // We don't consider skipped tests while running benchmarks.
+                    if !test.has_property(TestCaseFixtureProperty::IsBenchmark) {
+                        continue;
+                    }
+                }
+
                 // Determine if this specific test should be filtered out.
                 if test.should_skip(properties) {
                     should_not_run.insert(id);
@@ -341,6 +348,9 @@ fn debug_run_properties(properties: u64) -> String {
     if properties & RunProperty::ExpectNoBinaries as u64 != 0 {
         ret.push_str("with-expect-no-binaries ");
     }
+    if properties & RunProperty::Benchmarks as u64 != 0 {
+        ret.push_str("benchmarks ");
+    }
     ret
 }
 
@@ -361,7 +371,7 @@ static ABORT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^\s+(?:ABORT|SIGSEGV|SIGABRT) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
 });
 static SUMMARY_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"Summary \[.*\] +(\d+) tests? run: (\d+) passed(?: \((\d+) leaky\))?,?(?: (\d+) failed(?: \((\d+) due to being leaky\))?,?)? (\d+) skipped").unwrap()
+    Regex::new(r"Summary \[.*\] +(\d+) (?:tests?|benchmarks?) run: (\d+) passed(?: \((\d+) leaky\))?,?(?: (\d+) failed(?: \((\d+) due to being leaky\))?,?)? (\d+) skipped").unwrap()
 });
 
 impl ActualTestResults {
@@ -615,6 +625,11 @@ fn verify_summary(
         debug_run_properties(properties),
         output
     );
+}
+
+#[track_caller]
+pub fn check_run_output(stderr: &[u8], properties: u64) {
+    check_run_output_impl(stderr, None, properties);
 }
 
 #[track_caller]
