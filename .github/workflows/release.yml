@@ -245,7 +245,7 @@ jobs:
       - name: Upload unsigned Windows artifact
         id: upload-unsigned-artifact
         if: endsWith(matrix.target, '-pc-windows-msvc')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: ${{ matrix.target }}-unsigned
           path: target/unsigned/cargo-nextest.exe
