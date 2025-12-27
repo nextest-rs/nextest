@@ -34,6 +34,7 @@ use nextest_runner::{
         TestOutputDisplay,
     },
     reuse_build::ReuseBuildInfo,
+    run_mode::NextestRunMode,
     runner::{
         DebuggerCommand, Interceptor, StressCondition, StressCount, TestRunnerBuilder,
         TracerCommand,
@@ -161,6 +162,15 @@ pub(super) enum Command {
     /// For more information, see <https://nexte.st/docs/running>.
     #[command(visible_alias = "r")]
     Run(Box<RunOpts>),
+    /// Build and run benchmarks (experimental)
+    ///
+    /// This command builds benchmark binaries and queries them for the benchmarks they contain,
+    /// then runs each benchmark **serially**.
+    ///
+    /// This is an experimental feature. To enable it, set the environment variable
+    /// `NEXTEST_EXPERIMENTAL_BENCHMARKS=1`.
+    #[command(visible_alias = "b")]
+    Bench(Box<BenchOpts>),
     /// Build and archive tests
     ///
     /// This command builds test binaries and archives them to a file. The archive can then be
@@ -297,6 +307,156 @@ pub(super) struct RunOpts {
 
     #[clap(flatten)]
     pub(super) reuse_build: ReuseBuildOpts,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct BenchOpts {
+    #[clap(flatten)]
+    pub(super) cargo_options: CargoOptions,
+
+    #[clap(flatten)]
+    pub(super) build_filter: TestBuildFilter,
+
+    #[clap(flatten)]
+    pub(super) runner_opts: BenchRunnerOpts,
+
+    /// Run benchmarks serially and do not capture output (always enabled).
+    ///
+    /// Benchmarks in nextest always run serially, so this flag is kept only for
+    /// compatibility and has no effect.
+    #[arg(
+        long,
+        name = "no-capture",
+        alias = "nocapture",
+        help_heading = "Runner options",
+        display_order = 100
+    )]
+    pub(super) no_capture: bool,
+
+    #[clap(flatten)]
+    pub(super) reporter_opts: BenchReporterOpts,
+    // Note: no reuse_build for benchmarks since archive extraction is not supported
+}
+
+/// Benchmark runner options.
+#[derive(Debug, Default, Args)]
+#[command(next_help_heading = "Runner options")]
+pub(super) struct BenchRunnerOpts {
+    /// Compile, but don't run benchmarks.
+    #[arg(long, name = "no-run")]
+    pub(super) no_run: bool,
+
+    /// Cancel benchmark run on the first failure.
+    #[arg(
+        long,
+        visible_alias = "ff",
+        name = "fail-fast",
+        // TODO: It would be nice to warn rather than error if fail-fast is used
+        // with no-run, so that this matches the other options like
+        // test-threads. But there seem to be issues with that: clap 4.5 doesn't
+        // appear to like `Option<bool>` very much. With `ArgAction::SetTrue` it
+        // always sets the value to false or true rather than leaving it unset.
+        conflicts_with = "no-run"
+    )]
+    fail_fast: bool,
+
+    /// Run all benchmarks regardless of failure.
+    #[arg(
+        long,
+        visible_alias = "nff",
+        name = "no-fail-fast",
+        conflicts_with = "no-run",
+        overrides_with = "fail-fast"
+    )]
+    no_fail_fast: bool,
+
+    /// Number of benchmarks that can fail before exiting run [possible
+    /// values: integer or "all"]
+    #[arg(
+        long,
+        name = "max-fail",
+        value_name = "N",
+        conflicts_with_all = &["no-run", "fail-fast", "no-fail-fast"],
+    )]
+    max_fail: Option<MaxFail>,
+
+    /// Behavior if there are no benchmarks to run [default: fail]
+    #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
+    pub(super) no_tests: Option<NoTestsBehavior>,
+
+    /// Stress testing options.
+    #[clap(flatten)]
+    pub(super) stress: StressOptions,
+
+    #[clap(flatten)]
+    pub(super) interceptor: InterceptorOpt,
+}
+
+impl BenchRunnerOpts {
+    pub(super) fn to_builder(&self, cap_strat: CaptureStrategy) -> Option<TestRunnerBuilder> {
+        if self.no_tests.is_some() && self.no_run {
+            warn!("ignoring --no-tests because --no-run is specified");
+        }
+
+        // ---
+
+        if self.no_run {
+            return None;
+        }
+        let mut builder = TestRunnerBuilder::default();
+        builder.set_capture_strategy(cap_strat);
+        if let Some(max_fail) = self.max_fail {
+            builder.set_max_fail(max_fail);
+            debug!(max_fail = ?max_fail, "set max fail");
+        } else if self.no_fail_fast {
+            builder.set_max_fail(MaxFail::from_fail_fast(false));
+            debug!("set max fail via from_fail_fast(false)");
+        } else if self.fail_fast {
+            builder.set_max_fail(MaxFail::from_fail_fast(true));
+            debug!("set max fail via from_fail_fast(true)");
+        }
+
+        // Benchmarks always run serially and use 1 test thread.
+        builder.set_test_threads(TestThreads::Count(1));
+
+        if let Some(condition) = self.stress.condition.as_ref() {
+            builder.set_stress_condition(condition.stress_condition());
+        }
+
+        builder.set_interceptor(self.interceptor.to_interceptor());
+
+        Some(builder)
+    }
+}
+
+/// Benchmark reporter options.
+#[derive(Debug, Default, Args)]
+#[command(next_help_heading = "Reporter options")]
+pub(super) struct BenchReporterOpts {
+    /// Show nextest progress in the specified manner.
+    ///
+    /// For benchmarks, the default is "counter" which shows the benchmark index
+    /// (e.g., "(1/10)") but no progress bar.
+    #[arg(long, env = "NEXTEST_SHOW_PROGRESS")]
+    show_progress: Option<ShowProgressOpt>,
+
+    /// Disable handling of input keys from the terminal.
+    ///
+    /// By default, when running a terminal, nextest accepts the `t` key to dump
+    /// test information. This flag disables that behavior.
+    #[arg(long, env = "NEXTEST_NO_INPUT_HANDLER", value_parser = BoolishValueParser::new())]
+    pub(super) no_input_handler: bool,
+}
+
+impl BenchReporterOpts {
+    pub(super) fn to_builder(&self, should_colorize: bool) -> ReporterBuilder {
+        let mut builder = ReporterBuilder::default();
+        builder.set_no_capture(true);
+        builder.set_colorize(should_colorize);
+        let show_progress = self.show_progress.unwrap_or(ShowProgressOpt::Auto);
+        builder.set_show_progress(show_progress.into());
+        builder
+    }
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum, Default)]
@@ -447,6 +607,7 @@ impl TestBuildFilter {
 
     pub(super) fn make_test_filter_builder(
         &self,
+        mode: NextestRunMode,
         filter_exprs: Vec<nextest_filtering::Filterset>,
     ) -> Result<TestFilterBuilder> {
         // Merge the test binary args into the patterns.
@@ -455,6 +616,7 @@ impl TestBuildFilter {
         self.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
 
         Ok(TestFilterBuilder::new(
+            mode,
             run_ignored.unwrap_or_default(),
             self.partition.clone(),
             patterns,
@@ -589,6 +751,7 @@ impl From<RunIgnoredOpt> for RunIgnored {
 impl CargoOptions {
     pub(super) fn compute_binary_list(
         &self,
+        cargo_command: &str,
         graph: &PackageGraph,
         manifest_path: Option<&Utf8Path>,
         output: OutputContext,
@@ -596,7 +759,7 @@ impl CargoOptions {
     ) -> Result<BinaryList> {
         // Don't use the manifest path from the graph to ensure that if the user cd's into a
         // particular crate and runs cargo nextest, then it behaves identically to cargo test.
-        let mut cargo_cli = CargoCli::new("test", manifest_path, output);
+        let mut cargo_cli = CargoCli::new(cargo_command, manifest_path, output);
 
         // Only build tests in the cargo test invocation, do not run them.
         cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
@@ -1282,6 +1445,24 @@ impl AppOpts {
                 )?;
                 Ok(0)
             }
+            Command::Bench(bench_opts) => {
+                let base = super::execution::BaseApp::new(
+                    output,
+                    ReuseBuildOpts::default(),
+                    bench_opts.cargo_options,
+                    self.common.config_opts,
+                    self.common.manifest_path,
+                    output_writer,
+                )?;
+                let app = super::execution::App::new(base, bench_opts.build_filter)?;
+                app.exec_bench(
+                    &bench_opts.runner_opts,
+                    &bench_opts.reporter_opts,
+                    cli_args,
+                    output_writer,
+                )?;
+                Ok(0)
+            }
             Command::Archive(archive_opts) => {
                 let app = super::execution::BaseApp::new(
                     output,
@@ -1354,6 +1535,7 @@ impl NtrOpts {
 mod tests {
     use super::*;
     use clap::Parser;
+    use nextest_runner::run_mode::NextestRunMode;
 
     #[test]
     fn test_argument_parsing() {
@@ -1453,6 +1635,20 @@ mod tests {
             // Test negative cargo build jobs
             "cargo nextest run --build-jobs -1",
             "cargo nextest run --build-jobs 1",
+            // ---
+            // Bench command
+            // ---
+            "cargo nextest bench",
+            "cargo nextest bench --no-run",
+            "cargo nextest bench --fail-fast",
+            "cargo nextest bench --no-fail-fast",
+            "cargo nextest bench --max-fail 3",
+            "cargo nextest bench --max-fail=all",
+            "cargo nextest bench --stress-count 4",
+            "cargo nextest bench --stress-count infinite",
+            "cargo nextest bench --stress-duration 60m",
+            "cargo nextest bench --debugger gdb",
+            "cargo nextest bench --tracer strace",
         ];
 
         let invalid: &[(&'static str, ErrorKind)] = &[
@@ -1566,6 +1762,42 @@ mod tests {
                 "cargo nextest run --debugger gdb --no-run",
                 ArgumentConflict,
             ),
+            // ---
+            // Bench command conflicts
+            // ---
+            ("cargo nextest bench --no-run --fail-fast", ArgumentConflict),
+            (
+                "cargo nextest bench --no-run --no-fail-fast",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest bench --no-run --max-fail=3",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest bench --max-fail=3 --no-fail-fast",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest bench --debugger gdb --stress-count 4",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest bench --debugger gdb --stress-duration 1h",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest bench --debugger gdb --no-run",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest bench --tracer strace --stress-count 4",
+                ArgumentConflict,
+            ),
+            // Invalid stress count: 0
+            ("cargo nextest bench --stress-count 0", ValueValidation),
+            // Invalid stress duration: 0
+            ("cargo nextest bench --stress-duration 0m", ValueValidation),
         ];
 
         // Unset all NEXTEST_ env vars because they can conflict with the try_parse_from below.
@@ -1640,7 +1872,8 @@ mod tests {
         fn get_test_filter_builder(cmd: &str) -> Result<TestFilterBuilder> {
             let app = TestCli::try_parse_from(shell_words::split(cmd).expect("valid command line"))
                 .unwrap_or_else(|_| panic!("{cmd} should have successfully parsed"));
-            app.build_filter.make_test_filter_builder(vec![])
+            app.build_filter
+                .make_test_filter_builder(NextestRunMode::Test, vec![])
         }
 
         let valid = &[
@@ -1734,9 +1967,14 @@ mod tests {
             let builder =
                 get_test_filter_builder(args).unwrap_or_else(|_| panic!("failed to parse {args}"));
 
-            let builder2 =
-                TestFilterBuilder::new(RunIgnored::Default, None, patterns.clone(), Vec::new())
-                    .unwrap_or_else(|_| panic!("failed to build TestFilterBuilder"));
+            let builder2 = TestFilterBuilder::new(
+                NextestRunMode::Test,
+                RunIgnored::Default,
+                None,
+                patterns.clone(),
+                Vec::new(),
+            )
+            .unwrap_or_else(|_| panic!("failed to build TestFilterBuilder"));
 
             assert_eq!(builder, builder2, "{args} matches expected");
         }

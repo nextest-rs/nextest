@@ -174,6 +174,7 @@ mod tests {
     use crate::{
         config::{core::NextestConfig, utils::test_helpers::*},
         errors::ConfigParseErrorKind,
+        run_mode::NextestRunMode,
     };
     use camino_tempfile::tempdir;
     use config::ConfigError;
@@ -659,7 +660,7 @@ mod tests {
             .profile("ci")
             .expect("ci profile is defined")
             .apply_build_platforms(&build_platforms());
-        let settings_for = profile.settings_for(&query);
+        let settings_for = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(
             settings_for.retries(),
             retries,

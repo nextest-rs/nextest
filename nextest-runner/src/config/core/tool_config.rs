@@ -56,10 +56,13 @@ impl FromStr for ToolConfigFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        core::{NextestConfig, NextestVersionConfig, NextestVersionReq, VersionOnlyConfig},
-        elements::{RetryPolicy, TestGroup},
-        utils::test_helpers::*,
+    use crate::{
+        config::{
+            core::{NextestConfig, NextestVersionConfig, NextestVersionReq, VersionOnlyConfig},
+            elements::{RetryPolicy, TestGroup},
+            utils::test_helpers::*,
+        },
+        run_mode::NextestRunMode,
     };
     use camino_tempfile::tempdir;
     use camino_tempfile_ext::prelude::*;
@@ -255,32 +258,44 @@ mod tests {
         };
 
         assert_eq!(
-            default_profile.settings_for(&test_foo_query).retries(),
+            default_profile
+                .settings_for(NextestRunMode::Test, &test_foo_query)
+                .retries(),
             RetryPolicy::new_without_delay(20),
             "retries for test_foo/default profile"
         );
         assert_eq!(
-            default_profile.settings_for(&test_foo_query).test_group(),
+            default_profile
+                .settings_for(NextestRunMode::Test, &test_foo_query)
+                .test_group(),
             &test_group("foo"),
             "test_group for test_foo/default profile"
         );
         assert_eq!(
-            default_profile.settings_for(&test_bar_query).retries(),
+            default_profile
+                .settings_for(NextestRunMode::Test, &test_bar_query)
+                .retries(),
             RetryPolicy::new_without_delay(21),
             "retries for test_bar/default profile"
         );
         assert_eq!(
-            default_profile.settings_for(&test_bar_query).test_group(),
+            default_profile
+                .settings_for(NextestRunMode::Test, &test_bar_query)
+                .test_group(),
             &TestGroup::Global,
             "test_group for test_bar/default profile"
         );
         assert_eq!(
-            default_profile.settings_for(&test_baz_query).retries(),
+            default_profile
+                .settings_for(NextestRunMode::Test, &test_baz_query)
+                .retries(),
             RetryPolicy::new_without_delay(23),
             "retries for test_baz/default profile"
         );
         assert_eq!(
-            default_profile.settings_for(&test_quux_query).test_group(),
+            default_profile
+                .settings_for(NextestRunMode::Test, &test_quux_query)
+                .test_group(),
             &test_group("@tool:tool1:group1"),
             "test group for test_quux/default profile"
         );
@@ -291,17 +306,23 @@ mod tests {
             .apply_build_platforms(&build_platforms());
         assert_eq!(tool_profile.retries(), RetryPolicy::new_without_delay(12));
         assert_eq!(
-            tool_profile.settings_for(&test_foo_query).retries(),
+            tool_profile
+                .settings_for(NextestRunMode::Test, &test_foo_query)
+                .retries(),
             RetryPolicy::new_without_delay(25),
             "retries for test_foo/default profile"
         );
         assert_eq!(
-            tool_profile.settings_for(&test_bar_query).retries(),
+            tool_profile
+                .settings_for(NextestRunMode::Test, &test_bar_query)
+                .retries(),
             RetryPolicy::new_without_delay(24),
             "retries for test_bar/default profile"
         );
         assert_eq!(
-            tool_profile.settings_for(&test_baz_query).retries(),
+            tool_profile
+                .settings_for(NextestRunMode::Test, &test_baz_query)
+                .retries(),
             RetryPolicy::new_without_delay(22),
             "retries for test_baz/default profile"
         );
@@ -312,17 +333,23 @@ mod tests {
             .apply_build_platforms(&build_platforms());
         assert_eq!(tool2_profile.retries(), RetryPolicy::new_without_delay(18));
         assert_eq!(
-            tool2_profile.settings_for(&test_foo_query).retries(),
+            tool2_profile
+                .settings_for(NextestRunMode::Test, &test_foo_query)
+                .retries(),
             RetryPolicy::new_without_delay(26),
             "retries for test_foo/default profile"
         );
         assert_eq!(
-            tool2_profile.settings_for(&test_bar_query).retries(),
+            tool2_profile
+                .settings_for(NextestRunMode::Test, &test_bar_query)
+                .retries(),
             RetryPolicy::new_without_delay(26),
             "retries for test_bar/default profile"
         );
         assert_eq!(
-            tool2_profile.settings_for(&test_baz_query).retries(),
+            tool2_profile
+                .settings_for(NextestRunMode::Test, &test_baz_query)
+                .retries(),
             RetryPolicy::new_without_delay(26),
             "retries for test_baz/default profile"
         );

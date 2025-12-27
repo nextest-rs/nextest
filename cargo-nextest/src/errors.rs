@@ -8,13 +8,15 @@ use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{
+    config::core::ConfigExperimental,
     errors::*,
     helpers::{format_interceptor_too_many_tests, plural},
     list::OwnedTestInstanceId,
     redact::Redactor,
+    run_mode::NextestRunMode,
     runner::{DebuggerCommand, TracerCommand},
 };
-use owo_colors::OwoColorize;
+use owo_colors::{OwoColorize, Style};
 use semver::Version;
 use std::{error::Error, io, path::PathBuf, process::ExitStatus, string::FromUtf8Error};
 use swrite::{SWrite, swriteln};
@@ -218,35 +220,53 @@ pub enum ExpectedError {
     TestRunFailed,
     #[error("no tests to run")]
     NoTestsRun {
+        /// The run mode (test or benchmark).
+        mode: NextestRunMode,
         /// The no-tests-run error was chosen because it was the default (we show a hint in this
-        /// case)
+        /// case).
         is_default: bool,
     },
     #[error(
-        "--debugger requires exactly one test, but \
-         no tests were selected"
+        "--debugger requires exactly one {}, but \
+         no {} were selected",
+        plural::tests_plural_if(*mode, false),
+        plural::tests_plural(*mode)
     )]
-    DebuggerNoTests { debugger: DebuggerCommand },
+    DebuggerNoTests {
+        debugger: DebuggerCommand,
+        mode: NextestRunMode,
+    },
     #[error(
-        "--debugger requires exactly one test, but \
-         {test_count} tests were selected"
+        "--debugger requires exactly one {}, but \
+         {test_count} {} were selected",
+        plural::tests_plural_if(*mode, false),
+        plural::tests_str(*mode, *test_count)
     )]
     DebuggerTooManyTests {
         debugger: DebuggerCommand,
+        mode: NextestRunMode,
         test_count: usize,
         test_instances: Vec<OwnedTestInstanceId>,
     },
     #[error(
-        "--tracer requires exactly one test, but \
-         no tests were selected"
+        "--tracer requires exactly one {}, but \
+         no {} were selected",
+        plural::tests_plural_if(*mode, false),
+        plural::tests_plural(*mode)
     )]
-    TracerNoTests { tracer: TracerCommand },
+    TracerNoTests {
+        tracer: TracerCommand,
+        mode: NextestRunMode,
+    },
     #[error(
-        "--tracer requires exactly one test, but \
-         {test_count} tests were selected"
+        "--tracer requires exactly one {}, but \
+         {test_count} {} were selected",
+        plural::tests_plural_if(*mode, false),
+        plural::tests_str(*mode, *test_count)
     )]
     TracerTooManyTests {
         tracer: TracerCommand,
+        mode: NextestRunMode,
         test_count: usize,
         test_instances: Vec<OwnedTestInstanceId>,
     },
@@ -282,6 +302,11 @@ pub enum ExpectedError {
     ExperimentalFeatureNotEnabled {
         name: &'static str,
         var_name: &'static str,
+    },
+    #[error("experimental features not enabled in config")]
+    ConfigExperimentalFeaturesNotEnabled {
+        config_file: Utf8PathBuf,
+        missing: Vec<ConfigExperimental>,
     },
     #[error("filterset parse error")]
     FiltersetParseError {
@@ -503,7 +528,8 @@ impl ExpectedError {
             | Self::DebugExtractWriteError { .. } => NextestExitCode::WRITE_OUTPUT_ERROR,
             #[cfg(feature = "self-update")]
             Self::UpdateError { .. } => NextestExitCode::UPDATE_ERROR,
-            Self::ExperimentalFeatureNotEnabled { .. } => {
+            Self::ExperimentalFeatureNotEnabled { .. }
+            | Self::ConfigExperimentalFeaturesNotEnabled { .. } => {
                 NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED
             }
             Self::FiltersetParseError { .. } => NextestExitCode::INVALID_FILTERSET,
@@ -906,26 +932,35 @@ impl ExpectedError {
                 error!("test run failed");
                 None
             }
-            Self::NoTestsRun { is_default } => {
+            Self::NoTestsRun { mode, is_default } => {
                 let hint_str = if *is_default {
                     "\n(hint: use `--no-tests` to customize)"
                 } else {
                     ""
                 };
-                error!("no tests to run{hint_str}");
+                error!(
+                    "no {} to run{hint_str}",
+                    plural::tests_plural_if(*mode, true),
+                );
                 None
             }
-            Self::DebuggerNoTests { debugger: _ } => {
-                error!("--debugger requires exactly one test, but no tests were selected");
+            Self::DebuggerNoTests { debugger: _, mode } => {
+                error!(
+                    "--debugger requires exactly one {}, but no {} were selected",
+                    plural::tests_plural_if(*mode, false),
+                    plural::tests_plural(*mode)
+                );
                 None
             }
             Self::DebuggerTooManyTests {
                 debugger: _,
+                mode,
                 test_count,
                 test_instances,
             } => {
                 let msg = format_interceptor_too_many_tests(
                     "debugger",
+                    *mode,
                     *test_count,
                     test_instances,
                     &styles.list_styles,
@@ -934,17 +969,23 @@ impl ExpectedError {
                 error!("{}", msg);
                 None
             }
-            Self::TracerNoTests { tracer: _ } => {
-                error!("--tracer requires exactly one test, but no tests were selected");
+            Self::TracerNoTests { tracer: _, mode } => {
+                error!(
+                    "--tracer requires exactly one {}, but no {} were selected",
+                    plural::tests_plural_if(*mode, false),
+                    plural::tests_plural(*mode)
+                );
                 None
             }
             Self::TracerTooManyTests {
                 tracer: _,
+                mode,
                 test_count,
                 test_instances,
             } => {
                 let msg = format_interceptor_too_many_tests(
                     "tracer",
+                    *mode,
                     *test_count,
                     test_instances,
                     &styles.list_styles,
@@ -1010,6 +1051,16 @@ impl ExpectedError {
                 );
                 None
             }
+            Self::ConfigExperimentalFeaturesNotEnabled {
+                config_file,
+                missing,
+            } => {
+                error!(
+                    "{}",
+                    format_experimental_features_not_enabled(config_file, missing, styles.bold)
+                );
+                None
+            }
             Self::FiltersetParseError { all_errors } => {
                 for errors in all_errors {
                     for single_error in &errors.errors {
@@ -1069,5 +1120,83 @@ impl ExpectedError {
             );
             next_error = err.source();
         }
+    }
+}
+
+/// Formats the error message for `ConfigExperimentalFeaturesNotEnabled`.
+///
+/// This is extracted for testing purposes.
+pub(crate) fn format_experimental_features_not_enabled(
+    config_file: &Utf8PathBuf,
+    missing: &[ConfigExperimental],
+    bold: Style,
+) -> String {
+    if missing.len() == 1 {
+        let env_hint = if let Some(env_var) = missing[0].env_var() {
+            format!(", or set {}=1", env_var)
+        } else {
+            String::new()
+        };
+        format!(
+            "experimental feature not enabled: {}\n\
+             (hint: add to the {} list in {}{})",
+            missing[0].style(bold),
+            "experimental".style(bold),
+            config_file.style(bold),
+            env_hint,
+        )
+    } else {
+        format!(
+            "experimental features not enabled: {}\n\
+             (hint: add to the {} list in {})",
+            missing.iter().map(|f| f.style(bold)).join(", "),
+            "experimental".style(bold),
+            config_file.style(bold),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use insta::assert_snapshot;
+
+    #[test]
+    fn test_format_experimental_features_not_enabled() {
+        let config_file = Utf8PathBuf::from(".config/nextest.toml");
+        let style = Style::default();
+
+        // Single feature with env var shows the env var hint.
+        assert_snapshot!(
+            "single_with_env_var",
+            format_experimental_features_not_enabled(
+                &config_file,
+                &[ConfigExperimental::Benchmarks],
+                style,
+            )
+        );
+
+        // Single feature without env var does not show an env var hint.
+        assert_snapshot!(
+            "single_without_env_var",
+            format_experimental_features_not_enabled(
+                &config_file,
+                &[ConfigExperimental::SetupScripts],
+                style,
+            )
+        );
+
+        // Multiple features: plural form and no env var hint.
+        assert_snapshot!(
+            "multiple_features",
+            format_experimental_features_not_enabled(
+                &config_file,
+                &[
+                    ConfigExperimental::Benchmarks,
+                    ConfigExperimental::SetupScripts,
+                ],
+                style,
+            )
+        );
     }
 }

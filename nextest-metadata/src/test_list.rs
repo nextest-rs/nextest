@@ -813,6 +813,9 @@ impl FilterMatch {
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum MismatchReason {
+    /// Nextest is running in benchmark mode and this test is not a benchmark.
+    NotBenchmark,
+
     /// This test does not match the run-ignored option in the filter.
     Ignored,
 
@@ -834,6 +837,7 @@ pub enum MismatchReason {
 impl fmt::Display for MismatchReason {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            MismatchReason::NotBenchmark => write!(f, "is not a benchmark"),
             MismatchReason::Ignored => write!(f, "does not match the run-ignored option"),
             MismatchReason::String => write!(f, "does not match the provided string filters"),
             MismatchReason::Expression => {

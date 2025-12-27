@@ -1280,15 +1280,6 @@ impl UnitKind {
     }
 }
 
-impl fmt::Display for UnitKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            UnitKind::Script => write!(f, "script"),
-            UnitKind::Test => write!(f, "test"),
-        }
-    }
-}
-
 /// A response to an information request.
 #[derive(Clone, Debug)]
 pub enum InfoResponse<'a> {

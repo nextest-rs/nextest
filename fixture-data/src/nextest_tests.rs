@@ -135,7 +135,15 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
             "my-bench",
             BuildPlatform::Target,
             id_ord_map! {
-                TestCaseFixture::new("bench_add_two", TestCaseFixtureStatus::Pass),
+                TestCaseFixture::new("bench_add_two", TestCaseFixtureStatus::Pass)
+                    .with_property(TestCaseFixtureProperty::IsBenchmark),
+                TestCaseFixture::new("bench_ignored", TestCaseFixtureStatus::IgnoredPass)
+                    .with_property(TestCaseFixtureProperty::IsBenchmark),
+                TestCaseFixture::new("bench_slow_timeout", TestCaseFixtureStatus::IgnoredPass)
+                    .with_property(TestCaseFixtureProperty::IsBenchmark)
+                    .with_property(TestCaseFixtureProperty::BenchOverrideTimeout)
+                    .with_property(TestCaseFixtureProperty::BenchTermination)
+                    .with_property(TestCaseFixtureProperty::BenchIgnoresTestTimeout),
                 TestCaseFixture::new("tests::test_execute_bin", TestCaseFixtureStatus::Pass),
             },
         ),

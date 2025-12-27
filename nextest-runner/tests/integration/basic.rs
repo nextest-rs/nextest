@@ -26,6 +26,7 @@ use nextest_runner::{
             ExecutionDescription, ExecutionResult, FinalRunStats, RunStatsFailureKind, UnitKind,
         },
     },
+    run_mode::NextestRunMode,
     runner::TestRunnerBuilder,
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
@@ -82,6 +83,7 @@ fn test_timeout_with_retries() -> Result<()> {
     )
     .unwrap();
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Only,
         None,
         TestFilterPatterns::default(),
@@ -170,6 +172,7 @@ fn test_timeout_with_flaky() -> Result<()> {
     )
     .unwrap();
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Only,
         None,
         TestFilterPatterns::default(),
@@ -254,7 +257,7 @@ fn test_timeout_with_flaky() -> Result<()> {
 fn test_list_tests() -> Result<()> {
     test_init();
 
-    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
         NextestConfig::DEFAULT_PROFILE,
         &test_filter,
@@ -300,7 +303,7 @@ fn test_list_tests() -> Result<()> {
 fn test_run() -> Result<()> {
     test_init();
 
-    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
         NextestConfig::DEFAULT_PROFILE,
         &test_filter,
@@ -426,13 +429,14 @@ fn test_run_ignored() -> Result<()> {
 
     let pcx = ParseContext::new(&PACKAGE_GRAPH);
     let expr = Filterset::parse(
-        "not test(test_slow_timeout)".to_owned(),
+        "not test(test_slow_timeout) and not test(bench_slow_timeout)".to_owned(),
         &pcx,
         FiltersetKind::Test,
     )
     .unwrap();
 
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Only,
         None,
         TestFilterPatterns::default(),
@@ -471,7 +475,9 @@ fn test_run_ignored() -> Result<()> {
             .get(&expected.binary_id)
             .unwrap_or_else(|| panic!("unexpected binary ID {}", expected.binary_id));
         for fixture in &expected.test_cases {
-            if fixture.name.contains("test_slow_timeout") {
+            if fixture.name.contains("test_slow_timeout")
+                || fixture.name.contains("bench_slow_timeout")
+            {
                 // These tests are filtered out by the expression above.
                 continue;
             }
@@ -533,6 +539,7 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
     .expect("filterset is valid");
 
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Default,
         None,
         TestFilterPatterns::new(vec![
@@ -605,6 +612,7 @@ fn test_filter_expr_without_string_filters() -> Result<()> {
     .expect("filterset is valid");
 
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Default,
         None,
         TestFilterPatterns::default(),
@@ -638,6 +646,7 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
     test_init();
 
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Default,
         None,
         TestFilterPatterns::new(vec![
@@ -682,7 +691,7 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
 fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
     test_init();
 
-    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
         NextestConfig::DEFAULT_PROFILE,
         &test_filter,
@@ -855,6 +864,7 @@ fn test_termination() -> Result<()> {
     )
     .unwrap();
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Only,
         None,
         TestFilterPatterns::default(),
@@ -941,6 +951,7 @@ fn test_override_timeout_result() -> Result<()> {
     )
     .unwrap();
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Only,
         None,
         TestFilterPatterns::default(),

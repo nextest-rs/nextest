@@ -387,6 +387,7 @@ impl<'a> ExecutorContext<'a> {
         let command_mut = cmd.command_mut();
 
         command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
+        command_mut.env("NEXTEST_RUN_MODE", self.test_list.mode().to_string());
         command_mut.stdin(Stdio::null());
         super::os::set_process_group(command_mut);
 
@@ -703,6 +704,7 @@ impl<'a> ExecutorContext<'a> {
 
         // Test-related environment variables.
         command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
+        command_mut.env("NEXTEST_RUN_MODE", self.test_list.mode().to_string());
         command_mut.env(
             "NEXTEST_BINARY_ID",
             test.test_instance.suite_info.binary_id.as_str(),

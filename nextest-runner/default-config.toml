@@ -94,6 +94,30 @@ fail-fast = true
 # Example: slow-timeout = { period = "60s", on-timeout = "pass" }
 slow-timeout = { period = "60s", on-timeout = "fail" }
 
+# Treat a benchmark that takes longer than the configured 'period' as slow, and print a message.
+# See <https://nexte.st/docs/features/slow-tests> for more information.
+#
+# Optional: specify the parameter 'terminate-after' with a non-zero integer,
+# which will cause slow benchmarks to be terminated after the specified number of
+# periods have passed.
+# Example: bench.slow-timeout = { period = "60s", terminate-after = 2 }
+#
+# This is a separate configuration for benchmarks, because benchmarks are often
+# expected to take longer than tests.
+#
+# Defaults to 30 years, which is a large enough value to feel "infinite" without
+# running into overflows on various platforms.
+bench.slow-timeout = { period = "30y" }
+
+# Stop all benchmarks after the configured global timeout.
+#
+# This is a separate configuration for benchmarks, because benchmarks are often
+# expected to take longer than tests.
+#
+# Defaults to 30 years, which is a large enough value to feel "infinite" without
+# running into overflows on various platforms.
+bench.global-timeout = "30y"
+
 # Treat a test as leaky if after the process is shut down, standard output and standard error
 # aren't closed within this duration.
 #
@@ -104,7 +128,8 @@ slow-timeout = { period = "60s", on-timeout = "fail" }
 leak-timeout = "200ms"
 
 # Stop all tests after the configured global timeout.
-# Defaults to 30 year, which is a large enough value to feel "infinite" without
+#
+# Defaults to 30 years, which is a large enough value to feel "infinite" without
 # running into overflows on various platforms.
 global-timeout = "30y"
 

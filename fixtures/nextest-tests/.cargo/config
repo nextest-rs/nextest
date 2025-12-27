@@ -28,3 +28,8 @@ __NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_MAIN = { value = "test-FAILED-v
 __NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_BOTH = { value = "test-FAILED-value-set-by-main-config", force = true }
 __NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_NONE = { value = "test-FAILED-value-set-by-main-config" }
 __NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_FALSE = { value = "test-FAILED-value-set-by-main-config", force = true }
+
+[term]
+# Disable OSC 9;4 terminal integration for output reproducibility in case it's enabled globally.
+progress.when = "auto"
+progress.term-integration = false

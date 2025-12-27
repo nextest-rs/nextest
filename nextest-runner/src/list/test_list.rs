@@ -15,6 +15,7 @@ use crate::{
     indenter::indented,
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
     reuse_build::PathMapper,
+    run_mode::NextestRunMode,
     runner::Interceptor,
     target_runner::{PlatformRunner, TargetRunner},
     test_command::{LocalExecuteContext, TestCommand, TestCommandPhase},
@@ -205,6 +206,11 @@ pub struct SkipCounts {
     /// The number of skipped tests.
     pub skipped_tests: usize,
 
+    /// The number of tests skipped because they are not benchmarks.
+    ///
+    /// This is used when running in benchmark mode.
+    pub skipped_tests_non_benchmark: usize,
+
     /// The number of tests skipped due to not being in the default set.
     pub skipped_tests_default_filter: usize,
 
@@ -219,6 +225,7 @@ pub struct SkipCounts {
 #[derive(Clone, Debug)]
 pub struct TestList<'g> {
     test_count: usize,
+    mode: NextestRunMode,
     rust_build_meta: RustBuildMeta<TestListState>,
     rust_suites: IdOrdMap<RustTestSuite<'g>>,
     workspace_root: Utf8PathBuf,
@@ -316,6 +323,7 @@ impl<'g> TestList<'g> {
 
         Ok(Self {
             rust_suites,
+            mode: filter.mode(),
             workspace_root,
             env,
             rust_build_meta,
@@ -374,6 +382,7 @@ impl<'g> TestList<'g> {
 
         Ok(Self {
             rust_suites,
+            mode: filter.mode(),
             workspace_root,
             env,
             rust_build_meta,
@@ -388,6 +397,11 @@ impl<'g> TestList<'g> {
         self.test_count
     }
 
+    /// Returns the mode nextest is running in.
+    pub fn mode(&self) -> NextestRunMode {
+        self.mode
+    }
+
     /// Returns the Rust build-related metadata for this test list.
     pub fn rust_build_meta(&self) -> &RustBuildMeta<TestListState> {
         &self.rust_build_meta
@@ -396,10 +410,17 @@ impl<'g> TestList<'g> {
     /// Returns the total number of skipped tests.
     pub fn skip_counts(&self) -> &SkipCounts {
         self.skip_counts.get_or_init(|| {
+            let mut skipped_tests_non_benchmark = 0;
             let mut skipped_tests_default_filter = 0;
             let skipped_tests = self
                 .iter_tests()
                 .filter(|instance| match instance.test_info.filter_match {
+                    FilterMatch::Mismatch {
+                        reason: MismatchReason::NotBenchmark,
+                    } => {
+                        skipped_tests_non_benchmark += 1;
+                        true
+                    }
                     FilterMatch::Mismatch {
                         reason: MismatchReason::DefaultFilter,
                     } => {
@@ -429,6 +450,7 @@ impl<'g> TestList<'g> {
 
             SkipCounts {
                 skipped_tests,
+                skipped_tests_non_benchmark,
                 skipped_tests_default_filter,
                 skipped_binaries,
                 skipped_binaries_default_filter,
@@ -557,6 +579,7 @@ impl<'g> TestList<'g> {
     pub(crate) fn empty() -> Self {
         Self {
             test_count: 0,
+            mode: NextestRunMode::Test,
             workspace_root: Utf8PathBuf::new(),
             rust_build_meta: RustBuildMeta::empty(),
             env: EnvironmentMap::empty(),
@@ -614,18 +637,14 @@ impl<'g> TestList<'g> {
         // based on one doesn't affect the other.
         let mut non_ignored_filter = filter.build();
         for (test_name, kind) in Self::parse(&test_binary.binary_id, non_ignored.as_ref())? {
+            let filter_match =
+                non_ignored_filter.filter_match(&test_binary, test_name, &kind, ecx, bound, false);
             test_cases.insert_overwrite(RustTestCase {
                 name: test_name.into(),
                 test_info: RustTestCaseSummary {
                     kind: Some(kind),
                     ignored: false,
-                    filter_match: non_ignored_filter.filter_match(
-                        &test_binary,
-                        test_name,
-                        ecx,
-                        bound,
-                        false,
-                    ),
+                    filter_match,
                 },
             });
         }
@@ -636,18 +655,14 @@ impl<'g> TestList<'g> {
             // * just ignored tests if --ignored is passed in
             // * all tests, both ignored and non-ignored, if --ignored is not passed in
             // Adding ignored tests after non-ignored ones makes everything resolve correctly.
+            let filter_match =
+                ignored_filter.filter_match(&test_binary, test_name, &kind, ecx, bound, true);
             test_cases.insert_overwrite(RustTestCase {
                 name: test_name.into(),
                 test_info: RustTestCaseSummary {
                     kind: Some(kind),
                     ignored: true,
-                    filter_match: ignored_filter.filter_match(
-                        &test_binary,
-                        test_name,
-                        ecx,
-                        bound,
-                        true,
-                    ),
+                    filter_match,
                 },
             });
         }
@@ -835,10 +850,11 @@ pub struct TestPriorityQueue<'a> {
 
 impl<'a> TestPriorityQueue<'a> {
     fn new(test_list: &'a TestList<'a>, profile: &'a EvaluatableProfile<'a>) -> Self {
+        let mode = test_list.mode();
         let mut tests = test_list
             .iter_tests()
             .map(|instance| {
-                let settings = profile.settings_for(&instance.to_test_query());
+                let settings = profile.settings_for(mode, &instance.to_test_query());
                 TestInstanceWithSettings { instance, settings }
             })
             .collect::<Vec<_>>();
@@ -1209,6 +1225,12 @@ impl<'a> TestInstance<'a> {
         if self.test_info.ignored {
             cli.push("--ignored");
         }
+        match test_list.mode() {
+            NextestRunMode::Test => {}
+            NextestRunMode::Benchmark => {
+                cli.push("--bench");
+            }
+        }
         cli.extend(extra_args.iter().map(String::as_str));
 
         cli
@@ -1418,6 +1440,7 @@ mod tests {
         let cx = ParseContext::new(&PACKAGE_GRAPH_FIXTURE);
 
         let test_filter = TestFilterBuilder::new(
+            NextestRunMode::Test,
             RunIgnored::Default,
             None,
             TestFilterPatterns::default(),

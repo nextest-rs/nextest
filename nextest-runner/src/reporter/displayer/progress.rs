@@ -10,6 +10,7 @@ use crate::{
         events::*,
         helpers::{Styles, print_lines_in_chunks},
     },
+    run_mode::NextestRunMode,
 };
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::RustBinaryId;
@@ -158,6 +159,7 @@ impl RunningTest {
 #[derive(Debug)]
 pub(super) struct ProgressBarState {
     bar: ProgressBar,
+    mode: NextestRunMode,
     stats: RunStats,
     running: usize,
     max_progress_running: MaxProgressRunning,
@@ -187,6 +189,7 @@ pub(super) struct ProgressBarState {
 
 impl ProgressBarState {
     pub(super) fn new(
+        mode: NextestRunMode,
         test_count: usize,
         progress_chars: &str,
         max_progress_running: MaxProgressRunning,
@@ -221,6 +224,7 @@ impl ProgressBarState {
 
         Self {
             bar,
+            mode,
             stats: RunStats::default(),
             running: 0,
             max_progress_running,
@@ -292,7 +296,7 @@ impl ProgressBarState {
                 msg.push_str(&format!(
                     "\n             ... and {} more {} running",
                     overflow_count.style(styles.count),
-                    plural::tests_str(overflow_count),
+                    plural::tests_str(self.mode, overflow_count),
                 ));
                 count += 1;
             }

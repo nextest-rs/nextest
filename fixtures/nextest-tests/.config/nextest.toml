@@ -5,7 +5,7 @@
 nextest-version = { required = "0.9.54", recommended = "0.9.56" }
 
 # This must be on one line for test_setup_scripts_not_enabled to work.
-experimental = ["setup-scripts", "wrapper-scripts"]
+experimental = ["benchmarks", "setup-scripts", "wrapper-scripts"]
 
 [profile.default]
 # disable fail-fast to ensure a deterministic test run
@@ -103,6 +103,25 @@ slow-timeout = { period = "500ms", terminate-after = 2, on-timeout = "fail" }
 [profile.with-timeout-retries-success]
 slow-timeout = { period = "500ms", terminate-after = 2, on-timeout = "pass" }
 retries = 2
+
+# Profile where bench.slow-timeout causes benchmarks to time out.
+[profile.with-bench-termination]
+bench.slow-timeout = { period = "500ms", terminate-after = 2 }
+
+# Profile where slow-timeout is aggressive but bench.slow-timeout is not set.
+# Benchmarks should not time out because they don't use slow-timeout.
+[profile.with-test-termination-only]
+slow-timeout = { period = "500ms", terminate-after = 2 }
+
+# Profile to test per-benchmark overrides. The profile-level bench.slow-timeout
+# is very large (benchmarks would never time out), but the override sets a short
+# timeout for the specific benchmark.
+[profile.with-bench-override]
+bench.slow-timeout = { period = "30y" }
+
+[[profile.with-bench-override.overrides]]
+filter = "test(=bench_slow_timeout)"
+bench.slow-timeout = { period = "500ms", terminate-after = 2 }
 
 [profile.with-junit]
 retries = 2

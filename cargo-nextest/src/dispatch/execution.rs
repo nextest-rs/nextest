@@ -5,8 +5,8 @@
 
 use super::{
     cli::{
-        ArchiveBuildFilter, ListType, MessageFormat, MessageFormatOpts, NoTestsBehavior,
-        ReporterOpts, TestBuildFilter, TestRunnerOpts,
+        ArchiveBuildFilter, BenchReporterOpts, BenchRunnerOpts, ListType, MessageFormat,
+        MessageFormatOpts, NoTestsBehavior, ReporterOpts, TestBuildFilter, TestRunnerOpts,
     },
     helpers::{acquire_graph_data, build_filtersets, detect_build_platforms, runner_for_target},
 };
@@ -20,21 +20,24 @@ use nextest_filtering::{FiltersetKind, ParseContext};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
     config::core::{
-        EarlyProfile, EvaluatableProfile, NextestConfig, NextestVersionConfig, NextestVersionEval,
+        ConfigExperimental, EarlyProfile, EvaluatableProfile, NextestConfig, NextestVersionConfig,
+        NextestVersionEval,
     },
     double_spawn::DoubleSpawnInfo,
     errors::WriteTestListError,
+    helpers::plural,
     input::InputHandlerKind,
     list::{BinaryList, TestExecuteContext, TestList},
     platform::BuildPlatforms,
     redact::Redactor,
     reporter::{
-        events::{FinalRunStats, RunStatsFailureKind},
+        events::{FinalRunStats, RunStats, RunStatsFailureKind},
         structured,
     },
     reuse_build::{
         ArchiveReporter, PathMapper, ReuseBuildInfo, apply_archive_filters, archive_to_file,
     },
+    run_mode::NextestRunMode,
     runner::configure_handle_inheritance,
     show_config::{ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
@@ -46,6 +49,7 @@ use nextest_runner::{
 use owo_colors::OwoColorize;
 use semver::Version;
 use std::{
+    collections::BTreeSet,
     env::VarError,
     sync::{Arc, OnceLock},
 };
@@ -161,6 +165,7 @@ impl BaseApp {
     pub(super) fn load_config(
         &self,
         pcx: &ParseContext<'_>,
+        required_experimental: &BTreeSet<ConfigExperimental>,
     ) -> Result<(
         nextest_runner::config::core::VersionOnlyConfig,
         NextestConfig,
@@ -172,7 +177,27 @@ impl BaseApp {
             .make_version_only_config(&self.workspace_root)?;
         self.check_version_config_initial(version_only_config.nextest_version())?;
 
-        let experimental = version_only_config.experimental();
+        let mut experimental = ConfigExperimental::from_env();
+        experimental.extend(version_only_config.experimental());
+
+        // Check that all required experimental features are enabled.
+        let missing = required_experimental
+            .difference(&experimental)
+            .copied()
+            .collect::<Vec<_>>();
+
+        if !missing.is_empty() {
+            let config_file = self
+                .config_opts
+                .config_file
+                .clone()
+                .unwrap_or_else(|| Utf8PathBuf::from(".config/nextest.toml"));
+            return Err(ExpectedError::ConfigExperimentalFeaturesNotEnabled {
+                config_file,
+                missing,
+            });
+        }
+
         if !experimental.is_empty() {
             info!(
                 "experimental features enabled: {}",
@@ -353,10 +378,11 @@ impl BaseApp {
         })
     }
 
-    fn build_binary_list(&self) -> Result<Arc<BinaryList>> {
+    fn build_binary_list(&self, cargo_command: &str) -> Result<Arc<BinaryList>> {
         let binary_list = match self.reuse_build.binaries_metadata() {
             Some(m) => m.binary_list.clone(),
             None => Arc::new(self.cargo_opts.compute_binary_list(
+                cargo_command,
                 self.graph(),
                 self.manifest_path.as_deref(),
                 self.output,
@@ -462,13 +488,15 @@ impl App {
     ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
 
-        let (version_only_config, config) = self.base.load_config(&pcx)?;
+        let (version_only_config, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
         let profile = self.base.load_profile(&config)?;
         let filter_exprs =
             build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+        let test_filter_builder = self
+            .build_filter
+            .make_test_filter_builder(NextestRunMode::Test, filter_exprs)?;
 
-        let binary_list = self.base.build_binary_list()?;
+        let binary_list = self.base.build_binary_list("test")?;
 
         match list_type {
             ListType::BinariesOnly => {
@@ -524,7 +552,7 @@ impl App {
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
-        let (_, config) = self.base.load_config(&pcx)?;
+        let (_, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
         let profile = self.base.load_profile(&config)?;
 
         // Validate test groups before doing any other work.
@@ -538,9 +566,11 @@ impl App {
 
         let filter_exprs =
             build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+        let test_filter_builder = self
+            .build_filter
+            .make_test_filter_builder(NextestRunMode::Test, filter_exprs)?;
 
-        let binary_list = self.base.build_binary_list()?;
+        let binary_list = self.base.build_binary_list("test")?;
         let build_platforms = binary_list.rust_build_meta.build_platforms.clone();
 
         let double_spawn = self.base.load_double_spawn();
@@ -580,7 +610,7 @@ impl App {
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
-        let (version_only_config, config) = self.base.load_config(&pcx)?;
+        let (version_only_config, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
         let profile = self.base.load_profile(&config)?;
 
         // Construct this here so that errors are reported before the build step.
@@ -638,9 +668,11 @@ impl App {
 
         let filter_exprs =
             build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+        let test_filter_builder = self
+            .build_filter
+            .make_test_filter_builder(NextestRunMode::Test, filter_exprs)?;
 
-        let binary_list = self.base.build_binary_list()?;
+        let binary_list = self.base.build_binary_list("test")?;
         let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
         let double_spawn = self.base.load_double_spawn();
         let target_runner = self.base.load_runner(build_platforms);
@@ -662,10 +694,12 @@ impl App {
                 if let Some(debugger) = &runner_opts.interceptor.debugger {
                     return Err(ExpectedError::DebuggerNoTests {
                         debugger: debugger.clone(),
+                        mode: NextestRunMode::Test,
                     });
                 } else if let Some(tracer) = &runner_opts.interceptor.tracer {
                     return Err(ExpectedError::TracerNoTests {
                         tracer: tracer.clone(),
+                        mode: NextestRunMode::Test,
                     });
                 } else {
                     unreachable!("interceptor is active but neither debugger nor tracer is set");
@@ -683,12 +717,14 @@ impl App {
                 if let Some(debugger) = &runner_opts.interceptor.debugger {
                     return Err(ExpectedError::DebuggerTooManyTests {
                         debugger: debugger.clone(),
+                        mode: NextestRunMode::Test,
                         test_count,
                         test_instances,
                     });
                 } else if let Some(tracer) = &runner_opts.interceptor.tracer {
                     return Err(ExpectedError::TracerTooManyTests {
                         tracer: tracer.clone(),
+                        mode: NextestRunMode::Test,
                         test_count,
                         test_instances,
                     });
@@ -751,32 +787,164 @@ impl App {
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
 
-        match run_stats.summarize_final() {
-            FinalRunStats::Success => Ok(()),
-            FinalRunStats::NoTestsRun => match runner_opts.no_tests {
-                Some(NoTestsBehavior::Pass) => Ok(()),
-                Some(NoTestsBehavior::Warn) => {
-                    warn!("no tests to run");
-                    Ok(())
+        final_result(NextestRunMode::Test, run_stats, runner_opts.no_tests)
+    }
+
+    pub(super) fn exec_bench(
+        &self,
+        runner_opts: &BenchRunnerOpts,
+        reporter_opts: &BenchReporterOpts,
+        cli_args: Vec<String>,
+        output_writer: &mut OutputWriter,
+    ) -> Result<()> {
+        let pcx = ParseContext::new(self.base.graph());
+        let (version_only_config, config) = self.base.load_config(
+            &pcx,
+            &[ConfigExperimental::Benchmarks].into_iter().collect(),
+        )?;
+        let profile = self.base.load_profile(&config)?;
+
+        // Construct this here so that errors are reported before the build step.
+        let structured_reporter = structured::StructuredReporter::new();
+        // TODO: support message format for benchmarks.
+        // TODO: maybe support capture strategy for benchmarks?
+        let cap_strat = CaptureStrategy::None;
+
+        let should_colorize = self
+            .base
+            .output
+            .color
+            .should_colorize(supports_color::Stream::Stderr);
+
+        // Make the runner and reporter builders. Do them now so warnings are
+        // emitted before we start doing the build.
+        let runner_builder = runner_opts.to_builder(cap_strat);
+        let mut reporter_builder = reporter_opts.to_builder(should_colorize);
+        reporter_builder.set_verbose(self.base.output.verbose);
+
+        let filter_exprs =
+            build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
+        let test_filter_builder = self
+            .build_filter
+            .make_test_filter_builder(NextestRunMode::Benchmark, filter_exprs)?;
+
+        let binary_list = self.base.build_binary_list("bench")?;
+        let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
+        let double_spawn = self.base.load_double_spawn();
+        let target_runner = self.base.load_runner(build_platforms);
+
+        let profile = profile.apply_build_platforms(build_platforms);
+        let ctx = TestExecuteContext {
+            profile_name: profile.name(),
+            double_spawn,
+            target_runner,
+        };
+
+        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
+
+        // Validate interceptor mode requirements.
+        if runner_opts.interceptor.is_active() {
+            let test_count = test_list.run_count();
+
+            if test_count == 0 {
+                if let Some(debugger) = &runner_opts.interceptor.debugger {
+                    return Err(ExpectedError::DebuggerNoTests {
+                        debugger: debugger.clone(),
+                        mode: NextestRunMode::Benchmark,
+                    });
+                } else if let Some(tracer) = &runner_opts.interceptor.tracer {
+                    return Err(ExpectedError::TracerNoTests {
+                        tracer: tracer.clone(),
+                        mode: NextestRunMode::Benchmark,
+                    });
+                } else {
+                    unreachable!("interceptor is active but neither debugger nor tracer is set");
                 }
-                Some(NoTestsBehavior::Fail) => Err(ExpectedError::NoTestsRun { is_default: false }),
-                None => Err(ExpectedError::NoTestsRun { is_default: true }),
-            },
-            FinalRunStats::Cancelled {
-                reason: _,
-                kind: RunStatsFailureKind::SetupScript,
-            }
-            | FinalRunStats::Failed(RunStatsFailureKind::SetupScript) => {
-                Err(ExpectedError::setup_script_failed())
-            }
-            FinalRunStats::Cancelled {
-                reason: _,
-                kind: RunStatsFailureKind::Test { .. },
-            }
-            | FinalRunStats::Failed(RunStatsFailureKind::Test { .. }) => {
-                Err(ExpectedError::test_run_failed())
+            } else if test_count > 1 {
+                // Collect the first 8 matching test instances for the error
+                // message.
+                let test_instances: Vec<_> = test_list
+                    .iter_tests()
+                    .filter(|test| test.test_info.filter_match.is_match())
+                    .take(8)
+                    .map(|test| test.id().to_owned())
+                    .collect();
+
+                if let Some(debugger) = &runner_opts.interceptor.debugger {
+                    return Err(ExpectedError::DebuggerTooManyTests {
+                        debugger: debugger.clone(),
+                        mode: NextestRunMode::Benchmark,
+                        test_count,
+                        test_instances,
+                    });
+                } else if let Some(tracer) = &runner_opts.interceptor.tracer {
+                    return Err(ExpectedError::TracerTooManyTests {
+                        tracer: tracer.clone(),
+                        mode: NextestRunMode::Benchmark,
+                        test_count,
+                        test_instances,
+                    });
+                } else {
+                    unreachable!("interceptor is active but neither debugger nor tracer is set");
+                }
             }
         }
+
+        let output = output_writer.reporter_output();
+
+        let signal_handler = if runner_opts.interceptor.debugger.is_some() {
+            // Only debuggers use special signal handling. Tracers use standard
+            // handling.
+            SignalHandlerKind::DebuggerMode
+        } else {
+            SignalHandlerKind::Standard
+        };
+
+        let input_handler =
+            if reporter_opts.no_input_handler || runner_opts.interceptor.debugger.is_some() {
+                // Only debuggers disable the input handler.
+                InputHandlerKind::Noop
+            } else {
+                // This means that the input handler determines whether it
+                // should be enabled.
+                InputHandlerKind::Standard
+            };
+
+        // Make the runner.
+        let Some(runner_builder) = runner_builder else {
+            // This means --no-run was passed in. Exit.
+            return Ok(());
+        };
+        let runner = runner_builder.build(
+            &test_list,
+            &profile,
+            cli_args,
+            signal_handler,
+            input_handler,
+            double_spawn.clone(),
+            target_runner.clone(),
+        )?;
+
+        // Make the reporter.
+        let mut reporter = reporter_builder.build(
+            &test_list,
+            &profile,
+            &self.base.cargo_configs,
+            output,
+            structured_reporter,
+        );
+
+        // TODO: no_capture is always true for benchmarks for now.
+        configure_handle_inheritance(true)?;
+        let run_stats = runner.try_execute(|event| {
+            // Write and flush the event.
+            reporter.report_event(event)
+        })?;
+        reporter.finish();
+        self.base
+            .check_version_config_final(version_only_config.nextest_version())?;
+
+        final_result(NextestRunMode::Benchmark, run_stats, runner_opts.no_tests)
     }
 }
 
@@ -802,11 +970,11 @@ impl ArchiveApp {
     ) -> Result<()> {
         // Do format detection first so we fail immediately.
         let format = format.to_archive_format(output_file)?;
-        let binary_list = self.base.build_binary_list()?;
+        let binary_list = self.base.build_binary_list("test")?;
         let path_mapper = PathMapper::noop();
         let build_platforms = &binary_list.rust_build_meta.build_platforms;
         let pcx = ParseContext::new(self.base.graph());
-        let (_, config) = self.base.load_config(&pcx)?;
+        let (_, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
         let profile = self
             .base
             .load_profile(&config)?
@@ -871,5 +1039,44 @@ impl ArchiveApp {
         })?;
 
         Ok(())
+    }
+}
+
+fn final_result(
+    mode: NextestRunMode,
+    run_stats: RunStats,
+    no_tests: Option<NoTestsBehavior>,
+) -> Result<(), ExpectedError> {
+    match run_stats.summarize_final() {
+        FinalRunStats::Success => Ok(()),
+        FinalRunStats::NoTestsRun => match no_tests {
+            Some(NoTestsBehavior::Pass) => Ok(()),
+            Some(NoTestsBehavior::Warn) => {
+                warn!("no {} to run", plural::tests_plural(mode));
+                Ok(())
+            }
+            Some(NoTestsBehavior::Fail) => Err(ExpectedError::NoTestsRun {
+                mode,
+                is_default: false,
+            }),
+            None => Err(ExpectedError::NoTestsRun {
+                mode,
+                is_default: true,
+            }),
+        },
+        FinalRunStats::Cancelled {
+            reason: _,
+            kind: RunStatsFailureKind::SetupScript,
+        }
+        | FinalRunStats::Failed(RunStatsFailureKind::SetupScript) => {
+            Err(ExpectedError::setup_script_failed())
+        }
+        FinalRunStats::Cancelled {
+            reason: _,
+            kind: RunStatsFailureKind::Test { .. },
+        }
+        | FinalRunStats::Failed(RunStatsFailureKind::Test { .. }) => {
+            Err(ExpectedError::test_run_failed())
+        }
     }
 }

@@ -12,11 +12,13 @@ use crate::{
     list::TestInstanceId,
     reporter::{
         UnitErrorDescription,
+        displayer::DisplayUnitKind,
         events::{
             ExecutionDescription, ExecutionResult, FailureStatus, StressIndex, TestEvent,
             TestEventKind, UnitKind,
         },
     },
+    run_mode::NextestRunMode,
     test_output::{ChildExecutionOutput, ChildOutput},
 };
 use debug_ignore::DebugIgnore;
@@ -34,13 +36,15 @@ static PROCESS_FAILED_TO_START: &str = "(process failed to start)";
 
 #[derive(Clone, Debug)]
 pub(super) struct MetadataJunit<'cfg> {
+    mode: NextestRunMode,
     config: JunitConfig<'cfg>,
     test_suites: DebugIgnore<IndexMap<SuiteKey<'cfg>, TestSuite>>,
 }
 
 impl<'cfg> MetadataJunit<'cfg> {
-    pub(super) fn new(config: JunitConfig<'cfg>) -> Self {
+    pub(super) fn new(mode: NextestRunMode, config: JunitConfig<'cfg>) -> Self {
         Self {
+            mode,
             config,
             test_suites: DebugIgnore(IndexMap::new()),
         }
@@ -50,6 +54,8 @@ impl<'cfg> MetadataJunit<'cfg> {
         &mut self,
         event: Box<TestEvent<'cfg>>,
     ) -> Result<(), WriteEventError> {
+        // Copy mode at the start to avoid borrow checker conflicts.
+        let mode = self.mode;
         match event.kind {
             TestEventKind::RunStarted { .. }
             | TestEventKind::StressSubRunStarted { .. }
@@ -75,7 +81,8 @@ impl<'cfg> MetadataJunit<'cfg> {
                 let testcase_status = if is_success {
                     TestCaseStatus::success()
                 } else {
-                    let (kind, ty) = non_success_kind_and_type(UnitKind::Script, run_status.result);
+                    let (kind, ty) =
+                        non_success_kind_and_type(mode, UnitKind::Script, run_status.result);
                     let mut testcase_status = TestCaseStatus::non_success(kind);
                     testcase_status.set_type(ty);
                     testcase_status
@@ -146,7 +153,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                         ..
                     } => {
                         let (kind, ty) =
-                            non_success_kind_and_type(UnitKind::Test, first_status.result);
+                            non_success_kind_and_type(mode, UnitKind::Test, first_status.result);
                         let mut testcase_status = TestCaseStatus::non_success(kind);
                         testcase_status.set_type(ty);
                         (testcase_status, first_status, retries)
@@ -154,7 +161,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 };
 
                 for rerun in reruns {
-                    let (kind, ty) = non_success_kind_and_type(UnitKind::Test, rerun.result);
+                    let (kind, ty) = non_success_kind_and_type(mode, UnitKind::Test, rerun.result);
                     let mut test_rerun = TestRerun::new(kind);
                     test_rerun
                         .set_timestamp(rerun.start_time)
@@ -312,48 +319,73 @@ impl fmt::Display for SuiteKey<'_> {
     }
 }
 
-fn non_success_kind_and_type(kind: UnitKind, result: ExecutionResult) -> (NonSuccessKind, String) {
+fn non_success_kind_and_type(
+    mode: NextestRunMode,
+    kind: UnitKind,
+    result: ExecutionResult,
+) -> (NonSuccessKind, String) {
     match result {
         ExecutionResult::Fail {
             failure_status: FailureStatus::Abort(_),
             leaked: true,
         } => (
             NonSuccessKind::Failure,
-            format!("{kind} abort with leaked handles"),
+            format!(
+                "{} abort with leaked handles",
+                DisplayUnitKind::new(mode, kind),
+            ),
         ),
         ExecutionResult::Fail {
             failure_status: FailureStatus::Abort(_),
             leaked: false,
-        } => (NonSuccessKind::Failure, format!("{kind} abort")),
+        } => (
+            NonSuccessKind::Failure,
+            format!("{} abort", DisplayUnitKind::new(mode, kind)),
+        ),
         ExecutionResult::Fail {
             failure_status: FailureStatus::ExitCode(code),
             leaked: true,
         } => (
             NonSuccessKind::Failure,
-            format!("{kind} failure with exit code {code}, and leaked handles"),
+            format!(
+                "{} failure with exit code {code}, and leaked handles",
+                DisplayUnitKind::new(mode, kind),
+            ),
         ),
         ExecutionResult::Fail {
             failure_status: FailureStatus::ExitCode(code),
             leaked: false,
         } => (
             NonSuccessKind::Failure,
-            format!("{kind} failure with exit code {code}"),
+            format!(
+                "{} failure with exit code {code}",
+                DisplayUnitKind::new(mode, kind),
+            ),
         ),
         ExecutionResult::Timeout {
             result: SlowTimeoutResult::Fail,
-        } => (NonSuccessKind::Failure, format!("{kind} timeout")),
+        } => (
+            NonSuccessKind::Failure,
+            format!("{} timeout", DisplayUnitKind::new(mode, kind)),
+        ),
         ExecutionResult::ExecFail => (NonSuccessKind::Error, "execution failure".to_owned()),
         ExecutionResult::Leak {
             result: LeakTimeoutResult::Pass,
         } => (
             NonSuccessKind::Error,
-            format!("{kind} passed but leaked handles"),
+            format!(
+                "{} passed but leaked handles",
+                DisplayUnitKind::new(mode, kind),
+            ),
         ),
         ExecutionResult::Leak {
             result: LeakTimeoutResult::Fail,
         } => (
             NonSuccessKind::Error,
-            format!("{kind} exited with code 0, but leaked handles so was marked failed"),
+            format!(
+                "{} exited with code 0, but leaked handles so was marked failed",
+                DisplayUnitKind::new(mode, kind),
+            ),
         ),
         ExecutionResult::Pass
         | ExecutionResult::Timeout {

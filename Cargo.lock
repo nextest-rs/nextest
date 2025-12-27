@@ -356,6 +356,7 @@ dependencies = [
  "humantime",
  "idna_adapter",
  "indent_write",
+ "insta",
  "itertools",
  "miette",
  "nextest-filtering",

@@ -9,8 +9,8 @@ use super::{
     ChildOutputSpec, FinalStatusLevel, OutputStoreFinal, StatusLevel, StatusLevels,
     UnitOutputReporter,
     formatters::{
-        DisplayBracketedDuration, DisplayDurationBy, DisplaySlowDuration, write_final_warnings,
-        write_skip_counts,
+        DisplayBracketedDuration, DisplayDurationBy, DisplaySlowDuration, DisplayUnitKind,
+        write_final_warnings, write_skip_counts,
     },
     progress::{
         MaxProgressRunning, ProgressBarState, progress_bar_msg, progress_str, write_summary_str,
@@ -37,6 +37,7 @@ use crate::{
         helpers::Styles,
         imp::ReporterStderr,
     },
+    run_mode::NextestRunMode,
     runner::StressCount,
     write_str::WriteStr,
 };
@@ -51,6 +52,7 @@ use std::{
 };
 
 pub(crate) struct DisplayReporterBuilder {
+    pub(crate) mode: NextestRunMode,
     pub(crate) default_filter: CompiledDefaultFilter,
     pub(crate) status_levels: StatusLevels,
     pub(crate) test_count: usize,
@@ -140,6 +142,7 @@ impl DisplayReporterBuilder {
 
         DisplayReporter {
             inner: DisplayReporterImpl {
+                mode: self.mode,
                 default_filter: self.default_filter,
                 status_levels: StatusLevels {
                     status_level,
@@ -198,8 +201,12 @@ impl DisplayReporterBuilder {
         match self.show_progress {
             ShowProgress::None | ShowProgress::Counter => None,
             ShowProgress::Auto | ShowProgress::Running => {
-                let state =
-                    ProgressBarState::new(self.test_count, progress_chars, max_progress_running);
+                let state = ProgressBarState::new(
+                    self.mode,
+                    self.test_count,
+                    progress_chars,
+                    max_progress_running,
+                );
                 Some(state)
             }
         }
@@ -380,6 +387,7 @@ impl<'a> Ord for FinalOutputEntry<'a> {
 }
 
 struct DisplayReporterImpl<'a> {
+    mode: NextestRunMode,
     default_filter: CompiledDefaultFilter,
     status_levels: StatusLevels,
     no_capture: bool,
@@ -422,7 +430,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
                 let count_style = self.styles.count;
 
-                let tests_str = plural::tests_str(test_list.run_count());
+                let tests_str = plural::tests_str(self.mode, test_list.run_count());
                 let binaries_str = plural::binaries_str(test_list.listed_binary_count());
 
                 write!(
@@ -433,6 +441,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 )?;
 
                 write_skip_counts(
+                    self.mode,
                     test_list.skip_counts(),
                     &self.default_filter,
                     &self.styles,
@@ -907,7 +916,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         setup_scripts_running.style(self.styles.count),
                     )?;
                 } else if *running > 0 {
-                    let tests_str = plural::tests_str(*running);
+                    let tests_str = plural::tests_str(self.mode, *running);
                     write!(
                         writer,
                         "{immediately_terminating_text}{} {tests_str} still running",
@@ -941,7 +950,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         setup_scripts_running.style(self.styles.count),
                     )?;
                 } else if *running > 0 {
-                    let tests_str = plural::tests_str(*running);
+                    let tests_str = plural::tests_str(self.mode, *running);
                     write!(
                         writer,
                         ": {} {tests_str} still running",
@@ -970,7 +979,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         setup_scripts_running.style(self.styles.count),
                     )?;
                 } else if *running > 0 {
-                    let tests_str = plural::tests_str(*running);
+                    let tests_str = plural::tests_str(self.mode, *running);
                     write!(
                         writer,
                         ": {} {tests_str} running",
@@ -999,7 +1008,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         setup_scripts_running.style(self.styles.count),
                     )?;
                 } else if *running > 0 {
-                    let tests_str = plural::tests_str(*running);
+                    let tests_str = plural::tests_str(self.mode, *running);
                     write!(
                         writer,
                         ": {} {tests_str} running",
@@ -1146,6 +1155,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
                 // Both initial and finished counts must be 1 for the singular form.
                 let tests_str = plural::tests_plural_if(
+                    self.mode,
                     sub_stats.initial_run_count != 1 || sub_stats.finished_count != 1,
                 );
 
@@ -1197,6 +1207,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
                         // Both initial and finished counts must be 1 for the singular form.
                         let tests_str = plural::tests_plural_if(
+                            self.mode,
                             run_stats.initial_run_count != 1 || run_stats.finished_count != 1,
                         );
 
@@ -1305,7 +1316,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 }
 
                 // Print out warnings at the end, if any.
-                write_final_warnings(run_stats.final_stats(), &self.styles, writer)?;
+                write_final_warnings(self.mode, run_stats.final_stats(), &self.styles, writer)?;
             }
         }
 
@@ -1744,7 +1755,8 @@ impl<'a> DisplayReporterImpl<'a> {
                 };
                 write!(
                     writer,
-                    "{status_str}: {attempt_str}{kind} {} for {:.3?}s as PID {}",
+                    "{status_str}: {attempt_str}{} {} for {:.3?}s as PID {}",
+                    DisplayUnitKind::new(self.mode, kind),
                     "running".style(running_style),
                     time_taken.as_secs_f64(),
                     pid.style(self.styles.count),
@@ -1766,7 +1778,11 @@ impl<'a> DisplayReporterImpl<'a> {
                 waiting_duration,
                 remaining,
             } => {
-                write!(writer, "{status_str}: {attempt_str}{kind} ")?;
+                write!(
+                    writer,
+                    "{status_str}: {attempt_str}{} ",
+                    DisplayUnitKind::new(self.mode, kind)
+                )?;
 
                 self.write_info_execution_result(*tentative_result, slow_after.is_some(), writer)?;
                 write!(writer, " after {:.3?}s", time_taken.as_secs_f64())?;
@@ -1784,10 +1800,11 @@ impl<'a> DisplayReporterImpl<'a> {
                 if *waiting_duration >= Duration::from_secs(1) {
                     writeln!(
                         writer,
-                        "{}:   spent {:.3?}s waiting for {kind} PID {} to shut down, \
+                        "{}:   spent {:.3?}s waiting for {} PID {} to shut down, \
                          will mark as leaky after another {:.3?}s",
                         "note".style(self.styles.count),
                         waiting_duration.as_secs_f64(),
+                        DisplayUnitKind::new(self.mode, kind),
                         pid.style(self.styles.count),
                         remaining.as_secs_f64(),
                     )?;
@@ -1801,7 +1818,11 @@ impl<'a> DisplayReporterImpl<'a> {
                 time_taken,
                 slow_after,
             } => {
-                write!(writer, "{status_str}: {attempt_str}{kind} ")?;
+                write!(
+                    writer,
+                    "{status_str}: {attempt_str}{} ",
+                    DisplayUnitKind::new(self.mode, kind)
+                )?;
                 self.write_info_execution_result(Some(*result), slow_after.is_some(), writer)?;
                 write!(writer, " after {:.3?}s", time_taken.as_secs_f64())?;
                 if let Some(slow_after) = slow_after {
@@ -1819,7 +1840,11 @@ impl<'a> DisplayReporterImpl<'a> {
                 waiting_duration,
                 remaining,
             } => {
-                write!(writer, "{status_str}: {attempt_str}{kind} ")?;
+                write!(
+                    writer,
+                    "{status_str}: {attempt_str}{} ",
+                    DisplayUnitKind::new(self.mode, kind)
+                )?;
                 self.write_info_execution_result(Some(*previous_result), *previous_slow, writer)?;
                 writeln!(
                     writer,
@@ -1828,10 +1853,11 @@ impl<'a> DisplayReporterImpl<'a> {
                 )?;
                 writeln!(
                     writer,
-                    "{}:   waited {:.3?}s so far, will wait another {:.3?}s before retrying {kind}",
+                    "{}:   waited {:.3?}s so far, will wait another {:.3?}s before retrying {}",
                     "note".style(self.styles.count),
                     waiting_duration.as_secs_f64(),
                     remaining.as_secs_f64(),
+                    DisplayUnitKind::new(self.mode, kind),
                 )?;
             }
         }
@@ -1857,12 +1883,13 @@ impl<'a> DisplayReporterImpl<'a> {
 
         writeln!(
             writer,
-            "{}: {attempt_str}{} {kind} PID {} due to {} ({} ran for {:.3?}s)",
+            "{}: {attempt_str}{} {} PID {} due to {} ({} ran for {:.3?}s)",
             "status".style(self.styles.count),
             "terminating".style(self.styles.fail),
+            DisplayUnitKind::new(self.mode, kind),
             pid.style(self.styles.count),
             reason.style(self.styles.count),
-            kind,
+            DisplayUnitKind::new(self.mode, kind),
             time_taken.as_secs_f64(),
         )?;
 
@@ -1876,7 +1903,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     "note".style(self.styles.count),
                     signal,
                     waiting_duration.as_secs_f64(),
-                    kind,
+                    DisplayUnitKind::new(self.mode, kind),
                     remaining.as_secs_f64(),
                 )?;
             }
@@ -1898,7 +1925,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     "{}:   waiting for {} to exit on its own; spent {:.3?}s, will terminate \
                      job object after another {:.3?}s",
                     "note".style(self.styles.count),
-                    kind,
+                    DisplayUnitKind::new(self.mode, kind),
                     waiting_duration.as_secs_f64(),
                     remaining.as_secs_f64(),
                 )?;
@@ -1912,7 +1939,7 @@ impl<'a> DisplayReporterImpl<'a> {
                      will kill after another {:.3?}s",
                     "note".style(self.styles.count),
                     waiting_duration.as_secs_f64(),
-                    kind,
+                    DisplayUnitKind::new(self.mode, kind),
                     remaining.as_secs_f64(),
                 )?;
             }
@@ -2443,6 +2470,7 @@ mod tests {
         .unwrap();
 
         let builder = DisplayReporterBuilder {
+            mode: NextestRunMode::Test,
             default_filter: CompiledDefaultFilter::for_default_config(),
             status_levels: StatusLevels {
                 status_level: StatusLevel::Fail,

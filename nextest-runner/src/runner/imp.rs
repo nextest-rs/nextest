@@ -492,7 +492,7 @@ impl<'a> TestRunnerInner<'a> {
         let global_timeout = if self.interceptor.should_disable_timeouts() {
             crate::time::far_future_duration()
         } else {
-            self.profile.global_timeout().period
+            self.profile.global_timeout(self.test_list.mode()).period
         };
 
         let mut dispatcher_cx = DispatcherContext::new(
