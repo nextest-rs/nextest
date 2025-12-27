@@ -37,7 +37,7 @@ rand_chacha = { version = "0.9.0", default-features = false, features = ["std"] 
 regex-automata = { version = "0.4.12", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 regex-syntax = { version = "0.8.8" }
 serde_core = { version = "1.0.228", features = ["alloc"] }
-serde_json = { version = "1.0.145", features = ["unbounded_depth"] }
+serde_json = { version = "1.0.148", features = ["unbounded_depth"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
 target-spec = { version = "3.5.5", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.5", default-features = false, features = ["fixtures"] }
@@ -76,7 +76,7 @@ bitflags = { version = "2.9.4", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.178", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
-serde_json = { version = "1.0.145", features = ["unbounded_depth"] }
+serde_json = { version = "1.0.148", features = ["unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -119,7 +119,7 @@ bitflags = { version = "2.9.4", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.178", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
-serde_json = { version = "1.0.145", features = ["unbounded_depth"] }
+serde_json = { version = "1.0.148", features = ["unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -162,7 +162,7 @@ bitflags = { version = "2.9.4", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.178", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
-serde_json = { version = "1.0.145", features = ["unbounded_depth"] }
+serde_json = { version = "1.0.148", features = ["unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -189,7 +189,7 @@ bitflags = { version = "2.9.4", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.178", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
-serde_json = { version = "1.0.145", features = ["unbounded_depth"] }
+serde_json = { version = "1.0.148", features = ["unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -216,7 +216,7 @@ bitflags = { version = "2.9.4", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.178", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
-serde_json = { version = "1.0.145", features = ["unbounded_depth"] }
+serde_json = { version = "1.0.148", features = ["unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -241,7 +241,7 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 bitflags = { version = "2.9.4", default-features = false, features = ["std"] }
 libc = { version = "0.2.178", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
-serde_json = { version = "1.0.145", features = ["unbounded_depth"] }
+serde_json = { version = "1.0.148", features = ["unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
