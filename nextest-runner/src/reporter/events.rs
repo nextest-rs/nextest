@@ -919,7 +919,12 @@ impl<'a> ExecutionDescription<'a> {
                     result: LeakTimeoutResult::Pass,
                 } => StatusLevel::Leak,
                 ExecutionResult::Pass => StatusLevel::Pass,
-                other => unreachable!("Success only permits Pass or Leak Pass, found {other:?}"),
+                ExecutionResult::Timeout {
+                    result: SlowTimeoutResult::Pass,
+                } => StatusLevel::Slow,
+                other => unreachable!(
+                    "Success only permits Pass, Leak Pass, or Timeout Pass, found {other:?}"
+                ),
             },
             // A flaky test implies that we print out retry information for it.
             ExecutionDescription::Flaky { .. } => StatusLevel::Retry,
@@ -940,9 +945,15 @@ impl<'a> ExecutionDescription<'a> {
                         ExecutionResult::Leak {
                             result: LeakTimeoutResult::Pass,
                         } => FinalStatusLevel::Leak,
-                        other => {
-                            unreachable!("Success only permits Pass or Leak Pass, found {other:?}")
-                        }
+                        // Timeout with Pass should return Slow, but this case
+                        // shouldn't be reached because is_slow is true for
+                        // timeout scenarios. Handle it for completeness.
+                        ExecutionResult::Timeout {
+                            result: SlowTimeoutResult::Pass,
+                        } => FinalStatusLevel::Slow,
+                        other => unreachable!(
+                            "Success only permits Pass, Leak Pass, or Timeout Pass, found {other:?}"
+                        ),
                     }
                 }
             }
