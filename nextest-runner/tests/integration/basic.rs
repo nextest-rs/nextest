@@ -11,10 +11,7 @@ use fixture_data::{
 use iddqd::IdOrdMap;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_runner::{
-    config::{
-        core::NextestConfig,
-        elements::{LeakTimeoutResult, RetryPolicy, SlowTimeoutResult},
-    },
+    config::{core::NextestConfig, elements::SlowTimeoutResult},
     double_spawn::DoubleSpawnInfo,
     input::InputHandlerKind,
     list::BinaryList,
@@ -22,7 +19,7 @@ use nextest_runner::{
     reporter::{
         UnitErrorDescription,
         events::{
-            ExecutionDescription, ExecutionResult, FinalRunStats, RunStatsFailureKind, UnitKind,
+            ExecutionResult, FinalRunStats, RunStatsFailureKind, UnitKind,
         },
     },
     run_mode::NextestRunMode,
@@ -34,7 +31,6 @@ use nextest_runner::{
 };
 use pretty_assertions::assert_eq;
 use std::{io::Cursor, time::Duration};
-use test_case::test_case;
 
 #[test]
 fn test_list_binaries() -> Result<()> {
@@ -223,178 +219,6 @@ fn test_run() -> Result<()> {
                 panic!(
                     "for test {}, mismatch in status: expected {:?}, actual {:?}, error: {}",
                     fixture.name, fixture.status, instance_value.status, error,
-                );
-            }
-        }
-    }
-
-    // Note: can't compare not_run because its exact value would depend on the number of threads on
-    // the machine.
-    assert!(
-        matches!(
-            run_stats.summarize_final(),
-            FinalRunStats::Failed(RunStatsFailureKind::Test { .. })
-        ),
-        "run should be marked failed, but got {:?}",
-        run_stats.summarize_final(),
-    );
-    Ok(())
-}
-
-#[test_case(
-    None
-    ; "retry overrides obeyed"
-)]
-#[test_case(
-    Some(RetryPolicy::new_without_delay(2))
-    ; "retry overrides ignored"
-)]
-fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
-    test_init();
-
-    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
-    let test_list = FIXTURE_TARGETS.make_test_list(
-        NextestConfig::DEFAULT_PROFILE,
-        &test_filter,
-        &TargetRunner::empty(),
-    )?;
-    let config = load_config();
-    let profile = config
-        .profile("with-retries")
-        .expect("with-retries config is valid");
-    let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
-    let profile = profile.apply_build_platforms(&build_platforms);
-
-    let profile_retries = profile.retries();
-    assert_eq!(
-        profile_retries,
-        RetryPolicy::new_without_delay(2),
-        "retries set in with-retries profile"
-    );
-
-    let mut builder = TestRunnerBuilder::default();
-    if let Some(retries) = retries {
-        builder.set_retries(retries);
-    }
-    let runner = builder
-        .build(
-            &test_list,
-            &profile,
-            vec![],
-            SignalHandlerKind::Noop,
-            InputHandlerKind::Noop,
-            DoubleSpawnInfo::disabled(),
-            TargetRunner::empty(),
-        )
-        .unwrap();
-
-    let (instance_statuses, run_stats) = execute_collect(runner);
-
-    for expected in &*EXPECTED_TEST_SUITES {
-        let test_binary = FIXTURE_TARGETS
-            .test_artifacts
-            .get(&expected.binary_id)
-            .unwrap_or_else(|| panic!("unexpected binary ID {}", expected.binary_id));
-        for fixture in &expected.test_cases {
-            let instance_value =
-                &instance_statuses[&(test_binary.binary_path.as_path(), fixture.name)];
-            let valid = match &instance_value.status {
-                InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
-                InstanceStatus::Finished(run_statuses) => {
-                    let expected_len = match fixture.status {
-                        TestCaseFixtureStatus::Flaky { pass_attempt } => {
-                            if retries.is_some() {
-                                pass_attempt.min(profile_retries.count() + 1)
-                            } else {
-                                pass_attempt
-                            }
-                        }
-                        TestCaseFixtureStatus::Pass | TestCaseFixtureStatus::Leak => 1,
-                        // Note that currently only the flaky test fixtures are controlled by overrides.
-                        // If more tests are controlled by retry overrides, this may need to be updated.
-                        TestCaseFixtureStatus::LeakFail
-                        | TestCaseFixtureStatus::Fail
-                        | TestCaseFixtureStatus::FailLeak
-                        | TestCaseFixtureStatus::Segfault => profile_retries.count() + 1,
-                        TestCaseFixtureStatus::IgnoredPass | TestCaseFixtureStatus::IgnoredFail => {
-                            unreachable!("ignored tests should be skipped")
-                        }
-                    };
-                    assert_eq!(
-                        run_statuses.len(),
-                        expected_len as usize,
-                        "test {} should be run {} times",
-                        fixture.name,
-                        expected_len,
-                    );
-
-                    match run_statuses.describe() {
-                        ExecutionDescription::Success { single_status } => {
-                            if fixture.status == TestCaseFixtureStatus::Leak {
-                                single_status.result
-                                    == ExecutionResult::Leak {
-                                        result: LeakTimeoutResult::Pass,
-                                    }
-                            } else {
-                                single_status.result == ExecutionResult::Pass
-                            }
-                        }
-                        ExecutionDescription::Flaky {
-                            last_status,
-                            prior_statuses,
-                        } => {
-                            assert_eq!(
-                                prior_statuses.len(),
-                                (expected_len - 1) as usize,
-                                "correct length for prior statuses"
-                            );
-                            for prior_status in prior_statuses {
-                                assert!(
-                                    matches!(prior_status.result, ExecutionResult::Fail { .. }),
-                                    "prior status {} should be fail",
-                                    prior_status.retry_data.attempt
-                                );
-                            }
-                            last_status.result == ExecutionResult::Pass
-                        }
-                        ExecutionDescription::Failure {
-                            first_status,
-                            retries,
-                            ..
-                        } => {
-                            assert_eq!(
-                                retries.len(),
-                                (expected_len - 1) as usize,
-                                "correct length for retries"
-                            );
-                            for retry in retries {
-                                assert!(
-                                    matches!(
-                                        retry.result,
-                                        ExecutionResult::Fail { .. }
-                                            | ExecutionResult::Leak {
-                                                result: LeakTimeoutResult::Fail
-                                            }
-                                    ),
-                                    "retry {} should be fail or leak => fail",
-                                    retry.retry_data.attempt
-                                );
-                            }
-                            matches!(
-                                first_status.result,
-                                ExecutionResult::Fail { .. }
-                                    | ExecutionResult::Leak {
-                                        result: LeakTimeoutResult::Fail
-                                    }
-                            )
-                        }
-                    }
-                }
-            };
-            if !valid {
-                panic!(
-                    "for test {}, mismatch in status: expected {:?}, actual {:?}",
-                    fixture.name, fixture.status, instance_value.status
                 );
             }
         }

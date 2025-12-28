@@ -2263,3 +2263,42 @@ fn test_timeout_with_flaky() {
         RunProperties::TIMEOUT_RETRIES_FLAKY | RunProperties::SKIP_SUMMARY_CHECK,
     );
 }
+
+/// Test that retries work correctly with the with-retries profile.
+///
+/// The `with-retries` profile has:
+/// - `retries = 2` (default)
+/// - Override for test_flaky_mod_6: `retries = 5`
+/// - Override for test_flaky_mod_4: `retries = 4`
+///
+/// Flaky tests should eventually pass after the configured number of retries.
+#[test]
+fn test_retries() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--profile",
+            "with-retries",
+        ])
+        .unchecked(true)
+        .output();
+
+    // Should fail because some tests fail even after retries.
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "test run should fail due to failing tests\n{output}"
+    );
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("with-retries"),
+        RunProperties::WITH_RETRIES | RunProperties::SKIP_SUMMARY_CHECK,
+    );
+}
