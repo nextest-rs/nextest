@@ -218,13 +218,13 @@ Some tests may need to be modified to handle changes in the workspace and target
     === "Colorized"
 
         ```bash exec="true" result="ansi"
-        CLICOLOR_FORCE=1 cargo nextest archive -h
+        CLICOLOR_FORCE=1 cargo nextest archive -h | ../scripts/strip-hyperlinks.sh
         ```
 
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest archive -h
+        cargo nextest archive -h | ../scripts/strip-hyperlinks.sh
         ```
 
 === "Full output"
@@ -234,11 +234,11 @@ Some tests may need to be modified to handle changes in the workspace and target
     === "Colorized"
 
         ```bash exec="true" result="ansi"
-        CLICOLOR_FORCE=1 cargo nextest archive --help
+        CLICOLOR_FORCE=1 cargo nextest archive --help | ../scripts/strip-hyperlinks.sh
         ```
 
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest archive --help
+        cargo nextest archive --help | ../scripts/strip-hyperlinks.sh
         ```

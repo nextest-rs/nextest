@@ -160,13 +160,13 @@ For information about configuring the way nextest displays its human-readable ou
     === "Colorized"
 
         ```bash exec="true" result="ansi"
-        CLICOLOR_FORCE=1 cargo nextest run -h
+        CLICOLOR_FORCE=1 cargo nextest run -h | ../scripts/strip-hyperlinks.sh
         ```
 
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest run -h
+        cargo nextest run -h | ../scripts/strip-hyperlinks.sh
         ```
 
 === "Full output"
@@ -176,11 +176,11 @@ For information about configuring the way nextest displays its human-readable ou
     === "Colorized"
 
         ```bash exec="true" result="ansi"
-        CLICOLOR_FORCE=1 cargo nextest run --help
+        CLICOLOR_FORCE=1 cargo nextest run --help | ../scripts/strip-hyperlinks.sh
         ```
 
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest run --help
+        cargo nextest run --help | ../scripts/strip-hyperlinks.sh
         ```

@@ -59,13 +59,13 @@ cargo nextest list
     === "Colorized"
 
         ```bash exec="true" result="ansi"
-        CLICOLOR_FORCE=1 cargo nextest list -h
+        CLICOLOR_FORCE=1 cargo nextest list -h | ../scripts/strip-hyperlinks.sh
         ```
 
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest list -h
+        cargo nextest list -h | ../scripts/strip-hyperlinks.sh
         ```
 
 === "Full output"
@@ -75,11 +75,11 @@ cargo nextest list
     === "Colorized"
 
         ```bash exec="true" result="ansi"
-        CLICOLOR_FORCE=1 cargo nextest list --help
+        CLICOLOR_FORCE=1 cargo nextest list --help | ../scripts/strip-hyperlinks.sh
         ```
 
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest list --help
+        cargo nextest list --help | ../scripts/strip-hyperlinks.sh
         ```
