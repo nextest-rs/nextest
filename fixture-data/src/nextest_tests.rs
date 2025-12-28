@@ -6,8 +6,8 @@
 //! TODO: need a better name than "nextest-tests".
 
 use crate::models::{
-    TestCaseFixture, TestCaseFixtureProperty, TestCaseFixtureStatus, TestSuiteFixture,
-    TestSuiteFixtureProperty,
+    TestCaseFixture, TestCaseFixtureProperties, TestCaseFixtureStatus, TestSuiteFixture,
+    TestSuiteFixtureProperties,
 };
 use iddqd::{IdOrdMap, id_ord_map};
 use nextest_metadata::{BuildPlatform, RustBinaryId};
@@ -22,7 +22,7 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
             BuildPlatform::Target,
             id_ord_map! {
                 TestCaseFixture::new("test_cargo_env_vars", TestCaseFixtureStatus::Pass)
-                    .with_property(TestCaseFixtureProperty::NotInDefaultSetUnix),
+                    .with_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET_UNIX),
                 TestCaseFixture::new("test_cwd", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_execute_bin", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_failure_assert", TestCaseFixtureStatus::Fail),
@@ -32,12 +32,12 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
                     "test_flaky_mod_4",
                     TestCaseFixtureStatus::Flaky { pass_attempt: 4 },
                 )
-                .with_property(TestCaseFixtureProperty::NotInDefaultSet),
+                .with_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET),
                 TestCaseFixture::new(
                     "test_flaky_mod_6",
                     TestCaseFixtureStatus::Flaky { pass_attempt: 6 },
                 )
-                .with_property(TestCaseFixtureProperty::NotInDefaultSet),
+                .with_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET),
                 TestCaseFixture::new("test_ignored", TestCaseFixtureStatus::IgnoredPass),
                 TestCaseFixture::new("test_ignored_fail", TestCaseFixtureStatus::IgnoredFail),
                 TestCaseFixture::new("test_result_failure", TestCaseFixtureStatus::Fail),
@@ -136,14 +136,14 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
             BuildPlatform::Target,
             id_ord_map! {
                 TestCaseFixture::new("bench_add_two", TestCaseFixtureStatus::Pass)
-                    .with_property(TestCaseFixtureProperty::IsBenchmark),
+                    .with_property(TestCaseFixtureProperties::IS_BENCHMARK),
                 TestCaseFixture::new("bench_ignored", TestCaseFixtureStatus::IgnoredPass)
-                    .with_property(TestCaseFixtureProperty::IsBenchmark),
+                    .with_property(TestCaseFixtureProperties::IS_BENCHMARK),
                 TestCaseFixture::new("bench_slow_timeout", TestCaseFixtureStatus::IgnoredPass)
-                    .with_property(TestCaseFixtureProperty::IsBenchmark)
-                    .with_property(TestCaseFixtureProperty::BenchOverrideTimeout)
-                    .with_property(TestCaseFixtureProperty::BenchTermination)
-                    .with_property(TestCaseFixtureProperty::BenchIgnoresTestTimeout),
+                    .with_property(TestCaseFixtureProperties::IS_BENCHMARK)
+                    .with_property(TestCaseFixtureProperties::BENCH_OVERRIDE_TIMEOUT)
+                    .with_property(TestCaseFixtureProperties::BENCH_TERMINATION)
+                    .with_property(TestCaseFixtureProperties::BENCH_IGNORES_TEST_TIMEOUT),
                 TestCaseFixture::new("tests::test_execute_bin", TestCaseFixtureStatus::Pass),
             },
         ),
@@ -163,7 +163,7 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
             BuildPlatform::Target,
             id_ord_map! {
                 TestCaseFixture::new("test_multiply_two", TestCaseFixtureStatus::Pass)
-                    .with_property(TestCaseFixtureProperty::MatchesTestMultiplyTwo),
+                    .with_property(TestCaseFixtureProperties::MATCHES_TEST_MULTIPLY_TWO),
             },
         ),
         TestSuiteFixture::new(
@@ -178,12 +178,12 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
             BuildPlatform::Target,
             id_ord_map! {
                 TestCaseFixture::new("tests::test_multiply_two_cdylib", TestCaseFixtureStatus::Pass)
-                    .with_property(TestCaseFixtureProperty::MatchesCdylib)
-                    .with_property(TestCaseFixtureProperty::MatchesTestMultiplyTwo),
+                    .with_property(TestCaseFixtureProperties::MATCHES_CDYLIB)
+                    .with_property(TestCaseFixtureProperties::MATCHES_TEST_MULTIPLY_TWO),
             },
         )
-        .with_property(TestSuiteFixtureProperty::NotInDefaultSet)
-        .with_property(TestSuiteFixtureProperty::MatchesCdylibExample),
+        .with_property(TestSuiteFixtureProperties::NOT_IN_DEFAULT_SET)
+        .with_property(TestSuiteFixtureProperties::MATCHES_CDYLIB_EXAMPLE),
         // Build script tests
         TestSuiteFixture::new(
             "with-build-script",
