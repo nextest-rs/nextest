@@ -95,6 +95,9 @@ impl BinaryList {
             OutputFormat::Human { verbose } => self
                 .write_human(writer, verbose, colorize)
                 .map_err(WriteTestListError::Io),
+            OutputFormat::Oneline { verbose } => self
+                .write_oneline(writer, verbose, colorize)
+                .map_err(WriteTestListError::Io),
             OutputFormat::Serializable(format) => format.to_writer(&self.to_summary(), writer),
         }
     }
@@ -145,6 +148,33 @@ impl BinaryList {
             } else {
                 writeln!(writer, "{}", bin.id.style(styles.binary_id))?;
             }
+        }
+        Ok(())
+    }
+
+    fn write_oneline(
+        &self,
+        writer: &mut dyn WriteStr,
+        verbose: bool,
+        colorize: bool,
+    ) -> io::Result<()> {
+        let mut styles = Styles::default();
+        if colorize {
+            styles.colorize();
+        }
+        for bin in &self.rust_binaries {
+            write!(writer, "{}", bin.id.style(styles.binary_id))?;
+            if verbose {
+                write!(
+                    writer,
+                    " [{}{}] [{}{}]",
+                    "bin: ".style(styles.field),
+                    bin.path,
+                    "build platform: ".style(styles.field),
+                    bin.build_platform,
+                )?;
+            }
+            writeln!(writer)?;
         }
         Ok(())
     }
@@ -607,6 +637,15 @@ mod tests {
             }
           }
         }"#};
+        // Non-verbose oneline is the same as non-verbose human.
+        static EXPECTED_ONELINE: &str = indoc! {"
+            fake-package::bin/fake-binary
+            fake-macro::proc-macro/fake-macro
+        "};
+        static EXPECTED_ONELINE_VERBOSE: &str = indoc! {r"
+            fake-package::bin/fake-binary [bin: /fake/binary] [build platform: target]
+            fake-macro::proc-macro/fake-macro [bin: /fake/macro] [build platform: host]
+        "};
 
         assert_eq!(
             binary_list
@@ -625,6 +664,18 @@ mod tests {
                 .to_string(OutputFormat::Serializable(SerializableFormat::JsonPretty))
                 .expect("json-pretty succeeded"),
             EXPECTED_JSON_PRETTY
+        );
+        assert_eq!(
+            binary_list
+                .to_string(OutputFormat::Oneline { verbose: false })
+                .expect("oneline succeeded"),
+            EXPECTED_ONELINE
+        );
+        assert_eq!(
+            binary_list
+                .to_string(OutputFormat::Oneline { verbose: true })
+                .expect("oneline verbose succeeded"),
+            EXPECTED_ONELINE_VERBOSE
         );
     }
 }

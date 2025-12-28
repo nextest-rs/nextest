@@ -18,7 +18,6 @@ use owo_colors::OwoColorize;
 use std::{
     cmp::{max, min},
     env, fmt,
-    io::IsTerminal,
     str::FromStr,
     time::{Duration, Instant},
 };

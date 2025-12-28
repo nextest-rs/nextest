@@ -486,16 +486,32 @@ pub(super) enum ListType {
 
 #[derive(Copy, Clone, Debug, ValueEnum, Default)]
 pub(super) enum MessageFormatOpts {
+    /// Auto-detect: **human** if stdout is an interactive terminal, **oneline**
+    /// otherwise.
     #[default]
+    Auto,
+    /// A human-readable output format.
     Human,
+    /// One test per line.
+    Oneline,
+    /// JSON with no whitespace.
     Json,
+    /// JSON, prettified.
     JsonPretty,
 }
 
 impl MessageFormatOpts {
-    pub(super) fn to_output_format(self, verbose: bool) -> OutputFormat {
+    pub(super) fn to_output_format(self, verbose: bool, is_terminal: bool) -> OutputFormat {
         match self {
+            Self::Auto => {
+                if is_terminal {
+                    OutputFormat::Human { verbose }
+                } else {
+                    OutputFormat::Oneline { verbose }
+                }
+            }
             Self::Human => OutputFormat::Human { verbose },
+            Self::Oneline => OutputFormat::Oneline { verbose },
             Self::Json => OutputFormat::Serializable(SerializableFormat::Json),
             Self::JsonPretty => OutputFormat::Serializable(SerializableFormat::JsonPretty),
         }
@@ -1553,6 +1569,10 @@ mod tests {
             "cargo nextest list --list-type binaries-only",
             "cargo nextest list --list-type full",
             "cargo nextest list --message-format json-pretty",
+            "cargo nextest list --message-format oneline",
+            "cargo nextest list --message-format auto",
+            "cargo nextest list -T oneline",
+            "cargo nextest list -T auto",
             "cargo nextest run --failure-output never",
             "cargo nextest run --success-output=immediate",
             "cargo nextest run --status-level=all",

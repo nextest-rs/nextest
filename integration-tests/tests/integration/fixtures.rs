@@ -10,7 +10,7 @@ use fixture_data::{
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use integration_tests::nextest_cli::{CargoNextestCli, cargo_bin};
 use nextest_metadata::{
-    BinaryListSummary, BuildPlatform, RustTestSuiteStatusSummary, TestListSummary,
+    BinaryListSummary, BuildPlatform, RustBinaryId, RustTestSuiteStatusSummary, TestListSummary,
 };
 use quick_junit::Report;
 use regex::Regex;
@@ -139,6 +139,92 @@ pub fn check_list_binaries_output(stdout: &[u8]) {
     assert_eq!(
         expected_binary_ids, actual_binary_ids,
         "expected binaries:\n{expected_binary_ids:?}\nactual binaries\n{actual_binary_ids:?}"
+    );
+}
+
+/// Checks the output of `cargo nextest list --message-format oneline`.
+///
+/// The format is `binary_id test_name` per line.
+#[track_caller]
+pub fn check_list_oneline_output(stdout: &str) {
+    let test_suites = &*EXPECTED_TEST_SUITES;
+
+    // Build the set of expected test instances (binary_id, test_name).
+    let mut expected_tests: BTreeSet<(RustBinaryId, String)> = BTreeSet::new();
+    for fixture in test_suites {
+        for test_case in &fixture.test_cases {
+            // Only include non-ignored tests (oneline without --verbose skips ignored tests).
+            if !test_case.status.is_ignored() {
+                expected_tests.insert((fixture.binary_id.clone(), test_case.name.to_owned()));
+            }
+        }
+    }
+
+    // Parse the actual output.
+    let mut actual_tests: BTreeSet<(RustBinaryId, String)> = BTreeSet::new();
+    for line in stdout.lines() {
+        let parts: Vec<_> = line.splitn(2, ' ').collect();
+        assert_eq!(
+            parts.len(),
+            2,
+            "each line should be 'binary_id test_name', got: {line:?}"
+        );
+        let binary_id = parts[0];
+        let test_name = parts[1];
+        assert!(
+            !binary_id.is_empty(),
+            "binary_id should not be empty in line: {line:?}"
+        );
+        assert!(
+            !test_name.is_empty(),
+            "test_name should not be empty in line: {line:?}"
+        );
+        actual_tests.insert((RustBinaryId::new(binary_id), test_name.to_owned()));
+    }
+
+    // Compare expected vs actual.
+    let missing: Vec<_> = expected_tests.difference(&actual_tests).collect();
+    let extra: Vec<_> = actual_tests.difference(&expected_tests).collect();
+
+    assert!(
+        missing.is_empty() && extra.is_empty(),
+        "test list mismatch:\n  missing: {missing:?}\n  extra: {extra:?}"
+    );
+}
+
+/// Checks the output of `cargo nextest list --message-format oneline --list-type binaries-only`.
+///
+/// The format is `binary_id` per line.
+#[track_caller]
+pub fn check_list_oneline_binaries_output(stdout: &str) {
+    let test_suites = &*EXPECTED_TEST_SUITES;
+
+    // Build set of expected binary IDs.
+    let expected_binaries: BTreeSet<RustBinaryId> = test_suites
+        .iter()
+        .map(|fixture| fixture.binary_id.clone())
+        .collect();
+
+    // Parse the actual output.
+    let actual_binaries: BTreeSet<RustBinaryId> = stdout
+        .lines()
+        .map(|line| {
+            assert!(!line.is_empty(), "binary_id should not be empty");
+            assert!(
+                !line.contains(' '),
+                "binary_id should not contain spaces: {line:?}"
+            );
+            RustBinaryId::new(line)
+        })
+        .collect();
+
+    // Compare expected vs actual.
+    let missing: Vec<_> = expected_binaries.difference(&actual_binaries).collect();
+    let extra: Vec<_> = actual_binaries.difference(&expected_binaries).collect();
+
+    assert!(
+        missing.is_empty() && extra.is_empty(),
+        "binary list mismatch:\n  missing: {missing:?}\n  extra: {extra:?}"
     );
 }
 
