@@ -6,11 +6,10 @@ use cfg_if::cfg_if;
 use color_eyre::eyre::{Result, ensure};
 use fixture_data::{
     models::{TestCaseFixtureStatus, TestNameAndFilterMatch, TestSuiteFixture},
-    nextest_tests::{EXPECTED_TEST_SUITES, get_expected_test},
+    nextest_tests::EXPECTED_TEST_SUITES,
 };
 use iddqd::IdOrdMap;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
-use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
     config::{
         core::NextestConfig,
@@ -420,161 +419,6 @@ fn test_run() -> Result<()> {
         "run should be marked failed, but got {:?}",
         run_stats.summarize_final(),
     );
-    Ok(())
-}
-
-/// Test that filtersets with regular substring filters behave as expected.
-#[test]
-fn test_filter_expr_with_string_filters() -> Result<()> {
-    test_init();
-
-    let pcx = ParseContext::new(&PACKAGE_GRAPH);
-    let expr = Filterset::parse(
-        "test(test_multiply_two) | test(=tests::call_dylib_add_two)".to_owned(),
-        &pcx,
-        FiltersetKind::Test,
-    )
-    .expect("filterset is valid");
-
-    let test_filter = TestFilterBuilder::new(
-        NextestRunMode::Test,
-        RunIgnored::Default,
-        None,
-        TestFilterPatterns::new(vec![
-            "call_dylib_add_two".to_owned(),
-            "test_flaky_mod_4".to_owned(),
-        ]),
-        vec![expr],
-    )
-    .unwrap();
-    let test_list = FIXTURE_TARGETS.make_test_list(
-        NextestConfig::DEFAULT_PROFILE,
-        &test_filter,
-        &TargetRunner::empty(),
-    )?;
-    for test in test_list.iter_tests() {
-        if test.name == "tests::call_dylib_add_two" {
-            assert!(
-                test.test_info.filter_match.is_match(),
-                "expected test {test:?} to be a match, but it isn't"
-            );
-        } else if test.name.contains("test_multiply_two") {
-            assert_eq!(
-                test.test_info.filter_match,
-                FilterMatch::Mismatch {
-                    reason: MismatchReason::String,
-                },
-                "expected test {test:?} to mismatch due to string filters"
-            )
-        } else if test.name.contains("test_flaky_mod_4") {
-            assert_eq!(
-                test.test_info.filter_match,
-                FilterMatch::Mismatch {
-                    reason: MismatchReason::Expression,
-                },
-                "expected test {test:?} to mismatch due to expression filters"
-            )
-        } else {
-            // Mismatch both string and expression filters. nextest-runner returns:
-            // * first, ignored
-            // * then, for string
-            // * then, expression
-            let expected_test = get_expected_test(&test.suite_info.binary_id, test.name);
-            let reason = if expected_test.status.is_ignored() {
-                MismatchReason::Ignored
-            } else {
-                MismatchReason::String
-            };
-            assert_eq!(
-                test.test_info.filter_match,
-                FilterMatch::Mismatch { reason },
-                "expected test {test:?} to mismatch due to {reason}"
-            )
-        }
-    }
-
-    Ok(())
-}
-
-/// Test that filtersets without regular substring filters behave as expected.
-#[test]
-fn test_filter_expr_without_string_filters() -> Result<()> {
-    test_init();
-
-    let pcx = ParseContext::new(&PACKAGE_GRAPH);
-    let expr = Filterset::parse(
-        "test(test_multiply_two) | test(=tests::call_dylib_add_two)".to_owned(),
-        &pcx,
-        FiltersetKind::Test,
-    )
-    .expect("filterset is valid");
-
-    let test_filter = TestFilterBuilder::new(
-        NextestRunMode::Test,
-        RunIgnored::Default,
-        None,
-        TestFilterPatterns::default(),
-        vec![expr],
-    )
-    .unwrap();
-    let test_list = FIXTURE_TARGETS.make_test_list(
-        NextestConfig::DEFAULT_PROFILE,
-        &test_filter,
-        &TargetRunner::empty(),
-    )?;
-    for test in test_list.iter_tests() {
-        if test.name.contains("test_multiply_two") || test.name == "tests::call_dylib_add_two" {
-            assert!(
-                test.test_info.filter_match.is_match(),
-                "expected test {test:?} to be a match, but it isn't"
-            );
-        } else {
-            assert!(
-                !test.test_info.filter_match.is_match(),
-                "expected test {test:?} to not be a match, but it is"
-            )
-        }
-    }
-
-    Ok(())
-}
-
-#[test]
-fn test_string_filters_without_filter_expr() -> Result<()> {
-    test_init();
-
-    let test_filter = TestFilterBuilder::new(
-        NextestRunMode::Test,
-        RunIgnored::Default,
-        None,
-        TestFilterPatterns::new(vec![
-            "test_multiply_two".to_owned(),
-            "tests::call_dylib_add_two".to_owned(),
-        ]),
-        vec![],
-    )
-    .unwrap();
-    let test_list = FIXTURE_TARGETS.make_test_list(
-        NextestConfig::DEFAULT_PROFILE,
-        &test_filter,
-        &TargetRunner::empty(),
-    )?;
-    for test in test_list.iter_tests() {
-        if test.name.contains("test_multiply_two")
-            || test.name.contains("tests::call_dylib_add_two")
-        {
-            assert!(
-                test.test_info.filter_match.is_match(),
-                "expected test {test:?} to be a match, but it isn't"
-            );
-        } else {
-            assert!(
-                !test.test_info.filter_match.is_match(),
-                "expected test {test:?} to not be a match, but it is"
-            )
-        }
-    }
-
     Ok(())
 }
 

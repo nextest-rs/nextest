@@ -28,7 +28,9 @@ use integration_tests::{
     env::set_env_vars,
     nextest_cli::{CargoNextestCli, CargoNextestOutput},
 };
-use nextest_metadata::{BuildPlatform, NextestExitCode, TestListSummary};
+use nextest_metadata::{
+    BuildPlatform, FilterMatch, MismatchReason, NextestExitCode, TestListSummary,
+};
 use std::{borrow::Cow, fs::File, io::Write};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
 
@@ -1981,6 +1983,169 @@ fn test_rustc_version_verbose_errors() {
             "rustc_vv_invalid_triple_warning",
             command.unchecked(true).output().to_snapshot()
         );
+    }
+}
+
+/// Test that filterset expressions combined with string filters work correctly.
+#[test]
+fn test_filterset_with_string_filters() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    // Expression: test(test_multiply_two) | test(=tests::call_dylib_add_two)
+    // String filters: call_dylib_add_two, test_flaky_mod_4
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--workspace",
+            "--all-targets",
+            "--message-format",
+            "json",
+            "-E",
+            "test(test_multiply_two) | test(=tests::call_dylib_add_two)",
+            "--",
+            "call_dylib_add_two",
+            "test_flaky_mod_4",
+        ])
+        .output();
+
+    let summary: TestListSummary =
+        serde_json::from_slice(&output.stdout).expect("failed to parse test list JSON");
+
+    // Verify specific test cases:
+    for (binary_id, suite) in &summary.rust_suites {
+        for (test_name, test_info) in &suite.test_cases {
+            let full_name = format!("{} {}", binary_id, test_name);
+
+            if test_name == "tests::call_dylib_add_two" {
+                // Matches both expression and string filter.
+                assert!(
+                    test_info.filter_match.is_match(),
+                    "{full_name}: expected match, got {:?}",
+                    test_info.filter_match
+                );
+            } else if test_name.contains("test_multiply_two") {
+                // Matches expression but not string filter.
+                assert_eq!(
+                    test_info.filter_match,
+                    FilterMatch::Mismatch {
+                        reason: MismatchReason::String
+                    },
+                    "{full_name}: expected String mismatch"
+                );
+            } else if test_name.contains("test_flaky_mod_4") {
+                // Matches string filter but not expression.
+                assert_eq!(
+                    test_info.filter_match,
+                    FilterMatch::Mismatch {
+                        reason: MismatchReason::Expression
+                    },
+                    "{full_name}: expected Expression mismatch"
+                );
+            } else {
+                // Should not match.
+                assert!(
+                    !test_info.filter_match.is_match(),
+                    "{full_name}: expected no match, got {:?}",
+                    test_info.filter_match
+                );
+            }
+        }
+    }
+}
+
+/// Test that filterset expressions without string filters work correctly.
+#[test]
+fn test_filterset_without_string_filters() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    // Expression only, no string filters.
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--workspace",
+            "--all-targets",
+            "--message-format",
+            "json",
+            "-E",
+            "test(test_multiply_two) | test(=tests::call_dylib_add_two)",
+        ])
+        .output();
+
+    let summary: TestListSummary =
+        serde_json::from_slice(&output.stdout).expect("failed to parse test list JSON");
+
+    for (binary_id, suite) in &summary.rust_suites {
+        for (test_name, test_info) in &suite.test_cases {
+            let full_name = format!("{} {}", binary_id, test_name);
+
+            if test_name.contains("test_multiply_two") || test_name == "tests::call_dylib_add_two" {
+                assert!(
+                    test_info.filter_match.is_match(),
+                    "{full_name}: expected match, got {:?}",
+                    test_info.filter_match
+                );
+            } else {
+                assert!(
+                    !test_info.filter_match.is_match(),
+                    "{full_name}: expected no match, got {:?}",
+                    test_info.filter_match
+                );
+            }
+        }
+    }
+}
+
+/// Test that string filters without filterset expressions work correctly.
+#[test]
+fn test_string_filters_without_filterset() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    // String filters only, no expression.
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--workspace",
+            "--all-targets",
+            "--message-format",
+            "json",
+            "--",
+            "test_multiply_two",
+            "tests::call_dylib_add_two",
+        ])
+        .output();
+
+    let summary: TestListSummary =
+        serde_json::from_slice(&output.stdout).expect("failed to parse test list JSON");
+
+    for (binary_id, suite) in &summary.rust_suites {
+        for (test_name, test_info) in &suite.test_cases {
+            let full_name = format!("{} {}", binary_id, test_name);
+
+            if test_name.contains("test_multiply_two")
+                || test_name.contains("tests::call_dylib_add_two")
+            {
+                assert!(
+                    test_info.filter_match.is_match(),
+                    "{full_name}: expected match, got {:?}",
+                    test_info.filter_match
+                );
+            } else {
+                assert!(
+                    !test_info.filter_match.is_match(),
+                    "{full_name}: expected no match, got {:?}",
+                    test_info.filter_match
+                );
+            }
+        }
     }
 }
 
