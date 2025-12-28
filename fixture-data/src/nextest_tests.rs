@@ -42,19 +42,23 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
                 TestCaseFixture::new("test_ignored_fail", TestCaseFixtureStatus::IgnoredFail),
                 TestCaseFixture::new("test_result_failure", TestCaseFixtureStatus::Fail),
                 TestCaseFixture::new("test_slow_timeout", TestCaseFixtureStatus::IgnoredPass)
-                    .with_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING),
+                    .with_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING)
+                    .with_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING),
                 TestCaseFixture::new("test_slow_timeout_2", TestCaseFixtureStatus::IgnoredPass)
-                    .with_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING),
+                    .with_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING)
+                    .with_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING),
                 TestCaseFixture::new(
                     "test_slow_timeout_subprocess",
                     TestCaseFixtureStatus::IgnoredPass,
                 )
-                    .with_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING),
+                    .with_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING)
+                    .with_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING),
                 TestCaseFixture::new(
                     "test_flaky_slow_timeout_mod_3",
-                    TestCaseFixtureStatus::IgnoredFail
+                    TestCaseFixtureStatus::IgnoredFail,
                 )
-                    .with_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING),
+                    .with_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING)
+                    .with_property(TestCaseFixtureProperties::FLAKY_SLOW_TIMEOUT_SUBSTRING),
                 TestCaseFixture::new("test_stdin_closed", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_subprocess_doesnt_exit", TestCaseFixtureStatus::Leak),
                 TestCaseFixture::new("test_subprocess_doesnt_exit_fail", TestCaseFixtureStatus::FailLeak),

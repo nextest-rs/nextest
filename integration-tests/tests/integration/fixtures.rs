@@ -421,8 +421,10 @@ fn debug_run_properties(properties: RunProperties) -> String {
 // Regex patterns for parsing test result lines from nextest output.
 // Format: (STATUS) [duration] (attempt info) binary_id test_name
 // Example: "        PASS [   0.004s] (  1/249) nextest-runner cargo_config::test_..."
+// For flaky tests that eventually pass, the format includes "TRY N " prefix:
+// Example: "  TRY 3 PASS [   1.003s] (1/1) nextest-tests::basic test_flaky..."
 static PASS_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s+PASS \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap());
+    LazyLock::new(|| Regex::new(r"^\s+(?:TRY \d+ )?PASS \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap());
 static LEAK_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s+LEAK \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap());
 static LEAK_FAIL_RE: LazyLock<Regex> =
