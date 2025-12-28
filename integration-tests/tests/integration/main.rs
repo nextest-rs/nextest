@@ -1983,3 +1983,38 @@ fn test_rustc_version_verbose_errors() {
         );
     }
 }
+
+/// Test that `--run-ignored only` runs only ignored tests.
+#[test]
+fn test_run_ignored() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--run-ignored",
+            "only",
+            "-E",
+            // Filter out slow timeout tests to avoid long test times.
+            "not test(slow_timeout)",
+        ])
+        .unchecked(true)
+        .output();
+
+    // The run should fail because some ignored tests fail (e.g., test_ignored_fail).
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
+    );
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("default"),
+        RunProperties::RUN_IGNORED_ONLY,
+    );
+}

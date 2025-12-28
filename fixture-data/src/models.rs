@@ -38,6 +38,8 @@ bitflags::bitflags! {
         const BENCH_TERMINATION = 0x200;
         /// Run benchmarks with the `with-test-termination-only` profile.
         const BENCH_IGNORES_TEST_TIMEOUT = 0x400;
+        /// Run ignored tests only (--run-ignored only), excluding slow timeout tests.
+        const RUN_IGNORED_ONLY = 0x800;
     }
 }
 
@@ -214,6 +216,20 @@ impl TestCaseFixture {
             return !self.has_property(TestCaseFixtureProperties::BENCH_IGNORES_TEST_TIMEOUT);
         }
 
+        // RUN_IGNORED_ONLY: run only ignored tests, excluding slow timeout tests.
+        if properties.contains(RunProperties::RUN_IGNORED_ONLY) {
+            // Skip slow timeout tests (filtered out in the test).
+            if self.has_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING) {
+                return true;
+            }
+            // Skip non-ignored tests.
+            if !self.status.is_ignored() {
+                return true;
+            }
+            // Run other ignored tests.
+            return false;
+        }
+
         // Ignored tests are skipped by this test suite.
         if self.status.is_ignored() {
             return true;
@@ -265,8 +281,19 @@ impl TestCaseFixture {
             }
             TestCaseFixtureStatus::FailLeak => CheckResult::FailLeak,
             TestCaseFixtureStatus::Segfault => CheckResult::Abort,
-            TestCaseFixtureStatus::IgnoredPass | TestCaseFixtureStatus::IgnoredFail => {
-                unreachable!("ignored tests should be filtered out")
+            TestCaseFixtureStatus::IgnoredPass => {
+                if properties.contains(RunProperties::RUN_IGNORED_ONLY) {
+                    CheckResult::Pass
+                } else {
+                    unreachable!("ignored tests should be filtered out")
+                }
+            }
+            TestCaseFixtureStatus::IgnoredFail => {
+                if properties.contains(RunProperties::RUN_IGNORED_ONLY) {
+                    CheckResult::Fail
+                } else {
+                    unreachable!("ignored tests should be filtered out")
+                }
             }
         }
     }
@@ -334,5 +361,7 @@ bitflags::bitflags! {
         const BENCH_TERMINATION = 0x80;
         /// Benchmark that passes with the with-test-termination-only profile.
         const BENCH_IGNORES_TEST_TIMEOUT = 0x100;
+        /// Test with "slow_timeout" as a substring.
+        const SLOW_TIMEOUT_SUBSTRING = 0x200;
     }
 }
