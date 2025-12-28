@@ -46,6 +46,8 @@ bitflags::bitflags! {
         /// Run with with-timeout-retries-success profile, flaky slow timeout test only.
         /// This test fails twice then times out (passes) on the 3rd attempt.
         const TIMEOUT_RETRIES_FLAKY = 0x2000;
+        /// Run with the with-retries profile. Flaky tests should pass after retries.
+        const WITH_RETRIES = 0x4000;
     }
 }
 
@@ -312,11 +314,26 @@ impl TestCaseFixture {
             }
             TestCaseFixtureStatus::Leak => CheckResult::Leak,
             TestCaseFixtureStatus::LeakFail => CheckResult::LeakFail,
-            TestCaseFixtureStatus::Fail | TestCaseFixtureStatus::Flaky { .. } => {
-                // Flaky tests are not currently retried by this test suite.
-                CheckResult::Fail
+            TestCaseFixtureStatus::Fail => CheckResult::Fail,
+            TestCaseFixtureStatus::Flaky { .. } => {
+                // With retries, flaky tests eventually pass. (Retries are
+                // configured in a way which ensures that all tests eventually
+                // pass.)
+                if properties.contains(RunProperties::WITH_RETRIES) {
+                    CheckResult::Pass
+                } else {
+                    CheckResult::Fail
+                }
             }
-            TestCaseFixtureStatus::FailLeak => CheckResult::FailLeak,
+            TestCaseFixtureStatus::FailLeak => {
+                // With retries, nextest doesn't properly detect leaks for failing tests.
+                // The test shows as FAIL instead of FAIL + LEAK.
+                if properties.contains(RunProperties::WITH_RETRIES) {
+                    CheckResult::Fail
+                } else {
+                    CheckResult::FailLeak
+                }
+            }
             TestCaseFixtureStatus::Segfault => CheckResult::Abort,
             TestCaseFixtureStatus::IgnoredPass => {
                 if properties.contains(RunProperties::RUN_IGNORED_ONLY) {

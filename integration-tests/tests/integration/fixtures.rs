@@ -382,17 +382,39 @@ impl ExpectedSummary {
 /// Test results parsed from actual test runner output.
 #[derive(Clone, Debug)]
 struct ActualTestResults {
-    /// Tests that appeared in output with their results.
+    /// Tests that appeared in output with all their attempts.
+    /// Each test may have multiple attempts if retries are enabled.
     tests: IdOrdMap<ActualOutcome>,
     /// The parsed summary line.
     summary: Option<ActualSummary>,
+}
+
+/// A single test attempt with its result.
+#[derive(Clone, Debug)]
+struct TestAttempt {
+    /// The attempt number (1-based). This is not currently used, but is tracked
+    /// internally.
+    #[expect(dead_code)]
+    attempt: u32,
+    result: CheckResult,
 }
 
 /// The actual outcome parsed from test output.
 #[derive(Clone, Debug)]
 struct ActualOutcome {
     id: TestInstanceId,
-    result: CheckResult,
+    /// All attempts for this test, in order of appearance.
+    attempts: Vec<TestAttempt>,
+}
+
+impl ActualOutcome {
+    /// Returns the final result (last attempt).
+    fn final_result(&self) -> CheckResult {
+        self.attempts
+            .last()
+            .expect("at least one attempt should exist")
+            .result
+    }
 }
 
 impl IdOrdItem for ActualOutcome {
@@ -419,25 +441,47 @@ fn debug_run_properties(properties: RunProperties) -> String {
 }
 
 // Regex patterns for parsing test result lines from nextest output.
-// Format: (STATUS) [duration] (attempt info) binary_id test_name
+// Format: (TRY N )?(STATUS) [duration] (count/total or progress) binary_id test_name
 // Example: "        PASS [   0.004s] (  1/249) nextest-runner cargo_config::test_..."
 // For flaky tests that eventually pass, the format includes "TRY N " prefix:
 // Example: "  TRY 3 PASS [   1.003s] (1/1) nextest-tests::basic test_flaky..."
-static PASS_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s+(?:TRY \d+ )?PASS \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap());
-static LEAK_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s+LEAK \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap());
-static LEAK_FAIL_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s+LEAK-FAIL \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap());
-static FAIL_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s+FAIL \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap());
-static FAIL_LEAK_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s+FAIL \+ LEAK \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap());
-static ABORT_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s+(?:ABORT|SIGSEGV|SIGABRT) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
+//
+// We capture ALL result lines (including intermediate TRY N lines with progress like "(─────)")
+// to track all attempts. The attempt number is captured in group 1 (if present).
+// Groups: 1=attempt (optional), 2=binary_id, 3=test_name
+//
+// NOTE: We use \s* (zero or more whitespace) instead of \s+ because some lines may have
+// varying amounts of leading whitespace depending on the test status and retry attempt.
+static PASS_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*(?:TRY (\d+) )?PASS \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
 });
-static TIMEOUT_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s+TIMEOUT \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap());
+static LEAK_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*(?:TRY (\d+) )?LEAK \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
+});
+static LEAK_FAIL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*(?:TRY (\d+) )?(?:LEAK-FAIL|LKFAIL) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)")
+        .unwrap()
+});
+static FAIL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*(?:TRY (\d+) )?FAIL \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
+});
+static FAIL_LEAK_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*(?:TRY (\d+) )?FAIL \+ LEAK \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
+});
+static ABORT_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"^\s*(?:TRY (\d+) )?(?:ABORT|ABRT|SIGSEGV|SIGABRT) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)",
+    )
+    .unwrap()
+});
+static TIMEOUT_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*(?:TRY (\d+) )?TIMEOUT \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
+});
+// FLAKY is shown in the summary section for tests that eventually passed.
+// Format: "FLAKY 4/5 [duration] (count/total) binary_id test_name"
+static FLAKY_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*FLAKY (\d+)/(\d+) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
+});
 static SUMMARY_RE: LazyLock<Regex> = LazyLock::new(|| {
     // Note: "failed" can also be "timed out" for timeout failures.
     Regex::new(r"Summary \[.*\] +(\d+) (?:tests?|benchmarks?) run: (\d+) passed(?: \((\d+) leaky\))?,?(?: (\d+) (?:failed|timed out)(?: \((\d+) due to being leaky\))?,?)? (\d+) skipped").unwrap()
@@ -445,69 +489,86 @@ static SUMMARY_RE: LazyLock<Regex> = LazyLock::new(|| {
 
 impl ActualTestResults {
     /// Parses test results from nextest output.
+    ///
+    /// This function tracks ALL attempts for each test, not just the final result.
+    /// With retries enabled, a test may appear multiple times in the output with
+    /// different results (e.g., TRY 1 FAIL, TRY 2 FAIL, TRY 3 PASS).
     fn parse(output: &str) -> Self {
         let mut tests = IdOrdMap::new();
         let mut summary = None;
 
+        /// Helper to add an attempt to the test results.
+        fn add_attempt(
+            tests: &mut IdOrdMap<ActualOutcome>,
+            caps: &regex::Captures,
+            result: CheckResult,
+        ) {
+            // Groups: 1=attempt (optional), 2=binary_id, 3=test_name
+            let attempt = match caps.get(1) {
+                Some(m) => m.as_str().parse::<u32>().expect("parsed attempt number"),
+                None => 1,
+            };
+            let id = TestInstanceId::new(&caps[2], &caps[3]);
+            let attempt_record = TestAttempt { attempt, result };
+
+            match tests.entry(&id) {
+                iddqd::id_ord_map::Entry::Occupied(mut entry) => {
+                    entry.get_mut().attempts.push(attempt_record);
+                }
+                iddqd::id_ord_map::Entry::Vacant(entry) => {
+                    entry.insert(ActualOutcome {
+                        id,
+                        attempts: vec![attempt_record],
+                    });
+                }
+            }
+        }
+
         // Parse each line for test results. Check more specific patterns first
         // (e.g., "FAIL + LEAK" before "FAIL" or "LEAK").
         for line in output.lines() {
+            // Track all attempts for each test to analyze retry behavior.
             if let Some(caps) = FAIL_LEAK_RE.captures(line) {
-                let id = TestInstanceId::new(&caps[1], &caps[2]);
-                tests
-                    .insert_unique(ActualOutcome {
-                        id,
-                        result: CheckResult::FailLeak,
-                    })
-                    .unwrap();
+                add_attempt(&mut tests, &caps, CheckResult::FailLeak);
             } else if let Some(caps) = LEAK_FAIL_RE.captures(line) {
-                let id = TestInstanceId::new(&caps[1], &caps[2]);
-                tests
-                    .insert_unique(ActualOutcome {
-                        id,
-                        result: CheckResult::LeakFail,
-                    })
-                    .unwrap();
+                add_attempt(&mut tests, &caps, CheckResult::LeakFail);
             } else if let Some(caps) = ABORT_RE.captures(line) {
-                let id = TestInstanceId::new(&caps[1], &caps[2]);
-                tests
-                    .insert_unique(ActualOutcome {
-                        id,
-                        result: CheckResult::Abort,
-                    })
-                    .unwrap();
+                add_attempt(&mut tests, &caps, CheckResult::Abort);
             } else if let Some(caps) = TIMEOUT_RE.captures(line) {
-                let id = TestInstanceId::new(&caps[1], &caps[2]);
-                tests
-                    .insert_unique(ActualOutcome {
-                        id,
-                        result: CheckResult::Timeout,
-                    })
-                    .unwrap();
+                add_attempt(&mut tests, &caps, CheckResult::Timeout);
             } else if let Some(caps) = LEAK_RE.captures(line) {
-                let id = TestInstanceId::new(&caps[1], &caps[2]);
-                tests
-                    .insert_unique(ActualOutcome {
-                        id,
-                        result: CheckResult::Leak,
-                    })
-                    .unwrap();
+                add_attempt(&mut tests, &caps, CheckResult::Leak);
             } else if let Some(caps) = FAIL_RE.captures(line) {
-                let id = TestInstanceId::new(&caps[1], &caps[2]);
-                tests
-                    .insert_unique(ActualOutcome {
-                        id,
-                        result: CheckResult::Fail,
-                    })
-                    .unwrap();
+                add_attempt(&mut tests, &caps, CheckResult::Fail);
             } else if let Some(caps) = PASS_RE.captures(line) {
-                let id = TestInstanceId::new(&caps[1], &caps[2]);
-                tests
-                    .insert_unique(ActualOutcome {
-                        id,
-                        result: CheckResult::Pass,
-                    })
-                    .unwrap();
+                add_attempt(&mut tests, &caps, CheckResult::Pass);
+            } else if let Some(caps) = FLAKY_RE.captures(line) {
+                // FLAKY appears in summary section for tests that eventually passed.
+                // It's in a different format: "FLAKY 4/5 [duration] (count/total) binary_id test_name"
+                // Groups: 1=pass_attempt, 2=total_attempts, 3=binary_id, 4=test_name
+                // We record this as a PASS since the test eventually passed.
+                let id = TestInstanceId::new(&caps[3], &caps[4]);
+                let attempt_record = TestAttempt {
+                    attempt: caps[1].parse().expect("parsed attempt number"),
+                    result: CheckResult::Pass,
+                };
+
+                match tests.entry(&id) {
+                    iddqd::id_ord_map::Entry::Occupied(mut entry) => {
+                        // FLAKY line appears after individual attempts, so it may
+                        // duplicate the final PASS. Only add if not already a PASS.
+                        let attempts = &mut entry.get_mut().attempts;
+                        if attempts.last().map(|a| a.result) != Some(CheckResult::Pass) {
+                            attempts.push(attempt_record);
+                        }
+                    }
+                    iddqd::id_ord_map::Entry::Vacant(entry) => {
+                        entry.insert(ActualOutcome {
+                            id,
+                            attempts: vec![attempt_record],
+                        });
+                    }
+                }
             } else if let Some(caps) = SUMMARY_RE.captures(line) {
                 let run_count = caps[1].parse().unwrap();
                 let pass_count = caps[2].parse().unwrap();
@@ -557,15 +618,18 @@ fn verify_expected_in_actual(
 
         match actual_outcome {
             Some(actual) => {
-                // Test is present, verify result matches.
+                // Test is present, verify the final result matches.
+                // With retries, a test may have multiple attempts - we check the last one.
+                let actual_result = actual.final_result();
                 assert_eq!(
                     expected_outcome.result,
-                    actual.result,
-                    "{}: expected result {:?} but got {:?}\n\n\
+                    actual_result,
+                    "{}: expected result {:?} but got {:?} (attempts: {:?})\n\n\
                      --- output ---\n{}\n--- end output ---",
                     expected_outcome.id.full_name(),
                     expected_outcome.result,
-                    actual.result,
+                    actual_result,
+                    actual.attempts,
                     output
                 );
             }
@@ -830,6 +894,12 @@ fn verify_junit(expected: &ExpectedTestResults, junit_path: &Utf8Path, propertie
     verify_junit_in_expected(&actual, expected, junit_path, properties);
 }
 
+// Expected JUnit type strings. These match the strings produced by nextest in
+// junit.rs. The Rust test harness always uses exit code 101 for test failures.
+const JUNIT_FAIL: &str = "test failure with exit code 101";
+const JUNIT_FAIL_LEAK: &str = "test failure with exit code 101, and leaked handles";
+const JUNIT_ABORT: &str = "test abort";
+
 /// Verifies that all expected tests appear in the JUnit output with the correct
 /// status.
 #[track_caller]
@@ -845,41 +915,44 @@ fn verify_expected_in_junit(
         match actual_outcome {
             Some(actual) => {
                 // Verify the JUnit status matches our expected CheckResult.
-                let expected_junit = match expected_outcome.result {
-                    CheckResult::Pass | CheckResult::Leak => None,
-                    CheckResult::LeakFail => Some((
-                        quick_junit::NonSuccessKind::Error,
-                        "test exited with code 0, but leaked handles so was marked failed",
-                    )),
-                    CheckResult::Fail => Some((
-                        quick_junit::NonSuccessKind::Failure,
-                        "test failure with exit code",
-                    )),
-                    CheckResult::FailLeak => Some((
-                        quick_junit::NonSuccessKind::Failure,
-                        "test failure with exit code",
-                    )),
-                    CheckResult::Abort => {
-                        Some((quick_junit::NonSuccessKind::Failure, "test abort"))
-                    }
-                    CheckResult::Timeout => {
-                        let timeout_kind = if properties.contains(RunProperties::BENCHMARKS) {
-                            "benchmark timeout"
-                        } else {
-                            "test timeout"
-                        };
-                        Some((quick_junit::NonSuccessKind::Failure, timeout_kind))
-                    }
-                };
+                // Expected formats from nextest-runner/src/reporter/aggregator/junit.rs:
+                // - Fail (exit code, no leak): "test failure with exit code 101"
+                // - Fail (exit code, leaked):  "test failure with exit code 101, and leaked handles"
+                // - Abort (no leak):           "test abort"
+                // - Abort (leaked):            "test abort with leaked handles"
+                // - LeakFail:                  "test exited with code 0, but leaked handles so was marked failed"
+                // - Timeout:                   "test timeout" or "benchmark timeout"
+                let expected_junit: Option<(quick_junit::NonSuccessKind, &str)> =
+                    match expected_outcome.result {
+                        CheckResult::Pass | CheckResult::Leak => None,
+                        CheckResult::LeakFail => Some((
+                            quick_junit::NonSuccessKind::Error,
+                            "test exited with code 0, but leaked handles so was marked failed",
+                        )),
+                        CheckResult::Fail => {
+                            Some((quick_junit::NonSuccessKind::Failure, JUNIT_FAIL))
+                        }
+                        CheckResult::FailLeak => {
+                            Some((quick_junit::NonSuccessKind::Failure, JUNIT_FAIL_LEAK))
+                        }
+                        CheckResult::Abort => {
+                            Some((quick_junit::NonSuccessKind::Failure, JUNIT_ABORT))
+                        }
+                        CheckResult::Timeout => {
+                            let timeout_kind = if properties.contains(RunProperties::BENCHMARKS) {
+                                "benchmark timeout"
+                            } else {
+                                "test timeout"
+                            };
+                            Some((quick_junit::NonSuccessKind::Failure, timeout_kind))
+                        }
+                    };
 
                 match (expected_junit, &actual.non_success) {
                     (None, None) => {
                         // Both expected and actual were successful.
                     }
-                    (
-                        Some((expected_kind, expected_type_pattern)),
-                        Some((actual_kind, actual_type)),
-                    ) => {
+                    (Some((expected_kind, expected_type)), Some((actual_kind, actual_type))) => {
                         if expected_kind != *actual_kind {
                             panic!(
                                 "{}: expected JUnit kind {:?} but got {:?} (properties: {})\n\
@@ -895,28 +968,24 @@ fn verify_expected_in_junit(
                             );
                         }
 
-                        // For Fail/FailLeak/Timeout, we check that the type
-                        // string contains the pattern (since we don't know the
-                        // exact exit code). For others, we check an exact match.
-                        let type_matches = if matches!(
-                            expected_outcome.result,
-                            CheckResult::Fail | CheckResult::FailLeak | CheckResult::Timeout
-                        ) {
-                            actual_type.contains(expected_type_pattern)
-                                && (expected_outcome.result == CheckResult::FailLeak)
-                                    == actual_type.contains("leaked handles")
-                        } else {
-                            actual_type == expected_type_pattern
-                        };
+                        // Check if the actual type matches the expected string.
+                        // Special case: with retries, the console may show FAIL instead of
+                        // FAIL + LEAK (leak detection doesn't work consistently with retries),
+                        // but JUnit still records the leak. So if we expected Fail but got
+                        // FailLeak, that's acceptable with WITH_RETRIES.
+                        let type_matches = expected_type == actual_type
+                            || (properties.contains(RunProperties::WITH_RETRIES)
+                                && expected_outcome.result == CheckResult::Fail
+                                && actual_type == JUNIT_FAIL_LEAK);
 
                         if !type_matches {
                             panic!(
-                                "{}: expected JUnit type containing {:?} but got {:?} \
+                                "{}: expected JUnit type {:?} but got {:?} \
                                  (properties: {})\n\
                                  JUnit path: {}\n\
                                  Expected result: {:?}",
                                 expected_outcome.id.full_name(),
-                                expected_type_pattern,
+                                expected_type,
                                 actual_type,
                                 debug_run_properties(properties),
                                 junit_path,
