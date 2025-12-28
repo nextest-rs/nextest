@@ -100,9 +100,13 @@ impl DisplayReporterBuilder {
 
         let stderr = match output {
             ReporterStderr::Terminal => {
-                let progress_bar =
-                    self.progress_bar(theme_characters.progress_chars, self.max_progress_running);
-                let term_progress = TerminalProgress::new(configs, &io::stderr());
+                let is_terminal = io::stderr().is_terminal();
+                let progress_bar = self.progress_bar(
+                    is_terminal,
+                    theme_characters.progress_chars,
+                    self.max_progress_running,
+                );
+                let term_progress = TerminalProgress::new(configs, is_terminal);
 
                 show_progress_bar = progress_bar
                     .as_ref()
@@ -168,6 +172,7 @@ impl DisplayReporterBuilder {
 
     fn progress_bar(
         &self,
+        is_terminal: bool,
         progress_chars: &'static str,
         max_progress_running: MaxProgressRunning,
     ) -> Option<ProgressBarState> {
@@ -194,7 +199,7 @@ impl DisplayReporterBuilder {
         // If this is not a terminal, don't enable the progress bar. indicatif
         // also has this logic internally, but we do this check outside so we
         // know whether we're writing to an external buffer or to indicatif.
-        if !std::io::stderr().is_terminal() {
+        if !is_terminal {
             return None;
         }
 

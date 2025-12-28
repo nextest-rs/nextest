@@ -514,7 +514,7 @@ pub(super) struct TerminalProgress {
 impl TerminalProgress {
     const ENV: &str = "CARGO_TERM_PROGRESS_TERM_INTEGRATION";
 
-    pub(super) fn new(configs: &CargoConfigs, stream: &dyn IsTerminal) -> Option<Self> {
+    pub(super) fn new(configs: &CargoConfigs, is_terminal: bool) -> Option<Self> {
         // See whether terminal integration is enabled in Cargo.
         for config in configs.discovered_configs() {
             match config {
@@ -565,7 +565,7 @@ impl TerminalProgress {
             }
         }
 
-        supports_osc_9_4(stream).then(Self::default)
+        supports_osc_9_4(is_terminal).then(Self::default)
     }
 
     pub(super) fn update_progress(&mut self, event: &TestEvent<'_>) {
@@ -621,8 +621,8 @@ impl TerminalProgress {
 }
 
 /// Determines whether the terminal supports ANSI OSC 9;4.
-fn supports_osc_9_4(stream: &dyn IsTerminal) -> bool {
-    if !stream.is_terminal() {
+fn supports_osc_9_4(is_terminal: bool) -> bool {
+    if !is_terminal {
         debug!(
             "autodetect terminal progress reporting: disabling since \
              passed-in stream (usually stderr) is not a terminal"
