@@ -30,6 +30,7 @@ This document captures code conventions for the nextest project. It is intended 
 - Use type system extensively: newtypes, builder patterns, type states, lifetimes.
 - Use message passing or the actor model to avoid data races.
 - Comprehensive testing including edge cases, race conditions, and stress tests.
+- Pay attention to what facilities already exist for testing, and aim to reuse them.
 - Getting the details right is really important!
 
 ### Documentation
@@ -112,6 +113,7 @@ For doctests, use `cargo test --doc` (doctests are not supported by nextest).
 - Unit tests in the same file as the code they test.
 - Integration tests in `integration-tests/` crate.
 - Fixtures in dedicated `fixture-data/` crate.
+  - This crate has a model of expected tests under various scenarios. Prefer using this model over implementing spot checks by hand.
 - Test utilities in `internal-test/` crate.
 
 ### Testing Tools
