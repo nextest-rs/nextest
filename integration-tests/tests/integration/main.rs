@@ -2183,3 +2183,83 @@ fn test_run_ignored() {
         RunProperties::RUN_IGNORED_ONLY,
     );
 }
+
+/// Test that timed out tests with `on-timeout=pass` are not retried.
+///
+/// The profile `with-timeout-retries-success` has:
+/// - `retries = 2`
+/// - `slow-timeout = { period = "500ms", terminate-after = 2, on-timeout = "pass" }`
+///
+/// Tests that time out with `on-timeout = "pass"` should be marked as passed.
+#[test]
+fn test_timeout_with_retries() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--profile",
+            "with-timeout-retries-success",
+            "--run-ignored",
+            "only",
+            "-E",
+            // Only run the slow timeout tests (not the flaky one).
+            "test(/^test_slow_timeout/)",
+        ])
+        .output();
+
+    // Should succeed because on-timeout=pass marks timed out tests as passed.
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::OK),
+        "timed out tests with on-timeout=pass should succeed\n{output}"
+    );
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("with-timeout-retries-success"),
+        RunProperties::TIMEOUT_RETRIES_PASS | RunProperties::SKIP_SUMMARY_CHECK,
+    );
+}
+
+/// Test that a flaky test that times out on the 3rd attempt is handled correctly.
+///
+/// The test `test_flaky_slow_timeout_mod_3`:
+/// - Fails on attempts 1 and 2 (attempt % 3 != 0)
+/// - Times out on attempt 3 (attempt % 3 == 0, so it sleeps until timeout)
+///
+/// With the `with-timeout-retries-success` profile (retries=2, on-timeout=pass),
+/// the test should be marked as flaky (failed twice, then passed via timeout).
+#[test]
+fn test_timeout_with_flaky() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--profile",
+            "with-timeout-retries-success",
+            "--run-ignored",
+            "only",
+            "-E",
+            "test(test_flaky_slow_timeout_mod_3)",
+        ])
+        .output();
+
+    // Should succeed because the test eventually passes (via timeout with on-timeout=pass).
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::OK),
+        "flaky test that eventually times out with on-timeout=pass should succeed\n{output}"
+    );
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("with-timeout-retries-success"),
+        RunProperties::TIMEOUT_RETRIES_FLAKY | RunProperties::SKIP_SUMMARY_CHECK,
+    );
+}

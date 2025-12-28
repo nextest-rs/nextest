@@ -40,6 +40,12 @@ bitflags::bitflags! {
         const BENCH_IGNORES_TEST_TIMEOUT = 0x400;
         /// Run ignored tests only (--run-ignored only), excluding slow timeout tests.
         const RUN_IGNORED_ONLY = 0x800;
+        /// Run with with-timeout-retries-success profile, slow_timeout tests only.
+        /// These tests time out but pass due to on-timeout=pass.
+        const TIMEOUT_RETRIES_PASS = 0x1000;
+        /// Run with with-timeout-retries-success profile, flaky slow timeout test only.
+        /// This test fails twice then times out (passes) on the 3rd attempt.
+        const TIMEOUT_RETRIES_FLAKY = 0x2000;
     }
 }
 
@@ -216,7 +222,22 @@ impl TestCaseFixture {
             return !self.has_property(TestCaseFixtureProperties::BENCH_IGNORES_TEST_TIMEOUT);
         }
 
-        // RUN_IGNORED_ONLY: run only ignored tests, excluding slow timeout tests.
+        // TIMEOUT_RETRIES_PASS - only run tests with the
+        // TEST_SLOW_TIMEOUT_SUBSTRING property (not benchmarks). These are the
+        // test_slow_timeout* tests that time out but pass.
+        if properties.contains(RunProperties::TIMEOUT_RETRIES_PASS) {
+            // Skip if not SLOW_TIMEOUT or if it's a benchmark.
+            return !self.has_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING)
+                || self.has_property(TestCaseFixtureProperties::IS_BENCHMARK);
+        }
+
+        // TIMEOUT_RETRIES_FLAKY - only run the flaky slow timeout test.
+        if properties.contains(RunProperties::TIMEOUT_RETRIES_FLAKY) {
+            return !self.has_property(TestCaseFixtureProperties::FLAKY_SLOW_TIMEOUT_SUBSTRING);
+        }
+
+        // RUN_IGNORED_ONLY: run only ignored tests, excluding slow timeout
+        // tests.
         if properties.contains(RunProperties::RUN_IGNORED_ONLY) {
             // Skip slow timeout tests (filtered out in the test).
             if self.has_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING) {
@@ -258,6 +279,22 @@ impl TestCaseFixture {
         // bench.slow-timeout (30 years default) instead of slow-timeout.
         if self.has_property(TestCaseFixtureProperties::BENCH_IGNORES_TEST_TIMEOUT)
             && properties.contains(RunProperties::BENCH_IGNORES_TEST_TIMEOUT)
+        {
+            return CheckResult::Pass;
+        }
+
+        // TIMEOUT_RETRIES_PASS - tests time out but pass due to on-timeout=pass.
+        // The output shows PASS, not TIMEOUT.
+        if self.has_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING)
+            && properties.contains(RunProperties::TIMEOUT_RETRIES_PASS)
+        {
+            return CheckResult::Pass;
+        }
+
+        // TIMEOUT_RETRIES_FLAKY - test is flaky (fails twice, then times out and passes).
+        // The output shows PASS, not TIMEOUT.
+        if self.has_property(TestCaseFixtureProperties::FLAKY_SLOW_TIMEOUT_SUBSTRING)
+            && properties.contains(RunProperties::TIMEOUT_RETRIES_FLAKY)
         {
             return CheckResult::Pass;
         }
@@ -363,5 +400,9 @@ bitflags::bitflags! {
         const BENCH_IGNORES_TEST_TIMEOUT = 0x100;
         /// Test with "slow_timeout" as a substring.
         const SLOW_TIMEOUT_SUBSTRING = 0x200;
+        /// Test with "test_slow_timeout" as a substring.
+        const TEST_SLOW_TIMEOUT_SUBSTRING = 0x400;
+        /// Test with "flaky_slow_timeout" as a substring.
+        const FLAKY_SLOW_TIMEOUT_SUBSTRING = 0x800;
     }
 }
