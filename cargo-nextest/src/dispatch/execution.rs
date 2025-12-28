@@ -502,7 +502,7 @@ impl App {
             ListType::BinariesOnly => {
                 let mut writer = output_writer.stdout_writer();
                 binary_list.write(
-                    message_format.to_output_format(self.base.output.verbose),
+                    message_format.to_output_format(self.base.output.verbose, writer.is_terminal()),
                     &mut writer,
                     self.base
                         .output
@@ -529,7 +529,7 @@ impl App {
 
                 let mut writer = output_writer.stdout_writer();
                 test_list.write(
-                    message_format.to_output_format(self.base.output.verbose),
+                    message_format.to_output_format(self.base.output.verbose, writer.is_terminal()),
                     &mut writer,
                     self.base
                         .output

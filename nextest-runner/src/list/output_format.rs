@@ -16,6 +16,12 @@ pub enum OutputFormat {
         verbose: bool,
     },
 
+    /// One test per line output format.
+    Oneline {
+        /// Whether to produce verbose output.
+        verbose: bool,
+    },
+
     /// Machine-readable output format.
     Serializable(SerializableFormat),
 }

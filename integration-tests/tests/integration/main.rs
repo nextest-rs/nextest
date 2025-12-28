@@ -145,6 +145,37 @@ fn test_list_full() {
         .output();
 
     check_list_full_output(&output.stdout, None);
+
+    // Test oneline format: output should be one test per line with format "binary_id test_name".
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--workspace",
+            "--all-targets",
+            "--message-format",
+            "oneline",
+        ])
+        .output();
+
+    check_list_oneline_output(&output.stdout_as_str());
+
+    // Test auto format: when stdout is not a TTY, auto should produce oneline format.
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--workspace",
+            "--all-targets",
+            "--message-format",
+            "auto",
+        ])
+        .output();
+
+    // Auto format should produce oneline when stdout is not a TTY.
+    check_list_oneline_output(&output.stdout_as_str());
 }
 
 #[test]
@@ -199,6 +230,23 @@ fn test_list_binaries_only() {
         .output();
 
     insta::assert_snapshot!(output.stderr_as_str());
+
+    // Test oneline format for binaries-only: output should be one binary per line.
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--workspace",
+            "--all-targets",
+            "--message-format",
+            "oneline",
+            "--list-type",
+            "binaries-only",
+        ])
+        .output();
+
+    check_list_oneline_binaries_output(&output.stdout_as_str());
 }
 
 #[test]

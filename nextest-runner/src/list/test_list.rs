@@ -531,6 +531,9 @@ impl<'g> TestList<'g> {
             OutputFormat::Human { verbose } => self
                 .write_human(writer, verbose, colorize)
                 .map_err(WriteTestListError::Io),
+            OutputFormat::Oneline { verbose } => self
+                .write_oneline(writer, verbose, colorize)
+                .map_err(WriteTestListError::Io),
             OutputFormat::Serializable(format) => format.to_writer(&self.to_summary(), writer),
         }
     }
@@ -794,6 +797,57 @@ impl<'g> TestList<'g> {
 
             writer = indented.into_inner();
         }
+        Ok(())
+    }
+
+    /// Writes this test list out in a one-line-per-test format.
+    pub fn write_oneline(
+        &self,
+        writer: &mut dyn WriteStr,
+        verbose: bool,
+        colorize: bool,
+    ) -> io::Result<()> {
+        let mut styles = Styles::default();
+        if colorize {
+            styles.colorize();
+        }
+
+        for info in &self.rust_suites {
+            match &info.status {
+                RustTestSuiteStatus::Listed { test_cases } => {
+                    for case in test_cases.iter() {
+                        let is_match = case.test_info.filter_match.is_match();
+                        // Skip tests that don't match the filter (unless verbose).
+                        if !verbose && !is_match {
+                            continue;
+                        }
+
+                        write!(writer, "{} ", info.binary_id.style(styles.binary_id))?;
+                        write_test_name(&case.name, &styles, writer)?;
+
+                        if verbose {
+                            write!(
+                                writer,
+                                " [{}{}] [{}{}] [{}{}]{}",
+                                "bin: ".style(styles.field),
+                                info.binary_path,
+                                "cwd: ".style(styles.field),
+                                info.cwd,
+                                "build platform: ".style(styles.field),
+                                info.build_platform,
+                                if is_match { "" } else { " (skipped)" },
+                            )?;
+                        }
+
+                        writeln!(writer)?;
+                    }
+                }
+                RustTestSuiteStatus::Skipped { .. } => {
+                    // Skip binaries that were not listed.
+                }
+            }
+        }
+
         Ok(())
     }
 }
@@ -1742,6 +1796,19 @@ mod tests {
                 }
               }
             }"#};
+        static EXPECTED_ONELINE: &str = indoc! {"
+            fake-package::fake-binary benches::bench_foo
+            fake-package::fake-binary tests::baz::test_quux
+            fake-package::fake-binary tests::foo::test_bar
+        "};
+        static EXPECTED_ONELINE_VERBOSE: &str = indoc! {"
+            fake-package::fake-binary benches::bench_foo [bin: /fake/binary] [cwd: /fake/cwd] [build platform: target]
+            fake-package::fake-binary benches::ignored_bench_foo [bin: /fake/binary] [cwd: /fake/cwd] [build platform: target] (skipped)
+            fake-package::fake-binary tests::baz::test_ignored [bin: /fake/binary] [cwd: /fake/cwd] [build platform: target] (skipped)
+            fake-package::fake-binary tests::baz::test_quux [bin: /fake/binary] [cwd: /fake/cwd] [build platform: target]
+            fake-package::fake-binary tests::foo::test_bar [bin: /fake/binary] [cwd: /fake/cwd] [build platform: target]
+            fake-package::fake-binary tests::ignored::test_bar [bin: /fake/binary] [cwd: /fake/cwd] [build platform: target] (skipped)
+        "};
 
         assert_eq!(
             test_list
@@ -1766,6 +1833,18 @@ mod tests {
                 .to_string(OutputFormat::Serializable(SerializableFormat::JsonPretty))
                 .expect("json-pretty succeeded"),
             EXPECTED_JSON_PRETTY
+        );
+        assert_eq!(
+            test_list
+                .to_string(OutputFormat::Oneline { verbose: false })
+                .expect("oneline succeeded"),
+            EXPECTED_ONELINE
+        );
+        assert_eq!(
+            test_list
+                .to_string(OutputFormat::Oneline { verbose: true })
+                .expect("oneline verbose succeeded"),
+            EXPECTED_ONELINE_VERBOSE
         );
     }
 
