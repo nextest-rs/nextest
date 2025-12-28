@@ -4,7 +4,7 @@
 use super::temp_project::TempProject;
 use camino::Utf8Path;
 use fixture_data::{
-    models::{CheckResult, RunProperty, TestCaseFixtureProperty, TestSuiteFixtureProperty},
+    models::{CheckResult, RunProperties, TestCaseFixtureProperties, TestSuiteFixtureProperties},
     nextest_tests::EXPECTED_TEST_SUITES,
 };
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
@@ -175,7 +175,7 @@ struct ExpectedTestResults {
 
 impl ExpectedTestResults {
     /// Builds expected test results by applying filters to fixture data based on properties.
-    fn new(properties: u64) -> Self {
+    fn new(properties: RunProperties) -> Self {
         let mut should_run = IdOrdMap::new();
         let mut should_not_run = BTreeSet::new();
         let mut summary = ExpectedSummary::default();
@@ -184,10 +184,10 @@ impl ExpectedTestResults {
             let binary_id = &fixture.binary_id;
 
             // Check if the entire test suite should be skipped.
-            let skip_suite = (fixture.has_property(TestSuiteFixtureProperty::NotInDefaultSet)
-                && properties & RunProperty::WithDefaultFilter as u64 != 0)
-                || (!fixture.has_property(TestSuiteFixtureProperty::MatchesCdylibExample)
-                    && properties & RunProperty::CdyLibExamplePackageFilter as u64 != 0);
+            let skip_suite = (fixture.has_property(TestSuiteFixtureProperties::NOT_IN_DEFAULT_SET)
+                && properties.contains(RunProperties::WITH_DEFAULT_FILTER))
+                || (!fixture.has_property(TestSuiteFixtureProperties::MATCHES_CDYLIB_EXAMPLE)
+                    && properties.contains(RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER));
 
             if skip_suite {
                 // The entire suite should not appear in output.
@@ -201,9 +201,9 @@ impl ExpectedTestResults {
             for test in &fixture.test_cases {
                 let id = TestInstanceId::new(binary_id.as_str(), test.name);
 
-                if properties & RunProperty::Benchmarks as u64 != 0 {
+                if properties.contains(RunProperties::BENCHMARKS) {
                     // We don't consider skipped tests while running benchmarks.
-                    if !test.has_property(TestCaseFixtureProperty::IsBenchmark) {
+                    if !test.has_property(TestCaseFixtureProperties::IS_BENCHMARK) {
                         continue;
                     }
                 }
@@ -328,42 +328,8 @@ struct ActualSummary {
     skip_count: usize,
 }
 
-fn debug_run_properties(properties: u64) -> String {
-    let mut ret = String::new();
-    if properties & RunProperty::Relocated as u64 != 0 {
-        ret.push_str("relocated ");
-    }
-    if properties & RunProperty::WithDefaultFilter as u64 != 0 {
-        ret.push_str("with-default-filter ");
-    }
-    if properties & RunProperty::WithSkipCdylibFilter as u64 != 0 {
-        ret.push_str("with-skip-cdylib-filter ");
-    }
-    if properties & RunProperty::WithMultiplyTwoExactFilter as u64 != 0 {
-        ret.push_str("with-exact-filter ");
-    }
-    if properties & RunProperty::CdyLibExamplePackageFilter as u64 != 0 {
-        ret.push_str("with-dylib-package-filter ");
-    }
-    if properties & RunProperty::SkipSummaryCheck as u64 != 0 {
-        ret.push_str("with-skip-summary-check ");
-    }
-    if properties & RunProperty::ExpectNoBinaries as u64 != 0 {
-        ret.push_str("with-expect-no-binaries ");
-    }
-    if properties & RunProperty::Benchmarks as u64 != 0 {
-        ret.push_str("benchmarks ");
-    }
-    if properties & RunProperty::BenchOverrideTimeout as u64 != 0 {
-        ret.push_str("bench-override-timeout ");
-    }
-    if properties & RunProperty::BenchTermination as u64 != 0 {
-        ret.push_str("bench-termination ");
-    }
-    if properties & RunProperty::BenchIgnoresTestTimeout as u64 != 0 {
-        ret.push_str("bench-ignores-test-timeout ");
-    }
-    ret
+fn debug_run_properties(properties: RunProperties) -> String {
+    format!("{properties:?}")
 }
 
 // Regex patterns for parsing test result lines from nextest output.
@@ -586,10 +552,10 @@ fn verify_summary(
     expected_summary: &ExpectedSummary,
     actual_summary: Option<&ActualSummary>,
     output: &str,
-    properties: u64,
+    properties: RunProperties,
 ) {
     // Skip the summary check if requested.
-    if properties & RunProperty::SkipSummaryCheck as u64 != 0 {
+    if properties.contains(RunProperties::SKIP_SUMMARY_CHECK) {
         return;
     }
 
@@ -651,17 +617,21 @@ fn verify_summary(
 }
 
 #[track_caller]
-pub fn check_run_output(stderr: &[u8], properties: u64) {
+pub fn check_run_output(stderr: &[u8], properties: RunProperties) {
     check_run_output_impl(stderr, None, properties);
 }
 
 #[track_caller]
-pub fn check_run_output_with_junit(stderr: &[u8], junit_path: &Utf8Path, properties: u64) {
+pub fn check_run_output_with_junit(
+    stderr: &[u8],
+    junit_path: &Utf8Path,
+    properties: RunProperties,
+) {
     check_run_output_impl(stderr, Some(junit_path), properties);
 }
 
 #[track_caller]
-fn check_run_output_impl(stderr: &[u8], junit_path: Option<&Utf8Path>, properties: u64) {
+fn check_run_output_impl(stderr: &[u8], junit_path: Option<&Utf8Path>, properties: RunProperties) {
     let output = String::from_utf8(stderr.to_vec()).unwrap();
 
     println!("{output}");
@@ -769,7 +739,7 @@ impl ActualJunitResults {
 
 /// Verifies that JUnit output matches expected test results.
 #[track_caller]
-fn verify_junit(expected: &ExpectedTestResults, junit_path: &Utf8Path, properties: u64) {
+fn verify_junit(expected: &ExpectedTestResults, junit_path: &Utf8Path, properties: RunProperties) {
     let actual = ActualJunitResults::parse(junit_path);
 
     verify_expected_in_junit(expected, &actual, junit_path, properties);
@@ -784,7 +754,7 @@ fn verify_expected_in_junit(
     expected: &ExpectedTestResults,
     actual: &ActualJunitResults,
     junit_path: &Utf8Path,
-    properties: u64,
+    properties: RunProperties,
 ) {
     for expected_outcome in &expected.should_run {
         let actual_outcome = actual.tests.get(&expected_outcome.id);
@@ -810,7 +780,7 @@ fn verify_expected_in_junit(
                         Some((quick_junit::NonSuccessKind::Failure, "test abort"))
                     }
                     CheckResult::Timeout => {
-                        let timeout_kind = if properties & RunProperty::Benchmarks as u64 != 0 {
+                        let timeout_kind = if properties.contains(RunProperties::BENCHMARKS) {
                             "benchmark timeout"
                         } else {
                             "test timeout"
@@ -933,7 +903,7 @@ fn verify_junit_in_expected(
     actual: &ActualJunitResults,
     expected: &ExpectedTestResults,
     junit_path: &Utf8Path,
-    properties: u64,
+    properties: RunProperties,
 ) {
     for outcome in &actual.tests {
         if !expected.should_run.contains_key(&outcome.id) {

@@ -9,6 +9,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+bitflags.workspace = true
 iddqd.workspace = true
 nextest-metadata.workspace = true
 nextest-workspace-hack.workspace = true

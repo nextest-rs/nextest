@@ -18,26 +18,27 @@ pub enum CheckResult {
     Timeout,
 }
 
-/// Properties that control which tests should be run in integration test invocations.
-#[derive(Clone, Copy, Debug)]
-#[repr(u64)]
-pub enum RunProperty {
-    Relocated = 0x1,
-    WithDefaultFilter = 0x2,
-    // --skip cdylib
-    WithSkipCdylibFilter = 0x4,
-    // --exact test_multiply_two tests::test_multiply_two_cdylib
-    WithMultiplyTwoExactFilter = 0x8,
-    CdyLibExamplePackageFilter = 0x10,
-    SkipSummaryCheck = 0x20,
-    ExpectNoBinaries = 0x40,
-    Benchmarks = 0x80,
-    /// Run ignored benchmarks with the `with-bench-override` profile.
-    BenchOverrideTimeout = 0x100,
-    /// Run ignored benchmarks with the `with-bench-termination` profile.
-    BenchTermination = 0x200,
-    /// Run benchmarks with the `with-test-termination-only` profile.
-    BenchIgnoresTestTimeout = 0x400,
+bitflags::bitflags! {
+    /// Properties that control which tests should be run in integration test invocations.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct RunProperties: u64 {
+        const RELOCATED = 0x1;
+        const WITH_DEFAULT_FILTER = 0x2;
+        // --skip cdylib
+        const WITH_SKIP_CDYLIB_FILTER = 0x4;
+        // --exact test_multiply_two tests::test_multiply_two_cdylib
+        const WITH_MULTIPLY_TWO_EXACT_FILTER = 0x8;
+        const CDYLIB_EXAMPLE_PACKAGE_FILTER = 0x10;
+        const SKIP_SUMMARY_CHECK = 0x20;
+        const EXPECT_NO_BINARIES = 0x40;
+        const BENCHMARKS = 0x80;
+        /// Run ignored benchmarks with the `with-bench-override` profile.
+        const BENCH_OVERRIDE_TIMEOUT = 0x100;
+        /// Run ignored benchmarks with the `with-bench-termination` profile.
+        const BENCH_TERMINATION = 0x200;
+        /// Run benchmarks with the `with-test-termination-only` profile.
+        const BENCH_IGNORES_TEST_TIMEOUT = 0x400;
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -46,7 +47,7 @@ pub struct TestSuiteFixture {
     pub binary_name: &'static str,
     pub build_platform: BuildPlatform,
     pub test_cases: IdOrdMap<TestCaseFixture>,
-    properties: u64,
+    properties: TestSuiteFixtureProperties,
 }
 
 impl IdOrdItem for TestSuiteFixture {
@@ -69,17 +70,17 @@ impl TestSuiteFixture {
             binary_name,
             build_platform,
             test_cases,
-            properties: 0,
+            properties: TestSuiteFixtureProperties::empty(),
         }
     }
 
-    pub fn with_property(mut self, property: TestSuiteFixtureProperty) -> Self {
-        self.properties |= property as u64;
+    pub fn with_property(mut self, property: TestSuiteFixtureProperties) -> Self {
+        self.properties |= property;
         self
     }
 
-    pub fn has_property(&self, property: TestSuiteFixtureProperty) -> bool {
-        self.properties & property as u64 != 0
+    pub fn has_property(&self, property: TestSuiteFixtureProperties) -> bool {
+        self.properties.contains(property)
     }
 
     pub fn assert_test_cases_match(&self, other: &IdOrdMap<TestNameAndFilterMatch<'_>>) {
@@ -114,18 +115,19 @@ impl TestSuiteFixture {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-#[repr(u64)]
-pub enum TestSuiteFixtureProperty {
-    NotInDefaultSet = 0x1,
-    MatchesCdylibExample = 0x2,
+bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct TestSuiteFixtureProperties: u64 {
+        const NOT_IN_DEFAULT_SET = 0x1;
+        const MATCHES_CDYLIB_EXAMPLE = 0x2;
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct TestCaseFixture {
     pub name: &'static str,
     pub status: TestCaseFixtureStatus,
-    properties: u64,
+    properties: TestCaseFixtureProperties,
 }
 
 impl IdOrdItem for TestCaseFixture {
@@ -141,75 +143,75 @@ impl TestCaseFixture {
         Self {
             name,
             status,
-            properties: 0,
+            properties: TestCaseFixtureProperties::empty(),
         }
     }
 
-    pub fn with_property(mut self, property: TestCaseFixtureProperty) -> Self {
-        self.properties |= property as u64;
+    pub fn with_property(mut self, property: TestCaseFixtureProperties) -> Self {
+        self.properties |= property;
         self
     }
 
-    pub fn has_property(&self, property: TestCaseFixtureProperty) -> bool {
-        self.properties & property as u64 != 0
+    pub fn has_property(&self, property: TestCaseFixtureProperties) -> bool {
+        self.properties.contains(property)
     }
 
     /// Determines if this test should be skipped based on run properties and filters.
-    pub fn should_skip(&self, properties: u64) -> bool {
+    pub fn should_skip(&self, properties: RunProperties) -> bool {
         // NotInDefaultSet filter.
-        if self.has_property(TestCaseFixtureProperty::NotInDefaultSet)
-            && properties & RunProperty::WithDefaultFilter as u64 != 0
+        if self.has_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET)
+            && properties.contains(RunProperties::WITH_DEFAULT_FILTER)
         {
             return true;
         }
 
         // NotInDefaultSetUnix filter (Unix-specific).
         if cfg!(unix)
-            && self.has_property(TestCaseFixtureProperty::NotInDefaultSetUnix)
-            && properties & RunProperty::WithDefaultFilter as u64 != 0
+            && self.has_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET_UNIX)
+            && properties.contains(RunProperties::WITH_DEFAULT_FILTER)
         {
             return true;
         }
 
         // MatchesCdylib + WithSkipCdylibFilter.
-        if self.has_property(TestCaseFixtureProperty::MatchesCdylib)
-            && properties & RunProperty::WithSkipCdylibFilter as u64 != 0
+        if self.has_property(TestCaseFixtureProperties::MATCHES_CDYLIB)
+            && properties.contains(RunProperties::WITH_SKIP_CDYLIB_FILTER)
         {
             return true;
         }
 
         // WithMultiplyTwoExactFilter - skip tests that don't match.
-        if !self.has_property(TestCaseFixtureProperty::MatchesTestMultiplyTwo)
-            && properties & RunProperty::WithMultiplyTwoExactFilter as u64 != 0
+        if !self.has_property(TestCaseFixtureProperties::MATCHES_TEST_MULTIPLY_TWO)
+            && properties.contains(RunProperties::WITH_MULTIPLY_TWO_EXACT_FILTER)
         {
             return true;
         }
 
         // CdyLibExamplePackageFilter - only run test_multiply_two_cdylib.
-        if properties & RunProperty::CdyLibExamplePackageFilter as u64 != 0
+        if properties.contains(RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER)
             && self.name != "tests::test_multiply_two_cdylib"
         {
             return true;
         }
 
         // ExpectNoBinaries - all tests should be skipped.
-        if properties & RunProperty::ExpectNoBinaries as u64 != 0 {
+        if properties.contains(RunProperties::EXPECT_NO_BINARIES) {
             return true;
         }
 
         // BenchOverrideTimeout - only run the specific benchmark that times out.
-        if properties & RunProperty::BenchOverrideTimeout as u64 != 0 {
-            return !self.has_property(TestCaseFixtureProperty::BenchOverrideTimeout);
+        if properties.contains(RunProperties::BENCH_OVERRIDE_TIMEOUT) {
+            return !self.has_property(TestCaseFixtureProperties::BENCH_OVERRIDE_TIMEOUT);
         }
 
         // BenchTermination - only run the specific benchmark that times out.
-        if properties & RunProperty::BenchTermination as u64 != 0 {
-            return !self.has_property(TestCaseFixtureProperty::BenchTermination);
+        if properties.contains(RunProperties::BENCH_TERMINATION) {
+            return !self.has_property(TestCaseFixtureProperties::BENCH_TERMINATION);
         }
 
         // BenchIgnoresTestTimeout - only run the specific benchmark that passes.
-        if properties & RunProperty::BenchIgnoresTestTimeout as u64 != 0 {
-            return !self.has_property(TestCaseFixtureProperty::BenchIgnoresTestTimeout);
+        if properties.contains(RunProperties::BENCH_IGNORES_TEST_TIMEOUT) {
+            return !self.has_property(TestCaseFixtureProperties::BENCH_IGNORES_TEST_TIMEOUT);
         }
 
         // Ignored tests are skipped by this test suite.
@@ -221,25 +223,25 @@ impl TestCaseFixture {
     }
 
     /// Determines the expected test result based on test status and run properties.
-    pub fn expected_result(&self, properties: u64) -> CheckResult {
+    pub fn expected_result(&self, properties: RunProperties) -> CheckResult {
         // BenchOverrideTimeout - the benchmark times out due to override.
-        if self.has_property(TestCaseFixtureProperty::BenchOverrideTimeout)
-            && properties & RunProperty::BenchOverrideTimeout as u64 != 0
+        if self.has_property(TestCaseFixtureProperties::BENCH_OVERRIDE_TIMEOUT)
+            && properties.contains(RunProperties::BENCH_OVERRIDE_TIMEOUT)
         {
             return CheckResult::Timeout;
         }
 
         // BenchTermination - the benchmark times out due to bench.slow-timeout.
-        if self.has_property(TestCaseFixtureProperty::BenchTermination)
-            && properties & RunProperty::BenchTermination as u64 != 0
+        if self.has_property(TestCaseFixtureProperties::BENCH_TERMINATION)
+            && properties.contains(RunProperties::BENCH_TERMINATION)
         {
             return CheckResult::Timeout;
         }
 
         // BenchIgnoresTestTimeout - the benchmark passes because it uses
         // bench.slow-timeout (30 years default) instead of slow-timeout.
-        if self.has_property(TestCaseFixtureProperty::BenchIgnoresTestTimeout)
-            && properties & RunProperty::BenchIgnoresTestTimeout as u64 != 0
+        if self.has_property(TestCaseFixtureProperties::BENCH_IGNORES_TEST_TIMEOUT)
+            && properties.contains(RunProperties::BENCH_IGNORES_TEST_TIMEOUT)
         {
             return CheckResult::Pass;
         }
@@ -247,8 +249,8 @@ impl TestCaseFixture {
         match self.status {
             TestCaseFixtureStatus::Pass => {
                 // NeedsSameCwd tests fail when relocated.
-                if self.has_property(TestCaseFixtureProperty::NeedsSameCwd)
-                    && properties & RunProperty::Relocated as u64 != 0
+                if self.has_property(TestCaseFixtureProperties::NEEDS_SAME_CWD)
+                    && properties.contains(RunProperties::RELOCATED)
                 {
                     CheckResult::Fail
                 } else {
@@ -317,19 +319,20 @@ impl TestCaseFixtureStatus {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-#[repr(u64)]
-pub enum TestCaseFixtureProperty {
-    NeedsSameCwd = 0x1,
-    NotInDefaultSet = 0x2,
-    MatchesCdylib = 0x4,
-    MatchesTestMultiplyTwo = 0x8,
-    NotInDefaultSetUnix = 0x10,
-    IsBenchmark = 0x20,
-    /// Benchmark that times out with the with-bench-override profile.
-    BenchOverrideTimeout = 0x40,
-    /// Benchmark that times out with the with-bench-termination profile.
-    BenchTermination = 0x80,
-    /// Benchmark that passes with the with-test-termination-only profile.
-    BenchIgnoresTestTimeout = 0x100,
+bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct TestCaseFixtureProperties: u64 {
+        const NEEDS_SAME_CWD = 0x1;
+        const NOT_IN_DEFAULT_SET = 0x2;
+        const MATCHES_CDYLIB = 0x4;
+        const MATCHES_TEST_MULTIPLY_TWO = 0x8;
+        const NOT_IN_DEFAULT_SET_UNIX = 0x10;
+        const IS_BENCHMARK = 0x20;
+        /// Benchmark that times out with the with-bench-override profile.
+        const BENCH_OVERRIDE_TIMEOUT = 0x40;
+        /// Benchmark that times out with the with-bench-termination profile.
+        const BENCH_TERMINATION = 0x80;
+        /// Benchmark that passes with the with-test-termination-only profile.
+        const BENCH_IGNORES_TEST_TIMEOUT = 0x100;
+    }
 }

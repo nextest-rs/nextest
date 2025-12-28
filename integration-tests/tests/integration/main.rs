@@ -23,7 +23,7 @@
 //! `NEXTEST_BIN_EXE_cargo_nextest_dup`.
 
 use camino::{Utf8Path, Utf8PathBuf};
-use fixture_data::{models::RunProperty, nextest_tests::EXPECTED_TEST_SUITES};
+use fixture_data::{models::RunProperties, nextest_tests::EXPECTED_TEST_SUITES};
 use integration_tests::{
     env::set_env_vars,
     nextest_cli::{CargoNextestCli, CargoNextestOutput},
@@ -447,7 +447,11 @@ fn test_run() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output_with_junit(&output.stderr, &p.junit_path("default"), 0);
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("default"),
+        RunProperties::empty(),
+    );
 
     // --exact with nothing else should be the same as above.
     let output = CargoNextestCli::for_test()
@@ -468,7 +472,11 @@ fn test_run() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output_with_junit(&output.stderr, &p.junit_path("default"), 0);
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("default"),
+        RunProperties::empty(),
+    );
 
     // Check the output with --skip.
     let output = CargoNextestCli::for_test()
@@ -492,7 +500,7 @@ fn test_run() {
     check_run_output_with_junit(
         &output.stderr,
         &p.junit_path("default"),
-        RunProperty::WithSkipCdylibFilter as u64,
+        RunProperties::WITH_SKIP_CDYLIB_FILTER,
     );
 
     // Equivalent filterset to the above.
@@ -516,7 +524,7 @@ fn test_run() {
     check_run_output_with_junit(
         &output.stderr,
         &p.junit_path("default"),
-        RunProperty::WithSkipCdylibFilter as u64,
+        RunProperties::WITH_SKIP_CDYLIB_FILTER,
     );
 
     // Check the output with --exact.
@@ -537,7 +545,7 @@ fn test_run() {
     check_run_output_with_junit(
         &output.stderr,
         &p.junit_path("default"),
-        RunProperty::WithMultiplyTwoExactFilter as u64,
+        RunProperties::WITH_MULTIPLY_TWO_EXACT_FILTER,
     );
 
     // Equivalent filterset to the above.
@@ -556,7 +564,7 @@ fn test_run() {
     check_run_output_with_junit(
         &output.stderr,
         &p.junit_path("default"),
-        RunProperty::WithMultiplyTwoExactFilter as u64,
+        RunProperties::WITH_MULTIPLY_TWO_EXACT_FILTER,
     );
 
     // Check the output with --exact and --skip.
@@ -581,7 +589,7 @@ fn test_run() {
     check_run_output_with_junit(
         &output.stderr,
         &p.junit_path("default"),
-        RunProperty::WithSkipCdylibFilter as u64 | RunProperty::WithMultiplyTwoExactFilter as u64,
+        RunProperties::WITH_SKIP_CDYLIB_FILTER | RunProperties::WITH_MULTIPLY_TWO_EXACT_FILTER,
     );
 
     // Equivalent filterset to the above.
@@ -601,7 +609,7 @@ fn test_run() {
     check_run_output_with_junit(
         &output.stderr,
         &p.junit_path("default"),
-        RunProperty::WithSkipCdylibFilter as u64 | RunProperty::WithMultiplyTwoExactFilter as u64,
+        RunProperties::WITH_SKIP_CDYLIB_FILTER | RunProperties::WITH_MULTIPLY_TWO_EXACT_FILTER,
     );
 
     // Another equivalent.
@@ -624,7 +632,7 @@ fn test_run() {
     check_run_output_with_junit(
         &output.stderr,
         &p.junit_path("default"),
-        RunProperty::WithSkipCdylibFilter as u64 | RunProperty::WithMultiplyTwoExactFilter as u64,
+        RunProperties::WITH_SKIP_CDYLIB_FILTER | RunProperties::WITH_MULTIPLY_TWO_EXACT_FILTER,
     );
 
     // Yet another equivalent.
@@ -648,7 +656,7 @@ fn test_run() {
     check_run_output_with_junit(
         &output.stderr,
         &p.junit_path("default"),
-        RunProperty::WithSkipCdylibFilter as u64 | RunProperty::WithMultiplyTwoExactFilter as u64,
+        RunProperties::WITH_SKIP_CDYLIB_FILTER | RunProperties::WITH_MULTIPLY_TWO_EXACT_FILTER,
     );
 }
 
@@ -675,7 +683,11 @@ fn test_run_after_build() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output_with_junit(&output.stderr, &p.junit_path("default"), 0);
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("default"),
+        RunProperties::empty(),
+    );
 }
 
 /// Test that per-benchmark override for bench.slow-timeout is respected.
@@ -713,9 +725,9 @@ fn test_bench_override_slow_timeout() {
     check_run_output_with_junit(
         &output.stderr,
         &p.junit_path("with-bench-override"),
-        RunProperty::BenchOverrideTimeout as u64
-            | RunProperty::Benchmarks as u64
-            | RunProperty::SkipSummaryCheck as u64,
+        RunProperties::BENCH_OVERRIDE_TIMEOUT
+            | RunProperties::BENCHMARKS
+            | RunProperties::SKIP_SUMMARY_CHECK,
     );
 }
 
@@ -752,9 +764,9 @@ fn test_bench_termination() {
     check_run_output_with_junit(
         &output.stderr,
         &p.junit_path("with-bench-termination"),
-        RunProperty::BenchTermination as u64
-            | RunProperty::Benchmarks as u64
-            | RunProperty::SkipSummaryCheck as u64,
+        RunProperties::BENCH_TERMINATION
+            | RunProperties::BENCHMARKS
+            | RunProperties::SKIP_SUMMARY_CHECK,
     );
 }
 
@@ -798,9 +810,9 @@ fn test_bench_ignores_test_slow_timeout() {
     check_run_output_with_junit(
         &output.stderr,
         &p.junit_path("with-test-termination-only"),
-        RunProperty::BenchIgnoresTestTimeout as u64
-            | RunProperty::Benchmarks as u64
-            | RunProperty::SkipSummaryCheck as u64,
+        RunProperties::BENCH_IGNORES_TEST_TIMEOUT
+            | RunProperties::BENCHMARKS
+            | RunProperties::SKIP_SUMMARY_CHECK,
     );
 }
 
@@ -863,7 +875,7 @@ fn test_relocated_run() {
     check_run_output_with_junit(
         &output.stderr,
         &p2.junit_path("default"),
-        RunProperty::Relocated as u64,
+        RunProperties::RELOCATED,
     );
 }
 
@@ -1013,7 +1025,7 @@ fn test_archive_with_build_filter() {
         }
         run_archive_with_args(
             &archive_file,
-            RunProperty::Relocated as u64,
+            RunProperties::RELOCATED,
             NextestExitCode::TEST_RUN_FAILED,
         );
     });
@@ -1038,7 +1050,7 @@ fn test_archive_with_build_filter() {
         }
         run_archive_with_args(
             &archive_file,
-            RunProperty::SkipSummaryCheck as u64 | RunProperty::ExpectNoBinaries as u64,
+            RunProperties::SKIP_SUMMARY_CHECK | RunProperties::EXPECT_NO_BINARIES,
             NextestExitCode::NO_TESTS_RUN,
         );
     });
@@ -1063,7 +1075,7 @@ fn test_archive_with_build_filter() {
         );
         run_archive_with_args(
             &archive_file,
-            RunProperty::CdyLibExamplePackageFilter as u64 | RunProperty::SkipSummaryCheck as u64,
+            RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER | RunProperties::SKIP_SUMMARY_CHECK,
             NextestExitCode::OK,
         );
     });
@@ -1227,14 +1239,14 @@ fn create_archive_with_args(
 fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
     run_archive_with_args(
         archive_file,
-        RunProperty::Relocated as u64,
+        RunProperties::RELOCATED,
         NextestExitCode::TEST_RUN_FAILED,
     )
 }
 
 fn run_archive_with_args(
     archive_file: &Utf8Path,
-    run_property: u64,
+    run_property: RunProperties,
     expected_exit_code: i32,
 ) -> (TempProject, Utf8PathBuf) {
     let p2 = TempProject::new().unwrap();
@@ -1285,7 +1297,7 @@ fn test_bench() {
         Some(0),
         "correct exit code for command\n{output}",
     );
-    check_run_output(&output.stderr, RunProperty::Benchmarks as u64);
+    check_run_output(&output.stderr, RunProperties::BENCHMARKS);
 }
 
 #[test]
@@ -1586,7 +1598,7 @@ fn test_run_with_default_filter() {
     check_run_output_with_junit(
         &output.stderr,
         &p.junit_path("with-default-filter"),
-        RunProperty::WithDefaultFilter as u64,
+        RunProperties::WITH_DEFAULT_FILTER,
     );
 }
 
