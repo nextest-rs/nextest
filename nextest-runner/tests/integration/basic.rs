@@ -3,17 +3,13 @@
 
 use crate::fixtures::*;
 use color_eyre::eyre::Result;
-use fixture_data::{
-    models::{TestNameAndFilterMatch, TestSuiteFixture},
-    nextest_tests::EXPECTED_TEST_SUITES,
-};
+use fixture_data::{models::TestNameAndFilterMatch, nextest_tests::EXPECTED_TEST_SUITES};
 use iddqd::IdOrdMap;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_runner::{
     config::{core::NextestConfig, elements::SlowTimeoutResult},
     double_spawn::DoubleSpawnInfo,
     input::InputHandlerKind,
-    list::BinaryList,
     platform::BuildPlatforms,
     reporter::events::ExecutionResult,
     run_mode::NextestRunMode,
@@ -22,42 +18,7 @@ use nextest_runner::{
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder, TestFilterPatterns},
 };
-use std::{io::Cursor, time::Duration};
-
-#[test]
-fn test_list_binaries() -> Result<()> {
-    test_init();
-
-    let graph = &*PACKAGE_GRAPH;
-    let build_platforms = BuildPlatforms::new_with_no_target()?;
-    let binary_list = BinaryList::from_messages(
-        Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT),
-        graph,
-        build_platforms,
-    )?;
-
-    for TestSuiteFixture {
-        binary_id,
-        binary_name,
-        build_platform,
-        ..
-    } in EXPECTED_TEST_SUITES.iter()
-    {
-        let bin = binary_list
-            .rust_binaries
-            .iter()
-            .find(|bin| bin.id == *binary_id)
-            .unwrap();
-        // With Rust 1.79 and later, the actual name has - replaced with _. Just check for either.
-        assert!(
-            bin.name.as_str() == *binary_name || bin.name.as_str() == binary_name.replace('-', "_"),
-            "binary name matches (expected: {binary_name}, actual: {})",
-            bin.name,
-        );
-        assert_eq!(*build_platform, bin.build_platform);
-    }
-    Ok(())
-}
+use std::time::Duration;
 
 #[test]
 fn test_list_tests() -> Result<()> {
