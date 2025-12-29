@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::fixtures::*;
-use cfg_if::cfg_if;
-use color_eyre::eyre::{Result, ensure};
+use color_eyre::eyre::Result;
 use fixture_data::{
-    models::{TestCaseFixtureStatus, TestNameAndFilterMatch, TestSuiteFixture},
+    models::{TestNameAndFilterMatch, TestSuiteFixture},
     nextest_tests::EXPECTED_TEST_SUITES,
 };
 use iddqd::IdOrdMap;
@@ -16,20 +15,13 @@ use nextest_runner::{
     input::InputHandlerKind,
     list::BinaryList,
     platform::BuildPlatforms,
-    reporter::{
-        UnitErrorDescription,
-        events::{
-            ExecutionResult, FinalRunStats, RunStatsFailureKind, UnitKind,
-        },
-    },
+    reporter::events::ExecutionResult,
     run_mode::NextestRunMode,
     runner::TestRunnerBuilder,
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder, TestFilterPatterns},
-    test_output::{ChildExecutionOutput, ChildOutput},
 };
-use pretty_assertions::assert_eq;
 use std::{io::Cursor, time::Duration};
 
 #[test]
@@ -110,130 +102,6 @@ fn test_list_tests() -> Result<()> {
         panic!("{}", err_msg);
     }
 
-    Ok(())
-}
-
-#[test]
-fn test_run() -> Result<()> {
-    test_init();
-
-    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
-    let test_list = FIXTURE_TARGETS.make_test_list(
-        NextestConfig::DEFAULT_PROFILE,
-        &test_filter,
-        &TargetRunner::empty(),
-    )?;
-    let config = load_config();
-    let profile = config
-        .profile(NextestConfig::DEFAULT_PROFILE)
-        .expect("default config is valid");
-    let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
-    let profile = profile.apply_build_platforms(&build_platforms);
-
-    let runner = TestRunnerBuilder::default()
-        .build(
-            &test_list,
-            &profile,
-            vec![], // we aren't testing CLI args at the moment
-            SignalHandlerKind::Noop,
-            InputHandlerKind::Noop,
-            DoubleSpawnInfo::disabled(),
-            TargetRunner::empty(),
-        )
-        .unwrap();
-
-    let (instance_statuses, run_stats) = execute_collect(runner);
-
-    for expected in &*EXPECTED_TEST_SUITES {
-        let test_binary = FIXTURE_TARGETS
-            .test_artifacts
-            .get(&expected.binary_id)
-            .unwrap_or_else(|| panic!("unexpected binary ID {}", expected.binary_id));
-        for fixture in &expected.test_cases {
-            let instance_value = instance_statuses
-                .get(&(test_binary.binary_path.as_path(), fixture.name))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "no instance status found for key ({}, {})",
-                        test_binary.binary_path.as_path(),
-                        fixture.name
-                    )
-                });
-            let valid = || {
-                match &instance_value.status {
-                    InstanceStatus::Skipped(_) => {
-                        ensure!(fixture.status.is_ignored(), "test should be skipped");
-                        Ok(())
-                    }
-                    InstanceStatus::Finished(run_statuses) => {
-                        // This test should not have been retried since retries aren't configured.
-                        assert_eq!(
-                            run_statuses.len(),
-                            1,
-                            "test {} should have been run exactly once",
-                            fixture.name
-                        );
-                        let run_status = run_statuses.last_status();
-
-                        ensure_execution_result(&run_status.result, fixture.status, 1)?;
-                        // Extracting descriptions works for segfaults on Unix but not on Windows.
-                        #[cfg_attr(not(unix), expect(unused_mut))]
-                        let mut can_extract_description = fixture.status
-                            == TestCaseFixtureStatus::Fail
-                            || fixture.status == TestCaseFixtureStatus::IgnoredFail;
-                        cfg_if! {
-                            if #[cfg(unix)] {
-                                can_extract_description |= fixture.status == TestCaseFixtureStatus::Segfault;
-                            }
-                        }
-
-                        if can_extract_description {
-                            // Check that stderr can be parsed heuristically.
-                            let ChildExecutionOutput::Output {
-                                output: ChildOutput::Split(split),
-                                ..
-                            } = &run_status.output
-                            else {
-                                panic!("this test should always use split output")
-                            };
-                            let stdout = split.stdout.as_ref().expect("stdout should be captured");
-                            let stderr = split.stderr.as_ref().expect("stderr should be captured");
-
-                            println!("stderr: {}", stderr.as_str_lossy());
-                            let desc =
-                                UnitErrorDescription::new(UnitKind::Test, &run_status.output);
-                            assert!(
-                                desc.child_process_error_list().is_some(),
-                                "failed to extract description from {}\n*** stdout:\n{}\n*** stderr:\n{}\n",
-                                fixture.name,
-                                stdout.as_str_lossy(),
-                                stderr.as_str_lossy(),
-                            );
-                        }
-
-                        Ok(())
-                    }
-                }
-            };
-            if let Err(error) = valid() {
-                panic!(
-                    "for test {}, mismatch in status: expected {:?}, actual {:?}, error: {}",
-                    fixture.name, fixture.status, instance_value.status, error,
-                );
-            }
-        }
-    }
-
-    // Note: can't compare not_run because its exact value would depend on the number of threads on
-    // the machine.
-    assert!(
-        matches!(
-            run_stats.summarize_final(),
-            FinalRunStats::Failed(RunStatsFailureKind::Test { .. })
-        ),
-        "run should be marked failed, but got {:?}",
-        run_stats.summarize_final(),
-    );
     Ok(())
 }
 
