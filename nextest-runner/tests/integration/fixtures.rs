@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use camino::{Utf8Path, Utf8PathBuf};
-use color_eyre::eyre::{Context, Result, ensure};
+use color_eyre::eyre::{Context, Result};
 use duct::cmd;
-use fixture_data::models::TestCaseFixtureStatus;
 use guppy::{MetadataCommand, graph::PackageGraph};
 use maplit::btreeset;
 use nextest_filtering::{BinaryQuery, CompiledExpr, EvalContext, ParseContext};
@@ -13,7 +12,6 @@ use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
     config::{
         core::{ConfigExperimental, NextestConfig, get_num_cpus},
-        elements::LeakTimeoutResult,
         overrides::ListSettings,
         scripts::{
             ScriptCommand, ScriptCommandRelativeTo, WrapperScriptConfig, WrapperScriptTargetRunner,
@@ -25,10 +23,7 @@ use nextest_runner::{
         TestListState,
     },
     platform::BuildPlatforms,
-    reporter::events::{
-        AbortStatus, ExecutionResult, ExecutionStatuses, FailureStatus, ReporterEvent, RunStats,
-        TestEventKind,
-    },
+    reporter::events::{ExecutionStatuses, ReporterEvent, RunStats, TestEventKind},
     reuse_build::PathMapper,
     runner::{TestRunner, configure_handle_inheritance},
     target_runner::TargetRunner,
@@ -41,122 +36,6 @@ use std::{
     io::Cursor,
     sync::{Arc, LazyLock},
 };
-
-pub(crate) fn ensure_execution_result(
-    actual: &ExecutionResult,
-    status: TestCaseFixtureStatus,
-    total_attempts: u32,
-) -> Result<()> {
-    match status {
-        TestCaseFixtureStatus::Pass | TestCaseFixtureStatus::IgnoredPass => {
-            ensure!(
-                actual == &ExecutionResult::Pass,
-                "pass: actual result ({actual:?}) matches expected"
-            );
-        }
-        TestCaseFixtureStatus::Flaky { pass_attempt } => {
-            if pass_attempt <= total_attempts {
-                ensure!(
-                    actual == &ExecutionResult::Pass,
-                    "flaky (passing attempt): actual result ({actual:?}) matches expected"
-                );
-            } else {
-                ensure!(
-                    actual
-                        == &ExecutionResult::Fail {
-                            failure_status: FailureStatus::ExitCode(101),
-                            leaked: false
-                        },
-                    "flaky (failing attempt): actual result ({actual:?}) matches expected"
-                );
-            }
-        }
-        TestCaseFixtureStatus::Segfault => {
-            cfg_if::cfg_if! {
-                if #[cfg(unix)] {
-                    // SIGSEGV is 11. Newer versions of Rust may use SIGABRT
-                    // instead, which is 6. Check for either.
-                    let (failure_status, leaked) = match actual {
-                        ExecutionResult::Fail {
-                            failure_status,
-                            leaked,
-                        } => (failure_status, *leaked),
-                        _ => color_eyre::eyre::bail!("expected ExecutionResult::Fail, found {actual:?}"),
-                    };
-
-                    ensure!(
-                        *failure_status == FailureStatus::Abort(AbortStatus::UnixSignal(11))
-                            || *failure_status == FailureStatus::Abort(AbortStatus::UnixSignal(6)),
-                        "segfault: expected SIGSEGV or SIGABRT, found {failure_status:?}"
-                    );
-                    ensure!(!leaked, "segfault: expected no leaks, found leaked");
-                } else if #[cfg(windows)] {
-                    // For Rust versions before 1.86.
-                    let access_violation = FailureStatus::Abort(AbortStatus::WindowsNtStatus(
-                        windows_sys::Win32::Foundation::STATUS_ACCESS_VIOLATION,
-                    ));
-                    // 1.86 and above.
-                    let stack_buffer_overrun = FailureStatus::Abort(AbortStatus::WindowsNtStatus(
-                        windows_sys::Win32::Foundation::STATUS_STACK_BUFFER_OVERRUN,
-                    ));
-                    ensure!(
-                        actual == &ExecutionResult::Fail {
-                            failure_status: access_violation,
-                            leaked: false,
-                        } || actual == &ExecutionResult::Fail {
-                            failure_status: stack_buffer_overrun,
-                            leaked: false,
-                        },
-                        "segfault: actual result ({actual:?}) matches expected"
-                    );
-                } else {
-                    // Unsupported platform.
-                    compile_error!("unsupported platform");
-                }
-            }
-        }
-        TestCaseFixtureStatus::Fail | TestCaseFixtureStatus::IgnoredFail => {
-            ensure!(
-                actual
-                    == &ExecutionResult::Fail {
-                        failure_status: FailureStatus::ExitCode(101),
-                        leaked: false
-                    },
-                "fail: actual result ({actual:?}) matches expected"
-            );
-        }
-        TestCaseFixtureStatus::FailLeak => {
-            ensure!(
-                actual
-                    == &ExecutionResult::Fail {
-                        failure_status: FailureStatus::ExitCode(101),
-                        leaked: true
-                    },
-                "fail + leak: actual result ({actual:?}) matches expected"
-            );
-        }
-        TestCaseFixtureStatus::Leak => {
-            ensure!(
-                actual
-                    == &ExecutionResult::Leak {
-                        result: LeakTimeoutResult::Pass
-                    },
-                "leak: actual result ({actual:?}) matches expected"
-            );
-        }
-        TestCaseFixtureStatus::LeakFail => {
-            ensure!(
-                actual
-                    == &ExecutionResult::Leak {
-                        result: LeakTimeoutResult::Fail
-                    },
-                "leak => fail: actual result ({actual:?}) matches expected"
-            );
-        }
-    }
-
-    Ok(())
-}
 
 #[track_caller]
 pub(crate) fn test_init() {
