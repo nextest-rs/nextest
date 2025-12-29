@@ -43,7 +43,8 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
                 TestCaseFixture::new("test_result_failure", TestCaseFixtureStatus::Fail),
                 TestCaseFixture::new("test_slow_timeout", TestCaseFixtureStatus::IgnoredPass)
                     .with_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING)
-                    .with_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING),
+                    .with_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING)
+                    .with_property(TestCaseFixtureProperties::EXACT_TEST_SLOW_TIMEOUT),
                 TestCaseFixture::new("test_slow_timeout_2", TestCaseFixtureStatus::IgnoredPass)
                     .with_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING)
                     .with_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING),

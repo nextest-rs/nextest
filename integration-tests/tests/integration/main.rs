@@ -2303,6 +2303,43 @@ fn test_retries() {
     );
 }
 
+/// Test that tests time out correctly with the with-termination profile.
+///
+/// The `with-termination` profile has slow-timeout configured such that tests
+/// time out after 2 seconds. The test_slow_timeout* tests sleep for longer than
+/// this and should all be terminated.
+#[test]
+fn test_termination() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--profile",
+            "with-termination",
+            "--run-ignored",
+            "only",
+            "-E",
+            "test(/^test_slow_timeout/)",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "tests should time out and fail\n{output}"
+    );
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("with-termination"),
+        RunProperties::WITH_TERMINATION | RunProperties::SKIP_SUMMARY_CHECK,
+    );
+}
+
 /// Returns the CARGO_TARGET_<triple>_RUNNER env var name for the current platform.
 fn current_runner_env_var() -> String {
     let platform = Platform::build_target().expect("current platform is known to target-spec");

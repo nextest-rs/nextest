@@ -51,6 +51,11 @@ bitflags::bitflags! {
         /// Run with a target runner set. On Unix, segfaults are reported as regular
         /// failures because the passthrough runner doesn't propagate signal info.
         const WITH_TARGET_RUNNER = 0x8000;
+        /// Run with the with-termination profile. Tests should time out.
+        const WITH_TERMINATION = 0x10000;
+        /// Run with the with-timeout-success profile. test_slow_timeout passes
+        /// (on-timeout = "pass"), others fail.
+        const WITH_TIMEOUT_SUCCESS = 0x20000;
     }
 }
 
@@ -241,6 +246,18 @@ impl TestCaseFixture {
             return !self.has_property(TestCaseFixtureProperties::FLAKY_SLOW_TIMEOUT_SUBSTRING);
         }
 
+        // WITH_TERMINATION - only run test_slow_timeout* tests (they time out).
+        if properties.contains(RunProperties::WITH_TERMINATION) {
+            return !self.has_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING)
+                || self.has_property(TestCaseFixtureProperties::IS_BENCHMARK);
+        }
+
+        // WITH_TIMEOUT_SUCCESS - only run test_slow_timeout* tests.
+        if properties.contains(RunProperties::WITH_TIMEOUT_SUCCESS) {
+            return !self.has_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING)
+                || self.has_property(TestCaseFixtureProperties::IS_BENCHMARK);
+        }
+
         // RUN_IGNORED_ONLY: run only ignored tests, excluding slow timeout
         // tests.
         if properties.contains(RunProperties::RUN_IGNORED_ONLY) {
@@ -302,6 +319,26 @@ impl TestCaseFixture {
             && properties.contains(RunProperties::TIMEOUT_RETRIES_FLAKY)
         {
             return CheckResult::Pass;
+        }
+
+        // WITH_TERMINATION - all test_slow_timeout* tests time out.
+        if self.has_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING)
+            && properties.contains(RunProperties::WITH_TERMINATION)
+        {
+            return CheckResult::Timeout;
+        }
+
+        // WITH_TIMEOUT_SUCCESS - test_slow_timeout passes (on-timeout = "pass"),
+        // while other test_slow_timeout* tests fail.
+        if properties.contains(RunProperties::WITH_TIMEOUT_SUCCESS) {
+            if self.has_property(TestCaseFixtureProperties::EXACT_TEST_SLOW_TIMEOUT) {
+                // test_slow_timeout has on-timeout = "pass" override.
+                return CheckResult::Pass;
+            }
+            if self.has_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING) {
+                // Other test_slow_timeout* tests time out normally.
+                return CheckResult::Timeout;
+            }
         }
 
         match self.status {
@@ -424,5 +461,7 @@ bitflags::bitflags! {
         const TEST_SLOW_TIMEOUT_SUBSTRING = 0x400;
         /// Test with "flaky_slow_timeout" as a substring.
         const FLAKY_SLOW_TIMEOUT_SUBSTRING = 0x800;
+        /// Exactly test_slow_timeout (not test_slow_timeout_2 or test_slow_timeout_subprocess).
+        const EXACT_TEST_SLOW_TIMEOUT = 0x1000;
     }
 }
