@@ -21,6 +21,10 @@ path = "test-helpers/rustc-shim.rs"
 name = "fake-interceptor"
 path = "test-helpers/fake-interceptor.rs"
 
+[[bin]]
+name = "passthrough"
+path = "test-helpers/passthrough.rs"
+
 [[test]]
 name = "custom-harness"
 harness = false

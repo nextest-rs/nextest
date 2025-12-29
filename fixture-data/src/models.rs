@@ -48,6 +48,9 @@ bitflags::bitflags! {
         const TIMEOUT_RETRIES_FLAKY = 0x2000;
         /// Run with the with-retries profile. Flaky tests should pass after retries.
         const WITH_RETRIES = 0x4000;
+        /// Run with a target runner set. On Unix, segfaults are reported as regular
+        /// failures because the passthrough runner doesn't propagate signal info.
+        const WITH_TARGET_RUNNER = 0x8000;
     }
 }
 
@@ -326,7 +329,15 @@ impl TestCaseFixture {
                 }
             }
             TestCaseFixtureStatus::FailLeak => CheckResult::FailLeak,
-            TestCaseFixtureStatus::Segfault => CheckResult::Abort,
+            TestCaseFixtureStatus::Segfault => {
+                // On Unix, segfaults aren't passed through by the passthrough runner.
+                // They show as regular failures instead of aborts.
+                if cfg!(unix) && properties.contains(RunProperties::WITH_TARGET_RUNNER) {
+                    CheckResult::Fail
+                } else {
+                    CheckResult::Abort
+                }
+            }
             TestCaseFixtureStatus::IgnoredPass => {
                 if properties.contains(RunProperties::RUN_IGNORED_ONLY) {
                     CheckResult::Pass

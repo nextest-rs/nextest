@@ -2302,3 +2302,120 @@ fn test_retries() {
         RunProperties::WITH_RETRIES | RunProperties::SKIP_SUMMARY_CHECK,
     );
 }
+
+/// Returns the CARGO_TARGET_<triple>_RUNNER env var name for the current platform.
+fn current_runner_env_var() -> String {
+    let platform = Platform::build_target().expect("current platform is known to target-spec");
+    let triple = platform.triple_str().to_uppercase().replace('-', "_");
+    format!("CARGO_TARGET_{triple}_RUNNER")
+}
+
+/// Test that listing works correctly with a target runner set.
+#[test]
+fn test_listing_with_target_runner() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    // Get the passthrough binary path.
+    let passthrough = std::env::var("NEXTEST_BIN_EXE_passthrough")
+        .expect("passthrough binary should be available");
+
+    // First, list without target runner to get baseline counts.
+    let baseline_output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--workspace",
+            "--all-targets",
+            "--message-format",
+            "json",
+        ])
+        .output();
+
+    let baseline: TestListSummary =
+        serde_json::from_slice(&baseline_output.stdout).expect("parse baseline JSON");
+
+    // Now list with target runner set.
+    let runner_env = current_runner_env_var();
+    let runner_value = format!("{passthrough} --ensure-this-arg-is-sent");
+
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--workspace",
+            "--all-targets",
+            "--message-format",
+            "json",
+        ])
+        .env(&runner_env, &runner_value)
+        .output();
+
+    let with_runner: TestListSummary =
+        serde_json::from_slice(&output.stdout).expect("parse with-runner JSON");
+
+    // Verify the counts are the same.
+    assert_eq!(
+        baseline.rust_suites.len(),
+        with_runner.rust_suites.len(),
+        "binary counts should match"
+    );
+
+    let baseline_test_count: usize = baseline
+        .rust_suites
+        .values()
+        .map(|s| s.test_cases.len())
+        .sum();
+    let with_runner_test_count: usize = with_runner
+        .rust_suites
+        .values()
+        .map(|s| s.test_cases.len())
+        .sum();
+    assert_eq!(
+        baseline_test_count, with_runner_test_count,
+        "test counts should match"
+    );
+}
+
+/// Test that running tests works correctly with a target runner set.
+#[test]
+fn test_run_with_target_runner() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    // Get the passthrough binary path.
+    let passthrough = std::env::var("NEXTEST_BIN_EXE_passthrough")
+        .expect("passthrough binary should be available");
+
+    let runner_env = current_runner_env_var();
+    let runner_value = format!("{passthrough} --ensure-this-arg-is-sent");
+
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+        ])
+        .env(&runner_env, &runner_value)
+        .unchecked(true)
+        .output();
+
+    // Should fail because some tests fail (same as without target runner).
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
+    );
+
+    // On Unix, segfaults aren't passed through correctly by the passthrough runner
+    // (they show as regular failures), so we use a special property flag.
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("default"),
+        RunProperties::WITH_TARGET_RUNNER,
+    );
+}

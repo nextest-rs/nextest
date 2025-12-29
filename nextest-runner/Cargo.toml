@@ -163,10 +163,6 @@ test-strategy.workspace = true
 test-case.workspace = true
 tracing-subscriber.workspace = true
 
-[[bin]]
-name = "passthrough"
-path = "test-helpers/passthrough.rs"
-
 [features]
 self-update = [
     "dep:hex",
