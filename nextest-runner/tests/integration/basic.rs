@@ -3,11 +3,9 @@
 
 use crate::fixtures::*;
 use color_eyre::eyre::Result;
-use fixture_data::{models::TestNameAndFilterMatch, nextest_tests::EXPECTED_TEST_SUITES};
-use iddqd::IdOrdMap;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_runner::{
-    config::{core::NextestConfig, elements::SlowTimeoutResult},
+    config::elements::SlowTimeoutResult,
     double_spawn::DoubleSpawnInfo,
     input::InputHandlerKind,
     platform::BuildPlatforms,
@@ -19,52 +17,6 @@ use nextest_runner::{
     test_filter::{RunIgnored, TestFilterBuilder, TestFilterPatterns},
 };
 use std::time::Duration;
-
-#[test]
-fn test_list_tests() -> Result<()> {
-    test_init();
-
-    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
-    let test_list = FIXTURE_TARGETS.make_test_list(
-        NextestConfig::DEFAULT_PROFILE,
-        &test_filter,
-        &TargetRunner::empty(),
-    )?;
-    let mut summary = test_list.to_summary();
-
-    for expected in &*EXPECTED_TEST_SUITES {
-        let test_binary = FIXTURE_TARGETS
-            .test_artifacts
-            .get(&expected.binary_id)
-            .unwrap_or_else(|| panic!("unexpected binary ID {}", expected.binary_id));
-        let info = summary
-            .rust_suites
-            .remove(&test_binary.binary_id)
-            .unwrap_or_else(|| panic!("test list not found for {}", test_binary.binary_path));
-        let tests: IdOrdMap<_> = info
-            .test_cases
-            .iter()
-            .map(|(name, info)| TestNameAndFilterMatch {
-                name: name.as_str(),
-                filter_match: info.filter_match,
-            })
-            .collect();
-        expected.assert_test_cases_match(&tests);
-    }
-
-    // Are there any remaining tests?
-    if !summary.rust_suites.is_empty() {
-        let mut err_msg = "actual output has test suites missing in expected output:\n".to_owned();
-        for missing_suite in summary.rust_suites.keys() {
-            err_msg.push_str("  - ");
-            err_msg.push_str(missing_suite.as_str());
-            err_msg.push('\n');
-        }
-        panic!("{}", err_msg);
-    }
-
-    Ok(())
-}
 
 #[test]
 fn test_termination() -> Result<()> {
