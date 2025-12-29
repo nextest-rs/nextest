@@ -1,3 +1,6 @@
+// Copyright (c) The nextest Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! A small passthrough script used for testing. We can't use bash here because of System Integrity
 //! Protection on macOS: <https://github.com/nextest-rs/nextest/pull/84#issuecomment-1057287763>
 

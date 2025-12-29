@@ -1,25 +1,14 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::fixtures::*;
-use camino::Utf8Path;
-use color_eyre::{Result, eyre::ensure};
-use fixture_data::nextest_tests::EXPECTED_TEST_SUITES;
+use crate::fixtures::{test_init, workspace_root};
+use color_eyre::Result;
 use nextest_runner::{
     RustcCli,
     cargo_config::{CargoConfigs, TargetTriple},
-    config::core::NextestConfig,
-    double_spawn::DoubleSpawnInfo,
-    input::InputHandlerKind,
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
-    reporter::events::{FinalRunStats, RunStatsFailureKind},
-    run_mode::NextestRunMode,
-    runner::TestRunnerBuilder,
-    signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
-    test_filter::{RunIgnored, TestFilterBuilder},
 };
-use std::env;
 use target_spec::Platform;
 
 fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunner)> {
@@ -177,179 +166,8 @@ fn falls_back_to_cargo_config() {
     );
 }
 
-fn passthrough_path() -> &'static Utf8Path {
-    Utf8Path::new(env!("CARGO_BIN_EXE_passthrough"))
-}
-
 fn current_runner_env_var() -> String {
     PlatformRunner::runner_env_var(
         &Platform::build_target().expect("current platform is known to target-spec"),
     )
-}
-
-#[test]
-fn test_listing_with_target_runner() -> Result<()> {
-    test_init();
-
-    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
-    let test_list = FIXTURE_TARGETS.make_test_list(
-        NextestConfig::DEFAULT_PROFILE,
-        &test_filter,
-        &TargetRunner::empty(),
-    )?;
-
-    let bin_count = test_list.binary_count();
-    let test_count = test_list.test_count();
-
-    {
-        // SAFETY:
-        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
-        unsafe {
-            std::env::set_var(
-                current_runner_env_var(),
-                format!("{} --ensure-this-arg-is-sent", passthrough_path()),
-            )
-        };
-        let (_, target_runner) = runner_for_target(None).unwrap();
-
-        let test_list = FIXTURE_TARGETS.make_test_list(
-            NextestConfig::DEFAULT_PROFILE,
-            &test_filter,
-            &target_runner,
-        )?;
-
-        assert_eq!(bin_count, test_list.binary_count());
-        assert_eq!(test_count, test_list.test_count());
-    }
-
-    {
-        // cargo unfortunately doesn't handle relative paths for runner binaries,
-        // it will just assume they are in PATH if they are not absolute paths,
-        // and thus makes testing it a bit annoying, so we just punt and rely
-        // on the tests for parsing the runner in the proper precedence
-    }
-
-    Ok(())
-}
-
-#[test]
-fn test_run_with_target_runner() -> Result<()> {
-    test_init();
-
-    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
-
-    // SAFETY:
-    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
-    unsafe {
-        std::env::set_var(
-            current_runner_env_var(),
-            format!("{} --ensure-this-arg-is-sent", passthrough_path()),
-        )
-    };
-    let (build_platforms, target_runner) = runner_for_target(None).unwrap();
-
-    for (_, platform_runner) in target_runner.all_build_platforms() {
-        let runner = platform_runner.expect("current platform runner was set through env var");
-        assert_eq!(passthrough_path(), runner.binary());
-    }
-
-    let test_list = FIXTURE_TARGETS.make_test_list(
-        NextestConfig::DEFAULT_PROFILE,
-        &test_filter,
-        &target_runner,
-    )?;
-
-    let config = load_config();
-    let profile = config
-        .profile(NextestConfig::DEFAULT_PROFILE)
-        .expect("default config is valid")
-        .apply_build_platforms(&build_platforms);
-
-    let runner = TestRunnerBuilder::default();
-    let runner = runner
-        .build(
-            &test_list,
-            &profile,
-            vec![],
-            SignalHandlerKind::Noop,
-            InputHandlerKind::Noop,
-            DoubleSpawnInfo::disabled(),
-            target_runner,
-        )
-        .unwrap();
-
-    let (instance_statuses, run_stats) = execute_collect(runner);
-
-    for expected in &*EXPECTED_TEST_SUITES {
-        let test_binary = FIXTURE_TARGETS
-            .test_artifacts
-            .get(&expected.binary_id)
-            .unwrap_or_else(|| panic!("unexpected binary ID {}", expected.binary_id));
-        for fixture in &expected.test_cases {
-            let instance_value = instance_statuses
-                .get(&(test_binary.binary_path.as_path(), fixture.name))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "no instance status found for key ({}, {})",
-                        test_binary.binary_path.as_path(),
-                        fixture.name
-                    )
-                });
-            let valid = match &instance_value.status {
-                InstanceStatus::Skipped(_) => {
-                    ensure!(fixture.status.is_ignored(), "test should be skipped");
-                    Ok(())
-                }
-                InstanceStatus::Finished(run_statuses) => {
-                    // This test should not have been retried since retries aren't configured.
-                    assert_eq!(
-                        run_statuses.len(),
-                        1,
-                        "test {} should have been run exactly once",
-                        fixture.name
-                    );
-                    let run_status = run_statuses.last_status();
-
-                    cfg_if::cfg_if! {
-                        if #[cfg(unix)] {
-                            // On Unix, segfaults aren't passed through by the
-                            // passthrough runner.
-                            if fixture.status == fixture_data::models::TestCaseFixtureStatus::Segfault {
-                                ensure_execution_result(
-                                    &run_status.result,
-                                    fixture_data::models::TestCaseFixtureStatus::Fail,
-                                    1,
-                                )
-                            } else {
-                                ensure_execution_result(&run_status.result, fixture.status, 1)
-                            }
-                        } else if #[cfg(windows)] {
-                            ensure_execution_result(&run_status.result, fixture.status, 1)
-                        } else {
-                            compile_error!("unsupported platform")
-                        }
-                    }
-                }
-            };
-            if let Err(error) = valid {
-                panic!(
-                    "for test {}, mismatch in status: expected {:?}, actual {:?}, error: {}",
-                    fixture.name, fixture.status, instance_value.status, error
-                );
-            }
-        }
-    }
-
-    // Note: can't compare not_run because its exact value would depend on the number of threads on
-    // the machine.
-    assert!(
-        matches!(
-            run_stats.summarize_final(),
-            FinalRunStats::Failed(RunStatsFailureKind::Test { .. })
-        ),
-        "run should be marked failed, but got {:?}",
-        run_stats.summarize_final(),
-    );
-
-    Ok(())
 }
