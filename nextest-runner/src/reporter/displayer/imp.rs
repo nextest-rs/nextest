@@ -2338,7 +2338,11 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
         }
         ExecutionResult::Fail {
             failure_status: FailureStatus::ExitCode(_),
-            leaked: _,
+            leaked: true,
+        } => "FL+LK".into(),
+        ExecutionResult::Fail {
+            failure_status: FailureStatus::ExitCode(_),
+            leaked: false,
         } => "FAIL".into(),
         ExecutionResult::ExecFail => "XFAIL".into(),
         ExecutionResult::Pass => "PASS".into(),
