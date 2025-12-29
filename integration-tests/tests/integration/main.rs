@@ -2340,6 +2340,45 @@ fn test_termination() {
     );
 }
 
+/// Test that on-timeout = "pass" works correctly with the with-timeout-success profile.
+///
+/// The `with-timeout-success` profile has an override for test_slow_timeout that
+/// sets on-timeout = "pass", so it should pass when it times out. The other
+/// test_slow_timeout* tests should fail with timeout.
+#[test]
+fn test_override_timeout_result() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--profile",
+            "with-timeout-success",
+            "--run-ignored",
+            "only",
+            "-E",
+            "test(/^test_slow_timeout/)",
+        ])
+        .unchecked(true)
+        .output();
+
+    // Should fail because test_slow_timeout_2 and test_slow_timeout_subprocess
+    // time out without on-timeout = "pass".
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "some tests should time out and fail\n{output}"
+    );
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("with-timeout-success"),
+        RunProperties::WITH_TIMEOUT_SUCCESS | RunProperties::SKIP_SUMMARY_CHECK,
+    );
+}
+
 /// Returns the CARGO_TARGET_<triple>_RUNNER env var name for the current platform.
 fn current_runner_env_var() -> String {
     let platform = Platform::build_target().expect("current platform is known to target-spec");
