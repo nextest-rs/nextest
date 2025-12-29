@@ -1345,7 +1345,11 @@ fn test_bench() {
         Some(0),
         "correct exit code for command\n{output}",
     );
-    check_run_output(&output.stderr, RunProperties::BENCHMARKS);
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("default"),
+        RunProperties::BENCHMARKS,
+    );
 }
 
 #[test]
