@@ -10,7 +10,7 @@ use crate::models::{
     TestSuiteFixtureProperties,
 };
 use iddqd::{IdOrdMap, id_ord_map};
-use nextest_metadata::{BuildPlatform, RustBinaryId};
+use nextest_metadata::BuildPlatform;
 use std::sync::LazyLock;
 
 pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock::new(|| {
@@ -212,13 +212,3 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
         ),
     }
 });
-
-pub fn get_expected_test(binary_id: &RustBinaryId, test_name: &str) -> &'static TestCaseFixture {
-    let v = EXPECTED_TEST_SUITES
-        .get(binary_id)
-        .unwrap_or_else(|| panic!("binary id {binary_id} not found"));
-    v.test_cases
-        .iter()
-        .find(|fixture| fixture.name == test_name)
-        .unwrap_or_else(|| panic!("for binary id {binary_id}, test name {test_name} not found"))
-}
