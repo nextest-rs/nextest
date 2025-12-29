@@ -703,11 +703,6 @@ fn verify_summary(
 }
 
 #[track_caller]
-pub fn check_run_output(stderr: &[u8], properties: RunProperties) {
-    check_run_output_impl(stderr, None, properties);
-}
-
-#[track_caller]
 pub fn check_run_output_with_junit(
     stderr: &[u8],
     junit_path: &Utf8Path,
