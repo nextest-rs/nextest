@@ -466,7 +466,9 @@ static FAIL_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^\s*(?:TRY (\d+) )?FAIL \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
 });
 static FAIL_LEAK_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*(?:TRY (\d+) )?FAIL \+ LEAK \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
+    // Match both "FAIL + LEAK" (first attempt) and "FL+LK" (retry attempts).
+    Regex::new(r"^\s*(?:TRY (\d+) )?(?:FAIL \+ LEAK|FL\+LK) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)")
+        .unwrap()
 });
 static ABORT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
@@ -969,14 +971,7 @@ fn verify_expected_in_junit(
                         }
 
                         // Check if the actual type matches the expected string.
-                        // Special case: with retries, the console may show FAIL instead of
-                        // FAIL + LEAK (leak detection doesn't work consistently with retries),
-                        // but JUnit still records the leak. So if we expected Fail but got
-                        // FailLeak, that's acceptable with WITH_RETRIES.
-                        let type_matches = expected_type == actual_type
-                            || (properties.contains(RunProperties::WITH_RETRIES)
-                                && expected_outcome.result == CheckResult::Fail
-                                && actual_type == JUNIT_FAIL_LEAK);
+                        let type_matches = expected_type == actual_type;
 
                         if !type_matches {
                             panic!(

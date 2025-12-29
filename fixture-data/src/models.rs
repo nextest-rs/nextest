@@ -325,15 +325,7 @@ impl TestCaseFixture {
                     CheckResult::Fail
                 }
             }
-            TestCaseFixtureStatus::FailLeak => {
-                // With retries, nextest doesn't properly detect leaks for failing tests.
-                // The test shows as FAIL instead of FAIL + LEAK.
-                if properties.contains(RunProperties::WITH_RETRIES) {
-                    CheckResult::Fail
-                } else {
-                    CheckResult::FailLeak
-                }
-            }
+            TestCaseFixtureStatus::FailLeak => CheckResult::FailLeak,
             TestCaseFixtureStatus::Segfault => CheckResult::Abort,
             TestCaseFixtureStatus::IgnoredPass => {
                 if properties.contains(RunProperties::RUN_IGNORED_ONLY) {
