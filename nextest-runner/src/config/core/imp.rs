@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{NextestVersionDeserialize, ToolConfigFile};
+use super::{NextestVersionDeserialize, ToolConfigFile, ToolName};
 use crate::{
     config::{
         core::ConfigExperimental,
@@ -58,7 +58,7 @@ pub trait ConfigWarnings {
         &mut self,
         config_file: &Utf8Path,
         workspace_root: &Utf8Path,
-        tool: Option<&str>,
+        tool: Option<&ToolName>,
         unknown: &BTreeSet<String>,
     );
 
@@ -67,7 +67,7 @@ pub trait ConfigWarnings {
         &mut self,
         config_file: &Utf8Path,
         workspace_root: &Utf8Path,
-        tool: Option<&str>,
+        tool: Option<&ToolName>,
         profiles: &[&str],
     );
 
@@ -76,7 +76,7 @@ pub trait ConfigWarnings {
         &mut self,
         config_file: &Utf8Path,
         workspace_root: &Utf8Path,
-        tool: Option<&str>,
+        tool: Option<&ToolName>,
     );
 
     /// Handle warning about empty script sections with neither setup nor
@@ -85,7 +85,7 @@ pub trait ConfigWarnings {
         &mut self,
         config_file: &Utf8Path,
         workspace_root: &Utf8Path,
-        tool: Option<&str>,
+        tool: Option<&ToolName>,
         profile_name: &str,
         empty_count: usize,
     );
@@ -99,7 +99,7 @@ impl ConfigWarnings for DefaultConfigWarnings {
         &mut self,
         config_file: &Utf8Path,
         workspace_root: &Utf8Path,
-        tool: Option<&str>,
+        tool: Option<&ToolName>,
         unknown: &BTreeSet<String>,
     ) {
         let mut unknown_str = String::new();
@@ -128,7 +128,7 @@ impl ConfigWarnings for DefaultConfigWarnings {
         &mut self,
         config_file: &Utf8Path,
         workspace_root: &Utf8Path,
-        tool: Option<&str>,
+        tool: Option<&ToolName>,
         profiles: &[&str],
     ) {
         warn!(
@@ -148,7 +148,7 @@ impl ConfigWarnings for DefaultConfigWarnings {
         &mut self,
         config_file: &Utf8Path,
         workspace_root: &Utf8Path,
-        tool: Option<&str>,
+        tool: Option<&ToolName>,
     ) {
         warn!(
             "in config file {}{}, [script.*] is deprecated and will be removed in a \
@@ -164,7 +164,7 @@ impl ConfigWarnings for DefaultConfigWarnings {
         &mut self,
         config_file: &Utf8Path,
         workspace_root: &Utf8Path,
-        tool: Option<&str>,
+        tool: Option<&ToolName>,
         profile_name: &str,
         empty_count: usize,
     ) {
@@ -445,7 +445,7 @@ impl NextestConfig {
         pcx: &ParseContext<'_>,
         workspace_root: &Utf8Path,
         config_file: &Utf8Path,
-        tool: Option<&str>,
+        tool: Option<&ToolName>,
         source: File<FileSourceFile, FileFormat>,
         compiled_out: &mut CompiledByProfile,
         experimental: &BTreeSet<ConfigExperimental>,
@@ -473,7 +473,7 @@ impl NextestConfig {
                     group
                         .as_identifier()
                         .tool_components()
-                        .is_some_and(|(tool_name, _)| tool_name == tool)
+                        .is_some_and(|(tool_name, _)| tool_name == tool.as_str())
                 } else {
                     // If a tool is not specified, it must *not* be a tool identifier.
                     !group.as_identifier().is_tool_identifier()
@@ -548,7 +548,7 @@ impl NextestConfig {
                     script
                         .as_identifier()
                         .tool_components()
-                        .is_some_and(|(tool_name, _)| tool_name == tool)
+                        .is_some_and(|(tool_name, _)| tool_name == tool.as_str())
                 } else {
                     // If a tool is not specified, it must *not* be a tool identifier.
                     !script.as_identifier().is_tool_identifier()
@@ -1686,6 +1686,10 @@ mod tests {
     use camino_tempfile::tempdir;
     use iddqd::{IdHashItem, IdHashMap, id_hash_map, id_upcast};
 
+    fn tool_name(s: &str) -> ToolName {
+        ToolName::new(s.into()).unwrap()
+    }
+
     /// Test implementation of ConfigWarnings that collects warnings for testing.
     #[derive(Default)]
     struct TestConfigWarnings {
@@ -1700,12 +1704,12 @@ mod tests {
             &mut self,
             config_file: &Utf8Path,
             _workspace_root: &Utf8Path,
-            tool: Option<&str>,
+            tool: Option<&ToolName>,
             unknown: &BTreeSet<String>,
         ) {
             self.unknown_keys
                 .insert_unique(UnknownKeys {
-                    tool: tool.map(|s| s.to_owned()),
+                    tool: tool.cloned(),
                     config_file: config_file.to_owned(),
                     keys: unknown.clone(),
                 })
@@ -1716,12 +1720,12 @@ mod tests {
             &mut self,
             config_file: &Utf8Path,
             _workspace_root: &Utf8Path,
-            tool: Option<&str>,
+            tool: Option<&ToolName>,
             profiles: &[&str],
         ) {
             self.reserved_profiles
                 .insert_unique(ReservedProfiles {
-                    tool: tool.map(|s| s.to_owned()),
+                    tool: tool.cloned(),
                     config_file: config_file.to_owned(),
                     profiles: profiles.iter().map(|&s| s.to_owned()).collect(),
                 })
@@ -1732,13 +1736,13 @@ mod tests {
             &mut self,
             config_file: &Utf8Path,
             _workspace_root: &Utf8Path,
-            tool: Option<&str>,
+            tool: Option<&ToolName>,
             profile_name: &str,
             empty_count: usize,
         ) {
             self.empty_script_warnings
                 .insert_unique(EmptyScriptSections {
-                    tool: tool.map(|s| s.to_owned()),
+                    tool: tool.cloned(),
                     config_file: config_file.to_owned(),
                     profile_name: profile_name.to_owned(),
                     empty_count,
@@ -1750,11 +1754,11 @@ mod tests {
             &mut self,
             config_file: &Utf8Path,
             _workspace_root: &Utf8Path,
-            tool: Option<&str>,
+            tool: Option<&ToolName>,
         ) {
             self.deprecated_scripts
                 .insert_unique(DeprecatedScripts {
-                    tool: tool.map(|s| s.to_owned()),
+                    tool: tool.cloned(),
                     config_file: config_file.to_owned(),
                 })
                 .unwrap();
@@ -1763,58 +1767,58 @@ mod tests {
 
     #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
     struct UnknownKeys {
-        tool: Option<String>,
+        tool: Option<ToolName>,
         config_file: Utf8PathBuf,
         keys: BTreeSet<String>,
     }
 
     impl IdHashItem for UnknownKeys {
-        type Key<'a> = Option<&'a str>;
+        type Key<'a> = Option<&'a ToolName>;
         fn key(&self) -> Self::Key<'_> {
-            self.tool.as_deref()
+            self.tool.as_ref()
         }
         id_upcast!();
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
     struct ReservedProfiles {
-        tool: Option<String>,
+        tool: Option<ToolName>,
         config_file: Utf8PathBuf,
         profiles: Vec<String>,
     }
 
     impl IdHashItem for ReservedProfiles {
-        type Key<'a> = Option<&'a str>;
+        type Key<'a> = Option<&'a ToolName>;
         fn key(&self) -> Self::Key<'_> {
-            self.tool.as_deref()
+            self.tool.as_ref()
         }
         id_upcast!();
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
     struct DeprecatedScripts {
-        tool: Option<String>,
+        tool: Option<ToolName>,
         config_file: Utf8PathBuf,
     }
 
     impl IdHashItem for DeprecatedScripts {
-        type Key<'a> = Option<&'a str>;
+        type Key<'a> = Option<&'a ToolName>;
         fn key(&self) -> Self::Key<'_> {
-            self.tool.as_deref()
+            self.tool.as_ref()
         }
         id_upcast!();
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
     struct EmptyScriptSections {
-        tool: Option<String>,
+        tool: Option<ToolName>,
         config_file: Utf8PathBuf,
         profile_name: String,
         empty_count: usize,
     }
 
     impl IdHashItem for EmptyScriptSections {
-        type Key<'a> = (&'a Option<String>, &'a str);
+        type Key<'a> = (&'a Option<ToolName>, &'a str);
         fn key(&self) -> Self::Key<'_> {
             (&self.tool, &self.profile_name)
         }
@@ -1883,7 +1887,7 @@ mod tests {
             &pcx,
             None,
             &[ToolConfigFile {
-                tool: "my-tool".to_owned(),
+                tool: tool_name("my-tool"),
                 config_file: tool_path.clone(),
             }][..],
             &Default::default(),
@@ -1910,7 +1914,7 @@ mod tests {
                     }
                 },
                 UnknownKeys {
-                    tool: Some("my-tool".to_owned()),
+                    tool: Some(tool_name("my-tool")),
                     config_file: tool_path.clone(),
                     keys: maplit::btreeset! {
                         "store.ignored4".to_owned(),
@@ -1929,7 +1933,7 @@ mod tests {
                     profiles: vec!["default-foo".to_owned()],
                 },
                 ReservedProfiles {
-                    tool: Some("my-tool".to_owned()),
+                    tool: Some(tool_name("my-tool")),
                     config_file: tool_path,
                     profiles: vec!["default-bar".to_owned()],
                 }
@@ -2007,7 +2011,7 @@ mod tests {
             &pcx,
             None,
             &[ToolConfigFile {
-                tool: "tool".to_owned(),
+                tool: tool_name("tool"),
                 config_file: tool_path.clone(),
             }][..],
             &experimental,
@@ -2031,7 +2035,7 @@ mod tests {
                     empty_count: 2,
                 },
                 EmptyScriptSections {
-                    tool: Some("tool".to_owned()),
+                    tool: Some(tool_name("tool")),
                     config_file: tool_path,
                     profile_name: "tool".to_owned(),
                     empty_count: 1,
@@ -2070,7 +2074,7 @@ mod tests {
             &pcx,
             None,
             &[ToolConfigFile {
-                tool: "my-tool".to_owned(),
+                tool: tool_name("my-tool"),
                 config_file: tool_path.clone(),
             }],
             &maplit::btreeset! {ConfigExperimental::SetupScripts},
@@ -2086,7 +2090,7 @@ mod tests {
                     config_file: graph.workspace().root().join(".config/nextest.toml"),
                 },
                 DeprecatedScripts {
-                    tool: Some("my-tool".to_owned()),
+                    tool: Some(tool_name("my-tool")),
                     config_file: tool_path,
                 }
             }

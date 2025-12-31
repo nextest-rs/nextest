@@ -21,7 +21,7 @@ impl Inherits {
 mod tests {
     use crate::{
         config::{
-            core::{NextestConfig, ToolConfigFile},
+            core::{NextestConfig, ToolConfigFile, ToolName},
             elements::{MaxFail, RetryPolicy, TerminateMode},
             utils::test_helpers::*,
         },
@@ -35,6 +35,10 @@ mod tests {
     use nextest_filtering::ParseContext;
     use std::{collections::HashSet, fs};
     use test_case::test_case;
+
+    fn tool_name(s: &str) -> ToolName {
+        ToolName::new(s.into()).unwrap()
+    }
 
     /// Settings checked for inheritance below.
     #[derive(Default)]
@@ -309,11 +313,11 @@ mod tests {
         // tool1 is first = higher priority, tool2 is second = lower priority
         let tool_configs = [
             ToolConfigFile {
-                tool: "tool1".to_string(),
+                tool: tool_name("tool1"),
                 config_file: tool1_config,
             },
             ToolConfigFile {
-                tool: "tool2".to_string(),
+                tool: tool_name("tool2"),
                 config_file: tool2_config,
             },
         ];
@@ -379,11 +383,11 @@ mod tests {
 
         let tool_configs = [
             ToolConfigFile {
-                tool: "tool1".to_string(),
+                tool: tool_name("tool1"),
                 config_file: tool1_config,
             },
             ToolConfigFile {
-                tool: "tool2".to_string(),
+                tool: tool_name("tool2"),
                 config_file: tool2_config,
             },
         ];
@@ -399,7 +403,7 @@ mod tests {
 
         // Error should be attributed to tool2 since that's where the invalid
         // inheritance is defined.
-        assert_eq!(error.tool(), Some("tool2"));
+        assert_eq!(error.tool(), Some(&tool_name("tool2")));
 
         match error.kind() {
             ConfigParseErrorKind::InheritanceErrors(errors) => {

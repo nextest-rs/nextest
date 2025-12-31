@@ -6,7 +6,7 @@
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
     config::{
-        core::ConfigExperimental,
+        core::{ConfigExperimental, ToolName},
         elements::{CustomTestGroup, TestGroup},
         scripts::{ProfileScriptType, ScriptId, ScriptType},
     },
@@ -37,12 +37,12 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 #[error(
     "failed to parse nextest config at `{config_file}`{}",
-    provided_by_tool(tool.as_deref())
+    provided_by_tool(tool.as_ref())
 )]
 #[non_exhaustive]
 pub struct ConfigParseError {
     config_file: Utf8PathBuf,
-    tool: Option<String>,
+    tool: Option<ToolName>,
     #[source]
     kind: ConfigParseErrorKind,
 }
@@ -50,12 +50,12 @@ pub struct ConfigParseError {
 impl ConfigParseError {
     pub(crate) fn new(
         config_file: impl Into<Utf8PathBuf>,
-        tool: Option<&str>,
+        tool: Option<&ToolName>,
         kind: ConfigParseErrorKind,
     ) -> Self {
         Self {
             config_file: config_file.into(),
-            tool: tool.map(|s| s.to_owned()),
+            tool: tool.cloned(),
             kind,
         }
     }
@@ -66,8 +66,8 @@ impl ConfigParseError {
     }
 
     /// Returns the tool name associated with this error.
-    pub fn tool(&self) -> Option<&str> {
-        self.tool.as_deref()
+    pub fn tool(&self) -> Option<&ToolName> {
+        self.tool.as_ref()
     }
 
     /// Returns the kind of error this is.
@@ -77,7 +77,7 @@ impl ConfigParseError {
 }
 
 /// Returns the string ` provided by tool <tool>`, if `tool` is `Some`.
-pub fn provided_by_tool(tool: Option<&str>) -> String {
+pub fn provided_by_tool(tool: Option<&ToolName>) -> String {
     match tool {
         Some(tool) => format!(" provided by tool `{tool}`"),
         None => String::new(),
@@ -644,6 +644,22 @@ pub enum InvalidIdentifier {
     ToolIdentifierInvalidXid(SmolStr),
 }
 
+/// A tool name is invalid.
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+pub enum InvalidToolName {
+    /// The tool name is empty.
+    #[error("tool name is empty")]
+    Empty,
+
+    /// The tool name is not in the correct Unicode format.
+    #[error("invalid tool name `{0}`")]
+    InvalidXid(SmolStr),
+
+    /// The tool name starts with "@tool", which is reserved for tool identifiers.
+    #[error("tool name cannot start with \"@tool\": `{0}`")]
+    StartsWithToolPrefix(SmolStr),
+}
+
 /// The name of a test group is invalid (not a valid identifier).
 #[derive(Clone, Debug, Error)]
 #[error("invalid custom test group name: {0}")]
@@ -655,7 +671,7 @@ pub struct InvalidCustomTestGroupName(pub InvalidIdentifier);
 pub struct InvalidConfigScriptName(pub InvalidIdentifier);
 
 /// Error returned while parsing a [`ToolConfigFile`](crate::config::core::ToolConfigFile) value.
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ToolConfigFileParseError {
     #[error(
         "tool-config-file has invalid format: {input}\n(hint: tool configs must be in the format <tool-name>:<path>)"
@@ -666,11 +682,15 @@ pub enum ToolConfigFileParseError {
         input: String,
     },
 
-    /// The tool name was empty.
-    #[error("tool-config-file has empty tool name: {input}")]
-    EmptyToolName {
+    /// The tool name was invalid.
+    #[error("tool-config-file has invalid tool name: {input}")]
+    InvalidToolName {
         /// The input that failed to parse.
         input: String,
+
+        /// The error that occurred.
+        #[source]
+        error: InvalidToolName,
     },
 
     /// The config file path was empty.

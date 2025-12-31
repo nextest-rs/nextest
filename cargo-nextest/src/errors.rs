@@ -8,7 +8,7 @@ use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{
-    config::core::ConfigExperimental,
+    config::core::{ConfigExperimental, ToolName},
     errors::*,
     helpers::{format_interceptor_too_many_tests, plural},
     list::OwnedTestInstanceId,
@@ -296,7 +296,7 @@ pub enum ExpectedError {
     RequiredVersionNotMet {
         required: Version,
         current: Version,
-        tool: Option<String>,
+        tool: Option<ToolName>,
     },
     #[error("experimental feature not enabled")]
     ExperimentalFeatureNotEnabled {

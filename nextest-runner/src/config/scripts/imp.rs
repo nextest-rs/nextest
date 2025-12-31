@@ -1020,7 +1020,7 @@ mod tests {
     use super::*;
     use crate::{
         config::{
-            core::{ConfigExperimental, NextestConfig, ToolConfigFile},
+            core::{ConfigExperimental, NextestConfig, ToolConfigFile, ToolName},
             utils::test_helpers::*,
         },
         errors::{
@@ -1033,6 +1033,10 @@ mod tests {
     use indoc::indoc;
     use maplit::btreeset;
     use test_case::test_case;
+
+    fn tool_name(s: &str) -> ToolName {
+        ToolName::new(s.into()).unwrap()
+    }
 
     #[test]
     fn test_scripts_basic() {
@@ -1086,7 +1090,7 @@ mod tests {
         let pcx = ParseContext::new(&graph);
 
         let tool_config_files = [ToolConfigFile {
-            tool: "my-tool".to_owned(),
+            tool: tool_name("my-tool"),
             config_file: tool_path.to_path_buf(),
         }];
 
@@ -1526,7 +1530,7 @@ mod tests {
         let tool_path = workspace_dir.child(".config/my-tool.toml");
         tool_path.write_str(tool_config_contents).unwrap();
         let tool_config_files = [ToolConfigFile {
-            tool: "my-tool".to_owned(),
+            tool: tool_name("my-tool"),
             config_file: tool_path.to_path_buf(),
         }];
 
