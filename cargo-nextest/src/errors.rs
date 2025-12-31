@@ -3,7 +3,6 @@
 
 use crate::{ExtractOutputFormat, output::StderrStyles};
 use camino::Utf8PathBuf;
-use indent_write::indentable::Indented;
 use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
@@ -11,6 +10,7 @@ use nextest_runner::{
     config::core::{ConfigExperimental, ToolName},
     errors::*,
     helpers::{format_interceptor_too_many_tests, plural},
+    indenter::DisplayIndented,
     list::OwnedTestInstanceId,
     redact::Redactor,
     run_mode::NextestRunMode,
@@ -1116,7 +1116,7 @@ impl ExpectedError {
             error!(
                 target: "cargo_nextest::no_heading",
                 "\nCaused by:\n{}",
-                Indented { item: err, indent: "  " },
+                DisplayIndented { item: err, indent: "  " },
             );
             next_error = err.source();
         }

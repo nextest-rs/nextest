@@ -11,13 +11,13 @@ use crate::{
         scripts::{ProfileScriptType, ScriptId, ScriptType},
     },
     helpers::{display_exited_with, dylib_path_envvar},
+    indenter::{DisplayIndented, indented},
     redact::Redactor,
     reuse_build::{ArchiveFormat, ArchiveStep},
     target_runner::PlatformRunnerSource,
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
-use indent_write::{fmt::IndentWriter, indentable::Indented};
 use itertools::{Either, Itertools};
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::RustBinaryId;
@@ -414,7 +414,7 @@ impl<T: std::error::Error> fmt::Display for ErrorList<T> {
             self.description,
         )?;
         for error in &self.inner {
-            let mut indent = IndentWriter::new_skip_initial("  ", f);
+            let mut indent = indented(f).with_str("  ").skip_initial();
             writeln!(indent, "* {}", DisplayErrorChain::new(error))?;
             f = indent.into_inner();
         }
@@ -464,7 +464,7 @@ where
     E: std::error::Error,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut writer = IndentWriter::new(self.initial_indent, f);
+        let mut writer = indented(f).with_str(self.initial_indent);
         write!(writer, "{}", self.error)?;
 
         let Some(mut cause) = self.error.source() else {
@@ -475,7 +475,8 @@ where
 
         loop {
             writeln!(writer)?;
-            let mut indent = IndentWriter::new_skip_initial("    ", writer);
+            // Wrap the existing writer to accumulate indentation.
+            let mut indent = indented(&mut writer).with_str("    ").skip_initial();
             write!(indent, "  - {cause}")?;
 
             let Some(next_cause) = cause.source() else {
@@ -483,7 +484,6 @@ where
             };
 
             cause = next_cause;
-            writer = indent.into_inner();
         }
     }
 }
@@ -1656,8 +1656,8 @@ pub enum HostPlatformDetectError {
          - `rustc -vV` stderr:\n{}\n\
          - build target error:\n{}\n",
         status,
-        Indented { item: String::from_utf8_lossy(stdout), indent: "  " },
-        Indented { item: String::from_utf8_lossy(stderr), indent: "  " },
+        DisplayIndented { item: String::from_utf8_lossy(stdout), indent: "  " },
+        DisplayIndented { item: String::from_utf8_lossy(stderr), indent: "  " },
         DisplayErrorChain::new_with_initial_indent("  ", build_target_error)
     )]
     RustcVvFailed {
