@@ -33,7 +33,7 @@ Please review https://github.com/nextest-rs/nextest/blob/main/AGENTS.md#for-huma
 
 - Provide structured, helpful error messages using `miette` for rich diagnostics.
 - Make progress reporting responsive and informative.
-- Maintain consistency across platforms even when underlying OS capabilities differ. Use OS-native logic rather than trying to emulate Unix on Windows or vice versa.
+- Maintain consistency across platforms even when underlying OS capabilities differ. Use OS-native logic rather than trying to emulate Unix on Windows (or vice versa).
 - Write user-facing messages in clear, present tense: "Nextest now supports..." not "Nextest now supported..."
 
 ### Pragmatic incrementalism
@@ -47,7 +47,7 @@ Please review https://github.com/nextest-rs/nextest/blob/main/AGENTS.md#for-huma
 
 - Use type system extensively: newtypes, builder patterns, type states, lifetimes.
 - Use message passing or the actor model to avoid data races.
-- Comprehensive testing including edge cases, race conditions, and stress tests.
+- Test comprehensively, including edge cases, race conditions, and stress tests.
 - Pay attention to what facilities already exist for testing, and aim to reuse them.
 - Getting the details right is really important!
 
@@ -56,6 +56,7 @@ Please review https://github.com/nextest-rs/nextest/blob/main/AGENTS.md#for-huma
 - Use inline comments to explain "why," not just "what".
 - Module-level documentation should explain purpose and responsibilities.
 - **Always** use periods at the end of code comments.
+- **Never** use title case in headings and titles. Always use sentence case.
 
 ## Code style
 
@@ -118,15 +119,15 @@ Every Rust source file must start with:
 - Use `debug-ignore` to avoid expensive debug formatting in hot paths.
 - Stream data where possible rather than buffering.
 
-## Testing Practices
+## Testing practices
 
-### Running Tests
+### Running tests
 
 **CRITICAL**: Always use `cargo nextest run` to run unit and integration tests. Never use `cargo test` for these! Nextest dogfoods itself and its test suite depends on nextest's execution model.
 
 For doctests, use `cargo test --doc` (doctests are not supported by nextest).
 
-### Test Organization
+### Test organization
 
 - Unit tests in the same file as the code they test.
 - Integration tests in `integration-tests/` crate.
@@ -134,7 +135,7 @@ For doctests, use `cargo test --doc` (doctests are not supported by nextest).
   - This crate has a model of expected tests under various scenarios. Prefer using this model over implementing spot checks by hand.
 - Test utilities in `internal-test/` crate.
 
-### Testing Tools
+### Testing tools
 
 - **test-case**: For parameterized tests.
 - **proptest**: For property-based testing.
@@ -149,7 +150,7 @@ For doctests, use `cargo test --doc` (doctests are not supported by nextest).
 Commits follow a conventional format with crate-specific scoping:
 
 ```
-[crate-name] brief description (#PR-number)
+[crate-name] brief description
 ```
 
 Examples:
@@ -159,19 +160,16 @@ Examples:
 
 ### Conventions
 
-- Use `[meta]` for cross-cutting concerns (MSRV updates, releases, CI changes)
-- Version bump commits: `[crate-name] version X.Y.Z` (these are performed by `cargo release`)
-- Release preparation: `[meta] prepare releases`
-- Include PR number for all non-version commits
-- Use lowercase for descriptions
-- Keep descriptions concise but descriptive
+- Use `[meta]` for cross-cutting concerns (MSRV updates, releases, CI changes).
+- Version bump commits: `[crate-name] version X.Y.Z` (these are performed by `cargo release`).
+- Release preparation: `[meta] prepare releases`.
+- Keep descriptions concise but descriptive.
 
 ### Commit quality
 
-- **Atomic commits**: Each commit should be a logical unit of change
-- **Bisect-able history**: Every commit must build and pass all checks
-- **Separate concerns**: Don't mix formatting fixes with logic changes
-- Format fixes and refactoring should be in separate commits from feature changes
+- **Atomic commits**: Each commit should be a logical unit of change.
+- **Bisect-able history**: Every commit must build and pass all checks.
+- **Separate concerns**: Format fixes and refactoring should be in separate commits from feature changes.
 
 ### Changelog
 
@@ -179,34 +177,33 @@ For detailed guidelines on preparing changelog entries, use the `prepare-changel
 
 ## Architecture
 
-### Event-Driven Design
+### Event-driven design
 
 The nextest runner uses an event-driven architecture with two main components:
 
 #### The dispatcher
 
-- Interacts with the outside world
-- Linearizes all events from multiple sources (executor, signals, input, reporter)
-- Uses `tokio::select!` to multiplex over event sources
-- Maintains authoritative state about currently running tests
-- Synchronization points prevent race conditions in reporting
+- Interacts with the outside world.
+- Linearizes all events from multiple sources (executor, signals, input, reporter).
+- Uses `tokio::select!` to multiplex over event sources.
+- Maintains authoritative state about currently running tests.
+- Synchronization points prevent race conditions in reporting.
 
 #### The executor
 
-- Schedules and runs tests/scripts as async state machines
-- Each unit of work has dedicated channels to dispatcher (not broadcast)
-- Handles retries, timeouts, process spawning, output capture
-- Units are the source of truth for their own state
+- Schedules and runs tests/scripts as async state machines.
+- Each unit of work has dedicated channels to dispatcher (not broadcast).
+- Handles retries, timeouts, process spawning, output capture.
+- Units are the source of truth for their own state.
 
-### Key Design Principles
+### Key design principles
 
-1. **No direct state sharing**—everything via message passing
-2. **Linearized events**—dispatcher ensures consistent view
-3. **Full error space modeling**—handle all failure modes
-4. **Pausable timers**—custom implementations for job control (SIGTSTP/SIGCONT)
-5. **Structured concurrency**—use `async-scoped` for spawning with borrows
+1. **No direct state sharing**—everything via message passing.
+2. **Linearized events**—dispatcher ensures consistent view.
+3. **Full error space modeling**—handle all failure modes.
+4. **Pausable timers**—custom implementations for job control (SIGTSTP/SIGCONT).
 
-### Cross-Platform Strategy
+### Cross-platform strategy.
 
 - Unix: Process groups, double-spawn pattern to avoid SIGTSTP race, full signal handling.
 - Windows: Job objects, console mode manipulation, limited signal support.
@@ -216,26 +213,25 @@ The nextest runner uses an event-driven architecture with two main components:
 
 ## Dependencies
 
-### Workspace Dependencies
+### Workspace dependencies
 
-- All versions managed in root `Cargo.toml` `[workspace.dependencies]`
-- Internal crates use exact version pinning: `version = "=0.17.0"`
-- Comment on dependency choices when non-obvious
-- Example: "Disable punycode parsing since we only access well-known domains"
+- All versions managed in root `Cargo.toml` `[workspace.dependencies]`.
+- Internal crates use exact version pinning: `version = "=0.17.0"`.
+- Comment on dependency choices when non-obvious; example: "Disable punycode parsing since we only access well-known domains".
 
-### Key Dependencies
+### Key dependencies
 
-- **tokio**: Async runtime, essential for concurrency model
-- **guppy**: Cargo workspace graph analysis
-- **cargo_metadata**: Parse Cargo.toml and workspace metadata
-- **winnow**: Parser combinators (for filterset DSL)
-- **thiserror**: Error derive macros
-- **miette**: Rich diagnostics
-- **camino**: UTF-8 paths (`Utf8PathBuf`)
-- **serde**: Serialization (config, metadata)
-- **clap**: CLI parsing with derives
+- **tokio**: Async runtime, essential for concurrency model.
+- **guppy**: Cargo workspace graph analysis.
+- **cargo_metadata**: Parse Cargo.toml and workspace metadata.
+- **winnow**: Parser combinators (for filterset DSL).
+- **thiserror**: Error derive macros.
+- **miette**: Rich diagnostics.
+- **camino**: UTF-8 paths (`Utf8PathBuf`).
+- **serde**: Serialization (config, metadata).
+- **clap**: CLI parsing with derives.
 
-## Quick Reference
+## Quick reference
 
 ### Commands
 
@@ -264,7 +260,7 @@ cargo release -p <crate-name> <version>
 cargo release -p <crate-name> <version> --execute
 ```
 
-### Helpful Git Commands
+### Helpful Git commands
 
 ```bash
 # Get commits since last release
