@@ -71,6 +71,7 @@ mod tests {
     use camino_tempfile_ext::prelude::*;
     use guppy::graph::cargo::BuildPlatform;
     use nextest_filtering::{ParseContext, TestQuery};
+    use nextest_metadata::TestCaseName;
 
     fn tool_name(s: &str) -> ToolName {
         ToolName::new(s.into()).unwrap()
@@ -306,21 +307,25 @@ mod tests {
             "my-binary",
             BuildPlatform::Target,
         );
+        let test_foo = TestCaseName::new("test_foo");
         let test_foo_query = TestQuery {
             binary_query: binary_query.to_query(),
-            test_name: "test_foo",
+            test_name: &test_foo,
         };
+        let test_bar = TestCaseName::new("test_bar");
         let test_bar_query = TestQuery {
             binary_query: binary_query.to_query(),
-            test_name: "test_bar",
+            test_name: &test_bar,
         };
+        let test_baz = TestCaseName::new("test_baz");
         let test_baz_query = TestQuery {
             binary_query: binary_query.to_query(),
-            test_name: "test_baz",
+            test_name: &test_baz,
         };
+        let test_quux = TestCaseName::new("test_quux");
         let test_quux_query = TestQuery {
             binary_query: binary_query.to_query(),
-            test_name: "test_quux",
+            test_name: &test_quux,
         };
 
         assert_eq!(

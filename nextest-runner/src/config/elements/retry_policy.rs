@@ -181,6 +181,7 @@ mod tests {
     use guppy::graph::cargo::BuildPlatform;
     use indoc::indoc;
     use nextest_filtering::{ParseContext, TestQuery};
+    use nextest_metadata::TestCaseName;
     use test_case::test_case;
 
     #[test]
@@ -652,9 +653,10 @@ mod tests {
         )
         .unwrap();
         let binary_query = binary_query(&graph, package_id, "lib", "my-binary", build_platform);
+        let test_name = TestCaseName::new("my_test");
         let query = TestQuery {
             binary_query: binary_query.to_query(),
-            test_name: "my_test",
+            test_name: &test_name,
         };
         let profile = config
             .profile("ci")

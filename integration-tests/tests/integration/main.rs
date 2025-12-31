@@ -29,7 +29,7 @@ use integration_tests::{
     nextest_cli::{CargoNextestCli, CargoNextestOutput},
 };
 use nextest_metadata::{
-    BuildPlatform, FilterMatch, MismatchReason, NextestExitCode, TestListSummary,
+    BuildPlatform, FilterMatch, MismatchReason, NextestExitCode, TestCaseName, TestListSummary,
 };
 use std::{borrow::Cow, fs::File, io::Write};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
@@ -2019,7 +2019,7 @@ fn test_filterset_with_string_filters() {
         for (test_name, test_info) in &suite.test_cases {
             let full_name = format!("{} {}", binary_id, test_name);
 
-            if test_name == "tests::call_dylib_add_two" {
+            if *test_name == TestCaseName::new("tests::call_dylib_add_two") {
                 // Matches both expression and string filter.
                 assert!(
                     test_info.filter_match.is_match(),
@@ -2084,7 +2084,9 @@ fn test_filterset_without_string_filters() {
         for (test_name, test_info) in &suite.test_cases {
             let full_name = format!("{} {}", binary_id, test_name);
 
-            if test_name.contains("test_multiply_two") || test_name == "tests::call_dylib_add_two" {
+            if test_name.contains("test_multiply_two")
+                || *test_name == TestCaseName::new("tests::call_dylib_add_two")
+            {
                 assert!(
                     test_info.filter_match.is_match(),
                     "{full_name}: expected match, got {:?}",

@@ -13,7 +13,7 @@ use guppy::{
     graph::{BuildTargetId, PackageGraph, PackageMetadata, cargo::BuildPlatform},
 };
 use miette::SourceSpan;
-use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
+use nextest_metadata::{RustBinaryId, RustTestBinaryKind, TestCaseName};
 use recursion::{Collapsible, CollapsibleExt, MappableFrame, PartiallyApplied};
 use smol_str::SmolStr;
 use std::{collections::HashSet, fmt, sync::OnceLock};
@@ -169,7 +169,7 @@ pub struct TestQuery<'a> {
     pub binary_query: BinaryQuery<'a>,
 
     /// The name of the test.
-    pub test_name: &'a str,
+    pub test_name: &'a TestCaseName,
 }
 
 /// A filterset that has been parsed and compiled.
@@ -255,7 +255,7 @@ impl FiltersetLeaf {
             Self::All => true,
             Self::None => false,
             Self::Default => cx.default_filter.matches_test(query, cx),
-            Self::Test(matcher, _) => matcher.is_match(query.test_name),
+            Self::Test(matcher, _) => matcher.is_match(query.test_name.as_str()),
             Self::Binary(matcher, _) => matcher.is_match(query.binary_query.binary_name),
             Self::BinaryId(matcher, _) => matcher.is_match(query.binary_query.binary_id.as_str()),
             Self::Platform(platform, _) => query.binary_query.platform == *platform,

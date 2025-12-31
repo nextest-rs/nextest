@@ -194,7 +194,7 @@ impl<'a> ExecutorContext<'a> {
         resp_tx: UnboundedSender<ExecutorEvent<'a>>,
         setup_script_data: Arc<SetupScriptExecuteData<'a>>,
     ) {
-        debug!(test_name = test.instance.name, "running test");
+        debug!(test_name = %test.instance.name, "running test");
 
         let settings = Arc::new(test.settings);
 
@@ -709,7 +709,7 @@ impl<'a> ExecutorContext<'a> {
             "NEXTEST_BINARY_ID",
             test.test_instance.suite_info.binary_id.as_str(),
         );
-        command_mut.env("NEXTEST_TEST_NAME", test.test_instance.name);
+        command_mut.env("NEXTEST_TEST_NAME", test.test_instance.name.as_str());
         command_mut.env("NEXTEST_ATTEMPT", test.retry_data.attempt.to_string());
         command_mut.env(
             "NEXTEST_TOTAL_ATTEMPTS",

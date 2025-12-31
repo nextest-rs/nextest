@@ -31,7 +31,7 @@ use crate::{
 };
 use bstr::ByteSlice;
 use iddqd::{IdOrdItem, IdOrdMap, id_ord_map, id_upcast};
-use nextest_metadata::{MismatchReason, RustBinaryId};
+use nextest_metadata::{MismatchReason, RustBinaryId, TestCaseName};
 use std::fmt::Write as _;
 
 /// To support pinning the version of the output, we just use this simple enum
@@ -584,7 +584,7 @@ impl<'cfg> LibtestReporter<'cfg> {
 fn strip_human_output_from_failed_test(
     output: &ChildExecutionOutput,
     out: &mut bytes::BytesMut,
-    test_name: &str,
+    test_name: &TestCaseName,
 ) -> Result<(), WriteEventError> {
     match output {
         ChildExecutionOutput::Output {
@@ -651,7 +651,7 @@ fn strip_human_output_from_failed_test(
 fn strip_human_stdout_or_combined(
     output: &ChildSingleOutput,
     out: &mut bytes::BytesMut,
-    test_name: &str,
+    test_name: &TestCaseName,
 ) -> Result<(), WriteEventError> {
     if output.buf.contains_str("running 1 test\n") {
         // This is most likely the default test harness.
@@ -763,6 +763,7 @@ mod test {
     };
     use bytes::BytesMut;
     use color_eyre::eyre::eyre;
+    use nextest_metadata::TestCaseName;
     use std::{io, sync::Arc};
 
     /// Validates that the human output portion from a failed test is stripped
@@ -817,7 +818,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
                 errors: None,
             },
             &mut actual,
-            "index::test::download_url_crates_io",
+            &TestCaseName::new("index::test::download_url_crates_io"),
         )
         .unwrap();
 
@@ -848,7 +849,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
                 errors: None,
             },
             &mut actual,
-            "non-existent",
+            &TestCaseName::new("non-existent"),
         )
         .unwrap();
 
@@ -863,7 +864,12 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
         let output = ChildExecutionOutput::StartError(ChildStartError::Spawn(Arc::new(error)));
 
         let mut actual = bytes::BytesMut::new();
-        strip_human_output_from_failed_test(&output, &mut actual, "non-existent").unwrap();
+        strip_human_output_from_failed_test(
+            &output,
+            &mut actual,
+            &TestCaseName::new("non-existent"),
+        )
+        .unwrap();
 
         insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
     }
@@ -881,7 +887,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
                 errors: None,
             },
             &mut actual,
-            "non-existent",
+            &TestCaseName::new("non-existent"),
         )
         .unwrap();
 

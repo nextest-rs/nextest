@@ -13,7 +13,7 @@ use crate::{
     run_mode::NextestRunMode,
 };
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use nextest_metadata::RustBinaryId;
+use nextest_metadata::{RustBinaryId, TestCaseName};
 use owo_colors::OwoColorize;
 use std::{
     cmp::{max, min},
@@ -112,7 +112,7 @@ pub(super) enum RunningTestStatus {
 #[derive(Debug)]
 pub(super) struct RunningTest {
     binary_id: RustBinaryId,
-    test_name: String,
+    test_name: TestCaseName,
     status: RunningTestStatus,
     start_time: Instant,
     paused_for: Duration,
@@ -410,7 +410,7 @@ impl ProgressBarState {
                         .iter_mut()
                         .find(|rt| {
                             &rt.binary_id == test_instance.binary_id
-                                && rt.test_name == test_instance.test_name
+                                && &rt.test_name == test_instance.test_name
                         })
                         .expect("a slow test to be already running")
                         .status = RunningTestStatus::Slow;
@@ -470,7 +470,7 @@ impl ProgressBarState {
                     .iter()
                     .position(|e| {
                         &e.binary_id == test_instance.binary_id
-                            && e.test_name == test_instance.test_name
+                            && &e.test_name == test_instance.test_name
                     })
                     .expect("finished test to have started"),
             );
@@ -950,7 +950,7 @@ mod tests {
 
     fn running_test_examples(now: Instant) -> Vec<(&'static str, RunningTest)> {
         let binary_id = RustBinaryId::new("my-binary");
-        let test_name = "test::my_test".to_string();
+        let test_name = TestCaseName::new("test::my_test");
         let start_time = now - Duration::from_secs(125); // 2 minutes 5 seconds ago
 
         vec![

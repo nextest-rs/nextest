@@ -13,7 +13,7 @@ use crate::{
 };
 use aho_corasick::AhoCorasick;
 use nextest_filtering::{EvalContext, Filterset, TestQuery};
-use nextest_metadata::{FilterMatch, MismatchReason, RustTestKind};
+use nextest_metadata::{FilterMatch, MismatchReason, RustTestKind, TestCaseName};
 use std::{collections::HashSet, fmt, mem};
 
 /// Whether to run ignored tests.
@@ -324,7 +324,8 @@ enum ResolvedFilterPatterns {
 }
 
 impl ResolvedFilterPatterns {
-    fn name_match(&self, test_name: &str) -> FilterNameMatch {
+    fn name_match(&self, test_name: &TestCaseName) -> FilterNameMatch {
+        let test_name = test_name.as_str();
         match self {
             Self::All => FilterNameMatch::MatchEmptyPatterns,
             Self::SkipOnly {
@@ -595,7 +596,7 @@ impl TestFilter<'_> {
     pub fn filter_match(
         &mut self,
         test_binary: &RustTestArtifact<'_>,
-        test_name: &str,
+        test_name: &TestCaseName,
         test_kind: &RustTestKind,
         ecx: &EvalContext<'_>,
         bound: FilterBound,
@@ -693,14 +694,14 @@ impl TestFilter<'_> {
         None
     }
 
-    fn filter_name_match(&self, test_name: &str) -> FilterNameMatch {
+    fn filter_name_match(&self, test_name: &TestCaseName) -> FilterNameMatch {
         self.builder.patterns.name_match(test_name)
     }
 
     fn filter_expression_match(
         &self,
         test_binary: &RustTestArtifact<'_>,
-        test_name: &str,
+        test_name: &TestCaseName,
         ecx: &EvalContext<'_>,
         bound: FilterBound,
     ) -> FilterNameMatch {
@@ -732,9 +733,9 @@ impl TestFilter<'_> {
         }
     }
 
-    fn filter_partition_mismatch(&mut self, test_name: &str) -> Option<FilterMatch> {
+    fn filter_partition_mismatch(&mut self, test_name: &TestCaseName) -> Option<FilterMatch> {
         let partition_match = match &mut self.partitioner {
-            Some(partitioner) => partitioner.test_matches(test_name),
+            Some(partitioner) => partitioner.test_matches(test_name.as_str()),
             None => true,
         };
         if partition_match {
@@ -786,6 +787,7 @@ mod tests {
         .unwrap();
         let single_filter = test_filter.build();
         for test_name in test_names {
+            let test_name = TestCaseName::new(&test_name);
             prop_assert!(single_filter.filter_name_match(&test_name).is_match());
         }
     }
@@ -805,7 +807,8 @@ mod tests {
         .unwrap();
         let single_filter = test_filter.build();
         for test_name in &test_names {
-            prop_assert!(single_filter.filter_name_match(test_name).is_match());
+            let test_name = TestCaseName::new(test_name);
+            prop_assert!(single_filter.filter_name_match(&test_name).is_match());
         }
 
         // Test with the exact matcher.
@@ -823,7 +826,8 @@ mod tests {
         .unwrap();
         let single_filter = test_filter.build();
         for test_name in &test_names {
-            prop_assert!(single_filter.filter_name_match(test_name).is_match());
+            let test_name = TestCaseName::new(test_name);
+            prop_assert!(single_filter.filter_name_match(&test_name).is_match());
         }
     }
 
@@ -849,6 +853,7 @@ mod tests {
         .unwrap();
         let single_filter = test_filter.build();
         for test_name in test_names {
+            let test_name = TestCaseName::new(&test_name);
             prop_assert!(single_filter.filter_name_match(&test_name).is_match());
         }
     }
@@ -868,7 +873,12 @@ mod tests {
         )
         .unwrap();
         let single_filter = test_filter.build();
+        let substring = TestCaseName::new(&substring);
         prop_assert!(!single_filter.filter_name_match(&substring).is_match());
+    }
+
+    fn test_name(s: &str) -> TestCaseName {
+        TestCaseName::new(s)
     }
 
     #[test]
@@ -883,57 +893,57 @@ mod tests {
 
         // Test substring matches.
         assert_eq!(
-            resolved.name_match("foo"),
+            resolved.name_match(&test_name("foo")),
             FilterNameMatch::MatchWithPatterns,
         );
         assert_eq!(
-            resolved.name_match("1foo2"),
+            resolved.name_match(&test_name("1foo2")),
             FilterNameMatch::MatchWithPatterns,
         );
         assert_eq!(
-            resolved.name_match("bar"),
+            resolved.name_match(&test_name("bar")),
             FilterNameMatch::MatchWithPatterns,
         );
         assert_eq!(
-            resolved.name_match("x_bar_y"),
+            resolved.name_match(&test_name("x_bar_y")),
             FilterNameMatch::MatchWithPatterns,
         );
 
         // Test exact matches.
         assert_eq!(
-            resolved.name_match("baz"),
+            resolved.name_match(&test_name("baz")),
             FilterNameMatch::MatchWithPatterns,
         );
         assert_eq!(
-            resolved.name_match("abazb"),
+            resolved.name_match(&test_name("abazb")),
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
 
         // Both substring and exact matches.
         assert_eq!(
-            resolved.name_match("bazfoo"),
+            resolved.name_match(&test_name("bazfoo")),
             FilterNameMatch::MatchWithPatterns,
         );
 
         // Skip patterns.
         assert_eq!(
-            resolved.name_match("quux"),
+            resolved.name_match(&test_name("quux")),
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
         assert_eq!(
-            resolved.name_match("1quux2"),
+            resolved.name_match(&test_name("1quux2")),
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
 
         // Skip and substring patterns.
         assert_eq!(
-            resolved.name_match("quuxbar"),
+            resolved.name_match(&test_name("quuxbar")),
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
 
         // Skip-exact patterns.
         assert_eq!(
-            resolved.name_match("quuz"),
+            resolved.name_match(&test_name("quuz")),
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
 
@@ -941,7 +951,7 @@ mod tests {
         patterns.add_skip_pattern("baz".to_string());
         let resolved = patterns.resolve().unwrap();
         assert_eq!(
-            resolved.name_match("quuxbaz"),
+            resolved.name_match(&test_name("quuxbaz")),
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
     }
@@ -957,35 +967,35 @@ mod tests {
 
         // Test substring matches.
         assert_eq!(
-            resolved.name_match("foo"),
+            resolved.name_match(&test_name("foo")),
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
         assert_eq!(
-            resolved.name_match("1foo2"),
+            resolved.name_match(&test_name("1foo2")),
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
         assert_eq!(
-            resolved.name_match("bar"),
+            resolved.name_match(&test_name("bar")),
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
         assert_eq!(
-            resolved.name_match("x_bar_y"),
+            resolved.name_match(&test_name("x_bar_y")),
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
 
         // Test exact matches.
         assert_eq!(
-            resolved.name_match("baz"),
+            resolved.name_match(&test_name("baz")),
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
         assert_eq!(
-            resolved.name_match("abazb"),
+            resolved.name_match(&test_name("abazb")),
             FilterNameMatch::MatchWithPatterns,
         );
 
         // Anything that doesn't match the skip filter should match.
         assert_eq!(
-            resolved.name_match("quux"),
+            resolved.name_match(&test_name("quux")),
             FilterNameMatch::MatchWithPatterns,
         );
     }
@@ -998,27 +1008,27 @@ mod tests {
 
         // Anything matches.
         assert_eq!(
-            resolved.name_match("foo"),
+            resolved.name_match(&test_name("foo")),
             FilterNameMatch::MatchEmptyPatterns,
         );
         assert_eq!(
-            resolved.name_match("1foo2"),
+            resolved.name_match(&test_name("1foo2")),
             FilterNameMatch::MatchEmptyPatterns,
         );
         assert_eq!(
-            resolved.name_match("bar"),
+            resolved.name_match(&test_name("bar")),
             FilterNameMatch::MatchEmptyPatterns,
         );
         assert_eq!(
-            resolved.name_match("x_bar_y"),
+            resolved.name_match(&test_name("x_bar_y")),
             FilterNameMatch::MatchEmptyPatterns,
         );
         assert_eq!(
-            resolved.name_match("baz"),
+            resolved.name_match(&test_name("baz")),
             FilterNameMatch::MatchEmptyPatterns,
         );
         assert_eq!(
-            resolved.name_match("abazb"),
+            resolved.name_match(&test_name("abazb")),
             FilterNameMatch::MatchEmptyPatterns,
         );
     }

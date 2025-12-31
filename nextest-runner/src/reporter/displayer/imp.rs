@@ -2439,7 +2439,7 @@ mod tests {
     use bytes::Bytes;
     use camino::Utf8PathBuf;
     use chrono::Local;
-    use nextest_metadata::RustBinaryId;
+    use nextest_metadata::{RustBinaryId, TestCaseName};
     use quick_junit::ReportUuid;
     use smol_str::SmolStr;
     use std::{num::NonZero, sync::Arc};
@@ -2504,9 +2504,10 @@ mod tests {
     #[test]
     fn final_status_line() {
         let binary_id = RustBinaryId::new("my-binary-id");
+        let test_name = TestCaseName::new("test1");
         let test_instance = TestInstanceId {
             binary_id: &binary_id,
-            test_name: "test1",
+            test_name: &test_name,
         };
 
         let fail_result = ExecutionResult::Fail {
@@ -2786,6 +2787,10 @@ mod tests {
     fn test_info_response() {
         let args = vec!["arg1".to_string(), "arg2".to_string()];
         let binary_id = RustBinaryId::new("my-binary-id");
+        let test_name1 = TestCaseName::new("test1");
+        let test_name2 = TestCaseName::new("test2");
+        let test_name3 = TestCaseName::new("test3");
+        let test_name4 = TestCaseName::new("test4");
 
         let mut out = String::new();
 
@@ -3006,7 +3011,7 @@ mod tests {
                                 stress_index: None,
                                 test_instance: TestInstanceId {
                                     binary_id: &binary_id,
-                                    test_name: "test1",
+                                    test_name: &test_name1,
                                 },
                                 retry_data: RetryData {
                                     attempt: 1,
@@ -3038,7 +3043,7 @@ mod tests {
                                 }),
                                 test_instance: TestInstanceId {
                                     binary_id: &binary_id,
-                                    test_name: "test2",
+                                    test_name: &test_name2,
                                 },
                                 retry_data: RetryData {
                                     attempt: 2,
@@ -3070,7 +3075,7 @@ mod tests {
                                 stress_index: None,
                                 test_instance: TestInstanceId {
                                     binary_id: &binary_id,
-                                    test_name: "test3",
+                                    test_name: &test_name3,
                                 },
                                 retry_data: RetryData {
                                     attempt: 2,
@@ -3105,7 +3110,7 @@ mod tests {
                                 }),
                                 test_instance: TestInstanceId {
                                     binary_id: &binary_id,
-                                    test_name: "test4",
+                                    test_name: &test_name4,
                                 },
                                 retry_data: RetryData {
                                     attempt: 1,
@@ -3140,7 +3145,7 @@ mod tests {
                                 stress_index: None,
                                 test_instance: TestInstanceId {
                                     binary_id: &binary_id,
-                                    test_name: "test4",
+                                    test_name: &test_name4,
                                 },
                                 retry_data: RetryData {
                                     // Note that even though attempt is 1, we
@@ -3233,6 +3238,10 @@ mod tests {
     #[test]
     fn verbose_command_line() {
         let binary_id = RustBinaryId::new("my-binary-id");
+        let test_name = TestCaseName::new("test_name");
+        let test_with_spaces = TestCaseName::new("test_with_spaces");
+        let test_special_chars = TestCaseName::new("test_special_chars");
+        let test_retry = TestCaseName::new("test_retry");
         let mut out = String::new();
 
         with_verbose_reporter(
@@ -3252,7 +3261,7 @@ mod tests {
                             stress_index: None,
                             test_instance: TestInstanceId {
                                 binary_id: &binary_id,
-                                test_name: "test_name",
+                                test_name: &test_name,
                             },
                             current_stats,
                             running: 1,
@@ -3274,7 +3283,7 @@ mod tests {
                             stress_index: None,
                             test_instance: TestInstanceId {
                                 binary_id: &binary_id,
-                                test_name: "test_with_spaces",
+                                test_name: &test_with_spaces,
                             },
                             current_stats,
                             running: 2,
@@ -3297,7 +3306,7 @@ mod tests {
                             stress_index: None,
                             test_instance: TestInstanceId {
                                 binary_id: &binary_id,
-                                test_name: "test_special_chars",
+                                test_name: &test_special_chars,
                             },
                             current_stats,
                             running: 3,
@@ -3319,7 +3328,7 @@ mod tests {
                             stress_index: None,
                             test_instance: TestInstanceId {
                                 binary_id: &binary_id,
-                                test_name: "test_retry",
+                                test_name: &test_retry,
                             },
                             retry_data: RetryData {
                                 attempt: 2,
@@ -3344,7 +3353,7 @@ mod tests {
                             stress_index: None,
                             test_instance: TestInstanceId {
                                 binary_id: &binary_id,
-                                test_name: "test_retry",
+                                test_name: &test_retry,
                             },
                             retry_data: RetryData {
                                 attempt: 3,

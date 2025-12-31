@@ -467,6 +467,113 @@ pub enum RustBinaryIdNameAndKind<'a> {
     },
 }
 
+/// The name of a test case within a binary.
+///
+/// This is the identifier for an individual test within a Rust test binary.
+/// Test case names are typically the full path to the test function, like
+/// `module::submodule::test_name`.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct TestCaseName(SmolStr);
+
+impl fmt::Display for TestCaseName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl TestCaseName {
+    /// Creates a new `TestCaseName` from a string.
+    #[inline]
+    pub fn new(name: &str) -> Self {
+        Self(name.into())
+    }
+
+    /// Returns the name as a string.
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Returns the name as bytes.
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+
+    /// Returns the length of the name in bytes.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns `true` if the name is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Returns `true` if the name contains the given pattern.
+    #[inline]
+    pub fn contains(&self, pattern: &str) -> bool {
+        self.0.contains(pattern)
+    }
+
+    /// Returns an iterator over the `::` separated components of this test case name.
+    ///
+    /// Test case names typically follow Rust's module path syntax, like
+    /// `module::submodule::test_name`. This method splits on `::` to yield each component.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nextest_metadata::TestCaseName;
+    ///
+    /// let name = TestCaseName::new("foo::bar::test_baz");
+    /// let components: Vec<_> = name.components().collect();
+    /// assert_eq!(components, vec!["foo", "bar", "test_baz"]);
+    ///
+    /// let simple = TestCaseName::new("test_simple");
+    /// let components: Vec<_> = simple.components().collect();
+    /// assert_eq!(components, vec!["test_simple"]);
+    /// ```
+    #[inline]
+    pub fn components(&self) -> std::str::Split<'_, &str> {
+        self.0.split("::")
+    }
+
+    /// Splits the test case name into a module path prefix and trailing name.
+    ///
+    /// Returns `(Some(module_path), name)` if the test case name contains `::`,
+    /// or `(None, name)` if it doesn't.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nextest_metadata::TestCaseName;
+    ///
+    /// let name = TestCaseName::new("foo::bar::test_baz");
+    /// assert_eq!(name.module_path_and_name(), (Some("foo::bar"), "test_baz"));
+    ///
+    /// let simple = TestCaseName::new("test_simple");
+    /// assert_eq!(simple.module_path_and_name(), (None, "test_simple"));
+    /// ```
+    #[inline]
+    pub fn module_path_and_name(&self) -> (Option<&str>, &str) {
+        match self.0.rsplit_once("::") {
+            Some((module_path, name)) => (Some(module_path), name),
+            None => (None, &self.0),
+        }
+    }
+}
+
+impl AsRef<str> for TestCaseName {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Rust metadata used for builds and test runs.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -684,7 +791,7 @@ pub struct RustTestSuiteSummary {
 
     /// Test cases within this test suite.
     #[serde(rename = "testcases")]
-    pub test_cases: BTreeMap<String, RustTestCaseSummary>,
+    pub test_cases: BTreeMap<TestCaseName, RustTestCaseSummary>,
 }
 
 fn listed_status() -> RustTestSuiteStatusSummary {
