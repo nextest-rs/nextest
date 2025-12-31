@@ -12,6 +12,7 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use console::AnsiCodeIterator;
+use nextest_metadata::TestCaseName;
 use owo_colors::{OwoColorize, Style};
 use std::{fmt, io, path::PathBuf, process::ExitStatus, time::Duration};
 use swrite::{SWrite, swrite};
@@ -469,18 +470,16 @@ pub(crate) fn u32_decimal_char_width(n: u32) -> usize {
 
 /// Write out a test name.
 pub(crate) fn write_test_name(
-    name: &str,
+    name: &TestCaseName,
     style: &Styles,
     writer: &mut dyn WriteStr,
 ) -> io::Result<()> {
-    // Look for the part of the test after the last ::, if any.
-    let mut splits = name.rsplitn(2, "::");
-    let trailing = splits.next().expect("test should have at least 1 element");
-    if let Some(rest) = splits.next() {
+    let (module_path, trailing) = name.module_path_and_name();
+    if let Some(module_path) = module_path {
         write!(
             writer,
             "{}{}",
-            rest.style(style.module_path),
+            module_path.style(style.module_path),
             "::".style(style.module_path)
         )?;
     }
@@ -491,26 +490,24 @@ pub(crate) fn write_test_name(
 
 /// Wrapper for displaying a test name with styling.
 pub(crate) struct DisplayTestName<'a> {
-    name: &'a str,
+    name: &'a TestCaseName,
     styles: &'a Styles,
 }
 
 impl<'a> DisplayTestName<'a> {
-    pub(crate) fn new(name: &'a str, styles: &'a Styles) -> Self {
+    pub(crate) fn new(name: &'a TestCaseName, styles: &'a Styles) -> Self {
         Self { name, styles }
     }
 }
 
 impl fmt::Display for DisplayTestName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Look for the part of the test after the last ::, if any.
-        let mut splits = self.name.rsplitn(2, "::");
-        let trailing = splits.next().expect("test should have at least 1 element");
-        if let Some(rest) = splits.next() {
+        let (module_path, trailing) = self.name.module_path_and_name();
+        if let Some(module_path) = module_path {
             write!(
                 f,
                 "{}{}",
-                rest.style(self.styles.module_path),
+                module_path.style(self.styles.module_path),
                 "::".style(self.styles.module_path)
             )?;
         }

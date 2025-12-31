@@ -10,7 +10,8 @@ use fixture_data::{
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use integration_tests::nextest_cli::{CargoNextestCli, cargo_bin};
 use nextest_metadata::{
-    BinaryListSummary, BuildPlatform, RustBinaryId, RustTestSuiteStatusSummary, TestListSummary,
+    BinaryListSummary, BuildPlatform, RustBinaryId, RustTestSuiteStatusSummary, TestCaseName,
+    TestListSummary,
 };
 use quick_junit::Report;
 use regex::Regex;
@@ -106,7 +107,7 @@ pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
             test_suite.binary_id
         );
         for case in &test_suite.test_cases {
-            let e = entry.test_cases.get(case.name);
+            let e = entry.test_cases.get(&case.name);
             let e = match e {
                 Some(e) => e,
                 _ => panic!(
@@ -150,18 +151,18 @@ pub fn check_list_oneline_output(stdout: &str) {
     let test_suites = &*EXPECTED_TEST_SUITES;
 
     // Build the set of expected test instances (binary_id, test_name).
-    let mut expected_tests: BTreeSet<(RustBinaryId, String)> = BTreeSet::new();
+    let mut expected_tests: BTreeSet<(RustBinaryId, TestCaseName)> = BTreeSet::new();
     for fixture in test_suites {
         for test_case in &fixture.test_cases {
             // Only include non-ignored tests (oneline without --verbose skips ignored tests).
             if !test_case.status.is_ignored() {
-                expected_tests.insert((fixture.binary_id.clone(), test_case.name.to_owned()));
+                expected_tests.insert((fixture.binary_id.clone(), test_case.name.clone()));
             }
         }
     }
 
     // Parse the actual output.
-    let mut actual_tests: BTreeSet<(RustBinaryId, String)> = BTreeSet::new();
+    let mut actual_tests: BTreeSet<(RustBinaryId, TestCaseName)> = BTreeSet::new();
     for line in stdout.lines() {
         let parts: Vec<_> = line.splitn(2, ' ').collect();
         assert_eq!(
@@ -179,7 +180,7 @@ pub fn check_list_oneline_output(stdout: &str) {
             !test_name.is_empty(),
             "test_name should not be empty in line: {line:?}"
         );
-        actual_tests.insert((RustBinaryId::new(binary_id), test_name.to_owned()));
+        actual_tests.insert((RustBinaryId::new(binary_id), TestCaseName::new(test_name)));
     }
 
     // Compare expected vs actual.
@@ -232,14 +233,14 @@ pub fn check_list_oneline_binaries_output(stdout: &str) {
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 struct TestInstanceId {
     binary_id: String,
-    test_name: String,
+    test_name: TestCaseName,
 }
 
 impl TestInstanceId {
-    fn new(binary_id: &str, test_name: &str) -> Self {
+    fn new(binary_id: &str, test_name: &TestCaseName) -> Self {
         Self {
             binary_id: binary_id.to_owned(),
-            test_name: test_name.to_owned(),
+            test_name: test_name.clone(),
         }
     }
 
@@ -278,14 +279,14 @@ impl ExpectedTestResults {
             if skip_suite {
                 // The entire suite should not appear in output.
                 for test in &fixture.test_cases {
-                    let identifier = TestInstanceId::new(binary_id.as_str(), test.name);
+                    let identifier = TestInstanceId::new(binary_id.as_str(), &test.name);
                     should_not_run.insert(identifier);
                 }
                 continue;
             }
 
             for test in &fixture.test_cases {
-                let id = TestInstanceId::new(binary_id.as_str(), test.name);
+                let id = TestInstanceId::new(binary_id.as_str(), &test.name);
 
                 if properties.contains(RunProperties::BENCHMARKS) {
                     // We don't consider skipped tests while running benchmarks.
@@ -510,7 +511,8 @@ impl ActualTestResults {
                 Some(m) => m.as_str().parse::<u32>().expect("parsed attempt number"),
                 None => 1,
             };
-            let id = TestInstanceId::new(&caps[2], &caps[3]);
+            let test_name = TestCaseName::new(&caps[3]);
+            let id = TestInstanceId::new(&caps[2], &test_name);
             let attempt_record = TestAttempt { attempt, result };
 
             match tests.entry(&id) {
@@ -549,7 +551,8 @@ impl ActualTestResults {
                 // It's in a different format: "FLAKY 4/5 [duration] (count/total) binary_id test_name"
                 // Groups: 1=pass_attempt, 2=total_attempts, 3=binary_id, 4=test_name
                 // We record this as a PASS since the test eventually passed.
-                let id = TestInstanceId::new(&caps[3], &caps[4]);
+                let test_name = TestCaseName::new(&caps[4]);
+                let id = TestInstanceId::new(&caps[3], &test_name);
                 let attempt_record = TestAttempt {
                     attempt: caps[1].parse().expect("parsed attempt number"),
                     result: CheckResult::Pass,
@@ -855,8 +858,8 @@ impl ActualJunitResults {
             }
 
             for test_case in &test_suite.test_cases {
-                let test_name = test_case.name.as_str();
-                let id = TestInstanceId::new(binary_id, test_name);
+                let test_name = TestCaseName::new(test_case.name.as_str());
+                let id = TestInstanceId::new(binary_id, &test_name);
 
                 let non_success = match &test_case.status {
                     quick_junit::TestCaseStatus::Success { .. } => None,

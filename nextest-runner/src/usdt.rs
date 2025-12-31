@@ -16,7 +16,7 @@
 //!
 //! For more information and examples, see the [nextest documentation](https://nexte.st/docs/integrations/usdt).
 
-use nextest_metadata::RustBinaryId;
+use nextest_metadata::{RustBinaryId, TestCaseName};
 use quick_junit::ReportUuid;
 use serde::Serialize;
 
@@ -278,7 +278,7 @@ pub struct UsdtTestAttemptStart {
     /// The name of the test.
     ///
     /// Also available as `arg3`.
-    pub test_name: String,
+    pub test_name: TestCaseName,
 
     /// The process ID of the test.
     ///
@@ -335,7 +335,7 @@ pub struct UsdtTestAttemptDone {
     /// The name of the test.
     ///
     /// Also available as `arg3`.
-    pub test_name: String,
+    pub test_name: TestCaseName,
 
     /// The attempt number, starting at 1 and <= `total_attempts`.
     pub attempt: u32,
@@ -394,7 +394,7 @@ pub struct UsdtTestAttemptSlow {
     pub binary_id: RustBinaryId,
 
     /// The name of the test. Also available as `arg3`.
-    pub test_name: String,
+    pub test_name: TestCaseName,
 
     /// The attempt number, starting at 1 and <= `total_attempts`.
     pub attempt: u32,

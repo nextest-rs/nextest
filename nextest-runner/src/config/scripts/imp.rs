@@ -1032,6 +1032,7 @@ mod tests {
     use camino_tempfile_ext::prelude::*;
     use indoc::indoc;
     use maplit::btreeset;
+    use nextest_metadata::TestCaseName;
     use test_case::test_case;
 
     fn tool_name(s: &str) -> ToolName {
@@ -1130,9 +1131,10 @@ mod tests {
         // This query matches the foo and bar scripts.
         let host_binary_query =
             binary_query(&graph, package_id, "lib", "my-binary", BuildPlatform::Host);
+        let test_name = TestCaseName::new("script1");
         let query = TestQuery {
             binary_query: host_binary_query.to_query(),
-            test_name: "script1",
+            test_name: &test_name,
         };
         let scripts = SetupScripts::new_with_queries(&profile, std::iter::once(query));
         assert_eq!(scripts.len(), 2, "two scripts should be enabled");
@@ -1156,9 +1158,10 @@ mod tests {
         );
 
         // This query matches the baz script.
+        let test_name = TestCaseName::new("script2");
         let query = TestQuery {
             binary_query: target_binary_query.to_query(),
-            test_name: "script2",
+            test_name: &test_name,
         };
         let scripts = SetupScripts::new_with_queries(&profile, std::iter::once(query));
         assert_eq!(scripts.len(), 1, "one script should be enabled");
@@ -1169,9 +1172,10 @@ mod tests {
         );
 
         // This query matches the baz, foo and tool scripts (but note the order).
+        let test_name = TestCaseName::new("script3");
         let query = TestQuery {
             binary_query: target_binary_query.to_query(),
-            test_name: "script3",
+            test_name: &test_name,
         };
         let scripts = SetupScripts::new_with_queries(&profile, std::iter::once(query));
         assert_eq!(scripts.len(), 3, "three scripts should be enabled");

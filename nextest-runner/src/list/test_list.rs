@@ -34,7 +34,7 @@ use nextest_filtering::{BinaryQuery, EvalContext, TestQuery};
 use nextest_metadata::{
     BuildPlatform, FilterMatch, MismatchReason, RustBinaryId, RustNonTestBinaryKind,
     RustTestBinaryKind, RustTestBinarySummary, RustTestCaseSummary, RustTestKind,
-    RustTestSuiteStatusSummary, RustTestSuiteSummary, TestListSummary,
+    RustTestSuiteStatusSummary, RustTestSuiteSummary, TestCaseName, TestListSummary,
 };
 use owo_colors::OwoColorize;
 use quick_junit::ReportUuid;
@@ -640,10 +640,11 @@ impl<'g> TestList<'g> {
         // based on one doesn't affect the other.
         let mut non_ignored_filter = filter.build();
         for (test_name, kind) in Self::parse(&test_binary.binary_id, non_ignored.as_ref())? {
+            let name = TestCaseName::new(test_name);
             let filter_match =
-                non_ignored_filter.filter_match(&test_binary, test_name, &kind, ecx, bound, false);
+                non_ignored_filter.filter_match(&test_binary, &name, &kind, ecx, bound, false);
             test_cases.insert_overwrite(RustTestCase {
-                name: test_name.into(),
+                name,
                 test_info: RustTestCaseSummary {
                     kind: Some(kind),
                     ignored: false,
@@ -658,10 +659,11 @@ impl<'g> TestList<'g> {
             // * just ignored tests if --ignored is passed in
             // * all tests, both ignored and non-ignored, if --ignored is not passed in
             // Adding ignored tests after non-ignored ones makes everything resolve correctly.
+            let name = TestCaseName::new(test_name);
             let filter_match =
-                ignored_filter.filter_match(&test_binary, test_name, &kind, ecx, bound, true);
+                ignored_filter.filter_match(&test_binary, &name, &kind, ecx, bound, true);
             test_cases.insert_overwrite(RustTestCase {
-                name: test_name.into(),
+                name,
                 test_info: RustTestCaseSummary {
                     kind: Some(kind),
                     ignored: true,
@@ -1120,7 +1122,7 @@ impl RustTestSuiteStatus {
         &self,
     ) -> (
         RustTestSuiteStatusSummary,
-        BTreeMap<String, RustTestCaseSummary>,
+        BTreeMap<TestCaseName, RustTestCaseSummary>,
     ) {
         match self {
             Self::Listed { test_cases } => (
@@ -1148,14 +1150,14 @@ impl RustTestSuiteStatus {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustTestCase {
     /// The name of the test.
-    pub name: String,
+    pub name: TestCaseName,
 
     /// Information about the test.
     pub test_info: RustTestCaseSummary,
 }
 
 impl IdOrdItem for RustTestCase {
-    type Key<'a> = &'a str;
+    type Key<'a> = &'a TestCaseName;
     fn key(&self) -> Self::Key<'_> {
         &self.name
     }
@@ -1166,7 +1168,7 @@ impl IdOrdItem for RustTestCase {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TestInstance<'a> {
     /// The name of the test.
-    pub name: &'a str,
+    pub name: &'a TestCaseName,
 
     /// Information about the test suite.
     pub suite_info: &'a RustTestSuite<'a>,
@@ -1275,7 +1277,7 @@ impl<'a> TestInstance<'a> {
         );
         cli.push(self.suite_info.binary_path.as_str());
 
-        cli.extend(["--exact", self.name, "--nocapture"]);
+        cli.extend(["--exact", self.name.as_str(), "--nocapture"]);
         if self.test_info.ignored {
             cli.push("--ignored");
         }
@@ -1381,7 +1383,7 @@ pub struct TestInstanceId<'a> {
     pub binary_id: &'a RustBinaryId,
 
     /// The name of the test.
-    pub test_name: &'a str,
+    pub test_name: &'a TestCaseName,
 }
 
 impl TestInstanceId<'_> {
@@ -1421,7 +1423,7 @@ pub struct OwnedTestInstanceId {
     pub binary_id: RustBinaryId,
 
     /// The name of the test.
-    pub test_name: String,
+    pub test_name: TestCaseName,
 }
 
 impl OwnedTestInstanceId {
@@ -1439,7 +1441,7 @@ impl TestInstanceId<'_> {
     pub fn to_owned(&self) -> OwnedTestInstanceId {
         OwnedTestInstanceId {
             binary_id: self.binary_id.clone(),
-            test_name: self.test_name.to_string(),
+            test_name: self.test_name.clone(),
         }
     }
 }
@@ -1584,7 +1586,7 @@ mod tests {
                     status: RustTestSuiteStatus::Listed {
                         test_cases: id_ord_map! {
                             RustTestCase {
-                                name: "tests::foo::test_bar".to_owned(),
+                                name: TestCaseName::new("tests::foo::test_bar"),
                                 test_info: RustTestCaseSummary {
                                     kind: Some(RustTestKind::TEST),
                                     ignored: false,
@@ -1592,7 +1594,7 @@ mod tests {
                                 },
                             },
                             RustTestCase {
-                                name: "tests::baz::test_quux".to_owned(),
+                                name: TestCaseName::new("tests::baz::test_quux"),
                                 test_info: RustTestCaseSummary {
                                     kind: Some(RustTestKind::TEST),
                                     ignored: false,
@@ -1600,7 +1602,7 @@ mod tests {
                                 },
                             },
                             RustTestCase {
-                                name: "benches::bench_foo".to_owned(),
+                                name: TestCaseName::new("benches::bench_foo"),
                                 test_info: RustTestCaseSummary {
                                     kind: Some(RustTestKind::BENCH),
                                     ignored: false,
@@ -1608,7 +1610,7 @@ mod tests {
                                 },
                             },
                             RustTestCase {
-                                name: "tests::ignored::test_bar".to_owned(),
+                                name: TestCaseName::new("tests::ignored::test_bar"),
                                 test_info: RustTestCaseSummary {
                                     kind: Some(RustTestKind::TEST),
                                     ignored: true,
@@ -1616,7 +1618,7 @@ mod tests {
                                 },
                             },
                             RustTestCase {
-                                name: "tests::baz::test_ignored".to_owned(),
+                                name: TestCaseName::new("tests::baz::test_ignored"),
                                 test_info: RustTestCaseSummary {
                                     kind: Some(RustTestKind::TEST),
                                     ignored: true,
@@ -1624,7 +1626,7 @@ mod tests {
                                 },
                             },
                             RustTestCase {
-                                name: "benches::ignored_bench_foo".to_owned(),
+                                name: TestCaseName::new("benches::ignored_bench_foo"),
                                 test_info: RustTestCaseSummary {
                                     kind: Some(RustTestKind::BENCH),
                                     ignored: true,

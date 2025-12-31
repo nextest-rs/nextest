@@ -178,7 +178,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                     testcase_status.add_rerun(test_rerun);
                 }
 
-                let mut testcase = TestCase::new(test_instance.test_name, testcase_status);
+                let mut testcase = TestCase::new(test_instance.test_name.as_str(), testcase_status);
                 testcase
                     .set_classname(test_instance.binary_id.as_str())
                     .set_timestamp(main_status.start_time)

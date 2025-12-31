@@ -4,7 +4,7 @@
 //! Data models for fixture information.
 
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
-use nextest_metadata::{BuildPlatform, FilterMatch, RustBinaryId};
+use nextest_metadata::{BuildPlatform, FilterMatch, RustBinaryId, TestCaseName};
 
 /// The expected result for a test execution.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -143,23 +143,23 @@ bitflags::bitflags! {
 
 #[derive(Clone, Debug)]
 pub struct TestCaseFixture {
-    pub name: &'static str,
+    pub name: TestCaseName,
     pub status: TestCaseFixtureStatus,
     properties: TestCaseFixtureProperties,
 }
 
 impl IdOrdItem for TestCaseFixture {
-    type Key<'a> = &'static str;
+    type Key<'a> = &'a TestCaseName;
     fn key(&self) -> Self::Key<'_> {
-        self.name
+        &self.name
     }
     id_upcast!();
 }
 
 impl TestCaseFixture {
-    pub fn new(name: &'static str, status: TestCaseFixtureStatus) -> Self {
+    pub fn new(name: &str, status: TestCaseFixtureStatus) -> Self {
         Self {
-            name,
+            name: TestCaseName::new(name),
             status,
             properties: TestCaseFixtureProperties::empty(),
         }
@@ -207,7 +207,7 @@ impl TestCaseFixture {
 
         // CdyLibExamplePackageFilter - only run test_multiply_two_cdylib.
         if properties.contains(RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER)
-            && self.name != "tests::test_multiply_two_cdylib"
+            && self.name != TestCaseName::new("tests::test_multiply_two_cdylib")
         {
             return true;
         }
@@ -395,13 +395,13 @@ impl TestCaseFixture {
 
 #[derive(Clone, Debug)]
 pub struct TestNameAndFilterMatch<'a> {
-    pub name: &'a str,
+    pub name: &'a TestCaseName,
     pub filter_match: FilterMatch,
 }
 
 impl<'a> IdOrdItem for TestNameAndFilterMatch<'a> {
     type Key<'k>
-        = &'a str
+        = &'a TestCaseName
     where
         Self: 'k;
     fn key(&self) -> Self::Key<'_> {
@@ -414,7 +414,7 @@ impl<'a> IdOrdItem for TestNameAndFilterMatch<'a> {
 // TestFixture with an IdOrdMap of TestNameAndFilterMatch.
 impl PartialEq<TestNameAndFilterMatch<'_>> for TestCaseFixture {
     fn eq(&self, other: &TestNameAndFilterMatch<'_>) -> bool {
-        self.name == other.name && self.status.is_ignored() != other.filter_match.is_match()
+        self.name == *other.name && self.status.is_ignored() != other.filter_match.is_match()
     }
 }
 

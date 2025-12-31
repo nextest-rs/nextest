@@ -1053,6 +1053,7 @@ mod tests {
     };
     use camino_tempfile::tempdir;
     use indoc::indoc;
+    use nextest_metadata::TestCaseName;
     use std::{num::NonZeroUsize, time::Duration};
     use test_case::test_case;
 
@@ -1132,9 +1133,10 @@ mod tests {
         // This query matches override 2.
         let host_binary_query =
             binary_query(&graph, package_id, "lib", "my-binary", BuildPlatform::Host);
+        let test_name = TestCaseName::new("test");
         let query = TestQuery {
             binary_query: host_binary_query.to_query(),
-            test_name: "test",
+            test_name: &test_name,
         };
         let overrides = profile.settings_for(NextestRunMode::Test, &query);
 
@@ -1174,9 +1176,10 @@ mod tests {
             "my-binary",
             BuildPlatform::Target,
         );
+        let test_name = TestCaseName::new("test");
         let query = TestQuery {
             binary_query: target_binary_query.to_query(),
-            test_name: "test",
+            test_name: &test_name,
         };
         let overrides = profile.settings_for(NextestRunMode::Test, &query);
 
@@ -1220,25 +1223,28 @@ mod tests {
         }
 
         // This query matches override 3.
+        let test_name = TestCaseName::new("override3");
         let query = TestQuery {
             binary_query: target_binary_query.to_query(),
-            test_name: "override3",
+            test_name: &test_name,
         };
         let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(5));
 
         // This query matches override 5.
+        let test_name = TestCaseName::new("override5");
         let query = TestQuery {
             binary_query: target_binary_query.to_query(),
-            test_name: "override5",
+            test_name: &test_name,
         };
         let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(8));
 
         // This query matches override 6.
+        let test_name = TestCaseName::new("timeout_success");
         let query = TestQuery {
             binary_query: target_binary_query.to_query(),
-            test_name: "timeout_success",
+            test_name: &test_name,
         };
         let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(
@@ -1252,9 +1258,10 @@ mod tests {
         );
 
         // This query does not match any overrides.
+        let test_name = TestCaseName::new("no_match");
         let query = TestQuery {
             binary_query: target_binary_query.to_query(),
-            test_name: "no_match",
+            test_name: &test_name,
         };
         let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(0));
@@ -1308,9 +1315,10 @@ mod tests {
 
         // Test "both_specified": tests get slow-timeout, benchmarks get
         // bench.slow-timeout.
+        let test_name = TestCaseName::new("both_specified");
         let query = TestQuery {
             binary_query: host_binary_query.to_query(),
-            test_name: "both_specified",
+            test_name: &test_name,
         };
 
         let test_settings = profile.settings_for(NextestRunMode::Test, &query);
@@ -1330,9 +1338,10 @@ mod tests {
         // Test "test_only": tests get the override, benchmarks fall back to
         // profile default (no fallback from slow-timeout to
         // bench.slow-timeout).
+        let test_name = TestCaseName::new("test_only");
         let query = TestQuery {
             binary_query: host_binary_query.to_query(),
-            test_name: "test_only",
+            test_name: &test_name,
         };
 
         let test_settings = profile.settings_for(NextestRunMode::Test, &query);
@@ -1350,9 +1359,10 @@ mod tests {
 
         // Test "bench_only": tests get profile default, benchmarks get the
         // override.
+        let test_name = TestCaseName::new("bench_only");
         let query = TestQuery {
             binary_query: host_binary_query.to_query(),
-            test_name: "bench_only",
+            test_name: &test_name,
         };
 
         let test_settings = profile.settings_for(NextestRunMode::Test, &query);
@@ -1605,9 +1615,10 @@ mod tests {
             "my-binary",
             BuildPlatform::Target,
         );
+        let test_name = TestCaseName::new("test");
         let query = TestQuery {
             binary_query: target_binary_query.to_query(),
-            test_name: "test",
+            test_name: &test_name,
         };
         let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(

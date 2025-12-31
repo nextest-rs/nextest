@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use nextest_metadata::RustBinaryId;
+use nextest_metadata::{RustBinaryId, TestCaseName};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Debug, Default)]
@@ -9,7 +9,7 @@ pub(crate) struct TestListDisplayFilter<'list> {
     // This is a map of paths to the matching tests in those paths. The matching tests are stored as
     // a set of test names.
     // Invariant: hashset values are never empty.
-    map: HashMap<&'list RustBinaryId, HashSet<&'list str>>,
+    map: HashMap<&'list RustBinaryId, HashSet<&'list TestCaseName>>,
 }
 
 impl<'list> TestListDisplayFilter<'list> {
@@ -17,7 +17,11 @@ impl<'list> TestListDisplayFilter<'list> {
         Self::default()
     }
 
-    pub(crate) fn insert(&mut self, binary_id: &'list RustBinaryId, test_name: &'list str) {
+    pub(crate) fn insert(
+        &mut self,
+        binary_id: &'list RustBinaryId,
+        test_name: &'list TestCaseName,
+    ) {
         self.map.entry(binary_id).or_default().insert(test_name);
     }
 
@@ -36,11 +40,11 @@ impl<'list> TestListDisplayFilter<'list> {
 #[derive(Clone, Debug)]
 pub(crate) enum DisplayFilterMatcher<'list, 'filter> {
     All,
-    Some(&'filter HashSet<&'list str>),
+    Some(&'filter HashSet<&'list TestCaseName>),
 }
 
 impl DisplayFilterMatcher<'_, '_> {
-    pub(crate) fn is_match(&self, test_name: &str) -> bool {
+    pub(crate) fn is_match(&self, test_name: &TestCaseName) -> bool {
         match self {
             Self::All => true,
             Self::Some(set) => set.contains(test_name),

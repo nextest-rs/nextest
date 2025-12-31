@@ -9,7 +9,7 @@ use nextest_filtering::{
     BinaryQuery, CompiledExpr, EvalContext, Filterset, FiltersetKind, ParseContext, TestQuery,
     errors::{FiltersetParseErrors, ParseSingleError},
 };
-use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
+use nextest_metadata::{RustBinaryId, RustTestBinaryKind, TestCaseName};
 use test_case::test_case;
 
 #[track_caller]
@@ -73,6 +73,41 @@ fn binary_query<'a>(
     }
 }
 
+#[inline]
+fn test_something() -> TestCaseName {
+    TestCaseName::new("test_something")
+}
+
+#[inline]
+fn test_parse() -> TestCaseName {
+    TestCaseName::new("test_parse")
+}
+
+#[inline]
+fn test_run() -> TestCaseName {
+    TestCaseName::new("test_run")
+}
+
+#[inline]
+fn test_build() -> TestCaseName {
+    TestCaseName::new("test_build")
+}
+
+#[inline]
+fn test_parse_set() -> TestCaseName {
+    TestCaseName::new("test_parse_set")
+}
+
+#[inline]
+fn test_parse_expr() -> TestCaseName {
+    TestCaseName::new("test_parse_expr")
+}
+
+#[inline]
+fn test_expr() -> TestCaseName {
+    TestCaseName::new("test_expr")
+}
+
 #[test]
 fn test_expr_package_contains() {
     let graph = load_graph();
@@ -88,7 +123,7 @@ fn test_expr_package_contains() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -96,7 +131,7 @@ fn test_expr_package_contains() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -104,7 +139,7 @@ fn test_expr_package_contains() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_c, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -126,7 +161,7 @@ fn test_expr_package_equal() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -134,7 +169,7 @@ fn test_expr_package_equal() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -142,7 +177,7 @@ fn test_expr_package_equal() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_c, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -164,7 +199,7 @@ fn test_expr_package_regex() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -172,7 +207,7 @@ fn test_expr_package_regex() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -180,7 +215,7 @@ fn test_expr_package_regex() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_c, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -203,7 +238,7 @@ fn test_expr_binary_id_glob() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -211,7 +246,7 @@ fn test_expr_binary_id_glob() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -219,7 +254,7 @@ fn test_expr_binary_id_glob() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_c, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -246,7 +281,7 @@ fn test_expr_deps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -254,7 +289,7 @@ fn test_expr_deps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -262,7 +297,7 @@ fn test_expr_deps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_c, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -270,7 +305,7 @@ fn test_expr_deps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_d, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -280,7 +315,7 @@ fn test_expr_deps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_e, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -288,7 +323,7 @@ fn test_expr_deps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_f, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -296,7 +331,7 @@ fn test_expr_deps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_g, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -322,7 +357,7 @@ fn test_expr_rdeps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -330,7 +365,7 @@ fn test_expr_rdeps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -338,7 +373,7 @@ fn test_expr_rdeps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_c, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -348,7 +383,7 @@ fn test_expr_rdeps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_d, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -356,7 +391,7 @@ fn test_expr_rdeps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_e, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -364,7 +399,7 @@ fn test_expr_rdeps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_f, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -372,7 +407,7 @@ fn test_expr_rdeps() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_g, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -423,7 +458,7 @@ fn test_expr_kind() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -431,7 +466,7 @@ fn test_expr_kind() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "test", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_parse"
+            test_name: &test_parse()
         },
         &cx
     ));
@@ -439,7 +474,7 @@ fn test_expr_kind() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib2", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -459,7 +494,7 @@ fn test_expr_binary() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "crate_f", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -474,7 +509,7 @@ fn test_expr_binary() {
                     BuildPlatform::Target
                 )
                 .to_query(),
-                test_name: "test_parse"
+                test_name: &test_parse()
             },
             &cx
         )
@@ -483,7 +518,7 @@ fn test_expr_binary() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib2", "crate_f", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -503,7 +538,7 @@ fn test_expr_platform() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Host).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -511,7 +546,7 @@ fn test_expr_platform() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -523,7 +558,7 @@ fn test_expr_platform() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -531,7 +566,7 @@ fn test_expr_platform() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Host).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -551,7 +586,7 @@ fn test_expr_kind_partial() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "test", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_something"
+            test_name: &test_something()
         },
         &cx
     ));
@@ -559,7 +594,7 @@ fn test_expr_kind_partial() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_parse"
+            test_name: &test_parse()
         },
         &cx
     ));
@@ -580,7 +615,7 @@ fn test_expr_test() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_parse"
+            test_name: &test_parse()
         },
         &cx
     ));
@@ -588,7 +623,7 @@ fn test_expr_test() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_parse"
+            test_name: &test_parse()
         },
         &cx
     ));
@@ -596,7 +631,7 @@ fn test_expr_test() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_run"
+            test_name: &test_run()
         },
         &cx
     ));
@@ -616,7 +651,7 @@ fn test_expr_test_not() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_parse"
+            test_name: &test_parse()
         },
         &cx
     ));
@@ -624,7 +659,7 @@ fn test_expr_test_not() {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_run"
+            test_name: &test_run()
         },
         &cx
     ));
@@ -646,7 +681,7 @@ fn test_expr_test_union(input: &str) {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_parse"
+            test_name: &test_parse()
         },
         &cx
     ));
@@ -654,7 +689,7 @@ fn test_expr_test_union(input: &str) {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_run"
+            test_name: &test_run()
         },
         &cx
     ));
@@ -662,7 +697,7 @@ fn test_expr_test_union(input: &str) {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_build"
+            test_name: &test_build()
         },
         &cx
     ));
@@ -683,7 +718,7 @@ fn test_expr_test_difference(input: &str) {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_parse"
+            test_name: &test_parse()
         },
         &cx
     ));
@@ -691,7 +726,7 @@ fn test_expr_test_difference(input: &str) {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_parse_set"
+            test_name: &test_parse_set()
         },
         &cx
     ));
@@ -699,7 +734,7 @@ fn test_expr_test_difference(input: &str) {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_parse_expr"
+            test_name: &test_parse_expr()
         },
         &cx
     ));
@@ -720,7 +755,7 @@ fn test_expr_test_intersect(input: &str) {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_parse"
+            test_name: &test_parse()
         },
         &cx
     ));
@@ -728,7 +763,7 @@ fn test_expr_test_intersect(input: &str) {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_expr"
+            test_name: &test_expr()
         },
         &cx
     ));
@@ -736,7 +771,7 @@ fn test_expr_test_intersect(input: &str) {
         &TestQuery {
             binary_query:
                 binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target).to_query(),
-            test_name: "test_parse_expr"
+            test_name: &test_parse_expr()
         },
         &cx
     ));
