@@ -1,4 +1,4 @@
-## Pull Requests
+## Pull requests
 
 If you have a new feature in mind, please discuss the feature in an issue to ensure that your
 contributions will be accepted.
@@ -20,7 +20,7 @@ feature, please pay attention to:
 - [Configuration](https://rust-cli-recommendations.sunshowers.io/configuration.html), including hierarchical configuration.
 - Error handling. In particular, errors caused by components outside of nextest itself _should_ be part of [`ExpectedError`](https://github.com/nextest-rs/nextest/blob/main/cargo-nextest/src/errors.rs) and use a [well-defined exit code](https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html).
 
-## Logically Separate Commits
+## Logically separate commits
 
 Commits should be
 [atomic](https://en.wikipedia.org/wiki/Atomic_commit#Atomic_commit_convention)
@@ -28,7 +28,7 @@ and broken down into logically separate changes. Diffs should also be made easy
 for reviewers to read and review so formatting fixes or code moves should not
 be included in commits with actual code changes.
 
-## Bisect-able History
+## Bisectable history
 
 It is important that the project history is bisect-able so that when
 regressions are identified we can easily use `git bisect` to be able to
@@ -36,6 +36,10 @@ pin-point the exact commit which introduced the regression. This requires that
 every commit is able to be built and passes all lints and tests. So if your
 pull request includes multiple commits be sure that each and every commit is
 able to be built and passes all checks performed by CI.
+
+## LLM policy
+
+We welcome LLM-assisted contributions that aim for a high standard of excellence. See [AGENTS.md, For humans](AGENTS.md#for-humans).
 
 ## License
 
