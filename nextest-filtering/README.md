@@ -11,7 +11,7 @@ Logic for parsing [filtersets](https://nexte.st/docs/filtersets) used by cargo-n
 
 ## Contributing
 
-See the [CONTRIBUTING](../CONTRIBUTING.md) file for how to help out.
+See the [contributing guide](https://nexte.st/docs/contributing/) for how to help out.
 
 ## License
 

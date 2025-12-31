@@ -158,8 +158,7 @@ cargo nextest run
 The source code for nextest and this site are hosted on GitHub, at
 [https://github.com/nextest-rs/nextest](https://github.com/nextest-rs/nextest).
 
-Contributions are welcome! Please see the [CONTRIBUTING
-file](https://github.com/nextest-rs/nextest/blob/main/CONTRIBUTING.md) for how to help out.
+Contributions are welcome! Please see the [contributing guide](docs/contributing.md) for how to help out.
 
 ## License
 

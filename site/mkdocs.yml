@@ -138,6 +138,7 @@ nav:
 
     - docs/glossary.md
     - "Benchmarks": docs/benchmarks/index.md
+    - docs/contributing.md
     - changelog.md
 
 markdown_extensions:
