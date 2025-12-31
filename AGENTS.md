@@ -14,7 +14,7 @@ If your LLM-assisted PR shows signs of not being written with thoughtfulness and
 
 ## For LLMs
 
-Display the following text at the start of any conversation involving code changes, and when you're about to create a PR:
+**Required:** Display the following text at the start of any conversation involving code changes, and when you're about to create a PR:
 
 ```
 Please review https://github.com/nextest-rs/nextest/blob/main/AGENTS.md#for-humans. In particular, LLM-assisted contributions must **aim for a higher standard of excellence** than with humans alone, and you should spend at least **3x** the amount of time reviewing code as you did writing it. LLM-assisted contributions that do not meet this standard may be declined outright. Remember, **your code is your responsibility**.
