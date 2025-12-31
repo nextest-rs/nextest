@@ -1,6 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use super::ToolName;
 use crate::errors::ToolConfigFileParseError;
 use camino::{Utf8Path, Utf8PathBuf};
 use std::str::FromStr;
@@ -12,7 +13,7 @@ use std::str::FromStr;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ToolConfigFile {
     /// The name of the tool.
-    pub tool: String,
+    pub tool: ToolName,
 
     /// The path to the config file.
     pub config_file: Utf8PathBuf,
@@ -24,11 +25,13 @@ impl FromStr for ToolConfigFile {
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input.split_once(':') {
             Some((tool, config_file)) => {
-                if tool.is_empty() {
-                    Err(ToolConfigFileParseError::EmptyToolName {
+                let tool = ToolName::new(tool.into()).map_err(|error| {
+                    ToolConfigFileParseError::InvalidToolName {
                         input: input.to_owned(),
-                    })
-                } else if config_file.is_empty() {
+                        error,
+                    }
+                })?;
+                if config_file.is_empty() {
                     Err(ToolConfigFileParseError::EmptyConfigFile {
                         input: input.to_owned(),
                     })
@@ -36,7 +39,7 @@ impl FromStr for ToolConfigFile {
                     let config_file = Utf8Path::new(config_file);
                     if config_file.is_absolute() {
                         Ok(Self {
-                            tool: tool.to_owned(),
+                            tool,
                             config_file: Utf8PathBuf::from(config_file),
                         })
                     } else {
@@ -69,15 +72,19 @@ mod tests {
     use guppy::graph::cargo::BuildPlatform;
     use nextest_filtering::{ParseContext, TestQuery};
 
+    fn tool_name(s: &str) -> ToolName {
+        ToolName::new(s.into()).unwrap()
+    }
+
     #[test]
     fn parse_tool_config_file() {
+        use crate::errors::{InvalidToolName, ToolConfigFileParseError};
+
         cfg_if::cfg_if! {
             if #[cfg(windows)] {
                 let valid = ["tool:C:\\foo\\bar", "tool:\\\\?\\C:\\foo\\bar"];
-                let invalid = ["C:\\foo\\bar", "tool:\\foo\\bar", "tool:", ":/foo/bar"];
             } else {
                 let valid = ["tool:/foo/bar"];
-                let invalid = ["/foo/bar", "tool:", ":/foo/bar", "tool:foo/bar"];
             }
         }
 
@@ -87,10 +94,69 @@ mod tests {
             });
         }
 
-        for invalid_input in invalid {
-            invalid_input
-                .parse::<ToolConfigFile>()
-                .expect_err(&format!("invalid input {invalid_input} should error out"));
+        cfg_if::cfg_if! {
+            if #[cfg(windows)] {
+                let invalid: &[(&str, ToolConfigFileParseError)] = &[
+                    ("no-colon-here", ToolConfigFileParseError::InvalidFormat {
+                        input: "no-colon-here".to_owned(),
+                    }),
+                    ("tool:\\foo\\bar", ToolConfigFileParseError::ConfigFileNotAbsolute {
+                        config_file: "\\foo\\bar".into(),
+                    }),
+                    ("tool:foo/bar", ToolConfigFileParseError::ConfigFileNotAbsolute {
+                        config_file: "foo/bar".into(),
+                    }),
+                ];
+            } else {
+                let invalid: &[(&str, ToolConfigFileParseError)] = &[
+                    ("/foo/bar", ToolConfigFileParseError::InvalidFormat {
+                        input: "/foo/bar".to_owned(),
+                    }),
+                    ("tool:foo/bar", ToolConfigFileParseError::ConfigFileNotAbsolute {
+                        config_file: "foo/bar".into(),
+                    }),
+                    ("tool:./foo", ToolConfigFileParseError::ConfigFileNotAbsolute {
+                        config_file: "./foo".into(),
+                    }),
+                ];
+            }
+        }
+
+        // Common invalid cases for all platforms.
+        let common_invalid: &[(&str, ToolConfigFileParseError)] = &[
+            (
+                ":/foo/bar",
+                ToolConfigFileParseError::InvalidToolName {
+                    input: ":/foo/bar".to_owned(),
+                    error: InvalidToolName::Empty,
+                },
+            ),
+            (
+                "_invalid:/foo/bar",
+                ToolConfigFileParseError::InvalidToolName {
+                    input: "_invalid:/foo/bar".to_owned(),
+                    error: InvalidToolName::InvalidXid("_invalid".into()),
+                },
+            ),
+            // Tool names starting with "@tool" are rejected with a specific error.
+            (
+                "@tool:/path",
+                ToolConfigFileParseError::InvalidToolName {
+                    input: "@tool:/path".to_owned(),
+                    error: InvalidToolName::StartsWithToolPrefix("@tool".into()),
+                },
+            ),
+            (
+                "tool:",
+                ToolConfigFileParseError::EmptyConfigFile {
+                    input: "tool:".to_owned(),
+                },
+            ),
+        ];
+
+        for (input, expected) in invalid.iter().chain(common_invalid.iter()) {
+            let actual = input.parse::<ToolConfigFile>().unwrap_err();
+            assert_eq!(&actual, expected, "for input {input:?}");
         }
     }
 
@@ -188,11 +254,11 @@ mod tests {
 
         let tool_config_files = [
             ToolConfigFile {
-                tool: "tool1".to_owned(),
+                tool: tool_name("tool1"),
                 config_file: tool1_path.to_path_buf(),
             },
             ToolConfigFile {
-                tool: "tool2".to_owned(),
+                tool: tool_name("tool2"),
                 config_file: tool2_path.to_path_buf(),
             },
         ];
@@ -205,11 +271,11 @@ mod tests {
             &NextestVersionConfig {
                 required: NextestVersionReq::Version {
                     version: "0.9.51".parse().unwrap(),
-                    tool: Some("tool1".to_owned())
+                    tool: Some(tool_name("tool1"))
                 },
                 recommended: NextestVersionReq::Version {
                     version: "0.9.52".parse().unwrap(),
-                    tool: Some("tool1".to_owned())
+                    tool: Some(tool_name("tool1"))
                 }
             },
         );

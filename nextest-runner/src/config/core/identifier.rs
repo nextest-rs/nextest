@@ -1,7 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::errors::InvalidIdentifier;
+use crate::{
+    config::utils::{InvalidIdentifierKind, is_valid_identifier_unicode},
+    errors::{InvalidIdentifier, InvalidToolName},
+};
 use smol_str::SmolStr;
 use std::fmt;
 use unicode_normalization::{IsNormalized, UnicodeNormalization, is_nfc_quick};
@@ -42,7 +45,7 @@ impl ConfigIdentifier {
             };
 
             for x in [tool_name, tool_identifier] {
-                Self::is_valid_unicode(x).map_err(|error| match error {
+                is_valid_identifier_unicode(x).map_err(|error| match error {
                     InvalidIdentifierKind::Empty => {
                         InvalidIdentifier::ToolComponentEmpty(identifier.clone())
                     }
@@ -53,7 +56,7 @@ impl ConfigIdentifier {
             }
         } else {
             // This should be a regular identifier.
-            Self::is_valid_unicode(&identifier).map_err(|error| match error {
+            is_valid_identifier_unicode(&identifier).map_err(|error| match error {
                 InvalidIdentifierKind::Empty => InvalidIdentifier::Empty,
                 InvalidIdentifierKind::InvalidXid => {
                     InvalidIdentifier::InvalidXid(identifier.clone())
@@ -88,25 +91,6 @@ impl ConfigIdentifier {
     pub fn as_str(&self) -> &str {
         &self.0
     }
-
-    fn is_valid_unicode(identifier: &str) -> Result<(), InvalidIdentifierKind> {
-        if identifier.is_empty() {
-            return Err(InvalidIdentifierKind::Empty);
-        }
-
-        let mut first = true;
-        for ch in identifier.chars() {
-            if first {
-                if !unicode_ident::is_xid_start(ch) {
-                    return Err(InvalidIdentifierKind::InvalidXid);
-                }
-                first = false;
-            } else if !(ch == '-' || unicode_ident::is_xid_continue(ch)) {
-                return Err(InvalidIdentifierKind::InvalidXid);
-            }
-        }
-        Ok(())
-    }
 }
 
 impl fmt::Display for ConfigIdentifier {
@@ -125,10 +109,66 @@ impl<'de> serde::Deserialize<'de> for ConfigIdentifier {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-enum InvalidIdentifierKind {
-    Empty,
-    InvalidXid,
+/// A tool name used in tool configuration files.
+///
+/// Tool names follow the same validation rules as regular identifiers:
+/// * Conversion to NFC.
+/// * Ensuring that it is of the form (XID_Start)(XID_Continue | -)*
+///
+/// Tool names are used in `--tool-config-file` arguments and to validate tool
+/// identifiers in configuration.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ToolName(SmolStr);
+
+impl ToolName {
+    /// Validates and creates a new tool name.
+    pub fn new(name: SmolStr) -> Result<Self, InvalidToolName> {
+        let name = if is_nfc_quick(name.chars()) == IsNormalized::Yes {
+            name
+        } else {
+            name.nfc().collect::<SmolStr>()
+        };
+
+        if name.is_empty() {
+            return Err(InvalidToolName::Empty);
+        }
+
+        // Tool names cannot start with the reserved @tool prefix. Check this
+        // before XID validation for a better error message.
+        if name.starts_with("@tool") {
+            return Err(InvalidToolName::StartsWithToolPrefix(name));
+        }
+
+        // Validate as a regular identifier.
+        is_valid_identifier_unicode(&name).map_err(|error| match error {
+            InvalidIdentifierKind::Empty => InvalidToolName::Empty,
+            InvalidIdentifierKind::InvalidXid => InvalidToolName::InvalidXid(name.clone()),
+        })?;
+
+        Ok(Self(name))
+    }
+
+    /// Returns the tool name as a string slice.
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ToolName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ToolName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let name = SmolStr::deserialize(deserializer)?;
+        ToolName::new(name).map_err(serde::de::Error::custom)
+    }
 }
 
 #[cfg(test)]
@@ -219,6 +259,61 @@ mod tests {
             );
 
             serde_json::from_str::<TestDeserialize>(&make_json(input)).unwrap_err();
+        }
+    }
+
+    #[derive(Deserialize, Debug, PartialEq, Eq)]
+    struct TestToolNameDeserialize {
+        tool_name: ToolName,
+    }
+
+    fn make_tool_name_json(name: &str) -> String {
+        format!(r#"{{ "tool_name": "{name}" }}"#)
+    }
+
+    #[test]
+    fn test_tool_name_valid() {
+        let valid_inputs = ["foo", "foo-bar", "Δabc", "my-tool", "myTool123"];
+
+        for &input in &valid_inputs {
+            let tool_name = ToolName::new(input.into()).unwrap();
+            assert_eq!(tool_name.as_str(), input);
+
+            serde_json::from_str::<TestToolNameDeserialize>(&make_tool_name_json(input)).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_tool_name_invalid() {
+        let tool_name = ToolName::new("".into());
+        assert_eq!(tool_name.unwrap_err(), InvalidToolName::Empty);
+
+        let invalid_xid = ["foo bar", "_", "-foo", "_foo", "@foo"];
+
+        for &input in &invalid_xid {
+            let tool_name = ToolName::new(input.into());
+            assert_eq!(
+                tool_name.unwrap_err(),
+                InvalidToolName::InvalidXid(input.into())
+            );
+
+            serde_json::from_str::<TestToolNameDeserialize>(&make_tool_name_json(input))
+                .unwrap_err();
+        }
+
+        // Tool names cannot start with @tool (with or without colon).
+        let starts_with_tool_prefix = ["@tool", "@tool:foo:bar", "@tool:test:id", "@toolname"];
+
+        for &input in &starts_with_tool_prefix {
+            let tool_name = ToolName::new(input.into());
+            assert_eq!(
+                tool_name.unwrap_err(),
+                InvalidToolName::StartsWithToolPrefix(input.into()),
+                "for input {input:?}"
+            );
+
+            serde_json::from_str::<TestToolNameDeserialize>(&make_tool_name_json(input))
+                .unwrap_err();
         }
     }
 }

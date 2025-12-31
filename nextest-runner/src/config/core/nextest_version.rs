@@ -3,7 +3,7 @@
 
 //! Nextest version configuration.
 
-use super::{NextestConfig, ToolConfigFile};
+use super::{NextestConfig, ToolConfigFile, ToolName};
 use crate::errors::{ConfigParseError, ConfigParseErrorKind};
 use camino::Utf8Path;
 use semver::Version;
@@ -61,7 +61,7 @@ impl VersionOnlyConfig {
         // Merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
             if let Some(v) = Self::read_and_deserialize(config_file, Some(tool))?.nextest_version {
-                nextest_version.accumulate(v, Some(tool));
+                nextest_version.accumulate(v, Some(tool.clone()));
             }
         }
 
@@ -110,7 +110,7 @@ impl VersionOnlyConfig {
 
     fn read_and_deserialize(
         config_file: &Utf8Path,
-        tool: Option<&str>,
+        tool: Option<&ToolName>,
     ) -> Result<VersionOnlyDeserialize, ConfigParseError> {
         let toml_str = std::fs::read_to_string(config_file.as_str()).map_err(|error| {
             ConfigParseError::new(
@@ -177,12 +177,12 @@ pub struct NextestVersionConfig {
 
 impl NextestVersionConfig {
     /// Accumulates a deserialized version requirement into this configuration.
-    pub(crate) fn accumulate(&mut self, v: NextestVersionDeserialize, v_tool: Option<&str>) {
-        if let Some(v) = v.required {
-            self.required.accumulate(v, v_tool);
+    pub(crate) fn accumulate(&mut self, v: NextestVersionDeserialize, v_tool: Option<ToolName>) {
+        if let Some(version) = v.required {
+            self.required.accumulate(version, v_tool.clone());
         }
-        if let Some(v) = v.recommended {
-            self.recommended.accumulate(v, v_tool);
+        if let Some(version) = v.recommended {
+            self.recommended.accumulate(version, v_tool);
         }
     }
 
@@ -199,13 +199,13 @@ impl NextestVersionConfig {
                     return NextestVersionEval::ErrorOverride {
                         required: required.clone(),
                         current: current_version.clone(),
-                        tool: tool.map(|s| s.to_owned()),
+                        tool: tool.cloned(),
                     };
                 } else {
                     return NextestVersionEval::Error {
                         required: required.clone(),
                         current: current_version.clone(),
-                        tool: tool.map(|s| s.to_owned()),
+                        tool: tool.cloned(),
                     };
                 }
             }
@@ -218,13 +218,13 @@ impl NextestVersionConfig {
                     NextestVersionEval::WarnOverride {
                         recommended: recommended.clone(),
                         current: current_version.clone(),
-                        tool: tool.map(|s| s.to_owned()),
+                        tool: tool.cloned(),
                     }
                 } else {
                     NextestVersionEval::Warn {
                         recommended: recommended.clone(),
                         current: current_version.clone(),
-                        tool: tool.map(|s| s.to_owned()),
+                        tool: tool.cloned(),
                     }
                 }
             }
@@ -304,7 +304,7 @@ pub enum NextestVersionReq {
         version: Version,
 
         /// The tool which produced this version specification.
-        tool: Option<String>,
+        tool: Option<ToolName>,
     },
 
     /// No version was specified.
@@ -313,26 +313,26 @@ pub enum NextestVersionReq {
 }
 
 impl NextestVersionReq {
-    fn accumulate(&mut self, v: Version, v_tool: Option<&str>) {
+    fn accumulate(&mut self, v: Version, v_tool: Option<ToolName>) {
         match self {
             NextestVersionReq::Version { version, tool } => {
                 // This is v >= version rather than v > version, so that if multiple tools specify
                 // the same version, the last tool wins.
                 if &v >= version {
                     *version = v;
-                    *tool = v_tool.map(|s| s.to_owned());
+                    *tool = v_tool;
                 }
             }
             NextestVersionReq::None => {
                 *self = NextestVersionReq::Version {
                     version: v,
-                    tool: v_tool.map(|s| s.to_owned()),
+                    tool: v_tool,
                 };
             }
         }
     }
 
-    fn satisfies(&self, version: &Version) -> Result<(), (&Version, Option<&str>)> {
+    fn satisfies(&self, version: &Version) -> Result<(), (&Version, Option<&ToolName>)> {
         match self {
             NextestVersionReq::Version {
                 version: required,
@@ -341,7 +341,7 @@ impl NextestVersionReq {
                 if version >= required {
                     Ok(())
                 } else {
-                    Err((required, tool.as_deref()))
+                    Err((required, tool.as_ref()))
                 }
             }
             NextestVersionReq::None => Ok(()),
@@ -364,7 +364,7 @@ pub enum NextestVersionEval {
         /// The current version.
         current: Version,
         /// The tool which produced this version specification.
-        tool: Option<String>,
+        tool: Option<ToolName>,
     },
 
     /// A warning should be produced.
@@ -374,7 +374,7 @@ pub enum NextestVersionEval {
         /// The current version.
         current: Version,
         /// The tool which produced this version specification.
-        tool: Option<String>,
+        tool: Option<ToolName>,
     },
 
     /// An error should be produced but the version is overridden.
@@ -384,7 +384,7 @@ pub enum NextestVersionEval {
         /// The current version.
         current: Version,
         /// The tool which produced this version specification.
-        tool: Option<String>,
+        tool: Option<ToolName>,
     },
 
     /// A warning should be produced but the version is overridden.
@@ -394,7 +394,7 @@ pub enum NextestVersionEval {
         /// The current version.
         current: Version,
         /// The tool which produced this version specification.
-        tool: Option<String>,
+        tool: Option<ToolName>,
     },
 }
 
@@ -586,6 +586,10 @@ mod tests {
         );
     }
 
+    fn tool_name(s: &str) -> ToolName {
+        ToolName::new(s.into()).unwrap()
+    }
+
     #[test]
     fn test_accumulate() {
         let mut nextest_version = NextestVersionConfig::default();
@@ -594,14 +598,14 @@ mod tests {
                 required: Some("0.9.20".parse().unwrap()),
                 recommended: None,
             },
-            Some("tool1"),
+            Some(tool_name("tool1")),
         );
         nextest_version.accumulate(
             NextestVersionDeserialize {
                 required: Some("0.9.30".parse().unwrap()),
                 recommended: Some("0.9.35".parse().unwrap()),
             },
-            Some("tool2"),
+            Some(tool_name("tool2")),
         );
         nextest_version.accumulate(
             NextestVersionDeserialize {
@@ -610,7 +614,7 @@ mod tests {
                 // version.
                 recommended: Some("0.9.25".parse().unwrap()),
             },
-            Some("tool3"),
+            Some(tool_name("tool3")),
         );
         nextest_version.accumulate(
             NextestVersionDeserialize {
@@ -619,7 +623,7 @@ mod tests {
                 required: Some("0.9.30".parse().unwrap()),
                 recommended: None,
             },
-            Some("tool4"),
+            Some(tool_name("tool4")),
         );
 
         assert_eq!(
@@ -627,11 +631,11 @@ mod tests {
             NextestVersionConfig {
                 required: NextestVersionReq::Version {
                     version: "0.9.30".parse().unwrap(),
-                    tool: Some("tool4".to_owned()),
+                    tool: Some(tool_name("tool4")),
                 },
                 recommended: NextestVersionReq::Version {
                     version: "0.9.35".parse().unwrap(),
-                    tool: Some("tool2".to_owned()),
+                    tool: Some(tool_name("tool2")),
                 },
             }
         );

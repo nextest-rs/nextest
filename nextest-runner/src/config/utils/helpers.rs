@@ -7,6 +7,37 @@ use serde::{
     de::{Error, Unexpected},
 };
 
+/// An error that occurred while validating an identifier.
+#[derive(Clone, Copy, Debug)]
+pub(in crate::config) enum InvalidIdentifierKind {
+    /// The identifier is empty.
+    Empty,
+    /// The identifier has invalid XID characters.
+    InvalidXid,
+}
+
+/// Validates that an identifier follows Unicode XID rules with hyphens allowed.
+///
+/// Identifiers must be of the form `(XID_Start)(XID_Continue | -)*`.
+pub(in crate::config) fn is_valid_identifier_unicode(s: &str) -> Result<(), InvalidIdentifierKind> {
+    if s.is_empty() {
+        return Err(InvalidIdentifierKind::Empty);
+    }
+
+    let mut first = true;
+    for ch in s.chars() {
+        if first {
+            if !unicode_ident::is_xid_start(ch) {
+                return Err(InvalidIdentifierKind::InvalidXid);
+            }
+            first = false;
+        } else if !(ch == '-' || unicode_ident::is_xid_continue(ch)) {
+            return Err(InvalidIdentifierKind::InvalidXid);
+        }
+    }
+    Ok(())
+}
+
 /// Deserializes a well-formed relative path.
 ///
 /// Returns an error on absolute paths, and on other kinds of relative paths.

@@ -137,7 +137,7 @@ mod tests {
     use super::*;
     use crate::{
         config::{
-            core::{NextestConfig, ToolConfigFile},
+            core::{NextestConfig, ToolConfigFile, ToolName},
             utils::test_helpers::*,
         },
         errors::{ConfigParseErrorKind, UnknownTestGroupError},
@@ -149,6 +149,10 @@ mod tests {
     use nextest_filtering::ParseContext;
     use std::collections::BTreeSet;
     use test_case::test_case;
+
+    fn tool_name(s: &str) -> ToolName {
+        ToolName::new(s.into()).unwrap()
+    }
 
     #[derive(Debug)]
     enum GroupExpectedError {
@@ -223,7 +227,7 @@ mod tests {
             &pcx,
             None,
             &[ToolConfigFile {
-                tool: "my-tool".to_owned(),
+                tool: tool_name("my-tool"),
                 config_file: tool_path.to_path_buf(),
             }][..],
             &Default::default(),
@@ -245,7 +249,7 @@ mod tests {
             Err(expected_error) => {
                 let error = config_res.expect_err("config is invalid");
                 assert_eq!(error.config_file(), tool_path);
-                assert_eq!(error.tool(), Some("my-tool"));
+                assert_eq!(error.tool(), Some(&tool_name("my-tool")));
                 match &expected_error {
                     GroupExpectedError::InvalidTestGroups(expected_groups) => {
                         assert!(
@@ -371,7 +375,7 @@ mod tests {
         "#},
         "",
         "",
-        Some("tool1"),
+        Some(tool_name("tool1")),
         vec![UnknownTestGroupError {
             profile_name: "default".to_owned(),
             name: test_group("foo"),
@@ -412,7 +416,7 @@ mod tests {
             filter = 'all()'
             test-group = "foo"
         "#},
-        Some("tool2"),
+        Some(tool_name("tool2")),
         vec![UnknownTestGroupError {
             profile_name: "default".to_owned(),
             name: test_group("@tool:tool1:foo"),
@@ -434,7 +438,7 @@ mod tests {
             [test-groups.foo]
             max-threads = 1
         "#},
-        Some("tool1"),
+        Some(tool_name("tool1")),
         vec![UnknownTestGroupError {
             profile_name: "default".to_owned(),
             name: test_group("foo"),
@@ -445,7 +449,7 @@ mod tests {
         tool1_config: &str,
         tool2_config: &str,
         user_config: &str,
-        tool: Option<&str>,
+        tool: Option<ToolName>,
         expected_errors: Vec<UnknownTestGroupError>,
         expected_known_groups: BTreeSet<TestGroup>,
     ) {
@@ -465,18 +469,18 @@ mod tests {
             None,
             &[
                 ToolConfigFile {
-                    tool: "tool1".to_owned(),
+                    tool: tool_name("tool1"),
                     config_file: tool1_path.to_path_buf(),
                 },
                 ToolConfigFile {
-                    tool: "tool2".to_owned(),
+                    tool: tool_name("tool2"),
                     config_file: tool2_path.to_path_buf(),
                 },
             ][..],
             &Default::default(),
         )
         .expect_err("config is invalid");
-        assert_eq!(config.tool(), tool);
+        assert_eq!(config.tool(), tool.as_ref());
         match config.kind() {
             ConfigParseErrorKind::UnknownTestGroups {
                 errors,
