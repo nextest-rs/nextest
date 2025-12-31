@@ -34,7 +34,7 @@ crate has reached 1.x, any MSRV bump will be accompanied with a new minor versio
 
 ## Contributing
 
-See the [CONTRIBUTING](CONTRIBUTING.md) file for how to help out.
+See the [contributing guide](https://nexte.st/docs/contributing/) for how to help out.
 
 _Looking to contribute to nextest and don't know where to get started?_ Check out the list of [good first issues](https://github.com/nextest-rs/nextest/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc+label%3A%22good+first+issue%22).
 

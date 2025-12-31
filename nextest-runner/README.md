@@ -15,7 +15,7 @@ post](https://sunshowers.io/posts/nextest-and-tokio/).
 
 ## Contributing
 
-See the [CONTRIBUTING](../CONTRIBUTING.md) file for how to help out.
+See the [contributing guide](https://nexte.st/docs/contributing/) for how to help out.
 
 ## License
 

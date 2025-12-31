@@ -46,7 +46,7 @@ page](https://nexte.st/docs/stability/#nextest-metadata) on the nextest site.
 
 ## Contributing
 
-See the [CONTRIBUTING](../CONTRIBUTING.md) file for how to help out.
+See the [contributing guide](https://nexte.st/docs/contributing/) for how to help out.
 
 ## License
 
