@@ -9,10 +9,10 @@ use crate::{
     errors::{
         DisplayErrorChain, HostPlatformDetectError, RustBuildMetaParseError, TargetTripleError,
     },
+    indenter::DisplayIndented,
     reuse_build::{LibdirMapper, PlatformLibdirMapper},
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use indent_write::indentable::Indented;
 use nextest_metadata::{
     BuildPlatformsSummary, HostPlatformSummary, PlatformLibdirSummary, PlatformLibdirUnavailable,
     TargetPlatformSummary,
@@ -317,11 +317,11 @@ fn detect_host_platform() -> Result<Platform, HostPlatformDetectError> {
                              - `rustc -vV` stderr:\n{}",
                             output.status,
                             build_target.triple().as_str(),
-                            Indented {
+                            DisplayIndented {
                                 item: String::from_utf8_lossy(&output.stdout),
                                 indent: "  "
                             },
-                            Indented {
+                            DisplayIndented {
                                 item: String::from_utf8_lossy(&output.stderr),
                                 indent: "  "
                             },

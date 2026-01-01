@@ -37,7 +37,6 @@ guppy.workspace = true
 home.workspace = true
 humantime-serde.workspace = true
 iddqd.workspace = true
-indent_write.workspace = true
 indexmap = { workspace = true, features = ["serde"] }
 indicatif.workspace = true
 is_ci.workspace = true
