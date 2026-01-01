@@ -96,10 +96,12 @@ impl TargetTriple {
     /// 2. the CARGO_BUILD_TARGET env var
     /// 3. build.target in Cargo config files
     ///
-    /// Note that currently this only supports triples, not JSON files.
+    /// The `host_platform` is used to resolve the special "host-tuple" target, which resolves to
+    /// the host platform.
     pub fn find(
         cargo_configs: &CargoConfigs,
         target_cli_option: Option<&str>,
+        host_platform: &Platform,
     ) -> Result<Option<Self>, TargetTripleError> {
         // First, look at the CLI option passed in.
         if let Some(triple_str_or_path) = target_cli_option {
@@ -108,12 +110,13 @@ impl TargetTriple {
                 TargetTripleSource::CliOption,
                 cargo_configs.cwd(),
                 cargo_configs.target_paths(),
+                host_platform,
             )?;
             return Ok(Some(ret));
         }
 
         // Finally, look at the cargo configs.
-        Self::from_cargo_configs(cargo_configs)
+        Self::from_cargo_configs(cargo_configs, host_platform)
     }
 
     /// The environment variable used for target searches
@@ -122,19 +125,29 @@ impl TargetTriple {
     fn from_env(
         cwd: &Utf8Path,
         target_paths: &[Utf8PathBuf],
+        host_platform: &Platform,
     ) -> Result<Option<Self>, TargetTripleError> {
         if let Some(triple_val) = std::env::var_os(Self::CARGO_BUILD_TARGET_ENV) {
             let triple = triple_val
                 .into_string()
                 .map_err(|_osstr| TargetTripleError::InvalidEnvironmentVar)?;
-            let ret = Self::resolve_triple(&triple, TargetTripleSource::Env, cwd, target_paths)?;
+            let ret = Self::resolve_triple(
+                &triple,
+                TargetTripleSource::Env,
+                cwd,
+                target_paths,
+                host_platform,
+            )?;
             Ok(Some(ret))
         } else {
             Ok(None)
         }
     }
 
-    fn from_cargo_configs(cargo_configs: &CargoConfigs) -> Result<Option<Self>, TargetTripleError> {
+    fn from_cargo_configs(
+        cargo_configs: &CargoConfigs,
+        host_platform: &Platform,
+    ) -> Result<Option<Self>, TargetTripleError> {
         for discovered_config in cargo_configs.discovered_configs() {
             match discovered_config {
                 DiscoveredConfig::CliOption { config, source }
@@ -149,15 +162,18 @@ impl TargetTriple {
                             source,
                             resolve_dir,
                             cargo_configs.target_paths(),
+                            host_platform,
                         )?;
                         return Ok(Some(ret));
                     }
                 }
                 DiscoveredConfig::Env => {
                     // Look at the CARGO_BUILD_TARGET env var.
-                    if let Some(triple) =
-                        Self::from_env(cargo_configs.cwd(), cargo_configs.target_paths())?
-                    {
+                    if let Some(triple) = Self::from_env(
+                        cargo_configs.cwd(),
+                        cargo_configs.target_paths(),
+                        host_platform,
+                    )? {
                         return Ok(Some(triple));
                     }
                 }
@@ -177,7 +193,17 @@ impl TargetTriple {
         // with respect to that.
         resolve_dir: &Utf8Path,
         target_paths: &[Utf8PathBuf],
+        host_platform: &Platform,
     ) -> Result<Self, TargetTripleError> {
+        // Handle "host-tuple" special case: resolve to the host platform.
+        if triple_str_or_path == "host-tuple" {
+            return Ok(Self {
+                platform: host_platform.clone(),
+                source,
+                location: TargetDefinitionLocation::Builtin,
+            });
+        }
+
         if triple_str_or_path.ends_with(".json") {
             return Self::custom_from_path(triple_str_or_path.as_ref(), source, resolve_dir);
         }
@@ -701,6 +727,45 @@ mod tests {
         terminate_search_at: &Utf8Path,
         target_paths: Vec<Utf8PathBuf>,
     ) -> Option<TargetTriple> {
+        find_target_triple_impl(
+            cli_configs,
+            None,
+            env,
+            start_search_at,
+            terminate_search_at,
+            target_paths,
+            &dummy_host_platform(),
+        )
+    }
+
+    fn find_target_triple_with_host(
+        cli_configs: &[&str],
+        target_cli_option: Option<&str>,
+        env: Option<&str>,
+        start_search_at: &Utf8Path,
+        terminate_search_at: &Utf8Path,
+        host_platform: &Platform,
+    ) -> Option<TargetTriple> {
+        find_target_triple_impl(
+            cli_configs,
+            target_cli_option,
+            env,
+            start_search_at,
+            terminate_search_at,
+            Vec::new(),
+            host_platform,
+        )
+    }
+
+    fn find_target_triple_impl(
+        cli_configs: &[&str],
+        target_cli_option: Option<&str>,
+        env: Option<&str>,
+        start_search_at: &Utf8Path,
+        terminate_search_at: &Utf8Path,
+        target_paths: Vec<Utf8PathBuf>,
+        host_platform: &Platform,
+    ) -> Option<TargetTriple> {
         let configs = CargoConfigs::new_with_isolation(
             cli_configs,
             start_search_at,
@@ -713,14 +778,108 @@ mod tests {
             // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
             unsafe { std::env::set_var("CARGO_BUILD_TARGET", env) };
         }
-        let ret = TargetTriple::from_cargo_configs(&configs).unwrap();
+        let ret = TargetTriple::find(&configs, target_cli_option, host_platform).unwrap();
         // SAFETY:
         // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
         unsafe { std::env::remove_var("CARGO_BUILD_TARGET") };
         ret
     }
 
+    #[test]
+    fn test_host_tuple() {
+        // Create a temp dir with a .cargo/config.toml that has build.target = "host-tuple".
+        let dir = camino_tempfile::Builder::new()
+            .tempdir()
+            .expect("error creating tempdir");
+        let dir_path = Utf8PathBuf::try_from(dir.path().canonicalize().unwrap()).unwrap();
+
+        std::fs::create_dir_all(dir.path().join(".cargo")).expect("error creating .cargo subdir");
+        std::fs::write(
+            dir.path().join(".cargo/config.toml"),
+            r#"
+                [build]
+                target = "host-tuple"
+            "#,
+        )
+        .expect("error writing .cargo/config.toml");
+
+        let host_platform = platform("aarch64-apple-darwin");
+
+        // Test --target host-tuple (CLI option).
+        assert_eq!(
+            find_target_triple_with_host(
+                &[],
+                Some("host-tuple"),
+                None,
+                &dir_path,
+                &dir_path,
+                &host_platform,
+            ),
+            Some(TargetTriple {
+                platform: platform("aarch64-apple-darwin"),
+                source: TargetTripleSource::CliOption,
+                location: TargetDefinitionLocation::Builtin,
+            })
+        );
+
+        // Test --config build.target="host-tuple".
+        assert_eq!(
+            find_target_triple_with_host(
+                &["build.target=\"host-tuple\""],
+                None,
+                None,
+                &dir_path,
+                &dir_path,
+                &host_platform,
+            ),
+            Some(TargetTriple {
+                platform: platform("aarch64-apple-darwin"),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::CliOption,
+                },
+                location: TargetDefinitionLocation::Builtin,
+            })
+        );
+
+        // Test CARGO_BUILD_TARGET=host-tuple (env var).
+        assert_eq!(
+            find_target_triple_with_host(
+                &[],
+                None,
+                Some("host-tuple"),
+                &dir_path,
+                &dir_path,
+                &host_platform,
+            ),
+            Some(TargetTriple {
+                platform: platform("aarch64-apple-darwin"),
+                source: TargetTripleSource::Env,
+                location: TargetDefinitionLocation::Builtin,
+            })
+        );
+
+        // Test .cargo/config.toml with build.target = "host-tuple".
+        assert_eq!(
+            find_target_triple_with_host(&[], None, None, &dir_path, &dir_path, &host_platform),
+            Some(TargetTriple {
+                platform: platform("aarch64-apple-darwin"),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::File(dir_path.join(".cargo/config.toml")),
+                },
+                location: TargetDefinitionLocation::Builtin,
+            })
+        );
+    }
+
     fn platform(triple_str: &str) -> Platform {
         Platform::new(triple_str.to_owned(), TargetFeatures::Unknown).expect("triple str is valid")
+    }
+
+    fn dummy_host_platform() -> Platform {
+        Platform::new(
+            "x86_64-unknown-linux-gnu".to_owned(),
+            TargetFeatures::Unknown,
+        )
+        .unwrap()
     }
 }

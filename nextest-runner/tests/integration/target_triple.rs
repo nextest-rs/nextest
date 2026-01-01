@@ -194,10 +194,19 @@ fn target_triple(
         target_paths,
     )
     .unwrap();
-    let triple = TargetTriple::find(&configs, target_cli_option)?;
+    let host_platform = dummy_host_platform();
+    let triple = TargetTriple::find(&configs, target_cli_option, &host_platform)?;
     Ok(triple)
 }
 
 fn platform(triple_str: &str) -> Platform {
     Platform::new(triple_str.to_owned(), TargetFeatures::Unknown).unwrap()
+}
+
+fn dummy_host_platform() -> Platform {
+    Platform::new(
+        "x86_64-unknown-linux-gnu".to_owned(),
+        TargetFeatures::Unknown,
+    )
+    .unwrap()
 }

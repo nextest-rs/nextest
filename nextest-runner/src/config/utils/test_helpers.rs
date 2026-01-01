@@ -124,12 +124,14 @@ pub(in crate::config) fn custom_build_platforms(workspace_dir: &Utf8Path) -> Bui
     )
     .unwrap();
 
+    let host_platform = Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap();
+
     let mut fixture =
         Utf8PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("manifest dir is available"));
     fixture.pop();
     fixture.push("fixtures/custom-target/my-target.json");
 
-    let triple = TargetTriple::find(&configs, Some(fixture.as_str()))
+    let triple = TargetTriple::find(&configs, Some(fixture.as_str()), &host_platform)
         .expect("custom platform parsed")
         .expect("custom platform found");
     assert!(
@@ -143,7 +145,7 @@ pub(in crate::config) fn custom_build_platforms(workspace_dir: &Utf8Path) -> Bui
     );
 
     let host = HostPlatform {
-        platform: Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
+        platform: host_platform,
         libdir: PlatformLibdir::Available(Utf8PathBuf::from(
             "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib",
         )),
