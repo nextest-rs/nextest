@@ -24,7 +24,7 @@ fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunn
         let host = HostPlatform::detect(PlatformLibdir::from_rustc_stdout(
             RustcCli::print_host_libdir().read(),
         ))?;
-        let target = if let Some(triple) = TargetTriple::find(&configs, triple)? {
+        let target = if let Some(triple) = TargetTriple::find(&configs, triple, &host.platform)? {
             let libdir =
                 PlatformLibdir::from_rustc_stdout(RustcCli::print_target_libdir(&triple).read());
             Some(TargetPlatform::new(triple, libdir))

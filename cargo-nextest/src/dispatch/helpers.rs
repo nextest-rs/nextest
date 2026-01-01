@@ -15,7 +15,7 @@ use nextest_runner::{
     RustcCli,
     cargo_config::{CargoConfigs, TargetTriple},
     errors::TargetTripleError,
-    platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
+    platform::{BuildPlatforms, HostPlatform, Platform, PlatformLibdir, TargetPlatform},
     reporter::TestOutputErrorSlice,
     target_runner::{PlatformRunner, TargetRunner},
 };
@@ -75,7 +75,7 @@ pub(super) fn detect_build_platforms(
     let host = HostPlatform::detect(PlatformLibdir::from_rustc_stdout(
         RustcCli::print_host_libdir().read(),
     ))?;
-    let triple_info = discover_target_triple(cargo_configs, target_cli_option)?;
+    let triple_info = discover_target_triple(cargo_configs, target_cli_option, &host.platform)?;
     let target = triple_info.map(|triple| {
         let libdir =
             PlatformLibdir::from_rustc_stdout(RustcCli::print_target_libdir(&triple).read());
@@ -87,8 +87,9 @@ pub(super) fn detect_build_platforms(
 pub(super) fn discover_target_triple(
     cargo_configs: &CargoConfigs,
     target_cli_option: Option<&str>,
+    host_platform: &Platform,
 ) -> Result<Option<TargetTriple>, TargetTripleError> {
-    TargetTriple::find(cargo_configs, target_cli_option).inspect(|v| {
+    TargetTriple::find(cargo_configs, target_cli_option, host_platform).inspect(|v| {
         if let Some(triple) = v {
             debug!(
                 "using target triple `{}` defined by `{}`; {}",
