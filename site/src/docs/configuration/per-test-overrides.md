@@ -38,6 +38,9 @@ for more information.
 `slow-timeout`
 : Amount of time after which [tests are marked slow](../features/slow-tests.md).
 
+`bench.slow-timeout` <!-- md:version 0.9.117 -->
+: Amount of time after which [benchmarks are marked slow](../features/benchmarks.md). Only applies when running benchmarks with `cargo nextest bench`.
+
 `leak-timeout`
 : How long to wait after the test completes [for any subprocesses to exit](../features/leaky-tests.md).
 

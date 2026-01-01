@@ -178,6 +178,40 @@ The `slow-timeout` object accepts the following parameters:
   leak-timeout = { period = "500ms", result = "fail" }
   ```
 
+### Benchmark configuration
+
+#### `profile.<name>.bench.global-timeout`
+
+<!-- md:version 0.9.117 -->
+
+- **Type**: String (duration)
+- **Description**: A global timeout for benchmark execution
+- **Documentation**: [_Running benchmarks_](../features/benchmarks.md)
+- **Default**: none
+- **Example**: `bench.global-timeout = "2h"`
+- **Note**: This setting only applies when running benchmarks with `cargo nextest bench`. The regular `global-timeout` setting is ignored for benchmarks.
+
+#### `profile.<name>.bench.slow-timeout`
+
+<!-- md:version 0.9.117 -->
+
+- **Type**: String (duration) or object
+- **Description**: Time after which benchmarks are considered slow, and timeout configuration
+- **Documentation**: [_Running benchmarks_](../features/benchmarks.md)
+- **Default**: `60s` with no termination on timeout
+- **Examples**:
+  ```toml
+  bench.slow-timeout = "120s"
+  # or
+  bench.slow-timeout = { period = "60s", terminate-after = 10, grace-period = "10s" }
+  ```
+- **Note**: This setting only applies when running benchmarks with `cargo nextest bench`. The regular `slow-timeout` setting is ignored for benchmarks.
+
+The `bench.slow-timeout` object accepts the same parameters as `slow-timeout`:
+- `period`: Time period after which a benchmark is considered slow (required)
+- `terminate-after`: Number of periods after which to terminate the benchmark (default: do not terminate)
+- `grace-period`: Time to wait for graceful shutdown before force termination (default: 10s)
+
 ### Reporter options
 
 #### `profile.<name>.status-level`
@@ -365,6 +399,7 @@ All profile-level settings can be overridden:
 - `run-extra-args`
 - `retries`
 - `slow-timeout`
+- `bench.slow-timeout`
 - `leak-timeout`
 - `test-group`
 - `success-output`

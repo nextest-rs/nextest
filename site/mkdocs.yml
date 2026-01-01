@@ -95,6 +95,7 @@ nav:
                 - docs/features/target-runners.md
                 - docs/ci-features/archiving.md
                 - "Partitioning and sharding runs": docs/ci-features/partitioning.md
+                - docs/features/benchmarks.md
           - "Filterset DSL":
                 - "About filtersets": docs/filtersets/index.md
                 - "DSL reference": docs/filtersets/reference.md

@@ -7,6 +7,10 @@ description: Running Criterion.rs benchmarks in test mode with nextest.
 
 Nextest supports running benchmarks in "test mode" with [Criterion.rs](https://bheisler.github.io/criterion.rs/book/index.html).
 
+!!! note "Running benchmarks to measure performance"
+
+    <!-- md:version 0.9.117 --> This page is about running benchmarks as regular tests via `cargo nextest run`. Nextest also has an experimental `cargo nextest bench` command which runs benchmarks to measure performance. For more, see [_Running benchmarks_](../features/benchmarks.md).
+
 ## What is test mode?
 
 Many benchmarks depend on the system that's running them being [quiescent](https://en.wiktionary.org/wiki/quiescent). In other words, while benchmarks are being run there shouldn't be any other user or system activity. This can make benchmarks hard or even unsuitable to run in CI systems like GitHub Actions, where the capabilities of individual runners vary or are too noisy to produce useful results.

@@ -67,3 +67,5 @@ For your test harness to work with nextest, follow these rules (keywords are as 
 - **The test harness SHOULD be able to efficiently identify single tests specified with --exact.** This is particularly relevant in cases where discovering the list of tests is expensive. This can lead to a quadratic performance issue: if there are N tests in your custom test harness, nextest will run your test harness N times, leading to O(N²) behavior.
 
   For example, when invoked with `--exact`, the datatest-stable library switches to a more efficient mode. This is implemented in [datatest-stable PR #49](https://github.com/nextest-rs/datatest-stable/pull/49).
+
+- <!-- md:version 0.9.117 --> **For test names ending with `: benchmark`, the harness MUST support running them with `<test-name> --nocapture --exact --bench`.** This enables benchmarks [to be run](../features/benchmarks.md) via `cargo nextest bench`.
