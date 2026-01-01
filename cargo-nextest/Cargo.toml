@@ -27,7 +27,7 @@ miette = { workspace = true, features = ["fancy"] }
 # Instead of using workspace dependencies which have floating versions, we pin exact versions here
 # to avoid compatibility issues.
 nextest-filtering = { version = "=0.17.0", path = "../nextest-filtering" }
-nextest-metadata = { version = "=0.12.3", path = "../nextest-metadata" }
+nextest-metadata = { version = "=0.13.0", path = "../nextest-metadata" }
 nextest-runner = { version = "=0.98.0", path = "../nextest-runner" }
 nextest-workspace-hack.workspace = true
 owo-colors.workspace = true
