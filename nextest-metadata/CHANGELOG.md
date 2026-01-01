@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.13.0] - 2026-01-01
+
+### Changed
+
+- A new `TestCaseName` newtype wraps test case identifiers, providing type safety and utility methods:
+  - `components()` splits the name on `::` to yield module path components.
+  - `module_path_and_name()` extracts the module path prefix and trailing name.
+
+- `RustTestCaseSummary` now includes a `kind` field of type `Option<RustTestKind>`, distinguishing between tests (`#[test]`) and benchmarks (`#[bench]`). This field is `None` when parsing output from older nextest versions.
+
 ## [0.12.3] - 2025-10-29
 
 ### Added
@@ -259,6 +269,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.13.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.0
 [0.12.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.12.3
 [0.12.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.12.2
 [0.12.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.12.1

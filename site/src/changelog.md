@@ -9,6 +9,38 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.117] - 2026-01-01
+
+### Added
+
+- Experimental support for [running benchmarks](https://nexte.st/docs/features/benchmarks/) via `cargo nextest bench`. Set `NEXTEST_EXPERIMENTAL_BENCHMARKS=1` to enable.
+
+  Benchmarks have a separate configuration namespace with dedicated slow-timeout and global-timeout settings:
+
+  ```toml
+  [bench]
+  slow-timeout = { period = "120s", terminate-after = 2 }
+  global-timeout = "1h"
+  ```
+
+  Per-test overrides are also supported within the `[bench]` section.
+
+- The `list` command now supports `--message-format oneline` for grep-friendly output.
+
+- Nextest now accepts `--target host-tuple` to explicitly target the host platform, mirroring [Cargo's new feature](https://doc.rust-lang.org/nightly/cargo/reference/config.html#buildtarget). This resolves to the detected host triple at runtime. ([#2872])
+
+### Changed
+
+- The default output style for `cargo nextest list` has been changed to a new `auto` value, which is equivalent to `human` (the previous default) if standard output is an interactive terminal, and `oneline` if not.
+
+### Fixed
+
+- Fixed a panic when reporting test results with `on-timeout = "pass"` in slow-timeout configuration.
+
+- Retry attempts for tests that both fail and leak handles now correctly display as `TRY n FL+LK` instead of `TRY n FAIL`.
+
+[#2872]: https://github.com/nextest-rs/nextest/pull/2872
+
 ## [0.9.116] - 2025-12-26
 
 ### Added
@@ -1738,6 +1770,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.117]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.117
 [0.9.116]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.116
 [0.9.115]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.115
 [0.9.114]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.114

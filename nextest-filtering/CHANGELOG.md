@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.18.0] - 2026-01-01
+
+### Changed
+
+- `TestQuery::test_name` is now a `&TestCaseName` instead of `&str`.
+
 ## [0.17.0] - 2025-10-29
 
 ### Added
@@ -175,6 +181,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.18.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.18.0
 [0.17.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.17.0
 [0.16.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.16.0
 [0.15.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.15.0
