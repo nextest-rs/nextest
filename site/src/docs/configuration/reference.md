@@ -161,6 +161,7 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
   ```
 
 The `slow-timeout` object accepts the following parameters:
+
 - `period`: Time period after which a test is considered slow (required)
 - `terminate-after`: Number of periods after which to terminate the test (default: do not terminate)
 - `grace-period`: Time to wait for graceful shutdown before force termination (default: 10s)
@@ -208,6 +209,7 @@ The `slow-timeout` object accepts the following parameters:
 - **Note**: This setting only applies when running benchmarks with `cargo nextest bench`. The regular `slow-timeout` setting is ignored for benchmarks.
 
 The `bench.slow-timeout` object accepts the same parameters as `slow-timeout`:
+
 - `period`: Time period after which a benchmark is considered slow (required)
 - `terminate-after`: Number of periods after which to terminate the benchmark (default: do not terminate)
 - `grace-period`: Time to wait for graceful shutdown before force termination (default: 10s)
