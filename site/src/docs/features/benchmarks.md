@@ -44,34 +44,4 @@ The regular `slow-timeout` and `global-timeout` settings are ignored for benchma
 
 ## Options and arguments
 
-=== "Summarized output"
-
-    The output of `cargo nextest bench -h`:
-
-    === "Colorized"
-
-        ```bash exec="true" result="ansi"
-        CLICOLOR_FORCE=1 cargo nextest bench -h | ../scripts/strip-hyperlinks.sh
-        ```
-
-    === "Plaintext"
-
-        ```bash exec="true" result="text"
-        cargo nextest bench -h | ../scripts/strip-hyperlinks.sh
-        ```
-
-=== "Full output"
-
-    The output of `cargo nextest bench --help`:
-
-    === "Colorized"
-
-        ```bash exec="true" result="ansi"
-        CLICOLOR_FORCE=1 cargo nextest bench --help | ../scripts/strip-hyperlinks.sh
-        ```
-
-    === "Plaintext"
-
-        ```bash exec="true" result="text"
-        cargo nextest bench --help | ../scripts/strip-hyperlinks.sh
-        ```
+TODO
