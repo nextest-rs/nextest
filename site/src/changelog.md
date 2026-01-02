@@ -18,12 +18,12 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
   Benchmarks have a separate configuration namespace with dedicated slow-timeout and global-timeout settings:
 
   ```toml
-  [bench]
-  slow-timeout = { period = "120s", terminate-after = 2 }
-  global-timeout = "1h"
+  [profile.default]
+  bench.slow-timeout = { period = "120s", terminate-after = 2 }
+  bench.global-timeout = "1h"
   ```
 
-  Per-test overrides are also supported within the `[bench]` section.
+  Per-test overrides are also supported within the `bench` section.
 
 - The `list` command now supports `--message-format oneline` for grep-friendly output.
 
