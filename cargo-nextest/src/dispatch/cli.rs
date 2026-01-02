@@ -30,8 +30,7 @@ use nextest_runner::{
     partition::PartitionerBuilder,
     platform::BuildPlatforms,
     reporter::{
-        FinalStatusLevel, MaxProgressRunning, ReporterBuilder, ShowProgress, StatusLevel,
-        TestOutputDisplay,
+        FinalStatusLevel, MaxProgressRunning, ReporterBuilder, StatusLevel, TestOutputDisplay,
     },
     reuse_build::ReuseBuildInfo,
     run_mode::NextestRunMode,
@@ -41,6 +40,7 @@ use nextest_runner::{
     },
     test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
     test_output::CaptureStrategy,
+    user_config::elements::{UiConfig, UiShowProgress},
 };
 use std::{collections::BTreeSet, io::Cursor, sync::Arc, time::Duration};
 use tracing::{debug, warn};
@@ -437,6 +437,9 @@ pub(super) struct BenchReporterOpts {
     ///
     /// For benchmarks, the default is "counter" which shows the benchmark index
     /// (e.g., "(1/10)") but no progress bar.
+    ///
+    /// This can also be set via user config at `~/.config/nextest/config.toml`.
+    /// See <https://nexte.st/docs/user-config>.
     #[arg(long, env = "NEXTEST_SHOW_PROGRESS")]
     show_progress: Option<ShowProgressOpt>,
 
@@ -449,12 +452,29 @@ pub(super) struct BenchReporterOpts {
 }
 
 impl BenchReporterOpts {
-    pub(super) fn to_builder(&self, should_colorize: bool) -> ReporterBuilder {
+    pub(super) fn to_builder(
+        &self,
+        should_colorize: bool,
+        user_ui_config: Option<&UiConfig>,
+    ) -> ReporterBuilder {
         let mut builder = ReporterBuilder::default();
         builder.set_no_capture(true);
         builder.set_colorize(should_colorize);
-        let show_progress = self.show_progress.unwrap_or(ShowProgressOpt::Auto);
-        builder.set_show_progress(show_progress.into());
+        // Determine show_progress with precedence: CLI/env > user config > default.
+        let ui_show_progress = self
+            .show_progress
+            .map(UiShowProgress::from)
+            .unwrap_or_else(|| {
+                user_ui_config
+                    .and_then(|c| c.show_progress)
+                    .unwrap_or_default()
+            });
+        if ui_show_progress == UiShowProgress::Only {
+            // "only" implies --status-level=slow and --final-status-level=none.
+            builder.set_status_level(StatusLevel::Slow);
+            builder.set_final_status_level(FinalStatusLevel::None);
+        }
+        builder.set_show_progress(ui_show_progress.into());
         builder
     }
 }
@@ -1091,6 +1111,9 @@ pub(super) struct ReporterOpts {
     final_status_level: Option<FinalStatusLevelOpt>,
 
     /// Show nextest progress in the specified manner.
+    ///
+    /// This can also be set via user config at `~/.config/nextest/config.toml`.
+    /// See <https://nexte.st/docs/user-config>.
     #[arg(long, env = "NEXTEST_SHOW_PROGRESS")]
     show_progress: Option<ShowProgressOpt>,
 
@@ -1123,13 +1146,15 @@ pub(super) struct ReporterOpts {
     /// more tests running"). Set to **0** to hide running tests, or
     /// **infinite** for unlimited. This applies when using
     /// `--show-progress=bar` or `--show-progress=only`.
+    ///
+    /// This can also be set via user config at `~/.config/nextest/config.toml`.
+    /// See <https://nexte.st/docs/user-config>.
     #[arg(
         long = "max-progress-running",
         value_name = "N",
-        env = "NEXTEST_MAX_PROGRESS_RUNNING",
-        default_value = "8"
+        env = "NEXTEST_MAX_PROGRESS_RUNNING"
     )]
-    max_progress_running: MaxProgressRunning,
+    max_progress_running: Option<MaxProgressRunning>,
 
     /// Format to use for test results (experimental).
     #[arg(
@@ -1160,6 +1185,7 @@ impl ReporterOpts {
         no_run: bool,
         no_capture: bool,
         should_colorize: bool,
+        user_ui_config: Option<&UiConfig>,
     ) -> ReporterBuilder {
         // Warn on conflicts between options. This is a warning and not an error
         // because these options can be specified via environment variables as
@@ -1193,15 +1219,34 @@ impl ReporterOpts {
             warn!("ignoring --message-format-version because --no-run is specified");
         }
 
-        let show_progress = match (self.show_progress, self.hide_progress_bar) {
+        // Determine show_progress with precedence: CLI/env > user config > default.
+        // Use UiShowProgress to preserve the "only" variant's special behavior.
+        let ui_show_progress = match (self.show_progress, self.hide_progress_bar) {
             (Some(show_progress), true) => {
                 warn!("ignoring --hide-progress-bar because --show-progress is specified");
-                show_progress
+                show_progress.into()
             }
-            (Some(show_progress), false) => show_progress,
-            (None, true) => ShowProgressOpt::None,
-            (None, false) => ShowProgressOpt::default(),
+            (Some(show_progress), false) => show_progress.into(),
+            (None, true) => UiShowProgress::None,
+            (None, false) => {
+                // Check user config before using default.
+                user_ui_config
+                    .and_then(|c| c.show_progress)
+                    .unwrap_or_default()
+            }
         };
+
+        // Determine max_progress_running with precedence: CLI/env > user config > default.
+        let max_progress_running = self
+            .max_progress_running
+            .or_else(|| user_ui_config.and_then(|c| c.max_progress_running))
+            .unwrap_or_default();
+
+        debug!(
+            ?ui_show_progress,
+            ?max_progress_running,
+            "resolved reporter UI settings"
+        );
 
         // ---
 
@@ -1209,10 +1254,9 @@ impl ReporterOpts {
         builder.set_no_capture(no_capture);
         builder.set_colorize(should_colorize);
 
-        if let Some(ShowProgressOpt::Only) = self.show_progress {
-            // --show-progress=only implies --status-level=slow and
-            // --final-status-level=none. But we allow overriding these options
-            // explicitly as well.
+        if ui_show_progress == UiShowProgress::Only {
+            // "only" implies --status-level=slow and --final-status-level=none.
+            // But we allow overriding these options explicitly as well.
             builder.set_status_level(StatusLevel::Slow);
             builder.set_final_status_level(FinalStatusLevel::None);
         }
@@ -1228,9 +1272,9 @@ impl ReporterOpts {
         if let Some(final_status_level) = self.final_status_level {
             builder.set_final_status_level(final_status_level.into());
         }
-        builder.set_show_progress(show_progress.into());
+        builder.set_show_progress(ui_show_progress.into());
         builder.set_no_output_indent(self.no_output_indent);
-        builder.set_max_progress_running(self.max_progress_running);
+        builder.set_max_progress_running(max_progress_running);
         builder
     }
 }
@@ -1331,14 +1375,14 @@ enum ShowProgressOpt {
     Only,
 }
 
-impl From<ShowProgressOpt> for ShowProgress {
+impl From<ShowProgressOpt> for UiShowProgress {
     fn from(opt: ShowProgressOpt) -> Self {
         match opt {
-            ShowProgressOpt::Auto => ShowProgress::Auto,
-            ShowProgressOpt::None => ShowProgress::None,
-            ShowProgressOpt::Bar => ShowProgress::Running,
-            ShowProgressOpt::Counter => ShowProgress::Counter,
-            ShowProgressOpt::Only => ShowProgress::Running,
+            ShowProgressOpt::Auto => UiShowProgress::Auto,
+            ShowProgressOpt::None => UiShowProgress::None,
+            ShowProgressOpt::Bar => UiShowProgress::Bar,
+            ShowProgressOpt::Counter => UiShowProgress::Counter,
+            ShowProgressOpt::Only => UiShowProgress::Only,
         }
     }
 }

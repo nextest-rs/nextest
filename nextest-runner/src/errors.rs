@@ -708,6 +708,39 @@ pub enum ToolConfigFileParseError {
     },
 }
 
+/// Errors that can occur while loading user config.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum UserConfigError {
+    /// Failed to read the user config file.
+    #[error("failed to read user config at {path}")]
+    Read {
+        /// The path to the config file.
+        path: Utf8PathBuf,
+        /// The underlying I/O error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Failed to parse the user config file.
+    #[error("failed to parse user config at {path}")]
+    Parse {
+        /// The path to the config file.
+        path: Utf8PathBuf,
+        /// The underlying TOML parse error.
+        #[source]
+        error: toml::de::Error,
+    },
+
+    /// The user config path contains non-UTF-8 characters.
+    #[error("user config path contains non-UTF-8 characters")]
+    NonUtf8Path {
+        /// The underlying error from path conversion.
+        #[source]
+        error: FromPathBufError,
+    },
+}
+
 /// Error returned while parsing a [`MaxFail`](crate::config::elements::MaxFail) input.
 #[derive(Clone, Debug, Error)]
 #[error("unrecognized value for max-fail: {reason}")]

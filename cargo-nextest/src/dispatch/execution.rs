@@ -44,6 +44,7 @@ use nextest_runner::{
     target_runner::TargetRunner,
     test_filter::{BinaryFilter, TestFilterBuilder},
     test_output::CaptureStrategy,
+    user_config::UserConfig,
     write_str::WriteStr,
 };
 use owo_colors::OwoColorize;
@@ -656,6 +657,9 @@ impl App {
             .color
             .should_colorize(supports_color::Stream::Stderr);
 
+        // Load user config for UI settings.
+        let user_config = UserConfig::from_default_location().map_err(Box::new)?;
+
         // Make the runner and reporter builders. Do them now so warnings are
         // emitted before we start doing the build.
         let runner_builder = runner_opts.to_builder(cap_strat);
@@ -663,6 +667,7 @@ impl App {
             runner_opts.no_run,
             no_capture || runner_opts.interceptor.is_active(),
             should_colorize,
+            user_config.as_ref().map(|c| &c.ui),
         );
         reporter_builder.set_verbose(self.base.output.verbose);
 
@@ -816,10 +821,14 @@ impl App {
             .color
             .should_colorize(supports_color::Stream::Stderr);
 
+        // Load user config for UI settings.
+        let user_config = UserConfig::from_default_location().map_err(Box::new)?;
+
         // Make the runner and reporter builders. Do them now so warnings are
         // emitted before we start doing the build.
         let runner_builder = runner_opts.to_builder(cap_strat);
-        let mut reporter_builder = reporter_opts.to_builder(should_colorize);
+        let mut reporter_builder =
+            reporter_opts.to_builder(should_colorize, user_config.as_ref().map(|c| &c.ui));
         reporter_builder.set_verbose(self.base.output.verbose);
 
         let filter_exprs =

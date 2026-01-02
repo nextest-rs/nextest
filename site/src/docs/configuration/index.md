@@ -98,5 +98,6 @@ Configuration is resolved in the following order:
 
 ## See also
 
-- [Configuration reference](reference.md) - comprehensive list of all configuration parameters
-- [Per-test settings](per-test-overrides.md) - customize settings for specific tests
+- [User configuration](../user-config/index.md) — personal preferences stored in `~/.config/nextest/config.toml`
+- [Configuration reference](reference.md) — comprehensive list of all configuration parameters
+- [Per-test settings](per-test-overrides.md) — customize settings for specific tests

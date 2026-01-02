@@ -107,7 +107,7 @@ nav:
                 - docs/integrations/criterion.md
                 - "cargo-mutants": docs/integrations/cargo-mutants.md
                 - docs/integrations/usdt.md
-    - Configuration:
+    - "Repository config":
           - "Configuring nextest": docs/configuration/index.md
           - "Configuration reference": docs/configuration/reference.md
           - docs/configuration/per-test-overrides.md
@@ -121,6 +121,9 @@ nav:
                 - "Extra arguments": docs/configuration/extra-args.md
                 - docs/configuration/setup-scripts.md
                 - docs/configuration/wrapper-scripts.md
+    - "User config":
+          - "User configuration": docs/user-config/index.md
+          - "User config reference": docs/user-config/reference.md
     - Machine-readable output:
           - "About output formats": docs/machine-readable/index.md
           - "JUnit support": docs/machine-readable/junit.md
