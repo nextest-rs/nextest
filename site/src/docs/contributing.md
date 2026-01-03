@@ -29,6 +29,10 @@ feature, please pay attention to:
 - [Configuration](https://rust-cli-recommendations.sunshowers.io/configuration.html), including hierarchical configuration.
 - Error handling. In particular, errors caused by components outside of nextest itself _should_ be part of [`ExpectedError`](https://github.com/nextest-rs/nextest/blob/main/cargo-nextest/src/errors.rs) and use a [well-defined exit code](https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html).
 
+## Code conventions
+
+For code conventions followed by the nextest project, see [AGENTS.md](https://github.com/nextest-rs/nextest/blob/main/AGENTS.md). This file targets LLMs but is appropriate for humans as well.
+
 ## Logically separate commits
 
 Commits should be
