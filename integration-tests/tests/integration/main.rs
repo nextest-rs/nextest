@@ -37,6 +37,8 @@ use target_spec::{Platform, summaries::TargetFeaturesSummary};
 mod fixtures;
 mod interceptor;
 mod large_alloc;
+#[cfg(unix)]
+mod sigttou;
 mod stuck_signal;
 mod temp_project;
 mod user_config;
