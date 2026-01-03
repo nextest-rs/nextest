@@ -40,6 +40,7 @@ mod time;
 #[cfg(feature = "self-update")]
 pub mod update;
 pub mod usdt;
+pub mod user_config;
 pub mod write_str;
 
 pub use rustc_cli::RustcCli;

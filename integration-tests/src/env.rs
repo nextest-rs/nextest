@@ -40,5 +40,9 @@ pub fn set_env_vars() {
         // Remove OUT_DIR from the environment, as it interferes with tests
         // (some of them expect that OUT_DIR isn't set.)
         std::env::remove_var("OUT_DIR");
+
+        // Set NEXTEST_SHOW_PROGRESS to counter to ensure user config doesn't
+        // affect test output.
+        std::env::set_var("NEXTEST_SHOW_PROGRESS", "counter");
     }
 }

@@ -85,7 +85,7 @@ impl fmt::Display for MaxProgressRunning {
 }
 
 /// How to show progress.
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShowProgress {
     /// Automatically decide based on environment.
     #[default]

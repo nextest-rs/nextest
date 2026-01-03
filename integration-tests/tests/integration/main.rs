@@ -39,6 +39,7 @@ mod interceptor;
 mod large_alloc;
 mod stuck_signal;
 mod temp_project;
+mod user_config;
 
 use crate::temp_project::{UdsStatus, create_uds};
 use camino_tempfile::Utf8TempDir;

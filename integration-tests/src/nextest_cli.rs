@@ -30,6 +30,7 @@ pub struct CargoNextestCli {
     bin: Utf8PathBuf,
     args: Vec<String>,
     envs: HashMap<OsString, OsString>,
+    envs_remove: Vec<OsString>,
     unchecked: bool,
 }
 
@@ -41,6 +42,7 @@ impl CargoNextestCli {
             bin: bin.into(),
             args: vec!["nextest".to_owned()],
             envs: HashMap::new(),
+            envs_remove: Vec::new(),
             unchecked: false,
         }
     }
@@ -82,6 +84,7 @@ impl CargoNextestCli {
             bin: Utf8PathBuf::from(exe.trim_end()),
             args: vec!["nextest".to_owned()],
             envs: HashMap::new(),
+            envs_remove: Vec::new(),
             unchecked: false,
         })
     }
@@ -110,6 +113,11 @@ impl CargoNextestCli {
         self
     }
 
+    pub fn env_remove(&mut self, k: impl Into<OsString>) -> &mut Self {
+        self.envs_remove.push(k.into());
+        self
+    }
+
     pub fn unchecked(&mut self, unchecked: bool) -> &mut Self {
         self.unchecked = unchecked;
         self
@@ -118,6 +126,11 @@ impl CargoNextestCli {
     pub fn output(&self) -> CargoNextestOutput {
         let mut command = Command::new(&self.bin);
         command.args(&self.args);
+        // Apply env_remove first, then envs, so explicit env() calls can
+        // override env_remove().
+        for k in &self.envs_remove {
+            command.env_remove(k);
+        }
         command.envs(&self.envs);
         command
             .stdin(Stdio::null())

@@ -8,7 +8,7 @@ use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{
     config::core::{ConfigExperimental, ToolName},
-    errors::*,
+    errors::{UserConfigError, *},
     helpers::{format_interceptor_too_many_tests, plural},
     indenter::DisplayIndented,
     list::OwnedTestInstanceId,
@@ -99,6 +99,11 @@ pub enum ExpectedError {
     ConfigParseError {
         #[from]
         err: ConfigParseError,
+    },
+    #[error("user config error")]
+    UserConfigError {
+        #[from]
+        err: Box<UserConfigError>,
     },
     #[error("test filter build error")]
     TestFilterBuilderError {
@@ -475,6 +480,7 @@ impl ExpectedError {
             | Self::StoreDirCreateError { .. }
             | Self::RootManifestNotFound { .. }
             | Self::CargoConfigError { .. }
+            | Self::UserConfigError { .. }
             | Self::TestFilterBuilderError { .. }
             | Self::HostPlatformDetectError { .. }
             | Self::TargetTripleError { .. }
@@ -793,6 +799,10 @@ impl ExpectedError {
                         err.source()
                     }
                 }
+            }
+            Self::UserConfigError { err } => {
+                error!("{err}");
+                err.source()
             }
             Self::TestFilterBuilderError { err } => {
                 error!("{err}");
