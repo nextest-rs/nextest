@@ -61,14 +61,48 @@ UI settings are configured under `[ui]`.
 - **Examples**:
   ```toml
   [ui]
-  # Show up to 16 running tests
+  # Show up to 16 running tests.
   max-progress-running = 16
   ```
 
   ```toml
   [ui]
-  # Show all running tests
+  # Show all running tests.
   max-progress-running = "infinite"
+  ```
+
+### `ui.input-handler`
+
+<!-- md:version 0.9.118 -->
+
+- **Type**: Boolean
+- **Description**: Controls whether nextest's [keyboard input handler](../reporting.md#live-output) is enabled. When enabled, nextest accepts keyboard shortcuts during test runs (e.g., `t` to dump test information, `Enter` to produce a summary line).
+- **Valid values**: `true` or `false`
+- **Default**: `true` (input handler enabled)
+- **CLI equivalent**: `--no-input-handler` (to disable)
+- **Environment variable**: `NEXTEST_NO_INPUT_HANDLER=1` (to disable)
+- **Example**:
+  ```toml
+  [ui]
+  # Disable keyboard input handling.
+  input-handler = false
+  ```
+
+### `ui.output-indent`
+
+<!-- md:version 0.9.118 -->
+
+- **Type**: Boolean
+- **Description**: Controls whether captured test output is indented. By default, test output produced by `--failure-output` and `--success-output` is indented for visual clarity.
+- **Valid values**: `true` or `false`
+- **Default**: `true`
+- **CLI equivalent**: `--no-output-indent` (to disable)
+- **Environment variable**: `NEXTEST_NO_OUTPUT_INDENT=1` (to disable)
+- **Example**:
+  ```toml
+  [ui]
+  # Disable output indentation.
+  output-indent = false
   ```
 
 ## Default configuration
@@ -79,4 +113,6 @@ The default user configuration is:
 [ui]
 show-progress = "auto"
 max-progress-running = 8
+input-handler = true
+output-indent = true
 ```

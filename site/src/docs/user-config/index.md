@@ -46,6 +46,12 @@ show-progress = "bar"
 
 # Show more running tests in the progress output.
 max-progress-running = 16
+
+# Disable keyboard input handling.
+input-handler = false
+
+# Disable indentation for captured test output.
+output-indent = false
 ```
 
 For a complete list of available settings, see the [user config reference](reference.md).
