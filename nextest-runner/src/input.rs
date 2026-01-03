@@ -343,6 +343,19 @@ mod imp {
             let TermiosPair { original, updated } = compute_termios()?;
             stdin_tcsetattr(TCSAFLUSH, &updated)?;
 
+            // Ignore SIGTTIN and SIGTTOU while input handling is active. This
+            // prevents the process from being stopped if a test spawns an
+            // interactive shell that takes over the foreground process group.
+            //
+            // This is what zsh does for job control:
+            // https://github.com/zsh-users/zsh/blob/3e72a52/Src/init.c#L1439
+            //
+            // See https://github.com/nextest-rs/nextest/issues/2878.
+            unsafe {
+                libc::signal(libc::SIGTTIN, libc::SIG_IGN);
+                libc::signal(libc::SIGTTOU, libc::SIG_IGN);
+            }
+
             Ok(Self {
                 original: Some(original),
             })
@@ -350,6 +363,9 @@ mod imp {
 
         pub(super) fn restore(&mut self) -> io::Result<()> {
             if let Some(original) = self.original.take() {
+                // Restore terminal state. SIGTTIN/SIGTTOU remain ignored for
+                // the process lifetime to avoid racing with crossterm's input
+                // thread shutdown.
                 stdin_tcsetattr(TCSANOW, &original)
             } else {
                 Ok(())

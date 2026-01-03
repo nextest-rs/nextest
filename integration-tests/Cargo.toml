@@ -25,6 +25,10 @@ path = "test-helpers/fake-interceptor.rs"
 name = "passthrough"
 path = "test-helpers/passthrough.rs"
 
+[[bin]]
+name = "grab-foreground"
+path = "test-helpers/grab-foreground.rs"
+
 [[test]]
 name = "custom-harness"
 harness = false
