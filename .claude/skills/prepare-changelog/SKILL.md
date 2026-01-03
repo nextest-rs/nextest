@@ -19,7 +19,7 @@ The changelog follows the [Keep a Changelog](https://keepachangelog.com/) format
 
 - Version numbers are in brackets
 - Date is in ISO 8601 format (YYYY-MM-DD)
-- Each version should have a corresponding link at the bottom of the file (though this is often omitted for newer entries)
+- Each version must have a corresponding link at the bottom of the file.
 
 ## Section Organization
 

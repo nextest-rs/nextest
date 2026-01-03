@@ -9,6 +9,25 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.118] - 2026-01-04
+
+### Added
+
+- Nextest now supports [user configuration](https://nexte.st/docs/user-config/) for personal preferences. User config is stored in `~/.config/nextest/config.toml` (or `%APPDATA%\nextest\config.toml` on Windows) and includes the following settings:
+
+  - `show-progress`: Controls progress display during test runs.
+  - `max-progress-running`: Maximum number of running tests to show in the progress bar.
+  - `input-handler`: Enable or disable keyboard input handling.
+  - `output-indent`: Enable or disable output indentation for captured test output.
+
+  User config settings are lower priority than CLI arguments and environment variables. For details, see [_User configuration_](https://nexte.st/docs/user-config/).
+
+### Fixed
+
+- Fixed an issue where nextest could hang when tests spawn interactive shells (e.g., `zsh -ic`) that call `tcsetpgrp` to become the foreground process group. Nextest now ignores `SIGTTIN` and `SIGTTOU` signals while input handling is active. ([#2884])
+
+[#2884]: https://github.com/nextest-rs/nextest/pull/2884
+
 ## [0.9.117] - 2026-01-01
 
 ### Added
@@ -1770,6 +1789,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.118]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.118
 [0.9.117]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.117
 [0.9.116]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.116
 [0.9.115]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.115
