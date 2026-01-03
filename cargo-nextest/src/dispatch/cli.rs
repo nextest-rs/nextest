@@ -1242,9 +1242,18 @@ impl ReporterOpts {
             .or_else(|| user_ui_config.and_then(|c| c.max_progress_running))
             .unwrap_or_default();
 
+        // Note: CLI uses --no-output-indent (negative), user config uses
+        // output-indent (positive).
+        let no_output_indent = if self.no_output_indent {
+            true
+        } else {
+            user_ui_config.is_some_and(|c| c.output_indent == Some(false))
+        };
+
         debug!(
             ?ui_show_progress,
             ?max_progress_running,
+            ?no_output_indent,
             "resolved reporter UI settings"
         );
 
@@ -1273,7 +1282,7 @@ impl ReporterOpts {
             builder.set_final_status_level(final_status_level.into());
         }
         builder.set_show_progress(ui_show_progress.into());
-        builder.set_no_output_indent(self.no_output_indent);
+        builder.set_no_output_indent(no_output_indent);
         builder.set_max_progress_running(max_progress_running);
         builder
     }

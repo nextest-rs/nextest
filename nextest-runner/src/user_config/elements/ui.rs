@@ -24,6 +24,12 @@ pub struct UiConfig {
     /// Accepts: an integer, or `"infinite"` for unlimited.
     #[serde(default, deserialize_with = "deserialize_max_progress_running")]
     pub max_progress_running: Option<MaxProgressRunning>,
+
+    /// Whether to enable the input handler.
+    pub input_handler: Option<bool>,
+
+    /// Whether to indent captured test output.
+    pub output_indent: Option<bool>,
 }
 
 /// Show progress setting for UI configuration.
@@ -203,5 +209,25 @@ mod tests {
         // Test invalid value.
         let result: Result<UiConfig, _> = toml::from_str(r#"max-progress-running = "invalid""#);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ui_config_input_handler() {
+        let config: UiConfig = toml::from_str("input-handler = true").unwrap();
+        assert_eq!(config.input_handler, Some(true));
+        let config: UiConfig = toml::from_str("input-handler = false").unwrap();
+        assert_eq!(config.input_handler, Some(false));
+        let config: UiConfig = toml::from_str("").unwrap();
+        assert!(config.input_handler.is_none());
+    }
+
+    #[test]
+    fn test_ui_config_output_indent() {
+        let config: UiConfig = toml::from_str("output-indent = true").unwrap();
+        assert_eq!(config.output_indent, Some(true));
+        let config: UiConfig = toml::from_str("output-indent = false").unwrap();
+        assert_eq!(config.output_indent, Some(false));
+        let config: UiConfig = toml::from_str("").unwrap();
+        assert!(config.output_indent.is_none());
     }
 }

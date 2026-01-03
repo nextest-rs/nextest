@@ -751,7 +751,12 @@ impl App {
 
         let input_handler =
             if reporter_opts.no_input_handler || runner_opts.interceptor.debugger.is_some() {
-                // Only debuggers disable the input handler.
+                // Only debuggers disable the input handler -- tracers do not.
+                InputHandlerKind::Noop
+            } else if user_config
+                .as_ref()
+                .is_some_and(|c| c.ui.input_handler == Some(false))
+            {
                 InputHandlerKind::Noop
             } else {
                 // This means that the input handler determines whether it
@@ -911,7 +916,12 @@ impl App {
 
         let input_handler =
             if reporter_opts.no_input_handler || runner_opts.interceptor.debugger.is_some() {
-                // Only debuggers disable the input handler.
+                // Only debuggers disable the input handler -- tracers do not.
+                InputHandlerKind::Noop
+            } else if user_config
+                .as_ref()
+                .is_some_and(|c| c.ui.input_handler == Some(false))
+            {
                 InputHandlerKind::Noop
             } else {
                 // This means that the input handler determines whether it
