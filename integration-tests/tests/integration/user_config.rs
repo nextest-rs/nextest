@@ -344,7 +344,7 @@ max-progress-running = "not-a-number"
 
     let stderr = output.stderr_as_str();
     assert!(
-        stderr.contains("invalid max-progress-running value"),
+        stderr.contains("invalid value: string \"not-a-number\""),
         "error message should mention invalid max-progress-running value\n{output}"
     );
 }

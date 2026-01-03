@@ -4,7 +4,10 @@
 //! UI-related user configuration.
 
 use crate::reporter::{MaxProgressRunning, ShowProgress};
-use serde::{Deserialize, Deserializer, de};
+use serde::{
+    Deserialize, Deserializer,
+    de::{self, Unexpected},
+};
 
 /// UI-related configuration.
 ///
@@ -30,6 +33,28 @@ pub struct UiConfig {
 
     /// Whether to indent captured test output.
     pub output_indent: Option<bool>,
+}
+
+/// Default UI configuration with all values required.
+///
+/// This is parsed from the embedded default user config TOML. All fields are
+/// required - if the TOML is missing any field, parsing fails.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct DefaultUiConfig {
+    /// How to show progress during test runs.
+    #[serde(deserialize_with = "deserialize_show_progress_required")]
+    pub show_progress: UiShowProgress,
+
+    /// Maximum running tests to display in the progress bar.
+    #[serde(deserialize_with = "deserialize_max_progress_running_required")]
+    pub max_progress_running: MaxProgressRunning,
+
+    /// Whether to enable the input handler.
+    pub input_handler: bool,
+
+    /// Whether to indent captured test output.
+    pub output_indent: bool,
 }
 
 /// Show progress setting for UI configuration.
@@ -65,22 +90,68 @@ impl From<UiShowProgress> for ShowProgress {
     }
 }
 
+/// Parses a string into a UiShowProgress value.
+fn parse_show_progress<E: de::Error>(s: &str) -> Result<UiShowProgress, E> {
+    match s {
+        "auto" => Ok(UiShowProgress::Auto),
+        "none" => Ok(UiShowProgress::None),
+        "bar" => Ok(UiShowProgress::Bar),
+        "counter" => Ok(UiShowProgress::Counter),
+        "only" => Ok(UiShowProgress::Only),
+        other => Err(E::custom(format!(
+            "invalid show-progress value: {other:?}, expected one of: \
+             auto, none, bar, counter, only"
+        ))),
+    }
+}
+
 fn deserialize_show_progress<'de, D>(deserializer: D) -> Result<Option<UiShowProgress>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let s: Option<String> = Option::deserialize(deserializer)?;
-    match s.as_deref() {
-        None => Ok(None),
-        Some("auto") => Ok(Some(UiShowProgress::Auto)),
-        Some("none") => Ok(Some(UiShowProgress::None)),
-        Some("bar") => Ok(Some(UiShowProgress::Bar)),
-        Some("counter") => Ok(Some(UiShowProgress::Counter)),
-        Some("only") => Ok(Some(UiShowProgress::Only)),
-        Some(other) => Err(de::Error::custom(format!(
-            "invalid show-progress value: {other:?}, expected one of: \
-             auto, none, bar, counter, only"
-        ))),
+    s.map(|s| parse_show_progress(&s)).transpose()
+}
+
+fn deserialize_show_progress_required<'de, D>(deserializer: D) -> Result<UiShowProgress, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = String::deserialize(deserializer)?;
+    parse_show_progress(&s)
+}
+
+/// Visitor for deserializing max-progress-running (string or integer).
+struct MaxProgressRunningVisitor;
+
+impl<'de> de::Visitor<'de> for MaxProgressRunningVisitor {
+    type Value = MaxProgressRunning;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a non-negative integer or \"infinite\"")
+    }
+
+    fn visit_u64<E: de::Error>(self, v: u64) -> Result<Self::Value, E> {
+        Ok(MaxProgressRunning::Count(v as usize))
+    }
+
+    fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> {
+        if v < 0 {
+            Err(E::invalid_value(Unexpected::Signed(v), &self))
+        } else {
+            Ok(MaxProgressRunning::Count(v as usize))
+        }
+    }
+
+    fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+        if v == "infinite" {
+            Ok(MaxProgressRunning::Infinite)
+        } else {
+            // Try parsing as a number.
+            v.parse::<usize>()
+                .map(MaxProgressRunning::Count)
+                .map_err(|_| E::invalid_value(Unexpected::Str(v), &self))
+        }
     }
 }
 
@@ -90,33 +161,41 @@ fn deserialize_max_progress_running<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    // This can be either a string ("infinite") or an integer.
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum StringOrInt {
-        String(String),
-        Int(usize),
+    deserializer.deserialize_option(OptionMaxProgressRunningVisitor)
+}
+
+/// Visitor for deserializing Option<MaxProgressRunning>.
+struct OptionMaxProgressRunningVisitor;
+
+impl<'de> de::Visitor<'de> for OptionMaxProgressRunningVisitor {
+    type Value = Option<MaxProgressRunning>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a non-negative integer, \"infinite\", or null")
     }
 
-    let value: Option<StringOrInt> = Option::deserialize(deserializer)?;
-    match value {
-        None => Ok(None),
-        Some(StringOrInt::String(s)) => {
-            if s.eq_ignore_ascii_case("infinite") {
-                Ok(Some(MaxProgressRunning::Infinite))
-            } else {
-                // Try parsing as a number.
-                match s.parse::<usize>() {
-                    Ok(n) => Ok(Some(MaxProgressRunning::Count(n))),
-                    Err(_) => Err(de::Error::custom(format!(
-                        "invalid max-progress-running value: {s:?}, \
-                         expected an integer or \"infinite\""
-                    ))),
-                }
-            }
-        }
-        Some(StringOrInt::Int(n)) => Ok(Some(MaxProgressRunning::Count(n))),
+    fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+        Ok(None)
     }
+
+    fn visit_some<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+        deserializer
+            .deserialize_any(MaxProgressRunningVisitor)
+            .map(Some)
+    }
+
+    fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+        Ok(None)
+    }
+}
+
+fn deserialize_max_progress_running_required<'de, D>(
+    deserializer: D,
+) -> Result<MaxProgressRunning, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserializer.deserialize_any(MaxProgressRunningVisitor)
 }
 
 #[cfg(test)]
@@ -149,8 +228,7 @@ mod tests {
         assert!(config.show_progress.is_none());
 
         // Test invalid value.
-        let result: Result<UiConfig, _> = toml::from_str(r#"show-progress = "invalid""#);
-        assert!(result.is_err());
+        toml::from_str::<UiConfig>(r#"show-progress = "invalid""#).unwrap_err();
     }
 
     #[test]
@@ -195,20 +273,15 @@ mod tests {
             Some(MaxProgressRunning::Infinite)
         ));
 
-        // Test case-insensitive.
-        let config: UiConfig = toml::from_str(r#"max-progress-running = "INFINITE""#).unwrap();
-        assert!(matches!(
-            config.max_progress_running,
-            Some(MaxProgressRunning::Infinite)
-        ));
+        // Test that matching is case-sensitive.
+        toml::from_str::<UiConfig>(r#"max-progress-running = "INFINITE""#).unwrap_err();
 
         // Test missing value.
         let config: UiConfig = toml::from_str("").unwrap();
         assert!(config.max_progress_running.is_none());
 
         // Test invalid value.
-        let result: Result<UiConfig, _> = toml::from_str(r#"max-progress-running = "invalid""#);
-        assert!(result.is_err());
+        toml::from_str::<UiConfig>(r#"max-progress-running = "invalid""#).unwrap_err();
     }
 
     #[test]
