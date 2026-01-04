@@ -30,6 +30,10 @@ During test execution, the `--show-progress` command-line option (or `NEXTEST_SH
 
 The `--hide-progress-bar` option, now deprecated, hides progress in interactive terminals.
 
+!!! tip "User configuration"
+
+    Both `--show-progress` and `--max-progress-running` can be set in [user configuration](user-config/reference.md#uishow-progress).
+
 ## Status levels
 
 For non-output-related information (e.g. exit codes, slow tests), there are two options that control which test statuses (**PASS**, **FAIL** etc) are displayed during a test run:
@@ -84,7 +88,8 @@ To query current test status, do any of the following:
 
   Processing `t` requires that the terminal's processing is altered, which may
   cause issues in some circumstances. To disable this behavior, run nextest with
-  `--no-input-handler`, or set `NEXTEST_NO_INPUT_HANDLER=1` in the environment.
+  `--no-input-handler`, set `NEXTEST_NO_INPUT_HANDLER=1` in the environment, or set
+  [`ui.input-handler`](user-config/reference.md#uiinput-handler) to `false` in user configuration.
 
 * On Unix platforms where the `SIGINFO` signal is available (which includes macOS
   and other BSD-based platforms, as well as illumos, though not Linux), send that signal to nextest.
@@ -138,7 +143,7 @@ These options can also be configured via [global configuration](configuration/in
 #### Other options for completed tests { #other-options }
 
 `--no-output-indent` <!-- md:version 0.9.95 -->
-: By default, nextest indents captured output by 4 spaces for visual clarity. This flag disables that behavior. Can also be set through `NEXTEST_NO_OUTPUT_INDENT=1` in the environment.
+: By default, nextest indents captured output by 4 spaces for visual clarity. This flag disables that behavior. Can also be set through `NEXTEST_NO_OUTPUT_INDENT=1` in the environment, or by setting [`ui.output-indent`](user-config/reference.md#uioutput-indent) to `false` in user configuration.
 
 ## Options and arguments
 
