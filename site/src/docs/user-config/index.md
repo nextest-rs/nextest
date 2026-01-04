@@ -28,10 +28,29 @@ User config settings are resolved with the following precedence (highest priorit
 
 1. **CLI arguments** (e.g., `--show-progress=bar`).
 2. **Environment variables** (e.g., `NEXTEST_SHOW_PROGRESS=bar`).
-3. **User config file** (`~/.config/nextest/config.toml`).
-4. **Built-in defaults**.
+3. **User overrides** (first matching `[[overrides]]` for each setting).
+4. **User base config** (`[ui]` section).
+5. **Built-in defaults**.
 
 This means CLI arguments and environment variables always override user config.
+
+## Platform-specific overrides
+
+You can customize settings for specific platforms using `[[overrides]]` sections:
+
+```toml title="Platform-specific overrides"
+[ui]
+# Base settings for all platforms.
+show-progress = "auto"
+max-progress-running = 8
+
+[[overrides]]
+# Windows-specific settings.
+platform = "cfg(windows)"
+ui.max-progress-running = 4
+```
+
+Overrides are evaluated against the *host* platform (where nextest is running). For each setting, the first matching override provides the value. See the [user config reference](reference.md#platform-specific-overrides) for details.
 
 !!! note "User config versus repository config"
 
