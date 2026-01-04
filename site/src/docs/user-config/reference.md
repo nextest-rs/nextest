@@ -109,10 +109,6 @@ UI settings are configured under `[ui]`.
 
 The default user configuration is:
 
-```toml
-[ui]
-show-progress = "auto"
-max-progress-running = 8
-input-handler = true
-output-indent = true
+```bash exec="true" result="toml"
+cat ../nextest-runner/default-user-config.toml
 ```

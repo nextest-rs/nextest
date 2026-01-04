@@ -40,7 +40,7 @@ use nextest_runner::{
     },
     test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
     test_output::CaptureStrategy,
-    user_config::elements::{UiConfig, UiShowProgress},
+    user_config::elements::{DefaultUiConfig, UiConfig, UiShowProgress},
 };
 use std::{collections::BTreeSet, io::Cursor, sync::Arc, time::Duration};
 use tracing::{debug, warn};
@@ -456,6 +456,7 @@ impl BenchReporterOpts {
         &self,
         should_colorize: bool,
         user_ui_config: Option<&UiConfig>,
+        default_ui_config: &DefaultUiConfig,
     ) -> ReporterBuilder {
         let mut builder = ReporterBuilder::default();
         builder.set_no_capture(true);
@@ -467,7 +468,7 @@ impl BenchReporterOpts {
             .unwrap_or_else(|| {
                 user_ui_config
                     .and_then(|c| c.show_progress)
-                    .unwrap_or_default()
+                    .unwrap_or(default_ui_config.show_progress)
             });
         if ui_show_progress == UiShowProgress::Only {
             // "only" implies --status-level=slow and --final-status-level=none.
@@ -1186,6 +1187,7 @@ impl ReporterOpts {
         no_capture: bool,
         should_colorize: bool,
         user_ui_config: Option<&UiConfig>,
+        default_ui_config: &DefaultUiConfig,
     ) -> ReporterBuilder {
         // Warn on conflicts between options. This is a warning and not an error
         // because these options can be specified via environment variables as
@@ -1232,7 +1234,7 @@ impl ReporterOpts {
                 // Check user config before using default.
                 user_ui_config
                     .and_then(|c| c.show_progress)
-                    .unwrap_or_default()
+                    .unwrap_or(default_ui_config.show_progress)
             }
         };
 
@@ -1240,14 +1242,16 @@ impl ReporterOpts {
         let max_progress_running = self
             .max_progress_running
             .or_else(|| user_ui_config.and_then(|c| c.max_progress_running))
-            .unwrap_or_default();
+            .unwrap_or(default_ui_config.max_progress_running);
 
         // Note: CLI uses --no-output-indent (negative), user config uses
         // output-indent (positive).
         let no_output_indent = if self.no_output_indent {
             true
+        } else if let Some(output_indent) = user_ui_config.and_then(|c| c.output_indent) {
+            !output_indent
         } else {
-            user_ui_config.is_some_and(|c| c.output_indent == Some(false))
+            !default_ui_config.output_indent
         };
 
         debug!(

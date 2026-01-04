@@ -3,7 +3,10 @@
 
 //! User config implementation.
 
-use super::{discovery::user_config_paths, elements::UiConfig};
+use super::{
+    discovery::user_config_paths,
+    elements::{DefaultUiConfig, UiConfig},
+};
 use crate::errors::UserConfigError;
 use camino::Utf8Path;
 use serde::Deserialize;
@@ -79,5 +82,38 @@ impl UserConfig {
 
         debug!("user config: loaded successfully from {path}");
         Ok(Some(config))
+    }
+}
+
+/// Default user configuration parsed from the embedded TOML.
+///
+/// All fields are required - this ensures the default config is complete.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct DefaultUserConfig {
+    /// UI configuration.
+    pub ui: DefaultUiConfig,
+}
+
+impl DefaultUserConfig {
+    /// The embedded default user config TOML.
+    pub const DEFAULT_CONFIG: &'static str = include_str!("../../default-user-config.toml");
+
+    /// Parses the default config.
+    ///
+    /// Panics if the embedded TOML is invalid.
+    pub fn from_embedded() -> Self {
+        toml::from_str(Self::DEFAULT_CONFIG).expect("embedded default user config should be valid")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_user_config_is_valid() {
+        // This will panic if the TOML is missing any required fields.
+        let _ = DefaultUserConfig::from_embedded();
     }
 }

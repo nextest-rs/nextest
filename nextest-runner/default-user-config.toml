@@ -1,0 +1,20 @@
+# This is the default user config used by nextest. It is embedded in the binary
+# at build time. It may be used as a template for ~/.config/nextest/config.toml.
+#
+# For documentation on these settings, see:
+# https://nexte.st/docs/user-config/reference
+
+[ui]
+# How to show progress during test runs.
+# Valid values: "auto", "none", "bar", "counter", "only"
+show-progress = "auto"
+
+# Maximum running tests to display in the progress bar.
+# Valid values: an integer, or "infinite" for unlimited.
+max-progress-running = 8
+
+# Whether to enable the input handler for keyboard shortcuts during test runs.
+input-handler = true
+
+# Whether to indent captured test output for visual clarity.
+output-indent = true
