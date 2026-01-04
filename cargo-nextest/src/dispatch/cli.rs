@@ -40,7 +40,7 @@ use nextest_runner::{
     },
     test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
     test_output::CaptureStrategy,
-    user_config::elements::{DefaultUiConfig, UiConfig, UiShowProgress},
+    user_config::elements::{UiConfig, UiShowProgress},
 };
 use std::{collections::BTreeSet, io::Cursor, sync::Arc, time::Duration};
 use tracing::{debug, warn};
@@ -455,21 +455,16 @@ impl BenchReporterOpts {
     pub(super) fn to_builder(
         &self,
         should_colorize: bool,
-        user_ui_config: Option<&UiConfig>,
-        default_ui_config: &DefaultUiConfig,
+        resolved_ui: &UiConfig,
     ) -> ReporterBuilder {
         let mut builder = ReporterBuilder::default();
         builder.set_no_capture(true);
         builder.set_colorize(should_colorize);
-        // Determine show_progress with precedence: CLI/env > user config > default.
+        // Determine show_progress with precedence: CLI/env > resolved config.
         let ui_show_progress = self
             .show_progress
             .map(UiShowProgress::from)
-            .unwrap_or_else(|| {
-                user_ui_config
-                    .and_then(|c| c.show_progress)
-                    .unwrap_or(default_ui_config.show_progress)
-            });
+            .unwrap_or(resolved_ui.show_progress);
         if ui_show_progress == UiShowProgress::Only {
             // "only" implies --status-level=slow and --final-status-level=none.
             builder.set_status_level(StatusLevel::Slow);
@@ -1186,8 +1181,7 @@ impl ReporterOpts {
         no_run: bool,
         no_capture: bool,
         should_colorize: bool,
-        user_ui_config: Option<&UiConfig>,
-        default_ui_config: &DefaultUiConfig,
+        resolved_ui: &UiConfig,
     ) -> ReporterBuilder {
         // Warn on conflicts between options. This is a warning and not an error
         // because these options can be specified via environment variables as
@@ -1221,7 +1215,7 @@ impl ReporterOpts {
             warn!("ignoring --message-format-version because --no-run is specified");
         }
 
-        // Determine show_progress with precedence: CLI/env > user config > default.
+        // Determine show_progress with precedence: CLI/env > resolved config.
         // Use UiShowProgress to preserve the "only" variant's special behavior.
         let ui_show_progress = match (self.show_progress, self.hide_progress_bar) {
             (Some(show_progress), true) => {
@@ -1230,29 +1224,17 @@ impl ReporterOpts {
             }
             (Some(show_progress), false) => show_progress.into(),
             (None, true) => UiShowProgress::None,
-            (None, false) => {
-                // Check user config before using default.
-                user_ui_config
-                    .and_then(|c| c.show_progress)
-                    .unwrap_or(default_ui_config.show_progress)
-            }
+            (None, false) => resolved_ui.show_progress,
         };
 
-        // Determine max_progress_running with precedence: CLI/env > user config > default.
+        // Determine max_progress_running with precedence: CLI/env > resolved config.
         let max_progress_running = self
             .max_progress_running
-            .or_else(|| user_ui_config.and_then(|c| c.max_progress_running))
-            .unwrap_or(default_ui_config.max_progress_running);
+            .unwrap_or(resolved_ui.max_progress_running);
 
-        // Note: CLI uses --no-output-indent (negative), user config uses
-        // output-indent (positive).
-        let no_output_indent = if self.no_output_indent {
-            true
-        } else if let Some(output_indent) = user_ui_config.and_then(|c| c.output_indent) {
-            !output_indent
-        } else {
-            !default_ui_config.output_indent
-        };
+        // Note: CLI uses --no-output-indent (negative), resolved config uses
+        // output_indent (positive).
+        let no_output_indent = self.no_output_indent || !resolved_ui.output_indent;
 
         debug!(
             ?ui_show_progress,

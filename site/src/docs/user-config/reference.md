@@ -105,6 +105,85 @@ UI settings are configured under `[ui]`.
   output-indent = false
   ```
 
+## Platform-specific overrides
+
+<!-- md:version 0.9.119 -->
+
+You can customize UI settings for specific platforms using `[[overrides]]` sections. This is useful when different platforms need different defaults (e.g., different progress display settings).
+
+### Override structure
+
+```toml title="Platform-specific overrides"
+[[overrides]]
+platform = "cfg(windows)"
+ui.show-progress = "bar"
+ui.max-progress-running = 4
+```
+
+Each override has a required `platform` filter and optional settings in the `ui` section. Overrides are evaluated in order. For each setting, the first matching override provides the value. If no override matches, the base `[ui]` section value is used.
+
+### Override filter
+
+#### `overrides.platform`
+
+- **Type**: String (target spec expression)
+- **Description**: Platform specification for when this override applies. The expression is evaluated against the *host* platform (where nextest is running).
+- **Required**: Yes
+- **Documentation**: [_Specifying platforms_](../configuration/specifying-platforms.md)
+- **Valid formats**:
+  - Target triple: `"x86_64-unknown-linux-gnu"`
+  - `cfg()` expression: `"cfg(windows)"`, `"cfg(unix)"`, `"cfg(target_os = \"macos\")"`
+- **Examples**:
+  ```toml
+  [[overrides]]
+  platform = "cfg(windows)"
+  ui.show-progress = "bar"
+
+  [[overrides]]
+  platform = "cfg(target_os = \"macos\")"
+  ui.max-progress-running = 16
+  ```
+
+### Overridable settings
+
+All `[ui]` settings can be overridden within `[[overrides]]`:
+
+- [`ui.show-progress`](#uishow-progress)
+- [`ui.max-progress-running`](#uimax-progress-running)
+- [`ui.input-handler`](#uiinput-handler)
+- [`ui.output-indent`](#uioutput-indent)
+
+Each setting in an override is optional. The first matching override is applied on a per-setting basis.
+
+### Example: platform-specific configuration
+
+```toml title="~/.config/nextest/config.toml"
+[ui]
+# Base configuration for all platforms.
+show-progress = "auto"
+max-progress-running = 8
+
+[[overrides]]
+# Windows often has narrower terminals.
+platform = "cfg(windows)"
+ui.max-progress-running = 4
+
+[[overrides]]
+# macOS users might prefer a specific setting.
+platform = "cfg(target_os = \"macos\")"
+ui.show-progress = "bar"
+```
+
+### Resolution order
+
+Settings are resolved with the following precedence (highest priority first):
+
+1. **CLI arguments** (e.g., `--show-progress=bar`)
+2. **Environment variables** (e.g., `NEXTEST_SHOW_PROGRESS=bar`)
+3. **User overrides** (first matching `[[overrides]]` for each setting)
+4. **User base config** (`[ui]` section)
+5. **Built-in defaults**
+
 ## Default configuration
 
 The default user configuration is:

@@ -26,8 +26,9 @@
 //!
 //! 1. CLI arguments (e.g., `--show-progress=bar`)
 //! 2. Environment variables (e.g., `NEXTEST_SHOW_PROGRESS=bar`)
-//! 3. User config file
-//! 4. Built-in defaults
+//! 3. User overrides (first matching `[[overrides]]` for each setting)
+//! 4. User base config (`[ui]` section)
+//! 5. Built-in defaults
 
 mod discovery;
 pub mod elements;

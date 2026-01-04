@@ -497,6 +497,21 @@ impl PlatformLibdir {
     }
 }
 
+/// Detects the host platform for use in tests.
+///
+/// Prefer this over `Platform::build_target()` in tests to ensure we're testing
+/// with the same platform detection logic used in production.
+#[cfg(test)]
+pub(crate) fn detect_host_platform_for_tests() -> Platform {
+    use crate::RustcCli;
+
+    HostPlatform::detect(PlatformLibdir::from_rustc_stdout(
+        RustcCli::print_host_libdir().read(),
+    ))
+    .expect("host platform detection should succeed in tests")
+    .platform
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

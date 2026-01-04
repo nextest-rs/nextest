@@ -5,13 +5,45 @@
 
 use super::{
     discovery::user_config_paths,
-    elements::{DefaultUiConfig, UiConfig},
+    elements::{
+        CompiledUiOverride, DefaultUiConfig, DeserializedUiConfig, DeserializedUiOverrideData,
+        UiConfig,
+    },
 };
 use crate::errors::UserConfigError;
 use camino::Utf8Path;
 use serde::Deserialize;
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, io};
+use target_spec::{Platform, TargetSpec};
 use tracing::{debug, warn};
+
+/// User configuration after custom settings and overrides have been applied.
+#[derive(Clone, Debug)]
+pub struct UserConfig {
+    /// Resolved UI configuration.
+    pub ui: UiConfig,
+}
+
+impl UserConfig {
+    /// Loads and resolves user configuration for the given host platform.
+    pub fn for_host_platform(host_platform: &Platform) -> Result<Self, UserConfigError> {
+        let user_config = CompiledUserConfig::from_default_location()?;
+        let default_user_config = DefaultUserConfig::from_embedded();
+
+        let resolved_ui = UiConfig::resolve(
+            &default_user_config.ui,
+            &default_user_config.ui_overrides,
+            user_config.as_ref().map(|c| &c.ui),
+            user_config
+                .as_ref()
+                .map(|c| &c.ui_overrides[..])
+                .unwrap_or(&[]),
+            host_platform,
+        );
+
+        Ok(Self { ui: resolved_ui })
+    }
+}
 
 /// Trait for handling user configuration warnings.
 ///
@@ -49,64 +81,44 @@ impl UserConfigWarnings for DefaultUserConfigWarnings {
     }
 }
 
-/// User-specific configuration.
+/// User-specific configuration (deserialized form).
 ///
 /// This configuration is loaded from the user's config directory and contains
 /// personal preferences that shouldn't be version-controlled.
+///
+/// Use [`DeserializedUserConfig::compile`] to compile platform specs and get a
+/// [`CompiledUserConfig`].
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct UserConfig {
+struct DeserializedUserConfig {
     /// UI configuration.
     #[serde(default)]
-    pub ui: UiConfig,
+    ui: DeserializedUiConfig,
+
+    /// Configuration overrides.
+    #[serde(default)]
+    overrides: Vec<DeserializedOverride>,
 }
 
-impl UserConfig {
-    /// Loads user config from the default location.
+/// Deserialized form of a single override entry.
+///
+/// Each override has a platform filter and optional settings for different
+/// configuration sections.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct DeserializedOverride {
+    /// Platform to match (required).
     ///
-    /// Tries candidate paths in order and returns the first config file found:
-    /// - Unix/macOS: `~/.config/nextest/config.toml`
-    /// - Windows: `%APPDATA%\nextest\config.toml`, then `~/.config/nextest/config.toml`
-    ///
-    /// Returns `Ok(None)` if no config file exists at any candidate path.
-    /// Returns `Err` if a config file exists but is invalid.
-    pub fn from_default_location() -> Result<Option<Self>, UserConfigError> {
-        Self::from_default_location_with_warnings(&mut DefaultUserConfigWarnings)
-    }
+    /// This is a target-spec expression like `cfg(windows)` or
+    /// `x86_64-unknown-linux-gnu`.
+    platform: String,
 
-    /// Loads user config from the default location, with custom warning
-    /// handling.
-    fn from_default_location_with_warnings(
-        warnings: &mut impl UserConfigWarnings,
-    ) -> Result<Option<Self>, UserConfigError> {
-        let paths = user_config_paths()?;
-        if paths.is_empty() {
-            debug!("user config: could not determine config directory");
-            return Ok(None);
-        }
+    /// UI settings to override.
+    #[serde(default)]
+    ui: DeserializedUiOverrideData,
+}
 
-        for path in &paths {
-            match Self::from_path_with_warnings(path, warnings)? {
-                Some(config) => return Ok(Some(config)),
-                None => continue,
-            }
-        }
-
-        debug!(
-            "user config: no config file found at any candidate path: {:?}",
-            paths
-        );
-        Ok(None)
-    }
-
-    /// Loads user config from a specific path.
-    ///
-    /// Returns `Ok(None)` if the file does not exist.
-    /// Returns `Err` if the file exists but cannot be read or parsed.
-    pub fn from_path(path: &Utf8Path) -> Result<Option<Self>, UserConfigError> {
-        Self::from_path_with_warnings(path, &mut DefaultUserConfigWarnings)
-    }
-
+impl DeserializedUserConfig {
     /// Loads user config from a specific path with custom warning handling.
     ///
     /// Returns `Ok(None)` if the file does not exist.
@@ -118,7 +130,7 @@ impl UserConfig {
         debug!("user config: attempting to load from {path}");
         let contents = match std::fs::read_to_string(path) {
             Ok(contents) => contents,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
                 debug!("user config: file does not exist at {path}");
                 return Ok(None);
             }
@@ -148,35 +160,140 @@ impl UserConfig {
     fn deserialize_toml(contents: &str) -> Result<(Self, BTreeSet<String>), toml::de::Error> {
         let deserializer = toml::Deserializer::parse(contents)?;
         let mut unknown = BTreeSet::new();
-        let config: UserConfig = serde_ignored::deserialize(deserializer, |path| {
+        let config: DeserializedUserConfig = serde_ignored::deserialize(deserializer, |path| {
             unknown.insert(path.to_string());
         })?;
         Ok((config, unknown))
     }
+
+    /// Compiles the user config by parsing platform specs in overrides.
+    ///
+    /// The `path` is used for error reporting.
+    fn compile(self, path: &Utf8Path) -> Result<CompiledUserConfig, UserConfigError> {
+        let mut ui_overrides = Vec::with_capacity(self.overrides.len());
+        for (index, override_) in self.overrides.into_iter().enumerate() {
+            let platform_spec = TargetSpec::new(override_.platform).map_err(|error| {
+                UserConfigError::OverridePlatformSpec {
+                    path: path.to_owned(),
+                    index,
+                    error,
+                }
+            })?;
+            ui_overrides.push(CompiledUiOverride::new(platform_spec, override_.ui));
+        }
+
+        Ok(CompiledUserConfig {
+            ui: self.ui,
+            ui_overrides,
+        })
+    }
+}
+
+/// Compiled user configuration with parsed platform specs.
+///
+/// This is created from [`DeserializedUserConfig`] after compiling platform
+/// expressions in overrides.
+#[derive(Clone, Debug)]
+pub(super) struct CompiledUserConfig {
+    /// UI configuration.
+    pub(super) ui: DeserializedUiConfig,
+    /// Compiled UI overrides with parsed platform specs.
+    pub(super) ui_overrides: Vec<CompiledUiOverride>,
+}
+
+impl CompiledUserConfig {
+    /// Loads and compiles user config from the default location.
+    ///
+    /// This is a convenience method that combines loading and compilation.
+    /// Platform specs in overrides are compiled and validated.
+    ///
+    /// Returns `Ok(None)` if no config file exists at any candidate path.
+    /// Returns `Err` if:
+    /// - A config file exists but cannot be read or parsed.
+    /// - A platform spec in an override is invalid.
+    pub(super) fn from_default_location() -> Result<Option<Self>, UserConfigError> {
+        Self::from_default_location_with_warnings(&mut DefaultUserConfigWarnings)
+    }
+
+    /// Loads and compiles user config from the default location, with custom
+    /// warning handling.
+    fn from_default_location_with_warnings(
+        warnings: &mut impl UserConfigWarnings,
+    ) -> Result<Option<Self>, UserConfigError> {
+        let paths = user_config_paths()?;
+        if paths.is_empty() {
+            debug!("user config: could not determine config directory");
+            return Ok(None);
+        }
+
+        for path in &paths {
+            match Self::from_path_with_warnings(path, warnings)? {
+                Some(config) => return Ok(Some(config)),
+                None => continue,
+            }
+        }
+
+        debug!(
+            "user config: no config file found at any candidate path: {:?}",
+            paths
+        );
+        Ok(None)
+    }
+
+    /// Loads and compiles user config from a specific path with custom warning
+    /// handling.
+    fn from_path_with_warnings(
+        path: &Utf8Path,
+        warnings: &mut impl UserConfigWarnings,
+    ) -> Result<Option<Self>, UserConfigError> {
+        match DeserializedUserConfig::from_path_with_warnings(path, warnings)? {
+            Some(config) => Ok(Some(config.compile(path)?)),
+            None => Ok(None),
+        }
+    }
+}
+
+/// Deserialized form of the default user config before compilation.
+///
+/// This includes both base settings (all required) and platform-specific
+/// overrides.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct DeserializedDefaultUserConfig {
+    /// UI configuration (base settings, all required).
+    ui: DefaultUiConfig,
+
+    /// Configuration overrides.
+    #[serde(default)]
+    overrides: Vec<DeserializedOverride>,
 }
 
 /// Default user configuration parsed from the embedded TOML.
 ///
-/// All fields are required - this ensures the default config is complete.
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct DefaultUserConfig {
-    /// UI configuration.
-    pub ui: DefaultUiConfig,
+/// This contains both the base settings (all required) and compiled
+/// platform-specific overrides.
+#[derive(Clone, Debug)]
+pub(super) struct DefaultUserConfig {
+    /// Base UI configuration.
+    pub(super) ui: DefaultUiConfig,
+
+    /// Compiled UI overrides with parsed platform specs.
+    pub(super) ui_overrides: Vec<CompiledUiOverride>,
 }
 
 impl DefaultUserConfig {
     /// The embedded default user config TOML.
-    pub const DEFAULT_CONFIG: &'static str = include_str!("../../default-user-config.toml");
+    const DEFAULT_CONFIG: &'static str = include_str!("../../default-user-config.toml");
 
-    /// Parses the default config.
+    /// Parses and compiles the default config.
     ///
-    /// Panics if the embedded TOML is invalid or contains unknown keys.
-    pub fn from_embedded() -> Self {
+    /// Panics if the embedded TOML is invalid, contains unknown keys, or has
+    /// invalid platform specs in overrides.
+    pub(crate) fn from_embedded() -> Self {
         let deserializer = toml::Deserializer::parse(Self::DEFAULT_CONFIG)
             .expect("embedded default user config should parse");
         let mut unknown = BTreeSet::new();
-        let config: DefaultUserConfig =
+        let config: DeserializedDefaultUserConfig =
             serde_ignored::deserialize(deserializer, |path: serde_ignored::Path| {
                 unknown.insert(path.to_string());
             })
@@ -191,7 +308,26 @@ impl DefaultUserConfig {
             );
         }
 
-        config
+        // Compile platform specs in overrides.
+        let ui_overrides: Vec<CompiledUiOverride> = config
+            .overrides
+            .into_iter()
+            .enumerate()
+            .map(|(index, override_)| {
+                let platform_spec = TargetSpec::new(override_.platform).unwrap_or_else(|error| {
+                    panic!(
+                        "embedded default user config has invalid platform spec \
+                         in [[overrides]] at index {index}: {error}"
+                    )
+                });
+                CompiledUiOverride::new(platform_spec, override_.ui)
+            })
+            .collect();
+
+        Self {
+            ui: config.ui,
+            ui_overrides,
+        }
     }
 }
 
@@ -235,8 +371,8 @@ mod tests {
         std::fs::write(&config_path, config_contents).unwrap();
 
         let mut warnings = TestUserConfigWarnings::default();
-        let config =
-            UserConfig::from_path_with_warnings(&config_path, &mut warnings).expect("config valid");
+        let config = DeserializedUserConfig::from_path_with_warnings(&config_path, &mut warnings)
+            .expect("config valid");
 
         assert!(config.is_some(), "config should be loaded");
         let config = config.unwrap();
@@ -275,13 +411,96 @@ mod tests {
         std::fs::write(&config_path, config_contents).unwrap();
 
         let mut warnings = TestUserConfigWarnings::default();
-        let config =
-            UserConfig::from_path_with_warnings(&config_path, &mut warnings).expect("config valid");
+        let config = DeserializedUserConfig::from_path_with_warnings(&config_path, &mut warnings)
+            .expect("config valid");
 
         assert!(config.is_some(), "config should be loaded");
         assert!(
             warnings.unknown_keys.is_none(),
             "no unknown keys should be detected"
+        );
+    }
+
+    #[test]
+    fn overrides_parsing() {
+        let config_contents = r#"
+        [ui]
+        show-progress = "bar"
+
+        [[overrides]]
+        platform = "cfg(windows)"
+        ui.show-progress = "counter"
+        ui.max-progress-running = 4
+
+        [[overrides]]
+        platform = "cfg(unix)"
+        ui.input-handler = false
+        "#;
+
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+        std::fs::write(&config_path, config_contents).unwrap();
+
+        let mut warnings = TestUserConfigWarnings::default();
+        let config = CompiledUserConfig::from_path_with_warnings(&config_path, &mut warnings)
+            .expect("config valid")
+            .expect("config should exist");
+
+        assert!(
+            warnings.unknown_keys.is_none(),
+            "no unknown keys should be detected"
+        );
+        assert_eq!(config.ui_overrides.len(), 2, "should have 2 overrides");
+    }
+
+    #[test]
+    fn overrides_invalid_platform() {
+        let config_contents = r#"
+        [ui]
+        show-progress = "bar"
+
+        [[overrides]]
+        platform = "invalid platform spec!!!"
+        ui.show-progress = "counter"
+        "#;
+
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+        std::fs::write(&config_path, config_contents).unwrap();
+
+        let mut warnings = TestUserConfigWarnings::default();
+        let result = CompiledUserConfig::from_path_with_warnings(&config_path, &mut warnings);
+
+        assert!(
+            matches!(
+                result,
+                Err(UserConfigError::OverridePlatformSpec { index: 0, .. })
+            ),
+            "should fail with platform spec error at index 0"
+        );
+    }
+
+    #[test]
+    fn overrides_missing_platform() {
+        let config_contents = r#"
+        [ui]
+        show-progress = "bar"
+
+        [[overrides]]
+        # platform field is missing - should fail to parse
+        ui.show-progress = "counter"
+        "#;
+
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+        std::fs::write(&config_path, config_contents).unwrap();
+
+        let mut warnings = TestUserConfigWarnings::default();
+        let result = DeserializedUserConfig::from_path_with_warnings(&config_path, &mut warnings);
+
+        assert!(
+            matches!(result, Err(UserConfigError::Parse { .. })),
+            "should fail with parse error due to missing required platform field: {result:?}"
         );
     }
 }

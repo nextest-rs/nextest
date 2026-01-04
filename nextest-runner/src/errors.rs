@@ -739,6 +739,20 @@ pub enum UserConfigError {
         #[source]
         error: FromPathBufError,
     },
+
+    /// Failed to compile a platform spec in an override.
+    #[error(
+        "for user config at {path}, failed to compile platform spec in [[overrides]] at index {index}"
+    )]
+    OverridePlatformSpec {
+        /// The path to the config file.
+        path: Utf8PathBuf,
+        /// The index of the override in the array.
+        index: usize,
+        /// The underlying target-spec error.
+        #[source]
+        error: target_spec::Error,
+    },
 }
 
 /// Error returned while parsing a [`MaxFail`](crate::config::elements::MaxFail) input.
