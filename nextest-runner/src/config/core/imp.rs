@@ -105,9 +105,10 @@ impl ConfigWarnings for DefaultConfigWarnings {
         let mut unknown_str = String::new();
         if unknown.len() == 1 {
             // Print this on the same line.
-            unknown_str.push(' ');
+            unknown_str.push_str("key: ");
             unknown_str.push_str(unknown.iter().next().unwrap());
         } else {
+            unknown_str.push_str("keys:\n");
             for ignored_key in unknown {
                 unknown_str.push('\n');
                 unknown_str.push_str("  - ");
@@ -116,7 +117,7 @@ impl ConfigWarnings for DefaultConfigWarnings {
         }
 
         warn!(
-            "in config file {}{}, ignoring unknown configuration keys: {unknown_str}",
+            "in config file {}{}, ignoring unknown configuration {unknown_str}",
             config_file
                 .strip_prefix(workspace_root)
                 .unwrap_or(config_file),
