@@ -57,6 +57,7 @@ Please review https://github.com/nextest-rs/nextest/blob/main/AGENTS.md#for-huma
 - Module-level documentation should explain purpose and responsibilities.
 - **Always** use periods at the end of code comments.
 - **Never** use title case in headings and titles. Always use sentence case.
+- Always use the Oxford comma.
 
 ## Code style
 
@@ -87,11 +88,18 @@ Every Rust source file must start with:
 
 - Use `thiserror` for error types with `#[derive(Error)]`.
 - Group errors by category with an `ErrorKind` enum when appropriate.
-- Provide rich error context using `miette` for user-facing errors.
+- Provide rich error context using structured error types.
+  - Parts of the code use `miette` for structured error handling.
 - Two-tier error model:
   - `ExpectedError`: User/external errors with semantic exit codes.
   - Internal errors: Programming errors that may panic or use internal error types.
 - Error display messages should be lowercase sentence fragments suitable for "failed to {error}".
+
+### Serde patterns
+
+- Use `serde_ignored` for ignored paths in configuration.
+- Never use `#[serde(flatten)]`. Instead, copy fields to structs as necessary. The internal buffering leads to poor warnings from `serde_ignored`.
+- Never use `#[serde(untagged)]` for deserializers, since it produces poor error messages. Instead, write custom visitors with an appropriate `expecting` method.
 
 ### Async patterns
 
@@ -164,6 +172,7 @@ Examples:
 - Version bump commits: `[crate-name] version X.Y.Z` (these are performed by `cargo release`).
 - Release preparation: `[meta] prepare releases`.
 - Keep descriptions concise but descriptive.
+- Use simple past and present tense: "Previously, when the user did X, Y used to happen. With this commit, now Z happens. Also add tests for U, V, and W."
 
 ### Commit quality
 
