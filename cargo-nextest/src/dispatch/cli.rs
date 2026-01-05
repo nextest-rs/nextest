@@ -40,7 +40,7 @@ use nextest_runner::{
     },
     test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
     test_output::CaptureStrategy,
-    user_config::elements::{UiConfig, UiShowProgress},
+    user_config::elements::{PagerSetting, PaginateSetting, UiConfig, UiShowProgress},
 };
 use std::{collections::BTreeSet, io::Cursor, sync::Arc, time::Duration};
 use tracing::{debug, warn};
@@ -278,7 +278,36 @@ pub(super) struct ListOpts {
     pub(super) list_type: ListType,
 
     #[clap(flatten)]
+    pub(super) pager_opts: PagerOpts,
+
+    #[clap(flatten)]
     pub(super) reuse_build: ReuseBuildOpts,
+}
+
+/// Pager options for list output.
+#[derive(Debug, Default, Args)]
+#[command(next_help_heading = "Pager options")]
+pub(super) struct PagerOpts {
+    /// Disable paging for this invocation.
+    #[arg(long)]
+    no_pager: bool,
+}
+
+impl PagerOpts {
+    /// Returns the effective pager and paginate settings, given the resolved UI
+    /// config.
+    ///
+    /// If `--no-pager` is specified, returns `PaginateSetting::Never`.
+    /// Otherwise, falls back to the resolved config values.
+    pub(super) fn resolve(&self, resolved_ui: &UiConfig) -> (PagerSetting, PaginateSetting) {
+        if self.no_pager {
+            // --no-pager disables paging entirely.
+            return (resolved_ui.pager.clone(), PaginateSetting::Never);
+        }
+
+        // Fall back to resolved config.
+        (resolved_ui.pager.clone(), resolved_ui.paginate)
+    }
 }
 
 #[derive(Debug, Args)]
@@ -530,6 +559,16 @@ impl MessageFormatOpts {
             Self::Oneline => OutputFormat::Oneline { verbose },
             Self::Json => OutputFormat::Serializable(SerializableFormat::Json),
             Self::JsonPretty => OutputFormat::Serializable(SerializableFormat::JsonPretty),
+        }
+    }
+
+    /// Returns true if this format is human-readable (suitable for paging).
+    ///
+    /// Machine-readable formats (JSON) should not be paged.
+    pub(super) fn is_human_readable(self) -> bool {
+        match self {
+            Self::Auto | Self::Human | Self::Oneline => true,
+            Self::Json | Self::JsonPretty => false,
         }
     }
 }
@@ -1478,7 +1517,11 @@ impl AppOpts {
                     output_writer,
                 )?;
                 let app = super::execution::App::new(base, list_opts.build_filter)?;
-                app.exec_list(list_opts.message_format, list_opts.list_type, output_writer)?;
+                app.exec_list(
+                    list_opts.message_format,
+                    list_opts.list_type,
+                    &list_opts.pager_opts,
+                )?;
                 Ok(0)
             }
             Command::Run(run_opts) => {
@@ -1653,6 +1696,10 @@ mod tests {
             // ---
             "cargo nextest list --lib --bins",
             "cargo nextest run --ignore-rust-version --unit-graph",
+            // ---
+            // Pager options
+            // ---
+            "cargo nextest list --no-pager",
             // ---
             // Reuse build options
             // ---
