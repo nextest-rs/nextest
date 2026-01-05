@@ -123,6 +123,7 @@ nav:
                 - docs/configuration/wrapper-scripts.md
     - "User config":
           - "User configuration": docs/user-config/index.md
+          - "Pager support": docs/user-config/pager.md
           - "User config reference": docs/user-config/reference.md
     - Machine-readable output:
           - "About output formats": docs/machine-readable/index.md

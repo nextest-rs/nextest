@@ -105,6 +105,104 @@ UI settings are configured under `[ui]`.
   output-indent = false
   ```
 
+### `ui.pager`
+
+<!-- md:version 0.9.119 -->
+
+- **Type**: String, array, or table
+- **Description**: Specifies the pager command for output that benefits from scrolling (e.g., `nextest list`, help output). See [_Pager support_](pager.md) for details.
+- **Valid values**:
+  - String: `"less -FRX"` (split on whitespace)
+  - Array: `["less", "-FRX"]`
+  - Table: `{ command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }`
+  - `":builtin"`: Use the builtin pager
+- **Default**: `{ command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }` on Unix, `":builtin"` on Windows (specified via an override)
+- **CLI equivalent**: `--no-pager` (to disable paging)
+- **Examples**:
+  ```toml
+  [ui]
+  # Use less with custom flags.
+  pager = "less -FRX"
+  ```
+
+  ```toml
+  [ui]
+  # Use the builtin pager.
+  pager = ":builtin"
+  ```
+
+  ```toml
+  [ui]
+  # Use less with environment variables.
+  pager = { command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }
+  ```
+
+### `ui.paginate`
+
+<!-- md:version 0.9.119 -->
+
+- **Type**: String
+- **Description**: Controls when to paginate output.
+- **Valid values**:
+  - `"auto"`: Page supported commands if stdout is a terminal
+  - `"never"`: Never use a pager
+- **Default**: `"auto"`
+- **CLI equivalent**: `--no-pager` (equivalent to `paginate = "never"`)
+- **Example**:
+  ```toml
+  [ui]
+  # Never use a pager.
+  paginate = "never"
+  ```
+
+## Builtin pager configuration
+
+<!-- md:version 0.9.119 -->
+
+When `pager = ":builtin"` is set, the builtin pager's behavior can be customized under `[ui.streampager]`. See [_Pager support_](pager.md#builtin-pager-options) for details.
+
+### `ui.streampager.interface`
+
+- **Type**: String
+- **Description**: Controls how the builtin pager uses the alternate screen.
+- **Valid values**:
+  - `"quit-if-one-page"`: Exit immediately if content fits on one page; otherwise use full screen and clear on exit
+  - `"full-screen-clear-output"`: Always use full screen mode and clear the screen on exit
+  - `"quit-quickly-or-clear-output"`: Wait briefly before entering full screen; clear on exit if entered
+- **Default**: `"quit-if-one-page"`
+- **Example**:
+  ```toml
+  [ui.streampager]
+  interface = "full-screen-clear-output"
+  ```
+
+### `ui.streampager.wrapping`
+
+- **Type**: String
+- **Description**: Controls text wrapping in the builtin pager.
+- **Valid values**:
+  - `"none"`: No wrapping; allow horizontal scrolling
+  - `"word"`: Wrap at word boundaries
+  - `"anywhere"`: Wrap at any character (grapheme) boundary
+- **Default**: `"word"`
+- **Example**:
+  ```toml
+  [ui.streampager]
+  wrapping = "none"
+  ```
+
+### `ui.streampager.show-ruler`
+
+- **Type**: Boolean
+- **Description**: Whether to show a ruler at the bottom of the builtin pager.
+- **Valid values**: `true` or `false`
+- **Default**: `true`
+- **Example**:
+  ```toml
+  [ui.streampager]
+  show-ruler = false
+  ```
+
 ## Platform-specific overrides
 
 <!-- md:version 0.9.119 -->
@@ -146,12 +244,17 @@ Each override has a required `platform` filter and optional settings in the `ui`
 
 ### Overridable settings
 
-All `[ui]` settings can be overridden within `[[overrides]]`:
+All `[ui]` and `[ui.streampager]` settings can be overridden within `[[overrides]]`:
 
 - [`ui.show-progress`](#uishow-progress)
 - [`ui.max-progress-running`](#uimax-progress-running)
 - [`ui.input-handler`](#uiinput-handler)
 - [`ui.output-indent`](#uioutput-indent)
+- [`ui.pager`](#uipager)
+- [`ui.paginate`](#uipaginate)
+- [`ui.streampager.interface`](#uistreampagerinterface)
+- [`ui.streampager.wrapping`](#uistreampagerwrapping)
+- [`ui.streampager.show-ruler`](#uistreampagershow-ruler)
 
 Each setting in an override is optional. The first matching override is applied on a per-setting basis.
 

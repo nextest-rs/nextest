@@ -11,7 +11,7 @@ use serde::{
     Deserialize, Deserializer,
     de::{self, Unexpected},
 };
-use std::{collections::BTreeMap, process::Command};
+use std::{collections::BTreeMap, fmt, process::Command};
 use target_spec::{Platform, TargetSpec};
 
 /// UI-related configuration (deserialized form).
@@ -513,7 +513,7 @@ struct CommandNameAndArgsVisitor;
 impl<'de> de::Visitor<'de> for CommandNameAndArgsVisitor {
     type Value = CommandNameAndArgs;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str(
             "a command string (\"less -FRX\"), \
              an array ([\"less\", \"-FRX\"]), \
@@ -603,7 +603,7 @@ struct PagerSettingVisitor;
 impl<'de> de::Visitor<'de> for PagerSettingVisitor {
     type Value = PagerSetting;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter
             .write_str("\":builtin\", a command string, an array, or a table with command and env")
     }
@@ -634,7 +634,7 @@ struct MaxProgressRunningVisitor;
 impl<'de> de::Visitor<'de> for MaxProgressRunningVisitor {
     type Value = MaxProgressRunning;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("a non-negative integer or \"infinite\"")
     }
 
@@ -677,7 +677,7 @@ struct OptionMaxProgressRunningVisitor;
 impl<'de> de::Visitor<'de> for OptionMaxProgressRunningVisitor {
     type Value = Option<MaxProgressRunning>;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("a non-negative integer, \"infinite\", or null")
     }
 
