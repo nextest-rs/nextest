@@ -157,26 +157,6 @@ impl PagedOutput {
         }
     }
 
-    /// Returns a writer for stdout.
-    ///
-    /// For terminal output, this returns stdout directly.
-    /// For paged output, this returns the pipe to the pager.
-    ///
-    /// # Panics
-    ///
-    /// Panics if called after [`finalize`](Self::finalize).
-    pub fn stdout(&mut self) -> &mut dyn Write {
-        match self {
-            Self::Terminal { stdout, .. } => stdout,
-            Self::ExternalPager { child_stdin, .. } => {
-                child_stdin.as_mut().expect("stdout called after finalize")
-            }
-            Self::BuiltinPager { out_writer, .. } => {
-                out_writer.as_mut().expect("stdout called after finalize")
-            }
-        }
-    }
-
     /// Returns true if output will be displayed interactively.
     ///
     /// This is used to determine whether to use human-readable formatting
@@ -206,6 +186,24 @@ impl PagedOutput {
         self.finalize_inner();
     }
 
+    // ---
+    // Helper methods
+    // ---
+
+    // This is not made public: we want everyone to go through WriteStr, which
+    // squelches BrokenPipe errors.
+    fn stdout(&mut self) -> &mut dyn Write {
+        match self {
+            Self::Terminal { stdout, .. } => stdout,
+            Self::ExternalPager { child_stdin, .. } => child_stdin
+                .as_mut()
+                .expect("stdout should not be called after finalize"),
+            Self::BuiltinPager { out_writer, .. } => out_writer
+                .as_mut()
+                .expect("stdout should not be called after finalize"),
+        }
+    }
+
     fn finalize_inner(&mut self) {
         match self {
             Self::Terminal { .. } => {
@@ -220,11 +218,14 @@ impl PagedOutput {
                 // Close stdin to signal EOF to the pager.
                 drop(stdin);
 
-                // Wait for the pager to exit.
-                if let Err(error) = child.wait() {
+                // Wait for the pager to exit. (Ignore broken pipes -- they're
+                // expected with less.)
+                if let Err(error) = child.wait()
+                    && error.kind() != io::ErrorKind::BrokenPipe
+                {
                     warn!("failed to wait on pager: {error}");
                 }
-                // Note: We intentionally ignore the exit status. The pager may
+                // Note: We intentionally ignore the exit status from the child process. The pager may
                 // exit with a non-zero status if the user quits early (e.g.,
                 // pressing 'q' in less), which is normal behavior.
             }
@@ -279,11 +280,19 @@ impl Drop for PagedOutput {
 
 impl WriteStr for PagedOutput {
     fn write_str(&mut self, s: &str) -> io::Result<()> {
-        self.stdout().write_all(s.as_bytes())
+        squelch_broken_pipe(self.stdout().write_all(s.as_bytes()))
     }
 
     fn write_str_flush(&mut self) -> io::Result<()> {
-        self.stdout().flush()
+        squelch_broken_pipe(self.stdout().flush())
+    }
+}
+
+fn squelch_broken_pipe(res: io::Result<()>) -> io::Result<()> {
+    match res {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+        Err(e) => Err(e),
     }
 }
 
@@ -387,5 +396,38 @@ mod tests {
         output.finalize_inner();
         output.finalize_inner();
         // Drop will also try to finalize, should be safe.
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_external_pager_early_exit_squelches_broken_pipe() {
+        // `true` exits immediately, causing writes to fail with BrokenPipe.
+        let mut child = std::process::Command::new("true")
+            .stdin(Stdio::piped())
+            .spawn()
+            .expect("failed to spawn true");
+
+        let child_stdin = child.stdin.take().expect("stdin should be piped");
+
+        // Wait for the process to exit before constructing PagedOutput.
+        let _ = child.wait();
+
+        let mut output = PagedOutput::ExternalPager {
+            child,
+            child_stdin: Some(child_stdin),
+        };
+
+        output
+            .write_str("hello\n")
+            .expect("BrokenPipe should be squelched for write_str");
+        let error = output
+            .stdout()
+            .write(b"hello\n")
+            .expect_err("Write should fail with BrokenPipe");
+        assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+        output
+            .write_str_flush()
+            .expect("BrokenPipe should be squelched for write_str_flush");
+        output.finalize();
     }
 }

@@ -15,6 +15,7 @@ use nextest_runner::{
     pager::PagedOutput,
     platform::Platform,
     user_config::{EarlyUserConfig, elements::PaginateSetting},
+    write_str::WriteStr,
 };
 use std::io::{IsTerminal, Write};
 use tracing::debug;
@@ -198,11 +199,17 @@ fn handle_help_output(err: clap::Error, early_args: &EarlyArgs, host_platform: &
         &early_config.streampager,
     );
 
-    if let Err(e) = paged.stdout().write_all(help_text.as_bytes()) {
+    if let Err(error) = paged.write_str(&help_text) {
         // If writing to pager fails, try stdout directly.
-        debug!("failed to write to pager: {e}, falling back to stdout");
+        debug!("failed to write to pager: {error}, falling back to stdout");
         let _ = std::io::stdout().write_all(help_text.as_bytes());
         return;
+    }
+
+    if let Err(error) = paged.write_str_flush() {
+        debug!("failed to flush pager: {error}");
+        // Don't write to stdout if flushing fails, because the text probably
+        // got written out.
     }
 
     paged.finalize();
