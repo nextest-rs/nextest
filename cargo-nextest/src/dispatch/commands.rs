@@ -4,7 +4,7 @@
 //! Subcommand implementations for show-config, self, and debug commands.
 
 use super::{
-    cli::{ConfigOpts, TestBuildFilter},
+    cli::{ConfigOpts, PagerOpts, TestBuildFilter},
     execution::{App, BaseApp},
     helpers::{detect_build_platforms, display_output_slice, extract_slice_from_output},
 };
@@ -41,6 +41,9 @@ pub(super) enum ShowConfigCommand {
 
         #[clap(flatten)]
         build_filter: TestBuildFilter,
+
+        #[clap(flatten)]
+        pager_opts: PagerOpts,
 
         #[clap(flatten)]
         reuse_build: Box<ReuseBuildOpts>,
@@ -130,6 +133,7 @@ impl ShowConfigCommand {
                 groups,
                 cargo_options,
                 build_filter,
+                pager_opts,
                 reuse_build,
             } => {
                 let base = BaseApp::new(
@@ -142,7 +146,7 @@ impl ShowConfigCommand {
                 )?;
                 let app = App::new(base, build_filter)?;
 
-                app.exec_show_test_groups(show_default, groups, output_writer)?;
+                app.exec_show_test_groups(show_default, groups, &pager_opts)?;
 
                 Ok(0)
             }

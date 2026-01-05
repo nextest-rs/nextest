@@ -582,7 +582,7 @@ impl App {
         &self,
         show_default: bool,
         groups: Vec<nextest_runner::config::elements::TestGroup>,
-        output_writer: &mut OutputWriter,
+        pager_opts: &PagerOpts,
     ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
         let (_, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
@@ -617,19 +617,33 @@ impl App {
 
         let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
 
-        let mut writer = output_writer.stdout_writer();
+        // Resolve user config to get pager settings.
+        let resolved_user_config = resolve_user_config(&self.base.build_platforms.host.platform)?;
+        let (pager_setting, paginate) = pager_opts.resolve(&resolved_user_config.ui);
+
+        // Create paged output.
+        let mut paged_output = PagedOutput::request_pager(
+            &pager_setting,
+            paginate,
+            &resolved_user_config.ui.streampager,
+        );
 
         let show_test_groups = ShowTestGroups::new(&profile, &test_list, &settings);
         show_test_groups
             .write_human(
-                &mut writer,
+                &mut paged_output,
                 self.base
                     .output
                     .color
                     .should_colorize(supports_color::Stream::Stdout),
             )
             .map_err(WriteTestListError::Io)?;
-        writer.write_str_flush().map_err(WriteTestListError::Io)?;
+
+        // Finalize the pager: close stdin/the pipe, wait for exit.
+        paged_output
+            .write_str_flush()
+            .map_err(WriteTestListError::Io)?;
+        paged_output.finalize();
 
         Ok(())
     }

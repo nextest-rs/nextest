@@ -1706,6 +1706,7 @@ mod tests {
             // Pager options
             // ---
             "cargo nextest list --no-pager",
+            "cargo nextest show-config test-groups --no-pager",
             // ---
             // Reuse build options
             // ---
