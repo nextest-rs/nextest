@@ -48,7 +48,7 @@ The `pager` setting specifies which pager to use. It supports several formats:
     pager = ["less", "-FRX"]
     ```
 
-    Each element is a separate argument, allowing arguments with spaces.
+    Each element is a separate argument.
 
 === "Table with environment"
 
