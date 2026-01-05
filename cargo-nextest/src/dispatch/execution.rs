@@ -6,7 +6,8 @@
 use super::{
     cli::{
         ArchiveBuildFilter, BenchReporterOpts, BenchRunnerOpts, ListType, MessageFormat,
-        MessageFormatOpts, NoTestsBehavior, ReporterOpts, TestBuildFilter, TestRunnerOpts,
+        MessageFormatOpts, NoTestsBehavior, PagerOpts, ReporterOpts, TestBuildFilter,
+        TestRunnerOpts,
     },
     helpers::{
         acquire_graph_data, build_filtersets, detect_build_platforms, resolve_user_config,
@@ -31,6 +32,7 @@ use nextest_runner::{
     helpers::plural,
     input::InputHandlerKind,
     list::{BinaryList, TestExecuteContext, TestList},
+    pager::PagedOutput,
     platform::BuildPlatforms,
     redact::Redactor,
     reporter::{
@@ -47,6 +49,7 @@ use nextest_runner::{
     target_runner::TargetRunner,
     test_filter::{BinaryFilter, TestFilterBuilder},
     test_output::CaptureStrategy,
+    user_config::elements::PaginateSetting,
     write_str::WriteStr,
 };
 use owo_colors::OwoColorize;
@@ -487,7 +490,7 @@ impl App {
         &self,
         message_format: MessageFormatOpts,
         list_type: ListType,
-        output_writer: &mut OutputWriter,
+        pager_opts: &PagerOpts,
     ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
 
@@ -501,18 +504,44 @@ impl App {
 
         let binary_list = self.base.build_binary_list("test")?;
 
+        // Resolve user config to get pager settings.
+        let resolved_user_config = resolve_user_config(&self.base.build_platforms.host.platform)?;
+        let (pager_setting, paginate) = pager_opts.resolve(&resolved_user_config.ui);
+
+        // Determine if we should page output.
+        // Don't page if:
+        //
+        // - paginate is Never
+        // - message_format is not human-readable
+        let should_page =
+            !matches!(paginate, PaginateSetting::Never) && message_format.is_human_readable();
+
+        // Create paged output if conditions are met.
+        let mut paged_output = if should_page {
+            PagedOutput::request_pager(
+                &pager_setting,
+                paginate,
+                &resolved_user_config.ui.streampager,
+            )
+        } else {
+            PagedOutput::terminal()
+        };
+
+        // (Grab the value of is_interactive before a mutable ref is passed in.)
+        let is_interactive = paged_output.is_interactive();
+        let should_colorize = self
+            .base
+            .output
+            .color
+            .should_colorize(supports_color::Stream::Stdout);
+
         match list_type {
             ListType::BinariesOnly => {
-                let mut writer = output_writer.stdout_writer();
                 binary_list.write(
-                    message_format.to_output_format(self.base.output.verbose, writer.is_terminal()),
-                    &mut writer,
-                    self.base
-                        .output
-                        .color
-                        .should_colorize(supports_color::Stream::Stdout),
+                    message_format.to_output_format(self.base.output.verbose, is_interactive),
+                    &mut paged_output,
+                    should_colorize,
                 )?;
-                writer.write_str_flush().map_err(WriteTestListError::Io)?;
             }
             ListType::Full => {
                 let double_spawn = self.base.load_double_spawn();
@@ -530,18 +559,19 @@ impl App {
                 let test_list =
                     self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
 
-                let mut writer = output_writer.stdout_writer();
                 test_list.write(
-                    message_format.to_output_format(self.base.output.verbose, writer.is_terminal()),
-                    &mut writer,
-                    self.base
-                        .output
-                        .color
-                        .should_colorize(supports_color::Stream::Stdout),
+                    message_format.to_output_format(self.base.output.verbose, is_interactive),
+                    &mut paged_output,
+                    should_colorize,
                 )?;
-                writer.write_str_flush().map_err(WriteTestListError::Io)?;
             }
         }
+
+        // Finalize the pager: close stdin/the pipe, wait for exit.
+        paged_output
+            .write_str_flush()
+            .map_err(WriteTestListError::Io)?;
+        paged_output.finalize();
 
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;

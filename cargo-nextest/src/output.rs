@@ -8,7 +8,7 @@ use nextest_runner::{reporter::ReporterStderr, write_str::WriteStr};
 use owo_colors::{OwoColorize, Style, style};
 use std::{
     fmt,
-    io::{self, BufWriter, IsTerminal, Stderr, Stdout, Write},
+    io::{self, BufWriter, Stderr, Stdout, Write},
     marker::PhantomData,
 };
 use tracing::{
@@ -381,16 +381,6 @@ pub(crate) enum StdoutWriter<'a> {
     },
     #[cfg(test)]
     Test { buf: &'a mut String },
-}
-
-impl StdoutWriter<'_> {
-    pub(crate) fn is_terminal(&self) -> bool {
-        match self {
-            Self::Normal { buf, .. } => buf.get_ref().is_terminal(),
-            #[cfg(test)]
-            Self::Test { .. } => false,
-        }
-    }
 }
 
 impl WriteStr for StdoutWriter<'_> {

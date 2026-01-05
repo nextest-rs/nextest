@@ -7,7 +7,10 @@
 //! (like `less`) or a builtin pager (streampager) when appropriate. Paging is
 //! useful for commands that produce long output, such as `nextest list`.
 
-use crate::user_config::elements::{PagerSetting, PaginateSetting, StreampagerConfig};
+use crate::{
+    user_config::elements::{PagerSetting, PaginateSetting, StreampagerConfig},
+    write_str::WriteStr,
+};
 use std::{
     io::{self, IsTerminal, PipeWriter, Stdout, Write},
     process::{Child, ChildStdin, Stdio},
@@ -174,6 +177,23 @@ impl PagedOutput {
         }
     }
 
+    /// Returns true if output will be displayed interactively.
+    ///
+    /// This is used to determine whether to use human-readable formatting
+    /// (interactive) or machine-friendly oneline formatting (piped).
+    ///
+    /// - For terminal output: returns whether stdout is a TTY.
+    /// - For paged output: always returns true, since the pager displays
+    ///   output interactively to the user.
+    pub fn is_interactive(&self) -> bool {
+        match self {
+            Self::Terminal { stdout, .. } => stdout.is_terminal(),
+            // Paged output is always interactive - the user sees it in a
+            // terminal via the pager.
+            Self::ExternalPager { .. } | Self::BuiltinPager { .. } => true,
+        }
+    }
+
     /// Finalizes the pager output.
     ///
     /// For terminal output, this is a no-op.
@@ -254,6 +274,16 @@ impl Drop for PagedOutput {
             return;
         }
         self.finalize_inner();
+    }
+}
+
+impl WriteStr for PagedOutput {
+    fn write_str(&mut self, s: &str) -> io::Result<()> {
+        self.stdout().write_all(s.as_bytes())
+    }
+
+    fn write_str_flush(&mut self) -> io::Result<()> {
+        self.stdout().flush()
     }
 }
 
