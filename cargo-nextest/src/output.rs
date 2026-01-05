@@ -325,15 +325,6 @@ pub enum OutputWriter {
     /// No capture
     #[default]
     Normal,
-    /// Output captured (TODO: clean this up, it's no longer used)
-    #[cfg(test)]
-    #[expect(dead_code)]
-    Test {
-        /// stdout capture
-        stdout: String,
-        /// stderr capture
-        stderr: String,
-    },
 }
 
 impl OutputWriter {
@@ -343,16 +334,12 @@ impl OutputWriter {
                 buf: BufWriter::new(std::io::stdout()),
                 _lifetime: PhantomData,
             },
-            #[cfg(test)]
-            Self::Test { stdout, .. } => StdoutWriter::Test { buf: stdout },
         }
     }
 
     pub(crate) fn reporter_output(&mut self) -> ReporterStderr<'_> {
         match self {
             Self::Normal => ReporterStderr::Terminal,
-            #[cfg(test)]
-            Self::Test { stderr, .. } => ReporterStderr::Buffer(stderr),
         }
     }
 
@@ -362,8 +349,6 @@ impl OutputWriter {
                 buf: BufWriter::new(std::io::stderr()),
                 _lifetime: PhantomData,
             },
-            #[cfg(test)]
-            Self::Test { stderr, .. } => StderrWriter::Test { buf: stderr },
         }
     }
 }
@@ -373,24 +358,18 @@ pub(crate) enum StdoutWriter<'a> {
         buf: BufWriter<Stdout>,
         _lifetime: PhantomData<&'a ()>,
     },
-    #[cfg(test)]
-    Test { buf: &'a mut String },
 }
 
 impl WriteStr for StdoutWriter<'_> {
     fn write_str(&mut self, s: &str) -> io::Result<()> {
         match self {
             Self::Normal { buf, .. } => buf.write_str(s),
-            #[cfg(test)]
-            Self::Test { buf } => buf.write_str(s),
         }
     }
 
     fn write_str_flush(&mut self) -> io::Result<()> {
         match self {
             Self::Normal { buf, .. } => buf.flush(),
-            #[cfg(test)]
-            Self::Test { .. } => Ok(()),
         }
     }
 }
@@ -400,27 +379,18 @@ pub(crate) enum StderrWriter<'a> {
         buf: BufWriter<Stderr>,
         _lifetime: PhantomData<&'a ()>,
     },
-    #[cfg(test)]
-    Test { buf: &'a mut String },
 }
 
 impl WriteStr for StderrWriter<'_> {
     fn write_str(&mut self, s: &str) -> io::Result<()> {
         match self {
             Self::Normal { buf, .. } => buf.write_str(s),
-            #[cfg(test)]
-            Self::Test { buf } => {
-                buf.push_str(s);
-                Ok(())
-            }
         }
     }
 
     fn write_str_flush(&mut self) -> io::Result<()> {
         match self {
             Self::Normal { buf, .. } => buf.flush(),
-            #[cfg(test)]
-            Self::Test { .. } => Ok(()),
         }
     }
 }
