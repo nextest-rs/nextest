@@ -9,6 +9,18 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.119-b.1] - 2026-01-05
+
+### Added
+
+Support for using [a pager like `less`](https://nexte.st/docs/user-config/pager/) with nextest's output. Currently supported are:
+
+- `cargo nextest list`
+- `cargo nextest show-config test-groups`
+- `-h` and `--help` commands
+
+The pager support is closely modeled after the [Jujutsu version control system](https://github.com/jj-vcs/jj). The default pager is `less -FRX` on Unix platforms, and a builtin pager (based on [sapling-streampager](https://docs.rs/sapling-streampager)) on Windows.
+
 ## [0.9.118] - 2026-01-04
 
 ### Added
@@ -1789,6 +1801,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.119-b.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.119-b.1
 [0.9.118]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.118
 [0.9.117]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.117
 [0.9.116]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.116

@@ -9,6 +9,8 @@ description: "Pager support: scrollable output for long listings and help."
 
 Nextest supports paging output through an external pager (like `less`) or a builtin pager. This is useful for commands that produce long output, such as `cargo nextest list` or `cargo nextest show-config test-groups`.
 
+Nextest's pager support is closely modeled after the [Jujutsu version control system](https://github.com/jj-vcs/jj).
+
 ## Paged commands
 
 The following commands support paging:
@@ -64,9 +66,11 @@ The `pager` setting specifies which pager to use. It supports several formats:
     pager = ":builtin"
     ```
 
-    Use nextest's builtin pager (based on [streampager]).
+    Use nextest's builtin pager (based on [sapling-streampager]).
 
-[streampager]: https://crates.io/crates/sapling-streampager
+[sapling-streampager]: https://crates.io/crates/sapling-streampager
+
+The `PAGER` environment variable is ignored for a better user experience.
 
 ### Controlling pagination
 
