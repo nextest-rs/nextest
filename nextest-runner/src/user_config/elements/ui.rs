@@ -20,7 +20,6 @@ pub(in crate::user_config) struct DeserializedUiConfig {
     /// How to show progress during test runs.
     ///
     /// Accepts: `"auto"`, `"none"`, `"bar"`, `"counter"`, `"only"`.
-    #[serde(default, deserialize_with = "deserialize_show_progress")]
     pub(in crate::user_config) show_progress: Option<UiShowProgress>,
 
     /// Maximum running tests to display in the progress bar.
@@ -44,7 +43,6 @@ pub(in crate::user_config) struct DeserializedUiConfig {
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct DefaultUiConfig {
     /// How to show progress during test runs.
-    #[serde(deserialize_with = "deserialize_show_progress_required")]
     show_progress: UiShowProgress,
 
     /// Maximum running tests to display in the progress bar.
@@ -66,7 +64,6 @@ pub(crate) struct DefaultUiConfig {
 #[serde(rename_all = "kebab-case")]
 pub(in crate::user_config) struct DeserializedUiOverrideData {
     /// How to show progress during test runs.
-    #[serde(default, deserialize_with = "deserialize_show_progress")]
     pub(in crate::user_config) show_progress: Option<UiShowProgress>,
 
     /// Maximum running tests to display in the progress bar.
@@ -241,7 +238,8 @@ impl UiConfig {
 /// special behavior: it implies `--status-level=slow` and
 /// `--final-status-level=none`. This information would be lost if we converted
 /// directly to `ShowProgress`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub enum UiShowProgress {
     /// Automatically choose based on terminal capabilities.
     #[default]
@@ -266,37 +264,6 @@ impl From<UiShowProgress> for ShowProgress {
             UiShowProgress::Counter => ShowProgress::Counter,
         }
     }
-}
-
-/// Parses a string into a UiShowProgress value.
-fn parse_show_progress<E: de::Error>(s: &str) -> Result<UiShowProgress, E> {
-    match s {
-        "auto" => Ok(UiShowProgress::Auto),
-        "none" => Ok(UiShowProgress::None),
-        "bar" => Ok(UiShowProgress::Bar),
-        "counter" => Ok(UiShowProgress::Counter),
-        "only" => Ok(UiShowProgress::Only),
-        other => Err(E::custom(format!(
-            "invalid show-progress value: {other:?}, expected one of: \
-             auto, none, bar, counter, only"
-        ))),
-    }
-}
-
-fn deserialize_show_progress<'de, D>(deserializer: D) -> Result<Option<UiShowProgress>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    s.map(|s| parse_show_progress(&s)).transpose()
-}
-
-fn deserialize_show_progress_required<'de, D>(deserializer: D) -> Result<UiShowProgress, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: String = String::deserialize(deserializer)?;
-    parse_show_progress(&s)
 }
 
 /// Visitor for deserializing max-progress-running (string or integer).

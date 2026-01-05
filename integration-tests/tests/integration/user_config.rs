@@ -308,8 +308,8 @@ show-progress = "invalid-value"
 
     let stderr = output.stderr_as_str();
     assert!(
-        stderr.contains("invalid show-progress value"),
-        "error message should mention invalid show-progress value\n{output}"
+        stderr.contains("unknown variant") && stderr.contains("invalid-value"),
+        "error message should mention unknown variant\n{output}"
     );
 }
 
