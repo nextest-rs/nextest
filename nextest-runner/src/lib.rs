@@ -19,6 +19,7 @@ pub mod helpers;
 pub mod indenter;
 pub mod input;
 pub mod list;
+pub mod pager;
 pub mod partition;
 pub mod platform;
 pub mod redact;

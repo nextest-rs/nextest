@@ -8,6 +8,7 @@ use serde::{
     Deserialize, Deserializer,
     de::{self, Unexpected},
 };
+use std::{collections::BTreeMap, process::Command};
 use target_spec::{Platform, TargetSpec};
 
 /// UI-related configuration (deserialized form).
@@ -33,6 +34,14 @@ pub(in crate::user_config) struct DeserializedUiConfig {
 
     /// Whether to indent captured test output.
     output_indent: Option<bool>,
+
+    /// Pager command for output that benefits from scrolling.
+    #[serde(default)]
+    pager: Option<PagerSetting>,
+
+    /// When to paginate output.
+    #[serde(default)]
+    paginate: Option<PaginateSetting>,
 }
 
 /// Default UI configuration with all values required.
@@ -54,6 +63,12 @@ pub(crate) struct DefaultUiConfig {
 
     /// Whether to indent captured test output.
     output_indent: bool,
+
+    /// Pager command for output that benefits from scrolling.
+    pub(in crate::user_config) pager: PagerSetting,
+
+    /// When to paginate output.
+    pub(in crate::user_config) paginate: PaginateSetting,
 }
 
 /// Deserialized form of UI override settings.
@@ -75,6 +90,14 @@ pub(in crate::user_config) struct DeserializedUiOverrideData {
 
     /// Whether to indent captured test output.
     pub(in crate::user_config) output_indent: Option<bool>,
+
+    /// Pager command for output that benefits from scrolling.
+    #[serde(default)]
+    pub(in crate::user_config) pager: Option<PagerSetting>,
+
+    /// When to paginate output.
+    #[serde(default)]
+    pub(in crate::user_config) paginate: Option<PaginateSetting>,
 }
 
 /// A compiled UI override with parsed platform spec.
@@ -100,6 +123,8 @@ impl CompiledUiOverride {
                 max_progress_running: data.max_progress_running,
                 input_handler: data.input_handler,
                 output_indent: data.output_indent,
+                pager: data.pager,
+                paginate: data.paginate,
             },
         }
     }
@@ -122,6 +147,8 @@ struct UiOverrideData {
     max_progress_running: Option<MaxProgressRunning>,
     input_handler: Option<bool>,
     output_indent: Option<bool>,
+    pager: Option<PagerSetting>,
+    paginate: Option<PaginateSetting>,
 }
 
 /// Resolved UI configuration after applying overrides.
@@ -138,6 +165,10 @@ pub struct UiConfig {
     pub input_handler: bool,
     /// Whether to indent captured test output.
     pub output_indent: bool,
+    /// Pager command for output that benefits from scrolling.
+    pub pager: PagerSetting,
+    /// When to paginate output.
+    pub paginate: PaginateSetting,
 }
 
 impl UiConfig {
@@ -161,55 +192,71 @@ impl UiConfig {
     ) -> Self {
         Self {
             show_progress: Self::resolve_setting(
-                default_config.show_progress,
+                &default_config.show_progress,
                 default_overrides,
-                user_config.and_then(|c| c.show_progress),
+                user_config.and_then(|c| c.show_progress.as_ref()),
                 user_overrides,
                 host_platform,
-                |data| data.show_progress,
+                |data| data.show_progress.as_ref(),
             ),
             max_progress_running: Self::resolve_setting(
-                default_config.max_progress_running,
+                &default_config.max_progress_running,
                 default_overrides,
-                user_config.and_then(|c| c.max_progress_running),
+                user_config.and_then(|c| c.max_progress_running.as_ref()),
                 user_overrides,
                 host_platform,
-                |data| data.max_progress_running,
+                |data| data.max_progress_running.as_ref(),
             ),
             input_handler: Self::resolve_setting(
-                default_config.input_handler,
+                &default_config.input_handler,
                 default_overrides,
-                user_config.and_then(|c| c.input_handler),
+                user_config.and_then(|c| c.input_handler.as_ref()),
                 user_overrides,
                 host_platform,
-                |data| data.input_handler,
+                |data| data.input_handler.as_ref(),
             ),
             output_indent: Self::resolve_setting(
-                default_config.output_indent,
+                &default_config.output_indent,
                 default_overrides,
-                user_config.and_then(|c| c.output_indent),
+                user_config.and_then(|c| c.output_indent.as_ref()),
                 user_overrides,
                 host_platform,
-                |data| data.output_indent,
+                |data| data.output_indent.as_ref(),
+            ),
+            pager: Self::resolve_setting(
+                &default_config.pager,
+                default_overrides,
+                user_config.and_then(|c| c.pager.as_ref()),
+                user_overrides,
+                host_platform,
+                |data| data.pager.as_ref(),
+            ),
+            paginate: Self::resolve_setting(
+                &default_config.paginate,
+                default_overrides,
+                user_config.and_then(|c| c.paginate.as_ref()),
+                user_overrides,
+                host_platform,
+                |data| data.paginate.as_ref(),
             ),
         }
     }
 
     /// Resolves a single setting using the standard priority order.
-    fn resolve_setting<T: Copy>(
-        default_value: T,
+    fn resolve_setting<T: Clone>(
+        default_value: &T,
         default_overrides: &[CompiledUiOverride],
-        user_value: Option<T>,
+        user_value: Option<&T>,
         user_overrides: &[CompiledUiOverride],
         host_platform: &Platform,
-        get_override: impl Fn(&UiOverrideData) -> Option<T>,
+        get_override: impl Fn(&UiOverrideData) -> Option<&T>,
     ) -> T {
         // 1. User overrides (first match).
         for override_ in user_overrides {
             if override_.matches(host_platform)
                 && let Some(v) = get_override(&override_.data)
             {
-                return v;
+                return v.clone();
             }
         }
 
@@ -218,17 +265,17 @@ impl UiConfig {
             if override_.matches(host_platform)
                 && let Some(v) = get_override(&override_.data)
             {
-                return v;
+                return v.clone();
             }
         }
 
         // 3. User base config.
         if let Some(v) = user_value {
-            return v;
+            return v.clone();
         }
 
         // 4. Default base config.
-        default_value
+        default_value.clone()
     }
 }
 
@@ -263,6 +310,174 @@ impl From<UiShowProgress> for ShowProgress {
             UiShowProgress::Bar | UiShowProgress::Only => ShowProgress::Running,
             UiShowProgress::Counter => ShowProgress::Counter,
         }
+    }
+}
+
+/// Controls when to paginate output.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum PaginateSetting {
+    /// Automatically page if stdout is a TTY and output would benefit from it.
+    #[default]
+    Auto,
+    /// Never use a pager.
+    Never,
+}
+
+/// A command with optional arguments and environment variables.
+///
+/// Supports three input formats, all normalized to the same representation:
+///
+/// - String: `"less -FRX"` (split on whitespace)
+/// - Array: `["less", "-FRX"]`
+/// - Structured: `{ command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }`
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CommandNameAndArgs {
+    /// The command and its arguments (non-empty after deserialization).
+    command: Vec<String>,
+    /// Environment variables to set when running the command.
+    env: BTreeMap<String, String>,
+}
+
+impl CommandNameAndArgs {
+    /// Returns the command name.
+    pub fn command_name(&self) -> &str {
+        // The command is validated to be non-empty during deserialization.
+        &self.command[0]
+    }
+
+    /// Returns the arguments.
+    pub fn args(&self) -> &[String] {
+        &self.command[1..]
+    }
+
+    /// Creates a [`std::process::Command`] from this configuration.
+    pub fn to_command(&self) -> Command {
+        let mut cmd = Command::new(self.command_name());
+        cmd.args(self.args());
+        cmd.envs(&self.env);
+        cmd
+    }
+}
+
+impl<'de> Deserialize<'de> for CommandNameAndArgs {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(CommandNameAndArgsVisitor)
+    }
+}
+
+/// Visitor for deserializing CommandNameAndArgs.
+struct CommandNameAndArgsVisitor;
+
+impl<'de> de::Visitor<'de> for CommandNameAndArgsVisitor {
+    type Value = CommandNameAndArgs;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str(
+            "a command string (\"less -FRX\"), \
+             an array ([\"less\", \"-FRX\"]), \
+             or a table ({ command = [\"less\", \"-FRX\"], env = { ... } })",
+        )
+    }
+
+    fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+        // Split on whitespace and normalize to command array.
+        let command: Vec<String> = v.split_whitespace().map(String::from).collect();
+        if command.is_empty() {
+            return Err(de::Error::custom("command string must not be empty"));
+        }
+        Ok(CommandNameAndArgs {
+            command,
+            env: BTreeMap::new(),
+        })
+    }
+
+    fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        let mut command = Vec::new();
+        while let Some(arg) = seq.next_element::<String>()? {
+            command.push(arg);
+        }
+        if command.is_empty() {
+            return Err(de::Error::custom("command array must not be empty"));
+        }
+        Ok(CommandNameAndArgs {
+            command,
+            env: BTreeMap::new(),
+        })
+    }
+
+    fn visit_map<A: de::MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
+        #[derive(Deserialize)]
+        struct StructuredInner {
+            command: Vec<String>,
+            #[serde(default)]
+            env: BTreeMap<String, String>,
+        }
+
+        let inner = StructuredInner::deserialize(de::value::MapAccessDeserializer::new(map))?;
+        if inner.command.is_empty() {
+            return Err(de::Error::custom("command array must not be empty"));
+        }
+        Ok(CommandNameAndArgs {
+            command: inner.command,
+            env: inner.env,
+        })
+    }
+}
+
+/// Controls which pager to use for output that benefits from scrolling.
+///
+/// This specifies *which* pager to use; whether to actually paginate is
+/// controlled by [`PaginateSetting`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PagerSetting {
+    /// Use an external command.
+    External(CommandNameAndArgs),
+}
+
+// Only used in unit tests -- in regular code, the default is looked up via
+// default-user-config.toml.
+#[cfg(test)]
+impl Default for PagerSetting {
+    fn default() -> Self {
+        Self::External(CommandNameAndArgs {
+            command: vec!["less".to_owned(), "-FRX".to_owned()],
+            env: [("LESSCHARSET".to_owned(), "utf-8".to_owned())]
+                .into_iter()
+                .collect(),
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for PagerSetting {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(PagerSettingVisitor)
+    }
+}
+
+/// Visitor for deserializing PagerSetting.
+struct PagerSettingVisitor;
+
+impl<'de> de::Visitor<'de> for PagerSettingVisitor {
+    type Value = PagerSetting;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a command string, an array, or a table with command and env")
+    }
+
+    fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+        let cmd = CommandNameAndArgsVisitor.visit_str(v)?;
+        Ok(PagerSetting::External(cmd))
+    }
+
+    fn visit_seq<A: de::SeqAccess<'de>>(self, seq: A) -> Result<Self::Value, A::Error> {
+        let args = CommandNameAndArgsVisitor.visit_seq(seq)?;
+        Ok(PagerSetting::External(args))
+    }
+
+    fn visit_map<A: de::MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
+        let args = CommandNameAndArgsVisitor.visit_map(map)?;
+        Ok(PagerSetting::External(args))
     }
 }
 
@@ -479,8 +694,8 @@ mod tests {
         let user_config = DeserializedUiConfig {
             show_progress: Some(UiShowProgress::Bar),
             max_progress_running: Some(MaxProgressRunning::Count(4)),
-            input_handler: None, // Use default.
             output_indent: Some(false),
+            ..Default::default()
         };
 
         let host = detect_host_platform_for_tests();
@@ -501,9 +716,8 @@ mod tests {
             "cfg(all())",
             DeserializedUiOverrideData {
                 show_progress: Some(UiShowProgress::Counter),
-                max_progress_running: None,
                 input_handler: Some(false),
-                output_indent: None,
+                ..Default::default()
             },
         );
 
@@ -525,9 +739,8 @@ mod tests {
             "cfg(all())",
             DeserializedUiOverrideData {
                 show_progress: Some(UiShowProgress::Counter),
-                max_progress_running: None,
                 input_handler: Some(false),
-                output_indent: None,
+                ..Default::default()
             },
         );
 
@@ -553,6 +766,8 @@ mod tests {
                 max_progress_running: Some(MaxProgressRunning::Count(2)),
                 input_handler: Some(false),
                 output_indent: Some(false),
+                pager: Some(PagerSetting::default()),
+                paginate: Some(PaginateSetting::Never),
             },
         );
 
@@ -643,8 +858,7 @@ mod tests {
         let user_config = DeserializedUiConfig {
             show_progress: Some(UiShowProgress::None),
             max_progress_running: Some(MaxProgressRunning::Count(2)),
-            input_handler: None,
-            output_indent: None,
+            ..Default::default()
         };
 
         // Default override sets show_progress (should beat user base).
@@ -669,5 +883,249 @@ mod tests {
         assert_eq!(resolved.show_progress, UiShowProgress::Counter);
         // User base applies for max_progress_running (override didn't set it).
         assert_eq!(resolved.max_progress_running, MaxProgressRunning::Count(2));
+    }
+
+    #[test]
+    fn test_paginate_setting_parsing() {
+        // Test "auto".
+        let config: DeserializedUiConfig = toml::from_str(r#"paginate = "auto""#).unwrap();
+        assert_eq!(config.paginate, Some(PaginateSetting::Auto));
+
+        // Test "never".
+        let config: DeserializedUiConfig = toml::from_str(r#"paginate = "never""#).unwrap();
+        assert_eq!(config.paginate, Some(PaginateSetting::Never));
+
+        // Test missing value.
+        let config: DeserializedUiConfig = toml::from_str("").unwrap();
+        assert!(config.paginate.is_none());
+
+        // Test invalid value.
+        let err = toml::from_str::<DeserializedUiConfig>(r#"paginate = "invalid""#).unwrap_err();
+        assert!(
+            err.to_string().contains("unknown variant"),
+            "error should mention 'unknown variant': {err}"
+        );
+    }
+
+    #[test]
+    fn test_command_name_and_args_parsing() {
+        #[derive(Debug, Deserialize)]
+        struct Wrapper {
+            cmd: CommandNameAndArgs,
+        }
+
+        // String format: split on whitespace.
+        let wrapper: Wrapper = toml::from_str(r#"cmd = "less -FRX""#).unwrap();
+        assert_eq!(
+            wrapper.cmd,
+            CommandNameAndArgs {
+                command: vec!["less".to_owned(), "-FRX".to_owned()],
+                env: BTreeMap::new(),
+            }
+        );
+        assert_eq!(wrapper.cmd.command_name(), "less");
+        assert_eq!(wrapper.cmd.args(), &["-FRX".to_owned()]);
+
+        // Array format: each element is a separate argument.
+        let wrapper: Wrapper = toml::from_str(r#"cmd = ["less", "-F", "-R", "-X"]"#).unwrap();
+        assert_eq!(
+            wrapper.cmd,
+            CommandNameAndArgs {
+                command: vec![
+                    "less".to_owned(),
+                    "-F".to_owned(),
+                    "-R".to_owned(),
+                    "-X".to_owned()
+                ],
+                env: BTreeMap::new(),
+            }
+        );
+        assert_eq!(wrapper.cmd.command_name(), "less");
+        assert_eq!(
+            wrapper.cmd.args(),
+            &["-F".to_owned(), "-R".to_owned(), "-X".to_owned()]
+        );
+
+        // Structured format: command array with optional env.
+        let cmd: CommandNameAndArgs = toml::from_str(
+            r#"
+            command = ["less", "-FRX"]
+            env = { LESSCHARSET = "utf-8" }
+            "#,
+        )
+        .unwrap();
+        let expected_env: BTreeMap<String, String> =
+            [("LESSCHARSET".to_owned(), "utf-8".to_owned())]
+                .into_iter()
+                .collect();
+        assert_eq!(
+            cmd,
+            CommandNameAndArgs {
+                command: vec!["less".to_owned(), "-FRX".to_owned()],
+                env: expected_env,
+            }
+        );
+        assert_eq!(cmd.command_name(), "less");
+        assert_eq!(cmd.args(), &["-FRX".to_owned()]);
+    }
+
+    #[test]
+    fn test_command_and_pager_empty_errors() {
+        #[derive(Debug, Deserialize)]
+        struct Wrapper {
+            #[expect(dead_code)]
+            cmd: CommandNameAndArgs,
+        }
+
+        // Test CommandNameAndArgs empty cases.
+        let cmd_cases = [
+            ("empty array", "cmd = []"),
+            ("empty string", r#"cmd = """#),
+            ("whitespace-only string", r#"cmd = "   ""#),
+            (
+                "structured with empty command",
+                r#"cmd = { command = [], env = { LESSCHARSET = "utf-8" } }"#,
+            ),
+        ];
+
+        for (name, input) in cmd_cases {
+            let err = toml::from_str::<Wrapper>(input).unwrap_err();
+            assert!(
+                err.to_string().contains("must not be empty"),
+                "CommandNameAndArgs {name}: error should mention 'must not be empty': {err}"
+            );
+        }
+
+        // Test PagerSetting empty cases (via DeserializedUiConfig).
+        let pager_cases = [
+            ("empty array", "pager = []"),
+            ("empty string", r#"pager = """#),
+        ];
+
+        for (name, input) in pager_cases {
+            let err = toml::from_str::<DeserializedUiConfig>(input).unwrap_err();
+            assert!(
+                err.to_string().contains("must not be empty"),
+                "PagerSetting {name}: error should mention 'must not be empty': {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_command_name_and_args_to_command() {
+        // Test that to_command produces a valid Command.
+        let cmd = CommandNameAndArgs {
+            command: vec!["echo".to_owned(), "hello".to_owned()],
+            env: BTreeMap::new(),
+        };
+        let std_cmd = cmd.to_command();
+        assert_eq!(cmd.command_name(), "echo");
+        drop(std_cmd);
+    }
+
+    #[test]
+    fn test_pager_setting_parsing() {
+        // String format.
+        let config: DeserializedUiConfig = toml::from_str(r#"pager = "less -FRX""#).unwrap();
+        assert_eq!(
+            config.pager,
+            Some(PagerSetting::External(CommandNameAndArgs {
+                command: vec!["less".to_owned(), "-FRX".to_owned()],
+                env: BTreeMap::new(),
+            }))
+        );
+
+        // Array format.
+        let config: DeserializedUiConfig = toml::from_str(r#"pager = ["less", "-FRX"]"#).unwrap();
+        assert_eq!(
+            config.pager,
+            Some(PagerSetting::External(CommandNameAndArgs {
+                command: vec!["less".to_owned(), "-FRX".to_owned()],
+                env: BTreeMap::new(),
+            }))
+        );
+
+        // Structured format with env.
+        let config: DeserializedUiConfig = toml::from_str(
+            r#"
+            [pager]
+            command = ["less", "-FRX"]
+            env = { LESSCHARSET = "utf-8" }
+            "#,
+        )
+        .unwrap();
+        let expected_env: BTreeMap<String, String> =
+            [("LESSCHARSET".to_owned(), "utf-8".to_owned())]
+                .into_iter()
+                .collect();
+        assert_eq!(
+            config.pager,
+            Some(PagerSetting::External(CommandNameAndArgs {
+                command: vec!["less".to_owned(), "-FRX".to_owned()],
+                env: expected_env,
+            }))
+        );
+
+        // Missing pager (None).
+        let config: DeserializedUiConfig = toml::from_str("").unwrap();
+        assert!(config.pager.is_none());
+    }
+
+    #[test]
+    fn test_resolved_ui_config_pager_defaults() {
+        let defaults = DefaultUserConfig::from_embedded().ui;
+
+        let host = detect_host_platform_for_tests();
+        let resolved = UiConfig::resolve(&defaults, &[], None, &[], &host);
+
+        // Resolved values should match the embedded defaults.
+        assert_eq!(resolved.pager, defaults.pager);
+        assert_eq!(resolved.paginate, defaults.paginate);
+    }
+
+    #[test]
+    fn test_resolved_ui_config_pager_override() {
+        let defaults = DefaultUserConfig::from_embedded().ui;
+
+        // Create an override that sets a custom pager.
+        let custom_pager = PagerSetting::External(CommandNameAndArgs {
+            command: vec!["more".to_owned()],
+            env: BTreeMap::new(),
+        });
+        let override_ = make_override(
+            "cfg(all())",
+            DeserializedUiOverrideData {
+                pager: Some(custom_pager.clone()),
+                ..Default::default()
+            },
+        );
+
+        let host = detect_host_platform_for_tests();
+        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &host);
+
+        assert_eq!(resolved.pager, custom_pager);
+        // paginate should still be from defaults.
+        assert_eq!(resolved.paginate, defaults.paginate);
+    }
+
+    #[test]
+    fn test_resolved_ui_config_paginate_override() {
+        let defaults = DefaultUserConfig::from_embedded().ui;
+
+        // Create an override that sets paginate to "never".
+        let override_ = make_override(
+            "cfg(all())",
+            DeserializedUiOverrideData {
+                paginate: Some(PaginateSetting::Never),
+                ..Default::default()
+            },
+        );
+
+        let host = detect_host_platform_for_tests();
+        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &host);
+
+        assert_eq!(resolved.paginate, PaginateSetting::Never);
+        // pager should still be from defaults.
+        assert_eq!(resolved.pager, defaults.pager);
     }
 }
