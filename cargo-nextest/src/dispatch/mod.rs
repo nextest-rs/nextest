@@ -3,11 +3,13 @@
 
 //! Command dispatch and execution.
 
+mod clap_error;
 mod cli;
 mod commands;
 mod execution;
 mod helpers;
+mod imp;
 
-// Re-export main types for backward compatibility
-pub use cli::{CargoNextestApp, TestRunnerOpts};
-pub use commands::ExtractOutputFormat;
+pub(crate) use clap_error::EarlyArgs;
+pub(crate) use commands::ExtractOutputFormat;
+pub use imp::main_impl;

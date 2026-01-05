@@ -11,7 +11,7 @@ use super::{
 use crate::{
     ExpectedError, Result,
     cargo_cli::{CargoCli, CargoOptions},
-    output::{OutputContext, OutputOpts, OutputWriter},
+    output::{OutputContext, OutputWriter},
     reuse_build::ReuseBuildOpts,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -208,9 +208,7 @@ pub(super) enum SetupSource {
 
 impl SelfCommand {
     #[cfg_attr(not(feature = "self-update"), expect(unused_variables))]
-    pub(super) fn exec(self, output: OutputOpts) -> Result<i32> {
-        let output = output.init();
-
+    pub(super) fn exec(self, output: OutputContext) -> Result<i32> {
         match self {
             Self::Setup { source: _source } => {
                 // Currently a no-op.
@@ -290,8 +288,8 @@ pub(super) enum DebugCommand {
 }
 
 impl DebugCommand {
-    pub(super) fn exec(self, output: OutputOpts) -> Result<i32> {
-        let _ = output.init();
+    pub(super) fn exec(self, output: OutputContext) -> Result<i32> {
+        let _ = output;
 
         match self {
             DebugCommand::Extract {

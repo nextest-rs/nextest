@@ -3,7 +3,10 @@
 
 //! UI-related user configuration.
 
-use crate::reporter::{MaxProgressRunning, ShowProgress};
+use crate::{
+    reporter::{MaxProgressRunning, ShowProgress},
+    user_config::helpers::resolve_ui_setting,
+};
 use serde::{
     Deserialize, Deserializer,
     de::{self, Unexpected},
@@ -147,16 +150,21 @@ impl CompiledUiOverride {
     ///
     /// Unknown results (e.g., unrecognized target features) are treated as
     /// non-matching to be conservative.
-    fn matches(&self, host_platform: &Platform) -> bool {
+    pub(in crate::user_config) fn matches(&self, host_platform: &Platform) -> bool {
         self.platform_spec
             .eval(host_platform)
             .unwrap_or(/* unknown results are mapped to false */ false)
+    }
+
+    /// Returns a reference to the override data.
+    pub(in crate::user_config) fn data(&self) -> &UiOverrideData {
+        &self.data
     }
 }
 
 /// Override data for UI settings.
 #[derive(Clone, Debug, Default)]
-struct UiOverrideData {
+pub(in crate::user_config) struct UiOverrideData {
     show_progress: Option<UiShowProgress>,
     max_progress_running: Option<MaxProgressRunning>,
     input_handler: Option<bool>,
@@ -166,6 +174,33 @@ struct UiOverrideData {
     streampager_interface: Option<StreampagerInterface>,
     streampager_wrapping: Option<StreampagerWrapping>,
     streampager_show_ruler: Option<bool>,
+}
+
+impl UiOverrideData {
+    /// Returns the pager setting, if specified.
+    pub(in crate::user_config) fn pager(&self) -> Option<&PagerSetting> {
+        self.pager.as_ref()
+    }
+
+    /// Returns the paginate setting, if specified.
+    pub(in crate::user_config) fn paginate(&self) -> Option<&PaginateSetting> {
+        self.paginate.as_ref()
+    }
+
+    /// Returns the streampager interface, if specified.
+    pub(in crate::user_config) fn streampager_interface(&self) -> Option<&StreampagerInterface> {
+        self.streampager_interface.as_ref()
+    }
+
+    /// Returns the streampager wrapping, if specified.
+    pub(in crate::user_config) fn streampager_wrapping(&self) -> Option<&StreampagerWrapping> {
+        self.streampager_wrapping.as_ref()
+    }
+
+    /// Returns the streampager show-ruler setting, if specified.
+    pub(in crate::user_config) fn streampager_show_ruler(&self) -> Option<&bool> {
+        self.streampager_show_ruler.as_ref()
+    }
 }
 
 /// Resolved UI configuration after applying overrides.
@@ -210,7 +245,7 @@ impl UiConfig {
         host_platform: &Platform,
     ) -> Self {
         Self {
-            show_progress: Self::resolve_setting(
+            show_progress: resolve_ui_setting(
                 &default_config.show_progress,
                 default_overrides,
                 user_config.and_then(|c| c.show_progress.as_ref()),
@@ -218,7 +253,7 @@ impl UiConfig {
                 host_platform,
                 |data| data.show_progress.as_ref(),
             ),
-            max_progress_running: Self::resolve_setting(
+            max_progress_running: resolve_ui_setting(
                 &default_config.max_progress_running,
                 default_overrides,
                 user_config.and_then(|c| c.max_progress_running.as_ref()),
@@ -226,7 +261,7 @@ impl UiConfig {
                 host_platform,
                 |data| data.max_progress_running.as_ref(),
             ),
-            input_handler: Self::resolve_setting(
+            input_handler: resolve_ui_setting(
                 &default_config.input_handler,
                 default_overrides,
                 user_config.and_then(|c| c.input_handler.as_ref()),
@@ -234,7 +269,7 @@ impl UiConfig {
                 host_platform,
                 |data| data.input_handler.as_ref(),
             ),
-            output_indent: Self::resolve_setting(
+            output_indent: resolve_ui_setting(
                 &default_config.output_indent,
                 default_overrides,
                 user_config.and_then(|c| c.output_indent.as_ref()),
@@ -242,7 +277,7 @@ impl UiConfig {
                 host_platform,
                 |data| data.output_indent.as_ref(),
             ),
-            pager: Self::resolve_setting(
+            pager: resolve_ui_setting(
                 &default_config.pager,
                 default_overrides,
                 user_config.and_then(|c| c.pager.as_ref()),
@@ -250,7 +285,7 @@ impl UiConfig {
                 host_platform,
                 |data| data.pager.as_ref(),
             ),
-            paginate: Self::resolve_setting(
+            paginate: resolve_ui_setting(
                 &default_config.paginate,
                 default_overrides,
                 user_config.and_then(|c| c.paginate.as_ref()),
@@ -259,7 +294,7 @@ impl UiConfig {
                 |data| data.paginate.as_ref(),
             ),
             streampager: StreampagerConfig {
-                interface: Self::resolve_setting(
+                interface: resolve_ui_setting(
                     &default_config.streampager.interface,
                     default_overrides,
                     user_config.and_then(|c| c.streampager.interface.as_ref()),
@@ -267,7 +302,7 @@ impl UiConfig {
                     host_platform,
                     |data| data.streampager_interface.as_ref(),
                 ),
-                wrapping: Self::resolve_setting(
+                wrapping: resolve_ui_setting(
                     &default_config.streampager.wrapping,
                     default_overrides,
                     user_config.and_then(|c| c.streampager.wrapping.as_ref()),
@@ -275,7 +310,7 @@ impl UiConfig {
                     host_platform,
                     |data| data.streampager_wrapping.as_ref(),
                 ),
-                show_ruler: Self::resolve_setting(
+                show_ruler: resolve_ui_setting(
                     &default_config.streampager.show_ruler,
                     default_overrides,
                     user_config.and_then(|c| c.streampager.show_ruler.as_ref()),
@@ -285,42 +320,6 @@ impl UiConfig {
                 ),
             },
         }
-    }
-
-    /// Resolves a single setting using the standard priority order.
-    fn resolve_setting<T: Clone>(
-        default_value: &T,
-        default_overrides: &[CompiledUiOverride],
-        user_value: Option<&T>,
-        user_overrides: &[CompiledUiOverride],
-        host_platform: &Platform,
-        get_override: impl Fn(&UiOverrideData) -> Option<&T>,
-    ) -> T {
-        // 1. User overrides (first match).
-        for override_ in user_overrides {
-            if override_.matches(host_platform)
-                && let Some(v) = get_override(&override_.data)
-            {
-                return v.clone();
-            }
-        }
-
-        // 2. Default overrides (first match).
-        for override_ in default_overrides {
-            if override_.matches(host_platform)
-                && let Some(v) = get_override(&override_.data)
-            {
-                return v.clone();
-            }
-        }
-
-        // 3. User base config.
-        if let Some(v) = user_value {
-            return v.clone();
-        }
-
-        // 4. Default base config.
-        default_value.clone()
     }
 }
 
