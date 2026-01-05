@@ -4,23 +4,25 @@
 //! Pager support for nextest output.
 //!
 //! This module provides functionality to page output through an external pager
-//! (like `less`) when appropriate. Paging is useful for commands that produce
-//! long output, such as `nextest list`.
+//! (like `less`) or a builtin pager (streampager) when appropriate. Paging is
+//! useful for commands that produce long output, such as `nextest list`.
 
-use crate::user_config::elements::{PagerSetting, PaginateSetting};
+use crate::user_config::elements::{PagerSetting, PaginateSetting, StreampagerConfig};
 use std::{
-    io::{self, IsTerminal, Stdout, Write},
+    io::{self, IsTerminal, PipeWriter, Stdout, Write},
     process::{Child, ChildStdin, Stdio},
+    thread::{self, JoinHandle},
 };
 use tracing::warn;
 
-/// Output wrapper that optionally pages output through an external pager.
+/// Output wrapper that optionally pages output through a pager.
 ///
-/// When a pager is active, output is piped to the pager process. When
-/// finalized, the pager's stdin is closed and we wait for it to exit.
+/// When a pager is active, output is piped to the pager process (external) or
+/// thread (builtin). When finalized, the pipe is closed and we wait for the
+/// pager to exit.
 ///
-/// Implements [`Drop`] to ensure cleanup happens even if [`finalize`] is not
-/// called explicitly. During a panic, stdin is closed but we skip waiting for
+/// Implements [`Drop`] to ensure cleanup happens even if `finalize` is not
+/// called explicitly. During a panic, pipes are closed but we skip waiting for
 /// the pager to avoid potential double-panic.
 ///
 /// [`finalize`]: Self::finalize
@@ -39,6 +41,18 @@ pub enum PagedOutput {
         /// This is an `Option` to allow taking ownership in [`Drop`] and
         /// [`finalize`](Self::finalize).
         child_stdin: Option<ChildStdin>,
+    },
+    /// Output through the builtin streampager.
+    BuiltinPager {
+        /// Pipe writer for stdout (for writing output).
+        ///
+        /// This is an `Option` to allow taking ownership in [`Drop`] and
+        /// [`finalize`](Self::finalize).
+        out_writer: Option<PipeWriter>,
+        /// The pager thread handle.
+        ///
+        /// This is an `Option` to allow taking ownership in `finalize`.
+        pager_thread: Option<JoinHandle<streampager::Result<()>>>,
     },
 }
 
@@ -59,40 +73,82 @@ impl PagedOutput {
     ///
     /// On pager spawn failure, a warning is logged and terminal output is
     /// returned.
-    pub fn request_pager(pager: &PagerSetting, paginate: PaginateSetting) -> Self {
+    pub fn request_pager(
+        pager: &PagerSetting,
+        paginate: PaginateSetting,
+        streampager_config: &StreampagerConfig,
+    ) -> Self {
         // Check if paging is disabled.
         if matches!(paginate, PaginateSetting::Never) {
             return Self::terminal();
         }
-
-        // Get the pager command.
-        let PagerSetting::External(command_and_args) = pager;
 
         // Check if stdout is a TTY.
         if !io::stdout().is_terminal() {
             return Self::terminal();
         }
 
-        // Try to spawn the pager.
-        let mut cmd = command_and_args.to_command();
-        cmd.stdin(Stdio::piped());
+        match pager {
+            PagerSetting::Builtin => Self::spawn_builtin_pager(streampager_config),
+            PagerSetting::External(command_and_args) => {
+                // Try to spawn the external pager.
+                let mut cmd = command_and_args.to_command();
+                cmd.stdin(Stdio::piped());
 
-        match cmd.spawn() {
-            Ok(mut child) => {
-                let child_stdin = child
-                    .stdin
-                    .take()
-                    .expect("child stdin should be present when piped");
-                Self::ExternalPager {
-                    child,
-                    child_stdin: Some(child_stdin),
+                match cmd.spawn() {
+                    Ok(mut child) => {
+                        let child_stdin = child
+                            .stdin
+                            .take()
+                            .expect("child stdin should be present when piped");
+                        Self::ExternalPager {
+                            child,
+                            child_stdin: Some(child_stdin),
+                        }
+                    }
+                    Err(error) => {
+                        warn!(
+                            "failed to spawn pager '{}': {error}",
+                            command_and_args.command_name()
+                        );
+                        Self::terminal()
+                    }
                 }
             }
+        }
+    }
+
+    /// Spawns the builtin streampager.
+    fn spawn_builtin_pager(config: &StreampagerConfig) -> Self {
+        let streampager_config = streampager::config::Config {
+            wrapping_mode: config.streampager_wrapping_mode(),
+            interface_mode: config.streampager_interface_mode(),
+            show_ruler: config.show_ruler,
+            // Don't scroll past EOF - it can leave empty lines on screen after
+            // exiting with quit-if-one-page mode.
+            scroll_past_eof: false,
+            ..Default::default()
+        };
+
+        // Initialize with tty instead of stdin/stdout. We spawn pager so long
+        // as stdout is a tty, which means stdin may be redirected.
+        let pager_result = streampager::Pager::new_using_system_terminal_with_config(
+            streampager_config,
+        )
+        .and_then(|mut pager| {
+            // Create a pipe for stdout.
+            let (out_reader, out_writer) = io::pipe()?;
+            pager.add_stream(out_reader, "")?;
+            Ok((pager, out_writer))
+        });
+
+        match pager_result {
+            Ok((pager, out_writer)) => Self::BuiltinPager {
+                out_writer: Some(out_writer),
+                pager_thread: Some(thread::spawn(|| pager.run())),
+            },
             Err(error) => {
-                warn!(
-                    "failed to spawn pager '{}': {error}",
-                    command_and_args.command_name()
-                );
+                warn!("failed to set up builtin pager: {error}");
                 Self::terminal()
             }
         }
@@ -101,7 +157,7 @@ impl PagedOutput {
     /// Returns a writer for stdout.
     ///
     /// For terminal output, this returns stdout directly.
-    /// For paged output, this returns the pager's stdin.
+    /// For paged output, this returns the pipe to the pager.
     ///
     /// # Panics
     ///
@@ -112,14 +168,17 @@ impl PagedOutput {
             Self::ExternalPager { child_stdin, .. } => {
                 child_stdin.as_mut().expect("stdout called after finalize")
             }
+            Self::BuiltinPager { out_writer, .. } => {
+                out_writer.as_mut().expect("stdout called after finalize")
+            }
         }
     }
 
     /// Finalizes the pager output.
     ///
     /// For terminal output, this is a no-op.
-    /// For paged output, this closes the pager's stdin and waits for the pager
-    /// process to exit. Errors during wait are logged but not propagated.
+    /// For paged output, this closes the pipe and waits for the pager
+    /// process/thread to exit. Errors during wait are logged but not propagated.
     ///
     /// This method is also called by [`Drop`], so explicit calls are optional
     /// but recommended for clarity.
@@ -149,6 +208,31 @@ impl PagedOutput {
                 // exit with a non-zero status if the user quits early (e.g.,
                 // pressing 'q' in less), which is normal behavior.
             }
+            Self::BuiltinPager {
+                out_writer,
+                pager_thread,
+            } => {
+                // If writer is already taken, we've already finalized.
+                let Some(writer) = out_writer.take() else {
+                    return;
+                };
+
+                // Close the pipe to signal EOF to the pager.
+                drop(writer);
+
+                // Wait for the pager thread to exit.
+                if let Some(thread) = pager_thread.take() {
+                    match thread.join() {
+                        Ok(Ok(())) => {}
+                        Ok(Err(error)) => {
+                            warn!("failed to run builtin pager: {error}");
+                        }
+                        Err(_) => {
+                            warn!("builtin pager thread panicked");
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -156,10 +240,16 @@ impl PagedOutput {
 impl Drop for PagedOutput {
     fn drop(&mut self) {
         if std::thread::panicking() {
-            // During a panic, close stdin to signal EOF but don't wait for the
-            // pager. This avoids potential issues if wait() were to panic.
-            if let Self::ExternalPager { child_stdin, .. } = self {
-                drop(child_stdin.take());
+            // During a panic, close pipes to signal EOF but don't wait for the
+            // pager. This avoids potential issues if wait()/join() were to panic.
+            match self {
+                Self::Terminal { .. } => {}
+                Self::ExternalPager { child_stdin, .. } => {
+                    drop(child_stdin.take());
+                }
+                Self::BuiltinPager { out_writer, .. } => {
+                    drop(out_writer.take());
+                }
             }
             return;
         }
@@ -170,6 +260,7 @@ impl Drop for PagedOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::user_config::elements::{StreampagerInterface, StreampagerWrapping};
 
     #[test]
     fn test_terminal_output() {
@@ -190,7 +281,12 @@ mod tests {
     #[test]
     fn test_request_pager_never_paginate() {
         let pager = PagerSetting::default();
-        let output = PagedOutput::request_pager(&pager, PaginateSetting::Never);
+        let streampager = StreampagerConfig {
+            interface: StreampagerInterface::QuitIfOnePage,
+            wrapping: StreampagerWrapping::Word,
+            show_ruler: true,
+        };
+        let output = PagedOutput::request_pager(&pager, PaginateSetting::Never, &streampager);
         assert!(matches!(output, PagedOutput::Terminal { .. }));
         output.finalize();
     }

@@ -42,6 +42,10 @@ pub(in crate::user_config) struct DeserializedUiConfig {
     /// When to paginate output.
     #[serde(default)]
     paginate: Option<PaginateSetting>,
+
+    /// Configuration for the builtin streampager.
+    #[serde(default)]
+    streampager: DeserializedStreampagerConfig,
 }
 
 /// Default UI configuration with all values required.
@@ -69,6 +73,9 @@ pub(crate) struct DefaultUiConfig {
 
     /// When to paginate output.
     pub(in crate::user_config) paginate: PaginateSetting,
+
+    /// Configuration for the builtin streampager.
+    pub(in crate::user_config) streampager: DefaultStreampagerConfig,
 }
 
 /// Deserialized form of UI override settings.
@@ -98,6 +105,10 @@ pub(in crate::user_config) struct DeserializedUiOverrideData {
     /// When to paginate output.
     #[serde(default)]
     pub(in crate::user_config) paginate: Option<PaginateSetting>,
+
+    /// Configuration for the builtin streampager.
+    #[serde(default)]
+    pub(in crate::user_config) streampager: DeserializedStreampagerConfig,
 }
 
 /// A compiled UI override with parsed platform spec.
@@ -125,6 +136,9 @@ impl CompiledUiOverride {
                 output_indent: data.output_indent,
                 pager: data.pager,
                 paginate: data.paginate,
+                streampager_interface: data.streampager.interface,
+                streampager_wrapping: data.streampager.wrapping,
+                streampager_show_ruler: data.streampager.show_ruler,
             },
         }
     }
@@ -149,6 +163,9 @@ struct UiOverrideData {
     output_indent: Option<bool>,
     pager: Option<PagerSetting>,
     paginate: Option<PaginateSetting>,
+    streampager_interface: Option<StreampagerInterface>,
+    streampager_wrapping: Option<StreampagerWrapping>,
+    streampager_show_ruler: Option<bool>,
 }
 
 /// Resolved UI configuration after applying overrides.
@@ -169,6 +186,8 @@ pub struct UiConfig {
     pub pager: PagerSetting,
     /// When to paginate output.
     pub paginate: PaginateSetting,
+    /// Configuration for the builtin streampager.
+    pub streampager: StreampagerConfig,
 }
 
 impl UiConfig {
@@ -239,6 +258,32 @@ impl UiConfig {
                 host_platform,
                 |data| data.paginate.as_ref(),
             ),
+            streampager: StreampagerConfig {
+                interface: Self::resolve_setting(
+                    &default_config.streampager.interface,
+                    default_overrides,
+                    user_config.and_then(|c| c.streampager.interface.as_ref()),
+                    user_overrides,
+                    host_platform,
+                    |data| data.streampager_interface.as_ref(),
+                ),
+                wrapping: Self::resolve_setting(
+                    &default_config.streampager.wrapping,
+                    default_overrides,
+                    user_config.and_then(|c| c.streampager.wrapping.as_ref()),
+                    user_overrides,
+                    host_platform,
+                    |data| data.streampager_wrapping.as_ref(),
+                ),
+                show_ruler: Self::resolve_setting(
+                    &default_config.streampager.show_ruler,
+                    default_overrides,
+                    user_config.and_then(|c| c.streampager.show_ruler.as_ref()),
+                    user_overrides,
+                    host_platform,
+                    |data| data.streampager_show_ruler.as_ref(),
+                ),
+            },
         }
     }
 
@@ -322,6 +367,103 @@ pub enum PaginateSetting {
     Auto,
     /// Never use a pager.
     Never,
+}
+
+/// The special string that indicates the builtin pager should be used.
+pub const BUILTIN_PAGER_NAME: &str = ":builtin";
+
+/// Deserialized streampager configuration (all fields optional).
+///
+/// Used in user config and overrides where any field may be unspecified.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(in crate::user_config) struct DeserializedStreampagerConfig {
+    /// Interface mode controlling alternate screen behavior.
+    pub(in crate::user_config) interface: Option<StreampagerInterface>,
+    /// Text wrapping mode.
+    pub(in crate::user_config) wrapping: Option<StreampagerWrapping>,
+    /// Whether to show a ruler at the bottom.
+    pub(in crate::user_config) show_ruler: Option<bool>,
+}
+
+/// Default streampager configuration (all fields required).
+///
+/// Used in the embedded default config.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(in crate::user_config) struct DefaultStreampagerConfig {
+    /// Interface mode controlling alternate screen behavior.
+    pub(in crate::user_config) interface: StreampagerInterface,
+    /// Text wrapping mode.
+    pub(in crate::user_config) wrapping: StreampagerWrapping,
+    /// Whether to show a ruler at the bottom.
+    pub(in crate::user_config) show_ruler: bool,
+}
+
+/// Resolved streampager configuration.
+///
+/// These settings control behavior when `pager = ":builtin"` is configured.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StreampagerConfig {
+    /// Interface mode controlling alternate screen behavior.
+    pub interface: StreampagerInterface,
+    /// Text wrapping mode.
+    pub wrapping: StreampagerWrapping,
+    /// Whether to show a ruler at the bottom.
+    pub show_ruler: bool,
+}
+
+impl StreampagerConfig {
+    /// Converts to the streampager library's interface mode.
+    pub fn streampager_interface_mode(&self) -> streampager::config::InterfaceMode {
+        use streampager::config::InterfaceMode;
+        match self.interface {
+            StreampagerInterface::FullScreenClearOutput => InterfaceMode::FullScreen,
+            StreampagerInterface::QuitIfOnePage => InterfaceMode::Hybrid,
+            StreampagerInterface::QuitQuicklyOrClearOutput => {
+                InterfaceMode::Delayed(std::time::Duration::from_secs(2))
+            }
+        }
+    }
+
+    /// Converts to the streampager library's wrapping mode.
+    pub fn streampager_wrapping_mode(&self) -> streampager::config::WrappingMode {
+        use streampager::config::WrappingMode;
+        match self.wrapping {
+            StreampagerWrapping::None => WrappingMode::Unwrapped,
+            StreampagerWrapping::Word => WrappingMode::WordBoundary,
+            StreampagerWrapping::Anywhere => WrappingMode::GraphemeBoundary,
+        }
+    }
+}
+
+/// Interface mode for the builtin streampager.
+///
+/// Controls how the pager uses the alternate screen and when it exits.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StreampagerInterface {
+    /// Exit immediately if content fits on one page; otherwise use full screen
+    /// and clear on exit.
+    #[default]
+    QuitIfOnePage,
+    /// Always use full screen mode and clear the screen on exit.
+    FullScreenClearOutput,
+    /// Wait briefly before entering full screen; clear on exit if entered.
+    QuitQuicklyOrClearOutput,
+}
+
+/// Text wrapping mode for the builtin streampager.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StreampagerWrapping {
+    /// Do not wrap text; allow horizontal scrolling.
+    None,
+    /// Wrap at word boundaries.
+    #[default]
+    Word,
+    /// Wrap at any character (grapheme) boundary.
+    Anywhere,
 }
 
 /// A command with optional arguments and environment variables.
@@ -431,6 +573,8 @@ impl<'de> de::Visitor<'de> for CommandNameAndArgsVisitor {
 /// controlled by [`PaginateSetting`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PagerSetting {
+    /// Use the builtin streampager.
+    Builtin,
     /// Use an external command.
     External(CommandNameAndArgs),
 }
@@ -462,10 +606,15 @@ impl<'de> de::Visitor<'de> for PagerSettingVisitor {
     type Value = PagerSetting;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("a command string, an array, or a table with command and env")
+        formatter
+            .write_str("\":builtin\", a command string, an array, or a table with command and env")
     }
 
     fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+        // Check for the special ":builtin" value.
+        if v == BUILTIN_PAGER_NAME {
+            return Ok(PagerSetting::Builtin);
+        }
         let cmd = CommandNameAndArgsVisitor.visit_str(v)?;
         Ok(PagerSetting::External(cmd))
     }
@@ -768,6 +917,7 @@ mod tests {
                 output_indent: Some(false),
                 pager: Some(PagerSetting::default()),
                 paginate: Some(PaginateSetting::Never),
+                streampager: Default::default(),
             },
         );
 
@@ -1127,5 +1277,89 @@ mod tests {
         assert_eq!(resolved.paginate, PaginateSetting::Never);
         // pager should still be from defaults.
         assert_eq!(resolved.pager, defaults.pager);
+    }
+
+    #[test]
+    fn test_pager_setting_builtin() {
+        // `:builtin` special string.
+        let config: DeserializedUiConfig = toml::from_str(r#"pager = ":builtin""#).unwrap();
+        assert_eq!(config.pager, Some(PagerSetting::Builtin));
+    }
+
+    #[test]
+    fn test_streampager_config_parsing() {
+        // Full config.
+        let config: DeserializedUiConfig = toml::from_str(
+            r#"
+            [streampager]
+            interface = "full-screen-clear-output"
+            wrapping = "anywhere"
+            show-ruler = false
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.streampager.interface,
+            Some(StreampagerInterface::FullScreenClearOutput)
+        );
+        assert_eq!(
+            config.streampager.wrapping,
+            Some(StreampagerWrapping::Anywhere)
+        );
+        assert_eq!(config.streampager.show_ruler, Some(false));
+
+        // Partial config - unspecified fields are None.
+        let config: DeserializedUiConfig = toml::from_str(
+            r#"
+            [streampager]
+            interface = "quit-quickly-or-clear-output"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.streampager.interface,
+            Some(StreampagerInterface::QuitQuicklyOrClearOutput)
+        );
+        assert_eq!(config.streampager.wrapping, None);
+        assert_eq!(config.streampager.show_ruler, None);
+
+        // Empty config - all fields are None.
+        let config: DeserializedUiConfig = toml::from_str("").unwrap();
+        assert_eq!(config.streampager.interface, None);
+        assert_eq!(config.streampager.wrapping, None);
+        assert_eq!(config.streampager.show_ruler, None);
+    }
+
+    #[test]
+    fn test_streampager_config_resolution() {
+        let defaults = DefaultUserConfig::from_embedded().ui;
+
+        // Override just the interface.
+        let override_ = make_override(
+            "cfg(all())",
+            DeserializedUiOverrideData {
+                streampager: DeserializedStreampagerConfig {
+                    interface: Some(StreampagerInterface::FullScreenClearOutput),
+                    wrapping: None,
+                    show_ruler: None,
+                },
+                ..Default::default()
+            },
+        );
+
+        let host = detect_host_platform_for_tests();
+        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &host);
+
+        // Interface should be overridden.
+        assert_eq!(
+            resolved.streampager.interface,
+            StreampagerInterface::FullScreenClearOutput
+        );
+        // wrapping and show_ruler should be from defaults.
+        assert_eq!(resolved.streampager.wrapping, defaults.streampager.wrapping);
+        assert_eq!(
+            resolved.streampager.show_ruler,
+            defaults.streampager.show_ruler
+        );
     }
 }

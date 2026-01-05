@@ -53,6 +53,7 @@ petgraph.workspace = true
 quick-junit.workspace = true
 rand.workspace = true
 regex.workspace = true
+sapling-streampager.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_ignored.workspace = true

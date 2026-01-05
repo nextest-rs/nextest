@@ -22,9 +22,27 @@ output-indent = true
 # Pager command for output that benefits from scrolling.
 #
 # Accepts a command string ("less -FRX"), an array (["less", "-FRX"]),
-# or a table ({ command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }).
+# a table ({ command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }),
+# or ":builtin" to use the builtin pager.
 pager = { command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }
 
 # When to paginate output.
 # Valid values: "auto", "never"
 paginate = "auto"
+
+# Configuration for the builtin streampager (used when pager = ":builtin").
+[ui.streampager]
+# Interface mode controlling alternate screen behavior.
+# Valid values: "quit-if-one-page", "full-screen-clear-output", "quit-quickly-or-clear-output"
+interface = "quit-if-one-page"
+# Text wrapping mode.
+# Valid values: "none", "word", "anywhere"
+wrapping = "word"
+# Whether to show a ruler at the bottom.
+show-ruler = true
+
+# Windows uses the builtin pager by default because external pagers are
+# unreliable on Windows.
+[[overrides]]
+platform = "cfg(windows)"
+ui.pager = ":builtin"
