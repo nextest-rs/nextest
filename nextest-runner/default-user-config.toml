@@ -18,3 +18,13 @@ input-handler = true
 
 # Whether to indent captured test output for visual clarity.
 output-indent = true
+
+# Pager command for output that benefits from scrolling.
+#
+# Accepts a command string ("less -FRX"), an array (["less", "-FRX"]),
+# or a table ({ command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }).
+pager = { command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }
+
+# When to paginate output.
+# Valid values: "auto", "never"
+paginate = "auto"
