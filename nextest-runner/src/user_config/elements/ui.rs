@@ -522,8 +522,7 @@ impl<'de> de::Visitor<'de> for CommandNameAndArgsVisitor {
     }
 
     fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
-        // Split on whitespace and normalize to command array.
-        let command: Vec<String> = v.split_whitespace().map(String::from).collect();
+        let command: Vec<String> = shell_words::split(v).map_err(de::Error::custom)?;
         if command.is_empty() {
             return Err(de::Error::custom("command string must not be empty"));
         }
@@ -1063,7 +1062,7 @@ mod tests {
             cmd: CommandNameAndArgs,
         }
 
-        // String format: split on whitespace.
+        // String format: split using shell word parsing.
         let wrapper: Wrapper = toml::from_str(r#"cmd = "less -FRX""#).unwrap();
         assert_eq!(
             wrapper.cmd,
@@ -1116,6 +1115,63 @@ mod tests {
         );
         assert_eq!(cmd.command_name(), "less");
         assert_eq!(cmd.args(), &["-FRX".to_owned()]);
+
+        // Shell quoting: double quotes preserve spaces.
+        let wrapper: Wrapper = toml::from_str(r#"cmd = 'my-pager "arg with spaces"'"#).unwrap();
+        assert_eq!(
+            wrapper.cmd,
+            CommandNameAndArgs {
+                command: vec!["my-pager".to_owned(), "arg with spaces".to_owned()],
+                env: BTreeMap::new(),
+            }
+        );
+
+        // Shell quoting: single quotes preserve spaces.
+        let wrapper: Wrapper = toml::from_str(r#"cmd = "my-pager 'arg with spaces'""#).unwrap();
+        assert_eq!(
+            wrapper.cmd,
+            CommandNameAndArgs {
+                command: vec!["my-pager".to_owned(), "arg with spaces".to_owned()],
+                env: BTreeMap::new(),
+            }
+        );
+
+        // Shell quoting: escaped quotes within double quotes.
+        let wrapper: Wrapper =
+            toml::from_str(r#"cmd = 'my-pager "quoted \"nested\" arg"'"#).unwrap();
+        assert_eq!(
+            wrapper.cmd,
+            CommandNameAndArgs {
+                command: vec!["my-pager".to_owned(), "quoted \"nested\" arg".to_owned()],
+                env: BTreeMap::new(),
+            }
+        );
+
+        // Shell quoting: path with spaces.
+        let wrapper: Wrapper = toml::from_str(r#"cmd = '"/path/to/my pager" --flag'"#).unwrap();
+        assert_eq!(
+            wrapper.cmd,
+            CommandNameAndArgs {
+                command: vec!["/path/to/my pager".to_owned(), "--flag".to_owned()],
+                env: BTreeMap::new(),
+            }
+        );
+
+        // Shell quoting: multiple quoted arguments.
+        let wrapper: Wrapper =
+            toml::from_str(r#"cmd = 'cmd "first arg" "second arg" third'"#).unwrap();
+        assert_eq!(
+            wrapper.cmd,
+            CommandNameAndArgs {
+                command: vec![
+                    "cmd".to_owned(),
+                    "first arg".to_owned(),
+                    "second arg".to_owned(),
+                    "third".to_owned(),
+                ],
+                env: BTreeMap::new(),
+            }
+        );
     }
 
     #[test]
@@ -1156,6 +1212,20 @@ mod tests {
             assert!(
                 err.to_string().contains("must not be empty"),
                 "PagerSetting {name}: error should mention 'must not be empty': {err}"
+            );
+        }
+
+        // Test invalid shell quoting (unclosed quotes).
+        let unclosed_quote_cases = [
+            ("unclosed double quote", r#"cmd = 'pager "unclosed'"#),
+            ("unclosed single quote", r#"cmd = "pager 'unclosed""#),
+        ];
+
+        for (name, input) in unclosed_quote_cases {
+            let err = toml::from_str::<Wrapper>(input).unwrap_err();
+            assert!(
+                err.to_string().contains("missing closing quote"),
+                "CommandNameAndArgs {name}: error should mention 'missing closing quote': {err}"
             );
         }
     }
