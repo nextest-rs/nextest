@@ -18,7 +18,7 @@ use nextest_runner::{
 };
 use owo_colors::{OwoColorize, Style};
 use semver::Version;
-use std::{error::Error, io, path::PathBuf, process::ExitStatus, string::FromUtf8Error};
+use std::{error::Error, io, process::ExitStatus, string::FromUtf8Error};
 use swrite::{SWrite, swriteln};
 use thiserror::Error;
 use tracing::{Level, error, info};
@@ -40,8 +40,6 @@ pub enum ReuseBuildKind {
 #[derive(Debug, Error)]
 #[doc(hidden)]
 pub enum ExpectedError {
-    #[error("could not change to requested directory")]
-    SetCurrentDirFailed { error: std::io::Error },
     #[error("failed to get current executable")]
     GetCurrentExeFailed {
         #[source]
@@ -288,6 +286,7 @@ pub enum ExpectedError {
         err: UpdateError,
     },
     #[error("error reading prompt")]
+    #[cfg(feature = "self-update")]
     DialoguerError {
         #[source]
         err: dialoguer::Error,
@@ -322,16 +321,18 @@ pub enum ExpectedError {
         reason: &'static str,
         args: Vec<String>,
     },
+    #[cfg(unix)]
     #[error("double-spawn parse error")]
     DoubleSpawnParseArgsError {
         args: String,
         #[source]
         err: shell_words::ParseError,
     },
+    #[cfg(unix)]
     #[error("double-spawn execution error")]
     DoubleSpawnExecError {
         command: Box<std::process::Command>,
-        current_dir: Result<PathBuf, std::io::Error>,
+        current_dir: Result<std::path::PathBuf, std::io::Error>,
         #[source]
         err: std::io::Error,
     },
@@ -474,7 +475,6 @@ impl ExpectedError {
             | Self::CargoLocateProjectFailed { .. } => NextestExitCode::CARGO_METADATA_FAILED,
             Self::WorkspaceRootInvalidUtf8 { .. }
             | Self::WorkspaceRootInvalid { .. }
-            | Self::SetCurrentDirFailed { .. }
             | Self::GetCurrentExeFailed { .. }
             | Self::ProfileNotFound { .. }
             | Self::StoreDirCreateError { .. }
@@ -494,7 +494,6 @@ impl ExpectedError {
             | Self::ConfigureHandleInheritanceError { .. }
             | Self::CargoMetadataParseError { .. }
             | Self::TestBinaryArgsParseError { .. }
-            | Self::DialoguerError { .. }
             | Self::SignalHandlerSetupError { .. }
             | Self::ShowTestGroupsError { .. }
             | Self::InvalidMessageFormatVersion { .. }
@@ -510,7 +509,8 @@ impl ExpectedError {
             }
             Self::RequiredVersionNotMet { .. } => NextestExitCode::REQUIRED_VERSION_NOT_MET,
             #[cfg(feature = "self-update")]
-            Self::UpdateVersionParseError { .. } => NextestExitCode::SETUP_ERROR,
+            Self::DialoguerError { .. } | Self::UpdateVersionParseError { .. } => NextestExitCode::SETUP_ERROR,
+            #[cfg(unix)]
             Self::DoubleSpawnParseArgsError { .. } | Self::DoubleSpawnExecError { .. } => {
                 NextestExitCode::DOUBLE_SPAWN_ERROR
             }
@@ -545,10 +545,6 @@ impl ExpectedError {
     /// Displays this error to stderr.
     pub fn display_to_stderr(&self, styles: &StderrStyles) {
         let mut next_error = match &self {
-            Self::SetCurrentDirFailed { error } => {
-                error!("could not change to requested directory");
-                Some(error as &dyn Error)
-            }
             Self::GetCurrentExeFailed { err } => {
                 error!("failed to get current executable");
                 Some(err as &dyn Error)
@@ -1046,6 +1042,7 @@ impl ExpectedError {
                 );
                 Some(err as &dyn Error)
             }
+            #[cfg(feature = "self-update")]
             Self::DialoguerError { err } => {
                 error!("error reading input prompt");
                 Some(err as &dyn Error)
@@ -1090,10 +1087,12 @@ impl ExpectedError {
                 );
                 None
             }
+            #[cfg(unix)]
             Self::DoubleSpawnParseArgsError { args, err } => {
                 error!("[double-spawn] failed to parse arguments `{args}`");
                 Some(err as &dyn Error)
             }
+            #[cfg(unix)]
             Self::DoubleSpawnExecError {
                 command,
                 current_dir,

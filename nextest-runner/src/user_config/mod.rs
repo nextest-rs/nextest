@@ -31,8 +31,11 @@
 //! 5. Built-in defaults
 
 mod discovery;
+mod early;
 pub mod elements;
+mod helpers;
 mod imp;
 
 pub use discovery::*;
+pub use early::*;
 pub use imp::*;

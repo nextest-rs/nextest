@@ -2,6 +2,7 @@
 // Copyright (c) The cargo-guppy Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::dispatch::EarlyArgs;
 use clap::{Args, ValueEnum};
 use miette::{GraphicalTheme, MietteHandlerOpts, ThemeStyles};
 use nextest_runner::{reporter::ReporterStderr, write_str::WriteStr};
@@ -61,26 +62,18 @@ pub(crate) struct OutputOpts {
     #[arg(long, short, global = true, env = "NEXTEST_VERBOSE")]
     pub(crate) verbose: bool,
     // TODO: quiet?
-    /// Produce color output: auto, always, never
-    #[arg(
-        long,
-        value_enum,
-        default_value_t,
-        hide_possible_values = true,
-        global = true,
-        value_name = "WHEN",
-        env = "CARGO_TERM_COLOR"
-    )]
-    pub(crate) color: Color,
 }
 
 impl OutputOpts {
-    pub(crate) fn init(self) -> OutputContext {
-        let OutputOpts { verbose, color } = self;
+    pub(crate) fn init(self, early_args: EarlyArgs) -> OutputContext {
+        let OutputOpts { verbose } = self;
 
-        color.init();
+        early_args.color.init();
 
-        OutputContext { verbose, color }
+        OutputContext {
+            verbose,
+            color: early_args.color,
+        }
     }
 }
 
@@ -332,8 +325,9 @@ pub enum OutputWriter {
     /// No capture
     #[default]
     Normal,
-    /// Output captured
+    /// Output captured (TODO: clean this up, it's no longer used)
     #[cfg(test)]
+    #[expect(dead_code)]
     Test {
         /// stdout capture
         stdout: String,

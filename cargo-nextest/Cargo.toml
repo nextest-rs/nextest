@@ -16,7 +16,7 @@ camino.workspace = true
 cfg-if.workspace = true
 clap = { workspace = true, features = ["derive", "env", "unicode", "wrap_help"] }
 color-eyre.workspace = true
-dialoguer.workspace = true
+dialoguer = { workspace = true, optional = true }
 duct.workspace = true
 enable-ansi-support.workspace = true
 guppy.workspace = true
@@ -54,7 +54,7 @@ insta.workspace = true
 default = ["default-no-update", "self-update"]
 experimental-tokio-console = ["nextest-runner/experimental-tokio-console"]
 # Perform self-updates (enabled by default)
-self-update = ["nextest-runner/self-update"]
+self-update = ["dep:dialoguer", "nextest-runner/self-update"]
 # Default set of features excluding self-update. This is the recommended set of features for
 # distributor and custom CI builds.
 default-no-update = []

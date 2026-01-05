@@ -43,9 +43,7 @@ mod reuse_build;
 mod update;
 mod version;
 
-#[doc(hidden)]
-pub use dispatch::*;
-#[doc(hidden)]
-pub use errors::*;
-#[doc(hidden)]
-pub use output::OutputWriter;
+pub(crate) use dispatch::ExtractOutputFormat;
+pub use dispatch::main_impl;
+pub(crate) use errors::*;
+pub(crate) use output::OutputWriter;

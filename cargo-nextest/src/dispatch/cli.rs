@@ -3,6 +3,7 @@
 
 //! CLI argument parsing structures and enums.
 
+use super::clap_error::EarlyArgs;
 use crate::{
     ExpectedError, Result,
     cargo_cli::{CargoCli, CargoOptions},
@@ -1435,6 +1436,10 @@ impl From<ShowProgressOpt> for UiShowProgress {
     max_term_width = 100,
 )]
 pub struct CargoNextestApp {
+    /// Early args (color, no_pager) flattened at root for early extraction.
+    #[clap(flatten)]
+    early_args: EarlyArgs,
+
     #[clap(subcommand)]
     subcommand: NextestSubcommand,
 }
@@ -1443,8 +1448,8 @@ impl CargoNextestApp {
     /// Initializes the output context.
     pub fn init_output(&self) -> OutputContext {
         match &self.subcommand {
-            NextestSubcommand::Nextest(args) => args.common.output.init(),
-            NextestSubcommand::Ntr(args) => args.common.output.init(),
+            NextestSubcommand::Nextest(args) => args.common.output.init(self.early_args),
+            NextestSubcommand::Ntr(args) => args.common.output.init(self.early_args),
             #[cfg(unix)]
             // Double-spawned processes should never use coloring.
             NextestSubcommand::DoubleSpawn(_) => OutputContext::color_never_init(),
@@ -1588,8 +1593,8 @@ impl AppOpts {
                 output,
                 output_writer,
             ),
-            Command::Self_ { command } => command.exec(self.common.output),
-            Command::Debug { command } => command.exec(self.common.output),
+            Command::Self_ { command } => command.exec(output),
+            Command::Debug { command } => command.exec(output),
         }
     }
 }
