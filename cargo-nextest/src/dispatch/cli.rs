@@ -1749,6 +1749,17 @@ mod tests {
             "cargo nextest run --build-jobs -1",
             "cargo nextest run --build-jobs 1",
             // ---
+            // Self update options
+            // ---
+            "cargo nextest self update",
+            "cargo nextest self update --beta",
+            "cargo nextest self update --rc",
+            "cargo nextest self update --version 0.9.100",
+            "cargo nextest self update --version latest",
+            "cargo nextest self update --check",
+            "cargo nextest self update --beta --check",
+            "cargo nextest self update --rc --force",
+            // ---
             // Bench command
             // ---
             "cargo nextest bench",
@@ -1911,6 +1922,18 @@ mod tests {
             ("cargo nextest bench --stress-count 0", ValueValidation),
             // Invalid stress duration: 0
             ("cargo nextest bench --stress-duration 0m", ValueValidation),
+            // ---
+            // Self update option conflicts
+            // ---
+            ("cargo nextest self update --beta --rc", ArgumentConflict),
+            (
+                "cargo nextest self update --beta --version 0.9.100",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest self update --rc --version 0.9.100",
+                ArgumentConflict,
+            ),
         ];
 
         // Unset all NEXTEST_ env vars because they can conflict with the try_parse_from below.

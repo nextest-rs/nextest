@@ -15,7 +15,7 @@ use crate::{
     reuse_build::ReuseBuildOpts,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{Subcommand, ValueEnum};
+use clap::{Args, Subcommand, ValueEnum};
 use nextest_runner::{
     cargo_config::CargoConfigs, config::core::NextestVersionEval, errors::WriteTestListError,
 };
@@ -154,6 +154,51 @@ impl ShowConfigCommand {
     }
 }
 
+/// Arguments for specifying which version to update to.
+#[derive(Debug, Args)]
+#[group(id = "version_spec", multiple = false)]
+pub(super) struct UpdateVersionOpt {
+    /// Version or version range to download.
+    #[arg(long, help_heading = "Version selection")]
+    version: Option<String>,
+
+    /// Update to the latest version, including prereleases.
+    ///
+    /// This installs the latest beta, RC, or stable version.
+    #[arg(long, help_heading = "Version selection")]
+    beta: bool,
+
+    /// Update to the latest RC or stable version.
+    ///
+    /// This installs the latest RC or stable version. Beta versions are
+    /// excluded.
+    #[arg(long, help_heading = "Version selection")]
+    rc: bool,
+}
+
+impl UpdateVersionOpt {
+    /// Converts to `UpdateVersionReq`.
+    #[cfg(feature = "self-update")]
+    pub(super) fn to_update_version_req(
+        &self,
+    ) -> Result<nextest_runner::update::UpdateVersionReq, ExpectedError> {
+        use nextest_runner::update::{PrereleaseKind, UpdateVersionReq};
+
+        if self.beta {
+            Ok(UpdateVersionReq::LatestPrerelease(PrereleaseKind::Beta))
+        } else if self.rc {
+            Ok(UpdateVersionReq::LatestPrerelease(PrereleaseKind::Rc))
+        } else if let Some(version) = &self.version {
+            version
+                .parse()
+                .map(UpdateVersionReq::Version)
+                .map_err(|err| ExpectedError::UpdateVersionParseError { err })
+        } else {
+            Ok(UpdateVersionReq::Latest)
+        }
+    }
+}
+
 #[derive(Debug, Subcommand)]
 pub(super) enum SelfCommand {
     #[clap(hide = true)]
@@ -178,9 +223,8 @@ pub(super) enum SelfCommand {
         installs them if an update is available."
     )]
     Update {
-        /// Version or version range to download
-        #[arg(long, default_value = "latest")]
-        version: String,
+        #[command(flatten)]
+        version: UpdateVersionOpt,
 
         /// Check for updates rather than downloading them
         ///
@@ -227,8 +271,9 @@ impl SelfCommand {
             } => {
                 cfg_if::cfg_if! {
                     if #[cfg(feature = "self-update")] {
+                        let version_req = version.to_update_version_req()?;
                         crate::update::perform_update(
-                            &version,
+                            version_req,
                             check,
                             yes,
                             force,
@@ -236,6 +281,7 @@ impl SelfCommand {
                             output,
                         )
                     } else {
+                        let _ = version;
                         tracing::info!(
                             "this version of cargo-nextest cannot perform self-updates\n\
                             (hint: this usually means nextest was installed by a package manager)"

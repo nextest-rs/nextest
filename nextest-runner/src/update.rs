@@ -109,12 +109,12 @@ impl NextestReleases {
     /// Checks for whether an update should be performed.
     pub fn check<'a>(
         &'a self,
-        version: &UpdateVersion,
+        version_req: &UpdateVersionReq,
         force: bool,
         bin_path_in_archive: &'a Utf8Path,
         perform_setup_fn: impl FnOnce(&Version) -> bool,
     ) -> Result<CheckStatus<'a>, UpdateError> {
-        let (version, version_data) = self.get_version_data(version)?;
+        let (version, version_data) = self.resolve_version(version_req)?;
         debug!(
             target: "nextest-runner::update",
             "current version is {}, update version is {version}",
@@ -171,6 +171,24 @@ impl NextestReleases {
     // Helper methods
     // ---
 
+    fn resolve_version(
+        &self,
+        version_req: &UpdateVersionReq,
+    ) -> Result<(&Version, ReleaseVersionData), UpdateError> {
+        match version_req {
+            UpdateVersionReq::Latest => {
+                // Get the latest stable (non-prerelease) version.
+                let (version, release_data) = self
+                    .project
+                    .get_latest_matching(&VersionReq::STAR)
+                    .ok_or(UpdateError::NoStableVersion)?;
+                Ok((version, self.parse_release_data(release_data)))
+            }
+            UpdateVersionReq::Version(update_version) => self.get_version_data(update_version),
+            UpdateVersionReq::LatestPrerelease(kind) => self.get_latest_prerelease(*kind),
+        }
+    }
+
     fn get_version_data(
         &self,
         version: &UpdateVersion,
@@ -195,6 +213,27 @@ impl NextestReleases {
                 .ok_or_else(|| UpdateError::NoMatchForVersionReq { req: req.clone() })?,
         };
 
+        Ok((version, self.parse_release_data(release_data)))
+    }
+
+    fn get_latest_prerelease(
+        &self,
+        kind: PrereleaseKind,
+    ) -> Result<(&Version, ReleaseVersionData), UpdateError> {
+        // all_versions() returns versions in descending order (most recent first).
+        for (version, release_data) in self.project.all_versions() {
+            if release_data.status == ReleaseStatus::Active && kind.matches(version) {
+                return Ok((version, self.parse_release_data(release_data)));
+            }
+        }
+
+        Err(UpdateError::NoVersionForPrereleaseKind { kind })
+    }
+
+    fn parse_release_data(
+        &self,
+        release_data: &mukti_metadata::ReleaseVersionData,
+    ) -> ReleaseVersionData {
         // Parse the metadata into our custom format.
         let metadata = if release_data.metadata.is_null() {
             None
@@ -212,13 +251,12 @@ impl NextestReleases {
             }
         };
 
-        let release_data = ReleaseVersionData {
+        ReleaseVersionData {
             release_url: release_data.release_url.clone(),
             status: release_data.status,
             locations: release_data.locations.clone(),
             metadata,
-        };
-        Ok((version, release_data))
+        }
     }
 
     fn target_triple(&self) -> String {
@@ -567,6 +605,58 @@ fn cleanup_backup_temp_directories(
 }
 
 const TAR_GZ_SUFFIX: &str = "tar.gz";
+
+/// Represents the user's requested version for an update.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum UpdateVersionReq {
+    /// Update to the latest stable (non-prerelease) version.
+    Latest,
+
+    /// Update to a specific version or version requirement.
+    Version(UpdateVersion),
+
+    /// Update to the latest prerelease of the given kind.
+    LatestPrerelease(PrereleaseKind),
+}
+
+/// The kind of prerelease to look for.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PrereleaseKind {
+    /// Beta channel (includes beta `-b.N`, RC `-rc.N`, and stable versions).
+    Beta,
+
+    /// Release candidate channel (`-rc.N` and stable versions).
+    Rc,
+}
+
+impl PrereleaseKind {
+    /// Returns true if this version is acceptable for this prerelease kind.
+    ///
+    /// `Beta` accepts stable, RC, or beta versions.
+    ///
+    /// `Rc` accepts stable or RC versions (not beta).
+    pub fn matches(&self, version: &Version) -> bool {
+        // Stable versions are always acceptable.
+        if version.pre.is_empty() {
+            return true;
+        }
+        let pre_str = version.pre.as_str();
+        match self {
+            // Beta accepts everything: stable, -b.N, or -rc.N.
+            PrereleaseKind::Beta => pre_str.starts_with("b.") || pre_str.starts_with("rc."),
+            // RC accepts stable or -rc.N (not -b.N).
+            PrereleaseKind::Rc => pre_str.starts_with("rc."),
+        }
+    }
+
+    /// Returns a description of this prerelease kind for user-facing messages.
+    pub fn description(&self) -> &'static str {
+        match self {
+            PrereleaseKind::Beta => "beta or RC",
+            PrereleaseKind::Rc => "RC",
+        }
+    }
+}
 
 /// Represents the version this project is being updated to.
 #[derive(Clone, Debug, Eq, PartialEq)]
