@@ -1917,13 +1917,13 @@ pub enum InheritsError {
 #[cfg(feature = "self-update")]
 mod self_update_errors {
     use super::*;
+    use crate::update::PrereleaseKind;
     use mukti_metadata::ReleaseStatus;
     use semver::{Version, VersionReq};
 
     /// An error that occurs while performing a self-update.
     ///
     /// Returned by methods in the [`update`](crate::update) module.
-    #[cfg(feature = "self-update")]
     #[derive(Debug, Error)]
     #[non_exhaustive]
     pub enum UpdateError {
@@ -1961,6 +1961,17 @@ mod self_update_errors {
         NoMatchForVersionReq {
             /// The version requirement that had no matches.
             req: VersionReq,
+        },
+
+        /// No stable (non-prerelease) version was found.
+        #[error("no stable version found")]
+        NoStableVersion,
+
+        /// No version matching the requested prerelease kind was found.
+        #[error("no version found matching {} channel", kind.description())]
+        NoVersionForPrereleaseKind {
+            /// The kind of prerelease that was requested.
+            kind: PrereleaseKind,
         },
 
         /// The specified mukti project was not found.
@@ -2092,7 +2103,6 @@ mod self_update_errors {
         display_str
     }
 
-    #[cfg(feature = "self-update")]
     /// An error occurred while parsing an [`UpdateVersion`](crate::update::UpdateVersion).
     #[derive(Debug, Error)]
     pub enum UpdateVersionParseError {

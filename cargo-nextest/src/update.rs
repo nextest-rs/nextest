@@ -4,11 +4,11 @@
 use crate::{ExpectedError, Result, output::OutputContext};
 use camino::Utf8PathBuf;
 use nextest_metadata::NextestExitCode;
-use nextest_runner::update::{CheckStatus, MuktiBackend, UpdateVersion};
+use nextest_runner::update::{CheckStatus, MuktiBackend, UpdateVersionReq};
 use owo_colors::OwoColorize;
 use semver::Version;
 use std::cmp::Ordering;
-use tracing::info;
+use tracing::{debug, info};
 
 // Returns the smallest version with a `self setup` command.
 fn min_version_with_setup() -> Version {
@@ -24,16 +24,13 @@ fn min_version_with_setup() -> Version {
 
 /// Perform an update.
 pub(crate) fn perform_update(
-    version: &str,
+    version_req: UpdateVersionReq,
     check: bool,
     yes: bool,
     force: bool,
     releases_url: Option<String>,
     output: OutputContext,
 ) -> Result<i32> {
-    let version = version
-        .parse::<UpdateVersion>()
-        .map_err(|err| ExpectedError::UpdateVersionParseError { err })?;
     let releases_url =
         releases_url.unwrap_or_else(|| "https://get.nexte.st/releases.json".to_owned());
 
@@ -53,7 +50,7 @@ pub(crate) fn perform_update(
     let mut bin_path_in_archive = Utf8PathBuf::from("cargo-nextest");
     bin_path_in_archive.set_extension(std::env::consts::EXE_EXTENSION);
 
-    let status = releases.check(&version, force, &bin_path_in_archive, |v| {
+    let status = releases.check(&version_req, force, &bin_path_in_archive, |v| {
         // Use cmp_precedence here to disregard build metadata.
         v.cmp_precedence(&min_version_with_setup()).is_ge()
     })?;
@@ -114,6 +111,7 @@ pub(crate) fn perform_update(
             };
 
             if should_apply {
+                debug!(url = ctx.location.url, "updating cargo nextest");
                 ctx.do_update()
                     .map_err(|err| ExpectedError::UpdateError { err })?;
                 info!(
