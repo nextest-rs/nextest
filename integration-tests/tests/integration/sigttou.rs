@@ -14,12 +14,9 @@
 
 use std::process::Command;
 
-/// Spawning a subprocess that grabs the foreground process would trigger
-/// SIGTTOU without the fix.
-///
-/// This test is currently ignored because it requires a version of nextest with
+/// If this test is run under nextest in an interactive terminal, spawning a
+/// subprocess that grabs the foreground process would trigger SIGTTOU without
 /// the fix.
-#[ignore]
 #[test]
 fn test_foreground_grab_does_not_suspend() {
     // This issue could be reproduced with zsh -ic, though not with bash -ic or
