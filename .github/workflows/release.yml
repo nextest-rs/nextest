@@ -20,7 +20,7 @@ jobs:
         uses: taiki-e/install-action@0e76c5c569f13f7eb21e8e5b26fe710062b57b62 # v2
         with:
           tool: cargo-release@0.25.0
-      - uses: taiki-e/create-gh-release-action@26b80501670402f1999aff4b934e1574ef2d3705 # v1
+      - uses: taiki-e/create-gh-release-action@56a8b3f8449593aa02b91f7b84da564f476e94f0 # v1
         with:
           prefix: nextest-filtering
           changelog: nextest-filtering/CHANGELOG.md
@@ -45,7 +45,7 @@ jobs:
         uses: taiki-e/install-action@0e76c5c569f13f7eb21e8e5b26fe710062b57b62 # v2
         with:
           tool: cargo-release@0.25.0
-      - uses: taiki-e/create-gh-release-action@26b80501670402f1999aff4b934e1574ef2d3705 # v1
+      - uses: taiki-e/create-gh-release-action@56a8b3f8449593aa02b91f7b84da564f476e94f0 # v1
         with:
           prefix: nextest-metadata
           changelog: nextest-metadata/CHANGELOG.md
@@ -70,7 +70,7 @@ jobs:
         uses: taiki-e/install-action@0e76c5c569f13f7eb21e8e5b26fe710062b57b62 # v2
         with:
           tool: cargo-release@0.25.0
-      - uses: taiki-e/create-gh-release-action@26b80501670402f1999aff4b934e1574ef2d3705 # v1
+      - uses: taiki-e/create-gh-release-action@56a8b3f8449593aa02b91f7b84da564f476e94f0 # v1
         with:
           prefix: nextest-runner
           # No need for a changelog -- use the cargo-nextest changelog instead.
@@ -91,7 +91,7 @@ jobs:
           persist-credentials: false
       # Note: do not publish this until binaries are built and uploaded below. This is so that
       # `cargo binstall` keeps working.
-      - uses: taiki-e/create-gh-release-action@26b80501670402f1999aff4b934e1574ef2d3705 # v1
+      - uses: taiki-e/create-gh-release-action@56a8b3f8449593aa02b91f7b84da564f476e94f0 # v1
         id: create-gh-release
         with:
           prefix: cargo-nextest
