@@ -25,7 +25,7 @@ cargo nextest self update --version 0.9.72
 
 ### Beta and RC channels
 
-<!-- md:version 0.9.119 -->
+<!-- md:version 0.9.120 -->
 
 The nextest project occasionally publishes betas and release candidates (RCs) to test new features. To update to the latest prerelease, run:
 

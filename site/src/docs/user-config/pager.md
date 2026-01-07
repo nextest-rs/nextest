@@ -5,7 +5,7 @@ description: "Pager support: scrollable output for long listings and help."
 
 # Pager support
 
-<!-- md:version 0.9.119 -->
+<!-- md:version 0.9.120 -->
 
 Nextest supports paging output through an external pager (like `less`) or a builtin pager. This is useful for commands that produce long output, such as `cargo nextest list` or `cargo nextest show-config test-groups`.
 

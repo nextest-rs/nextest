@@ -107,7 +107,7 @@ UI settings are configured under `[ui]`.
 
 ### `ui.pager`
 
-<!-- md:version 0.9.119 -->
+<!-- md:version 0.9.120 -->
 
 - **Type**: String, array, or table
 - **Description**: Specifies the pager command for output that benefits from scrolling (e.g., `nextest list`, help output). See [_Pager support_](pager.md) for details.
@@ -139,7 +139,7 @@ UI settings are configured under `[ui]`.
 
 ### `ui.paginate`
 
-<!-- md:version 0.9.119 -->
+<!-- md:version 0.9.120 -->
 
 - **Type**: String
 - **Description**: Controls when to paginate output.
@@ -157,7 +157,7 @@ UI settings are configured under `[ui]`.
 
 ## Builtin pager configuration
 
-<!-- md:version 0.9.119 -->
+<!-- md:version 0.9.120 -->
 
 When `pager = ":builtin"` is set, the builtin pager's behavior can be customized under `[ui.streampager]`. See [_Pager support_](pager.md#builtin-pager-options) for details.
 
@@ -205,7 +205,7 @@ When `pager = ":builtin"` is set, the builtin pager's behavior can be customized
 
 ## Platform-specific overrides
 
-<!-- md:version 0.9.119 -->
+<!-- md:version 0.9.120 -->
 
 You can customize UI settings for specific platforms using `[[overrides]]` sections. This is useful when different platforms need different defaults (e.g., different progress display settings).
 
