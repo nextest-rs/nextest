@@ -21,7 +21,7 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
   The pager support is closely modeled after the [Jujutsu version control system](https://github.com/jj-vcs/jj). The default pager is `less -FRX` on Unix platforms, and a builtin pager (based on [sapling-streampager](https://docs.rs/sapling-streampager)) on Windows.
 
-- `cargo nextest self update` now supports `--beta` and `--rc` flags to [update to prerelease versions](https://nexte.st/docs/installation/updating/#prerelease-versions).
+- `cargo nextest self update` now supports `--beta` and `--rc` flags to [update to prerelease versions](https://nexte.st/docs/installation/updating/#beta-and-rc-channels).
 
 ## [0.9.118] - 2026-01-04
 
