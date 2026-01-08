@@ -300,8 +300,9 @@ impl<'a> ExecutorContext<'a> {
                     .next()
                     .expect("backoff delay must be non-empty");
 
-                let run_status = run_status.into_external();
+                // Capture the internal result before converting to external.
                 let previous_result = run_status.result;
+                let run_status = run_status.into_external();
                 let previous_slow = run_status.is_slow;
 
                 let _ = resp_tx.send(ExecutorEvent::AttemptFailedWillRetry {

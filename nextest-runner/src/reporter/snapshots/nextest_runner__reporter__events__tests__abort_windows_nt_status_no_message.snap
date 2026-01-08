@@ -1,0 +1,10 @@
+---
+source: nextest-runner/src/reporter/events.rs
+expression: json
+snapshot_kind: text
+---
+{
+  "kind": "windows-nt-status",
+  "code": -1073741819,
+  "message": null
+}

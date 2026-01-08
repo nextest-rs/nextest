@@ -6,7 +6,7 @@
 //! Status levels play a role that's similar to log levels in typical loggers.
 
 use super::TestOutputDisplay;
-use crate::reporter::events::{CancelReason, ExecutionResult};
+use crate::reporter::events::{CancelReason, ExecutionResultDescription};
 use serde::Deserialize;
 
 /// Status level to show in the reporter output.
@@ -93,7 +93,7 @@ impl StatusLevels {
         cancel_status: Option<CancelReason>,
         test_status_level: StatusLevel,
         test_final_status_level: FinalStatusLevel,
-        execution_result: ExecutionResult,
+        execution_result: &ExecutionResultDescription,
     ) -> OutputOnTestFinished {
         let write_status_line = self.status_level >= test_status_level;
 
@@ -213,13 +213,12 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
-        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             cancel_status,
             test_status_level,
             test_final_status_level,
-            execution_result,
+            &ExecutionResultDescription::Pass,
         );
 
         assert!(!actual.write_status_line);
@@ -237,13 +236,12 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
-        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             cancel_status,
             test_status_level,
             test_final_status_level,
-            execution_result,
+            &ExecutionResultDescription::Pass,
         );
         assert!(actual.write_status_line);
     }
@@ -263,13 +261,12 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
-        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             Some(CancelReason::Interrupt),
             test_status_level,
             test_final_status_level,
-            execution_result,
+            &ExecutionResultDescription::Pass,
         );
         assert!(!actual.show_immediate);
         assert_eq!(actual.store_final, OutputStoreFinal::No);
@@ -288,13 +285,12 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
-        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             cancel_status,
             test_status_level,
             test_final_status_level,
-            execution_result,
+            &ExecutionResultDescription::Pass,
         );
         assert!(!actual.show_immediate);
     }
@@ -312,13 +308,12 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
-        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             cancel_status,
             test_status_level,
             test_final_status_level,
-            execution_result,
+            &ExecutionResultDescription::Pass,
         );
         assert!(actual.show_immediate);
     }
@@ -340,13 +335,12 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
-        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             cancel_status,
             test_status_level,
             test_final_status_level,
-            execution_result,
+            &ExecutionResultDescription::Pass,
         );
         assert_eq!(actual.store_final, OutputStoreFinal::No);
     }
@@ -365,13 +359,12 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
-        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             TestOutputDisplay::Final,
             cancel_status,
             test_status_level,
             test_final_status_level,
-            execution_result,
+            &ExecutionResultDescription::Pass,
         );
         assert_eq!(
             actual.store_final,
@@ -394,13 +387,12 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
-        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             TestOutputDisplay::ImmediateFinal,
             cancel_status,
             test_status_level,
             test_final_status_level,
-            execution_result,
+            &ExecutionResultDescription::Pass,
         );
         assert_eq!(
             actual.store_final,
@@ -422,13 +414,12 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
-        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             TestOutputDisplay::ImmediateFinal,
             Some(CancelReason::Signal),
             test_status_level,
             test_final_status_level,
-            execution_result,
+            &ExecutionResultDescription::Pass,
         );
         assert_eq!(
             actual.store_final,
@@ -454,13 +445,12 @@ mod tests {
             final_status_level: FinalStatusLevel::Fail,
         };
 
-        let execution_result = ExecutionResult::Pass;
         let actual = status_levels.compute_output_on_test_finished(
             display,
             cancel_status,
             test_status_level,
             test_final_status_level,
-            execution_result,
+            &ExecutionResultDescription::Pass,
         );
         assert_eq!(
             actual.store_final,
@@ -472,7 +462,7 @@ mod tests {
 
     #[test]
     fn on_test_finished_terminated_by_nextest() {
-        use crate::reporter::events::{AbortStatus, FailureStatus};
+        use crate::reporter::events::{AbortDescription, FailureDescription, SIGTERM};
 
         let status_levels = StatusLevels {
             status_level: StatusLevel::Pass,
@@ -480,10 +470,14 @@ mod tests {
         };
 
         // Test 1: Terminated by nextest (SIGTERM) during TestFailureImmediate - should hide
-        #[cfg(unix)]
         {
-            let execution_result = ExecutionResult::Fail {
-                failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(libc::SIGTERM)),
+            let execution_result = ExecutionResultDescription::Fail {
+                failure: FailureDescription::Abort {
+                    abort: AbortDescription::UnixSignal {
+                        signal: SIGTERM,
+                        name: Some("TERM".into()),
+                    },
+                },
                 leaked: false,
             };
 
@@ -492,7 +486,7 @@ mod tests {
                 Some(CancelReason::TestFailureImmediate),
                 StatusLevel::Fail,
                 FinalStatusLevel::Fail,
-                execution_result,
+                &execution_result,
             );
 
             assert!(
@@ -507,10 +501,11 @@ mod tests {
         }
 
         // Test 2: Terminated by nextest (JobObject) during TestFailureImmediate - should hide
-        #[cfg(windows)]
         {
-            let execution_result = ExecutionResult::Fail {
-                failure_status: FailureStatus::Abort(AbortStatus::JobObject),
+            let execution_result = ExecutionResultDescription::Fail {
+                failure: FailureDescription::Abort {
+                    abort: AbortDescription::WindowsJobObject,
+                },
                 leaked: false,
             };
 
@@ -519,7 +514,7 @@ mod tests {
                 Some(CancelReason::TestFailureImmediate),
                 StatusLevel::Fail,
                 FinalStatusLevel::Fail,
-                execution_result,
+                &execution_result,
             );
 
             assert!(
@@ -534,8 +529,8 @@ mod tests {
         }
 
         // Test 3: Natural failure (exit code) during TestFailureImmediate - should show
-        let execution_result = ExecutionResult::Fail {
-            failure_status: FailureStatus::ExitCode(1),
+        let execution_result = ExecutionResultDescription::Fail {
+            failure: FailureDescription::ExitCode { code: 1 },
             leaked: false,
         };
 
@@ -544,7 +539,7 @@ mod tests {
             Some(CancelReason::TestFailureImmediate),
             StatusLevel::Fail,
             FinalStatusLevel::Fail,
-            execution_result,
+            &execution_result,
         );
 
         assert!(
@@ -560,10 +555,14 @@ mod tests {
         );
 
         // Test 4: SIGTERM but not during TestFailureImmediate (user sent signal) - should show
-        #[cfg(unix)]
         {
-            let execution_result = ExecutionResult::Fail {
-                failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(libc::SIGTERM)),
+            let execution_result = ExecutionResultDescription::Fail {
+                failure: FailureDescription::Abort {
+                    abort: AbortDescription::UnixSignal {
+                        signal: SIGTERM,
+                        name: Some("TERM".into()),
+                    },
+                },
                 leaked: false,
             };
 
@@ -572,7 +571,7 @@ mod tests {
                 Some(CancelReason::Signal), // Regular signal, not TestFailureImmediate
                 StatusLevel::Fail,
                 FinalStatusLevel::Fail,
-                execution_result,
+                &execution_result,
             );
 
             assert!(

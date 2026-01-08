@@ -19,7 +19,17 @@ use crate::{
 use chrono::{DateTime, FixedOffset};
 use nextest_metadata::MismatchReason;
 use quick_junit::ReportUuid;
-use std::{collections::BTreeMap, fmt, num::NonZero, process::ExitStatus, time::Duration};
+use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
+use std::{
+    collections::BTreeMap, ffi::c_int, fmt, num::NonZero, process::ExitStatus, time::Duration,
+};
+
+/// The signal number for SIGTERM.
+///
+/// This is 15 on all platforms. We define it here rather than using `SIGTERM` because
+/// `SIGTERM` is not available on Windows, but the value is platform-independent.
+pub const SIGTERM: c_int = 15;
 
 /// A reporter event.
 #[derive(Clone, Debug)]
@@ -637,23 +647,23 @@ impl RunStats {
         self.setup_scripts_finished_count += 1;
 
         match status.result {
-            ExecutionResult::Pass
-            | ExecutionResult::Leak {
+            ExecutionResultDescription::Pass
+            | ExecutionResultDescription::Leak {
                 result: LeakTimeoutResult::Pass,
             } => {
                 self.setup_scripts_passed += 1;
             }
-            ExecutionResult::Fail { .. }
-            | ExecutionResult::Leak {
+            ExecutionResultDescription::Fail { .. }
+            | ExecutionResultDescription::Leak {
                 result: LeakTimeoutResult::Fail,
             } => {
                 self.setup_scripts_failed += 1;
             }
-            ExecutionResult::ExecFail => {
+            ExecutionResultDescription::ExecFail => {
                 self.setup_scripts_exec_failed += 1;
             }
-            // Timed out setup scripts are always treated as failures
-            ExecutionResult::Timeout { .. } => {
+            // Timed out setup scripts are always treated as failures.
+            ExecutionResultDescription::Timeout { .. } => {
                 self.setup_scripts_timed_out += 1;
             }
         }
@@ -671,7 +681,7 @@ impl RunStats {
         // same type.
         let last_status = run_statuses.last_status();
         match last_status.result {
-            ExecutionResult::Pass => {
+            ExecutionResultDescription::Pass => {
                 self.passed += 1;
                 if last_status.is_slow {
                     self.passed_slow += 1;
@@ -680,7 +690,7 @@ impl RunStats {
                     self.flaky += 1;
                 }
             }
-            ExecutionResult::Leak {
+            ExecutionResultDescription::Leak {
                 result: LeakTimeoutResult::Pass,
             } => {
                 self.passed += 1;
@@ -692,7 +702,7 @@ impl RunStats {
                     self.flaky += 1;
                 }
             }
-            ExecutionResult::Leak {
+            ExecutionResultDescription::Leak {
                 result: LeakTimeoutResult::Fail,
             } => {
                 self.failed += 1;
@@ -701,13 +711,13 @@ impl RunStats {
                     self.failed_slow += 1;
                 }
             }
-            ExecutionResult::Fail { .. } => {
+            ExecutionResultDescription::Fail { .. } => {
                 self.failed += 1;
                 if last_status.is_slow {
                     self.failed_slow += 1;
                 }
             }
-            ExecutionResult::Timeout {
+            ExecutionResultDescription::Timeout {
                 result: SlowTimeoutResult::Pass,
             } => {
                 self.passed += 1;
@@ -716,12 +726,12 @@ impl RunStats {
                     self.flaky += 1;
                 }
             }
-            ExecutionResult::Timeout {
+            ExecutionResultDescription::Timeout {
                 result: SlowTimeoutResult::Fail,
             } => {
                 self.failed_timed_out += 1;
             }
-            ExecutionResult::ExecFail => self.exec_failed += 1,
+            ExecutionResultDescription::ExecFail => self.exec_failed += 1,
         }
     }
 }
@@ -915,14 +925,14 @@ impl<'a> ExecutionDescription<'a> {
     pub fn status_level(&self) -> StatusLevel {
         match self {
             ExecutionDescription::Success { single_status } => match single_status.result {
-                ExecutionResult::Leak {
+                ExecutionResultDescription::Leak {
                     result: LeakTimeoutResult::Pass,
                 } => StatusLevel::Leak,
-                ExecutionResult::Pass => StatusLevel::Pass,
-                ExecutionResult::Timeout {
+                ExecutionResultDescription::Pass => StatusLevel::Pass,
+                ExecutionResultDescription::Timeout {
                     result: SlowTimeoutResult::Pass,
                 } => StatusLevel::Slow,
-                other => unreachable!(
+                ref other => unreachable!(
                     "Success only permits Pass, Leak Pass, or Timeout Pass, found {other:?}"
                 ),
             },
@@ -941,17 +951,17 @@ impl<'a> ExecutionDescription<'a> {
                     FinalStatusLevel::Slow
                 } else {
                     match single_status.result {
-                        ExecutionResult::Pass => FinalStatusLevel::Pass,
-                        ExecutionResult::Leak {
+                        ExecutionResultDescription::Pass => FinalStatusLevel::Pass,
+                        ExecutionResultDescription::Leak {
                             result: LeakTimeoutResult::Pass,
                         } => FinalStatusLevel::Leak,
                         // Timeout with Pass should return Slow, but this case
                         // shouldn't be reached because is_slow is true for
                         // timeout scenarios. Handle it for completeness.
-                        ExecutionResult::Timeout {
+                        ExecutionResultDescription::Timeout {
                             result: SlowTimeoutResult::Pass,
                         } => FinalStatusLevel::Slow,
-                        other => unreachable!(
+                        ref other => unreachable!(
                             "Success only permits Pass, Leak Pass, or Timeout Pass, found {other:?}"
                         ),
                     }
@@ -976,6 +986,10 @@ impl<'a> ExecutionDescription<'a> {
 }
 
 /// Information about a single execution of a test.
+///
+/// This is the external-facing type used by reporters. The `result` field uses
+/// [`ExecutionResultDescription`], a platform-independent type that can be
+/// serialized and deserialized across platforms.
 #[derive(Clone, Debug)]
 pub struct ExecuteStatus {
     /// Retry-related data.
@@ -983,7 +997,7 @@ pub struct ExecuteStatus {
     /// The stdout and stderr output for this test.
     pub output: ChildExecutionOutput,
     /// The execution result for this test: pass, fail or execution error.
-    pub result: ExecutionResult,
+    pub result: ExecutionResultDescription,
     /// The time at which the test started.
     pub start_time: DateTime<FixedOffset>,
     /// The time it took for the test to run.
@@ -995,13 +1009,17 @@ pub struct ExecuteStatus {
 }
 
 /// Information about the execution of a setup script.
+///
+/// This is the external-facing type used by reporters. The `result` field uses
+/// [`ExecutionResultDescription`], a platform-independent type that can be
+/// serialized and deserialized across platforms.
 #[derive(Clone, Debug)]
 pub struct SetupScriptExecuteStatus {
     /// Output for this setup script.
     pub output: ChildExecutionOutput,
 
     /// The execution result for this setup script: pass, fail or execution error.
-    pub result: ExecutionResult,
+    pub result: ExecutionResultDescription,
 
     /// The time at which the script started.
     pub start_time: DateTime<FixedOffset>,
@@ -1103,31 +1121,6 @@ impl ExecutionResult {
         }
     }
 
-    /// Returns true if this result represents a test that was terminated by nextest
-    /// (as opposed to failing naturally).
-    ///
-    /// This is used to suppress output spam when immediate termination is active.
-    ///
-    /// TODO: This is a heuristic that checks if the test was terminated by SIGTERM (Unix) or
-    /// job object (Windows). In an edge case, a test could send SIGTERM to itself, which would
-    /// incorrectly be detected as a nextest-initiated termination. A more robust solution would
-    /// track which tests were explicitly sent termination signals by nextest.
-    pub fn is_termination_failure(&self) -> bool {
-        match self {
-            #[cfg(unix)]
-            ExecutionResult::Fail {
-                failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(libc::SIGTERM)),
-                ..
-            } => true,
-            #[cfg(windows)]
-            ExecutionResult::Fail {
-                failure_status: FailureStatus::Abort(AbortStatus::JobObject),
-                ..
-            } => true,
-            _ => false,
-        }
-    }
-
     /// Returns a static string representation of the result.
     pub fn as_static_str(&self) -> &'static str {
         match self {
@@ -1211,6 +1204,249 @@ impl fmt::Debug for AbortStatus {
             AbortStatus::WindowsNtStatus(status) => write!(f, "WindowsNtStatus({status:x})"),
             #[cfg(windows)]
             AbortStatus::JobObject => write!(f, "JobObject"),
+        }
+    }
+}
+
+/// A platform-independent description of an abort status.
+///
+/// This type can be serialized on one platform and deserialized on another,
+/// containing all information needed for display without requiring
+/// platform-specific lookups.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum AbortDescription {
+    /// The process was aborted by a Unix signal.
+    UnixSignal {
+        /// The signal number.
+        signal: i32,
+        /// The signal name without the "SIG" prefix (e.g., "TERM", "SEGV"),
+        /// if known.
+        name: Option<SmolStr>,
+    },
+
+    /// The process was aborted with a Windows NT status code.
+    WindowsNtStatus {
+        /// The NTSTATUS code.
+        code: i32,
+        /// The human-readable message from the Win32 error code, if available.
+        message: Option<SmolStr>,
+    },
+
+    /// The process was terminated via a Windows job object.
+    WindowsJobObject,
+}
+
+impl fmt::Display for AbortDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnixSignal { signal, name } => {
+                write!(f, "aborted with signal {signal}")?;
+                if let Some(name) = name {
+                    write!(f, " (SIG{name})")?;
+                }
+                Ok(())
+            }
+            Self::WindowsNtStatus { code, message } => {
+                write!(f, "aborted with code {code:#010x}")?;
+                if let Some(message) = message {
+                    write!(f, ": {message}")?;
+                }
+                Ok(())
+            }
+            Self::WindowsJobObject => {
+                write!(f, "terminated via job object")
+            }
+        }
+    }
+}
+
+impl From<AbortStatus> for AbortDescription {
+    fn from(status: AbortStatus) -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(unix)] {
+                match status {
+                    AbortStatus::UnixSignal(signal) => Self::UnixSignal {
+                        signal,
+                        name: crate::helpers::signal_str(signal).map(SmolStr::new_static),
+                    },
+                }
+            } else if #[cfg(windows)] {
+                match status {
+                    AbortStatus::WindowsNtStatus(code) => Self::WindowsNtStatus {
+                        code,
+                        message: crate::helpers::windows_nt_status_message(code),
+                    },
+                    AbortStatus::JobObject => Self::WindowsJobObject,
+                }
+            } else {
+                match status {}
+            }
+        }
+    }
+}
+
+/// A platform-independent description of a test failure status.
+///
+/// This is the platform-independent counterpart to [`FailureStatus`].
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum FailureDescription {
+    /// The test exited with a non-zero exit code.
+    ExitCode {
+        /// The exit code.
+        code: i32,
+    },
+
+    /// The test was aborted (e.g., by a signal on Unix or NT status on Windows).
+    ///
+    /// Note: this is a struct variant rather than a newtype variant to ensure
+    /// proper JSON nesting. Both `FailureDescription` and `AbortDescription`
+    /// use `#[serde(tag = "kind")]`, and if this were a newtype variant, serde
+    /// would flatten the inner type causing duplicate `"kind"` fields.
+    Abort {
+        /// The abort description.
+        abort: AbortDescription,
+    },
+}
+
+impl From<FailureStatus> for FailureDescription {
+    fn from(status: FailureStatus) -> Self {
+        match status {
+            FailureStatus::ExitCode(code) => Self::ExitCode { code },
+            FailureStatus::Abort(abort) => Self::Abort {
+                abort: AbortDescription::from(abort),
+            },
+        }
+    }
+}
+
+impl fmt::Display for FailureDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ExitCode { code } => write!(f, "exited with code {code}"),
+            Self::Abort { abort } => write!(f, "{abort}"),
+        }
+    }
+}
+
+/// A platform-independent description of a test execution result.
+///
+/// This is the platform-independent counterpart to [`ExecutionResult`], used
+/// in external-facing types like [`ExecuteStatus`].
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum ExecutionResultDescription {
+    /// The test passed.
+    Pass,
+
+    /// The test passed but leaked handles.
+    Leak {
+        /// Whether this leak was treated as a failure.
+        result: LeakTimeoutResult,
+    },
+
+    /// The test failed.
+    Fail {
+        /// The failure status.
+        failure: FailureDescription,
+
+        /// Whether the test leaked handles.
+        leaked: bool,
+    },
+
+    /// An error occurred while executing the test.
+    ExecFail,
+
+    /// The test was terminated due to a timeout.
+    Timeout {
+        /// Whether this timeout was treated as a failure.
+        result: SlowTimeoutResult,
+    },
+}
+
+impl ExecutionResultDescription {
+    /// Returns true if the test was successful.
+    pub fn is_success(&self) -> bool {
+        match self {
+            Self::Pass
+            | Self::Timeout {
+                result: SlowTimeoutResult::Pass,
+            }
+            | Self::Leak {
+                result: LeakTimeoutResult::Pass,
+            } => true,
+            Self::Leak {
+                result: LeakTimeoutResult::Fail,
+            }
+            | Self::Fail { .. }
+            | Self::ExecFail
+            | Self::Timeout {
+                result: SlowTimeoutResult::Fail,
+            } => false,
+        }
+    }
+
+    /// Returns a static string representation of the result.
+    pub fn as_static_str(&self) -> &'static str {
+        match self {
+            Self::Pass => "pass",
+            Self::Leak { .. } => "leak",
+            Self::Fail { .. } => "fail",
+            Self::ExecFail => "exec-fail",
+            Self::Timeout { .. } => "timeout",
+        }
+    }
+
+    /// Returns true if this result represents a test that was terminated by nextest
+    /// (as opposed to failing naturally).
+    ///
+    /// This is used to suppress output spam when running under
+    /// TestFailureImmediate.
+    ///
+    /// TODO: This is a heuristic that checks if the test was terminated by
+    /// SIGTERM (Unix) or job object (Windows). In an edge case, a test could
+    /// send SIGTERM to itself, which would incorrectly be detected as a
+    /// nextest-initiated termination. A more robust solution would track which
+    /// tests were explicitly sent termination signals by nextest.
+    pub fn is_termination_failure(&self) -> bool {
+        matches!(
+            self,
+            Self::Fail {
+                failure: FailureDescription::Abort {
+                    abort: AbortDescription::UnixSignal {
+                        signal: SIGTERM,
+                        ..
+                    },
+                },
+                ..
+            } | Self::Fail {
+                failure: FailureDescription::Abort {
+                    abort: AbortDescription::WindowsJobObject,
+                },
+                ..
+            }
+        )
+    }
+}
+
+impl From<ExecutionResult> for ExecutionResultDescription {
+    fn from(result: ExecutionResult) -> Self {
+        match result {
+            ExecutionResult::Pass => Self::Pass,
+            ExecutionResult::Leak { result } => Self::Leak { result },
+            ExecutionResult::Fail {
+                failure_status,
+                leaked,
+            } => Self::Fail {
+                failure: FailureDescription::from(failure_status),
+                leaked,
+            },
+            ExecutionResult::ExecFail => Self::ExecFail,
+            ExecutionResult::Timeout { result } => Self::Timeout { result },
         }
     }
 }
@@ -1701,5 +1937,296 @@ mod tests {
             FinalRunStats::NoTestsRun,
             "setup scripts passed => success, but no tests run"
         );
+    }
+
+    #[test]
+    fn abort_description_serialization() {
+        // Unix signal with name.
+        let unix_with_name = AbortDescription::UnixSignal {
+            signal: 15,
+            name: Some("TERM".into()),
+        };
+        let json = serde_json::to_string_pretty(&unix_with_name).unwrap();
+        insta::assert_snapshot!("abort_unix_signal_with_name", json);
+        let roundtrip: AbortDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(unix_with_name, roundtrip);
+
+        // Unix signal without name.
+        let unix_no_name = AbortDescription::UnixSignal {
+            signal: 42,
+            name: None,
+        };
+        let json = serde_json::to_string_pretty(&unix_no_name).unwrap();
+        insta::assert_snapshot!("abort_unix_signal_no_name", json);
+        let roundtrip: AbortDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(unix_no_name, roundtrip);
+
+        // Windows NT status (0xC000013A is STATUS_CONTROL_C_EXIT).
+        let windows_nt = AbortDescription::WindowsNtStatus {
+            code: -1073741510_i32,
+            message: Some("The application terminated as a result of a CTRL+C.".into()),
+        };
+        let json = serde_json::to_string_pretty(&windows_nt).unwrap();
+        insta::assert_snapshot!("abort_windows_nt_status", json);
+        let roundtrip: AbortDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(windows_nt, roundtrip);
+
+        // Windows NT status without message.
+        let windows_nt_no_msg = AbortDescription::WindowsNtStatus {
+            code: -1073741819_i32,
+            message: None,
+        };
+        let json = serde_json::to_string_pretty(&windows_nt_no_msg).unwrap();
+        insta::assert_snapshot!("abort_windows_nt_status_no_message", json);
+        let roundtrip: AbortDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(windows_nt_no_msg, roundtrip);
+
+        // Windows job object.
+        let job = AbortDescription::WindowsJobObject;
+        let json = serde_json::to_string_pretty(&job).unwrap();
+        insta::assert_snapshot!("abort_windows_job_object", json);
+        let roundtrip: AbortDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(job, roundtrip);
+    }
+
+    #[test]
+    fn abort_description_cross_platform_deserialization() {
+        // Cross-platform deserialization: these JSON strings could come from any
+        // platform. Verify they deserialize correctly regardless of current platform.
+        let unix_json = r#"{"kind":"unix-signal","signal":11,"name":"SEGV"}"#;
+        let unix_desc: AbortDescription = serde_json::from_str(unix_json).unwrap();
+        assert_eq!(
+            unix_desc,
+            AbortDescription::UnixSignal {
+                signal: 11,
+                name: Some("SEGV".into()),
+            }
+        );
+
+        let windows_json = r#"{"kind":"windows-nt-status","code":-1073741510,"message":"CTRL+C"}"#;
+        let windows_desc: AbortDescription = serde_json::from_str(windows_json).unwrap();
+        assert_eq!(
+            windows_desc,
+            AbortDescription::WindowsNtStatus {
+                code: -1073741510,
+                message: Some("CTRL+C".into()),
+            }
+        );
+
+        let job_json = r#"{"kind":"windows-job-object"}"#;
+        let job_desc: AbortDescription = serde_json::from_str(job_json).unwrap();
+        assert_eq!(job_desc, AbortDescription::WindowsJobObject);
+    }
+
+    #[test]
+    fn abort_description_display() {
+        // Unix signal with name.
+        let unix = AbortDescription::UnixSignal {
+            signal: 15,
+            name: Some("TERM".into()),
+        };
+        assert_eq!(unix.to_string(), "aborted with signal 15 (SIGTERM)");
+
+        // Unix signal without a name.
+        let unix_no_name = AbortDescription::UnixSignal {
+            signal: 42,
+            name: None,
+        };
+        assert_eq!(unix_no_name.to_string(), "aborted with signal 42");
+
+        // Windows NT status with message.
+        let windows = AbortDescription::WindowsNtStatus {
+            code: -1073741510,
+            message: Some("CTRL+C exit".into()),
+        };
+        assert_eq!(
+            windows.to_string(),
+            "aborted with code 0xc000013a: CTRL+C exit"
+        );
+
+        // Windows NT status without message.
+        let windows_no_msg = AbortDescription::WindowsNtStatus {
+            code: -1073741510,
+            message: None,
+        };
+        assert_eq!(windows_no_msg.to_string(), "aborted with code 0xc000013a");
+
+        // Windows job object.
+        let job = AbortDescription::WindowsJobObject;
+        assert_eq!(job.to_string(), "terminated via job object");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn abort_description_from_abort_status() {
+        // Test conversion from AbortStatus to AbortDescription on Unix.
+        let status = AbortStatus::UnixSignal(15);
+        let description = AbortDescription::from(status);
+
+        assert_eq!(
+            description,
+            AbortDescription::UnixSignal {
+                signal: 15,
+                name: Some("TERM".into()),
+            }
+        );
+
+        // Unknown signal.
+        let unknown_status = AbortStatus::UnixSignal(42);
+        let unknown_description = AbortDescription::from(unknown_status);
+        assert_eq!(
+            unknown_description,
+            AbortDescription::UnixSignal {
+                signal: 42,
+                name: None,
+            }
+        );
+    }
+
+    #[test]
+    fn execution_result_description_serialization() {
+        // Test all variants of ExecutionResultDescription for serialization roundtrips.
+
+        // Pass.
+        let pass = ExecutionResultDescription::Pass;
+        let json = serde_json::to_string_pretty(&pass).unwrap();
+        insta::assert_snapshot!("pass", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(pass, roundtrip);
+
+        // Leak with pass result.
+        let leak_pass = ExecutionResultDescription::Leak {
+            result: LeakTimeoutResult::Pass,
+        };
+        let json = serde_json::to_string_pretty(&leak_pass).unwrap();
+        insta::assert_snapshot!("leak_pass", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(leak_pass, roundtrip);
+
+        // Leak with fail result.
+        let leak_fail = ExecutionResultDescription::Leak {
+            result: LeakTimeoutResult::Fail,
+        };
+        let json = serde_json::to_string_pretty(&leak_fail).unwrap();
+        insta::assert_snapshot!("leak_fail", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(leak_fail, roundtrip);
+
+        // Fail with exit code, no leak.
+        let fail_exit_code = ExecutionResultDescription::Fail {
+            failure: FailureDescription::ExitCode { code: 101 },
+            leaked: false,
+        };
+        let json = serde_json::to_string_pretty(&fail_exit_code).unwrap();
+        insta::assert_snapshot!("fail_exit_code", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(fail_exit_code, roundtrip);
+
+        // Fail with exit code and leak.
+        let fail_exit_code_leaked = ExecutionResultDescription::Fail {
+            failure: FailureDescription::ExitCode { code: 1 },
+            leaked: true,
+        };
+        let json = serde_json::to_string_pretty(&fail_exit_code_leaked).unwrap();
+        insta::assert_snapshot!("fail_exit_code_leaked", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(fail_exit_code_leaked, roundtrip);
+
+        // Fail with Unix signal abort.
+        let fail_unix_signal = ExecutionResultDescription::Fail {
+            failure: FailureDescription::Abort {
+                abort: AbortDescription::UnixSignal {
+                    signal: 11,
+                    name: Some("SEGV".into()),
+                },
+            },
+            leaked: false,
+        };
+        let json = serde_json::to_string_pretty(&fail_unix_signal).unwrap();
+        insta::assert_snapshot!("fail_unix_signal", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(fail_unix_signal, roundtrip);
+
+        // Fail with Unix signal abort (no name) and leak.
+        let fail_unix_signal_unknown = ExecutionResultDescription::Fail {
+            failure: FailureDescription::Abort {
+                abort: AbortDescription::UnixSignal {
+                    signal: 42,
+                    name: None,
+                },
+            },
+            leaked: true,
+        };
+        let json = serde_json::to_string_pretty(&fail_unix_signal_unknown).unwrap();
+        insta::assert_snapshot!("fail_unix_signal_unknown_leaked", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(fail_unix_signal_unknown, roundtrip);
+
+        // Fail with Windows NT status abort.
+        let fail_windows_nt = ExecutionResultDescription::Fail {
+            failure: FailureDescription::Abort {
+                abort: AbortDescription::WindowsNtStatus {
+                    code: -1073741510,
+                    message: Some("The application terminated as a result of a CTRL+C.".into()),
+                },
+            },
+            leaked: false,
+        };
+        let json = serde_json::to_string_pretty(&fail_windows_nt).unwrap();
+        insta::assert_snapshot!("fail_windows_nt_status", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(fail_windows_nt, roundtrip);
+
+        // Fail with Windows NT status abort (no message).
+        let fail_windows_nt_no_msg = ExecutionResultDescription::Fail {
+            failure: FailureDescription::Abort {
+                abort: AbortDescription::WindowsNtStatus {
+                    code: -1073741819,
+                    message: None,
+                },
+            },
+            leaked: false,
+        };
+        let json = serde_json::to_string_pretty(&fail_windows_nt_no_msg).unwrap();
+        insta::assert_snapshot!("fail_windows_nt_status_no_message", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(fail_windows_nt_no_msg, roundtrip);
+
+        // Fail with Windows job object abort.
+        let fail_job_object = ExecutionResultDescription::Fail {
+            failure: FailureDescription::Abort {
+                abort: AbortDescription::WindowsJobObject,
+            },
+            leaked: false,
+        };
+        let json = serde_json::to_string_pretty(&fail_job_object).unwrap();
+        insta::assert_snapshot!("fail_windows_job_object", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(fail_job_object, roundtrip);
+
+        // ExecFail.
+        let exec_fail = ExecutionResultDescription::ExecFail;
+        let json = serde_json::to_string_pretty(&exec_fail).unwrap();
+        insta::assert_snapshot!("exec_fail", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(exec_fail, roundtrip);
+
+        // Timeout with pass result.
+        let timeout_pass = ExecutionResultDescription::Timeout {
+            result: SlowTimeoutResult::Pass,
+        };
+        let json = serde_json::to_string_pretty(&timeout_pass).unwrap();
+        insta::assert_snapshot!("timeout_pass", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(timeout_pass, roundtrip);
+
+        // Timeout with fail result.
+        let timeout_fail = ExecutionResultDescription::Timeout {
+            result: SlowTimeoutResult::Fail,
+        };
+        let json = serde_json::to_string_pretty(&timeout_fail).unwrap();
+        insta::assert_snapshot!("timeout_fail", json);
+        let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
+        assert_eq!(timeout_fail, roundtrip);
     }
 }

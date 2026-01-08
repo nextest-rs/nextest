@@ -3,7 +3,7 @@
 
 //! Leak timeout configuration.
 
-use serde::{Deserialize, de::IntoDeserializer};
+use serde::{Deserialize, Serialize, de::IntoDeserializer};
 use std::{fmt, time::Duration};
 
 /// Controls leak timeout behavior.
@@ -30,7 +30,7 @@ impl Default for LeakTimeout {
 }
 
 /// The result of controlling leak timeout behavior.
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum LeakTimeoutResult {
     /// The test is marked as failed.

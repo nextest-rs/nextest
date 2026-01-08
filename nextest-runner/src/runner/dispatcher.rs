@@ -16,9 +16,9 @@ use crate::{
     input::{InputEvent, InputHandler},
     list::{TestInstance, TestInstanceId, TestList},
     reporter::events::{
-        CancelReason, ExecuteStatus, ExecutionStatuses, FinalRunStats, InfoResponse, ReporterEvent,
-        RunFinishedStats, RunStats, StressIndex, StressProgress, StressRunStats, TestEvent,
-        TestEventKind,
+        CancelReason, ExecuteStatus, ExecutionResultDescription, ExecutionStatuses,
+        FailureDescription, FinalRunStats, InfoResponse, ReporterEvent, RunFinishedStats, RunStats,
+        StressIndex, StressProgress, StressRunStats, TestEvent, TestEventKind,
     },
     runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
     signal::{
@@ -600,11 +600,11 @@ where
 
                 // Fire the setup-script-done probe, extracting the exit code
                 // from the result if available.
-                let exit_code = match status.result {
-                    crate::reporter::events::ExecutionResult::Fail {
-                        failure_status: crate::reporter::events::FailureStatus::ExitCode(code),
+                let exit_code = match &status.result {
+                    ExecutionResultDescription::Fail {
+                        failure: FailureDescription::ExitCode { code },
                         ..
-                    } => Some(code),
+                    } => Some(*code),
                     _ => None,
                 };
 

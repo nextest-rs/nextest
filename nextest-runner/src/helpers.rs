@@ -687,18 +687,29 @@ pub(crate) fn display_nt_status(
     // set is going to be displayed anyway. This makes all possible displays
     // uniform.
     let bolded_status = format!("{:#010x}", nt_status.style(bold_style));
+
+    match windows_nt_status_message(nt_status) {
+        Some(message) => format!("{bolded_status}: {message}"),
+        None => bolded_status,
+    }
+}
+
+/// Returns the human-readable message for a Windows NT status code, if available.
+#[cfg(windows)]
+pub(crate) fn windows_nt_status_message(
+    nt_status: windows_sys::Win32::Foundation::NTSTATUS,
+) -> Option<smol_str::SmolStr> {
     // Convert the NTSTATUS to a Win32 error code.
     let win32_code = unsafe { windows_sys::Win32::Foundation::RtlNtStatusToDosError(nt_status) };
 
     if win32_code == windows_sys::Win32::Foundation::ERROR_MR_MID_NOT_FOUND {
         // The Win32 code was not found.
-        return bolded_status;
+        return None;
     }
 
-    format!(
-        "{bolded_status}: {}",
-        io::Error::from_raw_os_error(win32_code as i32)
-    )
+    Some(smol_str::SmolStr::new(
+        io::Error::from_raw_os_error(win32_code as i32).to_string(),
+    ))
 }
 
 #[derive(Copy, Clone, Debug)]
