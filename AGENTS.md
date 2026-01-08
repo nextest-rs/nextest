@@ -177,6 +177,7 @@ Examples:
 - Release preparation: `[meta] prepare releases`.
 - Keep descriptions concise but descriptive.
 - Use simple past and present tense: "Previously, when the user did X, Y used to happen. With this commit, now Z happens. Also add tests for U, V, and W."
+- Commit messages should be Markdown. Don't use backticks in commit message titles, but do use them in bodies.
 
 ### Commit quality
 

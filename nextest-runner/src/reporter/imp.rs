@@ -17,19 +17,20 @@ use crate::{
         aggregator::EventAggregator, displayer::ShowProgress, events::*,
         structured::StructuredReporter,
     },
+    write_str::WriteStr,
 };
 
-/// Standard error destination for the reporter.
+/// Output destination for the reporter.
 ///
 /// This is usually a terminal, but can be an in-memory buffer for tests.
-pub enum ReporterStderr<'a> {
+pub enum ReporterOutput<'a> {
     /// Produce output on the (possibly piped) terminal.
     ///
     /// If the terminal isn't piped, produce output to a progress bar.
     Terminal,
 
     /// Write output to a buffer.
-    Buffer(&'a mut String),
+    Writer(&'a mut (dyn WriteStr + Send)),
 }
 
 /// Test reporter builder.
@@ -126,7 +127,7 @@ impl ReporterBuilder {
         test_list: &TestList,
         profile: &EvaluatableProfile<'a>,
         show_term_progress: ShowTerminalProgress,
-        output: ReporterStderr<'a>,
+        output: ReporterOutput<'a>,
         structured_reporter: StructuredReporter<'a>,
     ) -> Reporter<'a> {
         let aggregator = EventAggregator::new(test_list.mode(), profile);
