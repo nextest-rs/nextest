@@ -38,7 +38,7 @@ use crate::{
         },
         events::*,
         helpers::Styles,
-        imp::ReporterStderr,
+        imp::ReporterOutput,
     },
     run_mode::NextestRunMode,
     runner::StressCount,
@@ -71,7 +71,7 @@ pub(crate) struct DisplayReporterBuilder {
 }
 
 impl DisplayReporterBuilder {
-    pub(crate) fn build<'a>(self, output: ReporterStderr<'a>) -> DisplayReporter<'a> {
+    pub(crate) fn build<'a>(self, output: ReporterOutput<'a>) -> DisplayReporter<'a> {
         let mut styles: Box<Styles> = Box::default();
         if self.should_colorize {
             styles.colorize();
@@ -85,21 +85,21 @@ impl DisplayReporterBuilder {
 
         let mut theme_characters = ThemeCharacters::default();
         match output {
-            ReporterStderr::Terminal => {
+            ReporterOutput::Terminal => {
                 if supports_unicode::on(supports_unicode::Stream::Stderr) {
                     theme_characters.use_unicode();
                 }
             }
-            ReporterStderr::Buffer(_) => {
-                // Always use Unicode for internal buffers.
+            ReporterOutput::Writer(_) => {
+                // Always use Unicode for writers.
                 theme_characters.use_unicode();
             }
         }
 
         let mut show_progress_bar = false;
 
-        let stderr = match output {
-            ReporterStderr::Terminal => {
+        let output = match output {
+            ReporterOutput::Terminal => {
                 let is_terminal = io::stderr().is_terminal();
                 let progress_bar = self.progress_bar(
                     is_terminal,
@@ -113,12 +113,12 @@ impl DisplayReporterBuilder {
                     .map(|progress_bar| !progress_bar.is_hidden())
                     .unwrap_or_default();
 
-                ReporterStderrImpl::Terminal {
+                ReporterOutputImpl::Terminal {
                     progress_bar: progress_bar.map(Box::new),
                     term_progress,
                 }
             }
-            ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
+            ReporterOutput::Writer(writer) => ReporterOutputImpl::Writer(writer),
         };
 
         // success_output is meaningless if the runner isn't capturing any
@@ -166,7 +166,7 @@ impl DisplayReporterBuilder {
                 ),
                 final_outputs: DebugIgnore(Vec::new()),
             },
-            stderr,
+            output,
         }
     }
 
@@ -219,20 +219,20 @@ impl DisplayReporterBuilder {
 }
 
 /// Functionality to report test results to stderr, JUnit, and/or structured,
-/// machine-readable results to stdout
+/// machine-readable results to stdout.
 pub(crate) struct DisplayReporter<'a> {
     inner: DisplayReporterImpl<'a>,
-    stderr: ReporterStderrImpl<'a>,
+    output: ReporterOutputImpl<'a>,
 }
 
 impl<'a> DisplayReporter<'a> {
     pub(crate) fn tick(&mut self) {
-        self.stderr.tick(&self.inner.styles);
+        self.output.tick(&self.inner.styles);
     }
 
     pub(crate) fn write_event(&mut self, event: &TestEvent<'a>) -> Result<(), WriteEventError> {
-        match &mut self.stderr {
-            ReporterStderrImpl::Terminal {
+        match &mut self.output {
+            ReporterOutputImpl::Terminal {
                 progress_bar,
                 term_progress,
             } => {
@@ -259,7 +259,7 @@ impl<'a> DisplayReporter<'a> {
                     writer.flush().map_err(WriteEventError::Io)
                 }
             }
-            ReporterStderrImpl::Buffer(buf) => self
+            ReporterOutputImpl::Writer(buf) => self
                 .inner
                 .write_event_impl(event, *buf)
                 .map_err(WriteEventError::Io),
@@ -267,11 +267,11 @@ impl<'a> DisplayReporter<'a> {
     }
 
     pub(crate) fn finish(&mut self) {
-        self.stderr.finish_and_clear_bar();
+        self.output.finish_and_clear_bar();
     }
 }
 
-enum ReporterStderrImpl<'a> {
+enum ReporterOutputImpl<'a> {
     Terminal {
         // Reporter-specific progress bar state. None if the progress bar is not
         // enabled (which can include the terminal not being a TTY).
@@ -279,13 +279,13 @@ enum ReporterStderrImpl<'a> {
         // OSC 9 code progress reporting.
         term_progress: Option<TerminalProgress>,
     },
-    Buffer(&'a mut String),
+    Writer(&'a mut (dyn WriteStr + Send)),
 }
 
-impl ReporterStderrImpl<'_> {
+impl ReporterOutputImpl<'_> {
     fn tick(&mut self, styles: &Styles) {
         match self {
-            ReporterStderrImpl::Terminal {
+            ReporterOutputImpl::Terminal {
                 progress_bar,
                 term_progress,
             } => {
@@ -302,13 +302,13 @@ impl ReporterStderrImpl<'_> {
                     eprint!("{}", term_progress.last_value())
                 }
             }
-            ReporterStderrImpl::Buffer(_) => {}
+            ReporterOutputImpl::Writer(_) => {}
         }
     }
 
     fn finish_and_clear_bar(&self) {
         match self {
-            ReporterStderrImpl::Terminal {
+            ReporterOutputImpl::Terminal {
                 progress_bar,
                 term_progress,
             } => {
@@ -320,14 +320,14 @@ impl ReporterStderrImpl<'_> {
                     eprint!("{}", term_progress.last_value())
                 }
             }
-            ReporterStderrImpl::Buffer(_) => {}
+            ReporterOutputImpl::Writer(_) => {}
         }
     }
 
     #[cfg(test)]
-    fn buf_mut(&mut self) -> Option<&mut String> {
+    fn buf_mut(&mut self) -> Option<&mut (dyn WriteStr + Send)> {
         match self {
-            Self::Buffer(buf) => Some(buf),
+            Self::Writer(writer) => Some(*writer),
             _ => None,
         }
     }
@@ -2484,7 +2484,7 @@ mod tests {
             show_term_progress: ShowTerminalProgress::No,
         };
 
-        let output = ReporterStderr::Buffer(out);
+        let output = ReporterOutput::Writer(out);
         let reporter = builder.build(output);
         f(reporter);
     }
@@ -2552,7 +2552,7 @@ mod tests {
                         TestInstanceCounter::None,
                         test_instance,
                         fail_describe,
-                        reporter.stderr.buf_mut().unwrap(),
+                        reporter.output.buf_mut().unwrap(),
                     )
                     .unwrap();
 
@@ -2566,7 +2566,7 @@ mod tests {
                         TestInstanceCounter::Padded,
                         test_instance,
                         flaky_describe,
-                        reporter.stderr.buf_mut().unwrap(),
+                        reporter.output.buf_mut().unwrap(),
                     )
                     .unwrap();
 
@@ -2583,7 +2583,7 @@ mod tests {
                         },
                         test_instance,
                         flaky_describe,
-                        reporter.stderr.buf_mut().unwrap(),
+                        reporter.output.buf_mut().unwrap(),
                     )
                     .unwrap();
             },

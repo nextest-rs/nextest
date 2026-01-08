@@ -5,7 +5,7 @@
 use crate::dispatch::EarlyArgs;
 use clap::{Args, ValueEnum};
 use miette::{GraphicalTheme, MietteHandlerOpts, ThemeStyles};
-use nextest_runner::{reporter::ReporterStderr, write_str::WriteStr};
+use nextest_runner::{reporter::ReporterOutput, write_str::WriteStr};
 use owo_colors::{OwoColorize, Style, style};
 use std::{
     fmt,
@@ -337,9 +337,9 @@ impl OutputWriter {
         }
     }
 
-    pub(crate) fn reporter_output(&mut self) -> ReporterStderr<'_> {
+    pub(crate) fn reporter_output(&mut self) -> ReporterOutput<'_> {
         match self {
-            Self::Normal => ReporterStderr::Terminal,
+            Self::Normal => ReporterOutput::Terminal,
         }
     }
 
