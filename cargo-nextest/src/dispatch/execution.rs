@@ -36,6 +36,7 @@ use nextest_runner::{
     platform::BuildPlatforms,
     redact::Redactor,
     reporter::{
+        ShowTerminalProgress,
         events::{FinalRunStats, RunStats, RunStatsFailureKind},
         structured,
     },
@@ -57,6 +58,7 @@ use semver::Version;
 use std::{
     collections::BTreeSet,
     env::VarError,
+    io::IsTerminal,
     sync::{Arc, OnceLock},
 };
 use tracing::{Level, info, warn};
@@ -823,10 +825,14 @@ impl App {
         )?;
 
         // Make the reporter.
+        let show_term_progress = ShowTerminalProgress::from_cargo_configs(
+            &self.base.cargo_configs,
+            std::io::stderr().is_terminal(),
+        );
         let mut reporter = reporter_builder.build(
             &test_list,
             &profile,
-            &self.base.cargo_configs,
+            show_term_progress,
             output,
             structured_reporter,
         );
@@ -983,10 +989,14 @@ impl App {
         )?;
 
         // Make the reporter.
+        let show_term_progress = ShowTerminalProgress::from_cargo_configs(
+            &self.base.cargo_configs,
+            std::io::stderr().is_terminal(),
+        );
         let mut reporter = reporter_builder.build(
             &test_list,
             &profile,
-            &self.base.cargo_configs,
+            show_term_progress,
             output,
             structured_reporter,
         );
