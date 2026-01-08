@@ -19,12 +19,14 @@ async-scoped.workspace = true
 atomicwrites.workspace = true
 bstr.workspace = true
 bytes.workspace = true
+bytesize.workspace = true
 camino = { workspace = true, features = ["serde1"] }
 camino-tempfile.workspace = true
 cargo_metadata.workspace = true
 config.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
+countio.workspace = true
 crossterm.workspace = true
 debug-ignore.workspace = true
 derive-where.workspace = true
@@ -89,7 +91,8 @@ toml_edit = { workspace = true, features = ["serde"] }
 tracing.workspace = true
 unicode-ident.workspace = true
 unicode-normalization.workspace = true
-xxhash-rust = { workspace = true, features = ["xxh64"] }
+xxhash-rust.workspace = true
+zip.workspace = true
 zstd.workspace = true
 
 ###
@@ -157,6 +160,8 @@ fixture-data.workspace = true
 indoc.workspace = true
 insta.workspace = true
 maplit.workspace = true
+newtype-uuid = { workspace = true, features = ["proptest1"] }
+nextest-metadata = { workspace = true, features = ["proptest1"] }
 pathdiff.workspace = true
 pretty_assertions.workspace = true
 proptest.workspace = true

@@ -50,5 +50,8 @@ pub fn set_env_vars() {
         // some config tests pass in --user-config-file, which overrides this
         // environment variable.)
         std::env::set_var("NEXTEST_USER_CONFIG_FILE", "none");
+
+        // Disable recording runs so tests don't accidentally record runs.
+        std::env::remove_var("NEXTEST_EXPERIMENTAL_RECORD");
     }
 }

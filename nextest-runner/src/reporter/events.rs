@@ -106,7 +106,7 @@ pub enum TestEventKind<'a> {
         program: String,
 
         /// The arguments to the program.
-        args: &'a [String],
+        args: Vec<String>,
 
         /// True if some output from the setup script is being passed through.
         no_capture: bool,
@@ -124,7 +124,7 @@ pub enum TestEventKind<'a> {
         program: String,
 
         /// The arguments to the program.
-        args: &'a [String],
+        args: Vec<String>,
 
         /// The amount of time elapsed since the start of execution.
         elapsed: Duration,
@@ -151,7 +151,7 @@ pub enum TestEventKind<'a> {
         program: String,
 
         /// The arguments to the program.
-        args: &'a [String],
+        args: Vec<String>,
 
         /// Whether the JUnit report should store success output for this script.
         junit_store_success_output: bool,
@@ -402,7 +402,9 @@ pub enum TestEventKind<'a> {
 }
 
 /// Progress for a stress test.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "progress-type", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum StressProgress {
     /// This is a count-based stress run.
     Count {
@@ -478,7 +480,9 @@ pub enum StressRemaining {
 }
 
 /// The index of the current stress run.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub struct StressIndex {
     /// The 0-indexed index.
     pub current: u32,
@@ -488,7 +492,9 @@ pub struct StressIndex {
 }
 
 /// Statistics for a completed test run or stress run.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum RunFinishedStats {
     /// A single test run was completed.
     Single(RunStats),
@@ -509,7 +515,9 @@ impl RunFinishedStats {
 }
 
 /// Statistics for a test run.
-#[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub struct RunStats {
     /// The total number of tests that were expected to be run at the beginning.
     ///
@@ -743,7 +751,9 @@ impl RunStats {
 }
 
 /// A type summarizing the possible outcomes of a test run.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "outcome", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum FinalRunStats {
     /// The test run was successful, or is successful so far.
     Success,
@@ -771,7 +781,9 @@ pub enum FinalRunStats {
 }
 
 /// Statistics for a stress run.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub struct StressRunStats {
     /// The number of stress runs completed.
     pub completed: StressIndex,
@@ -817,7 +829,9 @@ pub enum StressFinalRunStats {
 }
 
 /// A type summarizing the step at which a test run failed.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "step", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum RunStatsFailureKind {
     /// The run was interrupted during setup script execution.
     SetupScript,
@@ -836,15 +850,42 @@ pub enum RunStatsFailureKind {
 /// Information about executions of a test, including retries.
 ///
 /// The type parameter `O` represents how test output is stored.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(
+    test,
+    derive(test_strategy::Arbitrary),
+    arbitrary(bound(O: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+)]
 pub struct ExecutionStatuses<O> {
     /// This is guaranteed to be non-empty.
+    #[cfg_attr(test, strategy(proptest::collection::vec(proptest::arbitrary::any::<ExecuteStatus<O>>(), 1..=3)))]
     statuses: Vec<ExecuteStatus<O>>,
+}
+
+impl<'de, O: Deserialize<'de>> Deserialize<'de> for ExecutionStatuses<O> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // Deserialize as the wrapper struct that matches the Serialize output.
+        #[derive(Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct Helper<O> {
+            statuses: Vec<ExecuteStatus<O>>,
+        }
+
+        let helper = Helper::<O>::deserialize(deserializer)?;
+        if helper.statuses.is_empty() {
+            return Err(serde::de::Error::custom("expected non-empty statuses"));
+        }
+        Ok(Self {
+            statuses: helper.statuses,
+        })
+    }
 }
 
 #[expect(clippy::len_without_is_empty)] // RunStatuses is never empty
 impl<O> ExecutionStatuses<O> {
     pub(crate) fn new(statuses: Vec<ExecuteStatus<O>>) -> Self {
+        debug_assert!(!statuses.is_empty(), "ExecutionStatuses must be non-empty");
         Self { statuses }
     }
 
@@ -895,6 +936,18 @@ impl<O> ExecutionStatuses<O> {
         }
     }
 }
+
+impl<O> IntoIterator for ExecutionStatuses<O> {
+    type Item = ExecuteStatus<O>;
+    type IntoIter = std::vec::IntoIter<ExecuteStatus<O>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.statuses.into_iter()
+    }
+}
+
+// TODO: Add Arbitrary impl for ExecutionStatuses when generic type support is added.
+// This requires ExecuteStatus<O> to implement Arbitrary with proper bounds.
 
 /// A description of test executions obtained from `ExecuteStatuses`.
 ///
@@ -1013,7 +1066,9 @@ impl<'a, O> ExecutionDescription<'a, O> {
 /// This contains the formatted error messages, pre-computed from the execution
 /// output and result. Useful for record-replay scenarios where the rendering
 /// is done on the server.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub struct ErrorSummary {
     /// A short summary of the error, suitable for display in a single line.
     pub short_message: String,
@@ -1026,7 +1081,9 @@ pub struct ErrorSummary {
 ///
 /// This contains an error message heuristically extracted from test output,
 /// such as a panic message or error string.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub struct OutputErrorSlice {
     /// The extracted error slice as a string.
     pub slice: String,
@@ -1044,7 +1101,13 @@ pub struct OutputErrorSlice {
 /// The type parameter `O` represents how test output is stored:
 /// - [`ChildSingleOutput`]: Output stored in memory with lazy string conversion.
 /// - Other types may be used for serialization to archives.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(
+    test,
+    derive(test_strategy::Arbitrary),
+    arbitrary(bound(O: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+)]
 pub struct ExecuteStatus<O> {
     /// Retry-related data.
     pub retry_data: RetryData,
@@ -1053,12 +1116,18 @@ pub struct ExecuteStatus<O> {
     /// The execution result for this test: pass, fail or execution error.
     pub result: ExecutionResultDescription,
     /// The time at which the test started.
+    #[cfg_attr(
+        test,
+        strategy(crate::reporter::test_helpers::arb_datetime_fixed_offset())
+    )]
     pub start_time: DateTime<FixedOffset>,
     /// The time it took for the test to run.
+    #[cfg_attr(test, strategy(crate::reporter::test_helpers::arb_duration()))]
     pub time_taken: Duration,
     /// Whether this test counts as slow.
     pub is_slow: bool,
     /// The delay will be non-zero if this is a retry and delay was specified.
+    #[cfg_attr(test, strategy(crate::reporter::test_helpers::arb_duration()))]
     pub delay_before_start: Duration,
     /// Pre-computed error summary, if available.
     ///
@@ -1079,7 +1148,13 @@ pub struct ExecuteStatus<O> {
 /// serialized and deserialized across platforms.
 ///
 /// The type parameter `O` represents how test output is stored.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(
+    test,
+    derive(test_strategy::Arbitrary),
+    arbitrary(bound(O: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+)]
 pub struct SetupScriptExecuteStatus<O> {
     /// Output for this setup script.
     pub output: ChildExecutionOutputDescription<O>,
@@ -1088,9 +1163,14 @@ pub struct SetupScriptExecuteStatus<O> {
     pub result: ExecutionResultDescription,
 
     /// The time at which the script started.
+    #[cfg_attr(
+        test,
+        strategy(crate::reporter::test_helpers::arb_datetime_fixed_offset())
+    )]
     pub start_time: DateTime<FixedOffset>,
 
     /// The time it took for the script to run.
+    #[cfg_attr(test, strategy(crate::reporter::test_helpers::arb_duration()))]
     pub time_taken: Duration,
 
     /// Whether this script counts as slow.
@@ -1112,7 +1192,9 @@ pub struct SetupScriptExecuteStatus<O> {
 /// A map of environment variables set by a setup script.
 ///
 /// Part of [`SetupScriptExecuteStatus`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub struct SetupScriptEnvMap {
     /// The map of environment variables set by the script.
     pub env_map: BTreeMap<String, String>,
@@ -1129,7 +1211,15 @@ pub struct SetupScriptEnvMap {
 ///
 /// - [`ChildSingleOutput`]: Output stored in memory with lazy string caching.
 ///   Used by reporter event types during live runs.
-#[derive(Clone, Debug)]
+/// - [`ZipStoreOutput`](crate::record::ZipStoreOutput): Reference to a file in
+///   a zip archive. Used for record/replay serialization.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+#[cfg_attr(
+    test,
+    derive(test_strategy::Arbitrary),
+    arbitrary(bound(O: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+)]
 pub enum ChildExecutionOutputDescription<O> {
     /// The process was run and the output was captured.
     Output {
@@ -1173,8 +1263,13 @@ impl<O> ChildExecutionOutputDescription<O> {
 /// This represents either split stdout/stderr or combined output. The `Option`
 /// wrappers distinguish between "not captured" (`None`) and "captured but
 /// empty" (`Some` with empty content).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
+#[cfg_attr(
+    test,
+    derive(test_strategy::Arbitrary),
+    arbitrary(bound(O: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+)]
 pub enum ChildOutputDescription<O> {
     /// The output was split into stdout and stderr.
     Split {
@@ -1209,7 +1304,9 @@ impl ChildOutputDescription<ChildSingleOutput> {
 /// A serializable description of an error that occurred while starting a child process.
 ///
 /// This is the external-facing counterpart to [`ChildStartError`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum ChildStartErrorDescription {
     /// An error occurred while creating a temporary path for a setup script.
     TempPath {
@@ -1246,7 +1343,9 @@ impl std::error::Error for ChildStartErrorDescription {
 /// A serializable description of an error that occurred while managing a child process.
 ///
 /// This is the external-facing counterpart to [`ChildError`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum ChildErrorDescription {
     /// An error occurred while reading standard output.
     ReadStdout {
@@ -1312,7 +1411,8 @@ impl std::error::Error for ChildErrorDescription {
 /// A serializable description of an I/O error.
 ///
 /// This captures the error message from an [`std::io::Error`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub struct IoErrorDescription {
     message: String,
 }
@@ -1406,7 +1506,9 @@ impl From<ChildError> for ChildErrorDescription {
 }
 
 /// Data related to retries for a test.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub struct RetryData {
     /// The current attempt. In the range `[1, total_attempts]`.
     pub attempt: u32,
@@ -1574,6 +1676,7 @@ impl fmt::Debug for AbortStatus {
 /// platform-specific lookups.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[non_exhaustive]
 pub enum AbortDescription {
     /// The process was aborted by a Unix signal.
@@ -1582,6 +1685,10 @@ pub enum AbortDescription {
         signal: i32,
         /// The signal name without the "SIG" prefix (e.g., "TERM", "SEGV"),
         /// if known.
+        #[cfg_attr(
+            test,
+            strategy(proptest::option::of(crate::reporter::test_helpers::arb_smol_str()))
+        )]
         name: Option<SmolStr>,
     },
 
@@ -1590,6 +1697,10 @@ pub enum AbortDescription {
         /// The NTSTATUS code.
         code: i32,
         /// The human-readable message from the Win32 error code, if available.
+        #[cfg_attr(
+            test,
+            strategy(proptest::option::of(crate::reporter::test_helpers::arb_smol_str()))
+        )]
         message: Option<SmolStr>,
     },
 
@@ -1651,6 +1762,7 @@ impl From<AbortStatus> for AbortDescription {
 /// This is the platform-independent counterpart to [`FailureStatus`].
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[non_exhaustive]
 pub enum FailureDescription {
     /// The test exited with a non-zero exit code.
@@ -1697,6 +1809,7 @@ impl fmt::Display for FailureDescription {
 /// in external-facing types like [`ExecuteStatus`].
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[non_exhaustive]
 pub enum ExecutionResultDescription {
     /// The test passed.
@@ -1812,7 +1925,8 @@ impl From<ExecutionResult> for ExecutionResultDescription {
 
 // Note: the order here matters -- it indicates severity of cancellation
 /// The reason why a test run is being cancelled.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum CancelReason {
     /// A setup script failed.
@@ -1890,7 +2004,7 @@ impl UnitKind {
 #[derive(Clone, Debug)]
 pub enum InfoResponse<'a> {
     /// A setup script's response.
-    SetupScript(SetupScriptInfoResponse<'a>),
+    SetupScript(SetupScriptInfoResponse),
 
     /// A test's response.
     Test(TestInfoResponse<'a>),
@@ -1898,7 +2012,7 @@ pub enum InfoResponse<'a> {
 
 /// A setup script's response to an information request.
 #[derive(Clone, Debug)]
-pub struct SetupScriptInfoResponse<'a> {
+pub struct SetupScriptInfoResponse {
     /// The stress index of the setup script.
     pub stress_index: Option<StressIndex>,
 
@@ -1909,7 +2023,7 @@ pub struct SetupScriptInfoResponse<'a> {
     pub program: String,
 
     /// The list of arguments to the program.
-    pub args: &'a [String],
+    pub args: Vec<String>,
 
     /// The state of the setup script.
     pub state: UnitState,

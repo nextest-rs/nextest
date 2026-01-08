@@ -33,9 +33,11 @@
 mod discovery;
 mod early;
 pub mod elements;
+mod experimental;
 mod helpers;
 mod imp;
 
 pub use discovery::*;
 pub use early::*;
+pub use experimental::*;
 pub use imp::*;

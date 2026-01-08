@@ -12,7 +12,7 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Args, Subcommand, ValueEnum, builder::BoolishValueParser};
-use guppy::graph::PackageGraph;
+use guppy::{graph::PackageGraph, platform::Platform};
 use nextest_filtering::ParseContext;
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
@@ -30,6 +30,7 @@ use nextest_runner::{
     },
     partition::PartitionerBuilder,
     platform::BuildPlatforms,
+    record::{NoTestsBehavior, ReplayReporterBuilder},
     reporter::{
         FinalStatusLevel, MaxProgressRunning, ReporterBuilder, StatusLevel, TestOutputDisplay,
     },
@@ -41,7 +42,10 @@ use nextest_runner::{
     },
     test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
     test_output::CaptureStrategy,
-    user_config::elements::{PagerSetting, PaginateSetting, UiConfig, UiShowProgress},
+    user_config::{
+        UserConfig,
+        elements::{PagerSetting, PaginateSetting, UiConfig, UiShowProgress},
+    },
 };
 use std::{collections::BTreeSet, io::Cursor, sync::Arc, time::Duration};
 use tracing::{debug, warn};
@@ -205,6 +209,27 @@ pub(super) enum Command {
         #[clap(subcommand)]
         command: super::commands::DebugCommand,
     },
+    /// Replay a recorded test run (experimental).
+    ///
+    /// This command replays a recorded test run, displaying events as if the run were happening
+    /// live.
+    ///
+    /// This is an experimental feature. To enable it, set the environment variable
+    /// `NEXTEST_EXPERIMENTAL_RECORD=1`.
+    #[clap(hide = true)]
+    Replay(Box<ReplayOpts>),
+    /// Manage the record store (experimental).
+    ///
+    /// This command provides operations for managing the record store, such as pruning old runs
+    /// and showing storage information.
+    ///
+    /// This is an experimental feature. To enable it, set the environment variable
+    /// `NEXTEST_EXPERIMENTAL_RECORD=1`.
+    #[clap(hide = true)]
+    Store {
+        #[clap(subcommand)]
+        command: super::commands::StoreCommand,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -311,6 +336,51 @@ impl PagerOpts {
     }
 }
 
+/// Options for the replay command.
+#[derive(Debug, Args)]
+pub(super) struct ReplayOpts {
+    /// Run ID to replay (default: most recent completed run).
+    ///
+    /// Accepts full UUIDs or unambiguous prefixes.
+    #[arg(long, short = 'r', value_name = "RUN_ID")]
+    pub(super) run_id: Option<String>,
+
+    /// Exit with the same code as the original run.
+    ///
+    /// By default, replay exits with code 0 if the replay itself succeeds.
+    /// With this flag, replay exits with the code that the original test run
+    /// would have returned (e.g., 100 for test failures, 105 for setup script
+    /// failures).
+    #[arg(long)]
+    pub(super) exit_code: bool,
+
+    /// Simulate no-capture mode during replay.
+    ///
+    /// This is a convenience flag that sets:
+    /// - `--success-output immediate`
+    /// - `--failure-output immediate`
+    /// - `--no-output-indent`
+    ///
+    /// These settings produce output similar to running tests with `--no-capture`,
+    /// showing all output immediately without indentation.
+    ///
+    /// Explicit `--success-output` and `--failure-output` flags take precedence
+    /// over this setting.
+    #[arg(
+        long,
+        name = "no-capture",
+        alias = "nocapture",
+        help_heading = "Reporter options"
+    )]
+    pub(super) no_capture: bool,
+
+    #[clap(flatten)]
+    pub(super) reporter_opts: ReporterCommonOpts,
+
+    #[clap(flatten)]
+    pub(super) common: CommonOpts,
+}
+
 #[derive(Debug, Args)]
 pub(super) struct RunOpts {
     #[clap(flatten)]
@@ -412,7 +482,7 @@ pub(super) struct BenchRunnerOpts {
 
     /// Behavior if there are no benchmarks to run [default: fail].
     #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
-    pub(super) no_tests: Option<NoTestsBehavior>,
+    pub(super) no_tests: Option<NoTestsBehaviorOpt>,
 
     /// Stress testing options.
     #[clap(flatten)]
@@ -926,7 +996,7 @@ pub struct TestRunnerOpts {
 
     /// Behavior if there are no tests to run [default: fail].
     #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
-    pub(super) no_tests: Option<NoTestsBehavior>,
+    pub(super) no_tests: Option<NoTestsBehaviorOpt>,
 
     /// Stress testing options.
     #[clap(flatten)]
@@ -982,7 +1052,7 @@ impl InterceptorOpt {
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
-pub(super) enum NoTestsBehavior {
+pub(super) enum NoTestsBehaviorOpt {
     /// Silently exit with code 0.
     Pass,
 
@@ -992,6 +1062,17 @@ pub(super) enum NoTestsBehavior {
     /// Produce an error message and exit with code 4.
     #[clap(alias = "error")]
     Fail,
+}
+
+impl NoTestsBehaviorOpt {
+    /// Converts to the record-layer `NoTestsBehavior` type.
+    pub(super) fn to_record(self) -> NoTestsBehavior {
+        match self {
+            Self::Pass => NoTestsBehavior::Pass,
+            Self::Warn => NoTestsBehavior::Warn,
+            Self::Fail => NoTestsBehavior::Fail,
+        }
+    }
 }
 
 impl TestRunnerOpts {
@@ -1122,21 +1203,24 @@ fn non_zero_duration(input: &str) -> std::result::Result<Duration, String> {
     }
 }
 
+/// Common reporter options shared between `run` and `show` (replay) commands.
+///
+/// These options control how test output is displayed and can be used both
+/// during live test runs and when replaying recorded runs.
 #[derive(Debug, Default, Args)]
-#[command(next_help_heading = "Reporter options")]
-pub(super) struct ReporterOpts {
+pub(super) struct ReporterCommonOpts {
     /// Output stdout and stderr on failure.
     #[arg(long, value_enum, value_name = "WHEN", env = "NEXTEST_FAILURE_OUTPUT")]
-    failure_output: Option<TestOutputDisplayOpt>,
+    pub(super) failure_output: Option<TestOutputDisplayOpt>,
 
     /// Output stdout and stderr on success.
     #[arg(long, value_enum, value_name = "WHEN", env = "NEXTEST_SUCCESS_OUTPUT")]
-    success_output: Option<TestOutputDisplayOpt>,
+    pub(super) success_output: Option<TestOutputDisplayOpt>,
 
     // status_level does not conflict with --no-capture because pass vs skip still makes sense.
     /// Test statuses to output.
     #[arg(long, value_enum, value_name = "LEVEL", env = "NEXTEST_STATUS_LEVEL")]
-    status_level: Option<StatusLevelOpt>,
+    pub(super) status_level: Option<StatusLevelOpt>,
 
     /// Test statuses to output at the end of the run.
     #[arg(
@@ -1145,7 +1229,93 @@ pub(super) struct ReporterOpts {
         value_name = "LEVEL",
         env = "NEXTEST_FINAL_STATUS_LEVEL"
     )]
-    final_status_level: Option<FinalStatusLevelOpt>,
+    pub(super) final_status_level: Option<FinalStatusLevelOpt>,
+
+    /// Do not indent captured test output.
+    ///
+    /// By default, test output produced by **--failure-output** and
+    /// **--success-output** is indented for visual clarity. This flag disables
+    /// that behavior.
+    ///
+    /// This option has no effect with **--no-capture**, since that passes
+    /// through standard output and standard error.
+    #[arg(long, env = "NEXTEST_NO_OUTPUT_INDENT", value_parser = BoolishValueParser::new())]
+    pub(super) no_output_indent: bool,
+}
+
+impl ReporterCommonOpts {
+    /// Applies these common options to a reporter builder.
+    ///
+    /// The `no_output_indent` parameter from `resolved_ui` is combined with the
+    /// CLI option (CLI takes precedence if set).
+    pub(super) fn apply_to_builder(&self, builder: &mut ReporterBuilder, resolved_ui: &UiConfig) {
+        // Note: CLI uses --no-output-indent (negative), resolved config uses
+        // output_indent (positive).
+        let no_output_indent = self.no_output_indent || !resolved_ui.output_indent;
+
+        if let Some(failure_output) = self.failure_output {
+            builder.set_failure_output(failure_output.into());
+        }
+        if let Some(success_output) = self.success_output {
+            builder.set_success_output(success_output.into());
+        }
+        if let Some(status_level) = self.status_level {
+            builder.set_status_level(status_level.into());
+        }
+        if let Some(final_status_level) = self.final_status_level {
+            builder.set_final_status_level(final_status_level.into());
+        }
+        builder.set_no_output_indent(no_output_indent);
+    }
+
+    /// Applies these common options to a replay reporter builder.
+    ///
+    /// The `no_output_indent` parameter from `resolved_ui` is combined with the
+    /// CLI option (CLI takes precedence if set).
+    ///
+    /// If `no_capture` is true, it simulates no-capture mode by setting:
+    /// - `failure_output` to `Immediate` (if not explicitly set)
+    /// - `success_output` to `Immediate` (if not explicitly set)
+    /// - `no_output_indent` to `true`
+    pub(super) fn apply_to_replay_builder(
+        &self,
+        builder: &mut ReplayReporterBuilder,
+        resolved_ui: &UiConfig,
+        no_capture: bool,
+    ) {
+        // Note: CLI uses --no-output-indent (negative), resolved config uses
+        // output_indent (positive). --no-capture also implies no indentation.
+        let no_output_indent = self.no_output_indent || no_capture || !resolved_ui.output_indent;
+
+        // Apply failure_output: explicit CLI > no_capture default > builder default.
+        if let Some(failure_output) = self.failure_output {
+            builder.set_failure_output(failure_output.into());
+        } else if no_capture {
+            builder.set_failure_output(TestOutputDisplay::Immediate);
+        }
+
+        // Apply success_output: explicit CLI > no_capture default > builder default.
+        if let Some(success_output) = self.success_output {
+            builder.set_success_output(success_output.into());
+        } else if no_capture {
+            builder.set_success_output(TestOutputDisplay::Immediate);
+        }
+
+        if let Some(status_level) = self.status_level {
+            builder.set_status_level(status_level.into());
+        }
+        if let Some(final_status_level) = self.final_status_level {
+            builder.set_final_status_level(final_status_level.into());
+        }
+        builder.set_no_output_indent(no_output_indent);
+    }
+}
+
+#[derive(Debug, Default, Args)]
+#[command(next_help_heading = "Reporter options")]
+pub(super) struct ReporterOpts {
+    #[command(flatten)]
+    pub(super) common: ReporterCommonOpts,
 
     /// Show nextest progress in the specified manner.
     ///
@@ -1157,17 +1327,6 @@ pub(super) struct ReporterOpts {
     /// Do not display the progress bar. Deprecated, use **--show-progress** instead.
     #[arg(long, env = "NEXTEST_HIDE_PROGRESS_BAR", value_parser = BoolishValueParser::new())]
     hide_progress_bar: bool,
-
-    /// Do not indent captured test output.
-    ///
-    /// By default, test output produced by **--failure-output** and
-    /// **--success-output** is indented for visual clarity. This flag disables
-    /// that behavior.
-    ///
-    /// This option has no effect with **--no-capture**, since that passes
-    /// through standard output and standard error.
-    #[arg(long, env = "NEXTEST_NO_OUTPUT_INDENT", value_parser = BoolishValueParser::new())]
-    no_output_indent: bool,
 
     /// Disable handling of input keys from the terminal.
     ///
@@ -1233,20 +1392,20 @@ impl ReporterOpts {
 
         let reasons = no_run_no_capture_reasons(no_run, no_capture);
 
-        if self.failure_output.is_some()
+        if self.common.failure_output.is_some()
             && let Some(reasons) = reasons
         {
             warn!("ignoring --failure-output because {}", reasons);
         }
-        if self.success_output.is_some()
+        if self.common.success_output.is_some()
             && let Some(reasons) = reasons
         {
             warn!("ignoring --success-output because {}", reasons);
         }
-        if self.status_level.is_some() && no_run {
+        if self.common.status_level.is_some() && no_run {
             warn!("ignoring --status-level because --no-run is specified");
         }
-        if self.final_status_level.is_some() && no_run {
+        if self.common.final_status_level.is_some() && no_run {
             warn!("ignoring --final-status-level because --no-run is specified");
         }
         if self.message_format.is_some() && no_run {
@@ -1275,7 +1434,7 @@ impl ReporterOpts {
 
         // Note: CLI uses --no-output-indent (negative), resolved config uses
         // output_indent (positive).
-        let no_output_indent = self.no_output_indent || !resolved_ui.output_indent;
+        let no_output_indent = self.common.no_output_indent || !resolved_ui.output_indent;
 
         debug!(
             ?ui_show_progress,
@@ -1296,27 +1455,20 @@ impl ReporterOpts {
             builder.set_status_level(StatusLevel::Slow);
             builder.set_final_status_level(FinalStatusLevel::None);
         }
-        if let Some(failure_output) = self.failure_output {
-            builder.set_failure_output(failure_output.into());
-        }
-        if let Some(success_output) = self.success_output {
-            builder.set_success_output(success_output.into());
-        }
-        if let Some(status_level) = self.status_level {
-            builder.set_status_level(status_level.into());
-        }
-        if let Some(final_status_level) = self.final_status_level {
-            builder.set_final_status_level(final_status_level.into());
-        }
+
+        // Apply the common display options (failure_output, success_output,
+        // status_level, final_status_level, no_output_indent). These can
+        // override the "only" defaults set above.
+        self.common.apply_to_builder(&mut builder, resolved_ui);
+
         builder.set_show_progress(ui_show_progress.into());
-        builder.set_no_output_indent(no_output_indent);
         builder.set_max_progress_running(max_progress_running);
         builder
     }
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
-enum TestOutputDisplayOpt {
+pub(super) enum TestOutputDisplayOpt {
     Immediate,
     ImmediateFinal,
     Final,
@@ -1335,7 +1487,7 @@ impl From<TestOutputDisplayOpt> for TestOutputDisplay {
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
-enum StatusLevelOpt {
+pub(super) enum StatusLevelOpt {
     None,
     Fail,
     Retry,
@@ -1362,7 +1514,7 @@ impl From<StatusLevelOpt> for StatusLevel {
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
-enum FinalStatusLevelOpt {
+pub(super) enum FinalStatusLevelOpt {
     None,
     Fail,
     #[clap(alias = "retry")]
@@ -1605,6 +1757,28 @@ impl AppOpts {
             ),
             Command::Self_ { command } => command.exec(output),
             Command::Debug { command } => command.exec(output),
+            Command::Replay(replay_opts) => super::execution::exec_replay(
+                &early_args,
+                *replay_opts,
+                self.common.manifest_path,
+                output,
+                output_writer,
+            ),
+            Command::Store { command } => {
+                let host_platform =
+                    Platform::build_target().expect("nextest is built for a supported platform");
+                let user_config = UserConfig::for_host_platform(
+                    &host_platform,
+                    early_args.user_config_location(),
+                )
+                .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })?;
+                command.exec(
+                    self.common.manifest_path,
+                    &user_config,
+                    output,
+                    output_writer,
+                )
+            }
         }
     }
 }
@@ -1785,6 +1959,20 @@ mod tests {
             "cargo nextest bench --stress-duration 60m",
             "cargo nextest bench --debugger gdb",
             "cargo nextest bench --tracer strace",
+            // ---
+            // Replay command
+            // ---
+            "cargo nextest replay",
+            "cargo nextest replay --run-id abc123",
+            "cargo nextest replay -r abc123",
+            "cargo nextest replay --exit-code",
+            "cargo nextest replay --no-capture",
+            "cargo nextest replay --nocapture",
+            "cargo nextest replay --no-capture --failure-output never",
+            "cargo nextest replay --no-capture --success-output final",
+            "cargo nextest replay --no-capture --no-output-indent",
+            "cargo nextest replay --status-level pass",
+            "cargo nextest replay --final-status-level flaky",
         ];
 
         let invalid: &[(&'static str, ErrorKind)] = &[

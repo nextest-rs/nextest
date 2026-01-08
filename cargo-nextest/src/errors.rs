@@ -8,10 +8,14 @@ use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{
     config::core::{ConfigExperimental, ToolName},
-    errors::{UserConfigError, *},
+    errors::{
+        CacheDirError, RecordReadError, RecordSetupError, RunIdResolutionError, RunStoreError,
+        TestListFromSummaryError, UserConfigError, *,
+    },
     helpers::{format_interceptor_too_many_tests, plural},
     indenter::DisplayIndented,
     list::OwnedTestInstanceId,
+    record::RunListAlignment,
     redact::Redactor,
     run_mode::NextestRunMode,
     runner::{DebuggerCommand, TracerCommand},
@@ -312,6 +316,21 @@ pub enum ExpectedError {
         config_file: Utf8PathBuf,
         missing: Vec<ConfigExperimental>,
     },
+    #[error("could not determine cache directory for recording")]
+    RecordCacheDirNotFound {
+        #[source]
+        err: CacheDirError,
+    },
+    #[error("error setting up recording")]
+    RecordSetupError {
+        #[source]
+        err: RunStoreError,
+    },
+    #[error("error setting up recording session")]
+    RecordSessionSetupError {
+        #[source]
+        err: RecordSetupError,
+    },
     #[error("filterset parse error")]
     FiltersetParseError {
         all_errors: Vec<FiltersetParseErrors>,
@@ -351,6 +370,26 @@ pub enum ExpectedError {
     #[error("extract write error")]
     DebugExtractWriteError {
         format: ExtractOutputFormat,
+        #[source]
+        err: std::io::Error,
+    },
+    #[error("run ID resolution error")]
+    RunIdResolutionError {
+        #[source]
+        err: RunIdResolutionError,
+    },
+    #[error("error reading recorded run")]
+    RecordReadError {
+        #[source]
+        err: RecordReadError,
+    },
+    #[error("error reconstructing test list from archive")]
+    TestListFromSummaryError {
+        #[source]
+        err: TestListFromSummaryError,
+    },
+    #[error("write error")]
+    WriteError {
         #[source]
         err: std::io::Error,
     },
@@ -538,6 +577,13 @@ impl ExpectedError {
             | Self::ConfigExperimentalFeaturesNotEnabled { .. } => {
                 NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED
             }
+            Self::RecordCacheDirNotFound { .. }
+            | Self::RecordSetupError { .. }
+            | Self::RecordSessionSetupError { .. }
+            | Self::RunIdResolutionError { .. }
+            | Self::RecordReadError { .. }
+            | Self::TestListFromSummaryError { .. } => NextestExitCode::SETUP_ERROR,
+            Self::WriteError { .. } => NextestExitCode::WRITE_OUTPUT_ERROR,
             Self::FiltersetParseError { .. } => NextestExitCode::INVALID_FILTERSET,
         }
     }
@@ -1068,6 +1114,18 @@ impl ExpectedError {
                 );
                 None
             }
+            Self::RecordCacheDirNotFound { err } => {
+                error!("could not determine cache directory for recording test runs");
+                Some(err as &dyn Error)
+            }
+            Self::RecordSetupError { err } => {
+                error!("error setting up recording");
+                Some(err as &dyn Error)
+            }
+            Self::RecordSessionSetupError { err } => {
+                error!("error setting up recording session");
+                Some(err as &dyn Error)
+            }
             Self::FiltersetParseError { all_errors } => {
                 for errors in all_errors {
                     for single_error in &errors.errors {
@@ -1117,6 +1175,75 @@ impl ExpectedError {
             }
             Self::DebugExtractWriteError { format, err } => {
                 error!("error writing {format} output");
+                Some(err as &dyn Error)
+            }
+            Self::RunIdResolutionError { err } => {
+                match &err {
+                    RunIdResolutionError::NotFound { prefix } => {
+                        error!(
+                            "no recorded run found matching `{}`",
+                            prefix.style(styles.bold)
+                        );
+                    }
+                    RunIdResolutionError::Ambiguous {
+                        prefix,
+                        count,
+                        candidates,
+                        run_id_index,
+                    } => {
+                        error!(
+                            "prefix `{}` is ambiguous, matches {} {}:",
+                            prefix.style(styles.bold),
+                            count.style(styles.bold),
+                            plural::runs_str(*count)
+                        );
+                        let alignment = RunListAlignment::from_runs(candidates);
+                        for candidate in candidates {
+                            info!(
+                                target: "cargo_nextest::no_heading",
+                                "{}",
+                                candidate.display(run_id_index, alignment, &styles.record_styles)
+                            );
+                        }
+                        if *count > candidates.len() {
+                            let remaining = *count - candidates.len();
+                            info!(
+                                target: "cargo_nextest::no_heading",
+                                "  ... and {} more {}",
+                                remaining.style(styles.bold),
+                                plural::runs_str(remaining)
+                            );
+                        }
+                    }
+                    RunIdResolutionError::InvalidPrefix { prefix } => {
+                        error!(
+                            "prefix `{}` contains invalid characters (expected hexadecimal)",
+                            prefix.style(styles.bold)
+                        );
+                    }
+                    RunIdResolutionError::NoRuns => {
+                        error!("no recorded runs exist");
+                    }
+                    RunIdResolutionError::NoCompletedRuns { incomplete_count } => {
+                        error!(
+                            "{} recorded {} exist, but none are complete",
+                            incomplete_count.style(styles.bold),
+                            plural::runs_str(*incomplete_count)
+                        );
+                    }
+                }
+                None
+            }
+            Self::RecordReadError { err } => {
+                error!("error reading recorded run");
+                Some(err as &dyn Error)
+            }
+            Self::TestListFromSummaryError { err } => {
+                error!("error reconstructing test list from archived summary");
+                Some(err as &dyn Error)
+            }
+            Self::WriteError { err } => {
+                error!("write error");
                 Some(err as &dyn Error)
             }
         };

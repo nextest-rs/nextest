@@ -33,6 +33,10 @@ pub(super) struct Styles {
     pub(super) skip: Style,
     pub(super) script_id: Style,
     pub(super) list_styles: crate::list::Styles,
+    /// Style for the unique prefix portion of run IDs (highlighted).
+    pub(super) run_id_prefix: Style,
+    /// Style for the non-unique rest portion of run IDs (dimmed).
+    pub(super) run_id_rest: Style,
 }
 
 impl Styles {
@@ -45,6 +49,8 @@ impl Styles {
         self.skip = Style::new().yellow().bold();
         self.script_id = Style::new().blue().bold();
         self.list_styles.colorize();
+        self.run_id_prefix = Style::new().bold().purple();
+        self.run_id_rest = Style::new().bright_black();
     }
 }
 

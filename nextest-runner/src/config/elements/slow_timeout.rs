@@ -90,6 +90,7 @@ where
 /// means that they weren't found up until that moment, which is still valuable information.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum SlowTimeoutResult {
     #[default]
     /// The test is marked as failed.

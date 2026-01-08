@@ -6,9 +6,11 @@
 use super::{
     discovery::user_config_paths,
     elements::{
-        CompiledUiOverride, DefaultUiConfig, DeserializedUiConfig, DeserializedUiOverrideData,
-        UiConfig,
+        CompiledRecordOverride, CompiledUiOverride, DefaultRecordConfig, DefaultUiConfig,
+        DeserializedRecordConfig, DeserializedRecordOverrideData, DeserializedUiConfig,
+        DeserializedUiOverrideData, RecordConfig, UiConfig,
     },
+    experimental::UserConfigExperimental,
 };
 use crate::errors::UserConfigError;
 use camino::Utf8Path;
@@ -56,8 +58,12 @@ impl<'a> UserConfigLocation<'a> {
 /// User configuration after custom settings and overrides have been applied.
 #[derive(Clone, Debug)]
 pub struct UserConfig {
+    /// Experimental features enabled (from config and environment variables).
+    pub experimental: BTreeSet<UserConfigExperimental>,
     /// Resolved UI configuration.
     pub ui: UiConfig,
+    /// Resolved record configuration.
+    pub record: RecordConfig,
 }
 
 impl UserConfig {
@@ -68,6 +74,12 @@ impl UserConfig {
     ) -> Result<Self, UserConfigError> {
         let user_config = CompiledUserConfig::from_location(location)?;
         let default_user_config = DefaultUserConfig::from_embedded();
+
+        // Combine experimental features from user config and environment variables.
+        let mut experimental = UserConfigExperimental::from_env();
+        if let Some(config) = &user_config {
+            experimental.extend(config.experimental.iter().copied());
+        }
 
         let resolved_ui = UiConfig::resolve(
             &default_user_config.ui,
@@ -80,7 +92,27 @@ impl UserConfig {
             host_platform,
         );
 
-        Ok(Self { ui: resolved_ui })
+        let resolved_record = RecordConfig::resolve(
+            &default_user_config.record,
+            &default_user_config.record_overrides,
+            user_config.as_ref().map(|c| &c.record),
+            user_config
+                .as_ref()
+                .map(|c| &c.record_overrides[..])
+                .unwrap_or(&[]),
+            host_platform,
+        );
+
+        Ok(Self {
+            experimental,
+            ui: resolved_ui,
+            record: resolved_record,
+        })
+    }
+
+    /// Returns true if the specified experimental feature is enabled.
+    pub fn is_experimental_enabled(&self, feature: UserConfigExperimental) -> bool {
+        self.experimental.contains(&feature)
     }
 }
 
@@ -130,9 +162,20 @@ impl UserConfigWarnings for DefaultUserConfigWarnings {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct DeserializedUserConfig {
+    /// Experimental features to enable.
+    ///
+    /// Stored as strings; unknown features are silently ignored (they just
+    /// won't be enabled). This matches the repo config pattern.
+    #[serde(default)]
+    experimental: BTreeSet<String>,
+
     /// UI configuration.
     #[serde(default)]
     ui: DeserializedUiConfig,
+
+    /// Record configuration.
+    #[serde(default)]
+    record: DeserializedRecordConfig,
 
     /// Configuration overrides.
     #[serde(default)]
@@ -155,6 +198,10 @@ struct DeserializedOverride {
     /// UI settings to override.
     #[serde(default)]
     ui: DeserializedUiOverrideData,
+
+    /// Record settings to override.
+    #[serde(default)]
+    record: DeserializedRecordOverrideData,
 }
 
 impl DeserializedUserConfig {
@@ -210,6 +257,7 @@ impl DeserializedUserConfig {
     /// The `path` is used for error reporting.
     fn compile(self, path: &Utf8Path) -> Result<CompiledUserConfig, UserConfigError> {
         let mut ui_overrides = Vec::with_capacity(self.overrides.len());
+        let mut record_overrides = Vec::with_capacity(self.overrides.len());
         for (index, override_) in self.overrides.into_iter().enumerate() {
             let platform_spec = TargetSpec::new(override_.platform).map_err(|error| {
                 UserConfigError::OverridePlatformSpec {
@@ -218,12 +266,44 @@ impl DeserializedUserConfig {
                     error,
                 }
             })?;
-            ui_overrides.push(CompiledUiOverride::new(platform_spec, override_.ui));
+            // Each override entry uses the same platform spec for both UI and
+            // record settings.
+            ui_overrides.push(CompiledUiOverride::new(platform_spec.clone(), override_.ui));
+            record_overrides.push(CompiledRecordOverride::new(platform_spec, override_.record));
+        }
+
+        // Parse experimental features from strings, erroring on unknown ones.
+        let mut experimental = BTreeSet::new();
+        let unknown: BTreeSet<_> = self
+            .experimental
+            .into_iter()
+            .filter(|feature| {
+                if let Ok(feature) = feature.parse::<UserConfigExperimental>() {
+                    experimental.insert(feature);
+                    false
+                } else {
+                    true
+                }
+            })
+            .collect();
+        if !unknown.is_empty() {
+            let known = UserConfigExperimental::all()
+                .iter()
+                .map(|f| f.name())
+                .collect();
+            return Err(UserConfigError::UnknownExperimentalFeatures {
+                path: path.to_owned(),
+                unknown,
+                known,
+            });
         }
 
         Ok(CompiledUserConfig {
+            experimental,
             ui: self.ui,
+            record: self.record,
             ui_overrides,
+            record_overrides,
         })
     }
 }
@@ -234,10 +314,16 @@ impl DeserializedUserConfig {
 /// expressions in overrides.
 #[derive(Clone, Debug)]
 pub(super) struct CompiledUserConfig {
+    /// Experimental features enabled in user config.
+    pub(super) experimental: BTreeSet<UserConfigExperimental>,
     /// UI configuration.
     pub(super) ui: DeserializedUiConfig,
+    /// Record configuration.
+    pub(super) record: DeserializedRecordConfig,
     /// Compiled UI overrides with parsed platform specs.
     pub(super) ui_overrides: Vec<CompiledUiOverride>,
+    /// Compiled record overrides with parsed platform specs.
+    pub(super) record_overrides: Vec<CompiledRecordOverride>,
 }
 
 impl CompiledUserConfig {
@@ -320,6 +406,9 @@ struct DeserializedDefaultUserConfig {
     /// UI configuration (base settings, all required).
     ui: DefaultUiConfig,
 
+    /// Record configuration (base settings, all required).
+    record: DefaultRecordConfig,
+
     /// Configuration overrides.
     #[serde(default)]
     overrides: Vec<DeserializedOverride>,
@@ -334,8 +423,14 @@ pub(super) struct DefaultUserConfig {
     /// Base UI configuration.
     pub(super) ui: DefaultUiConfig,
 
+    /// Base record configuration.
+    pub(super) record: DefaultRecordConfig,
+
     /// Compiled UI overrides with parsed platform specs.
     pub(super) ui_overrides: Vec<CompiledUiOverride>,
+
+    /// Compiled record overrides with parsed platform specs.
+    pub(super) record_overrides: Vec<CompiledRecordOverride>,
 }
 
 impl DefaultUserConfig {
@@ -366,24 +461,26 @@ impl DefaultUserConfig {
         }
 
         // Compile platform specs in overrides.
-        let ui_overrides: Vec<CompiledUiOverride> = config
-            .overrides
-            .into_iter()
-            .enumerate()
-            .map(|(index, override_)| {
-                let platform_spec = TargetSpec::new(override_.platform).unwrap_or_else(|error| {
-                    panic!(
-                        "embedded default user config has invalid platform spec \
-                         in [[overrides]] at index {index}: {error}"
-                    )
-                });
-                CompiledUiOverride::new(platform_spec, override_.ui)
-            })
-            .collect();
+        let mut ui_overrides = Vec::with_capacity(config.overrides.len());
+        let mut record_overrides = Vec::with_capacity(config.overrides.len());
+        for (index, override_) in config.overrides.into_iter().enumerate() {
+            let platform_spec = TargetSpec::new(override_.platform).unwrap_or_else(|error| {
+                panic!(
+                    "embedded default user config has invalid platform spec \
+                     in [[overrides]] at index {index}: {error}"
+                )
+            });
+            // Each override entry uses the same platform spec for both UI and
+            // record settings.
+            ui_overrides.push(CompiledUiOverride::new(platform_spec.clone(), override_.ui));
+            record_overrides.push(CompiledRecordOverride::new(platform_spec, override_.record));
+        }
 
         Self {
             ui: config.ui,
+            record: config.record,
             ui_overrides,
+            record_overrides,
         }
     }
 }
@@ -507,7 +604,75 @@ mod tests {
             warnings.unknown_keys.is_none(),
             "no unknown keys should be detected"
         );
-        assert_eq!(config.ui_overrides.len(), 2, "should have 2 overrides");
+        assert_eq!(config.ui_overrides.len(), 2, "should have 2 UI overrides");
+        assert_eq!(
+            config.record_overrides.len(),
+            2,
+            "should have 2 record overrides"
+        );
+    }
+
+    #[test]
+    fn overrides_record_parsing() {
+        let config_contents = r#"
+        [record]
+        enabled = false
+
+        [[overrides]]
+        platform = "cfg(unix)"
+        record.enabled = true
+        record.max-output-size = "50MB"
+
+        [[overrides]]
+        platform = "cfg(windows)"
+        record.enabled = true
+        record.max-records = 200
+        "#;
+
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+        std::fs::write(&config_path, config_contents).unwrap();
+
+        let mut warnings = TestUserConfigWarnings::default();
+        let config = CompiledUserConfig::from_path_with_warnings(&config_path, &mut warnings)
+            .expect("config valid")
+            .expect("config should exist");
+
+        assert!(
+            warnings.unknown_keys.is_none(),
+            "no unknown keys should be detected"
+        );
+        assert_eq!(
+            config.record_overrides.len(),
+            2,
+            "should have 2 record overrides"
+        );
+    }
+
+    #[test]
+    fn overrides_record_unknown_key() {
+        let config_contents = r#"
+        [[overrides]]
+        platform = "cfg(unix)"
+        record.enabled = true
+        record.unknown-key = "test"
+        "#;
+
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+        std::fs::write(&config_path, config_contents).unwrap();
+
+        let mut warnings = TestUserConfigWarnings::default();
+        let _config = CompiledUserConfig::from_path_with_warnings(&config_path, &mut warnings)
+            .expect("config valid")
+            .expect("config should exist");
+
+        let (path, unknown) = warnings.unknown_keys.expect("should have unknown keys");
+        assert_eq!(path, config_path, "path should match");
+        assert!(
+            unknown.contains("overrides.0.record.unknown-key"),
+            "unknown key should be detected: {unknown:?}"
+        );
     }
 
     #[test]
@@ -558,6 +723,62 @@ mod tests {
         assert!(
             matches!(result, Err(UserConfigError::Parse { .. })),
             "should fail with parse error due to missing required platform field: {result:?}"
+        );
+    }
+
+    #[test]
+    fn experimental_features_parsing() {
+        let config_contents = r#"
+        experimental = ["record"]
+
+        [ui]
+        show-progress = "bar"
+        "#;
+
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+        std::fs::write(&config_path, config_contents).unwrap();
+
+        let mut warnings = TestUserConfigWarnings::default();
+        let config = CompiledUserConfig::from_path_with_warnings(&config_path, &mut warnings)
+            .expect("config valid")
+            .expect("config should exist");
+
+        assert!(
+            warnings.unknown_keys.is_none(),
+            "no unknown keys should be detected"
+        );
+        assert!(
+            config
+                .experimental
+                .contains(&UserConfigExperimental::Record),
+            "record feature should be enabled"
+        );
+    }
+
+    #[test]
+    fn experimental_features_unknown_error() {
+        let config_contents = r#"
+        experimental = ["record", "unknown-feature"]
+
+        [ui]
+        show-progress = "bar"
+        "#;
+
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+        std::fs::write(&config_path, config_contents).unwrap();
+
+        let mut warnings = TestUserConfigWarnings::default();
+        let result = CompiledUserConfig::from_path_with_warnings(&config_path, &mut warnings);
+
+        // Unknown features should cause an error.
+        assert!(
+            matches!(
+                result,
+                Err(UserConfigError::UnknownExperimentalFeatures { .. })
+            ),
+            "should fail with unknown experimental features error: {result:?}"
         );
     }
 }

@@ -16,7 +16,8 @@ use unicode_normalization::{IsNormalized, UnicodeNormalization, is_nfc_quick};
 /// * ensuring that it is of the form (XID_Start)(XID_Continue | -)*
 ///
 /// Identifiers can also be tool identifiers, which are of the form "@tool:tool-name:identifier".
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct ConfigIdentifier(SmolStr);
 
 impl ConfigIdentifier {

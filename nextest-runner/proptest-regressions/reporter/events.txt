@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc d39177861cce4f4d851b2798ecfa5ce2485e9c7748a609b992de988df82da447 # shrinks to input = _ExecuteStatusRoundtripsArgs { value: ExecuteStatus { retry_data: RetryData { attempt: 0, total_attempts: 0 }, output: Output { result: None, output: Split { stdout: None, stderr: None }, errors: None }, result: Pass, start_time: 2000-01-01T00:00:01+00:00:01, time_taken: 0ns, is_slow: false, delay_before_start: 0ns, error_summary: None, output_error_slice: None } }

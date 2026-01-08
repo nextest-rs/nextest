@@ -1,0 +1,8 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&list_output.stdout_as_str(), temp_root)"
+snapshot_kind: text
+---
+1 recorded run:
+
+  10000001  [TIMESTAMP]  [DURATION]  [SIZE]  21 passed / 9 failed

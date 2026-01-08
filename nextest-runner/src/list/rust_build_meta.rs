@@ -83,9 +83,10 @@ impl RustBuildMeta<BinaryListState> {
 }
 
 impl RustBuildMeta<TestListState> {
-    /// Empty metadata for tests.
-    #[cfg(test)]
-    pub(crate) fn empty() -> Self {
+    /// Creates empty metadata.
+    ///
+    /// Used for replay and testing where actual build metadata is not needed.
+    pub fn empty() -> Self {
         Self {
             target_directory: Utf8PathBuf::new(),
             base_output_directories: BTreeSet::new(),

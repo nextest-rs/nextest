@@ -535,7 +535,8 @@ impl CompiledProfileScripts<FinalConfig> {
 }
 
 /// The name of a configuration script.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord, serde::Serialize)]
+#[serde(transparent)]
 pub struct ScriptId(pub ConfigIdentifier);
 
 impl ScriptId {

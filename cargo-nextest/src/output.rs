@@ -306,6 +306,7 @@ pub struct StderrStyles {
     pub(crate) bold: Style,
     pub(crate) warning_text: Style,
     pub(crate) list_styles: nextest_runner::list::Styles,
+    pub(crate) record_styles: nextest_runner::record::Styles,
 }
 
 impl StderrStyles {
@@ -313,6 +314,7 @@ impl StderrStyles {
         self.bold = style().bold();
         self.warning_text = style().yellow();
         self.list_styles.colorize();
+        self.record_styles.colorize();
     }
 }
 

@@ -616,6 +616,7 @@ fn verify_expected_in_actual(
     expected: &ExpectedTestResults,
     actual: &ActualTestResults,
     output: &str,
+    properties: RunProperties,
 ) {
     // Check that all tests that should run are present with correct result.
     for expected_outcome in &expected.should_run {
@@ -661,15 +662,18 @@ fn verify_expected_in_actual(
             );
         }
 
-        // Also check that the test name doesn't appear anywhere in the output.
-        let full_name = id.full_name();
-        assert!(
-            !output.contains(&full_name),
-            "{}: should not be run but name appears in output\n\n\
-             --- output ---\n{}\n--- end output ---",
-            full_name,
-            output
-        );
+        // Also check that the test name doesn't appear anywhere in the output,
+        // unless ALLOW_SKIPPED_NAMES_IN_OUTPUT is set (e.g., for replay which shows SKIP lines).
+        if !properties.contains(RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT) {
+            let full_name = id.full_name();
+            assert!(
+                !output.contains(&full_name),
+                "{}: should not be run but name appears in output\n\n\
+                 --- output ---\n{}\n--- end output ---",
+                full_name,
+                output
+            );
+        }
     }
 }
 
@@ -782,6 +786,19 @@ pub fn check_run_output_with_junit(
     check_run_output_impl(stderr, Some(junit_path), properties);
 }
 
+/// Checks the output of a test run against fixture data.
+///
+/// This function uses the fixture data model to verify that:
+/// - All expected tests are present with the correct result.
+/// - No unexpected tests appear in the output.
+/// - Summary counts match expectations.
+///
+/// Use this for verifying replay output where JUnit files aren't available.
+#[track_caller]
+pub fn check_run_output(stderr: &[u8], properties: RunProperties) {
+    check_run_output_impl(stderr, None, properties);
+}
+
 #[track_caller]
 fn check_run_output_impl(stderr: &[u8], junit_path: Option<&Utf8Path>, properties: RunProperties) {
     let output = String::from_utf8(stderr.to_vec()).unwrap();
@@ -796,7 +813,7 @@ fn check_run_output_impl(stderr: &[u8], junit_path: Option<&Utf8Path>, propertie
     eprintln!("actual: {actual:?}");
 
     // Check that all expected tests appear (or don't appear) as required.
-    verify_expected_in_actual(&expected, &actual, &output);
+    verify_expected_in_actual(&expected, &actual, &output, properties);
 
     // Check that all tests in output were expected (no unexpected tests).
     verify_actual_in_expected(&actual, &expected, &output);

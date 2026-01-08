@@ -6,21 +6,24 @@
 use super::{
     cli::{
         ArchiveBuildFilter, BenchReporterOpts, BenchRunnerOpts, ListType, MessageFormat,
-        MessageFormatOpts, NoTestsBehavior, PagerOpts, ReporterOpts, TestBuildFilter,
-        TestRunnerOpts,
+        MessageFormatOpts, NoTestsBehaviorOpt, PagerOpts, ReplayOpts, ReporterOpts,
+        TestBuildFilter, TestRunnerOpts,
     },
     helpers::{
-        acquire_graph_data, build_filtersets, detect_build_platforms, resolve_user_config,
-        runner_for_target,
+        acquire_graph_data, build_filtersets, detect_build_platforms, final_stats_to_error,
+        resolve_user_config, runner_for_target,
     },
 };
 use crate::{
     ExpectedError, Result, ReuseBuildKind,
+    cargo_cli::CargoCli,
+    dispatch::EarlyArgs,
     output::{OutputContext, OutputWriter},
 };
-use camino::Utf8PathBuf;
-use guppy::graph::PackageGraph;
+use camino::{Utf8Path, Utf8PathBuf};
+use guppy::{graph::PackageGraph, platform::Platform};
 use nextest_filtering::{FiltersetKind, ParseContext};
+use nextest_metadata::NextestExitCode;
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
     config::core::{
@@ -28,16 +31,21 @@ use nextest_runner::{
         NextestVersionConfig, NextestVersionEval,
     },
     double_spawn::DoubleSpawnInfo,
-    errors::WriteTestListError,
+    errors::{DisplayErrorChain, WriteTestListError},
     helpers::plural,
     input::InputHandlerKind,
     list::{BinaryList, TestExecuteContext, TestList},
     pager::PagedOutput,
     platform::BuildPlatforms,
+    record::{
+        self, NoTestsBehavior, RecordOpts, RecordReader, RecordRetentionPolicy, RecordSession,
+        RecordSessionConfig, ReplayContext, ReplayHeader, ReplayReporterBuilder, RunStore,
+        TestInstanceSummary, records_cache_dir,
+    },
     redact::Redactor,
     reporter::{
-        ShowTerminalProgress,
-        events::{FinalRunStats, RunStats, RunStatsFailureKind},
+        ReporterOutput, ShowTerminalProgress,
+        events::{FinalRunStats, RunFinishedStats, RunStats, TestEventKind},
         structured,
     },
     reuse_build::{
@@ -50,7 +58,7 @@ use nextest_runner::{
     target_runner::TargetRunner,
     test_filter::{BinaryFilter, TestFilterBuilder},
     test_output::CaptureStrategy,
-    user_config::elements::PaginateSetting,
+    user_config::{UserConfig, UserConfigExperimental, elements::PaginateSetting},
     write_str::WriteStr,
 };
 use owo_colors::OwoColorize;
@@ -65,7 +73,7 @@ use tracing::{Level, info, warn};
 
 pub(super) struct BaseApp {
     output: OutputContext,
-    early_args: super::EarlyArgs,
+    early_args: EarlyArgs,
     // TODO: support multiple --target options
     build_platforms: BuildPlatforms,
     cargo_metadata_json: Arc<String>,
@@ -86,7 +94,7 @@ pub(super) struct BaseApp {
 impl BaseApp {
     pub(super) fn new(
         output: OutputContext,
-        early_args: super::EarlyArgs,
+        early_args: EarlyArgs,
         reuse_build: crate::reuse_build::ReuseBuildOpts,
         cargo_opts: crate::cargo_cli::CargoOptions,
         config_opts: super::cli::ConfigOpts,
@@ -97,16 +105,13 @@ impl BaseApp {
 
         let reuse_build = reuse_build.process(output, writer)?;
 
-        // First obtain the Cargo configs.
         let cargo_configs = CargoConfigs::new(&cargo_opts.config).map_err(Box::new)?;
 
-        // Next, read the build platforms.
         let build_platforms = match reuse_build.binaries_metadata() {
             Some(kind) => kind.binary_list.rust_build_meta.build_platforms.clone(),
             None => detect_build_platforms(&cargo_configs, cargo_opts.target.as_deref())?,
         };
 
-        // Read the Cargo metadata.
         let (cargo_metadata_json, package_graph) = match reuse_build.cargo_metadata() {
             Some(m) => (m.json.clone(), m.graph.clone()),
             None => {
@@ -530,22 +535,15 @@ impl App {
 
         let binary_list = self.base.build_binary_list("test")?;
 
-        // Resolve user config to get pager settings.
         let resolved_user_config = resolve_user_config(
             &self.base.build_platforms.host.platform,
             self.base.early_args.user_config_location(),
         )?;
         let (pager_setting, paginate) = pager_opts.resolve(&resolved_user_config.ui);
 
-        // Determine if we should page output.
-        // Don't page if:
-        //
-        // - paginate is Never
-        // - message_format is not human-readable
         let should_page =
             !matches!(paginate, PaginateSetting::Never) && message_format.is_human_readable();
 
-        // Create paged output if conditions are met.
         let mut paged_output = if should_page {
             PagedOutput::request_pager(
                 &pager_setting,
@@ -556,7 +554,6 @@ impl App {
             PagedOutput::terminal()
         };
 
-        // (Grab the value of is_interactive before a mutable ref is passed in.)
         let is_interactive = paged_output.is_interactive();
         let should_colorize = self
             .base
@@ -596,7 +593,6 @@ impl App {
             }
         }
 
-        // Finalize the pager: close stdin/the pipe, wait for exit.
         paged_output
             .write_str_flush()
             .map_err(WriteTestListError::Io)?;
@@ -646,14 +642,12 @@ impl App {
 
         let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
 
-        // Resolve user config to get pager settings.
         let resolved_user_config = resolve_user_config(
             &self.base.build_platforms.host.platform,
             self.base.early_args.user_config_location(),
         )?;
         let (pager_setting, paginate) = pager_opts.resolve(&resolved_user_config.ui);
 
-        // Create paged output.
         let mut paged_output = PagedOutput::request_pager(
             &pager_setting,
             paginate,
@@ -671,7 +665,6 @@ impl App {
             )
             .map_err(WriteTestListError::Io)?;
 
-        // Finalize the pager: close stdin/the pipe, wait for exit.
         paged_output
             .write_str_flush()
             .map_err(WriteTestListError::Io)?;
@@ -791,8 +784,6 @@ impl App {
                     unreachable!("interceptor is active but neither debugger nor tracer is set");
                 }
             } else if test_count > 1 {
-                // Collect the first 8 matching test instances for the error
-                // message.
                 let test_instances: Vec<_> = test_list
                     .iter_tests()
                     .filter(|test| test.test_info.filter_match.is_match())
@@ -832,19 +823,14 @@ impl App {
 
         let input_handler =
             if reporter_opts.no_input_handler || runner_opts.interceptor.debugger.is_some() {
-                // Only debuggers disable the input handler -- tracers do not.
                 InputHandlerKind::Noop
             } else if resolved_user_config.ui.input_handler {
-                // This means that the input handler determines whether it
-                // should be enabled.
                 InputHandlerKind::Standard
             } else {
                 InputHandlerKind::Noop
             };
 
-        // Make the runner.
         let Some(runner_builder) = runner_builder else {
-            // This means --no-run was passed in. Exit.
             return Ok(());
         };
         let runner = runner_builder.build(
@@ -857,7 +843,48 @@ impl App {
             target_runner.clone(),
         )?;
 
-        // Make the reporter.
+        // Set up recording if the experimental feature is enabled (via env var or user config)
+        // AND recording is enabled in the config.
+        let recording_session = if resolved_user_config
+            .is_experimental_enabled(UserConfigExperimental::Record)
+            && resolved_user_config.record.enabled
+        {
+            let config = RecordSessionConfig {
+                workspace_root: &self.base.workspace_root,
+                run_id: runner.run_id(),
+                nextest_version: self.base.current_version.clone(),
+                started_at: runner.started_at().fixed_offset(),
+                max_output_size: resolved_user_config.record.max_output_size,
+            };
+            match RecordSession::setup(config) {
+                Ok(setup) => {
+                    let record = structured::RecordReporter::new(setup.recorder);
+                    let opts = RecordOpts::new(
+                        test_list.mode(),
+                        runner_opts.no_tests.map(|b| b.to_record()),
+                    );
+                    record.write_meta(
+                        self.base.cargo_metadata_json.clone(),
+                        test_list.to_summary(),
+                        opts,
+                    );
+                    structured_reporter.set_record(record);
+                    Some(setup.session)
+                }
+                Err(err) => match err.disabled_error() {
+                    Some(reason) => {
+                        // Recording is disabled due to a format version mismatch.
+                        // Log a warning and continue without recording.
+                        warn!("recording disabled: {reason}");
+                        None
+                    }
+                    None => return Err(ExpectedError::RecordSessionSetupError { err }),
+                },
+            }
+        } else {
+            None
+        };
+
         let show_term_progress = ShowTerminalProgress::from_cargo_configs(
             &self.base.cargo_configs,
             std::io::stderr().is_terminal(),
@@ -871,11 +898,19 @@ impl App {
         );
 
         configure_handle_inheritance(no_capture)?;
-        let run_stats = runner.try_execute(|event| {
-            // Write and flush the event.
-            reporter.report_event(event)
-        })?;
-        reporter.finish();
+        let run_stats = runner.try_execute(|event| reporter.report_event(event))?;
+        let stats = reporter.finish();
+
+        if let Some(session) = recording_session {
+            let policy = RecordRetentionPolicy::from(&resolved_user_config.record);
+            let mut styles = record::Styles::default();
+            if should_colorize {
+                styles.colorize();
+            }
+            session
+                .finalize(stats.recording_sizes, stats.run_finished, &policy)
+                .log(&styles);
+        }
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
 
@@ -897,7 +932,7 @@ impl App {
         let profile = self.base.load_profile(&config)?;
 
         // Construct this here so that errors are reported before the build step.
-        let structured_reporter = structured::StructuredReporter::new();
+        let mut structured_reporter = structured::StructuredReporter::new();
         // TODO: support message format for benchmarks.
         // TODO: maybe support capture strategy for benchmarks?
         let cap_strat = CaptureStrategy::None;
@@ -960,8 +995,6 @@ impl App {
                     unreachable!("interceptor is active but neither debugger nor tracer is set");
                 }
             } else if test_count > 1 {
-                // Collect the first 8 matching test instances for the error
-                // message.
                 let test_instances: Vec<_> = test_list
                     .iter_tests()
                     .filter(|test| test.test_info.filter_match.is_match())
@@ -1001,7 +1034,6 @@ impl App {
 
         let input_handler =
             if reporter_opts.no_input_handler || runner_opts.interceptor.debugger.is_some() {
-                // Only debuggers disable the input handler -- tracers do not.
                 InputHandlerKind::Noop
             } else if resolved_user_config.ui.input_handler {
                 InputHandlerKind::Standard
@@ -1009,9 +1041,7 @@ impl App {
                 InputHandlerKind::Noop
             };
 
-        // Make the runner.
         let Some(runner_builder) = runner_builder else {
-            // This means --no-run was passed in. Exit.
             return Ok(());
         };
         let runner = runner_builder.build(
@@ -1024,7 +1054,48 @@ impl App {
             target_runner.clone(),
         )?;
 
-        // Make the reporter.
+        // Set up recording if the experimental feature is enabled AND recording is enabled in
+        // the config.
+        let recording_session = if resolved_user_config
+            .is_experimental_enabled(UserConfigExperimental::Record)
+            && resolved_user_config.record.enabled
+        {
+            let config = RecordSessionConfig {
+                workspace_root: &self.base.workspace_root,
+                run_id: runner.run_id(),
+                nextest_version: self.base.current_version.clone(),
+                started_at: runner.started_at().fixed_offset(),
+                max_output_size: resolved_user_config.record.max_output_size,
+            };
+            match RecordSession::setup(config) {
+                Ok(setup) => {
+                    let record = structured::RecordReporter::new(setup.recorder);
+                    let opts = RecordOpts::new(
+                        test_list.mode(),
+                        runner_opts.no_tests.map(|b| b.to_record()),
+                    );
+                    record.write_meta(
+                        self.base.cargo_metadata_json.clone(),
+                        test_list.to_summary(),
+                        opts,
+                    );
+                    structured_reporter.set_record(record);
+                    Some(setup.session)
+                }
+                Err(err) => match err.disabled_error() {
+                    Some(reason) => {
+                        // Recording is disabled due to a format version mismatch.
+                        // Log a warning and continue without recording.
+                        warn!("recording disabled: {reason}");
+                        None
+                    }
+                    None => return Err(ExpectedError::RecordSessionSetupError { err }),
+                },
+            }
+        } else {
+            None
+        };
+
         let show_term_progress = ShowTerminalProgress::from_cargo_configs(
             &self.base.cargo_configs,
             std::io::stderr().is_terminal(),
@@ -1039,11 +1110,20 @@ impl App {
 
         // TODO: no_capture is always true for benchmarks for now.
         configure_handle_inheritance(true)?;
-        let run_stats = runner.try_execute(|event| {
-            // Write and flush the event.
-            reporter.report_event(event)
-        })?;
-        reporter.finish();
+        let run_stats = runner.try_execute(|event| reporter.report_event(event))?;
+        let stats = reporter.finish();
+
+        if let Some(session) = recording_session {
+            let policy = RecordRetentionPolicy::from(&resolved_user_config.record);
+            let mut styles = record::Styles::default();
+            if should_colorize {
+                styles.colorize();
+            }
+            session
+                .finalize(stats.recording_sizes, stats.run_finished, &policy)
+                .log(&styles);
+        }
+
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
 
@@ -1148,17 +1228,18 @@ impl ArchiveApp {
 fn final_result(
     mode: NextestRunMode,
     run_stats: RunStats,
-    no_tests: Option<NoTestsBehavior>,
+    no_tests: Option<NoTestsBehaviorOpt>,
 ) -> Result<(), ExpectedError> {
-    match run_stats.summarize_final() {
-        FinalRunStats::Success => Ok(()),
-        FinalRunStats::NoTestsRun => match no_tests {
-            Some(NoTestsBehavior::Pass) => Ok(()),
-            Some(NoTestsBehavior::Warn) => {
+    let final_stats = run_stats.summarize_final();
+
+    if matches!(final_stats, FinalRunStats::NoTestsRun) {
+        return match no_tests {
+            Some(NoTestsBehaviorOpt::Pass) => Ok(()),
+            Some(NoTestsBehaviorOpt::Warn) => {
                 warn!("no {} to run", plural::tests_plural(mode));
                 Ok(())
             }
-            Some(NoTestsBehavior::Fail) => Err(ExpectedError::NoTestsRun {
+            Some(NoTestsBehaviorOpt::Fail) => Err(ExpectedError::NoTestsRun {
                 mode,
                 is_default: false,
             }),
@@ -1166,20 +1247,196 @@ fn final_result(
                 mode,
                 is_default: true,
             }),
-        },
-        FinalRunStats::Cancelled {
-            reason: _,
-            kind: RunStatsFailureKind::SetupScript,
-        }
-        | FinalRunStats::Failed {
-            kind: RunStatsFailureKind::SetupScript,
-        } => Err(ExpectedError::setup_script_failed()),
-        FinalRunStats::Cancelled {
-            reason: _,
-            kind: RunStatsFailureKind::Test { .. },
-        }
-        | FinalRunStats::Failed {
-            kind: RunStatsFailureKind::Test { .. },
-        } => Err(ExpectedError::test_run_failed()),
+        };
     }
+
+    match final_stats_to_error(final_stats, mode) {
+        Some(err) => Err(err),
+        None => Ok(()),
+    }
+}
+
+pub(super) fn exec_replay(
+    early_args: &EarlyArgs,
+    replay_opts: ReplayOpts,
+    manifest_path: Option<Utf8PathBuf>,
+    output: OutputContext,
+    _output_writer: &mut OutputWriter,
+) -> Result<i32> {
+    let mut cargo_cli = CargoCli::new("locate-project", manifest_path.as_deref(), output);
+    cargo_cli.add_args(["--workspace", "--message-format=plain"]);
+    let locate_project_output = cargo_cli
+        .to_expression()
+        .stdout_capture()
+        .unchecked()
+        .run()
+        .map_err(|error| {
+            ExpectedError::cargo_locate_project_exec_failed(cargo_cli.all_args(), error)
+        })?;
+    if !locate_project_output.status.success() {
+        return Err(ExpectedError::cargo_locate_project_failed(
+            cargo_cli.all_args(),
+            locate_project_output.status,
+        ));
+    }
+    let workspace_root = String::from_utf8(locate_project_output.stdout)
+        .map_err(|err| ExpectedError::WorkspaceRootInvalidUtf8 { err })?;
+    let workspace_root = Utf8Path::new(workspace_root.trim_end());
+    let workspace_root =
+        workspace_root
+            .parent()
+            .ok_or_else(|| ExpectedError::WorkspaceRootInvalid {
+                workspace_root: workspace_root.to_owned(),
+            })?;
+
+    let cache_dir = records_cache_dir(workspace_root)
+        .map_err(|err| ExpectedError::RecordCacheDirNotFound { err })?;
+
+    let store = RunStore::new(&cache_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
+    let snapshot = store
+        .lock_shared()
+        .map_err(|err| ExpectedError::RecordSetupError { err })?
+        .into_snapshot();
+
+    let (run_id, newer_incomplete_count) = match &replay_opts.run_id {
+        Some(prefix) => {
+            let run_id = snapshot
+                .resolve_run_id(prefix)
+                .map_err(|err| ExpectedError::RunIdResolutionError { err })?;
+            (run_id, None)
+        }
+        None => {
+            let result = snapshot
+                .most_recent_run()
+                .map_err(|err| ExpectedError::RunIdResolutionError { err })?;
+            let count = if result.newer_incomplete_count > 0 {
+                Some(result.newer_incomplete_count)
+            } else {
+                None
+            };
+            (result.run_id, count)
+        }
+    };
+
+    let run_info = snapshot.get_run(run_id);
+
+    let run_dir = snapshot.runs_dir().join(run_id.to_string());
+    let mut reader =
+        RecordReader::open(&run_dir).map_err(|err| ExpectedError::RecordReadError { err })?;
+
+    reader
+        .read_and_validate_format_version()
+        .map_err(|err| ExpectedError::RecordReadError { err })?;
+
+    let cargo_metadata_json = reader
+        .read_cargo_metadata()
+        .map_err(|err| ExpectedError::RecordReadError { err })?;
+    let graph = PackageGraph::from_json(&cargo_metadata_json)
+        .map_err(|err| ExpectedError::cargo_metadata_parse_error(None, err))?;
+
+    let test_list_summary = reader
+        .read_test_list()
+        .map_err(|err| ExpectedError::RecordReadError { err })?;
+
+    let record_opts = reader
+        .read_record_opts()
+        .map_err(|err| ExpectedError::RecordReadError { err })?;
+
+    let test_list = TestList::from_summary(&graph, &test_list_summary, record_opts.run_mode)
+        .map_err(|err| ExpectedError::TestListFromSummaryError { err })?;
+
+    let mut replay_cx = ReplayContext::new(&test_list);
+    for (binary_id, suite) in &test_list_summary.rust_suites {
+        for test_name in suite.test_cases.keys() {
+            let test_instance = TestInstanceSummary {
+                binary_id: binary_id.clone(),
+                name: test_name.to_string(),
+            };
+            replay_cx.register_test(&test_instance);
+        }
+    }
+
+    let host_platform =
+        Platform::build_target().expect("nextest is built for a supported platform");
+    let user_config =
+        UserConfig::for_host_platform(&host_platform, early_args.user_config_location())
+            .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })?;
+
+    let mut paged_output = PagedOutput::request_pager(
+        &user_config.ui.pager,
+        user_config.ui.paginate,
+        &user_config.ui.streampager,
+    );
+
+    let should_colorize = output.color.should_colorize(supports_color::Stream::Stdout);
+
+    let mut reporter_builder = ReplayReporterBuilder::new();
+    reporter_builder.set_colorize(should_colorize);
+    replay_opts.reporter_opts.apply_to_replay_builder(
+        &mut reporter_builder,
+        &user_config.ui,
+        replay_opts.no_capture,
+    );
+    let mut reporter = reporter_builder.build(
+        record_opts.run_mode,
+        test_list.test_count(),
+        ReporterOutput::Writer(&mut paged_output),
+    );
+
+    // Write the replay header through the reporter.
+    let header = ReplayHeader::new(
+        run_id,
+        run_info,
+        Some(snapshot.run_id_index()),
+        newer_incomplete_count,
+    );
+    reporter.write_header(&header)?;
+
+    let mut final_exit_code = NextestExitCode::OK;
+
+    for event_result in reader
+        .events()
+        .map_err(|err| ExpectedError::RecordReadError { err })?
+    {
+        let event_summary = event_result.map_err(|err| ExpectedError::RecordReadError { err })?;
+
+        match replay_cx.convert_event(&event_summary, &mut reader) {
+            Ok(event) => {
+                if replay_opts.exit_code
+                    && let TestEventKind::RunFinished { run_stats, .. } = &event.kind
+                {
+                    final_exit_code = compute_exit_code(run_stats, &record_opts);
+                }
+
+                reporter.write_event(&event)?;
+            }
+            Err(error) => {
+                // Warn about conversion errors, but continue replaying.
+                warn!(
+                    "error converting replay event: {}",
+                    DisplayErrorChain::new(error)
+                );
+            }
+        }
+    }
+
+    reporter.finish();
+
+    Ok(final_exit_code)
+}
+
+/// Computes the exit code from run statistics using the same logic as live runs.
+fn compute_exit_code(run_stats: &RunFinishedStats, record_opts: &RecordOpts) -> i32 {
+    let final_stats = run_stats.final_stats();
+
+    if matches!(final_stats, FinalRunStats::NoTestsRun) {
+        return match record_opts.no_tests {
+            Some(NoTestsBehavior::Pass | NoTestsBehavior::Warn) => NextestExitCode::OK,
+            // None means the default behavior was used, which is "fail".
+            Some(NoTestsBehavior::Fail) | None => NextestExitCode::NO_TESTS_RUN,
+        };
+    }
+
+    final_stats_to_error(final_stats, NextestRunMode::Test)
+        .map_or(NextestExitCode::OK, |e| e.process_exit_code())
 }

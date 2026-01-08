@@ -30,6 +30,7 @@ use crate::{
     },
     indenter::indented,
     list::TestInstanceId,
+    record::ReplayHeader,
     reporter::{
         displayer::{
             ShowProgress,
@@ -260,15 +261,100 @@ impl<'a> DisplayReporter<'a> {
                     writer.flush().map_err(WriteEventError::Io)
                 }
             }
-            ReporterOutputImpl::Writer(buf) => self
-                .inner
-                .write_event_impl(event, *buf)
-                .map_err(WriteEventError::Io),
+            ReporterOutputImpl::Writer(writer) => {
+                self.inner
+                    .write_event_impl(event, *writer)
+                    .map_err(WriteEventError::Io)?;
+                writer.write_str_flush().map_err(WriteEventError::Io)
+            }
         }
     }
 
     pub(crate) fn finish(&mut self) {
         self.output.finish_and_clear_bar();
+    }
+
+    /// Writes a replay header to the output.
+    ///
+    /// This is used by `ReplayReporter` to display replay-specific information
+    /// before processing recorded events.
+    pub(crate) fn write_replay_header(
+        &mut self,
+        header: &ReplayHeader,
+    ) -> Result<(), WriteEventError> {
+        self.write_impl(|writer, styles, _theme_chars| {
+            // Write "Replaying" line with unique prefix highlighting.
+            write!(writer, "{:>12} ", "Replaying".style(styles.pass))?;
+            let run_id_display = if let Some(prefix_info) = &header.unique_prefix {
+                // Highlight the unique prefix portion of the full run ID.
+                format!(
+                    "{}{}",
+                    prefix_info.prefix.style(styles.run_id_prefix),
+                    prefix_info.rest.style(styles.run_id_rest),
+                )
+            } else {
+                // No prefix info available, show the full ID without highlighting.
+                header.run_id.to_string().style(styles.count).to_string()
+            };
+            writeln!(writer, "recorded run {}", run_id_display)?;
+
+            // Write "Started" line with status.
+            let status_str = header.status.short_status_str();
+            write!(writer, "{:>12} ", "Started".style(styles.pass))?;
+            writeln!(
+                writer,
+                "{}  status: {}",
+                header.started_at.format("%Y-%m-%d %H:%M:%S"),
+                status_str.style(styles.count)
+            )?;
+
+            // Write skipped incomplete runs if any.
+            if let Some(count) = header.newer_incomplete_count {
+                write!(writer, "{:>12} ", "Skipping".style(styles.skip))?;
+                writeln!(
+                    writer,
+                    "{} newer incomplete {}",
+                    count.style(styles.count),
+                    plural::runs_str(count)
+                )?;
+            }
+
+            Ok(())
+        })
+    }
+
+    /// Internal helper for writing through the output with access to styles.
+    fn write_impl<F>(&mut self, f: F) -> Result<(), WriteEventError>
+    where
+        F: FnOnce(&mut dyn WriteStr, &Styles, &ThemeCharacters) -> io::Result<()>,
+    {
+        match &mut self.output {
+            ReporterOutputImpl::Terminal { progress_bar, .. } => {
+                if let Some(state) = progress_bar {
+                    // Write to a string that will be printed as a log line.
+                    let mut buf = String::new();
+                    f(&mut buf, &self.inner.styles, &self.inner.theme_characters)
+                        .map_err(WriteEventError::Io)?;
+                    state.write_buf(&buf);
+                    Ok(())
+                } else {
+                    // Write to a buffered stderr.
+                    let mut writer = BufWriter::new(std::io::stderr());
+                    f(
+                        &mut writer,
+                        &self.inner.styles,
+                        &self.inner.theme_characters,
+                    )
+                    .map_err(WriteEventError::Io)?;
+                    writer.flush().map_err(WriteEventError::Io)
+                }
+            }
+            ReporterOutputImpl::Writer(writer) => {
+                f(*writer, &self.inner.styles, &self.inner.theme_characters)
+                    .map_err(WriteEventError::Io)?;
+                writer.write_str_flush().map_err(WriteEventError::Io)
+            }
+        }
     }
 }
 
@@ -303,7 +389,9 @@ impl ReporterOutputImpl<'_> {
                     eprint!("{}", term_progress.last_value())
                 }
             }
-            ReporterOutputImpl::Writer(_) => {}
+            ReporterOutputImpl::Writer(_) => {
+                // No ticking for writers.
+            }
         }
     }
 
@@ -321,12 +409,14 @@ impl ReporterOutputImpl<'_> {
                     eprint!("{}", term_progress.last_value())
                 }
             }
-            ReporterOutputImpl::Writer(_) => {}
+            ReporterOutputImpl::Writer(_) => {
+                // No progress bar to clear.
+            }
         }
     }
 
     #[cfg(test)]
-    fn buf_mut(&mut self) -> Option<&mut (dyn WriteStr + Send)> {
+    fn writer_mut(&mut self) -> Option<&mut (dyn WriteStr + Send)> {
         match self {
             Self::Writer(writer) => Some(*writer),
             _ => None,
@@ -2592,7 +2682,7 @@ mod tests {
                         TestInstanceCounter::None,
                         test_instance,
                         fail_describe,
-                        reporter.output.buf_mut().unwrap(),
+                        reporter.output.writer_mut().unwrap(),
                     )
                     .unwrap();
 
@@ -2606,7 +2696,7 @@ mod tests {
                         TestInstanceCounter::Padded,
                         test_instance,
                         flaky_describe,
-                        reporter.output.buf_mut().unwrap(),
+                        reporter.output.writer_mut().unwrap(),
                     )
                     .unwrap();
 
@@ -2623,7 +2713,7 @@ mod tests {
                         },
                         test_instance,
                         flaky_describe,
-                        reporter.output.buf_mut().unwrap(),
+                        reporter.output.writer_mut().unwrap(),
                     )
                     .unwrap();
             },
@@ -2871,7 +2961,7 @@ mod tests {
                                 stress_index: None,
                                 script_id: ScriptId::new(SmolStr::new("setup")).unwrap(),
                                 program: "setup".to_owned(),
-                                args: &args,
+                                args: args.clone(),
                                 state: UnitState::Running {
                                     pid: 4567,
                                     time_taken: Duration::from_millis(1234),
@@ -2900,7 +2990,7 @@ mod tests {
                                 stress_index: None,
                                 script_id: ScriptId::new(SmolStr::new("setup-slow")).unwrap(),
                                 program: "setup-slow".to_owned(),
-                                args: &args,
+                                args: args.clone(),
                                 state: UnitState::Running {
                                     pid: 4568,
                                     time_taken: Duration::from_millis(1234),
@@ -2931,7 +3021,7 @@ mod tests {
                                 script_id: ScriptId::new(SmolStr::new("setup-terminating"))
                                     .unwrap(),
                                 program: "setup-terminating".to_owned(),
-                                args: &args,
+                                args: args.clone(),
                                 state: UnitState::Terminating(UnitTerminatingState {
                                     pid: 5094,
                                     time_taken: Duration::from_millis(1234),
@@ -2975,7 +3065,7 @@ mod tests {
                                 }),
                                 script_id: ScriptId::new(SmolStr::new("setup-exiting")).unwrap(),
                                 program: "setup-exiting".to_owned(),
-                                args: &args,
+                                args: args.clone(),
                                 state: UnitState::Exiting {
                                     pid: 9987,
                                     time_taken: Duration::from_millis(1234),
@@ -3011,7 +3101,7 @@ mod tests {
                                 }),
                                 script_id: ScriptId::new(SmolStr::new("setup-exited")).unwrap(),
                                 program: "setup-exited".to_owned(),
-                                args: &args,
+                                args: args.clone(),
                                 state: UnitState::Exited {
                                     result: ExecutionResult::Fail {
                                         failure_status: FailureStatus::ExitCode(1),

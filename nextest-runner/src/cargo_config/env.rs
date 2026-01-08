@@ -70,8 +70,11 @@ impl EnvironmentMap {
         Self { map }
     }
 
-    #[cfg(test)]
-    pub(crate) fn empty() -> Self {
+    /// Creates an empty `EnvironmentMap`.
+    ///
+    /// Used for replay and testing where actual environment variables
+    /// are not needed.
+    pub fn empty() -> Self {
         Self {
             map: BTreeMap::new(),
         }
