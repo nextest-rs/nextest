@@ -118,6 +118,10 @@ Every Rust source file must start with:
 - Platform-specific code in separate files: `unix.rs`, `windows.rs`.
 - Use `#[cfg(unix)]` and `#[cfg(windows)]` for conditional compilation.
 - Test helpers in dedicated modules/files.
+- Use fully qualified imports rarely, prefer importing the type most of the time, or otherwise a module if it is conventional.
+- Never write `std::fmt::Display` as a fully qualified type. Instead, import `std::fmt` and use `fmt::Display`.
+- Strongly prefer importing types or modules at the very top of the module. Never import types or modules within function contexts, unless the function is gated by a `cfg()` of some kind.
+- It is okay to import enum variants for pattern matching, though.
 
 ### Memory and performance
 
