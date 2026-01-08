@@ -49,7 +49,7 @@ use tracing::{debug, warn};
 // Options shared between cargo nextest and cargo ntr.
 #[derive(Debug, Args)]
 pub(super) struct CommonOpts {
-    /// Path to Cargo.toml
+    /// Path to Cargo.toml.
     #[arg(
         long,
         global = true,
@@ -68,11 +68,11 @@ pub(super) struct CommonOpts {
 #[derive(Debug, Args)]
 #[command(next_help_heading = "Config options")]
 pub(super) struct ConfigOpts {
-    /// Config file [default: workspace-root/.config/nextest.toml]
+    /// Config file [default: workspace-root/.config/nextest.toml].
     #[arg(long, global = true, value_name = "PATH")]
     pub config_file: Option<Utf8PathBuf>,
 
-    /// Tool-specific config files
+    /// Tool-specific config files.
     ///
     /// Some tools on top of nextest may want to set up their own default configuration but
     /// prioritize user configuration on top. Use this argument to insert configuration
@@ -144,7 +144,7 @@ impl ConfigOpts {
 
 #[derive(Debug, Subcommand)]
 pub(super) enum Command {
-    /// List tests in workspace
+    /// List tests in workspace.
     ///
     /// This command builds test binaries and queries them for the tests they contain.
     ///
@@ -155,7 +155,7 @@ pub(super) enum Command {
     ///
     /// For more information, see <https://nexte.st/docs/listing>.
     List(Box<ListOpts>),
-    /// Build and run tests
+    /// Build and run tests.
     ///
     /// This command builds test binaries and queries them for the tests they contain,
     /// then runs each test in parallel.
@@ -163,7 +163,7 @@ pub(super) enum Command {
     /// For more information, see <https://nexte.st/docs/running>.
     #[command(visible_alias = "r")]
     Run(Box<RunOpts>),
-    /// Build and run benchmarks (experimental)
+    /// Build and run benchmarks (experimental).
     ///
     /// This command builds benchmark binaries and queries them for the benchmarks they contain,
     /// then runs each benchmark **serially**.
@@ -172,7 +172,7 @@ pub(super) enum Command {
     /// `NEXTEST_EXPERIMENTAL_BENCHMARKS=1`.
     #[command(visible_alias = "b")]
     Bench(Box<BenchOpts>),
-    /// Build and archive tests
+    /// Build and archive tests.
     ///
     /// This command builds test binaries and archives them to a file. The archive can then be
     /// transferred to another machine, and tests within it can be run with `cargo nextest run
@@ -190,13 +190,13 @@ pub(super) enum Command {
         #[clap(subcommand)]
         command: super::commands::ShowConfigCommand,
     },
-    /// Manage the nextest installation
+    /// Manage the nextest installation.
     #[clap(name = "self")]
     Self_ {
         #[clap(subcommand)]
         command: super::commands::SelfCommand,
     },
-    /// Debug commands
+    /// Debug commands.
     ///
     /// The commands in this section are for nextest's own developers and those integrating with it
     /// to debug issues. They are not part of the public API and may change at any time.
@@ -212,7 +212,7 @@ pub(super) struct ArchiveOpts {
     #[clap(flatten)]
     pub(super) cargo_options: CargoOptions,
 
-    /// File to write archive to
+    /// File to write archive to.
     #[arg(
         long,
         name = "archive-file",
@@ -221,7 +221,7 @@ pub(super) struct ArchiveOpts {
     )]
     pub(super) archive_file: Utf8PathBuf,
 
-    /// Archive format
+    /// Archive format.
     ///
     /// `auto` uses the file extension to determine the archive format. Currently supported is
     /// `.tar.zst`.
@@ -237,7 +237,7 @@ pub(super) struct ArchiveOpts {
     #[clap(flatten)]
     pub(super) archive_build_filter: ArchiveBuildFilter,
 
-    /// Zstandard compression level (-7 to 22, higher is more compressed + slower)
+    /// Zstandard compression level (-7 to 22, higher is more compressed + slower).
     #[arg(
         long,
         help_heading = "Archive options",
@@ -257,7 +257,7 @@ pub(super) struct ListOpts {
     #[clap(flatten)]
     pub(super) build_filter: TestBuildFilter,
 
-    /// Output format
+    /// Output format.
     #[arg(
         short = 'T',
         long,
@@ -268,7 +268,7 @@ pub(super) struct ListOpts {
     )]
     pub(super) message_format: MessageFormatOpts,
 
-    /// Type of listing
+    /// Type of listing.
     #[arg(
         long,
         value_enum,
@@ -322,7 +322,7 @@ pub(super) struct RunOpts {
     #[clap(flatten)]
     pub(super) runner_opts: TestRunnerOpts,
 
-    /// Run tests serially and do not capture output
+    /// Run tests serially and do not capture output.
     #[arg(
         long,
         name = "no-capture",
@@ -401,7 +401,7 @@ pub(super) struct BenchRunnerOpts {
     no_fail_fast: bool,
 
     /// Number of benchmarks that can fail before exiting run [possible
-    /// values: integer or "all"]
+    /// values: integer or "all"].
     #[arg(
         long,
         name = "max-fail",
@@ -410,7 +410,7 @@ pub(super) struct BenchRunnerOpts {
     )]
     max_fail: Option<MaxFail>,
 
-    /// Behavior if there are no benchmarks to run [default: fail]
+    /// Behavior if there are no benchmarks to run [default: fail].
     #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
     pub(super) no_tests: Option<NoTestsBehavior>,
 
@@ -577,15 +577,15 @@ impl MessageFormatOpts {
 #[derive(Debug, Args)]
 #[command(next_help_heading = "Filter options")]
 pub(super) struct TestBuildFilter {
-    /// Run ignored tests
+    /// Run ignored tests.
     #[arg(long, value_enum, value_name = "WHICH")]
     run_ignored: Option<RunIgnoredOpt>,
 
-    /// Test partition, e.g. hash:1/2 or count:2/3
+    /// Test partition, e.g. hash:1/2 or count:2/3.
     #[arg(long)]
     partition: Option<PartitionerBuilder>,
 
-    /// Filter test binaries by build platform (DEPRECATED)
+    /// Filter test binaries by build platform (DEPRECATED).
     ///
     /// Instead, use -E with 'platform(host)' or 'platform(target)'.
     #[arg(
@@ -861,12 +861,12 @@ impl CargoOptions {
 #[derive(Debug, Default, Args)]
 #[command(next_help_heading = "Runner options")]
 pub struct TestRunnerOpts {
-    /// Compile, but don't run tests
+    /// Compile, but don't run tests.
     #[arg(long, name = "no-run")]
     pub(super) no_run: bool,
 
     /// Number of tests to run simultaneously [possible values: integer or "num-cpus"]
-    /// [default: from profile]
+    /// [default: from profile].
     #[arg(
         long,
         short = 'j',
@@ -877,11 +877,11 @@ pub struct TestRunnerOpts {
     )]
     test_threads: Option<TestThreads>,
 
-    /// Number of retries for failing tests [default: from profile]
+    /// Number of retries for failing tests [default: from profile].
     #[arg(long, env = "NEXTEST_RETRIES", value_name = "N")]
     retries: Option<u32>,
 
-    /// Cancel test run on the first failure
+    /// Cancel test run on the first failure.
     #[arg(
         long,
         visible_alias = "ff",
@@ -895,7 +895,7 @@ pub struct TestRunnerOpts {
     )]
     fail_fast: bool,
 
-    /// Run all tests regardless of failure
+    /// Run all tests regardless of failure.
     #[arg(
         long,
         visible_alias = "nff",
@@ -905,7 +905,7 @@ pub struct TestRunnerOpts {
     )]
     no_fail_fast: bool,
 
-    /// Number of tests that can fail before exiting test run
+    /// Number of tests that can fail before exiting test run.
     ///
     /// To control whether currently running tests are waited for or terminated
     /// immediately, append ':wait' (default) or ':immediate' to the number
@@ -920,15 +920,15 @@ pub struct TestRunnerOpts {
     )]
     max_fail: Option<MaxFail>,
 
-    /// Interceptor options (debugger or tracer)
+    /// Interceptor options (debugger or tracer).
     #[clap(flatten)]
     pub(super) interceptor: InterceptorOpt,
 
-    /// Behavior if there are no tests to run [default: fail]
+    /// Behavior if there are no tests to run [default: fail].
     #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
     pub(super) no_tests: Option<NoTestsBehavior>,
 
-    /// Stress testing options
+    /// Stress testing options.
     #[clap(flatten)]
     pub(super) stress: StressOptions,
 }
@@ -1125,16 +1125,16 @@ fn non_zero_duration(input: &str) -> std::result::Result<Duration, String> {
 #[derive(Debug, Default, Args)]
 #[command(next_help_heading = "Reporter options")]
 pub(super) struct ReporterOpts {
-    /// Output stdout and stderr on failure
+    /// Output stdout and stderr on failure.
     #[arg(long, value_enum, value_name = "WHEN", env = "NEXTEST_FAILURE_OUTPUT")]
     failure_output: Option<TestOutputDisplayOpt>,
 
-    /// Output stdout and stderr on success
+    /// Output stdout and stderr on success.
     #[arg(long, value_enum, value_name = "WHEN", env = "NEXTEST_SUCCESS_OUTPUT")]
     success_output: Option<TestOutputDisplayOpt>,
 
     // status_level does not conflict with --no-capture because pass vs skip still makes sense.
-    /// Test statuses to output
+    /// Test statuses to output.
     #[arg(long, value_enum, value_name = "LEVEL", env = "NEXTEST_STATUS_LEVEL")]
     status_level: Option<StatusLevelOpt>,
 
@@ -1478,7 +1478,7 @@ impl CargoNextestApp {
 
 #[derive(Debug, Subcommand)]
 enum NextestSubcommand {
-    /// A next-generation test runner for Rust. <https://nexte.st>
+    /// A next-generation test runner for Rust. <https://nexte.st>.
     Nextest(Box<AppOpts>),
     /// Build and run tests: a shortcut for `cargo nextest run`.
     Ntr(Box<NtrOpts>),

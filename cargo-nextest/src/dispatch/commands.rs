@@ -28,11 +28,11 @@ pub(super) enum ShowConfigCommand {
     Version {},
     /// Show defined test groups and their associated tests.
     TestGroups {
-        /// Show default test groups
+        /// Show default test groups.
         #[arg(long)]
         show_default: bool,
 
-        /// Show only the named groups
+        /// Show only the named groups.
         #[arg(long)]
         groups: Vec<nextest_runner::config::elements::TestGroup>,
 
@@ -202,7 +202,7 @@ impl UpdateVersionOpt {
 #[derive(Debug, Subcommand)]
 pub(super) enum SelfCommand {
     #[clap(hide = true)]
-    /// Perform setup actions (currently a no-op)
+    /// Perform setup actions (currently a no-op).
     Setup {
         /// The entity running the setup command.
         #[arg(long, value_enum, default_value_t = SetupSource::User)]
@@ -210,14 +210,14 @@ pub(super) enum SelfCommand {
     },
     #[cfg_attr(
         not(feature = "self-update"),
-        doc = "This version of nextest does not have self-update enabled\n\
+        doc = "This version of nextest does not have self-update enabled.\n\
         \n\
         Always exits with code 93 (SELF_UPDATE_UNAVAILABLE).
         "
     )]
     #[cfg_attr(
         feature = "self-update",
-        doc = "Download and install updates to nextest\n\
+        doc = "Download and install updates to nextest.\n\
         \n\
         This command checks the internet for updates to nextest, then downloads and
         installs them if an update is available."
@@ -226,22 +226,22 @@ pub(super) enum SelfCommand {
         #[command(flatten)]
         version: UpdateVersionOpt,
 
-        /// Check for updates rather than downloading them
+        /// Check for updates rather than downloading them.
         ///
         /// If no update is available, exits with code 0. If an update is available, exits with code
         /// 80 (UPDATE_AVAILABLE).
         #[arg(short = 'n', long)]
         check: bool,
 
-        /// Do not prompt for confirmation
+        /// Do not prompt for confirmation.
         #[arg(short = 'y', long, conflicts_with = "check")]
         yes: bool,
 
-        /// Force downgrades and reinstalls
+        /// Force downgrades and reinstalls.
         #[arg(short, long)]
         force: bool,
 
-        /// URL or path to fetch releases.json from
+        /// URL or path to fetch releases.json from.
         #[arg(long)]
         releases_url: Option<String>,
     },

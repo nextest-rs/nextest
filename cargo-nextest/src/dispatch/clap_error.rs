@@ -63,7 +63,7 @@ impl EarlySetup {
 /// `global = true` ensures proper handling of the `--` separator.
 #[derive(Copy, Clone, Debug, Default, Args)]
 pub struct EarlyArgs {
-    /// Produce color output: auto, always, never
+    /// Produce color output: auto, always, never.
     #[arg(
         long,
         value_enum,
