@@ -504,16 +504,22 @@ impl ProgressBarState {
     }
 }
 
-/// OSC 9 terminal progress reporting.
-#[derive(Default)]
-pub(super) struct TerminalProgress {
-    last_value: TerminalProgressValue,
+/// Whether to show OSC 9;4 terminal progress.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ShowTerminalProgress {
+    /// Show terminal progress.
+    Yes,
+
+    /// Do not show terminal progress.
+    No,
 }
 
-impl TerminalProgress {
+impl ShowTerminalProgress {
     const ENV: &str = "CARGO_TERM_PROGRESS_TERM_INTEGRATION";
 
-    pub(super) fn new(configs: &CargoConfigs, is_terminal: bool) -> Option<Self> {
+    /// Determines whether to show terminal progress based on Cargo configs and
+    /// whether the output is a terminal.
+    pub fn from_cargo_configs(configs: &CargoConfigs, is_terminal: bool) -> Self {
         // See whether terminal integration is enabled in Cargo.
         for config in configs.discovered_configs() {
             match config {
@@ -521,10 +527,10 @@ impl TerminalProgress {
                     if let Some(v) = config.term.progress.term_integration {
                         if v {
                             debug!("enabling terminal progress reporting based on {source:?}");
-                            return Some(Self::default());
+                            return Self::Yes;
                         } else {
                             debug!("disabling terminal progress reporting based on {source:?}");
-                            return None;
+                            return Self::No;
                         }
                     }
                 }
@@ -535,13 +541,13 @@ impl TerminalProgress {
                                 "enabling terminal progress reporting based on \
                                  CARGO_TERM_PROGRESS_TERM_INTEGRATION environment variable"
                             );
-                            return Some(Self::default());
+                            return Self::Yes;
                         } else if v == "false" {
                             debug!(
                                 "disabling terminal progress reporting based on \
                                  CARGO_TERM_PROGRESS_TERM_INTEGRATION environment variable"
                             );
-                            return None;
+                            return Self::No;
                         } else {
                             debug!(
                                 "invalid value for CARGO_TERM_PROGRESS_TERM_INTEGRATION \
@@ -554,17 +560,36 @@ impl TerminalProgress {
                     if let Some(v) = config.term.progress.term_integration {
                         if v {
                             debug!("enabling terminal progress reporting based on {source:?}");
-                            return Some(Self::default());
+                            return Self::Yes;
                         } else {
                             debug!("disabling terminal progress reporting based on {source:?}");
-                            return None;
+                            return Self::No;
                         }
                     }
                 }
             }
         }
 
-        supports_osc_9_4(is_terminal).then(Self::default)
+        if supports_osc_9_4(is_terminal) {
+            Self::Yes
+        } else {
+            Self::No
+        }
+    }
+}
+
+/// OSC 9 terminal progress reporting.
+#[derive(Default)]
+pub(super) struct TerminalProgress {
+    last_value: TerminalProgressValue,
+}
+
+impl TerminalProgress {
+    pub(super) fn new(show: ShowTerminalProgress) -> Option<Self> {
+        match show {
+            ShowTerminalProgress::Yes => Some(Self::default()),
+            ShowTerminalProgress::No => None,
+        }
     }
 
     pub(super) fn update_progress(&mut self, event: &TestEvent<'_>) {

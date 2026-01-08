@@ -14,7 +14,8 @@ mod imp;
 pub mod structured;
 
 pub use displayer::{
-    FinalStatusLevel, MaxProgressRunning, ShowProgress, StatusLevel, TestOutputDisplay,
+    FinalStatusLevel, MaxProgressRunning, ShowProgress, ShowTerminalProgress, StatusLevel,
+    TestOutputDisplay,
 };
 pub use error_description::*;
 pub use helpers::highlight_end;

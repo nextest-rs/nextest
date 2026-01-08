@@ -18,7 +18,6 @@ use super::{
     unit_output::TestOutputDisplay,
 };
 use crate::{
-    cargo_config::CargoConfigs,
     config::{
         elements::{LeakTimeoutResult, SlowTimeoutResult},
         overrides::CompiledDefaultFilter,
@@ -32,7 +31,11 @@ use crate::{
     indenter::indented,
     list::TestInstanceId,
     reporter::{
-        displayer::{ShowProgress, formatters::DisplayHhMmSs, progress::TerminalProgress},
+        displayer::{
+            ShowProgress,
+            formatters::DisplayHhMmSs,
+            progress::{ShowTerminalProgress, TerminalProgress},
+        },
         events::*,
         helpers::Styles,
         imp::ReporterStderr,
@@ -64,14 +67,11 @@ pub(crate) struct DisplayReporterBuilder {
     pub(crate) show_progress: ShowProgress,
     pub(crate) no_output_indent: bool,
     pub(crate) max_progress_running: MaxProgressRunning,
+    pub(crate) show_term_progress: ShowTerminalProgress,
 }
 
 impl DisplayReporterBuilder {
-    pub(crate) fn build<'a>(
-        self,
-        configs: &CargoConfigs,
-        output: ReporterStderr<'a>,
-    ) -> DisplayReporter<'a> {
+    pub(crate) fn build<'a>(self, output: ReporterStderr<'a>) -> DisplayReporter<'a> {
         let mut styles: Box<Styles> = Box::default();
         if self.should_colorize {
             styles.colorize();
@@ -106,7 +106,7 @@ impl DisplayReporterBuilder {
                     theme_characters.progress_chars,
                     self.max_progress_running,
                 );
-                let term_progress = TerminalProgress::new(configs, is_terminal);
+                let term_progress = TerminalProgress::new(self.show_term_progress);
 
                 show_progress_bar = progress_bar
                     .as_ref()
@@ -2437,7 +2437,6 @@ mod tests {
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     };
     use bytes::Bytes;
-    use camino::Utf8PathBuf;
     use chrono::Local;
     use nextest_metadata::{RustBinaryId, TestCaseName};
     use quick_junit::ReportUuid;
@@ -2466,18 +2465,6 @@ mod tests {
     where
         F: FnOnce(DisplayReporter<'a>),
     {
-        // Start and end the search at the cwd -- we expect this to not match
-        // any results since it'll be the nextest-runner directory.
-        let current_dir = Utf8PathBuf::try_from(std::env::current_dir().expect("obtained cwd"))
-            .expect("cwd is valid UTF_8");
-        let configs = CargoConfigs::new_with_isolation(
-            Vec::<String>::new(),
-            &current_dir,
-            &current_dir,
-            Vec::new(),
-        )
-        .unwrap();
-
         let builder = DisplayReporterBuilder {
             mode: NextestRunMode::Test,
             default_filter: CompiledDefaultFilter::for_default_config(),
@@ -2494,10 +2481,11 @@ mod tests {
             show_progress: ShowProgress::Counter,
             no_output_indent: false,
             max_progress_running: MaxProgressRunning::default(),
+            show_term_progress: ShowTerminalProgress::No,
         };
 
         let output = ReporterStderr::Buffer(out);
-        let reporter = builder.build(&configs, output);
+        let reporter = builder.build(output);
         f(reporter);
     }
 
