@@ -1,0 +1,10 @@
+---
+source: nextest-runner/src/reporter/events.rs
+expression: json
+snapshot_kind: text
+---
+{
+  "kind": "unix-signal",
+  "signal": 42,
+  "name": null
+}

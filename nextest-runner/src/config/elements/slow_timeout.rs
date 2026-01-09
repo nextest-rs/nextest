@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::time::far_future_duration;
-use serde::{Deserialize, de::IntoDeserializer};
+use serde::{Deserialize, Serialize, de::IntoDeserializer};
 use std::{fmt, num::NonZeroUsize, time::Duration};
 
 /// Type for the slow-timeout config key.
@@ -88,7 +88,7 @@ where
 /// they generally check for invariants and other properties of the code under test during their
 /// execution. A timeout in this context doesn't mean that there are no failing inputs, it just
 /// means that they weren't found up until that moment, which is still valuable information.
-#[derive(Clone, Copy, Debug, Deserialize, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum SlowTimeoutResult {
     #[default]

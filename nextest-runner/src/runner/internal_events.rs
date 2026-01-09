@@ -162,7 +162,7 @@ impl InternalExecuteStatus<'_> {
         ExecuteStatus {
             retry_data: self.test.retry_data(),
             output: self.output,
-            result: self.result,
+            result: self.result.into(),
             start_time: self.stopwatch_end.start_time.fixed_offset(),
             time_taken: self.stopwatch_end.active,
             is_slow: self.slow_after.is_some(),
@@ -184,7 +184,7 @@ impl InternalSetupScriptExecuteStatus<'_> {
     pub(super) fn into_external(self) -> SetupScriptExecuteStatus {
         SetupScriptExecuteStatus {
             output: self.output,
-            result: self.result,
+            result: self.result.into(),
             start_time: self.stopwatch_end.start_time.fixed_offset(),
             time_taken: self.stopwatch_end.active,
             is_slow: self.slow_after.is_some(),

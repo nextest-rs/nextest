@@ -26,7 +26,7 @@ use crate::{
     config::elements::{LeakTimeoutResult, SlowTimeoutResult},
     errors::{DisplayErrorChain, FormatVersionError, FormatVersionErrorInner, WriteEventError},
     list::{RustTestSuite, TestList},
-    reporter::events::{ExecutionResult, StressIndex, TestEvent, TestEventKind},
+    reporter::events::{ExecutionResultDescription, StressIndex, TestEvent, TestEventKind},
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
 use bstr::ByteSlice;
@@ -269,20 +269,20 @@ impl<'cfg> LibtestReporter<'cfg> {
 
                 (
                     KIND_TEST,
-                    match run_statuses.last_status().result {
-                        ExecutionResult::Pass
-                        | ExecutionResult::Timeout {
+                    match &run_statuses.last_status().result {
+                        ExecutionResultDescription::Pass
+                        | ExecutionResultDescription::Timeout {
                             result: SlowTimeoutResult::Pass,
                         }
-                        | ExecutionResult::Leak {
+                        | ExecutionResultDescription::Leak {
                             result: LeakTimeoutResult::Pass,
                         } => EVENT_OK,
-                        ExecutionResult::Leak {
+                        ExecutionResultDescription::Leak {
                             result: LeakTimeoutResult::Fail,
                         }
-                        | ExecutionResult::Fail { .. }
-                        | ExecutionResult::ExecFail
-                        | ExecutionResult::Timeout {
+                        | ExecutionResultDescription::Fail { .. }
+                        | ExecutionResultDescription::ExecFail
+                        | ExecutionResultDescription::Timeout {
                             result: SlowTimeoutResult::Fail,
                         } => EVENT_FAILED,
                     },
@@ -428,8 +428,9 @@ impl<'cfg> LibtestReporter<'cfg> {
                 )
                 .map_err(fmt_err)?;
 
-                match last_status.result {
-                    ExecutionResult::Fail { .. } | ExecutionResult::ExecFail => {
+                match &last_status.result {
+                    ExecutionResultDescription::Fail { .. }
+                    | ExecutionResultDescription::ExecFail => {
                         test_suite_mut.failed += 1;
 
                         // Write the output from the test into the `stdout` (even
@@ -443,7 +444,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                         )?;
                         out.extend_from_slice(b"\"");
                     }
-                    ExecutionResult::Timeout {
+                    ExecutionResultDescription::Timeout {
                         result: SlowTimeoutResult::Fail,
                     } => {
                         test_suite_mut.failed += 1;

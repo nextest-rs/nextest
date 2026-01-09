@@ -1,0 +1,15 @@
+---
+source: nextest-runner/src/reporter/events.rs
+expression: json
+snapshot_kind: text
+---
+{
+  "status": "fail",
+  "failure": {
+    "kind": "abort",
+    "abort": {
+      "kind": "windows-job-object"
+    }
+  },
+  "leaked": false
+}

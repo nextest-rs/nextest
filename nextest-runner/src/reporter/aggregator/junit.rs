@@ -14,8 +14,8 @@ use crate::{
         UnitErrorDescription,
         displayer::DisplayUnitKind,
         events::{
-            ExecutionDescription, ExecutionResult, FailureStatus, StressIndex, TestEvent,
-            TestEventKind, UnitKind,
+            ExecutionDescription, ExecutionResultDescription, FailureDescription, StressIndex,
+            TestEvent, TestEventKind, UnitKind,
         },
     },
     run_mode::NextestRunMode,
@@ -82,7 +82,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                     TestCaseStatus::success()
                 } else {
                     let (kind, ty) =
-                        non_success_kind_and_type(mode, UnitKind::Script, run_status.result);
+                        non_success_kind_and_type(mode, UnitKind::Script, &run_status.result);
                     let mut testcase_status = TestCaseStatus::non_success(kind);
                     testcase_status.set_type(ty);
                     testcase_status
@@ -153,7 +153,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                         ..
                     } => {
                         let (kind, ty) =
-                            non_success_kind_and_type(mode, UnitKind::Test, first_status.result);
+                            non_success_kind_and_type(mode, UnitKind::Test, &first_status.result);
                         let mut testcase_status = TestCaseStatus::non_success(kind);
                         testcase_status.set_type(ty);
                         (testcase_status, first_status, retries)
@@ -161,7 +161,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 };
 
                 for rerun in reruns {
-                    let (kind, ty) = non_success_kind_and_type(mode, UnitKind::Test, rerun.result);
+                    let (kind, ty) = non_success_kind_and_type(mode, UnitKind::Test, &rerun.result);
                     let mut test_rerun = TestRerun::new(kind);
                     test_rerun
                         .set_timestamp(rerun.start_time)
@@ -322,11 +322,11 @@ impl fmt::Display for SuiteKey<'_> {
 fn non_success_kind_and_type(
     mode: NextestRunMode,
     kind: UnitKind,
-    result: ExecutionResult,
+    result: &ExecutionResultDescription,
 ) -> (NonSuccessKind, String) {
     match result {
-        ExecutionResult::Fail {
-            failure_status: FailureStatus::Abort(_),
+        ExecutionResultDescription::Fail {
+            failure: FailureDescription::Abort { .. },
             leaked: true,
         } => (
             NonSuccessKind::Failure,
@@ -335,15 +335,15 @@ fn non_success_kind_and_type(
                 DisplayUnitKind::new(mode, kind),
             ),
         ),
-        ExecutionResult::Fail {
-            failure_status: FailureStatus::Abort(_),
+        ExecutionResultDescription::Fail {
+            failure: FailureDescription::Abort { .. },
             leaked: false,
         } => (
             NonSuccessKind::Failure,
             format!("{} abort", DisplayUnitKind::new(mode, kind)),
         ),
-        ExecutionResult::Fail {
-            failure_status: FailureStatus::ExitCode(code),
+        ExecutionResultDescription::Fail {
+            failure: FailureDescription::ExitCode { code },
             leaked: true,
         } => (
             NonSuccessKind::Failure,
@@ -352,8 +352,8 @@ fn non_success_kind_and_type(
                 DisplayUnitKind::new(mode, kind),
             ),
         ),
-        ExecutionResult::Fail {
-            failure_status: FailureStatus::ExitCode(code),
+        ExecutionResultDescription::Fail {
+            failure: FailureDescription::ExitCode { code },
             leaked: false,
         } => (
             NonSuccessKind::Failure,
@@ -362,14 +362,16 @@ fn non_success_kind_and_type(
                 DisplayUnitKind::new(mode, kind),
             ),
         ),
-        ExecutionResult::Timeout {
+        ExecutionResultDescription::Timeout {
             result: SlowTimeoutResult::Fail,
         } => (
             NonSuccessKind::Failure,
             format!("{} timeout", DisplayUnitKind::new(mode, kind)),
         ),
-        ExecutionResult::ExecFail => (NonSuccessKind::Error, "execution failure".to_owned()),
-        ExecutionResult::Leak {
+        ExecutionResultDescription::ExecFail => {
+            (NonSuccessKind::Error, "execution failure".to_owned())
+        }
+        ExecutionResultDescription::Leak {
             result: LeakTimeoutResult::Pass,
         } => (
             NonSuccessKind::Error,
@@ -378,7 +380,7 @@ fn non_success_kind_and_type(
                 DisplayUnitKind::new(mode, kind),
             ),
         ),
-        ExecutionResult::Leak {
+        ExecutionResultDescription::Leak {
             result: LeakTimeoutResult::Fail,
         } => (
             NonSuccessKind::Error,
@@ -387,8 +389,8 @@ fn non_success_kind_and_type(
                 DisplayUnitKind::new(mode, kind),
             ),
         ),
-        ExecutionResult::Pass
-        | ExecutionResult::Timeout {
+        ExecutionResultDescription::Pass
+        | ExecutionResultDescription::Timeout {
             result: SlowTimeoutResult::Pass,
         } => {
             unreachable!("this is a failure status")
@@ -499,9 +501,10 @@ fn set_execute_status_props(
 mod tests {
     use super::*;
     #[cfg(unix)]
-    use crate::reporter::events::AbortStatus;
+    use crate::reporter::events::{AbortStatus, SIGTERM};
     use crate::{
         errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
+        reporter::events::{ExecutionResult, FailureStatus},
         test_output::ChildSplitOutput,
     };
     use bytes::Bytes;
@@ -622,9 +625,7 @@ mod tests {
                 status: TestCaseStatus::non_success(NonSuccessKind::Failure),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Fail {
-                        failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(
-                            libc::SIGTERM,
-                        )),
+                        failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(SIGTERM)),
                         leaked: false,
                     }),
                     output: ChildOutput::Split(ChildSplitOutput {
@@ -645,9 +646,7 @@ mod tests {
                 status: TestCaseStatus::non_success(NonSuccessKind::Failure),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Fail {
-                        failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(
-                            libc::SIGTERM,
-                        )),
+                        failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(SIGTERM)),
                         leaked: true,
                     }),
                     output: ChildOutput::Split(ChildSplitOutput {

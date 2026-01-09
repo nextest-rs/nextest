@@ -1,10 +1,9 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::events::{AbortStatus, ExecutionResult, FailureStatus, UnitKind};
+use super::events::{AbortDescription, ExecutionResult, FailureStatus, UnitKind};
 use crate::{
     errors::{ChildError, ChildStartError, ErrorList},
-    helpers::display_abort_status,
     test_output::{ChildExecutionOutput, ChildOutput},
 };
 use bstr::ByteSlice;
@@ -67,7 +66,7 @@ impl<'a> UnitErrorDescription<'a> {
                     } = result
                     {
                         abort = Some(UnitAbortDescription {
-                            status: *status,
+                            description: AbortDescription::from(*status),
                             leaked: *leaked,
                         });
                     }
@@ -144,15 +143,15 @@ impl<'a> UnitErrorDescription<'a> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Error)]
+#[derive(Clone, Debug, Error)]
 struct UnitAbortDescription {
-    status: AbortStatus,
+    description: AbortDescription,
     leaked: bool,
 }
 
 impl fmt::Display for UnitAbortDescription {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "process {}", display_abort_status(self.status))?;
+        write!(f, "process {}", self.description)?;
         if self.leaked {
             write!(f, ", and also leaked handles")?;
         }
