@@ -2463,7 +2463,9 @@ mod tests {
     use super::*;
     use crate::{
         errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
-        reporter::events::{ExecutionResult, FailureStatus, UnitTerminateReason},
+        reporter::events::{
+            ChildExecutionOutputDescription, ExecutionResult, FailureStatus, UnitTerminateReason,
+        },
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     };
     use bytes::Bytes;
@@ -2546,6 +2548,8 @@ mod tests {
             time_taken: Duration::from_secs(1),
             is_slow: false,
             delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
         };
         let fail_describe = ExecutionDescription::Failure {
             first_status: &fail_status,
@@ -2565,6 +2569,8 @@ mod tests {
             time_taken: Duration::from_secs(2),
             is_slow: false,
             delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
         };
 
         // Make an `ExecutionStatuses` with a failure and a success, indicating flakiness.
@@ -2980,7 +2986,8 @@ mod tests {
                                 },
                                 output: ChildExecutionOutput::StartError(ChildStartError::Spawn(
                                     Arc::new(std::io::Error::other("exec error")),
-                                )),
+                                ))
+                                .into(),
                             }),
                         },
                     })
@@ -3012,7 +3019,8 @@ mod tests {
                                 },
                                 output: ChildExecutionOutput::StartError(ChildStartError::Spawn(
                                     Arc::new(std::io::Error::other("exec error")),
-                                )),
+                                ))
+                                .into(),
                             }),
                         },
                     })
@@ -3213,7 +3221,7 @@ mod tests {
         result: Option<ExecutionResult>,
         stdout: &str,
         stderr: &str,
-    ) -> ChildExecutionOutput {
+    ) -> ChildExecutionOutputDescription {
         ChildExecutionOutput::Output {
             result,
             output: ChildOutput::Split(ChildSplitOutput {
@@ -3222,6 +3230,7 @@ mod tests {
             }),
             errors: None,
         }
+        .into()
     }
 
     fn make_split_output_with_errors(
@@ -3229,7 +3238,7 @@ mod tests {
         stdout: &str,
         stderr: &str,
         errors: Vec<ChildError>,
-    ) -> ChildExecutionOutput {
+    ) -> ChildExecutionOutputDescription {
         ChildExecutionOutput::Output {
             result,
             output: ChildOutput::Split(ChildSplitOutput {
@@ -3238,13 +3247,14 @@ mod tests {
             }),
             errors: ErrorList::new("testing split output", errors),
         }
+        .into()
     }
 
     fn make_combined_output_with_errors(
         result: Option<ExecutionResult>,
         output: &str,
         errors: Vec<ChildError>,
-    ) -> ChildExecutionOutput {
+    ) -> ChildExecutionOutputDescription {
         ChildExecutionOutput::Output {
             result,
             output: ChildOutput::Combined {
@@ -3252,6 +3262,7 @@ mod tests {
             },
             errors: ErrorList::new("testing split output", errors),
         }
+        .into()
     }
 
     #[test]

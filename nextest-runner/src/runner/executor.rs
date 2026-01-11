@@ -1238,7 +1238,7 @@ impl<'a> TestPacket<'a> {
             test_instance: self.test_instance.id(),
             state,
             retry_data: self.retry_data,
-            output,
+            output: output.into(),
         })
     }
 }
@@ -1293,7 +1293,7 @@ impl<'a> SetupScriptPacket<'a> {
             program: self.program.clone(),
             args: &self.config.command.args,
             state,
-            output,
+            output: output.into(),
         })
     }
 }

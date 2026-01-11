@@ -10,12 +10,14 @@
 use super::{SetupScriptPacket, TestPacket};
 use crate::{
     config::scripts::{ScriptId, SetupScriptConfig},
+    errors::DisplayErrorChain,
     list::TestInstance,
     reporter::{
-        TestOutputDisplay,
+        TestOutputDisplay, UnitErrorDescription,
         events::{
-            ExecuteStatus, ExecutionResult, InfoResponse, RetryData, SetupScriptEnvMap,
-            SetupScriptExecuteStatus, StressIndex, UnitState,
+            ChildExecutionOutputDescription, ErrorSummary, ExecuteStatus, ExecutionResult,
+            InfoResponse, OutputErrorSlice, RetryData, SetupScriptEnvMap, SetupScriptExecuteStatus,
+            StressIndex, UnitKind, UnitState,
         },
     },
     signal::ShutdownEvent,
@@ -159,14 +161,30 @@ pub(super) struct InternalExecuteStatus<'a> {
 
 impl InternalExecuteStatus<'_> {
     pub(super) fn into_external(self) -> ExecuteStatus {
+        let output: ChildExecutionOutputDescription = self.output.into();
+
+        // Compute the error summary and output error slice using
+        // UnitErrorDescription.
+        let desc = UnitErrorDescription::new(UnitKind::Test, &output);
+        let error_summary = desc.all_error_list().map(|errors| ErrorSummary {
+            short_message: errors.short_message(),
+            description: DisplayErrorChain::new(errors).to_string(),
+        });
+        let output_error_slice = desc.output_slice().map(|slice| OutputErrorSlice {
+            slice: slice.to_string(),
+            start: slice.combined_subslice().map(|s| s.start).unwrap_or(0),
+        });
+
         ExecuteStatus {
             retry_data: self.test.retry_data(),
-            output: self.output,
+            output,
             result: self.result.into(),
             start_time: self.stopwatch_end.start_time.fixed_offset(),
             time_taken: self.stopwatch_end.active,
             is_slow: self.slow_after.is_some(),
             delay_before_start: self.test.delay_before_start(),
+            error_summary,
+            output_error_slice,
         }
     }
 }
@@ -182,13 +200,26 @@ pub(super) struct InternalSetupScriptExecuteStatus<'a> {
 
 impl InternalSetupScriptExecuteStatus<'_> {
     pub(super) fn into_external(self) -> SetupScriptExecuteStatus {
+        let output: ChildExecutionOutputDescription = self.output.into();
+
+        // Compute the error summary using UnitErrorDescription.
+        // Setup scripts don't have output_error_slice since that's only for
+        // tests (setup scripts can fail in all kinds of ways, while tests fail
+        // in more predictable ones).
+        let desc = UnitErrorDescription::new(UnitKind::Script, &output);
+        let error_summary = desc.all_error_list().map(|errors| ErrorSummary {
+            short_message: errors.short_message(),
+            description: DisplayErrorChain::new(errors).to_string(),
+        });
+
         SetupScriptExecuteStatus {
-            output: self.output,
+            output,
             result: self.result.into(),
             start_time: self.stopwatch_end.start_time.fixed_offset(),
             time_taken: self.stopwatch_end.active,
             is_slow: self.slow_after.is_some(),
             env_map: self.env_map,
+            error_summary,
         }
     }
 }

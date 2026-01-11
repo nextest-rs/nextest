@@ -16,9 +16,10 @@ use crate::{
     input::{InputEvent, InputHandler},
     list::{TestInstance, TestInstanceId, TestList},
     reporter::events::{
-        CancelReason, ExecuteStatus, ExecutionResultDescription, ExecutionStatuses,
-        FailureDescription, FinalRunStats, InfoResponse, ReporterEvent, RunFinishedStats, RunStats,
-        StressIndex, StressProgress, StressRunStats, TestEvent, TestEventKind,
+        CancelReason, ChildExecutionOutputDescription, ExecuteStatus, ExecutionResultDescription,
+        ExecutionStatuses, FailureDescription, FinalRunStats, InfoResponse, ReporterEvent,
+        RunFinishedStats, RunStats, StressIndex, StressProgress, StressRunStats, TestEvent,
+        TestEventKind,
     },
     runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
     signal::{
@@ -608,12 +609,12 @@ where
                     _ => None,
                 };
 
-                // Extract stdout and stderr lengths from the output
+                // Extract stdout and stderr lengths from the output.
                 let (stdout_len, stderr_len) = match &status.output {
-                    crate::test_output::ChildExecutionOutput::Output { output, .. } => {
+                    ChildExecutionOutputDescription::Output { output, .. } => {
                         output.stdout_stderr_len()
                     }
-                    crate::test_output::ChildExecutionOutput::StartError(_) => (None, None),
+                    ChildExecutionOutputDescription::StartError(_) => (None, None),
                 };
 
                 crate::fire_usdt!(UsdtSetupScriptDone {

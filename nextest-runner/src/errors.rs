@@ -394,8 +394,35 @@ impl<T: std::error::Error> ErrorList<T> {
         }
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
+    /// Returns the description of what the errors are.
+    pub fn description(&self) -> &'static str {
+        self.description
+    }
+
+    /// Iterates over the errors in this list.
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.inner.iter()
+    }
+
+    /// Transforms the errors in this list using the given function.
+    pub fn map<U, F>(self, f: F) -> ErrorList<U>
+    where
+        U: std::error::Error,
+        F: FnMut(T) -> U,
+    {
+        ErrorList {
+            description: self.description,
+            inner: self.inner.into_iter().map(f).collect(),
+        }
+    }
+}
+
+impl<T: std::error::Error> IntoIterator for ErrorList<T> {
+    type Item = T;
+    type IntoIter = std::vec::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
     }
 }
 
