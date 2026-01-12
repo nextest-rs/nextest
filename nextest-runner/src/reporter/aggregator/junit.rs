@@ -14,12 +14,13 @@ use crate::{
         UnitErrorDescription,
         displayer::DisplayUnitKind,
         events::{
-            ChildExecutionOutputDescription, ExecutionDescription, ExecutionResultDescription,
-            FailureDescription, StressIndex, TestEvent, TestEventKind, UnitKind,
+            ChildExecutionOutputDescription, ChildOutputDescription, ExecutionDescription,
+            ExecutionResultDescription, FailureDescription, StressIndex, TestEvent, TestEventKind,
+            UnitKind,
         },
     },
     run_mode::NextestRunMode,
-    test_output::ChildOutput,
+    test_output::ChildSingleOutput,
 };
 use debug_ignore::DebugIgnore;
 use indexmap::IndexMap;
@@ -454,7 +455,7 @@ impl TestcaseOrRerun<'_> {
 }
 
 fn set_execute_status_props(
-    exec_output: &ChildExecutionOutputDescription,
+    exec_output: &ChildExecutionOutputDescription<ChildSingleOutput>,
     store_stdout_stderr: bool,
     mut out: TestcaseOrRerun<'_>,
 ) {
@@ -468,22 +469,22 @@ fn set_execute_status_props(
     if store_stdout_stderr {
         match exec_output {
             ChildExecutionOutputDescription::Output {
-                output: ChildOutput::Split(split),
+                output: ChildOutputDescription::Split { stdout, stderr },
                 ..
             } => {
-                if let Some(stdout) = &split.stdout {
+                if let Some(stdout) = stdout {
                     out.set_system_out(stdout.as_str_lossy());
                 } else {
                     out.set_system_out(STDOUT_NOT_CAPTURED);
                 }
-                if let Some(stderr) = &split.stderr {
+                if let Some(stderr) = stderr {
                     out.set_system_err(stderr.as_str_lossy());
                 } else {
                     out.set_system_err(STDERR_NOT_CAPTURED);
                 }
             }
             ChildExecutionOutputDescription::Output {
-                output: ChildOutput::Combined { output },
+                output: ChildOutputDescription::Combined { output },
                 ..
             } => {
                 out.set_system_out(output.as_str_lossy())
@@ -505,7 +506,7 @@ mod tests {
     use crate::{
         errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
         reporter::events::{ChildExecutionOutputDescription, ExecutionResult, FailureStatus},
-        test_output::{ChildExecutionOutput, ChildSplitOutput},
+        test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     };
     use bytes::Bytes;
     use std::{io, sync::Arc};
@@ -771,7 +772,7 @@ mod tests {
     struct ExecuteStatusPropsCase<'a> {
         comment: &'a str,
         status: TestCaseStatus,
-        output: ChildExecutionOutputDescription,
+        output: ChildExecutionOutputDescription<ChildSingleOutput>,
         store_stdout_stderr: bool,
         message: Option<&'a str>,
         description: Option<&'a str>,

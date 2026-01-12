@@ -2466,7 +2466,7 @@ mod tests {
         reporter::events::{
             ChildExecutionOutputDescription, ExecutionResult, FailureStatus, UnitTerminateReason,
         },
-        test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
+        test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput, ChildSplitOutput},
     };
     use bytes::Bytes;
     use chrono::Local;
@@ -3221,7 +3221,7 @@ mod tests {
         result: Option<ExecutionResult>,
         stdout: &str,
         stderr: &str,
-    ) -> ChildExecutionOutputDescription {
+    ) -> ChildExecutionOutputDescription<ChildSingleOutput> {
         ChildExecutionOutput::Output {
             result,
             output: ChildOutput::Split(ChildSplitOutput {
@@ -3238,7 +3238,7 @@ mod tests {
         stdout: &str,
         stderr: &str,
         errors: Vec<ChildError>,
-    ) -> ChildExecutionOutputDescription {
+    ) -> ChildExecutionOutputDescription<ChildSingleOutput> {
         ChildExecutionOutput::Output {
             result,
             output: ChildOutput::Split(ChildSplitOutput {
@@ -3254,7 +3254,7 @@ mod tests {
         result: Option<ExecutionResult>,
         output: &str,
         errors: Vec<ChildError>,
-    ) -> ChildExecutionOutputDescription {
+    ) -> ChildExecutionOutputDescription<ChildSingleOutput> {
         ChildExecutionOutput::Output {
             result,
             output: ChildOutput::Combined {

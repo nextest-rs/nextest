@@ -11,7 +11,7 @@ use crate::{
         events::*,
         helpers::{Styles, highlight_end},
     },
-    test_output::{ChildOutput, ChildSingleOutput},
+    test_output::ChildSingleOutput,
     write_str::WriteStr,
 };
 use owo_colors::Style;
@@ -125,7 +125,7 @@ impl UnitOutputReporter {
         &self,
         styles: &Styles,
         spec: &ChildOutputSpec,
-        exec_output: &ChildExecutionOutputDescription,
+        exec_output: &ChildExecutionOutputDescription<ChildSingleOutput>,
         mut writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         match exec_output {
@@ -177,13 +177,13 @@ impl UnitOutputReporter {
         &self,
         styles: &Styles,
         spec: &ChildOutputSpec,
-        output: &ChildOutput,
+        output: &ChildOutputDescription<ChildSingleOutput>,
         highlight_slice: Option<TestOutputErrorSlice<'_>>,
         mut writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         match output {
-            ChildOutput::Split(split) => {
-                if let Some(stdout) = &split.stdout
+            ChildOutputDescription::Split { stdout, stderr } => {
+                if let Some(stdout) = stdout
                     && (self.display_empty_outputs || !stdout.is_empty())
                 {
                     writeln!(writer, "{}", spec.stdout_header)?;
@@ -203,7 +203,7 @@ impl UnitOutputReporter {
                     writer = indent_writer.into_inner();
                 }
 
-                if let Some(stderr) = &split.stderr
+                if let Some(stderr) = stderr
                     && (self.display_empty_outputs || !stderr.is_empty())
                 {
                     writeln!(writer, "{}", spec.stderr_header)?;
@@ -218,7 +218,7 @@ impl UnitOutputReporter {
                     indent_writer.write_str_flush()?;
                 }
             }
-            ChildOutput::Combined { output } => {
+            ChildOutputDescription::Combined { output } => {
                 if self.display_empty_outputs || !output.is_empty() {
                     writeln!(writer, "{}", spec.combined_header)?;
 

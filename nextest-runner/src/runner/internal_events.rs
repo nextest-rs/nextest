@@ -21,7 +21,7 @@ use crate::{
         },
     },
     signal::ShutdownEvent,
-    test_output::ChildExecutionOutput,
+    test_output::{ChildExecutionOutput, ChildSingleOutput},
     time::StopwatchSnapshot,
 };
 use nextest_metadata::MismatchReason;
@@ -161,7 +161,7 @@ pub(super) struct InternalExecuteStatus<'a> {
 
 impl InternalExecuteStatus<'_> {
     pub(super) fn into_external(self) -> ExecuteStatus {
-        let output: ChildExecutionOutputDescription = self.output.into();
+        let output: ChildExecutionOutputDescription<ChildSingleOutput> = self.output.into();
 
         // Compute the error summary and output error slice using
         // UnitErrorDescription.
@@ -200,7 +200,7 @@ pub(super) struct InternalSetupScriptExecuteStatus<'a> {
 
 impl InternalSetupScriptExecuteStatus<'_> {
     pub(super) fn into_external(self) -> SetupScriptExecuteStatus {
-        let output: ChildExecutionOutputDescription = self.output.into();
+        let output: ChildExecutionOutputDescription<ChildSingleOutput> = self.output.into();
 
         // Compute the error summary using UnitErrorDescription.
         // Setup scripts don't have output_error_slice since that's only for

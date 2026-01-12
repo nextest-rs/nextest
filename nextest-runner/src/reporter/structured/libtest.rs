@@ -27,10 +27,10 @@ use crate::{
     errors::{DisplayErrorChain, FormatVersionError, FormatVersionErrorInner, WriteEventError},
     list::{RustTestSuite, TestList},
     reporter::events::{
-        ChildExecutionOutputDescription, ExecutionResultDescription, StressIndex, TestEvent,
-        TestEventKind,
+        ChildExecutionOutputDescription, ChildOutputDescription, ExecutionResultDescription,
+        StressIndex, TestEvent, TestEventKind,
     },
-    test_output::{ChildOutput, ChildSingleOutput},
+    test_output::ChildSingleOutput,
 };
 use bstr::ByteSlice;
 use iddqd::{IdOrdItem, IdOrdMap, id_ord_map, id_upcast};
@@ -586,7 +586,7 @@ impl<'cfg> LibtestReporter<'cfg> {
 /// This function relies on the fact that nextest runs every individual test in
 /// isolation.
 fn strip_human_output_from_failed_test(
-    output: &ChildExecutionOutputDescription,
+    output: &ChildExecutionOutputDescription<ChildSingleOutput>,
     out: &mut bytes::BytesMut,
     test_name: &TestCaseName,
 ) -> Result<(), WriteEventError> {
@@ -597,10 +597,10 @@ fn strip_human_output_from_failed_test(
             errors,
         } => {
             match output {
-                ChildOutput::Combined { output } => {
+                ChildOutputDescription::Combined { output } => {
                     strip_human_stdout_or_combined(output, out, test_name)?;
                 }
-                ChildOutput::Split(split) => {
+                ChildOutputDescription::Split { stdout, stderr } => {
                     // This is not a case that we hit because we always set CaptureStrategy to Combined. But
                     // handle it in a reasonable fashion. (We do have a unit test for this case, so gate the
                     // assertion with cfg(not(test)).)
@@ -608,7 +608,7 @@ fn strip_human_output_from_failed_test(
                     {
                         debug_assert!(false, "libtest output requires CaptureStrategy::Combined");
                     }
-                    if let Some(stdout) = &split.stdout {
+                    if let Some(stdout) = stdout {
                         if !stdout.is_empty() {
                             write!(out, "--- STDOUT ---\\n").map_err(fmt_err)?;
                             strip_human_stdout_or_combined(stdout, out, test_name)?;
@@ -617,7 +617,7 @@ fn strip_human_output_from_failed_test(
                         write!(out, "(stdout not captured)").map_err(fmt_err)?;
                     }
                     // If stderr is not empty, just write all of it in.
-                    if let Some(stderr) = &split.stderr {
+                    if let Some(stderr) = stderr {
                         if !stderr.is_empty() {
                             write!(out, "\\n--- STDERR ---\\n").map_err(fmt_err)?;
                             write!(out, "{}", EscapedString(stderr.as_str_lossy()))
@@ -818,7 +818,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
         };
 
         let mut actual = bytes::BytesMut::new();
-        let output_desc: ChildExecutionOutputDescription = ChildExecutionOutput::Output {
+        let output_desc: ChildExecutionOutputDescription<_> = ChildExecutionOutput::Output {
             result: None,
             output,
             errors: None,
@@ -851,7 +851,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
         };
 
         let mut actual = bytes::BytesMut::new();
-        let output_desc: ChildExecutionOutputDescription = ChildExecutionOutput::Output {
+        let output_desc: ChildExecutionOutputDescription<_> = ChildExecutionOutput::Output {
             result: None,
             output,
             errors: None,
@@ -872,7 +872,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
         let inner_error = eyre!("inner error");
         let error = io::Error::other(inner_error);
 
-        let output: ChildExecutionOutputDescription =
+        let output: ChildExecutionOutputDescription<_> =
             ChildExecutionOutput::StartError(ChildStartError::Spawn(Arc::new(error))).into();
 
         let mut actual = bytes::BytesMut::new();
@@ -889,7 +889,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
     #[test]
     fn strips_human_output_none() {
         let mut actual = bytes::BytesMut::new();
-        let output_desc: ChildExecutionOutputDescription = ChildExecutionOutput::Output {
+        let output_desc: ChildExecutionOutputDescription<_> = ChildExecutionOutput::Output {
             result: None,
             output: ChildOutput::Split(ChildSplitOutput {
                 stdout: None,
