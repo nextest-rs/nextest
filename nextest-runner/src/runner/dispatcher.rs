@@ -26,6 +26,7 @@ use crate::{
         JobControlEvent, ShutdownEvent, ShutdownSignalEvent, SignalEvent, SignalHandler,
         SignalInfoEvent,
     },
+    test_output::ChildSingleOutput,
     time::StopwatchStart,
 };
 use chrono::Local;
@@ -912,8 +913,8 @@ where
     fn finish_test(
         &mut self,
         key: TestInstanceId<'a>,
-        last_run_status: ExecuteStatus,
-    ) -> ExecutionStatuses {
+        last_run_status: ExecuteStatus<ChildSingleOutput>,
+    ) -> ExecutionStatuses<ChildSingleOutput> {
         self.running_tests
             .remove(&key)
             .unwrap_or_else(|| {
@@ -1331,16 +1332,19 @@ struct ContextTestInstance<'a> {
     // Store the instance primarily for debugging.
     #[expect(dead_code)]
     instance: TestInstance<'a>,
-    past_attempts: Vec<ExecuteStatus>,
+    past_attempts: Vec<ExecuteStatus<ChildSingleOutput>>,
     req_tx: UnboundedSender<RunUnitRequest<'a>>,
 }
 
 impl ContextTestInstance<'_> {
-    fn attempt_failed_will_retry(&mut self, run_status: ExecuteStatus) {
+    fn attempt_failed_will_retry(&mut self, run_status: ExecuteStatus<ChildSingleOutput>) {
         self.past_attempts.push(run_status);
     }
 
-    fn finish(self, last_run_status: ExecuteStatus) -> ExecutionStatuses {
+    fn finish(
+        self,
+        last_run_status: ExecuteStatus<ChildSingleOutput>,
+    ) -> ExecutionStatuses<ChildSingleOutput> {
         let mut attempts = self.past_attempts;
         attempts.push(last_run_status);
         ExecutionStatuses::new(attempts)

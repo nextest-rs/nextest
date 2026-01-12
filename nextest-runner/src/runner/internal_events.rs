@@ -66,7 +66,7 @@ pub(super) enum ExecutorEvent<'a> {
         program: String,
         index: usize,
         total: usize,
-        status: SetupScriptExecuteStatus,
+        status: SetupScriptExecuteStatus<ChildSingleOutput>,
     },
     Started {
         stress_index: Option<StressIndex>,
@@ -95,7 +95,7 @@ pub(super) enum ExecutorEvent<'a> {
         stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
         failure_output: TestOutputDisplay,
-        run_status: ExecuteStatus,
+        run_status: ExecuteStatus<ChildSingleOutput>,
         delay_before_next_attempt: Duration,
     },
     RetryStarted {
@@ -113,7 +113,7 @@ pub(super) enum ExecutorEvent<'a> {
         failure_output: TestOutputDisplay,
         junit_store_success_output: bool,
         junit_store_failure_output: bool,
-        last_run_status: ExecuteStatus,
+        last_run_status: ExecuteStatus<ChildSingleOutput>,
     },
     Skipped {
         stress_index: Option<StressIndex>,
@@ -160,7 +160,7 @@ pub(super) struct InternalExecuteStatus<'a> {
 }
 
 impl InternalExecuteStatus<'_> {
-    pub(super) fn into_external(self) -> ExecuteStatus {
+    pub(super) fn into_external(self) -> ExecuteStatus<ChildSingleOutput> {
         let output: ChildExecutionOutputDescription<ChildSingleOutput> = self.output.into();
 
         // Compute the error summary and output error slice using
@@ -199,7 +199,7 @@ pub(super) struct InternalSetupScriptExecuteStatus<'a> {
 }
 
 impl InternalSetupScriptExecuteStatus<'_> {
-    pub(super) fn into_external(self) -> SetupScriptExecuteStatus {
+    pub(super) fn into_external(self) -> SetupScriptExecuteStatus<ChildSingleOutput> {
         let output: ChildExecutionOutputDescription<ChildSingleOutput> = self.output.into();
 
         // Compute the error summary using UnitErrorDescription.

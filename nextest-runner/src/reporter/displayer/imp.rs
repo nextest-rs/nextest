@@ -42,6 +42,7 @@ use crate::{
     },
     run_mode::NextestRunMode,
     runner::StressCount,
+    test_output::ChildSingleOutput,
     write_str::WriteStr,
 };
 use debug_ignore::DebugIgnore;
@@ -337,7 +338,7 @@ impl ReporterOutputImpl<'_> {
 enum FinalOutput {
     Skipped(#[expect(dead_code)] MismatchReason),
     Executed {
-        run_statuses: ExecutionStatuses,
+        run_statuses: ExecutionStatuses<ChildSingleOutput>,
         display_output: bool,
     },
 }
@@ -1353,7 +1354,7 @@ impl<'a> DisplayReporterImpl<'a> {
         script_id: &ScriptId,
         command: &str,
         args: &[String],
-        status: &SetupScriptExecuteStatus,
+        status: &SetupScriptExecuteStatus<ChildSingleOutput>,
         writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         match status.result {
@@ -1393,7 +1394,7 @@ impl<'a> DisplayReporterImpl<'a> {
         stress_index: Option<StressIndex>,
         counter: TestInstanceCounter,
         test_instance: TestInstanceId<'a>,
-        describe: ExecutionDescription<'_>,
+        describe: ExecutionDescription<'_, ChildSingleOutput>,
         writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         let last_status = describe.last_status();
@@ -1465,7 +1466,7 @@ impl<'a> DisplayReporterImpl<'a> {
         stress_index: Option<StressIndex>,
         counter: TestInstanceCounter,
         test_instance: TestInstanceId<'a>,
-        describe: ExecutionDescription<'_>,
+        describe: ExecutionDescription<'_, ChildSingleOutput>,
         writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         let last_status = describe.last_status();
@@ -2057,7 +2058,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
     fn write_setup_script_execute_status(
         &self,
-        run_status: &SetupScriptExecuteStatus,
+        run_status: &SetupScriptExecuteStatus<ChildSingleOutput>,
         writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         let spec = self.output_spec_for_finished(&run_status.result, false);
@@ -2083,7 +2084,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
     fn write_test_execute_status(
         &self,
-        run_status: &ExecuteStatus,
+        run_status: &ExecuteStatus<ChildSingleOutput>,
         is_retry: bool,
         writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
