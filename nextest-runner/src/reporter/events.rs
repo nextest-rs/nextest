@@ -163,7 +163,7 @@ pub enum TestEventKind<'a> {
         no_capture: bool,
 
         /// The execution status of the setup script.
-        run_status: SetupScriptExecuteStatus,
+        run_status: SetupScriptExecuteStatus<ChildSingleOutput>,
     },
 
     // TODO: add events for BinaryStarted and BinaryFinished? May want a slightly different way to
@@ -216,7 +216,7 @@ pub enum TestEventKind<'a> {
         test_instance: TestInstanceId<'a>,
 
         /// The status of this attempt to run the test. Will never be success.
-        run_status: ExecuteStatus,
+        run_status: ExecuteStatus<ChildSingleOutput>,
 
         /// The delay before the next attempt to run the test.
         delay_before_next_attempt: Duration,
@@ -267,7 +267,7 @@ pub enum TestEventKind<'a> {
         junit_store_failure_output: bool,
 
         /// Information about all the runs for this test.
-        run_statuses: ExecutionStatuses,
+        run_statuses: ExecutionStatuses<ChildSingleOutput>,
 
         /// Current statistics for number of tests so far.
         current_stats: RunStats,
@@ -644,7 +644,10 @@ impl RunStats {
         }
     }
 
-    pub(crate) fn on_setup_script_finished(&mut self, status: &SetupScriptExecuteStatus) {
+    pub(crate) fn on_setup_script_finished(
+        &mut self,
+        status: &SetupScriptExecuteStatus<ChildSingleOutput>,
+    ) {
         self.setup_scripts_finished_count += 1;
 
         match status.result {
@@ -670,7 +673,7 @@ impl RunStats {
         }
     }
 
-    pub(crate) fn on_test_finished(&mut self, run_statuses: &ExecutionStatuses) {
+    pub(crate) fn on_test_finished(&mut self, run_statuses: &ExecutionStatuses<ChildSingleOutput>) {
         self.finished_count += 1;
         // run_statuses is guaranteed to have at least one element.
         // * If the last element is success, treat it as success (and possibly flaky).
@@ -826,29 +829,31 @@ pub enum RunStatsFailureKind {
 }
 
 /// Information about executions of a test, including retries.
+///
+/// The type parameter `O` represents how test output is stored.
 #[derive(Clone, Debug)]
-pub struct ExecutionStatuses {
+pub struct ExecutionStatuses<O> {
     /// This is guaranteed to be non-empty.
-    statuses: Vec<ExecuteStatus>,
+    statuses: Vec<ExecuteStatus<O>>,
 }
 
 #[expect(clippy::len_without_is_empty)] // RunStatuses is never empty
-impl ExecutionStatuses {
-    pub(crate) fn new(statuses: Vec<ExecuteStatus>) -> Self {
+impl<O> ExecutionStatuses<O> {
+    pub(crate) fn new(statuses: Vec<ExecuteStatus<O>>) -> Self {
         Self { statuses }
     }
 
     /// Returns the last execution status.
     ///
     /// This status is typically used as the final result.
-    pub fn last_status(&self) -> &ExecuteStatus {
+    pub fn last_status(&self) -> &ExecuteStatus<O> {
         self.statuses
             .last()
             .expect("execution statuses is non-empty")
     }
 
     /// Iterates over all the statuses.
-    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &'_ ExecuteStatus> + '_ {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &'_ ExecuteStatus<O>> + '_ {
         self.statuses.iter()
     }
 
@@ -858,7 +863,7 @@ impl ExecutionStatuses {
     }
 
     /// Returns a description of self.
-    pub fn describe(&self) -> ExecutionDescription<'_> {
+    pub fn describe(&self) -> ExecutionDescription<'_, O> {
         let last_status = self.last_status();
         if last_status.result.is_success() {
             if self.statuses.len() > 1 {
@@ -889,39 +894,51 @@ impl ExecutionStatuses {
 /// A description of test executions obtained from `ExecuteStatuses`.
 ///
 /// This can be used to quickly determine whether a test passed, failed or was flaky.
-#[derive(Copy, Clone, Debug)]
-pub enum ExecutionDescription<'a> {
+///
+/// The type parameter `O` represents how test output is stored.
+#[derive(Debug)]
+pub enum ExecutionDescription<'a, O> {
     /// The test was run once and was successful.
     Success {
         /// The status of the test.
-        single_status: &'a ExecuteStatus,
+        single_status: &'a ExecuteStatus<O>,
     },
 
     /// The test was run more than once. The final result was successful.
     Flaky {
         /// The last, successful status.
-        last_status: &'a ExecuteStatus,
+        last_status: &'a ExecuteStatus<O>,
 
         /// Previous statuses, none of which are successes.
-        prior_statuses: &'a [ExecuteStatus],
+        prior_statuses: &'a [ExecuteStatus<O>],
     },
 
     /// The test was run once, or possibly multiple times. All runs failed.
     Failure {
         /// The first, failing status.
-        first_status: &'a ExecuteStatus,
+        first_status: &'a ExecuteStatus<O>,
 
         /// The last, failing status. Same as the first status if no retries were performed.
-        last_status: &'a ExecuteStatus,
+        last_status: &'a ExecuteStatus<O>,
 
         /// Any retries that were performed. All of these runs failed.
         ///
         /// May be empty.
-        retries: &'a [ExecuteStatus],
+        retries: &'a [ExecuteStatus<O>],
     },
 }
 
-impl<'a> ExecutionDescription<'a> {
+// Manual Copy and Clone implementations to avoid requiring O: Copy/Clone, since
+// ExecutionDescription just stores references.
+impl<O> Clone for ExecutionDescription<'_, O> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<O> Copy for ExecutionDescription<'_, O> {}
+
+impl<'a, O> ExecutionDescription<'a, O> {
     /// Returns the status level for this `ExecutionDescription`.
     pub fn status_level(&self) -> StatusLevel {
         match self {
@@ -975,7 +992,7 @@ impl<'a> ExecutionDescription<'a> {
     }
 
     /// Returns the last run status.
-    pub fn last_status(&self) -> &'a ExecuteStatus {
+    pub fn last_status(&self) -> &'a ExecuteStatus<O> {
         match self {
             ExecutionDescription::Success {
                 single_status: last_status,
@@ -1018,12 +1035,16 @@ pub struct OutputErrorSlice {
 /// This is the external-facing type used by reporters. The `result` field uses
 /// [`ExecutionResultDescription`], a platform-independent type that can be
 /// serialized and deserialized across platforms.
+///
+/// The type parameter `O` represents how test output is stored:
+/// - [`ChildSingleOutput`]: Output stored in memory with lazy string conversion.
+/// - Other types may be used for serialization to archives.
 #[derive(Clone, Debug)]
-pub struct ExecuteStatus {
+pub struct ExecuteStatus<O> {
     /// Retry-related data.
     pub retry_data: RetryData,
     /// The stdout and stderr output for this test.
-    pub output: ChildExecutionOutputDescription<ChildSingleOutput>,
+    pub output: ChildExecutionOutputDescription<O>,
     /// The execution result for this test: pass, fail or execution error.
     pub result: ExecutionResultDescription,
     /// The time at which the test started.
@@ -1051,10 +1072,12 @@ pub struct ExecuteStatus {
 /// This is the external-facing type used by reporters. The `result` field uses
 /// [`ExecutionResultDescription`], a platform-independent type that can be
 /// serialized and deserialized across platforms.
+///
+/// The type parameter `O` represents how test output is stored.
 #[derive(Clone, Debug)]
-pub struct SetupScriptExecuteStatus {
+pub struct SetupScriptExecuteStatus<O> {
     /// Output for this setup script.
-    pub output: ChildExecutionOutputDescription<ChildSingleOutput>,
+    pub output: ChildExecutionOutputDescription<O>,
 
     /// The execution result for this setup script: pass, fail or execution error.
     pub result: ExecutionResultDescription,
