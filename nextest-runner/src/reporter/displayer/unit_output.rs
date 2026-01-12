@@ -11,7 +11,7 @@ use crate::{
         events::*,
         helpers::{Styles, highlight_end},
     },
-    test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
+    test_output::{ChildOutput, ChildSingleOutput},
     write_str::WriteStr,
 };
 use owo_colors::Style;
@@ -125,11 +125,11 @@ impl UnitOutputReporter {
         &self,
         styles: &Styles,
         spec: &ChildOutputSpec,
-        exec_output: &ChildExecutionOutput,
+        exec_output: &ChildExecutionOutputDescription,
         mut writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
         match exec_output {
-            ChildExecutionOutput::Output {
+            ChildExecutionOutputDescription::Output {
                 output,
                 // result and errors are captured by desc.
                 result: _,
@@ -158,7 +158,7 @@ impl UnitOutputReporter {
                 self.write_child_output(styles, spec, output, highlight_slice, writer)?;
             }
 
-            ChildExecutionOutput::StartError(error) => {
+            ChildExecutionOutputDescription::StartError(error) => {
                 writeln!(writer, "{}", spec.exec_fail_header)?;
 
                 // Indent the displayed error chain.

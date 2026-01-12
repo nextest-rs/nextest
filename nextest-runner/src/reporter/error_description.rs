@@ -1,11 +1,11 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::events::{AbortDescription, ExecutionResult, FailureStatus, UnitKind};
-use crate::{
-    errors::{ChildError, ChildStartError, ErrorList},
-    test_output::{ChildExecutionOutput, ChildOutput},
+use super::events::{
+    AbortDescription, ChildErrorDescription, ChildExecutionOutputDescription,
+    ChildStartErrorDescription, ExecutionResultDescription, FailureDescription, UnitKind,
 };
+use crate::{errors::ErrorList, test_output::ChildOutput};
 use bstr::ByteSlice;
 use regex::bytes::{Regex, RegexBuilder};
 use std::{fmt, sync::LazyLock};
@@ -16,25 +16,25 @@ use thiserror::Error;
 #[derive(Clone, Debug)]
 pub struct UnitErrorDescription<'a> {
     kind: UnitKind,
-    start_error: Option<&'a ChildStartError>,
-    output_errors: Option<&'a ErrorList<ChildError>>,
+    start_error: Option<&'a ChildStartErrorDescription>,
+    output_errors: Option<&'a ErrorList<ChildErrorDescription>>,
     abort: Option<UnitAbortDescription>,
     output_slice: Option<TestOutputErrorSlice<'a>>,
 }
 
 impl<'a> UnitErrorDescription<'a> {
     /// Adds the execution output of a child process to the description.
-    pub fn new(kind: UnitKind, output: &'a ChildExecutionOutput) -> Self {
+    pub fn new(kind: UnitKind, output: &'a ChildExecutionOutputDescription) -> Self {
         let mut start_error = None;
         let mut output_errors = None;
         let mut abort = None;
         let mut output_slice = None;
 
         match output {
-            ChildExecutionOutput::StartError(error) => {
+            ChildExecutionOutputDescription::StartError(error) => {
                 start_error = Some(error);
             }
-            ChildExecutionOutput::Output {
+            ChildExecutionOutputDescription::Output {
                 result,
                 output,
                 errors,
@@ -60,13 +60,14 @@ impl<'a> UnitErrorDescription<'a> {
                         }
                     }
 
-                    if let ExecutionResult::Fail {
-                        failure_status: FailureStatus::Abort(status),
+                    if let ExecutionResultDescription::Fail {
+                        failure: FailureDescription::Abort { abort: status },
                         leaked,
+                        ..
                     } = result
                     {
                         abort = Some(UnitAbortDescription {
-                            description: AbortDescription::from(*status),
+                            description: status.clone(),
                             leaked: *leaked,
                         });
                     }
@@ -119,12 +120,10 @@ impl<'a> UnitErrorDescription<'a> {
 
     fn exec_fail_errors(&self) -> impl Iterator<Item = &dyn std::error::Error> {
         self.start_error
-            .as_ref()
             .map(|error| error as &dyn std::error::Error)
             .into_iter()
             .chain(
                 self.output_errors
-                    .as_ref()
                     .into_iter()
                     .flat_map(|errors| errors.iter().map(|error| error as &dyn std::error::Error)),
             )

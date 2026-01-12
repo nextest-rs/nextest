@@ -26,8 +26,11 @@ use crate::{
     config::elements::{LeakTimeoutResult, SlowTimeoutResult},
     errors::{DisplayErrorChain, FormatVersionError, FormatVersionErrorInner, WriteEventError},
     list::{RustTestSuite, TestList},
-    reporter::events::{ExecutionResultDescription, StressIndex, TestEvent, TestEventKind},
-    test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
+    reporter::events::{
+        ChildExecutionOutputDescription, ExecutionResultDescription, StressIndex, TestEvent,
+        TestEventKind,
+    },
+    test_output::{ChildOutput, ChildSingleOutput},
 };
 use bstr::ByteSlice;
 use iddqd::{IdOrdItem, IdOrdMap, id_ord_map, id_upcast};
@@ -583,12 +586,12 @@ impl<'cfg> LibtestReporter<'cfg> {
 /// This function relies on the fact that nextest runs every individual test in
 /// isolation.
 fn strip_human_output_from_failed_test(
-    output: &ChildExecutionOutput,
+    output: &ChildExecutionOutputDescription,
     out: &mut bytes::BytesMut,
     test_name: &TestCaseName,
 ) -> Result<(), WriteEventError> {
     match output {
-        ChildExecutionOutput::Output {
+        ChildExecutionOutputDescription::Output {
             result: _,
             output,
             errors,
@@ -636,7 +639,7 @@ fn strip_human_output_from_failed_test(
                 .map_err(fmt_err)?;
             }
         }
-        ChildExecutionOutput::StartError(error) => {
+        ChildExecutionOutputDescription::StartError(error) => {
             write!(out, "--- EXECUTION ERROR ---\\n").map_err(fmt_err)?;
             write!(
                 out,
@@ -759,7 +762,10 @@ impl std::fmt::Display for EscapedString<'_> {
 mod test {
     use crate::{
         errors::ChildStartError,
-        reporter::structured::libtest::strip_human_output_from_failed_test,
+        reporter::{
+            events::ChildExecutionOutputDescription,
+            structured::libtest::strip_human_output_from_failed_test,
+        },
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     };
     use bytes::BytesMut;
@@ -812,12 +818,14 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
         };
 
         let mut actual = bytes::BytesMut::new();
+        let output_desc: ChildExecutionOutputDescription = ChildExecutionOutput::Output {
+            result: None,
+            output,
+            errors: None,
+        }
+        .into();
         strip_human_output_from_failed_test(
-            &ChildExecutionOutput::Output {
-                result: None,
-                output,
-                errors: None,
-            },
+            &output_desc,
             &mut actual,
             &TestCaseName::new("index::test::download_url_crates_io"),
         )
@@ -843,12 +851,14 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
         };
 
         let mut actual = bytes::BytesMut::new();
+        let output_desc: ChildExecutionOutputDescription = ChildExecutionOutput::Output {
+            result: None,
+            output,
+            errors: None,
+        }
+        .into();
         strip_human_output_from_failed_test(
-            &ChildExecutionOutput::Output {
-                result: None,
-                output,
-                errors: None,
-            },
+            &output_desc,
             &mut actual,
             &TestCaseName::new("non-existent"),
         )
@@ -862,7 +872,8 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
         let inner_error = eyre!("inner error");
         let error = io::Error::other(inner_error);
 
-        let output = ChildExecutionOutput::StartError(ChildStartError::Spawn(Arc::new(error)));
+        let output: ChildExecutionOutputDescription =
+            ChildExecutionOutput::StartError(ChildStartError::Spawn(Arc::new(error))).into();
 
         let mut actual = bytes::BytesMut::new();
         strip_human_output_from_failed_test(
@@ -878,15 +889,17 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
     #[test]
     fn strips_human_output_none() {
         let mut actual = bytes::BytesMut::new();
+        let output_desc: ChildExecutionOutputDescription = ChildExecutionOutput::Output {
+            result: None,
+            output: ChildOutput::Split(ChildSplitOutput {
+                stdout: None,
+                stderr: None,
+            }),
+            errors: None,
+        }
+        .into();
         strip_human_output_from_failed_test(
-            &ChildExecutionOutput::Output {
-                result: None,
-                output: ChildOutput::Split(ChildSplitOutput {
-                    stdout: None,
-                    stderr: None,
-                }),
-                errors: None,
-            },
+            &output_desc,
             &mut actual,
             &TestCaseName::new("non-existent"),
         )

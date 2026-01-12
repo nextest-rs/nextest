@@ -12,9 +12,10 @@ use crate::{
         elements::{LeakTimeoutResult, SlowTimeoutResult},
         scripts::ScriptId,
     },
+    errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
     list::{TestInstanceId, TestList},
     runner::{StressCondition, StressCount},
-    test_output::ChildExecutionOutput,
+    test_output::{ChildExecutionOutput, ChildOutput},
 };
 use chrono::{DateTime, FixedOffset};
 use nextest_metadata::MismatchReason;
@@ -985,6 +986,33 @@ impl<'a> ExecutionDescription<'a> {
     }
 }
 
+/// Pre-computed error summary for display.
+///
+/// This contains the formatted error messages, pre-computed from the execution
+/// output and result. Useful for record-replay scenarios where the rendering
+/// is done on the server.
+#[derive(Clone, Debug)]
+pub struct ErrorSummary {
+    /// A short summary of the error, suitable for display in a single line.
+    pub short_message: String,
+
+    /// A full description of the error chain, suitable for detailed display.
+    pub description: String,
+}
+
+/// Pre-computed output error slice for display.
+///
+/// This contains an error message heuristically extracted from test output,
+/// such as a panic message or error string.
+#[derive(Clone, Debug)]
+pub struct OutputErrorSlice {
+    /// The extracted error slice as a string.
+    pub slice: String,
+
+    /// The byte offset in the original output where this slice starts.
+    pub start: usize,
+}
+
 /// Information about a single execution of a test.
 ///
 /// This is the external-facing type used by reporters. The `result` field uses
@@ -995,7 +1023,7 @@ pub struct ExecuteStatus {
     /// Retry-related data.
     pub retry_data: RetryData,
     /// The stdout and stderr output for this test.
-    pub output: ChildExecutionOutput,
+    pub output: ChildExecutionOutputDescription,
     /// The execution result for this test: pass, fail or execution error.
     pub result: ExecutionResultDescription,
     /// The time at which the test started.
@@ -1006,6 +1034,16 @@ pub struct ExecuteStatus {
     pub is_slow: bool,
     /// The delay will be non-zero if this is a retry and delay was specified.
     pub delay_before_start: Duration,
+    /// Pre-computed error summary, if available.
+    ///
+    /// This is computed from the execution output and result, and can be used
+    /// for display without needing to re-compute the error chain.
+    pub error_summary: Option<ErrorSummary>,
+    /// Pre-computed output error slice, if available.
+    ///
+    /// This is a heuristically extracted error message from the test output,
+    /// such as a panic message or error string.
+    pub output_error_slice: Option<OutputErrorSlice>,
 }
 
 /// Information about the execution of a setup script.
@@ -1016,7 +1054,7 @@ pub struct ExecuteStatus {
 #[derive(Clone, Debug)]
 pub struct SetupScriptExecuteStatus {
     /// Output for this setup script.
-    pub output: ChildExecutionOutput,
+    pub output: ChildExecutionOutputDescription,
 
     /// The execution result for this setup script: pass, fail or execution error.
     pub result: ExecutionResultDescription,
@@ -1035,6 +1073,12 @@ pub struct SetupScriptExecuteStatus {
     /// `None` if an error occurred while running the script or reading the
     /// environment map.
     pub env_map: Option<SetupScriptEnvMap>,
+
+    /// Pre-computed error summary, if available.
+    ///
+    /// This is computed from the execution output and result, and can be used
+    /// for display without needing to re-compute the error chain.
+    pub error_summary: Option<ErrorSummary>,
 }
 
 /// A map of environment variables set by a setup script.
@@ -1044,6 +1088,239 @@ pub struct SetupScriptExecuteStatus {
 pub struct SetupScriptEnvMap {
     /// The map of environment variables set by the script.
     pub env_map: BTreeMap<String, String>,
+}
+
+// ---
+// Child execution output description types
+// ---
+
+/// The result of executing a child process, in a serializable format.
+///
+/// This is the external-facing counterpart to [`ChildExecutionOutput`].
+#[derive(Clone, Debug)]
+pub enum ChildExecutionOutputDescription {
+    /// The process was run and the output was captured.
+    Output {
+        /// If the process has finished executing, the final state it is in.
+        ///
+        /// `None` means execution is currently in progress.
+        result: Option<ExecutionResultDescription>,
+
+        /// The captured output.
+        output: ChildOutput,
+
+        /// Errors that occurred while waiting on the child process or parsing
+        /// its output.
+        errors: Option<ErrorList<ChildErrorDescription>>,
+    },
+
+    /// There was a failure to start the process.
+    StartError(ChildStartErrorDescription),
+}
+
+impl ChildExecutionOutputDescription {
+    /// Returns true if there are any errors in this output.
+    pub fn has_errors(&self) -> bool {
+        match self {
+            Self::Output { errors, result, .. } => {
+                if errors.is_some() {
+                    return true;
+                }
+                if let Some(result) = result {
+                    return !result.is_success();
+                }
+                false
+            }
+            Self::StartError(_) => true,
+        }
+    }
+}
+
+/// A serializable description of an error that occurred while starting a child process.
+///
+/// This is the external-facing counterpart to [`ChildStartError`].
+#[derive(Clone, Debug)]
+pub enum ChildStartErrorDescription {
+    /// An error occurred while creating a temporary path for a setup script.
+    TempPath {
+        /// The source error.
+        source: IoErrorDescription,
+    },
+
+    /// An error occurred while spawning the child process.
+    Spawn {
+        /// The source error.
+        source: IoErrorDescription,
+    },
+}
+
+impl fmt::Display for ChildStartErrorDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TempPath { .. } => {
+                write!(f, "error creating temporary path for setup script")
+            }
+            Self::Spawn { .. } => write!(f, "error spawning child process"),
+        }
+    }
+}
+
+impl std::error::Error for ChildStartErrorDescription {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::TempPath { source } | Self::Spawn { source } => Some(source),
+        }
+    }
+}
+
+/// A serializable description of an error that occurred while managing a child process.
+///
+/// This is the external-facing counterpart to [`ChildError`].
+#[derive(Clone, Debug)]
+pub enum ChildErrorDescription {
+    /// An error occurred while reading standard output.
+    ReadStdout {
+        /// The source error.
+        source: IoErrorDescription,
+    },
+
+    /// An error occurred while reading standard error.
+    ReadStderr {
+        /// The source error.
+        source: IoErrorDescription,
+    },
+
+    /// An error occurred while reading combined output.
+    ReadCombined {
+        /// The source error.
+        source: IoErrorDescription,
+    },
+
+    /// An error occurred while waiting for the child process to exit.
+    Wait {
+        /// The source error.
+        source: IoErrorDescription,
+    },
+
+    /// An error occurred while reading the output of a setup script.
+    SetupScriptOutput {
+        /// The source error.
+        source: IoErrorDescription,
+    },
+}
+
+impl fmt::Display for ChildErrorDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ReadStdout { .. } => write!(f, "error reading standard output"),
+            Self::ReadStderr { .. } => write!(f, "error reading standard error"),
+            Self::ReadCombined { .. } => {
+                write!(f, "error reading combined stream")
+            }
+            Self::Wait { .. } => {
+                write!(f, "error waiting for child process to exit")
+            }
+            Self::SetupScriptOutput { .. } => {
+                write!(f, "error reading setup script output")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ChildErrorDescription {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::ReadStdout { source }
+            | Self::ReadStderr { source }
+            | Self::ReadCombined { source }
+            | Self::Wait { source }
+            | Self::SetupScriptOutput { source } => Some(source),
+        }
+    }
+}
+
+/// A serializable description of an I/O error.
+///
+/// This captures the error message from an [`std::io::Error`].
+#[derive(Clone, Debug)]
+pub struct IoErrorDescription {
+    message: String,
+}
+
+impl fmt::Display for IoErrorDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for IoErrorDescription {}
+
+impl From<ChildExecutionOutput> for ChildExecutionOutputDescription {
+    fn from(output: ChildExecutionOutput) -> Self {
+        match output {
+            ChildExecutionOutput::Output {
+                result,
+                output,
+                errors,
+            } => Self::Output {
+                result: result.map(ExecutionResultDescription::from),
+                output,
+                errors: errors.map(|e| e.map(ChildErrorDescription::from)),
+            },
+            ChildExecutionOutput::StartError(error) => {
+                Self::StartError(ChildStartErrorDescription::from(error))
+            }
+        }
+    }
+}
+
+impl From<ChildStartError> for ChildStartErrorDescription {
+    fn from(error: ChildStartError) -> Self {
+        match error {
+            ChildStartError::TempPath(e) => Self::TempPath {
+                source: IoErrorDescription {
+                    message: e.to_string(),
+                },
+            },
+            ChildStartError::Spawn(e) => Self::Spawn {
+                source: IoErrorDescription {
+                    message: e.to_string(),
+                },
+            },
+        }
+    }
+}
+
+impl From<ChildError> for ChildErrorDescription {
+    fn from(error: ChildError) -> Self {
+        match error {
+            ChildError::Fd(ChildFdError::ReadStdout(e)) => Self::ReadStdout {
+                source: IoErrorDescription {
+                    message: e.to_string(),
+                },
+            },
+            ChildError::Fd(ChildFdError::ReadStderr(e)) => Self::ReadStderr {
+                source: IoErrorDescription {
+                    message: e.to_string(),
+                },
+            },
+            ChildError::Fd(ChildFdError::ReadCombined(e)) => Self::ReadCombined {
+                source: IoErrorDescription {
+                    message: e.to_string(),
+                },
+            },
+            ChildError::Fd(ChildFdError::Wait(e)) => Self::Wait {
+                source: IoErrorDescription {
+                    message: e.to_string(),
+                },
+            },
+            ChildError::SetupScriptOutput(e) => Self::SetupScriptOutput {
+                source: IoErrorDescription {
+                    message: e.to_string(),
+                },
+            },
+        }
+    }
 }
 
 /// Data related to retries for a test.
@@ -1556,7 +1833,7 @@ pub struct SetupScriptInfoResponse<'a> {
     pub state: UnitState,
 
     /// Output obtained from the setup script.
-    pub output: ChildExecutionOutput,
+    pub output: ChildExecutionOutputDescription,
 }
 
 /// A test's response to an information request.
@@ -1575,7 +1852,7 @@ pub struct TestInfoResponse<'a> {
     pub state: UnitState,
 
     /// Output obtained from the test.
-    pub output: ChildExecutionOutput,
+    pub output: ChildExecutionOutputDescription,
 }
 
 /// The current state of a test or script process: running, exiting, or

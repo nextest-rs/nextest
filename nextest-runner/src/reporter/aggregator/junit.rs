@@ -14,12 +14,12 @@ use crate::{
         UnitErrorDescription,
         displayer::DisplayUnitKind,
         events::{
-            ExecutionDescription, ExecutionResultDescription, FailureDescription, StressIndex,
-            TestEvent, TestEventKind, UnitKind,
+            ChildExecutionOutputDescription, ExecutionDescription, ExecutionResultDescription,
+            FailureDescription, StressIndex, TestEvent, TestEventKind, UnitKind,
         },
     },
     run_mode::NextestRunMode,
-    test_output::{ChildExecutionOutput, ChildOutput},
+    test_output::ChildOutput,
 };
 use debug_ignore::DebugIgnore;
 use indexmap::IndexMap;
@@ -454,7 +454,7 @@ impl TestcaseOrRerun<'_> {
 }
 
 fn set_execute_status_props(
-    exec_output: &ChildExecutionOutput,
+    exec_output: &ChildExecutionOutputDescription,
     store_stdout_stderr: bool,
     mut out: TestcaseOrRerun<'_>,
 ) {
@@ -467,7 +467,7 @@ fn set_execute_status_props(
 
     if store_stdout_stderr {
         match exec_output {
-            ChildExecutionOutput::Output {
+            ChildExecutionOutputDescription::Output {
                 output: ChildOutput::Split(split),
                 ..
             } => {
@@ -482,14 +482,14 @@ fn set_execute_status_props(
                     out.set_system_err(STDERR_NOT_CAPTURED);
                 }
             }
-            ChildExecutionOutput::Output {
+            ChildExecutionOutputDescription::Output {
                 output: ChildOutput::Combined { output },
                 ..
             } => {
                 out.set_system_out(output.as_str_lossy())
                     .set_system_err(STDOUT_STDERR_COMBINED);
             }
-            ChildExecutionOutput::StartError(_) => {
+            ChildExecutionOutputDescription::StartError(_) => {
                 out.set_system_out(PROCESS_FAILED_TO_START)
                     .set_system_err(PROCESS_FAILED_TO_START);
             }
@@ -504,8 +504,8 @@ mod tests {
     use crate::reporter::events::{AbortStatus, SIGTERM};
     use crate::{
         errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
-        reporter::events::{ExecutionResult, FailureStatus},
-        test_output::ChildSplitOutput,
+        reporter::events::{ChildExecutionOutputDescription, ExecutionResult, FailureStatus},
+        test_output::{ChildExecutionOutput, ChildSplitOutput},
     };
     use bytes::Bytes;
     use std::{io, sync::Arc};
@@ -522,7 +522,8 @@ mod tests {
                         output: Bytes::from("stdout\nstderr").into(),
                     },
                     errors: None,
-                },
+                }
+                .into(),
                 store_stdout_stderr: true,
                 message: None,
                 description: None,
@@ -538,7 +539,8 @@ mod tests {
                         output: Bytes::from("stdout\nstderr").into(),
                     },
                     errors: None,
-                },
+                }
+                .into(),
                 store_stdout_stderr: false,
                 message: None,
                 description: None,
@@ -555,7 +557,8 @@ mod tests {
                         stderr: Some(Bytes::from("stderr").into()),
                     }),
                     errors: None,
-                },
+                }
+                .into(),
                 store_stdout_stderr: true,
                 message: None,
                 description: None,
@@ -580,7 +583,8 @@ mod tests {
                         .into(),
                     },
                     errors: None,
-                },
+                }
+                .into(),
                 store_stdout_stderr: true,
                 message: Some("thread 'foo' panicked at xyz.rs:40"),
                 description: Some("thread 'foo' panicked at xyz.rs:40:\nstrange\nextra\nextra2"),
@@ -609,7 +613,8 @@ mod tests {
                         ),
                     }),
                     errors: None,
-                },
+                }
+                .into(),
                 store_stdout_stderr: false,
                 message: Some("thread 'foo' panicked at xyz.rs:40"),
                 description: Some(
@@ -633,7 +638,8 @@ mod tests {
                         stderr: None,
                     }),
                     errors: None,
-                },
+                }
+                .into(),
                 store_stdout_stderr: true,
                 message: Some("process aborted with signal 15 (SIGTERM)"),
                 description: Some("process aborted with signal 15 (SIGTERM)"),
@@ -661,7 +667,8 @@ mod tests {
                             io::Error::other("huh"),
                         )))],
                     ),
-                },
+                }
+                .into(),
                 store_stdout_stderr: false,
                 message: Some("3 errors occurred executing test"),
                 description: Some(indoc::indoc! {"
@@ -695,7 +702,8 @@ mod tests {
                             io::Error::other("stdout error"),
                         )))],
                     ),
-                },
+                }
+                .into(),
                 store_stdout_stderr: false,
                 message: Some("2 errors occurred executing test"),
                 description: Some(indoc::indoc! {"
@@ -713,7 +721,8 @@ mod tests {
                 status: TestCaseStatus::non_success(NonSuccessKind::Error),
                 output: ChildExecutionOutput::StartError(ChildStartError::Spawn(Arc::new(
                     io::Error::other("start error"),
-                ))),
+                )))
+                .into(),
                 store_stdout_stderr: true,
                 message: Some("error spawning child process"),
                 description: Some(indoc::indoc! {"
@@ -762,7 +771,7 @@ mod tests {
     struct ExecuteStatusPropsCase<'a> {
         comment: &'a str,
         status: TestCaseStatus,
-        output: ChildExecutionOutput,
+        output: ChildExecutionOutputDescription,
         store_stdout_stderr: bool,
         message: Option<&'a str>,
         description: Option<&'a str>,
