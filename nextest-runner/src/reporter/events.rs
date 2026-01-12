@@ -15,7 +15,7 @@ use crate::{
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
     list::{TestInstanceId, TestList},
     runner::{StressCondition, StressCount},
-    test_output::{ChildExecutionOutput, ChildOutput},
+    test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
 use chrono::{DateTime, FixedOffset};
 use nextest_metadata::MismatchReason;
@@ -1023,7 +1023,7 @@ pub struct ExecuteStatus {
     /// Retry-related data.
     pub retry_data: RetryData,
     /// The stdout and stderr output for this test.
-    pub output: ChildExecutionOutputDescription,
+    pub output: ChildExecutionOutputDescription<ChildSingleOutput>,
     /// The execution result for this test: pass, fail or execution error.
     pub result: ExecutionResultDescription,
     /// The time at which the test started.
@@ -1054,7 +1054,7 @@ pub struct ExecuteStatus {
 #[derive(Clone, Debug)]
 pub struct SetupScriptExecuteStatus {
     /// Output for this setup script.
-    pub output: ChildExecutionOutputDescription,
+    pub output: ChildExecutionOutputDescription<ChildSingleOutput>,
 
     /// The execution result for this setup script: pass, fail or execution error.
     pub result: ExecutionResultDescription,
@@ -1094,11 +1094,15 @@ pub struct SetupScriptEnvMap {
 // Child execution output description types
 // ---
 
-/// The result of executing a child process, in a serializable format.
+/// The result of executing a child process, generic over output storage.
 ///
-/// This is the external-facing counterpart to [`ChildExecutionOutput`].
+/// This is the external-facing counterpart to [`ChildExecutionOutput`]. The
+/// type parameter `O` represents how output is stored:
+///
+/// - [`ChildSingleOutput`]: Output stored in memory with lazy string caching.
+///   Used by reporter event types during live runs.
 #[derive(Clone, Debug)]
-pub enum ChildExecutionOutputDescription {
+pub enum ChildExecutionOutputDescription<O> {
     /// The process was run and the output was captured.
     Output {
         /// If the process has finished executing, the final state it is in.
@@ -1107,7 +1111,7 @@ pub enum ChildExecutionOutputDescription {
         result: Option<ExecutionResultDescription>,
 
         /// The captured output.
-        output: ChildOutput,
+        output: ChildOutputDescription<O>,
 
         /// Errors that occurred while waiting on the child process or parsing
         /// its output.
@@ -1118,7 +1122,7 @@ pub enum ChildExecutionOutputDescription {
     StartError(ChildStartErrorDescription),
 }
 
-impl ChildExecutionOutputDescription {
+impl<O> ChildExecutionOutputDescription<O> {
     /// Returns true if there are any errors in this output.
     pub fn has_errors(&self) -> bool {
         match self {
@@ -1132,6 +1136,44 @@ impl ChildExecutionOutputDescription {
                 false
             }
             Self::StartError(_) => true,
+        }
+    }
+}
+
+/// The output of a child process, generic over output storage.
+///
+/// This represents either split stdout/stderr or combined output. The `Option`
+/// wrappers distinguish between "not captured" (`None`) and "captured but
+/// empty" (`Some` with empty content).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ChildOutputDescription<O> {
+    /// The output was split into stdout and stderr.
+    Split {
+        /// Standard output, or `None` if not captured.
+        stdout: Option<O>,
+        /// Standard error, or `None` if not captured.
+        stderr: Option<O>,
+    },
+
+    /// The output was combined into a single stream.
+    Combined {
+        /// The combined output.
+        output: O,
+    },
+}
+
+impl ChildOutputDescription<ChildSingleOutput> {
+    /// Returns the lengths of stdout and stderr in bytes.
+    ///
+    /// Returns `None` for each stream that wasn't captured.
+    pub fn stdout_stderr_len(&self) -> (Option<u64>, Option<u64>) {
+        match self {
+            Self::Split { stdout, stderr } => (
+                stdout.as_ref().map(|s| s.buf.len() as u64),
+                stderr.as_ref().map(|s| s.buf.len() as u64),
+            ),
+            Self::Combined { output } => (Some(output.buf.len() as u64), None),
         }
     }
 }
@@ -1255,7 +1297,7 @@ impl fmt::Display for IoErrorDescription {
 
 impl std::error::Error for IoErrorDescription {}
 
-impl From<ChildExecutionOutput> for ChildExecutionOutputDescription {
+impl From<ChildExecutionOutput> for ChildExecutionOutputDescription<ChildSingleOutput> {
     fn from(output: ChildExecutionOutput) -> Self {
         match output {
             ChildExecutionOutput::Output {
@@ -1264,12 +1306,24 @@ impl From<ChildExecutionOutput> for ChildExecutionOutputDescription {
                 errors,
             } => Self::Output {
                 result: result.map(ExecutionResultDescription::from),
-                output,
+                output: ChildOutputDescription::from(output),
                 errors: errors.map(|e| e.map(ChildErrorDescription::from)),
             },
             ChildExecutionOutput::StartError(error) => {
                 Self::StartError(ChildStartErrorDescription::from(error))
             }
+        }
+    }
+}
+
+impl From<ChildOutput> for ChildOutputDescription<ChildSingleOutput> {
+    fn from(output: ChildOutput) -> Self {
+        match output {
+            ChildOutput::Split(split) => Self::Split {
+                stdout: split.stdout,
+                stderr: split.stderr,
+            },
+            ChildOutput::Combined { output } => Self::Combined { output },
         }
     }
 }
@@ -1833,7 +1887,7 @@ pub struct SetupScriptInfoResponse<'a> {
     pub state: UnitState,
 
     /// Output obtained from the setup script.
-    pub output: ChildExecutionOutputDescription,
+    pub output: ChildExecutionOutputDescription<ChildSingleOutput>,
 }
 
 /// A test's response to an information request.
@@ -1852,7 +1906,7 @@ pub struct TestInfoResponse<'a> {
     pub state: UnitState,
 
     /// Output obtained from the test.
-    pub output: ChildExecutionOutputDescription,
+    pub output: ChildExecutionOutputDescription<ChildSingleOutput>,
 }
 
 /// The current state of a test or script process: running, exiting, or

@@ -3,9 +3,10 @@
 
 use super::events::{
     AbortDescription, ChildErrorDescription, ChildExecutionOutputDescription,
-    ChildStartErrorDescription, ExecutionResultDescription, FailureDescription, UnitKind,
+    ChildOutputDescription, ChildStartErrorDescription, ExecutionResultDescription,
+    FailureDescription, UnitKind,
 };
-use crate::{errors::ErrorList, test_output::ChildOutput};
+use crate::{errors::ErrorList, test_output::ChildSingleOutput};
 use bstr::ByteSlice;
 use regex::bytes::{Regex, RegexBuilder};
 use std::{fmt, sync::LazyLock};
@@ -24,7 +25,10 @@ pub struct UnitErrorDescription<'a> {
 
 impl<'a> UnitErrorDescription<'a> {
     /// Adds the execution output of a child process to the description.
-    pub fn new(kind: UnitKind, output: &'a ChildExecutionOutputDescription) -> Self {
+    pub fn new(
+        kind: UnitKind,
+        output: &'a ChildExecutionOutputDescription<ChildSingleOutput>,
+    ) -> Self {
         let mut start_error = None;
         let mut output_errors = None;
         let mut abort = None;
@@ -45,13 +49,13 @@ impl<'a> UnitErrorDescription<'a> {
                         match output {
                             // Scanning the output for the most relevant slice
                             // only makes sense for completed tests.
-                            ChildOutput::Split(output) => {
+                            ChildOutputDescription::Split { stdout, stderr } => {
                                 output_slice = TestOutputErrorSlice::heuristic_extract(
-                                    output.stdout.as_ref().map(|x| x.buf.as_ref()),
-                                    output.stderr.as_ref().map(|x| x.buf.as_ref()),
+                                    stdout.as_ref().map(|x| x.buf.as_ref()),
+                                    stderr.as_ref().map(|x| x.buf.as_ref()),
                                 );
                             }
-                            ChildOutput::Combined { output } => {
+                            ChildOutputDescription::Combined { output } => {
                                 output_slice = TestOutputErrorSlice::heuristic_extract(
                                     Some(output.buf.as_ref()),
                                     Some(output.buf.as_ref()),
