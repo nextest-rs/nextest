@@ -364,7 +364,7 @@ where
     pub(super) fn run_started(&mut self, test_list: &'a TestList, test_threads: usize) {
         let (stress_count, stress_infinite, stress_duration_nanos) =
             match self.stress_cx.condition() {
-                Some(StressCondition::Count(StressCount::Count(count))) => {
+                Some(StressCondition::Count(StressCount::Count { count })) => {
                     (Some(count.get()), false, None)
                 }
                 Some(StressCondition::Count(StressCount::Infinite)) => (None, true, None),
@@ -412,7 +412,7 @@ where
                 elapsed: _,
             } => {
                 let total = match total {
-                    StressCount::Count(n) => Some(n.get()),
+                    StressCount::Count { count } => Some(count.get()),
                     StressCount::Infinite => None,
                 };
                 (*completed, total)
@@ -451,7 +451,7 @@ where
                 elapsed: _,
             } => {
                 let total = match total {
-                    StressCount::Count(n) => Some(n.get()),
+                    StressCount::Count { count } => Some(count.get()),
                     StressCount::Infinite => None,
                 };
                 (*completed - 1, total)
@@ -1209,7 +1209,7 @@ impl DispatcherStressContext {
                 // completed runs.
                 let current = *completed;
                 let total = match condition {
-                    StressCondition::Count(StressCount::Count(total)) => Some(*total),
+                    StressCondition::Count(StressCount::Count { count }) => Some(*count),
                     StressCondition::Count(StressCount::Infinite)
                     | StressCondition::Duration(_) => None,
                 };
@@ -1237,7 +1237,7 @@ impl DispatcherStressContext {
                         // TODO: We should figure out whether to terminate the
                         // test run based on this.
                     }
-                    FinalRunStats::Failed(_) => {
+                    FinalRunStats::Failed { .. } => {
                         *failed += 1;
                     }
                     FinalRunStats::Cancelled { .. } => {

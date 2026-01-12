@@ -342,7 +342,10 @@ pub enum StressCondition {
 #[derive(Clone, Copy, Debug)]
 pub enum StressCount {
     /// Run each test `count` times.
-    Count(NonZero<u32>),
+    Count {
+        /// The number of times to run each test.
+        count: NonZero<u32>,
+    },
 
     /// Run indefinitely.
     Infinite,
@@ -356,7 +359,7 @@ impl FromStr for StressCount {
             Ok(StressCount::Infinite)
         } else {
             match s.parse() {
-                Ok(count) => Ok(StressCount::Count(count)),
+                Ok(count) => Ok(StressCount::Count { count }),
                 Err(_) => Err(StressCountParseError::new(s)),
             }
         }

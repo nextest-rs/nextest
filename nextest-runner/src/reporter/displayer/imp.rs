@@ -466,7 +466,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
                 match progress {
                     StressProgress::Count {
-                        total: StressCount::Count(total),
+                        total: StressCount::Count { count },
                         elapsed,
                         completed,
                     } => {
@@ -474,7 +474,7 @@ impl<'a> DisplayReporterImpl<'a> {
                             writer,
                             "iteration {}/{} ({} elapsed so far",
                             (completed + 1).style(self.styles.count),
-                            total.style(self.styles.count),
+                            count.style(self.styles.count),
                             DisplayHhMmSs {
                                 duration: *elapsed,
                                 floor: true,
@@ -1093,7 +1093,9 @@ impl<'a> DisplayReporterImpl<'a> {
                 let summary_style = match stats_summary {
                     FinalRunStats::Success => self.styles.pass,
                     FinalRunStats::NoTestsRun => self.styles.skip,
-                    FinalRunStats::Failed(_) | FinalRunStats::Cancelled { .. } => self.styles.fail,
+                    FinalRunStats::Failed { .. } | FinalRunStats::Cancelled { .. } => {
+                        self.styles.fail
+                    }
                 };
 
                 write!(
@@ -1104,7 +1106,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 )?;
                 match progress {
                     StressProgress::Count {
-                        total: StressCount::Count(total),
+                        total: StressCount::Count { count },
                         elapsed: _,
                         completed,
                     } => {
@@ -1115,7 +1117,7 @@ impl<'a> DisplayReporterImpl<'a> {
                             // represents the number of stress runs actually
                             // completed.
                             completed.style(self.styles.count),
-                            total.style(self.styles.count),
+                            count.style(self.styles.count),
                         )?;
                     }
                     StressProgress::Count {
@@ -1183,7 +1185,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         let summary_style = match stats_summary {
                             FinalRunStats::Success => self.styles.pass,
                             FinalRunStats::NoTestsRun => self.styles.skip,
-                            FinalRunStats::Failed(_) | FinalRunStats::Cancelled { .. } => {
+                            FinalRunStats::Failed { .. } | FinalRunStats::Cancelled { .. } => {
                                 self.styles.fail
                             }
                         };
@@ -1282,7 +1284,7 @@ impl<'a> DisplayReporterImpl<'a> {
                                     )?;
                                 }
                             }
-                            FinalRunStats::Failed(_)
+                            FinalRunStats::Failed { .. }
                             | FinalRunStats::Success
                             | FinalRunStats::NoTestsRun => {}
                         }

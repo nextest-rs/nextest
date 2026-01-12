@@ -204,10 +204,13 @@ pub(super) fn write_final_warnings(
     writer: &mut dyn WriteStr,
 ) -> io::Result<()> {
     match final_stats {
-        FinalRunStats::Failed(RunStatsFailureKind::Test {
-            initial_run_count,
-            not_run,
-        }) if not_run > 0 => {
+        FinalRunStats::Failed {
+            kind:
+                RunStatsFailureKind::Test {
+                    initial_run_count,
+                    not_run,
+                },
+        } if not_run > 0 => {
             write_final_warnings_for_failure(
                 mode,
                 initial_run_count,
@@ -474,10 +477,12 @@ mod tests {
 
     #[test]
     fn test_final_warnings() {
-        let warnings = final_warnings_for(FinalRunStats::Failed(RunStatsFailureKind::Test {
-            initial_run_count: 3,
-            not_run: 1,
-        }));
+        let warnings = final_warnings_for(FinalRunStats::Failed {
+            kind: RunStatsFailureKind::Test {
+                initial_run_count: 3,
+                not_run: 1,
+            },
+        });
         assert_eq!(
             warnings,
             "warning: 1/3 tests were not run due to test failure \
@@ -511,7 +516,9 @@ mod tests {
         assert_eq!(warnings, "");
 
         // No warnings for setup script failure.
-        let warnings = final_warnings_for(FinalRunStats::Failed(RunStatsFailureKind::SetupScript));
+        let warnings = final_warnings_for(FinalRunStats::Failed {
+            kind: RunStatsFailureKind::SetupScript,
+        });
         assert_eq!(warnings, "");
 
         // No warnings for setup script cancellation.
