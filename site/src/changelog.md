@@ -9,6 +9,14 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.121] - 2026-01-12
+
+### Fixed
+
+- In custom target JSONs, `panic-strategy = "immediate-abort"` now parses correctly ([#2922]).
+
+[#2922]: https://github.com/nextest-rs/nextest/issues/2922
+
 ## [0.9.120] - 2026-01-07
 
 ### Added
@@ -1807,6 +1815,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.121]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.121
 [0.9.120]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.120
 [0.9.119]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.119
 [0.9.118]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.118
