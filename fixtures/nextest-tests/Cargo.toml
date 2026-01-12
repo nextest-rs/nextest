@@ -41,7 +41,7 @@ members = [
 ]
 
 [dependencies]
-uuid = "1.2.1"
+uuid = "1.19.0"
 
 [dev-dependencies]
 dylib-test = { path = "dylib-test" }
