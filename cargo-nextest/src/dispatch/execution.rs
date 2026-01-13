@@ -1135,15 +1135,15 @@ fn final_result(
             reason: _,
             kind: RunStatsFailureKind::SetupScript,
         }
-        | FinalRunStats::Failed(RunStatsFailureKind::SetupScript) => {
-            Err(ExpectedError::setup_script_failed())
-        }
+        | FinalRunStats::Failed {
+            kind: RunStatsFailureKind::SetupScript,
+        } => Err(ExpectedError::setup_script_failed()),
         FinalRunStats::Cancelled {
             reason: _,
             kind: RunStatsFailureKind::Test { .. },
         }
-        | FinalRunStats::Failed(RunStatsFailureKind::Test { .. }) => {
-            Err(ExpectedError::test_run_failed())
-        }
+        | FinalRunStats::Failed {
+            kind: RunStatsFailureKind::Test { .. },
+        } => Err(ExpectedError::test_run_failed()),
     }
 }

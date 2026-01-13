@@ -435,10 +435,10 @@ impl StressProgress {
     pub fn remaining(&self) -> Option<StressRemaining> {
         match self {
             Self::Count {
-                total: StressCount::Count(total),
+                total: StressCount::Count { count },
                 elapsed: _,
                 completed,
-            } => total
+            } => count
                 .get()
                 .checked_sub(*completed)
                 .and_then(|remaining| NonZero::try_from(remaining).ok())
@@ -606,7 +606,9 @@ impl RunStats {
                     kind: RunStatsFailureKind::SetupScript,
                 }
             } else {
-                FinalRunStats::Failed(RunStatsFailureKind::SetupScript)
+                FinalRunStats::Failed {
+                    kind: RunStatsFailureKind::SetupScript,
+                }
             }
         } else if self.setup_scripts_initial_count > self.setup_scripts_finished_count {
             FinalRunStats::Cancelled {
@@ -627,7 +629,7 @@ impl RunStats {
                     kind,
                 }
             } else {
-                FinalRunStats::Failed(kind)
+                FinalRunStats::Failed { kind }
             }
         } else if self.initial_run_count > self.finished_count {
             FinalRunStats::Cancelled {
@@ -762,7 +764,10 @@ pub enum FinalRunStats {
     },
 
     /// At least one test failed.
-    Failed(RunStatsFailureKind),
+    Failed {
+        /// The kind of failure that occurred.
+        kind: RunStatsFailureKind,
+    },
 }
 
 /// Statistics for a stress run.
@@ -2176,10 +2181,12 @@ mod tests {
                 ..RunStats::default()
             }
             .summarize_final(),
-            FinalRunStats::Failed(RunStatsFailureKind::Test {
-                initial_run_count: 42,
-                not_run: 0
-            }),
+            FinalRunStats::Failed {
+                kind: RunStatsFailureKind::Test {
+                    initial_run_count: 42,
+                    not_run: 0,
+                },
+            },
             "failed => failure"
         );
         assert_eq!(
@@ -2190,10 +2197,12 @@ mod tests {
                 ..RunStats::default()
             }
             .summarize_final(),
-            FinalRunStats::Failed(RunStatsFailureKind::Test {
-                initial_run_count: 42,
-                not_run: 0
-            }),
+            FinalRunStats::Failed {
+                kind: RunStatsFailureKind::Test {
+                    initial_run_count: 42,
+                    not_run: 0,
+                },
+            },
             "exec failed => failure"
         );
         assert_eq!(
@@ -2204,10 +2213,12 @@ mod tests {
                 ..RunStats::default()
             }
             .summarize_final(),
-            FinalRunStats::Failed(RunStatsFailureKind::Test {
-                initial_run_count: 42,
-                not_run: 0
-            }),
+            FinalRunStats::Failed {
+                kind: RunStatsFailureKind::Test {
+                    initial_run_count: 42,
+                    not_run: 0,
+                },
+            },
             "timed out => failure {:?} {:?}",
             RunStats {
                 initial_run_count: 42,
@@ -2216,10 +2227,12 @@ mod tests {
                 ..RunStats::default()
             }
             .summarize_final(),
-            FinalRunStats::Failed(RunStatsFailureKind::Test {
-                initial_run_count: 42,
-                not_run: 0
-            }),
+            FinalRunStats::Failed {
+                kind: RunStatsFailureKind::Test {
+                    initial_run_count: 42,
+                    not_run: 0,
+                },
+            },
         );
         assert_eq!(
             RunStats {
@@ -2255,7 +2268,9 @@ mod tests {
                 ..RunStats::default()
             }
             .summarize_final(),
-            FinalRunStats::Failed(RunStatsFailureKind::SetupScript),
+            FinalRunStats::Failed {
+                kind: RunStatsFailureKind::SetupScript,
+            },
             "setup script failed => failure"
         );
         assert_eq!(
@@ -2266,7 +2281,9 @@ mod tests {
                 ..RunStats::default()
             }
             .summarize_final(),
-            FinalRunStats::Failed(RunStatsFailureKind::SetupScript),
+            FinalRunStats::Failed {
+                kind: RunStatsFailureKind::SetupScript,
+            },
             "setup script exec failed => failure"
         );
         assert_eq!(
@@ -2277,7 +2294,9 @@ mod tests {
                 ..RunStats::default()
             }
             .summarize_final(),
-            FinalRunStats::Failed(RunStatsFailureKind::SetupScript),
+            FinalRunStats::Failed {
+                kind: RunStatsFailureKind::SetupScript,
+            },
             "setup script timed out => failure"
         );
         assert_eq!(
