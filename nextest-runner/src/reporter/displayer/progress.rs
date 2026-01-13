@@ -662,7 +662,7 @@ fn supports_osc_9_4(is_terminal: bool) -> bool {
         return true;
     }
     if let Ok(term) = std::env::var("TERM_PROGRAM")
-        && (term == "WezTerm" || term == "ghostty")
+        && (term == "WezTerm" || term == "ghostty" || term == "iTerm.app")
     {
         debug!("autodetect terminal progress reporting: enabling since TERM_PROGRAM is {term}");
         return true;
