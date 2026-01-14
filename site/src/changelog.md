@@ -9,6 +9,18 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.122] - 2026-01-14
+
+### Added
+
+- iTerm now supports the OSC 9;4 progress protocol for progress bar integration. Thanks [case](https://github.com/case) for your first contribution!
+
+### Fixed
+
+- Fixed an issue where the progress bar displayed stale statistics during test runs ([#2930]).
+
+[#2930]: https://github.com/nextest-rs/nextest/issues/2930
+
 ## [0.9.121] - 2026-01-12
 
 ### Fixed
@@ -1815,6 +1827,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.122]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.122
 [0.9.121]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.121
 [0.9.120]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.120
 [0.9.119]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.119
