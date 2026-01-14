@@ -24,8 +24,8 @@ use nextest_filtering::{FiltersetKind, ParseContext};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
     config::core::{
-        ConfigExperimental, EarlyProfile, EvaluatableProfile, NextestConfig, NextestVersionConfig,
-        NextestVersionEval,
+        ConfigExperimental, EarlyProfile, EvaluatableProfile, ExperimentalConfig, NextestConfig,
+        NextestVersionConfig, NextestVersionEval,
     },
     double_spawn::DoubleSpawnInfo,
     errors::WriteTestListError,
@@ -185,8 +185,13 @@ impl BaseApp {
             .make_version_only_config(&self.workspace_root)?;
         self.check_version_config_initial(version_only_config.nextest_version())?;
 
+        // Check for unknown experimental features after the version check. This ensures that if
+        // the required nextest version is higher than the current version, the version error takes
+        // precedence (a future version may have new experimental features).
+        self.check_experimental_config_initial(version_only_config.experimental())?;
+
         let mut experimental = ConfigExperimental::from_env();
-        experimental.extend(version_only_config.experimental());
+        experimental.extend(version_only_config.experimental().known());
 
         // Check that all required experimental features are enabled.
         let missing = required_experimental
@@ -220,7 +225,7 @@ impl BaseApp {
         let config = self.config_opts.make_config(
             &self.workspace_root,
             pcx,
-            version_only_config.experimental(),
+            version_only_config.experimental().known(),
         )?;
 
         Ok((version_only_config, config))
@@ -301,6 +306,22 @@ impl BaseApp {
 
                 Ok(())
             }
+        }
+    }
+
+    fn check_experimental_config_initial(
+        &self,
+        experimental_cfg: &ExperimentalConfig,
+    ) -> Result<()> {
+        let config_file = self
+            .config_opts
+            .config_file
+            .clone()
+            .unwrap_or_else(|| self.workspace_root.join(NextestConfig::CONFIG_PATH));
+        if let Some(err) = experimental_cfg.eval().into_error(config_file) {
+            Err(err.into())
+        } else {
+            Ok(())
         }
     }
 

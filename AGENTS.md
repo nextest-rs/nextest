@@ -137,6 +137,8 @@ Every Rust source file must start with:
 
 **CRITICAL**: Always use `cargo nextest run` to run unit and integration tests. Never use `cargo test` for these! Nextest dogfoods itself and its test suite depends on nextest's execution model.
 
+To invoke the in-repo (locally built) copy of nextest, use `cargo local-nt` instead of `cargo nextest`. This is useful for testing changes to nextest itself.
+
 For doctests, use `cargo test --doc` (doctests are not supported by nextest).
 
 ### Test organization
@@ -254,6 +256,9 @@ The nextest runner uses an event-driven architecture with two main components:
 cargo nextest run
 cargo nextest run --all-features
 cargo nextest run --profile ci
+
+# Run the in-repo (locally built) copy of nextest
+cargo local-nt run
 
 # Run doctests (nextest doesn't support these)
 cargo test --doc
