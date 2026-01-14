@@ -275,7 +275,7 @@ impl ProgressBarState {
     }
 
     fn update_message(&mut self, styles: &Styles) {
-        let mut msg = progress_bar_msg(&self.stats, self.running, styles);
+        let mut msg = self.progress_bar_msg(styles);
         msg += "     ";
 
         if let Some(running_tests) = &self.running_tests {
@@ -303,6 +303,10 @@ impl ProgressBarState {
             msg.push_str(&"\n".to_string().repeat(self.max_running_displayed - count));
         }
         self.bar.set_message(msg);
+    }
+
+    fn progress_bar_msg(&self, styles: &Styles) -> String {
+        progress_bar_msg(&self.stats, self.running, styles)
     }
 
     pub(super) fn update_progress_bar(&mut self, event: &TestEvent<'_>, styles: &Styles) {
@@ -336,6 +340,7 @@ impl ProgressBarState {
                 ..
             } => {
                 self.running = *running;
+                self.stats = *current_stats;
 
                 self.bar.set_prefix(progress_bar_prefix(
                     current_stats,
@@ -364,6 +369,7 @@ impl ProgressBarState {
                 ..
             } => {
                 self.running = *running;
+                self.stats = *current_stats;
                 self.remove_test(test_instance);
 
                 self.bar.set_prefix(progress_bar_prefix(
@@ -444,8 +450,18 @@ impl ProgressBarState {
                     }
                 }
             }
-            TestEventKind::RunBeginCancel { current_stats, .. }
-            | TestEventKind::RunBeginKill { current_stats, .. } => {
+            TestEventKind::RunBeginCancel {
+                current_stats,
+                running,
+                ..
+            }
+            | TestEventKind::RunBeginKill {
+                current_stats,
+                running,
+                ..
+            } => {
+                self.running = *running;
+                self.stats = *current_stats;
                 self.bar.set_prefix(progress_bar_cancel_prefix(
                     current_stats.cancel_reason,
                     styles,
@@ -884,6 +900,12 @@ pub(super) fn progress_bar_msg(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        reporter::TestOutputDisplay,
+        test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput, ChildSplitOutput},
+    };
+    use bytes::Bytes;
+    use chrono::Local;
 
     #[test]
     fn test_progress_bar_prefix() {
@@ -1118,5 +1140,203 @@ mod tests {
                 },
             ),
         ]
+    }
+
+    /// Test that `update_progress_bar` correctly updates `self.stats` when
+    /// processing `TestStarted` and `TestFinished` events.
+    ///
+    /// This test verifies both:
+    ///
+    /// 1. State: `self.stats` equals the event's `current_stats` after processing.
+    /// 2. Output: `state.progress_bar_msg()` reflects the updated stats.
+    #[test]
+    fn update_progress_bar_updates_stats() {
+        let styles = Styles::default();
+        let binary_id = RustBinaryId::new("test-binary");
+        let test_name = TestCaseName::new("test_name");
+
+        // Create ProgressBarState with initial (default) stats.
+        let mut state = ProgressBarState::new(
+            NextestRunMode::Test,
+            10,
+            "=> ",
+            MaxProgressRunning::default(),
+        );
+
+        // Verify the initial state.
+        assert_eq!(state.stats, RunStats::default());
+        assert_eq!(state.running, 0);
+
+        // Create a TestStarted event.
+        let started_stats = RunStats {
+            initial_run_count: 10,
+            passed: 5,
+            ..RunStats::default()
+        };
+        let started_event = TestEvent {
+            timestamp: Local::now().fixed_offset(),
+            elapsed: Duration::ZERO,
+            kind: TestEventKind::TestStarted {
+                stress_index: None,
+                test_instance: TestInstanceId {
+                    binary_id: &binary_id,
+                    test_name: &test_name,
+                },
+                current_stats: started_stats,
+                running: 3,
+                command_line: vec![],
+            },
+        };
+
+        state.update_progress_bar(&started_event, &styles);
+
+        // Verify the state was updated.
+        assert_eq!(
+            state.stats, started_stats,
+            "stats should be updated on TestStarted"
+        );
+        assert_eq!(state.running, 3, "running should be updated on TestStarted");
+
+        // Verify that the output reflects the updated stats.
+        let msg = state.progress_bar_msg(&styles);
+        insta::assert_snapshot!(msg, @"3 running, 5 passed, 0 skipped");
+
+        // Create a TestFinished event with different stats.
+        let finished_stats = RunStats {
+            initial_run_count: 10,
+            finished_count: 1,
+            passed: 8,
+            ..RunStats::default()
+        };
+        let finished_event = TestEvent {
+            timestamp: Local::now().fixed_offset(),
+            elapsed: Duration::ZERO,
+            kind: TestEventKind::TestFinished {
+                stress_index: None,
+                test_instance: TestInstanceId {
+                    binary_id: &binary_id,
+                    test_name: &test_name,
+                },
+                success_output: TestOutputDisplay::Never,
+                failure_output: TestOutputDisplay::Never,
+                junit_store_success_output: false,
+                junit_store_failure_output: false,
+                run_statuses: ExecutionStatuses::new(vec![ExecuteStatus {
+                    retry_data: RetryData {
+                        attempt: 1,
+                        total_attempts: 1,
+                    },
+                    output: make_test_output(),
+                    result: ExecutionResultDescription::Pass,
+                    start_time: Local::now().fixed_offset(),
+                    time_taken: Duration::from_secs(1),
+                    is_slow: false,
+                    delay_before_start: Duration::ZERO,
+                    error_summary: None,
+                    output_error_slice: None,
+                }]),
+                current_stats: finished_stats,
+                running: 2,
+            },
+        };
+
+        state.update_progress_bar(&finished_event, &styles);
+
+        // Verify the state was updated.
+        assert_eq!(
+            state.stats, finished_stats,
+            "stats should be updated on TestFinished"
+        );
+        assert_eq!(
+            state.running, 2,
+            "running should be updated on TestFinished"
+        );
+
+        // Verify that the output reflects the updated stats.
+        let msg = state.progress_bar_msg(&styles);
+        insta::assert_snapshot!(msg, @"2 running, 8 passed, 0 skipped");
+
+        // Create a RunBeginCancel event.
+        let cancel_stats = RunStats {
+            initial_run_count: 10,
+            finished_count: 3,
+            passed: 2,
+            failed: 1,
+            cancel_reason: Some(CancelReason::TestFailure),
+            ..RunStats::default()
+        };
+        let cancel_event = TestEvent {
+            timestamp: Local::now().fixed_offset(),
+            elapsed: Duration::ZERO,
+            kind: TestEventKind::RunBeginCancel {
+                setup_scripts_running: 0,
+                current_stats: cancel_stats,
+                running: 4,
+            },
+        };
+
+        state.update_progress_bar(&cancel_event, &styles);
+
+        // Verify the state was updated.
+        assert_eq!(
+            state.stats, cancel_stats,
+            "stats should be updated on RunBeginCancel"
+        );
+        assert_eq!(
+            state.running, 4,
+            "running should be updated on RunBeginCancel"
+        );
+
+        // Verify that the output reflects the updated stats.
+        let msg = state.progress_bar_msg(&styles);
+        insta::assert_snapshot!(msg, @"4 running, 2 passed, 1 failed, 0 skipped");
+
+        // Create a RunBeginKill event with different stats.
+        let kill_stats = RunStats {
+            initial_run_count: 10,
+            finished_count: 5,
+            passed: 3,
+            failed: 2,
+            cancel_reason: Some(CancelReason::Signal),
+            ..RunStats::default()
+        };
+        let kill_event = TestEvent {
+            timestamp: Local::now().fixed_offset(),
+            elapsed: Duration::ZERO,
+            kind: TestEventKind::RunBeginKill {
+                setup_scripts_running: 0,
+                current_stats: kill_stats,
+                running: 2,
+            },
+        };
+
+        state.update_progress_bar(&kill_event, &styles);
+
+        // Verify the state was updated.
+        assert_eq!(
+            state.stats, kill_stats,
+            "stats should be updated on RunBeginKill"
+        );
+        assert_eq!(
+            state.running, 2,
+            "running should be updated on RunBeginKill"
+        );
+
+        // Verify that the output reflects the updated stats.
+        let msg = state.progress_bar_msg(&styles);
+        insta::assert_snapshot!(msg, @"2 running, 3 passed, 2 failed, 0 skipped");
+    }
+
+    // Helper to create minimal output for ExecuteStatus.
+    fn make_test_output() -> ChildExecutionOutputDescription<ChildSingleOutput> {
+        ChildExecutionOutput::Output {
+            result: Some(ExecutionResult::Pass),
+            output: ChildOutput::Split(ChildSplitOutput {
+                stdout: Some(Bytes::new().into()),
+                stderr: Some(Bytes::new().into()),
+            }),
+            errors: None,
+        }
+        .into()
     }
 }
