@@ -1810,6 +1810,109 @@ fn test_show_config_version() {
     insta::assert_snapshot!(output.stdout_as_str());
 }
 
+/// Tests that the version error takes precedence over unknown experimental features.
+///
+/// When a config has both a future nextest-version requirement and an unknown
+/// experimental feature, the version error should be shown first. This is
+/// because a future version may have new experimental features that the current
+/// version doesn't know about.
+#[test]
+fn test_version_error_precedes_unknown_experimental() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    const TEST_VERSION_ENV: &str = "__NEXTEST_TEST_VERSION";
+
+    // Create a config with both a future version and an unknown experimental feature.
+    let config_path = p.workspace_root().join(".config/nextest.toml");
+    std::fs::write(
+        &config_path,
+        r#"
+nextest-version = "0.9.9999"
+experimental = ["setup-scripts", "unknown-experimental-feature"]
+
+[profile.default]
+fail-fast = false
+"#,
+    )
+    .unwrap();
+
+    // Run with a "current" version that doesn't meet the requirement.
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--message-format",
+            "human",
+        ])
+        .env(TEST_VERSION_ENV, "0.9.100")
+        .unchecked(true)
+        .output();
+
+    // Should get the version error, not the unknown experimental feature error.
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::REQUIRED_VERSION_NOT_MET),
+        "expected REQUIRED_VERSION_NOT_MET exit code, got {:?}\nstderr: {}",
+        output.exit_status.code(),
+        output.stderr_as_str()
+    );
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("requires nextest version 0.9.9999"),
+        "expected version error in stderr, got: {}",
+        stderr
+    );
+    assert!(
+        !stderr.contains("unknown-experimental-feature"),
+        "should not contain unknown experimental feature error, got: {}",
+        stderr
+    );
+
+    // Now test that the unknown experimental feature error is shown when the version passes.
+    std::fs::write(
+        &config_path,
+        r#"
+nextest-version = "0.9.50"
+experimental = ["setup-scripts", "unknown-experimental-feature"]
+
+[profile.default]
+fail-fast = false
+"#,
+    )
+    .unwrap();
+
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--message-format",
+            "human",
+        ])
+        .env(TEST_VERSION_ENV, "0.9.100")
+        .unchecked(true)
+        .output();
+
+    // Should get the unknown experimental feature error now.
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "expected SETUP_ERROR exit code for unknown experimental feature, got {:?}\nstderr: {}",
+        output.exit_status.code(),
+        output.stderr_as_str()
+    );
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("unknown-experimental-feature"),
+        "expected unknown experimental feature error in stderr, got: {}",
+        stderr
+    );
+}
+
 #[test]
 fn test_setup_scripts_not_enabled() {
     set_env_vars();

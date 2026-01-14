@@ -5,7 +5,7 @@
 
 use super::{NextestConfig, ToolConfigFile, ToolName};
 use crate::errors::{ConfigParseError, ConfigParseErrorKind};
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use semver::Version;
 use serde::{Deserialize, Deserializer};
 use std::{borrow::Cow, collections::BTreeSet, fmt, str::FromStr};
@@ -19,8 +19,8 @@ pub struct VersionOnlyConfig {
     /// The nextest version configuration.
     nextest_version: NextestVersionConfig,
 
-    /// Experimental features enabled.
-    experimental: BTreeSet<ConfigExperimental>,
+    /// Experimental features configuration.
+    experimental: ExperimentalConfig,
 }
 
 impl VersionOnlyConfig {
@@ -45,8 +45,8 @@ impl VersionOnlyConfig {
         &self.nextest_version
     }
 
-    /// Returns the experimental features enabled.
-    pub fn experimental(&self) -> &BTreeSet<ConfigExperimental> {
+    /// Returns the experimental features configuration.
+    pub fn experimental(&self) -> &ExperimentalConfig {
         &self.experimental
     }
 
@@ -56,7 +56,8 @@ impl VersionOnlyConfig {
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
     ) -> Result<Self, ConfigParseError> {
         let mut nextest_version = NextestVersionConfig::default();
-        let mut experimental = BTreeSet::new();
+        let mut known = BTreeSet::new();
+        let mut unknown = BTreeSet::new();
 
         // Merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
@@ -79,32 +80,20 @@ impl VersionOnlyConfig {
                 nextest_version.accumulate(v, None);
             }
 
-            // Check for unknown features.
-            let unknown: BTreeSet<_> = d
-                .experimental
-                .into_iter()
-                .filter(|feature| {
-                    if let Ok(feature) = feature.parse::<ConfigExperimental>() {
-                        experimental.insert(feature);
-                        false
-                    } else {
-                        true
-                    }
-                })
-                .collect();
-            if !unknown.is_empty() {
-                let known = ConfigExperimental::known().collect();
-                return Err(ConfigParseError::new(
-                    config_file.into_owned(),
-                    None,
-                    ConfigParseErrorKind::UnknownExperimentalFeatures { unknown, known },
-                ));
+            // Separate known and unknown features. Unknown features are stored rather than
+            // immediately causing an error, so that the nextest version check can run first.
+            for feature_str in d.experimental {
+                if let Ok(feature) = feature_str.parse::<ConfigExperimental>() {
+                    known.insert(feature);
+                } else {
+                    unknown.insert(feature_str);
+                }
             }
         }
 
         Ok(Self {
             nextest_version,
-            experimental,
+            experimental: ExperimentalConfig { known, unknown },
         })
     }
 
@@ -232,6 +221,77 @@ impl NextestVersionConfig {
     }
 }
 
+/// Experimental features configuration.
+///
+/// This stores both known and unknown experimental features. Unknown features are stored rather
+/// than immediately causing an error, so that the nextest version check can run first.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ExperimentalConfig {
+    /// Known experimental features that are enabled.
+    known: BTreeSet<ConfigExperimental>,
+
+    /// Unknown experimental feature names found in the config.
+    unknown: BTreeSet<String>,
+}
+
+impl ExperimentalConfig {
+    /// Returns the known experimental features that are enabled.
+    pub fn known(&self) -> &BTreeSet<ConfigExperimental> {
+        &self.known
+    }
+
+    /// Evaluates the experimental configuration.
+    ///
+    /// This should be called after the nextest version check, so that the version error takes
+    /// precedence over unknown experimental features (a future version may have new features).
+    pub fn eval(&self) -> ExperimentalConfigEval {
+        if self.unknown.is_empty() {
+            ExperimentalConfigEval::Satisfied
+        } else {
+            ExperimentalConfigEval::UnknownFeatures {
+                unknown: self.unknown.clone(),
+                known: ConfigExperimental::known_features().collect(),
+            }
+        }
+    }
+}
+
+/// The result of evaluating an [`ExperimentalConfig`].
+///
+/// Returned by [`ExperimentalConfig::eval`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExperimentalConfigEval {
+    /// All experimental features are known.
+    Satisfied,
+
+    /// Unknown experimental features were found.
+    UnknownFeatures {
+        /// The set of unknown feature names.
+        unknown: BTreeSet<String>,
+
+        /// The set of known features.
+        known: BTreeSet<ConfigExperimental>,
+    },
+}
+
+impl ExperimentalConfigEval {
+    /// Converts this eval result into an error, if it represents an error condition.
+    ///
+    /// Returns `Some(ConfigParseError)` if this is `UnknownFeatures`, and `None` if `Satisfied`.
+    pub fn into_error(self, config_file: impl Into<Utf8PathBuf>) -> Option<ConfigParseError> {
+        match self {
+            ExperimentalConfigEval::Satisfied => None,
+            ExperimentalConfigEval::UnknownFeatures { unknown, known } => {
+                Some(ConfigParseError::new(
+                    config_file,
+                    None,
+                    ConfigParseErrorKind::UnknownExperimentalFeatures { unknown, known },
+                ))
+            }
+        }
+    }
+}
+
 /// Experimental configuration features.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 #[non_exhaustive]
@@ -245,7 +305,8 @@ pub enum ConfigExperimental {
 }
 
 impl ConfigExperimental {
-    fn known() -> impl Iterator<Item = Self> {
+    /// Returns an iterator over all known experimental features.
+    pub fn known_features() -> impl Iterator<Item = Self> {
         vec![Self::SetupScripts, Self::WrapperScripts, Self::Benchmarks].into_iter()
     }
 
@@ -261,7 +322,7 @@ impl ConfigExperimental {
     /// Returns the set of experimental features enabled via environment variables.
     pub fn from_env() -> std::collections::BTreeSet<Self> {
         let mut set = std::collections::BTreeSet::new();
-        for feature in Self::known() {
+        for feature in Self::known_features() {
             if let Some(env_var) = feature.env_var()
                 && std::env::var(env_var).as_deref() == Ok("1")
             {
