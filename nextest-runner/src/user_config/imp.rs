@@ -17,6 +17,42 @@ use std::{collections::BTreeSet, io};
 use target_spec::{Platform, TargetSpec};
 use tracing::{debug, warn};
 
+/// Special value for `--user-config-file` and `NEXTEST_USER_CONFIG_FILE` that
+/// skips user config loading entirely.
+pub const USER_CONFIG_NONE: &str = "none";
+
+/// Specifies where to load user configuration from.
+#[derive(Clone, Copy, Debug)]
+pub enum UserConfigLocation<'a> {
+    /// Discover user config from default locations (e.g.,
+    /// `~/.config/nextest/config.toml`).
+    Default,
+
+    /// Skip user config loading entirely, using only built-in defaults.
+    ///
+    /// This is useful for test isolation.
+    Isolated,
+
+    /// Load user config from an explicit path.
+    ///
+    /// Returns an error if the file does not exist.
+    Explicit(&'a Utf8Path),
+}
+
+impl<'a> UserConfigLocation<'a> {
+    /// Creates a user config location from a CLI or environment variable value.
+    ///
+    /// Returns `Default` if `None`, `Isolated` if `"none"`, otherwise
+    /// `Explicit` with the path.
+    pub fn from_cli_or_env(s: Option<&'a str>) -> Self {
+        match s {
+            None => Self::Default,
+            Some(s) if s == USER_CONFIG_NONE => Self::Isolated,
+            Some(s) => Self::Explicit(Utf8Path::new(s)),
+        }
+    }
+}
+
 /// User configuration after custom settings and overrides have been applied.
 #[derive(Clone, Debug)]
 pub struct UserConfig {
@@ -26,8 +62,11 @@ pub struct UserConfig {
 
 impl UserConfig {
     /// Loads and resolves user configuration for the given host platform.
-    pub fn for_host_platform(host_platform: &Platform) -> Result<Self, UserConfigError> {
-        let user_config = CompiledUserConfig::from_default_location()?;
+    pub fn for_host_platform(
+        host_platform: &Platform,
+        location: UserConfigLocation<'_>,
+    ) -> Result<Self, UserConfigError> {
+        let user_config = CompiledUserConfig::from_location(location)?;
         let default_user_config = DefaultUserConfig::from_embedded();
 
         let resolved_ui = UiConfig::resolve(
@@ -202,17 +241,35 @@ pub(super) struct CompiledUserConfig {
 }
 
 impl CompiledUserConfig {
-    /// Loads and compiles user config from the default location.
-    ///
-    /// This is a convenience method that combines loading and compilation.
-    /// Platform specs in overrides are compiled and validated.
-    ///
-    /// Returns `Ok(None)` if no config file exists at any candidate path.
-    /// Returns `Err` if:
-    /// - A config file exists but cannot be read or parsed.
-    /// - A platform spec in an override is invalid.
-    pub(super) fn from_default_location() -> Result<Option<Self>, UserConfigError> {
-        Self::from_default_location_with_warnings(&mut DefaultUserConfigWarnings)
+    /// Loads and compiles user config from the specified location.
+    pub(super) fn from_location(
+        location: UserConfigLocation<'_>,
+    ) -> Result<Option<Self>, UserConfigError> {
+        Self::from_location_with_warnings(location, &mut DefaultUserConfigWarnings)
+    }
+
+    /// Loads and compiles user config from the specified location, with custom
+    /// warning handling.
+    fn from_location_with_warnings(
+        location: UserConfigLocation<'_>,
+        warnings: &mut impl UserConfigWarnings,
+    ) -> Result<Option<Self>, UserConfigError> {
+        match location {
+            UserConfigLocation::Isolated => {
+                debug!("user config: skipping (isolated)");
+                Ok(None)
+            }
+            UserConfigLocation::Explicit(path) => {
+                debug!("user config: loading from explicit path {path}");
+                match Self::from_path_with_warnings(path, warnings)? {
+                    Some(config) => Ok(Some(config)),
+                    None => Err(UserConfigError::FileNotFound {
+                        path: path.to_owned(),
+                    }),
+                }
+            }
+            UserConfigLocation::Default => Self::from_default_location_with_warnings(warnings),
+        }
     }
 
     /// Loads and compiles user config from the default location, with custom

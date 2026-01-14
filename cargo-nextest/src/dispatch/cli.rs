@@ -3,7 +3,7 @@
 
 //! CLI argument parsing structures and enums.
 
-use super::clap_error::EarlyArgs;
+use super::EarlyArgs;
 use crate::{
     ExpectedError, Result,
     cargo_cli::{CargoCli, CargoOptions},
@@ -1448,8 +1448,8 @@ impl CargoNextestApp {
     /// Initializes the output context.
     pub fn init_output(&self) -> OutputContext {
         match &self.subcommand {
-            NextestSubcommand::Nextest(args) => args.common.output.init(self.early_args),
-            NextestSubcommand::Ntr(args) => args.common.output.init(self.early_args),
+            NextestSubcommand::Nextest(args) => args.common.output.init(&self.early_args),
+            NextestSubcommand::Ntr(args) => args.common.output.init(&self.early_args),
             #[cfg(unix)]
             // Double-spawned processes should never use coloring.
             NextestSubcommand::DoubleSpawn(_) => OutputContext::color_never_init(),
@@ -1468,8 +1468,12 @@ impl CargoNextestApp {
         }
 
         match self.subcommand {
-            NextestSubcommand::Nextest(app) => app.exec(cli_args, output, output_writer),
-            NextestSubcommand::Ntr(opts) => opts.exec(cli_args, output, output_writer),
+            NextestSubcommand::Nextest(app) => {
+                app.exec(self.early_args, cli_args, output, output_writer)
+            }
+            NextestSubcommand::Ntr(opts) => {
+                opts.exec(self.early_args, cli_args, output, output_writer)
+            }
             #[cfg(unix)]
             NextestSubcommand::DoubleSpawn(opts) => opts.exec(output),
         }
@@ -1508,6 +1512,7 @@ impl AppOpts {
     /// Returns the exit code.
     fn exec(
         self,
+        early_args: EarlyArgs,
         cli_args: Vec<String>,
         output: OutputContext,
         output_writer: &mut crate::output::OutputWriter,
@@ -1516,6 +1521,7 @@ impl AppOpts {
             Command::List(list_opts) => {
                 let base = super::execution::BaseApp::new(
                     output,
+                    early_args,
                     list_opts.reuse_build,
                     list_opts.cargo_options,
                     self.common.config_opts,
@@ -1533,6 +1539,7 @@ impl AppOpts {
             Command::Run(run_opts) => {
                 let base = super::execution::BaseApp::new(
                     output,
+                    early_args,
                     run_opts.reuse_build,
                     run_opts.cargo_options,
                     self.common.config_opts,
@@ -1552,6 +1559,7 @@ impl AppOpts {
             Command::Bench(bench_opts) => {
                 let base = super::execution::BaseApp::new(
                     output,
+                    early_args,
                     ReuseBuildOpts::default(),
                     bench_opts.cargo_options,
                     self.common.config_opts,
@@ -1570,6 +1578,7 @@ impl AppOpts {
             Command::Archive(archive_opts) => {
                 let app = super::execution::BaseApp::new(
                     output,
+                    early_args,
                     ReuseBuildOpts::default(),
                     archive_opts.cargo_options,
                     self.common.config_opts,
@@ -1588,6 +1597,7 @@ impl AppOpts {
                 Ok(0)
             }
             Command::ShowConfig { command } => command.exec(
+                early_args,
                 self.common.manifest_path,
                 self.common.config_opts,
                 output,
@@ -1611,12 +1621,14 @@ struct NtrOpts {
 impl NtrOpts {
     fn exec(
         self,
+        early_args: EarlyArgs,
         cli_args: Vec<String>,
         output: OutputContext,
         output_writer: &mut crate::output::OutputWriter,
     ) -> Result<i32> {
         let base = super::execution::BaseApp::new(
             output,
+            early_args,
             self.run_opts.reuse_build,
             self.run_opts.cargo_options,
             self.common.config_opts,

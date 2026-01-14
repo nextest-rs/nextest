@@ -17,9 +17,9 @@ use super::{
         StreampagerConfig, StreampagerInterface, StreampagerWrapping,
     },
     helpers::resolve_ui_setting,
-    imp::DefaultUserConfig,
+    imp::{DefaultUserConfig, UserConfigLocation},
 };
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
 use std::{fmt, io};
 use target_spec::{Platform, TargetSpec};
@@ -46,13 +46,13 @@ pub struct EarlyUserConfig {
 impl EarlyUserConfig {
     /// Loads early user configuration for the given host platform.
     ///
-    /// This attempts to load user config from the default location and resolve
+    /// This attempts to load user config from the specified location and resolve
     /// pager settings. On any error, returns defaults and logs a warning.
     ///
     /// This is intentionally fault-tolerant: help paging is a nice-to-have
     /// feature, so we prefer degraded behavior over failing to show help.
-    pub fn for_platform(host_platform: &Platform) -> Self {
-        match Self::try_load(host_platform) {
+    pub fn for_platform(host_platform: &Platform, location: UserConfigLocation<'_>) -> Self {
+        match Self::try_load(host_platform, location) {
             Ok(config) => config,
             Err(error) => {
                 warn!(
@@ -70,16 +70,49 @@ impl EarlyUserConfig {
         Self::resolve_from_defaults(&default_config, host_platform)
     }
 
-    /// Attempts to load early user configuration.
-    fn try_load(host_platform: &Platform) -> Result<Self, EarlyConfigError> {
+    /// Attempts to load early user configuration from the specified location.
+    fn try_load(
+        host_platform: &Platform,
+        location: UserConfigLocation<'_>,
+    ) -> Result<Self, EarlyConfigError> {
         let default_config = DefaultUserConfig::from_embedded();
 
-        // Try to find and load user config.
+        match location {
+            UserConfigLocation::Isolated => {
+                debug!("early user config: skipping (isolated)");
+                Ok(Self::resolve_from_defaults(&default_config, host_platform))
+            }
+            UserConfigLocation::Explicit(path) => {
+                debug!("early user config: loading from explicit path {path}");
+                match EarlyDeserializedConfig::from_path(path) {
+                    Ok(Some(user_config)) => {
+                        debug!("early user config: loaded from {path}");
+                        Ok(Self::resolve(
+                            &default_config,
+                            Some(&user_config),
+                            host_platform,
+                        ))
+                    }
+                    Ok(None) => Err(EarlyConfigError::FileNotFound(path.to_owned())),
+                    Err(error) => Err(error),
+                }
+            }
+            UserConfigLocation::Default => {
+                Self::try_load_from_default_locations(&default_config, host_platform)
+            }
+        }
+    }
+
+    /// Attempts to load early user configuration from default locations.
+    fn try_load_from_default_locations(
+        default_config: &DefaultUserConfig,
+        host_platform: &Platform,
+    ) -> Result<Self, EarlyConfigError> {
         let paths = user_config_paths().map_err(EarlyConfigError::Discovery)?;
 
         if paths.is_empty() {
             debug!("early user config: no config directory found, using defaults");
-            return Ok(Self::resolve_from_defaults(&default_config, host_platform));
+            return Ok(Self::resolve_from_defaults(default_config, host_platform));
         }
 
         // Try each candidate path.
@@ -88,7 +121,7 @@ impl EarlyUserConfig {
                 Ok(Some(user_config)) => {
                     debug!("early user config: loaded from {path}");
                     return Ok(Self::resolve(
-                        &default_config,
+                        default_config,
                         Some(&user_config),
                         host_platform,
                     ));
@@ -106,7 +139,7 @@ impl EarlyUserConfig {
         }
 
         debug!("early user config: no config file found, using defaults");
-        Ok(Self::resolve_from_defaults(&default_config, host_platform))
+        Ok(Self::resolve_from_defaults(default_config, host_platform))
     }
 
     /// Resolves configuration from defaults.
@@ -202,6 +235,8 @@ impl EarlyUserConfig {
 #[derive(Debug)]
 enum EarlyConfigError {
     Discovery(crate::errors::UserConfigError),
+    /// The file specified via `NEXTEST_USER_CONFIG_FILE` does not exist.
+    FileNotFound(Utf8PathBuf),
     Read(std::io::Error),
     Parse(toml::de::Error),
 }
@@ -210,6 +245,7 @@ impl fmt::Display for EarlyConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Discovery(e) => write!(f, "config discovery: {e}"),
+            Self::FileNotFound(path) => write!(f, "config file not found at {path}"),
             Self::Read(e) => write!(f, "read: {e}"),
             Self::Parse(e) => write!(f, "parse: {e}"),
         }
@@ -320,7 +356,7 @@ mod tests {
         let host = detect_host_platform_for_tests();
 
         // This should not panic, even if no config file exists.
-        let config = EarlyUserConfig::for_platform(&host);
+        let config = EarlyUserConfig::for_platform(&host, UserConfigLocation::Default);
 
         // Should return a valid config.
         match &config.pager {

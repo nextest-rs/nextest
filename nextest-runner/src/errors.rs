@@ -739,6 +739,14 @@ pub enum ToolConfigFileParseError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum UserConfigError {
+    /// The user config file specified via `--user-config-file` or
+    /// `NEXTEST_USER_CONFIG_FILE` does not exist.
+    #[error("user config file not found at {path}")]
+    FileNotFound {
+        /// The path that was specified.
+        path: Utf8PathBuf,
+    },
+
     /// Failed to read the user config file.
     #[error("failed to read user config at {path}")]
     Read {

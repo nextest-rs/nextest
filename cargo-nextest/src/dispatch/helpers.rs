@@ -18,7 +18,7 @@ use nextest_runner::{
     platform::{BuildPlatforms, HostPlatform, Platform, PlatformLibdir, TargetPlatform},
     reporter::TestOutputErrorSlice,
     target_runner::{PlatformRunner, TargetRunner},
-    user_config::UserConfig,
+    user_config::{UserConfig, UserConfigLocation},
 };
 use owo_colors::OwoColorize;
 use std::io::Write;
@@ -86,8 +86,11 @@ pub(super) fn detect_build_platforms(
 }
 
 /// Loads and resolves user configuration with platform-specific overrides.
-pub(super) fn resolve_user_config(host_platform: &Platform) -> Result<UserConfig, ExpectedError> {
-    UserConfig::for_host_platform(host_platform)
+pub(super) fn resolve_user_config(
+    host_platform: &Platform,
+    location: UserConfigLocation<'_>,
+) -> Result<UserConfig, ExpectedError> {
+    UserConfig::for_host_platform(host_platform, location)
         .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })
 }
 

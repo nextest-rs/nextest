@@ -44,5 +44,11 @@ pub fn set_env_vars() {
         // Set NEXTEST_SHOW_PROGRESS to counter to ensure user config doesn't
         // affect test output.
         std::env::set_var("NEXTEST_SHOW_PROGRESS", "counter");
+
+        // Skip user config loading entirely for test isolation. This prevents
+        // the user's personal config from affecting test results. (Note that
+        // some config tests pass in --user-config-file, which overrides this
+        // environment variable.)
+        std::env::set_var("NEXTEST_USER_CONFIG_FILE", "none");
     }
 }

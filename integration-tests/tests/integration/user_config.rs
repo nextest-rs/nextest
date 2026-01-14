@@ -14,58 +14,37 @@ use camino_tempfile::Utf8TempDir;
 use integration_tests::{env::set_env_vars, nextest_cli::CargoNextestCli};
 use std::fs;
 
-/// Creates a temporary directory with a user config file.
+/// Creates a temporary user config file.
 ///
-/// Returns the temp dir (which must be kept alive) and a helper to set env vars.
-fn create_user_config_home(config_contents: &str) -> (Utf8TempDir, UserConfigEnv) {
+/// Returns the temp dir (which must be kept alive) and the path to the config file.
+fn create_user_config_file(config_contents: &str) -> (Utf8TempDir, Utf8PathBuf) {
     let temp_dir = camino_tempfile::Builder::new()
         .prefix("nextest-user-config-")
         .tempdir()
         .expect("created temp dir for user config");
 
-    let base_path: Utf8PathBuf = temp_dir.path().to_path_buf();
-
-    // Config is always at <temp>/.config/nextest/config.toml.
-    // UserConfigEnv::apply sets env vars so this path is discovered on all platforms.
-    let config_dir = base_path.join(".config/nextest");
-
-    fs::create_dir_all(&config_dir).expect("created nextest config directory");
-
-    let config_path = config_dir.join("config.toml");
+    let config_path = temp_dir.path().join("config.toml");
     fs::write(&config_path, config_contents).expect("wrote user config file");
 
-    (temp_dir, UserConfigEnv { base_path })
+    (temp_dir, config_path)
 }
 
-/// Helper to set the appropriate environment variables for user config discovery.
-struct UserConfigEnv {
-    base_path: Utf8PathBuf,
+/// Applies user config settings to a CLI command.
+fn apply_user_config(cli: &mut CargoNextestCli, config_path: &Utf8PathBuf) {
+    // Use --user-config-file to specify the config file directly.
+    cli.args(["--user-config-file", config_path.as_str()]);
+    // Remove NEXTEST_SHOW_PROGRESS so user config can be tested without
+    // interference from the env var that each test sets via set_env_vars().
+    cli.env_remove("NEXTEST_SHOW_PROGRESS");
 }
 
-impl UserConfigEnv {
-    /// Apply the environment variables to a CLI command.
-    fn apply(&self, cli: &mut CargoNextestCli) {
-        // Set APPDATA (Windows) and HOME/XDG_CONFIG_HOME (Unix) so that
-        // <base_path>/.config/nextest/config.toml is discovered on all platforms.
-        cli.env("APPDATA", self.base_path.join(".config").as_str());
-        cli.env("HOME", self.base_path.as_str());
-        cli.env("XDG_CONFIG_HOME", self.base_path.join(".config").as_str());
-        // Remove NEXTEST_SHOW_PROGRESS so user config can be tested without
-        // interference from the env var set by set_env_vars().
-        cli.env_remove("NEXTEST_SHOW_PROGRESS");
-    }
-}
-
-/// Creates a temporary directory with no user config file.
-fn create_empty_config_home() -> (Utf8TempDir, UserConfigEnv) {
-    let temp_dir = camino_tempfile::Builder::new()
-        .prefix("nextest-no-config-")
-        .tempdir()
-        .expect("created temp dir");
-
-    let base_path: Utf8PathBuf = temp_dir.path().to_path_buf();
-
-    (temp_dir, UserConfigEnv { base_path })
+/// Applies settings for "no user config" tests.
+fn apply_no_user_config(cli: &mut CargoNextestCli) {
+    // Use --user-config-file=none to skip user config loading.
+    cli.args(["--user-config-file", "none"]);
+    // Remove NEXTEST_SHOW_PROGRESS so user config can be tested without
+    // interference from the env var that each test sets via set_env_vars().
+    cli.env_remove("NEXTEST_SHOW_PROGRESS");
 }
 
 /// Test that user config values are applied.
@@ -81,7 +60,7 @@ fn test_user_config_values_applied() {
 show-progress = "counter"
 max-progress-running = 4
 "#;
-    let (_temp_home, env) = create_user_config_home(config);
+    let (_temp_dir, config_path) = create_user_config_file(config);
 
     let mut cli = CargoNextestCli::for_test();
     cli.args([
@@ -91,7 +70,7 @@ max-progress-running = 4
         "-E",
         "test(=test_success)",
     ]);
-    env.apply(&mut cli);
+    apply_user_config(&mut cli, &config_path);
     // Enable debug logging to see resolved values.
     cli.env("NEXTEST_LOG", "cargo_nextest=debug");
     let output = cli.output();
@@ -125,7 +104,7 @@ fn test_user_config_cli_override() {
 show-progress = "none"
 max-progress-running = 4
 "#;
-    let (_temp_home, env) = create_user_config_home(config);
+    let (_temp_dir, config_path) = create_user_config_file(config);
 
     let mut cli = CargoNextestCli::for_test();
     cli.args([
@@ -139,7 +118,7 @@ max-progress-running = 4
         "--max-progress-running",
         "12",
     ]);
-    env.apply(&mut cli);
+    apply_user_config(&mut cli, &config_path);
     cli.env("NEXTEST_LOG", "cargo_nextest=debug");
     let output = cli.output();
 
@@ -171,7 +150,7 @@ fn test_user_config_env_override() {
 show-progress = "none"
 max-progress-running = 4
 "#;
-    let (_temp_home, env) = create_user_config_home(config);
+    let (_temp_dir, config_path) = create_user_config_file(config);
 
     let mut cli = CargoNextestCli::for_test();
     cli.args([
@@ -181,7 +160,7 @@ max-progress-running = 4
         "-E",
         "test(=test_success)",
     ]);
-    env.apply(&mut cli);
+    apply_user_config(&mut cli, &config_path);
     cli.env("NEXTEST_SHOW_PROGRESS", "counter");
     cli.env("NEXTEST_MAX_PROGRESS_RUNNING", "20");
     cli.env("NEXTEST_LOG", "cargo_nextest=debug");
@@ -210,8 +189,6 @@ fn test_user_config_missing_uses_defaults() {
     set_env_vars();
     let p = TempProject::new().unwrap();
 
-    let (_temp_dir, env) = create_empty_config_home();
-
     let mut cli = CargoNextestCli::for_test();
     cli.args([
         "--manifest-path",
@@ -220,7 +197,7 @@ fn test_user_config_missing_uses_defaults() {
         "-E",
         "test(=test_success)",
     ]);
-    env.apply(&mut cli);
+    apply_no_user_config(&mut cli);
     cli.env("NEXTEST_LOG", "cargo_nextest=debug");
     let output = cli.output();
 
@@ -251,7 +228,7 @@ fn test_user_config_malformed_toml() {
 [ui
 show-progress = "bar"
 "#; // Missing closing bracket.
-    let (_temp_home, env) = create_user_config_home(config);
+    let (_temp_dir, config_path) = create_user_config_file(config);
 
     let mut cli = CargoNextestCli::for_test();
     cli.args([
@@ -261,7 +238,7 @@ show-progress = "bar"
         "-E",
         "test(=test_success)",
     ]);
-    env.apply(&mut cli);
+    apply_user_config(&mut cli, &config_path);
     cli.unchecked(true);
     let output = cli.output();
 
@@ -277,6 +254,41 @@ show-progress = "bar"
     );
 }
 
+/// Test that specifying a non-existent config file produces a clear error.
+///
+/// When `--user-config-file` points to a path that doesn't exist, nextest
+/// should error rather than silently falling back to defaults.
+#[test]
+fn test_user_config_explicit_path_not_found() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    let mut cli = CargoNextestCli::for_test();
+    cli.args([
+        "--manifest-path",
+        p.manifest_path().as_str(),
+        "--user-config-file",
+        "/nonexistent/path/to/config.toml",
+        "list",
+    ])
+    .unchecked(true);
+    let output = cli.output();
+
+    assert!(
+        !output.exit_status.success(),
+        "non-existent config file should cause an error\n{output}"
+    );
+
+    // Extract just the error line for snapshot testing, since stderr includes
+    // build output.
+    let stderr = output.stderr_as_str();
+    let error_line = stderr
+        .lines()
+        .find(|line| line.starts_with("error:"))
+        .expect("should have an error line");
+    insta::assert_snapshot!(error_line);
+}
+
 /// Test that an invalid show-progress value produces a clear error.
 #[test]
 fn test_user_config_invalid_show_progress() {
@@ -287,7 +299,7 @@ fn test_user_config_invalid_show_progress() {
 [ui]
 show-progress = "invalid-value"
 "#;
-    let (_temp_home, env) = create_user_config_home(config);
+    let (_temp_dir, config_path) = create_user_config_file(config);
 
     let mut cli = CargoNextestCli::for_test();
     cli.args([
@@ -297,7 +309,7 @@ show-progress = "invalid-value"
         "-E",
         "test(=test_success)",
     ]);
-    env.apply(&mut cli);
+    apply_user_config(&mut cli, &config_path);
     cli.unchecked(true);
     let output = cli.output();
 
@@ -323,7 +335,7 @@ fn test_user_config_invalid_max_progress_running() {
 [ui]
 max-progress-running = "not-a-number"
 "#;
-    let (_temp_home, env) = create_user_config_home(config);
+    let (_temp_dir, config_path) = create_user_config_file(config);
 
     let mut cli = CargoNextestCli::for_test();
     cli.args([
@@ -333,7 +345,7 @@ max-progress-running = "not-a-number"
         "-E",
         "test(=test_success)",
     ]);
-    env.apply(&mut cli);
+    apply_user_config(&mut cli, &config_path);
     cli.unchecked(true);
     let output = cli.output();
 
@@ -362,7 +374,7 @@ show-progress = "bar"
 [future-section]
 some-key = "some-value"
 "#;
-    let (_temp_home, env) = create_user_config_home(config);
+    let (_temp_dir, config_path) = create_user_config_file(config);
 
     let mut cli = CargoNextestCli::for_test();
     cli.args([
@@ -372,7 +384,7 @@ some-key = "some-value"
         "-E",
         "test(=test_success)",
     ]);
-    env.apply(&mut cli);
+    apply_user_config(&mut cli, &config_path);
     cli.env("NEXTEST_LOG", "cargo_nextest=debug");
     let output = cli.output();
 
@@ -399,7 +411,7 @@ fn test_user_config_max_progress_running_infinite() {
 [ui]
 max-progress-running = "infinite"
 "#;
-    let (_temp_home, env) = create_user_config_home(config);
+    let (_temp_dir, config_path) = create_user_config_file(config);
 
     let mut cli = CargoNextestCli::for_test();
     cli.args([
@@ -409,7 +421,7 @@ max-progress-running = "infinite"
         "-E",
         "test(=test_success)",
     ]);
-    env.apply(&mut cli);
+    apply_user_config(&mut cli, &config_path);
     cli.env("NEXTEST_LOG", "cargo_nextest=debug");
     let output = cli.output();
 
@@ -435,7 +447,7 @@ fn test_user_config_max_progress_running_integer() {
 [ui]
 max-progress-running = 16
 "#;
-    let (_temp_home, env) = create_user_config_home(config);
+    let (_temp_dir, config_path) = create_user_config_file(config);
 
     let mut cli = CargoNextestCli::for_test();
     cli.args([
@@ -445,7 +457,7 @@ max-progress-running = 16
         "-E",
         "test(=test_success)",
     ]);
-    env.apply(&mut cli);
+    apply_user_config(&mut cli, &config_path);
     cli.env("NEXTEST_LOG", "cargo_nextest=debug");
     let output = cli.output();
 
