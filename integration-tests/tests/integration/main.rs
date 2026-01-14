@@ -24,6 +24,7 @@
 
 use camino::{Utf8Path, Utf8PathBuf};
 use fixture_data::{models::RunProperty, nextest_tests::EXPECTED_TEST_SUITES};
+use indoc::indoc;
 use integration_tests::{
     env::set_env_vars,
     nextest_cli::{CargoNextestCli, CargoNextestOutput},
@@ -31,6 +32,7 @@ use integration_tests::{
 use nextest_metadata::{BuildPlatform, NextestExitCode, TestListSummary};
 use std::{borrow::Cow, fs::File, io::Write};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
+use test_case::test_case;
 
 mod fixtures;
 mod interceptor;
@@ -1766,6 +1768,110 @@ fn test_rustc_version_verbose_errors() {
         insta::assert_snapshot!(
             "rustc_vv_invalid_triple_warning",
             command.unchecked(true).output().to_snapshot()
+        );
+    }
+}
+
+#[test_case(
+    indoc! {r#"
+        [store]
+        dir = "my-store"
+
+        [profile.default]
+        fail-fast = false
+        [profile.default.junit]
+        path = "junit.xml"
+    "#},
+    "my-store/default",
+    false
+    ; "store dir simple"
+)]
+#[test_case(
+    indoc! {r#"
+        [store]
+        dir = { dir = "my-store-ws", relative-to = "workspace-root" }
+
+        [profile.default]
+        fail-fast = false
+        [profile.default.junit]
+        path = "junit.xml"
+    "#},
+    "my-store-ws/default",
+    false
+    ; "store dir relative to workspace root"
+)]
+#[test_case(
+    indoc! {r#"
+        [store]
+        dir = { dir = "my-store-target", relative-to = "target-dir" }
+
+        [profile.default]
+        fail-fast = false
+        [profile.default.junit]
+        path = "junit.xml"
+    "#},
+    "target/my-store-target/default",
+    false
+    ; "store dir relative to target dir"
+)]
+#[test_case(
+    indoc! {r#"
+        [store]
+        dir = { dir = "emoji🚀test", relative-to = "target-dir" }
+
+        [profile.default]
+        fail-fast = false
+        [profile.default.junit]
+        path = "junit.xml"
+    "#},
+    "target/emoji🚀test/default",
+    false
+    ; "store dir with unicode"
+)]
+#[test_case(
+    indoc! {r#"
+        [store]
+        dir = { dir = "../escape-store", relative-to = "target-dir" }
+    "#},
+    "escape-store/default",
+    true
+    ; "store dir with parent directory traversal should fail"
+)]
+fn test_store_dir_config(config_contents: &str, relative_to_workspace: &str, should_fail: bool) {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    // Create config file
+    let config_path = p.workspace_root().join(".config/nextest.toml");
+    std::fs::create_dir_all(config_path.parent().unwrap()).unwrap();
+    std::fs::write(&config_path, config_contents).unwrap();
+
+    let target_dir = p.workspace_root().join("target");
+
+    // Run nextest
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+        ])
+        .env("CARGO_TARGET_DIR", &target_dir)
+        .unchecked(true) // Expecting a non-zero exit code because some tests fail
+        .output();
+
+    if should_fail {
+        assert!(
+            !output.exit_status.success(),
+            "config with directory traversal should fail to parse: {output}"
+        );
+    } else {
+        let store_dir = p.workspace_root().join(relative_to_workspace);
+        assert!(
+            store_dir.is_dir(),
+            "store directory should be created at {:?}",
+            store_dir
         );
     }
 }
