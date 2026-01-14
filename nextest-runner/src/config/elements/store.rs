@@ -121,8 +121,111 @@ enum StoreRelativeTo {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::{
+        core::NextestConfig,
+        utils::test_helpers::{build_platforms, temp_workspace},
+    };
+
     use super::*;
+    use camino_tempfile::tempdir;
+    use indoc::indoc;
+    use nextest_filtering::ParseContext;
     use test_case::test_case;
+
+    #[test_case(
+        "",
+        Utf8PathBuf::from("target"),
+        Ok(Utf8PathBuf::from("nextest/default")),
+        false
+        ; "no config"
+    )]
+    #[test_case(
+        indoc! {r#" 
+            [store]
+            dir = { path = "nexte", relative-to = "tig" }
+        "#},
+        Utf8PathBuf::from("target"),
+        Err("does not have variant constructor tig"),
+        true
+        ; "invalid relative-to"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [store]
+            dir = "my-store"
+        "#} ,
+        Utf8PathBuf::from("target"),
+        Ok(Utf8PathBuf::from("my-store/default")),
+        false
+        ; "valid dir"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [store]
+            dir = { dir = "my-store", relative-to = "target-dir" }
+        "#},
+        Utf8PathBuf::from("target"),
+        Ok(Utf8PathBuf::from("my-store/default")),
+        true
+        ; "valid target dir"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [store]
+            dir = { dir = "store", relative-to = "workspace-root" }
+        "#},
+        Utf8PathBuf::from(""),
+        Ok(Utf8PathBuf::from("store/default")),
+        true
+        ; "valid workspace root"
+    )]
+    fn store_config_deserialization(
+        config_contents: &str,
+        target_dir: Utf8PathBuf,
+        expected: Result<Utf8PathBuf, &str>,
+        relative_to: bool,
+    ) {
+        let workspace_dir = tempdir().unwrap();
+
+        let graph = temp_workspace(&workspace_dir, config_contents);
+
+        let pcx = ParseContext::new(&graph);
+
+        let nextest_config_result = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &[][..],
+            &Default::default(),
+        );
+
+        match expected {
+            Ok(expected_default) => {
+                let nextest_config = nextest_config_result.expect("config file should parse");
+
+                let store_dir = nextest_config
+                    .profile("default")
+                    .expect("default profile should exist")
+                    .into_evaluatable(&build_platforms())
+                    .store_dir(&target_dir);
+
+                if relative_to {
+                    assert!(store_dir.ends_with(target_dir.join(expected_default)));
+                } else {
+                    assert!(store_dir.ends_with(expected_default));
+                }
+            }
+
+            Err(expected_err_str) => {
+                let err_str = format!("{:?}", nextest_config_result.unwrap_err());
+
+                assert!(
+                    err_str.contains(expected_err_str),
+                    "expected error string not found: {err_str}",
+                )
+            }
+        }
+    }
 
     #[test_case(
         r#"dir = "target/nextest""#,
@@ -152,6 +255,35 @@ mod tests {
         "/tmp/archive-target/nextest"
         ; "relative to remapped target dir"
     )]
+    #[test_case(
+        r#"dir = { dir = "emoji🚀test", relative-to = "workspace-root" }"#,
+        "/workspace",
+        "/workspace/target",
+        "/workspace/emoji🚀test"
+        ; "emoji unicode path"
+    )]
+    #[test_case(
+        r#"dir = { dir = "café/naïve", relative-to = "target-dir" }"#,
+        "/workspace",
+        "/tmp/target",
+        "/tmp/target/café/naïve"
+        ; "accented unicode path"
+    )]
+    // Edge case boundary conditions
+    #[test_case(
+        r#"dir = { dir = "", relative-to = "workspace-root" }"#,
+        "/workspace",
+        "/workspace/target",
+        "/workspace"
+        ; "empty path component"
+    )]
+    #[test_case(
+        r#"dir = { dir = ".", relative-to = "target-dir" }"#,
+        "/workspace",
+        "/tmp/target",
+        "/tmp/target"
+        ; "current directory reference"
+    )]
     fn test_store_dir_resolution(
         toml: &str,
         workspace_root: &str,
@@ -162,5 +294,33 @@ mod tests {
         let resolved =
             config.resolve_store_dir(Utf8Path::new(workspace_root), Utf8Path::new(target_dir));
         assert_eq!(resolved, Utf8Path::new(expected));
+    }
+
+    #[test]
+    fn test_store_dir_escape_target_dir() {
+        let result = toml::from_str::<StoreConfigImpl>(
+            r#"dir = { dir = "../escape-test", relative-to = "target-dir" }"#,
+        );
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("expected a relative path with no parent components")
+        );
+    }
+
+    #[test]
+    fn test_store_dir_parent_dir_in_path() {
+        let result = toml::from_str::<StoreConfigImpl>(
+            r#"dir = { dir = "sub/../sneaky", relative-to = "workspace-root" }"#,
+        );
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("expected a relative path with no parent components")
+        );
     }
 }
