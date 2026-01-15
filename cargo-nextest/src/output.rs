@@ -65,7 +65,7 @@ pub(crate) struct OutputOpts {
 }
 
 impl OutputOpts {
-    pub(crate) fn init(self, early_args: EarlyArgs) -> OutputContext {
+    pub(crate) fn init(self, early_args: &EarlyArgs) -> OutputContext {
         let OutputOpts { verbose } = self;
 
         early_args.color.init();

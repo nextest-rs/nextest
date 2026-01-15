@@ -14,7 +14,7 @@ use clap::{ArgAction, Args, Command};
 use nextest_runner::{
     pager::PagedOutput,
     platform::Platform,
-    user_config::{EarlyUserConfig, elements::PaginateSetting},
+    user_config::{EarlyUserConfig, UserConfigLocation, elements::PaginateSetting},
     write_str::WriteStr,
 };
 use std::io::{IsTerminal, Write};
@@ -61,7 +61,7 @@ impl EarlySetup {
 /// These are needed to handle clap errors (especially help output) before
 /// the full argument parsing completes. Using clap's derive system with
 /// `global = true` ensures proper handling of the `--` separator.
-#[derive(Copy, Clone, Debug, Default, Args)]
+#[derive(Clone, Debug, Default, Args)]
 pub struct EarlyArgs {
     /// Produce color output: auto, always, never.
     #[arg(
@@ -78,6 +78,26 @@ pub struct EarlyArgs {
     /// Do not pipe output through a pager.
     #[arg(long, global = true)]
     pub no_pager: bool,
+
+    /// User config file [default: ~/.config/nextest/config.toml or platform equivalent].
+    ///
+    /// User configuration stores per-user preferences like UI settings. Use "none" to skip
+    /// loading user config entirely.
+    #[arg(
+        long,
+        global = true,
+        value_name = "PATH",
+        env = "NEXTEST_USER_CONFIG_FILE",
+        help_heading = "Config options"
+    )]
+    pub user_config_file: Option<String>,
+}
+
+impl EarlyArgs {
+    /// Returns the user config location.
+    pub fn user_config_location(&self) -> UserConfigLocation<'_> {
+        UserConfigLocation::from_cli_or_env(self.user_config_file.as_deref())
+    }
 }
 
 /// Extracts early arguments from CLI args using clap's parsing.
@@ -129,7 +149,16 @@ fn extract_early_args(args: &[String], app: &Command) -> EarlyArgs {
                 .flatten()
                 .copied()
                 .unwrap_or_default();
-            EarlyArgs { color, no_pager }
+            let user_config_file = matches
+                .try_get_one::<String>("user_config_file")
+                .ok()
+                .flatten()
+                .cloned();
+            EarlyArgs {
+                color,
+                no_pager,
+                user_config_file,
+            }
         }
         Err(_) => {
             // This shouldn't happen with ignore_errors, but fall back to defaults.
@@ -187,7 +216,8 @@ fn handle_help_output(err: clap::Error, early_args: &EarlyArgs, host_platform: &
         return;
     }
 
-    let early_config = EarlyUserConfig::for_platform(host_platform);
+    let early_config =
+        EarlyUserConfig::for_platform(host_platform, early_args.user_config_location());
     if early_config.paginate == PaginateSetting::Never {
         let _ = std::io::stdout().write_all(help_text.as_bytes());
         return;

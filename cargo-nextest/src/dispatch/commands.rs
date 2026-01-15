@@ -4,6 +4,7 @@
 //! Subcommand implementations for show-config, self, and debug commands.
 
 use super::{
+    EarlyArgs,
     cli::{ConfigOpts, PagerOpts, TestBuildFilter},
     execution::{App, BaseApp},
     helpers::{detect_build_platforms, display_output_slice, extract_slice_from_output},
@@ -53,6 +54,7 @@ pub(super) enum ShowConfigCommand {
 impl ShowConfigCommand {
     pub(super) fn exec(
         self,
+        early_args: EarlyArgs,
         manifest_path: Option<Utf8PathBuf>,
         config_opts: ConfigOpts,
         output: OutputContext,
@@ -138,6 +140,7 @@ impl ShowConfigCommand {
             } => {
                 let base = BaseApp::new(
                     output,
+                    early_args,
                     *reuse_build,
                     *cargo_options,
                     config_opts,

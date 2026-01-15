@@ -65,6 +65,7 @@ use tracing::{Level, info, warn};
 
 pub(super) struct BaseApp {
     output: OutputContext,
+    early_args: super::EarlyArgs,
     // TODO: support multiple --target options
     build_platforms: BuildPlatforms,
     cargo_metadata_json: Arc<String>,
@@ -85,6 +86,7 @@ pub(super) struct BaseApp {
 impl BaseApp {
     pub(super) fn new(
         output: OutputContext,
+        early_args: super::EarlyArgs,
         reuse_build: crate::reuse_build::ReuseBuildOpts,
         cargo_opts: crate::cargo_cli::CargoOptions,
         config_opts: super::cli::ConfigOpts,
@@ -154,6 +156,7 @@ impl BaseApp {
 
         Ok(Self {
             output,
+            early_args,
             build_platforms,
             cargo_metadata_json,
             package_graph,
@@ -528,7 +531,10 @@ impl App {
         let binary_list = self.base.build_binary_list("test")?;
 
         // Resolve user config to get pager settings.
-        let resolved_user_config = resolve_user_config(&self.base.build_platforms.host.platform)?;
+        let resolved_user_config = resolve_user_config(
+            &self.base.build_platforms.host.platform,
+            self.base.early_args.user_config_location(),
+        )?;
         let (pager_setting, paginate) = pager_opts.resolve(&resolved_user_config.ui);
 
         // Determine if we should page output.
@@ -641,7 +647,10 @@ impl App {
         let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
 
         // Resolve user config to get pager settings.
-        let resolved_user_config = resolve_user_config(&self.base.build_platforms.host.platform)?;
+        let resolved_user_config = resolve_user_config(
+            &self.base.build_platforms.host.platform,
+            self.base.early_args.user_config_location(),
+        )?;
         let (pager_setting, paginate) = pager_opts.resolve(&resolved_user_config.ui);
 
         // Create paged output.
@@ -727,7 +736,10 @@ impl App {
             .should_colorize(supports_color::Stream::Stderr);
 
         // Load and resolve user config with platform-specific overrides.
-        let resolved_user_config = resolve_user_config(&self.base.build_platforms.host.platform)?;
+        let resolved_user_config = resolve_user_config(
+            &self.base.build_platforms.host.platform,
+            self.base.early_args.user_config_location(),
+        )?;
 
         // Make the runner and reporter builders. Do them now so warnings are
         // emitted before we start doing the build.
@@ -897,7 +909,10 @@ impl App {
             .should_colorize(supports_color::Stream::Stderr);
 
         // Load and resolve user config with platform-specific overrides.
-        let resolved_user_config = resolve_user_config(&self.base.build_platforms.host.platform)?;
+        let resolved_user_config = resolve_user_config(
+            &self.base.build_platforms.host.platform,
+            self.base.early_args.user_config_location(),
+        )?;
 
         // Make the runner and reporter builders. Do them now so warnings are
         // emitted before we start doing the build.
