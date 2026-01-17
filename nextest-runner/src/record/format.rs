@@ -12,7 +12,7 @@ use chrono::{DateTime, FixedOffset, Utc};
 use quick_junit::ReportUuid;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::num::NonZero;
+use std::{collections::BTreeMap, num::NonZero};
 
 // ---
 // runs.json format types
@@ -133,6 +133,14 @@ pub(super) struct RecordedRun {
     /// Duration of the run in seconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) duration_secs: Option<f64>,
+    /// The command-line arguments used to invoke nextest.
+    #[serde(default)]
+    pub(super) cli_args: Vec<String>,
+    /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
+    ///
+    /// This has a default for deserializing old runs.json files that don't have this field.
+    #[serde(default)]
+    pub(super) env_vars: BTreeMap<String, String>,
     /// Sizes broken down by component (log and store).
     ///
     /// This is all zeros until the run completes successfully.
@@ -260,6 +268,8 @@ impl From<RecordedRun> for RecordedRunInfo {
             started_at: run.started_at,
             last_written_at: run.last_written_at,
             duration_secs: run.duration_secs,
+            cli_args: run.cli_args,
+            env_vars: run.env_vars,
             sizes: run.sizes.into(),
             status: run.status.into(),
         }
@@ -274,6 +284,8 @@ impl From<&RecordedRunInfo> for RecordedRun {
             started_at: run.started_at,
             last_written_at: run.last_written_at,
             duration_secs: run.duration_secs,
+            cli_args: run.cli_args.clone(),
+            env_vars: run.env_vars.clone(),
             sizes: run.sizes.into(),
             status: (&run.status).into(),
         }
@@ -592,6 +604,16 @@ mod tests {
             last_written_at: DateTime::parse_from_rfc3339("2024-12-19T22:22:33Z")
                 .expect("valid timestamp"),
             duration_secs: Some(12.345),
+            cli_args: vec![
+                "cargo".to_owned(),
+                "nextest".to_owned(),
+                "run".to_owned(),
+                "--workspace".to_owned(),
+            ],
+            env_vars: BTreeMap::from([
+                ("CARGO_TERM_COLOR".to_owned(), "always".to_owned()),
+                ("NEXTEST_PROFILE".to_owned(), "ci".to_owned()),
+            ]),
             sizes: RecordedSizesFormat {
                 log: ComponentSizesFormat {
                     compressed: 2345,
@@ -667,6 +689,8 @@ mod tests {
             "nextest-version": "0.9.999",
             "started-at": "2024-12-19T14:22:33-08:00",
             "last-written-at": "2024-12-19T22:22:33Z",
+            "cli-args": ["cargo", "nextest", "run"],
+            "env-vars": {},
             "sizes": {
                 "log": { "compressed": 2345, "uncompressed": 5678 },
                 "store": { "compressed": 10000, "uncompressed": 40000 }

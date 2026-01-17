@@ -12,6 +12,7 @@
 //!
 //! See <https://github.com/nextest-rs/nextest/issues/2878>.
 
+use integration_tests::env::set_env_vars_for_test;
 use std::process::Command;
 
 /// If this test is run under nextest in an interactive terminal, spawning a
@@ -19,13 +20,13 @@ use std::process::Command;
 /// the fix.
 #[test]
 fn test_foreground_grab_does_not_suspend() {
+    let env_info = set_env_vars_for_test();
+
     // This issue could be reproduced with zsh -ic, though not with bash -ic or
     // sh -ic (Ubuntu 24.04). But we don't want to introduce a dependency on zsh
     // in our test suite, so we have a small helper binary which simulates the
     // issue.
-    let bin_path = std::env::var("NEXTEST_BIN_EXE_grab_foreground")
-        .expect("NEXTEST_BIN_EXE_grab_foreground should be set by nextest");
-    let child = Command::new(bin_path)
+    let child = Command::new(&env_info.grab_foreground_bin)
         .spawn()
         .expect("spawned grab-foreground");
     let output = child

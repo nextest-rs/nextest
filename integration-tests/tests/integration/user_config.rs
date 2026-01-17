@@ -11,7 +11,7 @@
 use super::TempProject;
 use camino::Utf8PathBuf;
 use camino_tempfile::Utf8TempDir;
-use integration_tests::{env::set_env_vars, nextest_cli::CargoNextestCli};
+use integration_tests::{env::set_env_vars_for_test, nextest_cli::CargoNextestCli};
 use std::fs;
 
 /// Creates a temporary user config file.
@@ -34,7 +34,7 @@ fn apply_user_config(cli: &mut CargoNextestCli, config_path: &Utf8PathBuf) {
     // Use --user-config-file to specify the config file directly.
     cli.args(["--user-config-file", config_path.as_str()]);
     // Remove NEXTEST_SHOW_PROGRESS so user config can be tested without
-    // interference from the env var that each test sets via set_env_vars().
+    // interference from the env var that each test sets via set_env_vars_for_test().
     cli.env_remove("NEXTEST_SHOW_PROGRESS");
 }
 
@@ -43,7 +43,7 @@ fn apply_no_user_config(cli: &mut CargoNextestCli) {
     // Use --user-config-file=none to skip user config loading.
     cli.args(["--user-config-file", "none"]);
     // Remove NEXTEST_SHOW_PROGRESS so user config can be tested without
-    // interference from the env var that each test sets via set_env_vars().
+    // interference from the env var that each test sets via set_env_vars_for_test().
     cli.env_remove("NEXTEST_SHOW_PROGRESS");
 }
 
@@ -52,8 +52,8 @@ fn apply_no_user_config(cli: &mut CargoNextestCli) {
 /// Verifies by checking debug output for resolved values.
 #[test]
 fn test_user_config_values_applied() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     let config = r#"
 [ui]
@@ -62,7 +62,7 @@ max-progress-running = 4
 "#;
     let (_temp_dir, config_path) = create_user_config_file(config);
 
-    let mut cli = CargoNextestCli::for_test();
+    let mut cli = CargoNextestCli::for_test(&env_info);
     cli.args([
         "--manifest-path",
         p.manifest_path().as_str(),
@@ -96,8 +96,8 @@ max-progress-running = 4
 /// Test that CLI options override user config values.
 #[test]
 fn test_user_config_cli_override() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     let config = r#"
 [ui]
@@ -106,7 +106,7 @@ max-progress-running = 4
 "#;
     let (_temp_dir, config_path) = create_user_config_file(config);
 
-    let mut cli = CargoNextestCli::for_test();
+    let mut cli = CargoNextestCli::for_test(&env_info);
     cli.args([
         "--manifest-path",
         p.manifest_path().as_str(),
@@ -142,8 +142,8 @@ max-progress-running = 4
 /// Test that environment variables override user config values.
 #[test]
 fn test_user_config_env_override() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     let config = r#"
 [ui]
@@ -152,7 +152,7 @@ max-progress-running = 4
 "#;
     let (_temp_dir, config_path) = create_user_config_file(config);
 
-    let mut cli = CargoNextestCli::for_test();
+    let mut cli = CargoNextestCli::for_test(&env_info);
     cli.args([
         "--manifest-path",
         p.manifest_path().as_str(),
@@ -186,10 +186,10 @@ max-progress-running = 4
 /// Test that a missing user config file uses the defaults.
 #[test]
 fn test_user_config_missing_uses_defaults() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let mut cli = CargoNextestCli::for_test();
+    let mut cli = CargoNextestCli::for_test(&env_info);
     cli.args([
         "--manifest-path",
         p.manifest_path().as_str(),
@@ -221,8 +221,8 @@ fn test_user_config_missing_uses_defaults() {
 /// Test that malformed TOML in user config produces a clear error.
 #[test]
 fn test_user_config_malformed_toml() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     let config = r#"
 [ui
@@ -230,7 +230,7 @@ show-progress = "bar"
 "#; // Missing closing bracket.
     let (_temp_dir, config_path) = create_user_config_file(config);
 
-    let mut cli = CargoNextestCli::for_test();
+    let mut cli = CargoNextestCli::for_test(&env_info);
     cli.args([
         "--manifest-path",
         p.manifest_path().as_str(),
@@ -260,10 +260,10 @@ show-progress = "bar"
 /// should error rather than silently falling back to defaults.
 #[test]
 fn test_user_config_explicit_path_not_found() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let mut cli = CargoNextestCli::for_test();
+    let mut cli = CargoNextestCli::for_test(&env_info);
     cli.args([
         "--manifest-path",
         p.manifest_path().as_str(),
@@ -292,8 +292,8 @@ fn test_user_config_explicit_path_not_found() {
 /// Test that an invalid show-progress value produces a clear error.
 #[test]
 fn test_user_config_invalid_show_progress() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     let config = r#"
 [ui]
@@ -301,7 +301,7 @@ show-progress = "invalid-value"
 "#;
     let (_temp_dir, config_path) = create_user_config_file(config);
 
-    let mut cli = CargoNextestCli::for_test();
+    let mut cli = CargoNextestCli::for_test(&env_info);
     cli.args([
         "--manifest-path",
         p.manifest_path().as_str(),
@@ -328,8 +328,8 @@ show-progress = "invalid-value"
 /// Test that invalid max-progress-running value produces a clear error.
 #[test]
 fn test_user_config_invalid_max_progress_running() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     let config = r#"
 [ui]
@@ -337,7 +337,7 @@ max-progress-running = "not-a-number"
 "#;
     let (_temp_dir, config_path) = create_user_config_file(config);
 
-    let mut cli = CargoNextestCli::for_test();
+    let mut cli = CargoNextestCli::for_test(&env_info);
     cli.args([
         "--manifest-path",
         p.manifest_path().as_str(),
@@ -364,8 +364,8 @@ max-progress-running = "not-a-number"
 /// Test that unknown sections in user config are allowed (forward compatibility).
 #[test]
 fn test_user_config_unknown_section() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     let config = r#"
 [ui]
@@ -376,7 +376,7 @@ some-key = "some-value"
 "#;
     let (_temp_dir, config_path) = create_user_config_file(config);
 
-    let mut cli = CargoNextestCli::for_test();
+    let mut cli = CargoNextestCli::for_test(&env_info);
     cli.args([
         "--manifest-path",
         p.manifest_path().as_str(),
@@ -404,8 +404,8 @@ some-key = "some-value"
 /// Test that max-progress-running = "infinite" is correctly applied.
 #[test]
 fn test_user_config_max_progress_running_infinite() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     let config = r#"
 [ui]
@@ -413,7 +413,7 @@ max-progress-running = "infinite"
 "#;
     let (_temp_dir, config_path) = create_user_config_file(config);
 
-    let mut cli = CargoNextestCli::for_test();
+    let mut cli = CargoNextestCli::for_test(&env_info);
     cli.args([
         "--manifest-path",
         p.manifest_path().as_str(),
@@ -440,8 +440,8 @@ max-progress-running = "infinite"
 /// Test that max-progress-running with integer is correctly applied.
 #[test]
 fn test_user_config_max_progress_running_integer() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     let config = r#"
 [ui]
@@ -449,7 +449,7 @@ max-progress-running = 16
 "#;
     let (_temp_dir, config_path) = create_user_config_file(config);
 
-    let mut cli = CargoNextestCli::for_test();
+    let mut cli = CargoNextestCli::for_test(&env_info);
     cli.args([
         "--manifest-path",
         p.manifest_path().as_str(),

@@ -64,7 +64,7 @@ use nextest_runner::{
 use owo_colors::OwoColorize;
 use semver::Version;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     env::VarError,
     io::IsTerminal,
     sync::{Arc, OnceLock},
@@ -490,6 +490,13 @@ fn check_experimental_filtering(_output: OutputContext) {
     }
 }
 
+/// Captures environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
+fn capture_env_vars_for_recording() -> BTreeMap<String, String> {
+    std::env::vars()
+        .filter(|(key, _)| key.starts_with("NEXTEST_") || key.starts_with("CARGO_"))
+        .collect()
+}
+
 impl App {
     pub(super) fn new(base: BaseApp, build_filter: TestBuildFilter) -> Result<Self> {
         check_experimental_filtering(base.output);
@@ -833,6 +840,8 @@ impl App {
         let Some(runner_builder) = runner_builder else {
             return Ok(());
         };
+        // Save cli_args for recording before moving them to the runner.
+        let cli_args_for_recording = cli_args.clone();
         let runner = runner_builder.build(
             &test_list,
             &profile,
@@ -849,11 +858,14 @@ impl App {
             .is_experimental_enabled(UserConfigExperimental::Record)
             && resolved_user_config.record.enabled
         {
+            let env_vars_for_recording = capture_env_vars_for_recording();
             let config = RecordSessionConfig {
                 workspace_root: &self.base.workspace_root,
                 run_id: runner.run_id(),
                 nextest_version: self.base.current_version.clone(),
                 started_at: runner.started_at().fixed_offset(),
+                cli_args: cli_args_for_recording.clone(),
+                env_vars: env_vars_for_recording.clone(),
                 max_output_size: resolved_user_config.record.max_output_size,
             };
             match RecordSession::setup(config) {
@@ -862,6 +874,8 @@ impl App {
                     let opts = RecordOpts::new(
                         test_list.mode(),
                         runner_opts.no_tests.map(|b| b.to_record()),
+                        cli_args_for_recording,
+                        env_vars_for_recording,
                     );
                     record.write_meta(
                         self.base.cargo_metadata_json.clone(),
@@ -1044,6 +1058,8 @@ impl App {
         let Some(runner_builder) = runner_builder else {
             return Ok(());
         };
+        // Save cli_args for recording before moving them to the runner.
+        let cli_args_for_recording = cli_args.clone();
         let runner = runner_builder.build(
             &test_list,
             &profile,
@@ -1060,11 +1076,14 @@ impl App {
             .is_experimental_enabled(UserConfigExperimental::Record)
             && resolved_user_config.record.enabled
         {
+            let env_vars_for_recording = capture_env_vars_for_recording();
             let config = RecordSessionConfig {
                 workspace_root: &self.base.workspace_root,
                 run_id: runner.run_id(),
                 nextest_version: self.base.current_version.clone(),
                 started_at: runner.started_at().fixed_offset(),
+                cli_args: cli_args_for_recording.clone(),
+                env_vars: env_vars_for_recording.clone(),
                 max_output_size: resolved_user_config.record.max_output_size,
             };
             match RecordSession::setup(config) {
@@ -1073,6 +1092,8 @@ impl App {
                     let opts = RecordOpts::new(
                         test_list.mode(),
                         runner_opts.no_tests.map(|b| b.to_record()),
+                        cli_args_for_recording,
+                        env_vars_for_recording,
                     );
                     record.write_meta(
                         self.base.cargo_metadata_json.clone(),

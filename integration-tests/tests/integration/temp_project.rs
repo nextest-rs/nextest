@@ -6,7 +6,7 @@ use camino_tempfile::Utf8TempDir;
 use color_eyre::eyre::{Context, bail};
 use cp_r::CopyOptions;
 use fs_err as fs;
-use integration_tests::{nextest_cli::CargoNextestCli, seed::nextest_tests_dir};
+use integration_tests::{env::TestEnvInfo, nextest_cli::CargoNextestCli, seed::nextest_tests_dir};
 use nextest_metadata::BinaryListSummary;
 use std::path::Path;
 
@@ -47,15 +47,21 @@ pub struct TempProject {
 }
 
 impl TempProject {
-    pub fn new() -> color_eyre::Result<Self> {
-        Self::new_impl(None)
+    pub fn new(env_info: &TestEnvInfo) -> color_eyre::Result<Self> {
+        Self::new_impl(env_info, None)
     }
 
-    pub fn new_custom_target_dir(target_dir: &Utf8Path) -> color_eyre::Result<Self> {
-        Self::new_impl(Some(target_dir.to_path_buf()))
+    pub fn new_custom_target_dir(
+        env_info: &TestEnvInfo,
+        target_dir: &Utf8Path,
+    ) -> color_eyre::Result<Self> {
+        Self::new_impl(env_info, Some(target_dir.to_path_buf()))
     }
 
-    fn new_impl(custom_target_dir: Option<Utf8PathBuf>) -> color_eyre::Result<Self> {
+    fn new_impl(
+        env_info: &TestEnvInfo,
+        custom_target_dir: Option<Utf8PathBuf>,
+    ) -> color_eyre::Result<Self> {
         // Ensure that a custom target dir, if specified, ends with "target".
         if let Some(dir) = &custom_target_dir {
             if !dir.ends_with("target") {
@@ -98,7 +104,7 @@ impl TempProject {
         // dir, but we need to pass it in here. So use the new target dir
         // (knowing that the original one won't be used in this invocation,
         // because it's only used for creating new archives).
-        _ = CargoNextestCli::for_test()
+        _ = CargoNextestCli::for_test(env_info)
             .args([
                 "run",
                 "--no-run",

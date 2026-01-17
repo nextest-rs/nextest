@@ -288,6 +288,7 @@ mod tests {
     use crate::record::{RecordedRunStatus, RecordedSizes};
     use chrono::TimeZone;
     use semver::Version;
+    use std::collections::BTreeMap;
 
     /// Creates a test run with the given run ID.
     fn make_run(run_id: ReportUuid) -> RecordedRunInfo {
@@ -301,6 +302,8 @@ mod tests {
             started_at,
             last_written_at: started_at,
             duration_secs: None,
+            cli_args: Vec::new(),
+            env_vars: BTreeMap::new(),
             sizes: RecordedSizes::default(),
             status: RecordedRunStatus::Incomplete,
         }

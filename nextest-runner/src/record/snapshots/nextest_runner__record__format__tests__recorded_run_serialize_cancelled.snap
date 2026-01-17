@@ -9,6 +9,16 @@ snapshot_kind: text
   "started-at": "2024-12-19T14:22:33-08:00",
   "last-written-at": "2024-12-19T22:22:33Z",
   "duration-secs": 12.345,
+  "cli-args": [
+    "cargo",
+    "nextest",
+    "run",
+    "--workspace"
+  ],
+  "env-vars": {
+    "CARGO_TERM_COLOR": "always",
+    "NEXTEST_PROFILE": "ci"
+  },
   "sizes": {
     "log": {
       "compressed": 2345,

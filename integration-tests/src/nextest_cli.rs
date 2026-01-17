@@ -1,6 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::env::TestEnvInfo;
 use camino::Utf8PathBuf;
 use color_eyre::{
     Result,
@@ -35,11 +36,9 @@ pub struct CargoNextestCli {
 }
 
 impl CargoNextestCli {
-    pub fn for_test() -> Self {
-        let bin = std::env::var("NEXTEST_BIN_EXE_cargo_nextest_dup")
-            .expect("unable to find cargo-nextest-dup");
+    pub fn for_test(env_info: &TestEnvInfo) -> Self {
         Self {
-            bin: bin.into(),
+            bin: env_info.cargo_nextest_dup_bin.clone(),
             args: vec!["nextest".to_owned(), "--no-pager".to_owned()],
             envs: HashMap::new(),
             envs_remove: Vec::new(),

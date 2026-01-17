@@ -26,7 +26,7 @@ use chrono::{DateTime, FixedOffset};
 use owo_colors::OwoColorize;
 use quick_junit::ReportUuid;
 use semver::Version;
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 
 /// Configuration for creating a recording session.
 #[derive(Clone, Debug)]
@@ -39,6 +39,10 @@ pub struct RecordSessionConfig<'a> {
     pub nextest_version: Version,
     /// When the run started.
     pub started_at: DateTime<FixedOffset>,
+    /// The command-line arguments used to invoke nextest.
+    pub cli_args: Vec<String>,
+    /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
+    pub env_vars: BTreeMap<String, String>,
     /// Maximum size per output file before truncation.
     pub max_output_size: ByteSize,
 }
@@ -85,6 +89,8 @@ impl RecordSession {
                 config.run_id,
                 config.nextest_version,
                 config.started_at,
+                config.cli_args,
+                config.env_vars,
                 config.max_output_size,
             )
             .map_err(RecordSetupError::RecorderCreate)?;

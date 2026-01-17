@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{env::set_env_vars, nextest_cli::CargoNextestCli};
+use crate::{env::set_env_vars_for_script, nextest_cli::CargoNextestCli};
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::Context;
 use fs_err as fs;
@@ -178,8 +178,8 @@ pub fn make_seed_archive(workspace_dir: &Utf8Path, file_name: &Utf8Path) -> colo
     // rebuilds due to the variables changing.
     //
     // TODO: We shouldn't alter the global state of this process -- instead,
-    // set_env_vars should be part of nextest_cli.rs.
-    set_env_vars();
+    // set_env_vars_for_script should be part of nextest_cli.rs.
+    set_env_vars_for_script();
 
     let output = cli
         .args([
