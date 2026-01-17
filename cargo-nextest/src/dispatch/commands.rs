@@ -21,10 +21,10 @@ use nextest_runner::{
     cargo_config::CargoConfigs,
     config::core::NextestVersionEval,
     errors::WriteTestListError,
-    helpers::plural,
+    helpers::ThemeCharacters,
     pager::PagedOutput,
     record::{
-        PruneKind, RecordRetentionPolicy, RunListAlignment, RunStore, Styles as RecordStyles,
+        DisplayRunList, PruneKind, RecordRetentionPolicy, RunStore, Styles as RecordStyles,
         records_cache_dir,
     },
     user_config::{UserConfig, elements::RecordConfig},
@@ -472,9 +472,11 @@ pub enum BuildPlatformsOutputFormat {
 #[derive(Debug, Subcommand)]
 pub(super) enum StoreCommand {
     /// List all recorded runs.
-    List {},
-    /// Show information about the record store (location, size).
-    Info {},
+    List {
+        /// Show verbose output.
+        #[arg(short, long)]
+        verbose: bool,
+    },
     /// Prune old recorded runs according to retention policy.
     Prune(PruneOpts),
 }
@@ -522,12 +524,16 @@ impl StoreCommand {
             PagedOutput::request_pager(&pager_setting, paginate, &user_config.ui.streampager);
 
         let mut styles = RecordStyles::default();
+        let mut theme_characters = ThemeCharacters::default();
         if output.color.should_colorize(supports_color::Stream::Stdout) {
             styles.colorize();
         }
+        if supports_unicode::on(supports_unicode::Stream::Stdout) {
+            theme_characters.use_unicode();
+        }
 
         match self {
-            Self::List {} => {
+            Self::List { verbose } => {
                 let store = RunStore::new(&cache_dir)
                     .map_err(|err| ExpectedError::RecordSetupError { err })?;
 
@@ -536,55 +542,24 @@ impl StoreCommand {
                     .map_err(|err| ExpectedError::RecordSetupError { err })?
                     .into_snapshot();
 
+                // Sort runs by start time, most recent first.
+                snapshot
+                    .runs_mut()
+                    .sort_by(|a, b| b.started_at.cmp(&a.started_at));
+
+                let store_path = if verbose {
+                    Some(cache_dir.as_path())
+                } else {
+                    None
+                };
+                let display =
+                    DisplayRunList::new(&snapshot, store_path, &styles, &theme_characters);
+                write!(paged_output, "{}", display)
+                    .map_err(|err| ExpectedError::WriteError { err })?;
+
                 if snapshot.run_count() == 0 {
                     info!("no recorded runs");
-                } else {
-                    writeln!(
-                        paged_output,
-                        "{} recorded {}:\n",
-                        snapshot.run_count(),
-                        plural::runs_str(snapshot.run_count()),
-                    )
-                    .map_err(|err| ExpectedError::WriteError { err })?;
-
-                    snapshot
-                        .runs_mut()
-                        .sort_by(|a, b| b.started_at.cmp(&a.started_at));
-
-                    let alignment = RunListAlignment::from_runs(snapshot.runs());
-                    for run in snapshot.runs() {
-                        writeln!(
-                            paged_output,
-                            "{}",
-                            run.display(snapshot.run_id_index(), alignment, &styles)
-                        )
-                        .map_err(|err| ExpectedError::WriteError { err })?;
-                    }
                 }
-                Ok(0)
-            }
-            Self::Info {} => {
-                let store = RunStore::new(&cache_dir)
-                    .map_err(|err| ExpectedError::RecordSetupError { err })?;
-
-                let snapshot = store
-                    .lock_shared()
-                    .map_err(|err| ExpectedError::RecordSetupError { err })?
-                    .into_snapshot();
-
-                writeln!(paged_output, "Record store location: {}", cache_dir)
-                    .map_err(|err| ExpectedError::WriteError { err })?;
-                writeln!(paged_output, "Number of runs: {}", snapshot.run_count())
-                    .map_err(|err| ExpectedError::WriteError { err })?;
-
-                let total_size = snapshot.total_size();
-                let size_display = if total_size >= 1024 * 1024 {
-                    format!("{:.1} MB", total_size as f64 / (1024.0 * 1024.0))
-                } else {
-                    format!("{} KB", total_size / 1024)
-                };
-                writeln!(paged_output, "Total size: {}", size_display)
-                    .map_err(|err| ExpectedError::WriteError { err })?;
 
                 Ok(0)
             }
