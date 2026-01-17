@@ -13,23 +13,49 @@ use crate::{
     config::core::EvaluatableProfile,
     errors::WriteEventError,
     list::TestList,
+    record::StoreSizes,
     reporter::{
         aggregator::EventAggregator, displayer::ShowProgress, events::*,
         structured::StructuredReporter,
     },
     write_str::WriteStr,
 };
+use std::time::Duration;
+
+/// Statistics returned by the reporter after a test run completes.
+#[derive(Clone, Debug, Default)]
+pub struct ReporterStats {
+    /// The sizes of the recording written to disk (compressed and uncompressed), or `None` if
+    /// recording was not enabled or an error occurred.
+    pub recording_sizes: Option<StoreSizes>,
+    /// Information captured from the `RunFinished` event.
+    pub run_finished: Option<RunFinishedInfo>,
+}
+
+/// Information captured from the `RunFinished` event.
+///
+/// This struct groups together data that is always available together: if we
+/// receive a `RunFinished` event, we have both the stats and elapsed time.
+#[derive(Clone, Copy, Debug)]
+pub struct RunFinishedInfo {
+    /// Statistics about the run.
+    pub stats: RunFinishedStats,
+    /// Total elapsed time for the run.
+    pub elapsed: Duration,
+}
 
 /// Output destination for the reporter.
 ///
-/// This is usually a terminal, but can be an in-memory buffer for tests.
+/// This is usually a terminal, but can be a writer for paged output or an
+/// in-memory buffer for tests.
 pub enum ReporterOutput<'a> {
-    /// Produce output on the (possibly piped) terminal.
+    /// Produce output on the terminal (stderr).
     ///
     /// If the terminal isn't piped, produce output to a progress bar.
     Terminal,
 
-    /// Write output to a buffer.
+    /// Write output to a `WriteStr` implementation (e.g., for pager support or
+    /// an in-memory buffer for tests).
     Writer(&'a mut (dyn WriteStr + Send)),
 }
 
@@ -161,6 +187,7 @@ impl ReporterBuilder {
             display_reporter,
             structured_reporter,
             metadata_reporter: aggregator,
+            run_finished: None,
         }
     }
 }
@@ -174,6 +201,8 @@ pub struct Reporter<'a> {
     metadata_reporter: EventAggregator<'a>,
     /// Used to emit test events in machine-readable format(s) to stdout
     structured_reporter: StructuredReporter<'a>,
+    /// Information captured from the RunFinished event.
+    run_finished: Option<RunFinishedInfo>,
 }
 
 impl<'a> Reporter<'a> {
@@ -189,8 +218,16 @@ impl<'a> Reporter<'a> {
     }
 
     /// Mark the reporter done.
-    pub fn finish(&mut self) {
+    ///
+    /// Returns statistics about the test run, including the size of the
+    /// recording if recording was enabled.
+    pub fn finish(mut self) -> ReporterStats {
         self.display_reporter.finish();
+        let recording_sizes = self.structured_reporter.finish();
+        ReporterStats {
+            recording_sizes,
+            run_finished: self.run_finished,
+        }
     }
 
     // ---
@@ -204,6 +241,17 @@ impl<'a> Reporter<'a> {
 
     /// Report this test event to the given writer.
     fn write_event(&mut self, event: Box<TestEvent<'a>>) -> Result<(), WriteEventError> {
+        // Capture run finished info before passing to reporters.
+        if let TestEventKind::RunFinished {
+            run_stats, elapsed, ..
+        } = &event.kind
+        {
+            self.run_finished = Some(RunFinishedInfo {
+                stats: *run_stats,
+                elapsed: *elapsed,
+            });
+        }
+
         // TODO: write to all of these even if one of them fails?
         self.display_reporter.write_event(&event)?;
         self.structured_reporter.write_event(&event)?;

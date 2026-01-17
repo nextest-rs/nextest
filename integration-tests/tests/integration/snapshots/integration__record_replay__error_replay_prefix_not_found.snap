@@ -1,0 +1,6 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+assertion_line: 922
+expression: "redact_dynamic_fields(&replay_not_found.stderr_as_str(), temp_root)"
+---
+error: no recorded run found matching `c`

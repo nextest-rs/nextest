@@ -3,12 +3,15 @@
 
 //! Run mode for nextest.
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// The run mode for nextest.
 ///
 /// This is used to distinguish between running tests and benchmarks.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum NextestRunMode {
     /// Run tests.
     #[default]

@@ -392,6 +392,106 @@ impl<'g> TestList<'g> {
         })
     }
 
+    /// Reconstructs a TestList from archived summary data.
+    ///
+    /// This is used during replay to reconstruct a TestList without
+    /// executing test binaries. The reconstructed TestList provides the
+    /// data needed for display through the reporter infrastructure.
+    ///
+    /// # Arguments
+    ///
+    /// * `graph` - The package graph loaded from archived cargo metadata.
+    /// * `summary` - The test list summary loaded from the archive.
+    /// * `mode` - The run mode (normal test run or benchmark).
+    pub fn from_summary(
+        graph: &'g PackageGraph,
+        summary: &TestListSummary,
+        mode: NextestRunMode,
+    ) -> Result<Self, crate::errors::TestListFromSummaryError> {
+        use crate::errors::TestListFromSummaryError;
+
+        // Build RustBuildMeta from summary.
+        let rust_build_meta = RustBuildMeta::from_summary(summary.rust_build_meta.clone())
+            .map_err(TestListFromSummaryError::RustBuildMeta)?;
+
+        // Get the workspace root from the graph.
+        let workspace_root = graph.workspace().root().to_path_buf();
+
+        // Construct an empty environment map - we don't need it for replay.
+        let env = EnvironmentMap::empty();
+
+        // For replay, we don't need the actual dylib path since we're not executing tests.
+        let updated_dylib_path = OsString::new();
+
+        // Build test suites from the summary.
+        let mut rust_suites = IdOrdMap::new();
+        let mut test_count = 0;
+
+        for (binary_id, suite_summary) in &summary.rust_suites {
+            // Look up the package in the graph by package_id.
+            let package_id = PackageId::new(suite_summary.binary.package_id.clone());
+            let package = graph.metadata(&package_id).map_err(|_| {
+                TestListFromSummaryError::PackageNotFound {
+                    name: suite_summary.package_name.clone(),
+                    package_id: suite_summary.binary.package_id.clone(),
+                }
+            })?;
+
+            // Determine the status based on the summary.
+            let status = if suite_summary.status == RustTestSuiteStatusSummary::SKIPPED {
+                RustTestSuiteStatus::Skipped {
+                    reason: BinaryMismatchReason::Expression,
+                }
+            } else if suite_summary.status == RustTestSuiteStatusSummary::SKIPPED_DEFAULT_FILTER {
+                RustTestSuiteStatus::Skipped {
+                    reason: BinaryMismatchReason::DefaultSet,
+                }
+            } else {
+                // Build test cases from the summary (only for listed suites).
+                let test_cases: IdOrdMap<RustTestCase> = suite_summary
+                    .test_cases
+                    .iter()
+                    .map(|(name, info)| RustTestCase {
+                        name: name.clone(),
+                        test_info: info.clone(),
+                    })
+                    .collect();
+
+                test_count += test_cases.len();
+
+                // LISTED or any other status - treat as listed.
+                RustTestSuiteStatus::Listed {
+                    test_cases: DebugIgnore(test_cases),
+                }
+            };
+
+            let suite = RustTestSuite {
+                binary_id: binary_id.clone(),
+                binary_path: suite_summary.binary.binary_path.clone(),
+                package,
+                binary_name: suite_summary.binary.binary_name.clone(),
+                kind: suite_summary.binary.kind.clone(),
+                non_test_binaries: BTreeSet::new(), // Not stored in summary.
+                cwd: suite_summary.cwd.clone(),
+                build_platform: suite_summary.binary.build_platform,
+                status,
+            };
+
+            let _ = rust_suites.insert_unique(suite);
+        }
+
+        Ok(Self {
+            rust_suites,
+            mode,
+            workspace_root,
+            env,
+            rust_build_meta,
+            updated_dylib_path,
+            test_count,
+            skip_counts: OnceLock::new(),
+        })
+    }
+
     /// Returns the total number of tests across all binaries.
     pub fn test_count(&self) -> usize {
         self.test_count
@@ -577,9 +677,10 @@ impl<'g> TestList<'g> {
     // Helper methods
     // ---
 
-    // Empty list for tests.
-    #[cfg(test)]
-    pub(crate) fn empty() -> Self {
+    /// Creates an empty test list.
+    ///
+    /// This is primarily for use in tests where a placeholder test list is needed.
+    pub fn empty() -> Self {
         Self {
             test_count: 0,
             mode: NextestRunMode::Test,

@@ -554,7 +554,7 @@ where
                     total,
                     script_id,
                     program,
-                    args: &config.command.args,
+                    args: config.command.args.clone(),
                     no_capture: config.no_capture(),
                 })
             }
@@ -583,7 +583,7 @@ where
                     stress_index,
                     script_id,
                     program,
-                    args: &config.command.args,
+                    args: config.command.args.clone(),
                     elapsed,
                     will_terminate: will_terminate.is_some(),
                 })
@@ -643,7 +643,7 @@ where
                     total,
                     script_id,
                     program,
-                    args: &config.command.args,
+                    args: config.command.args.clone(),
                     no_capture: config.no_capture(),
                     junit_store_success_output: config.junit.store_success_output,
                     junit_store_failure_output: config.junit.store_failure_output,

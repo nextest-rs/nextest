@@ -958,6 +958,40 @@ impl fmt::Display for MismatchReason {
     }
 }
 
+// --- Proptest support ---
+
+#[cfg(feature = "proptest1")]
+mod proptest_impls {
+    use super::*;
+    use proptest::prelude::*;
+
+    impl Arbitrary for RustBinaryId {
+        type Parameters = ();
+        type Strategy = BoxedStrategy<Self>;
+
+        fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+            any::<String>().prop_map(|s| RustBinaryId::new(&s)).boxed()
+        }
+    }
+
+    impl Arbitrary for MismatchReason {
+        type Parameters = ();
+        type Strategy = BoxedStrategy<Self>;
+
+        fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+            prop_oneof![
+                Just(MismatchReason::NotBenchmark),
+                Just(MismatchReason::Ignored),
+                Just(MismatchReason::String),
+                Just(MismatchReason::Expression),
+                Just(MismatchReason::Partition),
+                Just(MismatchReason::DefaultFilter),
+            ]
+            .boxed()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

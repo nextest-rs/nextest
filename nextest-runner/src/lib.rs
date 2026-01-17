@@ -22,6 +22,7 @@ pub mod list;
 pub mod pager;
 pub mod partition;
 pub mod platform;
+pub mod record;
 pub mod redact;
 pub mod reporter;
 pub mod reuse_build;

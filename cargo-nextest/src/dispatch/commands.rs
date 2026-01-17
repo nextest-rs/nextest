@@ -18,10 +18,20 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Args, Subcommand, ValueEnum};
 use nextest_runner::{
-    cargo_config::CargoConfigs, config::core::NextestVersionEval, errors::WriteTestListError,
+    cargo_config::CargoConfigs,
+    config::core::NextestVersionEval,
+    errors::WriteTestListError,
+    helpers::plural,
+    pager::PagedOutput,
+    record::{
+        PruneKind, RecordRetentionPolicy, RunListAlignment, RunStore, Styles as RecordStyles,
+        records_cache_dir,
+    },
+    user_config::{UserConfig, elements::RecordConfig},
+    write_str::WriteStr,
 };
 use std::fmt;
-use tracing::Level;
+use tracing::{Level, info};
 
 #[derive(Debug, Subcommand)]
 pub(super) enum ShowConfigCommand {
@@ -81,9 +91,7 @@ impl ShowConfigCommand {
                 }
                 let workspace_root = String::from_utf8(locate_project_output.stdout)
                     .map_err(|err| ExpectedError::WorkspaceRootInvalidUtf8 { err })?;
-                // trim_end because the output ends with a newline.
                 let workspace_root = Utf8Path::new(workspace_root.trim_end());
-                // parent() because the output includes Cargo.toml at the end.
                 let workspace_root =
                     workspace_root
                         .parent()
@@ -261,10 +269,7 @@ impl SelfCommand {
     #[cfg_attr(not(feature = "self-update"), expect(unused_variables))]
     pub(super) fn exec(self, output: OutputContext) -> Result<i32> {
         match self {
-            Self::Setup { source: _source } => {
-                // Currently a no-op.
-                Ok(0)
-            }
+            Self::Setup { source: _source } => Ok(0),
             Self::Update {
                 version,
                 check,
@@ -351,7 +356,6 @@ impl DebugCommand {
                 combined,
                 output_format,
             } => {
-                // Either stdout + stderr or combined must be present.
                 if let Some(combined) = combined {
                     let combined = std::fs::read(&combined).map_err(|err| {
                         ExpectedError::DebugExtractReadError {
@@ -466,4 +470,189 @@ pub enum BuildPlatformsOutputFormat {
 
     /// Show just the triple.
     Triple,
+}
+
+/// Subcommands for managing the record store.
+#[derive(Debug, Subcommand)]
+pub(super) enum StoreCommand {
+    /// List all recorded runs.
+    List {},
+    /// Show information about the record store (location, size).
+    Info {},
+    /// Prune old recorded runs according to retention policy.
+    Prune(PruneOpts),
+}
+
+impl StoreCommand {
+    pub(super) fn exec(
+        self,
+        manifest_path: Option<Utf8PathBuf>,
+        user_config: &UserConfig,
+        output: OutputContext,
+        output_writer: &mut OutputWriter,
+    ) -> Result<i32> {
+        let mut cargo_cli = CargoCli::new("locate-project", manifest_path.as_deref(), output);
+        cargo_cli.add_args(["--workspace", "--message-format=plain"]);
+        let locate_project_output = cargo_cli
+            .to_expression()
+            .stdout_capture()
+            .unchecked()
+            .run()
+            .map_err(|error| {
+                ExpectedError::cargo_locate_project_exec_failed(cargo_cli.all_args(), error)
+            })?;
+        if !locate_project_output.status.success() {
+            return Err(ExpectedError::cargo_locate_project_failed(
+                cargo_cli.all_args(),
+                locate_project_output.status,
+            ));
+        }
+        let workspace_root = String::from_utf8(locate_project_output.stdout)
+            .map_err(|err| ExpectedError::WorkspaceRootInvalidUtf8 { err })?;
+        let workspace_root = Utf8Path::new(workspace_root.trim_end());
+        let workspace_root =
+            workspace_root
+                .parent()
+                .ok_or_else(|| ExpectedError::WorkspaceRootInvalid {
+                    workspace_root: workspace_root.to_owned(),
+                })?;
+
+        let cache_dir = records_cache_dir(workspace_root)
+            .map_err(|err| ExpectedError::RecordCacheDirNotFound { err })?;
+
+        let mut paged_output = PagedOutput::request_pager(
+            &user_config.ui.pager,
+            user_config.ui.paginate,
+            &user_config.ui.streampager,
+        );
+
+        let mut styles = RecordStyles::default();
+        if output.color.should_colorize(supports_color::Stream::Stdout) {
+            styles.colorize();
+        }
+
+        match self {
+            Self::List {} => {
+                let store = RunStore::new(&cache_dir)
+                    .map_err(|err| ExpectedError::RecordSetupError { err })?;
+
+                let mut snapshot = store
+                    .lock_shared()
+                    .map_err(|err| ExpectedError::RecordSetupError { err })?
+                    .into_snapshot();
+
+                if snapshot.run_count() == 0 {
+                    info!("no recorded runs");
+                } else {
+                    writeln!(
+                        paged_output,
+                        "{} recorded {}:\n",
+                        snapshot.run_count(),
+                        plural::runs_str(snapshot.run_count()),
+                    )
+                    .map_err(|err| ExpectedError::WriteError { err })?;
+
+                    snapshot
+                        .runs_mut()
+                        .sort_by(|a, b| b.started_at.cmp(&a.started_at));
+
+                    let alignment = RunListAlignment::from_runs(snapshot.runs());
+                    for run in snapshot.runs() {
+                        writeln!(
+                            paged_output,
+                            "{}",
+                            run.display(snapshot.run_id_index(), alignment, &styles)
+                        )
+                        .map_err(|err| ExpectedError::WriteError { err })?;
+                    }
+                }
+                Ok(0)
+            }
+            Self::Info {} => {
+                let store = RunStore::new(&cache_dir)
+                    .map_err(|err| ExpectedError::RecordSetupError { err })?;
+
+                let snapshot = store
+                    .lock_shared()
+                    .map_err(|err| ExpectedError::RecordSetupError { err })?
+                    .into_snapshot();
+
+                writeln!(paged_output, "Record store location: {}", cache_dir)
+                    .map_err(|err| ExpectedError::WriteError { err })?;
+                writeln!(paged_output, "Number of runs: {}", snapshot.run_count())
+                    .map_err(|err| ExpectedError::WriteError { err })?;
+
+                let total_size = snapshot.total_size();
+                let size_display = if total_size >= 1024 * 1024 {
+                    format!("{:.1} MB", total_size as f64 / (1024.0 * 1024.0))
+                } else {
+                    format!("{} KB", total_size / 1024)
+                };
+                writeln!(paged_output, "Total size: {}", size_display)
+                    .map_err(|err| ExpectedError::WriteError { err })?;
+
+                Ok(0)
+            }
+            Self::Prune(opts) => opts.exec(
+                &cache_dir,
+                &user_config.record,
+                &styles,
+                &mut paged_output,
+                output_writer,
+            ),
+        }
+    }
+}
+
+/// Options for the `cargo nextest store prune` command.
+#[derive(Debug, Args)]
+pub(super) struct PruneOpts {
+    /// Show what would be deleted without actually deleting.
+    #[arg(long)]
+    dry_run: bool,
+}
+
+impl PruneOpts {
+    fn exec(
+        &self,
+        cache_dir: &Utf8Path,
+        record_config: &RecordConfig,
+        styles: &RecordStyles,
+        paged_output: &mut PagedOutput,
+        output_writer: &mut OutputWriter,
+    ) -> Result<i32> {
+        let store =
+            RunStore::new(cache_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
+        let policy = RecordRetentionPolicy::from(record_config);
+
+        if self.dry_run {
+            // Dry run: show what would be deleted via paged output.
+            let snapshot = store
+                .lock_shared()
+                .map_err(|err| ExpectedError::RecordSetupError { err })?
+                .into_snapshot();
+
+            let plan = snapshot.compute_prune_plan(&policy);
+
+            write!(
+                paged_output,
+                "{}",
+                plan.display(snapshot.run_id_index(), styles)
+            )
+            .map_err(|err| ExpectedError::WriteError { err })?;
+            Ok(0)
+        } else {
+            // Actual prune: output to stderr.
+            let mut locked = store
+                .lock_exclusive()
+                .map_err(|err| ExpectedError::RecordSetupError { err })?;
+            let result = locked
+                .prune(&policy, PruneKind::Explicit)
+                .map_err(|err| ExpectedError::RecordSetupError { err })?;
+
+            write!(output_writer.stderr_writer(), "{}", result.display(styles))
+                .map_err(|err| ExpectedError::WriteError { err })?;
+            Ok(0)
+        }
+    }
 }

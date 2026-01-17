@@ -1291,7 +1291,7 @@ impl<'a> SetupScriptPacket<'a> {
             stress_index: self.stress_index,
             script_id: self.script_id.clone(),
             program: self.program.clone(),
-            args: &self.config.command.args,
+            args: self.config.command.args.clone(),
             state,
             output: output.into(),
         })

@@ -41,6 +41,21 @@ wrapping = "word"
 # Whether to show a ruler at the bottom.
 show-ruler = true
 
+# Record retention settings (for experimental record-replay feature).
+[record]
+# Whether recording is enabled.
+# Recording only occurs when the `record` experimental feature is enabled AND
+# this is set to true.
+enabled = false
+# Maximum number of recorded runs to keep.
+max-records = 100
+# Maximum total size of all recorded runs.
+max-total-size = "1GB"
+# Maximum age of recorded runs.
+max-age = "30d"
+# Maximum size of a single output (stdout/stderr) before truncation.
+max-output-size = "10MB"
+
 # Windows uses the builtin pager by default because external pagers are
 # unreliable on Windows.
 [[overrides]]

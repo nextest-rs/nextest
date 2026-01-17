@@ -12,6 +12,7 @@ use crate::{
     },
     helpers::{display_exited_with, dylib_path_envvar},
     indenter::{DisplayIndented, indented},
+    record::{RecordedRunInfo, RunIdIndex},
     redact::Redactor,
     reuse_build::{ArchiveFormat, ArchiveStep},
     target_runner::PlatformRunnerSource,
@@ -21,12 +22,15 @@ use config::ConfigError;
 use itertools::{Either, Itertools};
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::RustBinaryId;
+use quick_junit::ReportUuid;
+use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use std::{
     borrow::Cow,
     collections::BTreeSet,
     env::JoinPathsError,
     fmt::{self, Write as _},
+    path::PathBuf,
     process::ExitStatus,
     sync::Arc,
 };
@@ -361,10 +365,10 @@ pub enum SetupScriptOutputError {
 ///
 /// In the future, we'll likely want to replace this with a `miette::Diagnostic`-based error, since
 /// that supports multiple causes via "related".
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ErrorList<T> {
     // A description of what the errors are.
-    description: &'static str,
+    description: Cow<'static, str>,
     // Invariant: this list is non-empty.
     inner: Vec<T>,
 }
@@ -378,7 +382,7 @@ impl<T: std::error::Error> ErrorList<T> {
             None
         } else {
             Some(Self {
-                description,
+                description: Cow::Borrowed(description),
                 inner: errors.into_iter().map(T::from).collect(),
             })
         }
@@ -395,8 +399,8 @@ impl<T: std::error::Error> ErrorList<T> {
     }
 
     /// Returns the description of what the errors are.
-    pub fn description(&self) -> &'static str {
-        self.description
+    pub fn description(&self) -> &str {
+        &self.description
     }
 
     /// Iterates over the errors in this list.
@@ -449,6 +453,26 @@ impl<T: std::error::Error> fmt::Display for ErrorList<T> {
     }
 }
 
+#[cfg(test)]
+impl<T: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static> proptest::arbitrary::Arbitrary
+    for ErrorList<T>
+{
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::*;
+
+        // Generate 1-5 errors (non-empty).
+        proptest::collection::vec(any::<T>(), 1..=5)
+            .prop_map(|inner| ErrorList {
+                description: Cow::Borrowed("test errors"),
+                inner,
+            })
+            .boxed()
+    }
+}
+
 impl<T: std::error::Error> std::error::Error for ErrorList<T> {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         if self.inner.len() == 1 {
@@ -463,22 +487,24 @@ impl<T: std::error::Error> std::error::Error for ErrorList<T> {
 
 /// A wrapper type to display a chain of errors with internal indentation.
 ///
-/// This is similar to the display-error-chain crate, but uses IndentWriter
+/// This is similar to the display-error-chain crate, but uses an indenter
 /// internally to ensure that subsequent lines are also nested.
-pub(crate) struct DisplayErrorChain<E> {
+pub struct DisplayErrorChain<E> {
     error: E,
     initial_indent: &'static str,
 }
 
 impl<E: std::error::Error> DisplayErrorChain<E> {
-    pub(crate) fn new(error: E) -> Self {
+    /// Creates a new `DisplayErrorChain` with the given error.
+    pub fn new(error: E) -> Self {
         Self {
             error,
             initial_indent: "",
         }
     }
 
-    pub(crate) fn new_with_initial_indent(initial_indent: &'static str, error: E) -> Self {
+    /// Creates a new `DisplayErrorChain` with the given error and initial indentation.
+    pub fn new_with_initial_indent(initial_indent: &'static str, error: E) -> Self {
         Self {
             error,
             initial_indent,
@@ -787,6 +813,19 @@ pub enum UserConfigError {
         /// The underlying target-spec error.
         #[source]
         error: target_spec::Error,
+    },
+
+    /// Unknown experimental features in the user config.
+    #[error(
+        "for user config at {path}, unknown experimental features: {unknown:?} (known features: {known:?})"
+    )]
+    UnknownExperimentalFeatures {
+        /// The path to the config file.
+        path: Utf8PathBuf,
+        /// The unknown features.
+        unknown: BTreeSet<String>,
+        /// The known features.
+        known: Vec<&'static str>,
     },
 }
 
@@ -1947,6 +1986,596 @@ pub enum InheritsError {
         format!("[{}]", scc.iter().join(", "))
     }).join(", "))]
     InheritanceCycle(Vec<Vec<String>>),
+}
+
+// ---
+// Record and replay errors
+// ---
+
+/// An error that occurred while managing the run store.
+#[derive(Debug, Error)]
+pub enum RunStoreError {
+    /// An error occurred while creating the run directory.
+    #[error("error creating run directory `{run_dir}`")]
+    RunDirCreate {
+        /// The run directory that could not be created.
+        run_dir: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while acquiring a file lock.
+    #[error("error acquiring lock on `{path}`")]
+    FileLock {
+        /// The path to the lock file.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Timed out waiting to acquire a file lock.
+    #[error(
+        "timed out acquiring lock on `{path}` after {timeout_secs}s (is the cache directory \
+         on a networked filesystem?)"
+    )]
+    FileLockTimeout {
+        /// The path to the lock file.
+        path: Utf8PathBuf,
+
+        /// The timeout duration in seconds.
+        timeout_secs: u64,
+    },
+
+    /// An error occurred while reading the run list.
+    #[error("error reading run list from `{path}`")]
+    RunListRead {
+        /// The path to the run list file.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while deserializing the run list.
+    #[error("error deserializing run list from `{path}`")]
+    RunListDeserialize {
+        /// The path to the run list file.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: serde_json::Error,
+    },
+
+    /// An error occurred while serializing the run list.
+    #[error("error serializing run list to `{path}`")]
+    RunListSerialize {
+        /// The path to the run list file.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: serde_json::Error,
+    },
+
+    /// An error occurred while serializing the test list.
+    #[error("error serializing test list")]
+    TestListSerialize {
+        /// The underlying error.
+        #[source]
+        error: serde_json::Error,
+    },
+
+    /// An error occurred while serializing a test event.
+    #[error("error serializing test event")]
+    TestEventSerialize {
+        /// The underlying error.
+        #[source]
+        error: serde_json::Error,
+    },
+
+    /// An error occurred while writing the run list.
+    #[error("error writing run list to `{path}`")]
+    RunListWrite {
+        /// The path to the run list file.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: atomicwrites::Error<std::io::Error>,
+    },
+
+    /// An error occurred while writing to the store.
+    #[error("error writing to store at `{store_path}`")]
+    StoreWrite {
+        /// The path to the store file.
+        store_path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: StoreWriterError,
+    },
+
+    /// An error occurred while creating the run log.
+    #[error("error creating run log at `{path}`")]
+    RunLogCreate {
+        /// The path to the run log file.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while writing to the run log.
+    #[error("error writing to run log at `{path}`")]
+    RunLogWrite {
+        /// The path to the run log file.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while flushing the run log.
+    #[error("error flushing run log at `{path}`")]
+    RunLogFlush {
+        /// The path to the run log file.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Cannot write to runs.json because it has a newer format version.
+    #[error(
+        "cannot write to record store: runs.json format version {file_version} is newer than \
+         supported version {max_supported_version}"
+    )]
+    FormatVersionTooNew {
+        /// The format version in the file.
+        file_version: u32,
+        /// The maximum version this nextest can write.
+        max_supported_version: u32,
+    },
+}
+
+/// An error that occurred while writing to a zip store.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum StoreWriterError {
+    /// An error occurred while creating the store file.
+    #[error("error creating store")]
+    Create {
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while starting a new file in the store.
+    #[error("error creating path `{path}` in store")]
+    StartFile {
+        /// The path within the store.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: zip::result::ZipError,
+    },
+
+    /// An error occurred while writing to a file in the store.
+    #[error("error writing to path `{path}` in store")]
+    Write {
+        /// The path within the store.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while compressing data with a zstd dictionary.
+    #[error("error compressing data")]
+    Compress {
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while finalizing the store.
+    #[error("error finalizing store")]
+    Finish {
+        /// The underlying error.
+        #[source]
+        error: zip::result::ZipError,
+    },
+
+    /// An error occurred while flushing the store.
+    #[error("error flushing store")]
+    Flush {
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+}
+
+/// An error that occurred in the record reporter.
+#[derive(Debug, Error)]
+pub enum RecordReporterError {
+    /// An error occurred while writing to the run store.
+    #[error(transparent)]
+    RunStore(RunStoreError),
+
+    /// The writer thread panicked.
+    #[error("record writer thread panicked: {message}")]
+    WriterPanic {
+        /// A message extracted from the panic payload, if available.
+        message: String,
+    },
+}
+
+/// An error determining the cache directory for recordings.
+#[derive(Debug, Error)]
+pub enum CacheDirError {
+    /// The platform base strategy could not be determined.
+    ///
+    /// This typically means the platform doesn't support standard directory layouts.
+    #[error("could not determine platform base directory strategy")]
+    BaseDirStrategy,
+
+    /// The platform cache directory path is not valid UTF-8.
+    #[error("platform cache directory is not valid UTF-8: {path:?}")]
+    CacheDirNotUtf8 {
+        /// The path that was not valid UTF-8.
+        path: PathBuf,
+    },
+
+    /// The workspace path could not be canonicalized.
+    #[error("could not canonicalize workspace path `{workspace_root}`")]
+    Canonicalize {
+        /// The workspace root that could not be canonicalized.
+        workspace_root: Utf8PathBuf,
+        /// The underlying I/O error.
+        #[source]
+        error: std::io::Error,
+    },
+}
+
+/// An error during recording session setup.
+#[derive(Debug, Error)]
+pub enum RecordSetupError {
+    /// The platform cache directory could not be determined.
+    #[error("could not determine platform cache directory for recording")]
+    CacheDirNotFound(#[source] CacheDirError),
+
+    /// Failed to create the run store.
+    #[error("failed to create run store")]
+    StoreCreate(#[source] RunStoreError),
+
+    /// Failed to acquire exclusive lock on the run store.
+    #[error("failed to lock run store")]
+    StoreLock(#[source] RunStoreError),
+
+    /// Failed to create the run recorder.
+    #[error("failed to create run recorder")]
+    RecorderCreate(#[source] RunStoreError),
+}
+
+impl RecordSetupError {
+    /// If this error indicates that recording should be disabled (but the test
+    /// run should continue), returns the underlying error.
+    ///
+    /// This is the case when the runs.json file has a newer format version than
+    /// this nextest supports. Recording is disabled to avoid data loss, but the
+    /// test run can proceed normally.
+    pub fn disabled_error(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            RecordSetupError::RecorderCreate(err @ RunStoreError::FormatVersionTooNew { .. }) => {
+                Some(err)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// An error that occurred while pruning recorded runs.
+#[derive(Debug, Error)]
+pub enum RecordPruneError {
+    /// An error occurred while deleting a run directory.
+    #[error("error deleting run `{run_id}` at `{path}`")]
+    DeleteRun {
+        /// The run ID that could not be deleted.
+        run_id: ReportUuid,
+
+        /// The path to the run directory.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while calculating the size of a path.
+    #[error("error calculating size of `{path}`")]
+    CalculateSize {
+        /// The path whose size could not be calculated.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while deleting an orphaned directory.
+    #[error("error deleting orphaned directory `{path}`")]
+    DeleteOrphan {
+        /// The path to the orphaned directory.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while reading the runs directory.
+    #[error("error reading runs directory `{path}`")]
+    ReadRunsDir {
+        /// The path to the runs directory.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while reading a directory entry.
+    #[error("error reading directory entry in `{dir}`")]
+    ReadDirEntry {
+        /// The path to the directory being read.
+        dir: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while reading file type.
+    #[error("error reading file type for `{path}`")]
+    ReadFileType {
+        /// The path whose file type could not be read.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+}
+
+/// An error resolving a run ID prefix.
+#[derive(Debug, Error)]
+pub enum RunIdResolutionError {
+    /// No run found matching the prefix.
+    #[error("no recorded run found matching `{prefix}`")]
+    NotFound {
+        /// The prefix that was searched for.
+        prefix: String,
+    },
+
+    /// Multiple runs match the prefix.
+    #[error("prefix `{prefix}` is ambiguous, matches {count} runs")]
+    Ambiguous {
+        /// The prefix that was searched for.
+        prefix: String,
+
+        /// The number of matching runs.
+        count: usize,
+
+        /// The candidates that matched (up to a limit).
+        candidates: Vec<RecordedRunInfo>,
+
+        /// The run ID index for computing shortest unique prefixes.
+        run_id_index: RunIdIndex,
+    },
+
+    /// The prefix contains invalid characters.
+    #[error("prefix `{prefix}` contains invalid characters (expected hexadecimal)")]
+    InvalidPrefix {
+        /// The invalid prefix.
+        prefix: String,
+    },
+
+    /// No recorded runs exist.
+    #[error("no recorded runs exist")]
+    NoRuns,
+
+    /// Recorded runs exist but none are completed (all are incomplete or have
+    /// unknown status).
+    #[error("{incomplete_count} recorded runs exist, but none are complete")]
+    NoCompletedRuns {
+        /// The number of incomplete runs.
+        incomplete_count: usize,
+    },
+}
+
+/// An error that occurred while reading a recorded run.
+#[derive(Debug, Error)]
+pub enum RecordReadError {
+    /// The run was not found.
+    #[error("run not found at `{path}`")]
+    RunNotFound {
+        /// The path where the run was expected.
+        path: Utf8PathBuf,
+    },
+
+    /// Failed to open the archive.
+    #[error("error opening archive at `{path}`")]
+    OpenArchive {
+        /// The path to the archive.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Failed to read an archive file.
+    #[error("error reading `{file_name}` from archive")]
+    ReadArchiveFile {
+        /// The file name within the archive.
+        file_name: String,
+
+        /// The underlying error.
+        #[source]
+        error: zip::result::ZipError,
+    },
+
+    /// Failed to open the run log.
+    #[error("error opening run log at `{path}`")]
+    OpenRunLog {
+        /// The path to the run log.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Failed to read a line from the run log.
+    #[error("error reading line {line_number} from run log")]
+    ReadRunLog {
+        /// The line number that failed.
+        line_number: usize,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Failed to parse an event from the run log.
+    #[error("error parsing event at line {line_number}")]
+    ParseEvent {
+        /// The line number that failed.
+        line_number: usize,
+
+        /// The underlying error.
+        #[source]
+        error: serde_json::Error,
+    },
+
+    /// Required file not found in archive.
+    #[error("required file `{file_name}` not found in archive")]
+    FileNotFound {
+        /// The file name that was not found.
+        file_name: String,
+    },
+
+    /// Failed to decompress archive data.
+    #[error("error decompressing data from `{file_name}`")]
+    Decompress {
+        /// The file name being decompressed.
+        file_name: String,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Unknown output file type in archive.
+    ///
+    /// This indicates the archive was created by a newer version of nextest
+    /// with additional output types that this version doesn't recognize.
+    #[error(
+        "unknown output file type `{file_name}` in archive \
+         (archive may have been created by a newer version of nextest)"
+    )]
+    UnknownOutputType {
+        /// The file name with the unknown type.
+        file_name: String,
+    },
+
+    /// Archive file exceeds maximum allowed size.
+    #[error(
+        "file `{file_name}` in archive exceeds maximum size ({size} bytes, limit is {limit} bytes)"
+    )]
+    FileTooLarge {
+        /// The file name in the archive.
+        file_name: String,
+
+        /// The size of the file.
+        size: u64,
+
+        /// The maximum allowed size.
+        limit: u64,
+    },
+
+    /// Archive file size doesn't match the header.
+    ///
+    /// This indicates a corrupt or tampered archive since nextest controls
+    /// archive creation.
+    #[error(
+        "file `{file_name}` size mismatch: header claims {claimed_size} bytes, \
+         but read {actual_size} bytes (archive may be corrupt or tampered)"
+    )]
+    SizeMismatch {
+        /// The file name in the archive.
+        file_name: String,
+
+        /// The size claimed in the ZIP header.
+        claimed_size: u64,
+
+        /// The actual size read.
+        actual_size: u64,
+    },
+
+    /// Failed to deserialize metadata.
+    #[error("error deserializing `{file_name}`")]
+    DeserializeMetadata {
+        /// The file name being deserialized.
+        file_name: String,
+
+        /// The underlying error.
+        #[source]
+        error: serde_json::Error,
+    },
+
+    /// The archive format version is not supported.
+    #[error(
+        "unsupported format version {found} (this version of nextest supports version {supported})"
+    )]
+    UnsupportedFormatVersion {
+        /// The format version found in the archive.
+        found: u32,
+
+        /// The format version supported by this version of nextest.
+        supported: u32,
+    },
+}
+
+/// An error that occurred while reconstructing a TestList from a summary.
+///
+/// Returned by [`TestList::from_summary`](crate::list::TestList::from_summary).
+#[derive(Debug, Error)]
+pub enum TestListFromSummaryError {
+    /// Package not found in the package graph.
+    #[error("package `{name}` (id: `{package_id}`) not found in cargo metadata")]
+    PackageNotFound {
+        /// The package name.
+        name: String,
+
+        /// The package ID that was looked up.
+        package_id: String,
+    },
+
+    /// Error parsing rust build metadata.
+    #[error("error parsing rust build metadata")]
+    RustBuildMeta(#[source] RustBuildMetaParseError),
 }
 
 #[cfg(feature = "self-update")]

@@ -3,6 +3,8 @@
 
 //! User config elements.
 
+mod record;
 mod ui;
 
+pub use record::*;
 pub use ui::*;

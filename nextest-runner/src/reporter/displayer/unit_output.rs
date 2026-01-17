@@ -19,7 +19,7 @@ use serde::Deserialize;
 use std::{fmt, io};
 
 /// When to display test output in the reporter.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize, serde::Serialize)]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[serde(rename_all = "kebab-case")]
 pub enum TestOutputDisplay {

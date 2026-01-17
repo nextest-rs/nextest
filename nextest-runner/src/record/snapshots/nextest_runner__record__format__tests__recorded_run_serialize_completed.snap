@@ -1,0 +1,18 @@
+---
+source: nextest-runner/src/record/format.rs
+expression: json
+---
+{
+  "run-id": "550e8400-e29b-41d4-a716-446655440000",
+  "nextest-version": "0.9.111",
+  "started-at": "2024-12-19T14:22:33-08:00",
+  "duration-secs": 12.345,
+  "compressed-size": 12345,
+  "uncompressed-size": 45678,
+  "status": {
+    "status": "completed",
+    "initial-run-count": 100,
+    "passed": 95,
+    "failed": 5
+  }
+}

@@ -32,6 +32,7 @@ impl Default for LeakTimeout {
 /// The result of controlling leak timeout behavior.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum LeakTimeoutResult {
     /// The test is marked as failed.
     Fail,

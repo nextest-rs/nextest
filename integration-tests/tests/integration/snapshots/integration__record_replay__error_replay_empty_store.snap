@@ -1,0 +1,5 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: redact_dynamic_fields(&replay_empty.stderr_as_str())
+---
+error: no recorded runs exist

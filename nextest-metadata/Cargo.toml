@@ -21,5 +21,12 @@ serde.workspace = true
 smol_str.workspace = true
 target-spec.workspace = true
 
+# Optional dependencies for proptest feature.
+proptest = { workspace = true, optional = true }
+
 [dev-dependencies]
 test-case.workspace = true
+
+[features]
+default = []
+proptest1 = ["dep:proptest"]

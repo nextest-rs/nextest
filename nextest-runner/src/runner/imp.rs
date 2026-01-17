@@ -22,6 +22,7 @@ use crate::{
     test_output::CaptureStrategy,
 };
 use async_scoped::TokioScope;
+use chrono::{DateTime, Local};
 use future_queue::{FutureQueueContext, StreamExt};
 use futures::{future::Fuse, prelude::*};
 use nextest_metadata::FilterMatch;
@@ -308,7 +309,8 @@ impl TestRunnerBuilder {
 
         Ok(TestRunner {
             inner: TestRunnerInner {
-                run_id: ReportUuid::new_v4(),
+                run_id: force_or_new_run_id(),
+                started_at: Local::now(),
                 profile,
                 test_list,
                 test_threads,
@@ -339,7 +341,9 @@ pub enum StressCondition {
 }
 
 /// A count for stress testing.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum StressCount {
     /// Run each test `count` times.
     Count {
@@ -377,6 +381,16 @@ pub struct TestRunner<'a> {
 }
 
 impl<'a> TestRunner<'a> {
+    /// Returns the unique ID for this test run.
+    pub fn run_id(&self) -> ReportUuid {
+        self.inner.run_id
+    }
+
+    /// Returns the timestamp when this test run was started.
+    pub fn started_at(&self) -> DateTime<Local> {
+        self.inner.started_at
+    }
+
     /// Returns the status of the input handler.
     pub fn input_handler_status(&self) -> InputHandlerStatus {
         self.input_handler.status()
@@ -464,6 +478,7 @@ impl<'a> TestRunner<'a> {
 #[derive(Debug)]
 struct TestRunnerInner<'a> {
     run_id: ReportUuid,
+    started_at: DateTime<Local>,
     profile: &'a EvaluatableProfile<'a>,
     test_list: &'a TestList<'a>,
     test_threads: usize,
@@ -779,6 +794,25 @@ pub fn configure_handle_inheritance(
     no_capture: bool,
 ) -> Result<(), ConfigureHandleInheritanceError> {
     super::os::configure_handle_inheritance_impl(no_capture)
+}
+
+/// Environment variable to force a specific run ID (for testing).
+const FORCE_RUN_ID_ENV: &str = "__NEXTEST_FORCE_RUN_ID";
+
+/// Returns a forced run ID from the environment, or generates a new one.
+fn force_or_new_run_id() -> ReportUuid {
+    if let Ok(id_str) = std::env::var(FORCE_RUN_ID_ENV) {
+        match id_str.parse::<ReportUuid>() {
+            Ok(uuid) => return uuid,
+            Err(err) => {
+                warn!(
+                    "{FORCE_RUN_ID_ENV} is set but invalid (expected UUID): {err}, \
+                     generating random ID"
+                );
+            }
+        }
+    }
+    ReportUuid::new_v4()
 }
 
 #[cfg(test)]

@@ -4,10 +4,11 @@ members = [
   "cargo-nextest",
   "fixture-data",
   "integration-tests",
+  "internal-test",
+  "internal-tools/zstd-dict",
   "nextest-filtering",
   "nextest-metadata",
   "nextest-runner",
-  "internal-test",
   "workspace-hack",
 ]
 
@@ -22,6 +23,7 @@ async-scoped = { version = "0.9.0", features = ["use-tokio"] }
 atomicwrites = "0.4.4"
 bstr = { version = "1.12.1", default-features = false, features = ["std"] }
 bitflags = "2.10.0"
+bytesize = { version = "2.3.1", features = ["serde"] }
 bytes = "1.11.0"
 camino = "1.2.2"
 camino-tempfile = "1.4.1"
@@ -45,9 +47,10 @@ config = { version = "0.15.19", default-features = false, features = [
     "toml",
     "preserve_order",
 ] }
-chrono = "0.4.43"
+chrono = { version = "0.4.43", features = ["serde"] }
 clap = { version = "4.5.54", features = ["derive", "unstable-markdown"] }
 console-subscriber = "0.5.0"
+countio = "0.2.19"
 cp_r = "0.5.2"
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 datatest-stable = { version = "0.3.3", features = ["include-dir"] }
@@ -89,6 +92,7 @@ mukti-metadata = "0.3.0"
 newtype-uuid = { version = "1.3.2", features = ["v4"] }
 nextest-filtering = { version = "0.18.0", path = "nextest-filtering" }
 nextest-metadata = { version = "0.13.0", path = "nextest-metadata" }
+nextest-runner = { path = "nextest-runner" }
 nextest-workspace-hack = "0.1.0"
 nix = { version = "0.30.1", default-features = false, features = ["signal"] }
 num_threads = "0.1.7"
@@ -136,11 +140,13 @@ tracing-subscriber = { version = "0.3.22", default-features = false, features = 
 unicode-ident = "1.0.22"
 unicode-normalization = "0.1.25"
 usdt = "0.6.0"
+walkdir = "2.5.0"
 whoami = "1.6.1"
 win32job = "2.0.3"
 windows-sys = "0.61.2"
 winnow = "0.7.14"
-xxhash-rust = "0.8.15"
+xxhash-rust = { version = "0.8.15", features = ["xxh3", "xxh64"] }
+zip = { version = "2.4.2", default-features = false, features = ["zstd"] }
 zstd = { version = "0.13.3", features = ["zstdmt"] }
 
 # make backtrace + color-eyre faster on debug builds

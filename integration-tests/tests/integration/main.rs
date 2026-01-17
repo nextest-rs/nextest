@@ -37,6 +37,7 @@ use target_spec::{Platform, summaries::TargetFeaturesSummary};
 mod fixtures;
 mod interceptor;
 mod large_alloc;
+mod record_replay;
 #[cfg(unix)]
 mod sigttou;
 mod stuck_signal;

@@ -12,7 +12,10 @@ pub mod events;
 mod helpers;
 mod imp;
 pub mod structured;
+#[cfg(test)]
+pub(crate) mod test_helpers;
 
+pub(crate) use displayer::{DisplayReporter, DisplayReporterBuilder, StatusLevels};
 pub use displayer::{
     FinalStatusLevel, MaxProgressRunning, ShowProgress, ShowTerminalProgress, StatusLevel,
     TestOutputDisplay,

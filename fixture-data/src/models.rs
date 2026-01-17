@@ -56,6 +56,9 @@ bitflags::bitflags! {
         /// Run with the with-timeout-success profile. test_slow_timeout passes
         /// (on-timeout = "pass"), others fail.
         const WITH_TIMEOUT_SUCCESS = 0x20000;
+        /// Allow skipped test names to appear in output (e.g., for replay which shows SKIP lines).
+        /// Without this flag, verification fails if any skipped test name appears in the output.
+        const ALLOW_SKIPPED_NAMES_IN_OUTPUT = 0x40000;
     }
 }
 

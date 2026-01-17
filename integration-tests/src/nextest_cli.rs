@@ -40,7 +40,7 @@ impl CargoNextestCli {
             .expect("unable to find cargo-nextest-dup");
         Self {
             bin: bin.into(),
-            args: vec!["nextest".to_owned()],
+            args: vec!["nextest".to_owned(), "--no-pager".to_owned()],
             envs: HashMap::new(),
             envs_remove: Vec::new(),
             unchecked: false,

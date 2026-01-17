@@ -121,6 +121,21 @@ pub mod plural {
             "iterations"
         }
     }
+
+    /// Returns "run" if `count` is 1, otherwise "runs".
+    pub fn runs_str(count: usize) -> &'static str {
+        if count == 1 { "run" } else { "runs" }
+    }
+
+    /// Returns "orphan" if `count` is 1, otherwise "orphans".
+    pub fn orphans_str(count: usize) -> &'static str {
+        if count == 1 { "orphan" } else { "orphans" }
+    }
+
+    /// Returns "error" if `count` is 1, otherwise "errors".
+    pub fn errors_str(count: usize) -> &'static str {
+        if count == 1 { "error" } else { "errors" }
+    }
 }
 
 /// A helper for displaying test instances with formatting.
