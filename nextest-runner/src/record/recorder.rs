@@ -70,14 +70,17 @@ impl LogEncoder {
     }
 
     /// Finishes the encoder and returns the compressed and uncompressed sizes.
-    fn finish(mut self) -> io::Result<StoreSizes> {
+    ///
+    /// The `entries` parameter is the number of log entries written.
+    fn finish(mut self, entries: u64) -> io::Result<ComponentSizes> {
         let counter = self.inner.take().expect("encoder already finished");
         let uncompressed = counter.writer_bytes() as u64;
         let file_counter = counter.into_inner().finish()?;
         let compressed = file_counter.writer_bytes() as u64;
-        Ok(StoreSizes {
+        Ok(ComponentSizes {
             compressed,
             uncompressed,
+            entries,
         })
     }
 }
@@ -121,6 +124,8 @@ pub struct RunRecorder {
     store_writer: StoreWriter,
     log_path: Utf8PathBuf,
     log: DebugIgnore<LogEncoder>,
+    /// Number of log entries (records) written.
+    log_entries: u64,
     max_output_size: usize,
 }
 
@@ -172,6 +177,7 @@ impl RunRecorder {
             store_writer,
             log_path,
             log: DebugIgnore(log),
+            log_entries: 0,
             // Saturate to usize::MAX on 32-bit platforms. This is fine because
             // you can't allocate more than usize::MAX bytes anyway.
             max_output_size: usize::try_from(max_output_size.as_u64()).unwrap_or(usize::MAX),
@@ -244,6 +250,8 @@ impl RunRecorder {
         self.write_log_impl(json.as_bytes())?;
         self.write_log_impl(b"\n")?;
 
+        self.log_entries += 1;
+
         Ok(())
     }
 
@@ -259,16 +267,16 @@ impl RunRecorder {
     /// Finishes writing and closes all files.
     ///
     /// This must be called to ensure all data is flushed to disk.
-    /// Returns the compressed and uncompressed sizes (store.zip + run.log.zst combined).
+    /// Returns the compressed and uncompressed sizes for both log and store.
     pub(crate) fn finish(self) -> Result<StoreSizes, RunStoreError> {
-        let log_sizes = self
-            .log
-            .0
-            .finish()
-            .map_err(|error| RunStoreError::RunLogFlush {
-                path: self.log_path.clone(),
-                error,
-            })?;
+        let log_sizes =
+            self.log
+                .0
+                .finish(self.log_entries)
+                .map_err(|error| RunStoreError::RunLogFlush {
+                    path: self.log_path.clone(),
+                    error,
+                })?;
 
         let store_sizes =
             self.store_writer
@@ -279,8 +287,8 @@ impl RunRecorder {
                 })?;
 
         Ok(StoreSizes {
-            compressed: store_sizes.compressed + log_sizes.compressed,
-            uncompressed: store_sizes.uncompressed + log_sizes.uncompressed,
+            log: log_sizes,
+            store: store_sizes,
         })
     }
 }
@@ -372,8 +380,9 @@ impl StoreWriter {
 
     /// Finishes writing and closes the archive.
     ///
-    /// Returns the compressed and uncompressed sizes.
-    fn finish(self) -> Result<StoreSizes, StoreWriterError> {
+    /// Returns the compressed and uncompressed sizes and entry count.
+    fn finish(self) -> Result<ComponentSizes, StoreWriterError> {
+        let entries = self.added_files.len() as u64;
         let mut counter = self
             .writer
             .0
@@ -384,20 +393,44 @@ impl StoreWriter {
             .flush()
             .map_err(|error| StoreWriterError::Flush { error })?;
 
-        Ok(StoreSizes {
+        Ok(ComponentSizes {
             compressed: counter.writer_bytes() as u64,
             uncompressed: self.uncompressed_size,
+            entries,
         })
     }
 }
 
-/// Compressed and uncompressed sizes for storage.
+/// Compressed and uncompressed sizes for a single component (log or store).
 #[derive(Clone, Copy, Debug, Default)]
-pub struct StoreSizes {
+pub struct ComponentSizes {
     /// Compressed size in bytes.
     pub compressed: u64,
     /// Uncompressed size in bytes.
     pub uncompressed: u64,
+    /// Number of entries (records for log, files for store).
+    pub entries: u64,
+}
+
+/// Compressed and uncompressed sizes for storage, broken down by component.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StoreSizes {
+    /// Sizes for the run log (run.log.zst).
+    pub log: ComponentSizes,
+    /// Sizes for the store archive (store.zip).
+    pub store: ComponentSizes,
+}
+
+impl StoreSizes {
+    /// Returns the total compressed size (log + store).
+    pub fn total_compressed(&self) -> u64 {
+        self.log.compressed + self.store.compressed
+    }
+
+    /// Returns the total uncompressed size (log + store).
+    pub fn total_uncompressed(&self) -> u64 {
+        self.log.uncompressed + self.store.uncompressed
+    }
 }
 
 /// Compresses data using a pre-trained zstd dictionary.

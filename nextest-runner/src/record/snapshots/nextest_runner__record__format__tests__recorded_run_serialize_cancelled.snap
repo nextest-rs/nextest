@@ -9,8 +9,18 @@ snapshot_kind: text
   "started-at": "2024-12-19T14:22:33-08:00",
   "last-written-at": "2024-12-19T22:22:33Z",
   "duration-secs": 12.345,
-  "compressed-size": 12345,
-  "uncompressed-size": 45678,
+  "sizes": {
+    "log": {
+      "compressed": 2345,
+      "uncompressed": 5678,
+      "entries": 42
+    },
+    "store": {
+      "compressed": 10000,
+      "uncompressed": 40000,
+      "entries": 15
+    }
+  },
   "status": {
     "status": "cancelled",
     "initial-run-count": 100,

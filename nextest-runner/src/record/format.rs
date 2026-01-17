@@ -3,7 +3,10 @@
 
 //! Archive format metadata shared between recorder and reader.
 
-use super::{CompletedRunStats, RecordedRunInfo, RecordedRunStatus, StressCompletedRunStats};
+use super::{
+    CompletedRunStats, ComponentSizes, RecordedRunInfo, RecordedRunStatus, RecordedSizes,
+    StressCompletedRunStats,
+};
 use camino::Utf8Path;
 use chrono::{DateTime, FixedOffset, Utc};
 use quick_junit::ReportUuid;
@@ -129,16 +132,69 @@ pub(super) struct RecordedRun {
     /// Duration of the run in seconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) duration_secs: Option<f64>,
-    /// Compressed size of this run in bytes (store.zip + run.log.zst on disk).
+    /// Sizes broken down by component (log and store).
     ///
-    /// This is 0 until the run completes successfully.
-    pub(super) compressed_size: u64,
-    /// Uncompressed size of this run in bytes.
-    ///
-    /// This is 0 until the run completes successfully.
-    pub(super) uncompressed_size: u64,
+    /// This is all zeros until the run completes successfully.
+    pub(super) sizes: RecordedSizesFormat,
     /// Status and statistics for the run.
     pub(super) status: RecordedRunStatusFormat,
+}
+
+/// Sizes broken down by component (serialization format for runs.json).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub(super) struct RecordedSizesFormat {
+    /// Sizes for the run log (run.log.zst).
+    pub(super) log: ComponentSizesFormat,
+    /// Sizes for the store archive (store.zip).
+    pub(super) store: ComponentSizesFormat,
+}
+
+/// Compressed and uncompressed sizes for a single component (serialization format).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub(super) struct ComponentSizesFormat {
+    /// Compressed size in bytes.
+    pub(super) compressed: u64,
+    /// Uncompressed size in bytes.
+    pub(super) uncompressed: u64,
+    /// Number of entries (records for log, files for store).
+    #[serde(default)]
+    pub(super) entries: u64,
+}
+
+impl From<RecordedSizes> for RecordedSizesFormat {
+    fn from(sizes: RecordedSizes) -> Self {
+        Self {
+            log: ComponentSizesFormat {
+                compressed: sizes.log.compressed,
+                uncompressed: sizes.log.uncompressed,
+                entries: sizes.log.entries,
+            },
+            store: ComponentSizesFormat {
+                compressed: sizes.store.compressed,
+                uncompressed: sizes.store.uncompressed,
+                entries: sizes.store.entries,
+            },
+        }
+    }
+}
+
+impl From<RecordedSizesFormat> for RecordedSizes {
+    fn from(sizes: RecordedSizesFormat) -> Self {
+        Self {
+            log: ComponentSizes {
+                compressed: sizes.log.compressed,
+                uncompressed: sizes.log.uncompressed,
+                entries: sizes.log.entries,
+            },
+            store: ComponentSizes {
+                compressed: sizes.store.compressed,
+                uncompressed: sizes.store.uncompressed,
+                entries: sizes.store.entries,
+            },
+        }
+    }
 }
 
 /// Status of a recorded run (serialization format).
@@ -203,8 +259,7 @@ impl From<RecordedRun> for RecordedRunInfo {
             started_at: run.started_at,
             last_written_at: run.last_written_at,
             duration_secs: run.duration_secs,
-            compressed_size: run.compressed_size,
-            uncompressed_size: run.uncompressed_size,
+            sizes: run.sizes.into(),
             status: run.status.into(),
         }
     }
@@ -218,8 +273,7 @@ impl From<&RecordedRunInfo> for RecordedRun {
             started_at: run.started_at,
             last_written_at: run.last_written_at,
             duration_secs: run.duration_secs,
-            compressed_size: run.compressed_size,
-            uncompressed_size: run.uncompressed_size,
+            sizes: run.sizes.into(),
             status: (&run.status).into(),
         }
     }
@@ -538,8 +592,18 @@ mod tests {
                 .expect("valid timestamp")
                 .to_utc(),
             duration_secs: Some(12.345),
-            compressed_size: 12345,
-            uncompressed_size: 45678,
+            sizes: RecordedSizesFormat {
+                log: ComponentSizesFormat {
+                    compressed: 2345,
+                    uncompressed: 5678,
+                    entries: 42,
+                },
+                store: ComponentSizesFormat {
+                    compressed: 10000,
+                    uncompressed: 40000,
+                    entries: 15,
+                },
+            },
             status,
         }
     }
@@ -603,8 +667,10 @@ mod tests {
             "nextest-version": "0.9.999",
             "started-at": "2024-12-19T14:22:33-08:00",
             "last-written-at": "2024-12-19T22:22:33Z",
-            "compressed-size": 12345,
-            "uncompressed-size": 45678,
+            "sizes": {
+                "log": { "compressed": 2345, "uncompressed": 5678 },
+                "store": { "compressed": 10000, "uncompressed": 40000 }
+            },
             "status": {
                 "status": "super-new-status",
                 "some-future-field": 42
@@ -638,8 +704,7 @@ mod tests {
         assert_eq!(roundtripped.run_id, original.run_id);
         assert_eq!(roundtripped.nextest_version, original.nextest_version);
         assert_eq!(roundtripped.started_at, original.started_at);
-        assert_eq!(roundtripped.compressed_size, original.compressed_size);
-        assert_eq!(roundtripped.uncompressed_size, original.uncompressed_size);
+        assert_eq!(roundtripped.sizes, original.sizes);
 
         // Verify status fields via domain conversion.
         let info: RecordedRunInfo = roundtripped.into();

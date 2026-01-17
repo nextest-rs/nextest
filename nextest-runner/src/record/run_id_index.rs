@@ -237,7 +237,7 @@ pub enum PrefixResolutionError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::record::RecordedRunStatus;
+    use crate::record::{RecordedRunStatus, RecordedSizes};
     use chrono::TimeZone;
     use semver::Version;
 
@@ -253,8 +253,7 @@ mod tests {
             started_at,
             last_written_at: started_at.to_utc(),
             duration_secs: None,
-            compressed_size: 0,
-            uncompressed_size: 0,
+            sizes: RecordedSizes::default(),
             status: RecordedRunStatus::Incomplete,
         }
     }

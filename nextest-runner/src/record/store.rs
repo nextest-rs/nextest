@@ -206,8 +206,18 @@ impl<'store> ExclusiveLockedRunStore<'store> {
     ) -> bool {
         for run in &mut self.runs {
             if run.run_id == run_id {
-                run.compressed_size = sizes.compressed;
-                run.uncompressed_size = sizes.uncompressed;
+                run.sizes = RecordedSizes {
+                    log: ComponentSizes {
+                        compressed: sizes.log.compressed,
+                        uncompressed: sizes.log.uncompressed,
+                        entries: sizes.log.entries,
+                    },
+                    store: ComponentSizes {
+                        compressed: sizes.store.compressed,
+                        uncompressed: sizes.store.uncompressed,
+                        entries: sizes.store.entries,
+                    },
+                };
                 run.status = status;
                 run.duration_secs = duration_secs;
                 return true;
@@ -348,8 +358,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
             started_at,
             last_written_at: Utc::now(),
             duration_secs: None,
-            compressed_size: 0,
-            uncompressed_size: 0,
+            sizes: RecordedSizes::default(),
             status: RecordedRunStatus::Incomplete,
         };
         self.runs.push(run);
@@ -383,12 +392,47 @@ pub struct RecordedRunInfo {
     ///
     /// This is `None` for incomplete runs.
     pub duration_secs: Option<f64>,
-    /// Total compressed size in bytes (on disk).
-    pub compressed_size: u64,
-    /// Total uncompressed size in bytes.
-    pub uncompressed_size: u64,
+    /// Sizes broken down by component (log and store).
+    pub sizes: RecordedSizes,
     /// The status and statistics for this run.
     pub status: RecordedRunStatus,
+}
+
+/// Sizes broken down by component (log and store).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RecordedSizes {
+    /// Sizes for the run log (run.log.zst).
+    pub log: ComponentSizes,
+    /// Sizes for the store archive (store.zip).
+    pub store: ComponentSizes,
+}
+
+/// Compressed and uncompressed sizes for a single component.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ComponentSizes {
+    /// Compressed size in bytes.
+    pub compressed: u64,
+    /// Uncompressed size in bytes.
+    pub uncompressed: u64,
+    /// Number of entries (records for log, files for store).
+    pub entries: u64,
+}
+
+impl RecordedSizes {
+    /// Returns the total compressed size (log + store).
+    pub fn total_compressed(&self) -> u64 {
+        self.log.compressed + self.store.compressed
+    }
+
+    /// Returns the total uncompressed size (log + store).
+    pub fn total_uncompressed(&self) -> u64 {
+        self.log.uncompressed + self.store.uncompressed
+    }
+
+    /// Returns the total number of entries (log records + store files).
+    pub fn total_entries(&self) -> u64 {
+        self.log.entries + self.store.entries
+    }
 }
 
 /// Status and statistics for a recorded run.
@@ -627,7 +671,7 @@ impl fmt::Display for DisplayRecordedRunInfo<'_> {
             };
 
         let status_display = self.format_status();
-        let size_kb = run.compressed_size / 1024;
+        let size_kb = run.sizes.total_compressed() / 1024;
         let duration_display = match run.duration_secs {
             Some(secs) => format!("{:>9.3}s", secs),
             None => format!("{:>10}", "-"),
@@ -994,7 +1038,7 @@ impl RunStoreSnapshot {
 
     /// Returns the total compressed size of all recorded runs in bytes.
     pub fn total_size(&self) -> u64 {
-        self.runs.iter().map(|r| r.compressed_size).sum()
+        self.runs.iter().map(|r| r.sizes.total_compressed()).sum()
     }
 
     /// Resolves a run ID prefix to a full UUID.
