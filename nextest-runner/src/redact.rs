@@ -10,6 +10,7 @@ use crate::{
     list::RustBuildMeta,
 };
 use camino::{Utf8Path, Utf8PathBuf};
+use chrono::{DateTime, TimeZone};
 use regex::Regex;
 use std::{
     collections::BTreeMap,
@@ -23,6 +24,14 @@ static CRATE_NAME_HASH_REGEX: LazyLock<Regex> =
 static TARGET_DIR_REDACTION: &str = "<target-dir>";
 static FILE_COUNT_REDACTION: &str = "<file-count>";
 static DURATION_REDACTION: &str = "<duration>";
+
+// Fixed-width placeholders for store list alignment.
+// These match the original field widths to preserve column alignment.
+
+/// 19 chars, matches `%Y-%m-%d %H:%M:%S` format.
+static TIMESTAMP_REDACTION: &str = "XXXX-XX-XX XX:XX:XX";
+/// 6 chars for numeric portion (e.g. "   123" for KB display).
+static SIZE_REDACTION: &str = "<size>";
 
 /// A helper for redacting data that varies by environment.
 ///
@@ -115,6 +124,87 @@ impl Redactor {
             RedactorOutput::Redacted(DURATION_REDACTION.to_string())
         } else {
             RedactorOutput::Unredacted(FormattedDuration(orig))
+        }
+    }
+
+    /// Returns true if this redactor is active (will redact values).
+    pub fn is_active(&self) -> bool {
+        self.kind.is_active()
+    }
+
+    /// Creates a new redactor for snapshot testing, without any path redactions.
+    ///
+    /// This is useful when you need redaction of timestamps, durations, and
+    /// sizes, but don't have a `RustBuildMeta` to build path redactions from.
+    pub fn for_snapshot_testing() -> Self {
+        Self::new_with_kind(RedactorKind::Active {
+            redactions: Vec::new(),
+        })
+    }
+
+    /// Redacts a timestamp for display, producing a fixed-width placeholder.
+    ///
+    /// The placeholder `XXXX-XX-XX XX:XX:XX` is 19 characters, matching the
+    /// width of the `%Y-%m-%d %H:%M:%S` format.
+    pub fn redact_timestamp<Tz>(&self, orig: &DateTime<Tz>) -> RedactorOutput<DisplayTimestamp<Tz>>
+    where
+        Tz: TimeZone + Clone,
+        Tz::Offset: fmt::Display,
+    {
+        if self.kind.is_active() {
+            RedactorOutput::Redacted(TIMESTAMP_REDACTION.to_string())
+        } else {
+            RedactorOutput::Unredacted(DisplayTimestamp(orig.clone()))
+        }
+    }
+
+    /// Redacts a size in KB for display, producing a fixed-width placeholder.
+    ///
+    /// The placeholder `<size>` is 6 characters, matching the width of the
+    /// `{:>6}` format used for KB values.
+    pub fn redact_size_kb(&self, orig: u64) -> RedactorOutput<u64> {
+        if self.kind.is_active() {
+            RedactorOutput::Redacted(SIZE_REDACTION.to_string())
+        } else {
+            RedactorOutput::Unredacted(orig)
+        }
+    }
+
+    /// Redacts a store duration for display, producing a fixed-width placeholder.
+    ///
+    /// The placeholder `<duration>` is 10 characters, matching the width of the
+    /// `{:>9.3}s` format used for durations.
+    pub fn redact_store_duration(&self, orig: Option<f64>) -> RedactorOutput<StoreDurationDisplay> {
+        if self.kind.is_active() {
+            RedactorOutput::Redacted(format!("{:>10}", DURATION_REDACTION))
+        } else {
+            RedactorOutput::Unredacted(StoreDurationDisplay(orig))
+        }
+    }
+}
+
+/// Wrapper for timestamps that formats with `%Y-%m-%d %H:%M:%S`.
+#[derive(Clone, Debug)]
+pub struct DisplayTimestamp<Tz: TimeZone>(pub DateTime<Tz>);
+
+impl<Tz: TimeZone> fmt::Display for DisplayTimestamp<Tz>
+where
+    Tz::Offset: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.format("%Y-%m-%d %H:%M:%S"))
+    }
+}
+
+/// Wrapper for store durations that formats as `{:>9.3}s` or `{:>10}` for "-".
+#[derive(Clone, Debug)]
+pub struct StoreDurationDisplay(pub Option<f64>);
+
+impl fmt::Display for StoreDurationDisplay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Some(secs) => write!(f, "{secs:>9.3}s"),
+            None => write!(f, "{:>10}", "-"),
         }
     }
 }

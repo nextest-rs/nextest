@@ -20,6 +20,7 @@ use super::{
 use crate::{
     errors::{RunIdResolutionError, RunStoreError},
     helpers::{ThemeCharacters, plural},
+    redact::Redactor,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use chrono::{DateTime, FixedOffset, Local, TimeDelta, Utc};
@@ -595,13 +596,17 @@ impl RecordedRunInfo {
     /// The `alignment` parameter controls column alignment when displaying a
     /// list of runs. Use [`RunListAlignment::from_runs`] to precompute
     /// alignment for a set of runs.
+    ///
+    /// The `redactor` parameter, if provided, redacts timestamps, durations,
+    /// and sizes for snapshot testing while preserving column alignment.
     pub fn display<'a>(
         &'a self,
         run_id_index: &'a RunIdIndex,
         alignment: RunListAlignment,
         styles: &'a Styles,
+        redactor: Option<&'a Redactor>,
     ) -> DisplayRecordedRunInfo<'a> {
-        DisplayRecordedRunInfo::new(self, run_id_index, alignment, styles)
+        DisplayRecordedRunInfo::new(self, run_id_index, alignment, styles, redactor)
     }
 }
 
@@ -650,6 +655,7 @@ pub struct DisplayRecordedRunInfo<'a> {
     run_id_index: &'a RunIdIndex,
     alignment: RunListAlignment,
     styles: &'a Styles,
+    redactor: Option<&'a Redactor>,
 }
 
 impl<'a> DisplayRecordedRunInfo<'a> {
@@ -658,12 +664,14 @@ impl<'a> DisplayRecordedRunInfo<'a> {
         run_id_index: &'a RunIdIndex,
         alignment: RunListAlignment,
         styles: &'a Styles,
+        redactor: Option<&'a Redactor>,
     ) -> Self {
         Self {
             run,
             run_id_index,
             alignment,
             styles,
+            redactor,
         }
     }
 }
@@ -692,23 +700,42 @@ impl fmt::Display for DisplayRecordedRunInfo<'_> {
             };
 
         let status_display = self.format_status();
-        let size_kb = run.sizes.total_compressed() / 1024;
-        let duration_display = match run.duration_secs {
-            Some(secs) => format!("{:>9.3}s", secs),
-            None => format!("{:>10}", "-"),
-        };
 
-        write!(
-            f,
-            "  {}  {}  {}  {:>6} KB  {}",
-            run_id_display,
-            run.started_at
-                .format("%Y-%m-%d %H:%M:%S")
-                .style(self.styles.timestamp),
-            duration_display.style(self.styles.duration),
-            size_kb.style(self.styles.size),
-            status_display,
-        )
+        // Format timestamp, duration, and size with optional redaction.
+        // When redacted, use fixed-width placeholders to preserve column alignment.
+        let size_kb = run.sizes.total_compressed() / 1024;
+
+        if let Some(redactor) = self.redactor {
+            let timestamp_display = redactor.redact_timestamp(&run.started_at);
+            let duration_display = redactor.redact_store_duration(run.duration_secs);
+            let size_display = redactor.redact_size_kb(size_kb);
+
+            write!(
+                f,
+                "  {}  {}  {}  {:>6} KB  {}",
+                run_id_display,
+                timestamp_display.style(self.styles.timestamp),
+                duration_display.style(self.styles.duration),
+                size_display.style(self.styles.size),
+                status_display,
+            )
+        } else {
+            let timestamp_display = run.started_at.format("%Y-%m-%d %H:%M:%S");
+            let duration_display = match run.duration_secs {
+                Some(secs) => format!("{secs:>9.3}s"),
+                None => format!("{:>10}", "-"),
+            };
+
+            write!(
+                f,
+                "  {}  {}  {}  {:>6} KB  {}",
+                run_id_display,
+                timestamp_display.style(self.styles.timestamp),
+                duration_display.style(self.styles.duration),
+                size_kb.style(self.styles.size),
+                status_display,
+            )
+        }
     }
 }
 
@@ -853,23 +880,29 @@ pub struct DisplayRunList<'a> {
     store_path: Option<&'a Utf8Path>,
     styles: &'a Styles,
     theme_characters: &'a ThemeCharacters,
+    redactor: Option<&'a Redactor>,
 }
 
 impl<'a> DisplayRunList<'a> {
     /// Creates a new display wrapper for a run list.
     ///
     /// If `store_path` is provided, it will be displayed at the top of the output.
+    ///
+    /// If `redactor` is provided, timestamps, durations, and sizes will be
+    /// redacted for snapshot testing while preserving column alignment.
     pub fn new(
         snapshot: &'a RunStoreSnapshot,
         store_path: Option<&'a Utf8Path>,
         styles: &'a Styles,
         theme_characters: &'a ThemeCharacters,
+        redactor: Option<&'a Redactor>,
     ) -> Self {
         Self {
             snapshot,
             store_path,
             styles,
             theme_characters,
+            redactor,
         }
     }
 }
@@ -899,7 +932,12 @@ impl fmt::Display for DisplayRunList<'_> {
 
         let alignment = RunListAlignment::from_runs(self.snapshot.runs());
         for run in self.snapshot.runs() {
-            let display = run.display(self.snapshot.run_id_index(), alignment, self.styles);
+            let display = run.display(
+                self.snapshot.run_id_index(),
+                alignment,
+                self.styles,
+                self.redactor,
+            );
             if Some(run.run_id) == latest_run_id {
                 writeln!(f, "{}  *{}", display, "latest".style(self.styles.count))?;
             } else {
@@ -916,11 +954,22 @@ impl fmt::Display for DisplayRunList<'_> {
             "                                             {}",
             self.theme_characters.hbar(6),
         )?;
-        writeln!(
-            f,
-            "                                             {:>6} KB",
-            total_size_kb.style(self.styles.size),
-        )?;
+
+        // Optionally redact the total size for snapshot testing.
+        if let Some(redactor) = self.redactor {
+            let size_display = redactor.redact_size_kb(total_size_kb);
+            writeln!(
+                f,
+                "                                             {:>6} KB",
+                size_display.style(self.styles.size),
+            )?;
+        } else {
+            writeln!(
+                f,
+                "                                             {:>6} KB",
+                total_size_kb.style(self.styles.size),
+            )?;
+        }
 
         Ok(())
     }

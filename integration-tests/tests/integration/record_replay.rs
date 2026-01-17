@@ -35,14 +35,19 @@ const NEXTEST_CACHE_DIR_ENV: &str = "NEXTEST_CACHE_DIR";
 /// This is the same constant as in `nextest_runner::runner::imp`.
 const FORCE_RUN_ID_ENV: &str = "__NEXTEST_FORCE_RUN_ID";
 
+/// Environment variable to enable redaction of dynamic fields (timestamps, durations, sizes).
+///
+/// When set to "1", nextest produces fixed-width placeholders for these fields,
+/// preserving column alignment in the output.
+const NEXTEST_REDACT_ENV: &str = "__NEXTEST_REDACT";
+
+/// Regex for matching timestamps in output (e.g., "2026-01-17 12:24:08").
 static TIMESTAMP_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*").unwrap());
-static DURATION_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\d+\.\d+m?s|\d+ms").unwrap());
-static SIZE_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\d+(\.\d+)?\s*(B|KB|MB|GB)").unwrap());
-// Normalize runs of 2+ spaces to exactly 2 spaces (handles variable-width fields).
-static MULTI_SPACE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"  +").unwrap());
+    LazyLock::new(|| Regex::new(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}").unwrap());
+
+/// Regex for matching bracketed durations in output (e.g., "[   0.024s]").
+static BRACKETED_DURATION_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\[\s*\d+\.\d+s\]").unwrap());
 
 /// User config content that enables recording.
 ///
@@ -96,6 +101,8 @@ fn cli_for_project(p: &TempProject) -> CargoNextestCli {
 ///    `experimental = ["record"]` and `[record] enabled = true`)
 /// 3. Sets `NEXTEST_CACHE_DIR` to a directory inside the temp project
 /// 4. Optionally sets `__NEXTEST_FORCE_RUN_ID` for deterministic run IDs
+/// 5. Sets `__NEXTEST_REDACT=1` to produce fixed-width placeholders for
+///    timestamps, durations, and sizes, preserving column alignment
 fn cli_with_recording(
     p: &TempProject,
     cache_dir: &Utf8Path,
@@ -105,6 +112,7 @@ fn cli_with_recording(
     let mut cli = cli_for_project(p);
     cli.args(["--user-config-file", user_config_path.as_str()]);
     cli.env(NEXTEST_CACHE_DIR_ENV, cache_dir.as_str());
+    cli.env(NEXTEST_REDACT_ENV, "1");
     if let Some(run_id) = run_id {
         cli.env(FORCE_RUN_ID_ENV, run_id);
     }
@@ -159,41 +167,44 @@ fn count_runs(output: &str) -> usize {
 
 /// Redacts dynamic fields from output for snapshot comparison.
 ///
-/// This is critical for deterministic snapshots. The `temp_root` parameter
-/// allows redacting all paths within the temp directory with `[TEMP_DIR]`.
+/// This function redacts:
+/// - Temp root paths with `[TEMP_DIR]`
+/// - Timestamps with `XXXX-XX-XX XX:XX:XX` (19 chars, preserving width)
+/// - Bracketed durations like `[   0.024s]` with same-width placeholders
+///
+/// Store list output (timestamps, durations, sizes in columns) is redacted by
+/// the Redactor infrastructure when `__NEXTEST_REDACT=1` is set. This function
+/// handles additional dynamic fields in replay output.
 fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
-    let output = output.to_string();
-
     // Redact the temp root path (this covers both workspace and cache paths).
-    // This regex is created dynamically since it depends on the temp root path.
     let temp_root_escaped = regex::escape(temp_root.as_str());
     let temp_root_regex = Regex::new(&format!(r"{temp_root_escaped}[^\s]*")).unwrap();
-    let output = temp_root_regex
-        .replace_all(&output, "[TEMP_DIR]")
-        .to_string();
+    let output = temp_root_regex.replace_all(output, "[TEMP_DIR]");
 
-    // Note: Run IDs are NOT redacted because all tests use deterministic run IDs
-    // via __NEXTEST_FORCE_RUN_ID. This makes snapshots more readable and verifiable.
+    // Redact timestamps with fixed-width placeholder (19 chars).
+    let output = TIMESTAMP_REGEX.replace_all(&output, "XXXX-XX-XX XX:XX:XX");
 
-    // Redact timestamps: 2024-01-15T10:30:45Z or 2024-01-15 10:30:45 -> [TIMESTAMP].
-    let output = TIMESTAMP_REGEX
-        .replace_all(&output, "[TIMESTAMP]")
-        .to_string();
+    // Redact bracketed durations with same-width placeholder.
+    // E.g., "[   0.024s]" (11 chars) -> "[ duration ]" (11 chars).
+    let output = BRACKETED_DURATION_REGEX.replace_all(&output, |caps: &regex::Captures| {
+        let matched = caps.get(0).unwrap().as_str();
+        let width = matched.len();
+        // Create a placeholder that fits within the brackets with same width.
+        // "[" + padding + "duration" + padding + "]"
+        let inner_width = width - 2; // subtract brackets
+        let placeholder = "duration";
+        let padding = inner_width.saturating_sub(placeholder.len());
+        let left_pad = padding.div_ceil(2);
+        let right_pad = padding.saturating_sub(left_pad);
+        format!(
+            "[{}{}{}]",
+            " ".repeat(left_pad),
+            placeholder,
+            " ".repeat(right_pad)
+        )
+    });
 
-    // Redact durations: 1.234s, 0.5ms, 123ms -> [DURATION].
-    let output = DURATION_REGEX
-        .replace_all(&output, "[DURATION]")
-        .to_string();
-
-    // Redact file sizes: 1.2 MB, 456 KB, 123 B -> [SIZE].
-    let output = SIZE_REGEX.replace_all(&output, "[SIZE]").to_string();
-
-    // Normalize runs of 2+ spaces to exactly 2 spaces. This handles
-    // variable-width fields like durations (0.1s vs 10.5s) that would
-    // otherwise cause inconsistent spacing in snapshots.
-    let output = MULTI_SPACE_REGEX.replace_all(&output, "  ").to_string();
-
-    output
+    output.to_string()
 }
 
 // --- Tests ---

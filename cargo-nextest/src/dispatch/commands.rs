@@ -27,6 +27,7 @@ use nextest_runner::{
         DisplayRunList, PruneKind, RecordRetentionPolicy, RunStore, Styles as RecordStyles,
         records_cache_dir,
     },
+    redact::Redactor,
     user_config::{UserConfig, elements::RecordConfig},
     write_str::WriteStr,
 };
@@ -528,6 +529,9 @@ impl StoreCommand {
             theme_characters.use_unicode();
         }
 
+        // Create redactor for snapshot testing if __NEXTEST_REDACT=1.
+        let redactor = crate::output::should_redact().then(Redactor::for_snapshot_testing);
+
         match self {
             Self::List {} => {
                 let store = RunStore::new(&cache_dir)
@@ -548,8 +552,13 @@ impl StoreCommand {
                 } else {
                     None
                 };
-                let display =
-                    DisplayRunList::new(&snapshot, store_path, &styles, &theme_characters);
+                let display = DisplayRunList::new(
+                    &snapshot,
+                    store_path,
+                    &styles,
+                    &theme_characters,
+                    redactor.as_ref(),
+                );
                 write!(paged_output, "{}", display)
                     .map_err(|err| ExpectedError::WriteError { err })?;
 
@@ -565,6 +574,7 @@ impl StoreCommand {
                 &styles,
                 &mut paged_output,
                 output_writer,
+                redactor.as_ref(),
             ),
         }
     }
@@ -586,6 +596,7 @@ impl PruneOpts {
         styles: &RecordStyles,
         paged_output: &mut PagedOutput,
         output_writer: &mut OutputWriter,
+        redactor: Option<&Redactor>,
     ) -> Result<i32> {
         let store =
             RunStore::new(cache_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
@@ -603,7 +614,7 @@ impl PruneOpts {
             write!(
                 paged_output,
                 "{}",
-                plan.display(snapshot.run_id_index(), styles)
+                plan.display(snapshot.run_id_index(), styles, redactor)
             )
             .map_err(|err| ExpectedError::WriteError { err })?;
             Ok(0)

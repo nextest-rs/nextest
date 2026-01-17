@@ -5,6 +5,6 @@ snapshot_kind: text
 ---
 1 recorded run:
 
-  60000001  [TIMESTAMP]  [DURATION]  [SIZE]  5 passed iterations  *latest
-  ──────
-  [SIZE]
+  60000001  XXXX-XX-XX XX:XX:XX  <duration>  <size> KB  5 passed iterations  *latest
+                                             ──────
+                                             <size> KB
