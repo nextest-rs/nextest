@@ -30,7 +30,7 @@ use nextest_runner::{
     },
     partition::PartitionerBuilder,
     platform::BuildPlatforms,
-    record::{NoTestsBehavior, ReplayReporterBuilder},
+    record::{NoTestsBehavior, ReplayReporterBuilder, RunIdSelector},
     reporter::{
         FinalStatusLevel, MaxProgressRunning, ReporterBuilder, StatusLevel, TestOutputDisplay,
     },
@@ -310,11 +310,12 @@ pub(super) struct ListOpts {
 /// Options for the replay command.
 #[derive(Debug, Args)]
 pub(super) struct ReplayOpts {
-    /// Run ID to replay (default: most recent completed run).
+    /// Run ID to replay.
     ///
-    /// Accepts full UUIDs or unambiguous prefixes.
-    #[arg(long, short = 'r', value_name = "RUN_ID")]
-    pub(super) run_id: Option<String>,
+    /// Accepts "latest" (the default) for the most recent completed run,
+    /// or a full UUID or unambiguous prefix.
+    #[arg(long, short = 'r', value_name = "RUN_ID", default_value_t)]
+    pub(super) run_id: RunIdSelector,
 
     /// Exit with the same code as the original run.
     ///

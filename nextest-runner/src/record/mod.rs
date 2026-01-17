@@ -49,15 +49,15 @@ pub use retention::{
     DisplayPrunePlan, DisplayPruneResult, PruneKind, PrunePlan, PruneResult, RecordRetentionPolicy,
     format_size_display,
 };
-pub use run_id_index::{RunIdIndex, ShortestRunIdPrefix};
+pub use run_id_index::{RunIdIndex, RunIdSelector, ShortestRunIdPrefix};
 pub use session::{
     RecordFinalizeResult, RecordFinalizeWarning, RecordSession, RecordSessionConfig,
     RecordSessionSetup,
 };
 pub use store::{
     CompletedRunStats, ComponentSizes, DisplayRecordedRunInfo, DisplayRunList,
-    ExclusiveLockedRunStore, MostRecentRunResult, RecordedRunInfo, RecordedRunStatus,
-    RecordedSizes, RunListAlignment, RunStore, RunStoreSnapshot, SharedLockedRunStore,
+    ExclusiveLockedRunStore, RecordedRunInfo, RecordedRunStatus, RecordedSizes, ResolveRunIdResult,
+    RunListAlignment, RunStore, RunStoreSnapshot, SharedLockedRunStore, StoreRunsDir,
     StressCompletedRunStats, Styles,
 };
 pub use summary::{

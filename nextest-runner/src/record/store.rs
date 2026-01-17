@@ -15,7 +15,7 @@ use super::{
     retention::{
         PruneKind, PrunePlan, PruneResult, RecordRetentionPolicy, delete_orphaned_dirs, delete_runs,
     },
-    run_id_index::{PrefixResolutionError, RunIdIndex},
+    run_id_index::{PrefixResolutionError, RunIdIndex, RunIdSelector},
 };
 use crate::{
     errors::{RunIdResolutionError, RunStoreError},
@@ -41,6 +41,24 @@ use swrite::{SWrite, swrite};
 static RUNS_LOCK_FILE_NAME: &str = "runs.lock";
 static RUNS_JSON_FILE_NAME: &str = "runs.json";
 
+/// A reference to the runs directory in a run store.
+///
+/// This provides methods to compute paths within the runs directory.
+#[derive(Clone, Copy, Debug)]
+pub struct StoreRunsDir<'a>(&'a Utf8Path);
+
+impl<'a> StoreRunsDir<'a> {
+    /// Returns the path to a specific run's directory.
+    pub fn run_dir(self, run_id: ReportUuid) -> Utf8PathBuf {
+        self.0.join(run_id.to_string())
+    }
+
+    /// Returns the underlying path to the runs directory.
+    pub fn as_path(self) -> &'a Utf8Path {
+        self.0
+    }
+}
+
 /// Manages the storage of recorded test runs.
 ///
 /// The run store is a directory containing a list of recorded runs and their data.
@@ -65,9 +83,9 @@ impl RunStore {
         Ok(Self { runs_dir })
     }
 
-    /// Returns the path to the runs directory.
-    pub fn runs_dir(&self) -> &Utf8Path {
-        &self.runs_dir
+    /// Returns the runs directory.
+    pub fn runs_dir(&self) -> StoreRunsDir<'_> {
+        StoreRunsDir(&self.runs_dir)
     }
 
     /// Acquires a shared lock on the run store for reading.
@@ -94,7 +112,7 @@ impl RunStore {
         let run_id_index = RunIdIndex::new(&result.runs);
 
         Ok(SharedLockedRunStore {
-            runs_dir: &self.runs_dir,
+            runs_dir: StoreRunsDir(&self.runs_dir),
             locked_file: DebugIgnore(file),
             runs: result.runs,
             write_permission: result.write_permission,
@@ -125,7 +143,7 @@ impl RunStore {
         let result = read_runs_json(&self.runs_dir)?;
 
         Ok(ExclusiveLockedRunStore {
-            runs_dir: &self.runs_dir,
+            runs_dir: StoreRunsDir(&self.runs_dir),
             locked_file: DebugIgnore(file),
             runs: result.runs,
             last_pruned_at: result.last_pruned_at,
@@ -140,7 +158,7 @@ impl RunStore {
 /// corresponding [`RunStore`].
 #[derive(Debug)]
 pub struct ExclusiveLockedRunStore<'store> {
-    runs_dir: &'store Utf8Path,
+    runs_dir: StoreRunsDir<'store>,
     // Held for RAII lock semantics; the lock is released when this struct is dropped.
     #[expect(dead_code)]
     locked_file: DebugIgnore<File>,
@@ -150,8 +168,8 @@ pub struct ExclusiveLockedRunStore<'store> {
 }
 
 impl<'store> ExclusiveLockedRunStore<'store> {
-    /// Returns the path to the runs directory.
-    pub fn runs_dir(&self) -> &Utf8Path {
+    /// Returns the runs directory.
+    pub fn runs_dir(&self) -> StoreRunsDir<'store> {
         self.runs_dir
     }
 
@@ -191,7 +209,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
 
         let found = self.mark_run_completed_inner(run_id, sizes, status, duration_secs);
         if found {
-            write_runs_json(self.runs_dir, &self.runs, self.last_pruned_at)?;
+            write_runs_json(self.runs_dir.as_path(), &self.runs, self.last_pruned_at)?;
         }
         Ok(found)
     }
@@ -265,10 +283,11 @@ impl<'store> ExclusiveLockedRunStore<'store> {
             .into_iter()
             .collect();
 
+        let runs_dir = self.runs_dir();
         let mut result = if to_delete.is_empty() {
             PruneResult::default()
         } else {
-            delete_runs(self.runs_dir, &mut self.runs, &to_delete)
+            delete_runs(runs_dir, &mut self.runs, &to_delete)
         };
         result.kind = kind;
 
@@ -278,7 +297,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
         if result.deleted_count > 0 || result.orphans_deleted > 0 {
             // Update last_pruned_at since we performed pruning.
             self.last_pruned_at = Some(now);
-            write_runs_json(self.runs_dir, &self.runs, self.last_pruned_at)?;
+            write_runs_json(self.runs_dir.as_path(), &self.runs, self.last_pruned_at)?;
         }
 
         Ok(result)
@@ -363,13 +382,13 @@ impl<'store> ExclusiveLockedRunStore<'store> {
             status: RecordedRunStatus::Incomplete,
         };
         self.runs.push(run);
-        write_runs_json(self.runs_dir, &self.runs, self.last_pruned_at)?;
+        write_runs_json(self.runs_dir.as_path(), &self.runs, self.last_pruned_at)?;
 
         // Create the run directory while still holding the lock. This prevents
         // a race where another process could prune the newly-added run entry
         // before the directory exists, leaving an orphaned directory. The lock
         // is released when `self` is dropped.
-        let run_dir = self.runs_dir.join(run_id.to_string());
+        let run_dir = self.runs_dir().run_dir(run_id);
 
         RunRecorder::new(run_dir, max_output_size)
     }
@@ -512,7 +531,7 @@ pub struct StressCompletedRunStats {
 
 /// Result of looking up the most recent replayable run.
 #[derive(Clone, Copy, Debug)]
-pub struct MostRecentRunResult {
+pub struct ResolveRunIdResult {
     /// The run ID of the most recent replayable run.
     pub run_id: ReportUuid,
     /// The number of newer runs that are not replayable (incomplete or unknown
@@ -875,13 +894,17 @@ impl fmt::Display for DisplayRunList<'_> {
             plural::runs_str(self.snapshot.run_count()),
         )?;
 
+        // Compute the latest (most recent replayable) run ID for marking.
+        let latest_run_id = self.snapshot.most_recent_run().ok().map(|r| r.run_id);
+
         let alignment = RunListAlignment::from_runs(self.snapshot.runs());
         for run in self.snapshot.runs() {
-            writeln!(
-                f,
-                "{}",
-                run.display(self.snapshot.run_id_index(), alignment, self.styles)
-            )?;
+            let display = run.display(self.snapshot.run_id_index(), alignment, self.styles);
+            if Some(run.run_id) == latest_run_id {
+                writeln!(f, "{}  *{}", display, "latest".style(self.styles.count))?;
+            } else {
+                writeln!(f, "{}", display)?;
+            }
         }
 
         // Display total size at the bottom.
@@ -978,7 +1001,7 @@ fn write_runs_json(
 /// with the exclusive lock used for writing.
 #[derive(Debug)]
 pub struct SharedLockedRunStore<'store> {
-    runs_dir: &'store Utf8Path,
+    runs_dir: StoreRunsDir<'store>,
     #[expect(dead_code, reason = "held for lock duration")]
     locked_file: DebugIgnore<File>,
     runs: Vec<RecordedRunInfo>,
@@ -991,7 +1014,7 @@ impl<'store> SharedLockedRunStore<'store> {
     /// lock.
     pub fn into_snapshot(self) -> RunStoreSnapshot {
         RunStoreSnapshot {
-            runs_dir: self.runs_dir.to_owned(),
+            runs_dir: self.runs_dir.as_path().to_owned(),
             runs: self.runs,
             write_permission: self.write_permission,
             run_id_index: self.run_id_index,
@@ -1009,9 +1032,9 @@ pub struct RunStoreSnapshot {
 }
 
 impl RunStoreSnapshot {
-    /// Returns the path to the runs directory.
-    pub fn runs_dir(&self) -> &Utf8Path {
-        &self.runs_dir
+    /// Returns the runs directory.
+    pub fn runs_dir(&self) -> StoreRunsDir<'_> {
+        StoreRunsDir(&self.runs_dir)
     }
 
     /// Returns whether this nextest can write to the runs.json file.
@@ -1043,12 +1066,35 @@ impl RunStoreSnapshot {
         self.runs.iter().map(|r| r.sizes.total_compressed()).sum()
     }
 
+    /// Resolves a run ID selector to a run result.
+    ///
+    /// For [`RunIdSelector::Latest`], returns the most recent replayable run.
+    /// For [`RunIdSelector::Prefix`], resolves the prefix to a specific run.
+    ///
+    /// Returns a [`ResolveRunIdResult`] containing the run ID and, for
+    /// `Latest`, the count of newer incomplete runs that were skipped.
+    pub fn resolve_run_id(
+        &self,
+        selector: &RunIdSelector,
+    ) -> Result<ResolveRunIdResult, RunIdResolutionError> {
+        match selector {
+            RunIdSelector::Latest => self.most_recent_run(),
+            RunIdSelector::Prefix(prefix) => {
+                let run_id = self.resolve_run_id_prefix(prefix)?;
+                Ok(ResolveRunIdResult {
+                    run_id,
+                    newer_incomplete_count: 0,
+                })
+            }
+        }
+    }
+
     /// Resolves a run ID prefix to a full UUID.
     ///
     /// The prefix must be a valid hexadecimal string. If the prefix matches
     /// exactly one run, that run's UUID is returned. Otherwise, an error is
     /// returned indicating whether no runs matched or multiple runs matched.
-    pub fn resolve_run_id(&self, prefix: &str) -> Result<ReportUuid, RunIdResolutionError> {
+    fn resolve_run_id_prefix(&self, prefix: &str) -> Result<ReportUuid, RunIdResolutionError> {
         self.run_id_index.resolve_prefix(prefix).map_err(|err| {
             match err {
                 PrefixResolutionError::NotFound => RunIdResolutionError::NotFound {
@@ -1092,7 +1138,7 @@ impl RunStoreSnapshot {
     ///
     /// Returns an error if there are no runs at all, or if there are runs but
     /// none are replayable.
-    pub fn most_recent_run(&self) -> Result<MostRecentRunResult, RunIdResolutionError> {
+    pub fn most_recent_run(&self) -> Result<ResolveRunIdResult, RunIdResolutionError> {
         if self.runs.is_empty() {
             return Err(RunIdResolutionError::NoRuns);
         }
@@ -1105,7 +1151,7 @@ impl RunStoreSnapshot {
         let mut newer_incomplete_count = 0;
         for run in sorted_runs {
             if run.status.is_replayable() {
-                return Ok(MostRecentRunResult {
+                return Ok(ResolveRunIdResult {
                     run_id: run.run_id,
                     newer_incomplete_count,
                 });

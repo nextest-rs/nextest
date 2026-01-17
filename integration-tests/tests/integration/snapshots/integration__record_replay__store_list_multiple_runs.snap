@@ -5,7 +5,7 @@ snapshot_kind: text
 ---
 3 recorded runs:
 
-  50000003  [TIMESTAMP]  [DURATION]  [SIZE]  2 passed
+  50000003  [TIMESTAMP]  [DURATION]  [SIZE]  2 passed  *latest
   50000002  [TIMESTAMP]  [DURATION]  [SIZE]  1 passed
   50000001  [TIMESTAMP]  [DURATION]  [SIZE]  1 passed
   ──────

@@ -5,6 +5,6 @@ snapshot_kind: text
 ---
 1 recorded run:
 
-  10000001  [TIMESTAMP]  [DURATION]  [SIZE]  21 passed / 9 failed
+  10000001  [TIMESTAMP]  [DURATION]  [SIZE]  21 passed / 9 failed  *latest
   ──────
   [SIZE]

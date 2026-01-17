@@ -9,14 +9,13 @@
 
 use super::{
     run_id_index::RunIdIndex,
-    store::{RunListAlignment, Styles},
+    store::{RunListAlignment, StoreRunsDir, Styles},
 };
 use crate::{
     errors::RecordPruneError, helpers::plural, record::RecordedRunInfo,
     user_config::elements::RecordConfig,
 };
 use bytesize::ByteSize;
-use camino::Utf8Path;
 use chrono::{DateTime, TimeDelta, Utc};
 use owo_colors::OwoColorize;
 use quick_junit::ReportUuid;
@@ -393,14 +392,14 @@ impl fmt::Display for DisplayPrunePlan<'_> {
 /// Deletion continues even if individual runs fail to delete. Errors are
 /// collected in the returned `PruneResult`.
 pub(crate) fn delete_runs(
-    runs_dir: &Utf8Path,
+    runs_dir: StoreRunsDir<'_>,
     runs: &mut Vec<RecordedRunInfo>,
     to_delete: &HashSet<ReportUuid>,
 ) -> PruneResult {
     let mut result = PruneResult::default();
 
     for run_id in to_delete {
-        let run_dir = runs_dir.join(run_id.to_string());
+        let run_dir = runs_dir.run_dir(*run_id);
 
         let size_bytes = runs
             .iter()
@@ -442,17 +441,18 @@ pub(crate) fn delete_runs(
 /// present in the `known_runs` set. This can happen if a process crashes
 /// after creating a run directory but before the run completes.
 pub(crate) fn delete_orphaned_dirs(
-    runs_dir: &Utf8Path,
+    runs_dir: StoreRunsDir<'_>,
     known_runs: &HashSet<ReportUuid>,
     result: &mut PruneResult,
 ) {
-    let entries = match runs_dir.read_dir_utf8() {
+    let runs_path = runs_dir.as_path();
+    let entries = match runs_path.read_dir_utf8() {
         Ok(entries) => entries,
         Err(error) => {
             // If we can't read the directory, record the error but don't fail.
             if error.kind() != std::io::ErrorKind::NotFound {
                 result.errors.push(RecordPruneError::ReadRunsDir {
-                    path: runs_dir.to_owned(),
+                    path: runs_path.to_owned(),
                     error,
                 });
             }
@@ -465,7 +465,7 @@ pub(crate) fn delete_orphaned_dirs(
             Ok(entry) => entry,
             Err(error) => {
                 result.errors.push(RecordPruneError::ReadDirEntry {
-                    dir: runs_dir.to_owned(),
+                    dir: runs_path.to_owned(),
                     error,
                 });
                 continue;
@@ -498,7 +498,7 @@ pub(crate) fn delete_orphaned_dirs(
             continue;
         }
 
-        let path = runs_dir.join(dir_name);
+        let path = runs_dir.run_dir(run_id);
         match std::fs::remove_dir_all(&path) {
             Ok(()) => {
                 result.orphans_deleted += 1;

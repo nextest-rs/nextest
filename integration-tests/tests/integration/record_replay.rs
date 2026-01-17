@@ -292,6 +292,19 @@ fn test_record_replay_cycle() {
         RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
     );
 
+    // Replay with explicit "latest" (should produce same output as default).
+    let replay_latest = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+        .args(["replay", "-r", "latest", "--status-level", "all"])
+        .output();
+    assert!(
+        replay_latest.exit_status.success(),
+        "replay with -r latest should succeed: {replay_latest}"
+    );
+    check_run_output(
+        &replay_latest.stdout,
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
     // Verify archive structure.
     let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
     let run_dirs: Vec<_> = std::fs::read_dir(&runs_dir)

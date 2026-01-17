@@ -613,13 +613,13 @@ pub struct ReplayHeader {
     pub status: RecordedRunStatus,
     /// Number of newer incomplete runs that were skipped.
     ///
-    /// This is `Some` only when the most recent run was not selected because
+    /// This is non-zero when the most recent run was not selected because
     /// it was incomplete, and we fell back to an earlier completed run.
-    pub newer_incomplete_count: Option<usize>,
+    pub newer_incomplete_count: usize,
 }
 
 impl ReplayHeader {
-    /// Creates a new replay header from run info and optional incomplete count.
+    /// Creates a new replay header from run info and incomplete count.
     ///
     /// The `run_id_index` parameter enables unique prefix highlighting similar
     /// to `cargo nextest store list`. If provided, the shortest unique prefix
@@ -628,7 +628,7 @@ impl ReplayHeader {
         run_id: ReportUuid,
         run_info: Option<&RecordedRunInfo>,
         run_id_index: Option<&RunIdIndex>,
-        newer_incomplete_count: Option<usize>,
+        newer_incomplete_count: usize,
     ) -> Self {
         let (started_at, status) = match run_info {
             Some(info) => (info.started_at, info.status.clone()),

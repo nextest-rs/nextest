@@ -1,5 +1,8 @@
 ---
 source: integration-tests/tests/integration/record_replay.rs
-expression: redact_dynamic_fields(&replay_invalid.stderr_as_str())
+expression: "redact_dynamic_fields(&replay_invalid.stderr_as_str(), temp_root)"
+snapshot_kind: text
 ---
-error: prefix `not-a-uuid!!!` contains invalid characters (expected hexadecimal)
+error: invalid value 'not-a-uuid!!!' for '--run-id <RUN_ID>': invalid run ID selector `not-a-uuid!!!`: expected `latest` or hex digits
+
+For more information, try '--help'.

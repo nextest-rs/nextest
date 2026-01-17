@@ -1298,29 +1298,14 @@ pub(super) fn exec_replay(
         .map_err(|err| ExpectedError::RecordSetupError { err })?
         .into_snapshot();
 
-    let (run_id, newer_incomplete_count) = match &replay_opts.run_id {
-        Some(prefix) => {
-            let run_id = snapshot
-                .resolve_run_id(prefix)
-                .map_err(|err| ExpectedError::RunIdResolutionError { err })?;
-            (run_id, None)
-        }
-        None => {
-            let result = snapshot
-                .most_recent_run()
-                .map_err(|err| ExpectedError::RunIdResolutionError { err })?;
-            let count = if result.newer_incomplete_count > 0 {
-                Some(result.newer_incomplete_count)
-            } else {
-                None
-            };
-            (result.run_id, count)
-        }
-    };
+    let result = snapshot
+        .resolve_run_id(&replay_opts.run_id)
+        .map_err(|err| ExpectedError::RunIdResolutionError { err })?;
+    let run_id = result.run_id;
 
     let run_info = snapshot.get_run(run_id);
 
-    let run_dir = snapshot.runs_dir().join(run_id.to_string());
+    let run_dir = snapshot.runs_dir().run_dir(run_id);
     let mut reader =
         RecordReader::open(&run_dir).map_err(|err| ExpectedError::RecordReadError { err })?;
 
@@ -1390,7 +1375,7 @@ pub(super) fn exec_replay(
         run_id,
         run_info,
         Some(snapshot.run_id_index()),
-        newer_incomplete_count,
+        result.newer_incomplete_count,
     );
     reporter.write_header(&header)?;
 
