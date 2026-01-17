@@ -26,6 +26,7 @@
 
 mod cache_dir;
 pub mod dicts;
+mod display;
 pub mod format;
 mod reader;
 mod recorder;
@@ -39,26 +40,26 @@ mod summary;
 pub(crate) mod test_helpers;
 
 pub use cache_dir::{NEXTEST_CACHE_DIR_ENV, records_cache_dir};
+pub use display::{
+    DisplayPrunePlan, DisplayPruneResult, DisplayRecordedRunInfo, DisplayRunList, RunListAlignment,
+    Styles, format_size_display,
+};
 pub use format::RunsJsonWritePermission;
 pub use reader::{RecordEventIter, RecordReader};
 pub use recorder::{RunRecorder, StoreSizes};
 pub use replay::{
     ReplayContext, ReplayConversionError, ReplayHeader, ReplayReporter, ReplayReporterBuilder,
 };
-pub use retention::{
-    DisplayPrunePlan, DisplayPruneResult, PruneKind, PrunePlan, PruneResult, RecordRetentionPolicy,
-    format_size_display,
-};
+pub use retention::{PruneKind, PrunePlan, PruneResult, RecordRetentionPolicy};
 pub use run_id_index::{RunIdIndex, RunIdSelector, ShortestRunIdPrefix};
 pub use session::{
     RecordFinalizeResult, RecordFinalizeWarning, RecordSession, RecordSessionConfig,
     RecordSessionSetup,
 };
 pub use store::{
-    CompletedRunStats, ComponentSizes, DisplayRecordedRunInfo, DisplayRunList,
-    ExclusiveLockedRunStore, RecordedRunInfo, RecordedRunStatus, RecordedSizes, ResolveRunIdResult,
-    RunListAlignment, RunStore, RunStoreSnapshot, SharedLockedRunStore, StoreRunsDir,
-    StressCompletedRunStats, Styles,
+    CompletedRunStats, ComponentSizes, ExclusiveLockedRunStore, RecordedRunInfo, RecordedRunStatus,
+    RecordedSizes, ResolveRunIdResult, RunStore, RunStoreSnapshot, SharedLockedRunStore,
+    StoreRunsDir, StressCompletedRunStats,
 };
 pub use summary::{
     CoreEventKind, NoTestsBehavior, OutputEventKind, OutputFileName, RecordOpts,

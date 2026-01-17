@@ -8,18 +8,18 @@
 //! to enforce those limits.
 
 use super::{
+    display::{DisplayPrunePlan, DisplayPruneResult, Styles},
     run_id_index::RunIdIndex,
-    store::{RunListAlignment, StoreRunsDir, Styles},
+    store::StoreRunsDir,
 };
 use crate::{
-    errors::RecordPruneError, helpers::plural, record::RecordedRunInfo, redact::Redactor,
+    errors::RecordPruneError, record::RecordedRunInfo, redact::Redactor,
     user_config::elements::RecordConfig,
 };
 use bytesize::ByteSize;
 use chrono::{DateTime, TimeDelta, Utc};
-use owo_colors::OwoColorize;
 use quick_junit::ReportUuid;
-use std::{collections::HashSet, error::Error, fmt, time::Duration};
+use std::{collections::HashSet, time::Duration};
 
 /// A retention policy for recorded test runs.
 ///
@@ -195,88 +195,6 @@ impl PruneResult {
     }
 }
 
-/// A display wrapper for [`PruneResult`].
-///
-/// This wrapper implements [`fmt::Display`] to format the prune result as a
-/// human-readable summary.
-#[derive(Clone, Debug)]
-pub struct DisplayPruneResult<'a> {
-    result: &'a PruneResult,
-    styles: &'a Styles,
-}
-
-impl fmt::Display for DisplayPruneResult<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let result = self.result;
-        if result.deleted_count == 0 && result.orphans_deleted == 0 {
-            if result.errors.is_empty() {
-                writeln!(f, "no runs to prune")?;
-            } else {
-                writeln!(
-                    f,
-                    "no runs pruned ({} {} occurred)",
-                    result.errors.len().style(self.styles.count),
-                    plural::errors_str(result.errors.len()),
-                )?;
-            }
-        } else {
-            let orphan_suffix = if result.orphans_deleted > 0 {
-                format!(
-                    ", {} {}",
-                    result.orphans_deleted.style(self.styles.count),
-                    plural::orphans_str(result.orphans_deleted)
-                )
-            } else {
-                String::new()
-            };
-            let error_suffix = if result.errors.is_empty() {
-                String::new()
-            } else {
-                format!(
-                    " ({} {} occurred)",
-                    result.errors.len().style(self.styles.count),
-                    plural::errors_str(result.errors.len()),
-                )
-            };
-            writeln!(
-                f,
-                "pruned {} {}{}, freed {}{}",
-                result.deleted_count.style(self.styles.count),
-                plural::runs_str(result.deleted_count),
-                orphan_suffix,
-                format_size_display(result.freed_bytes),
-                error_suffix,
-            )?;
-        }
-
-        // For explicit pruning, show error details as a bulleted list.
-        if result.kind == PruneKind::Explicit && !result.errors.is_empty() {
-            writeln!(f)?;
-            writeln!(f, "errors:")?;
-            for error in &result.errors {
-                write!(f, "  - {error}")?;
-                let mut curr = error.source();
-                while let Some(source) = curr {
-                    write!(f, ": {source}")?;
-                    curr = source.source();
-                }
-                writeln!(f)?;
-            }
-        }
-
-        Ok(())
-    }
-}
-
-/// Formats a byte count as a human-readable size string (KB or MB).
-pub fn format_size_display(bytes: u64) -> String {
-    if bytes >= 1024 * 1024 {
-        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
-    } else {
-        format!("{} KB", bytes / 1024)
-    }
-}
-
 /// The result of computing a prune plan (dry-run mode).
 ///
 /// Contains information about which runs would be deleted if the prune
@@ -345,45 +263,6 @@ impl PrunePlan {
             run_id_index,
             styles,
             redactor,
-        }
-    }
-}
-
-/// A display wrapper for [`PrunePlan`].
-///
-/// This wrapper implements [`fmt::Display`] to format the prune plan as a
-/// human-readable summary showing what would be deleted.
-#[derive(Clone, Debug)]
-pub struct DisplayPrunePlan<'a> {
-    plan: &'a PrunePlan,
-    run_id_index: &'a RunIdIndex,
-    styles: &'a Styles,
-    redactor: &'a Redactor,
-}
-
-impl fmt::Display for DisplayPrunePlan<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let plan = self.plan;
-        if plan.runs.is_empty() {
-            writeln!(f, "no runs would be pruned")
-        } else {
-            writeln!(
-                f,
-                "would prune {} {}, freeing {}:\n",
-                plan.runs.len().style(self.styles.count),
-                plural::runs_str(plan.runs.len()),
-                format_size_display(plan.total_bytes())
-            )?;
-
-            let alignment = RunListAlignment::from_runs(&plan.runs);
-            for run in &plan.runs {
-                writeln!(
-                    f,
-                    "{}",
-                    run.display(self.run_id_index, alignment, self.styles, self.redactor)
-                )?;
-            }
-            Ok(())
         }
     }
 }
@@ -524,8 +403,8 @@ pub(crate) fn delete_orphaned_dirs(
 mod tests {
     use super::*;
     use crate::record::{
-        CompletedRunStats, ComponentSizes, RecordedRunStatus, RecordedSizes,
-        StressCompletedRunStats,
+        CompletedRunStats, ComponentSizes, RecordedRunStatus, RecordedSizes, RunListAlignment,
+        StressCompletedRunStats, format_size_display,
     };
     use chrono::{FixedOffset, TimeZone};
     use semver::Version;
