@@ -10,6 +10,10 @@ on:
 
 name: cargo hakari
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   workspace-hack-check:
     name: Check workspace-hack

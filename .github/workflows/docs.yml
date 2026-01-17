@@ -7,6 +7,11 @@ on:
       - main
 
 name: Docs
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
@@ -14,7 +19,6 @@ env:
 jobs:
   docs:
     name: Build and deploy documentation
-    concurrency: ci-${{ github.ref }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
