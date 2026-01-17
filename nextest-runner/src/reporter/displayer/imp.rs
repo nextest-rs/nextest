@@ -86,15 +86,16 @@ impl DisplayReporterBuilder {
         };
 
         let mut theme_characters = ThemeCharacters::default();
-        match output {
+        match &output {
             ReporterOutput::Terminal => {
                 if supports_unicode::on(supports_unicode::Stream::Stderr) {
                     theme_characters.use_unicode();
                 }
             }
-            ReporterOutput::Writer(_) => {
-                // Always use Unicode for writers.
-                theme_characters.use_unicode();
+            ReporterOutput::Writer { use_unicode, .. } => {
+                if *use_unicode {
+                    theme_characters.use_unicode();
+                }
             }
         }
 
@@ -120,7 +121,7 @@ impl DisplayReporterBuilder {
                     term_progress,
                 }
             }
-            ReporterOutput::Writer(writer) => ReporterOutputImpl::Writer(writer),
+            ReporterOutput::Writer { writer, .. } => ReporterOutputImpl::Writer(writer),
         };
 
         // success_output is meaningless if the runner isn't capturing any
@@ -2596,7 +2597,10 @@ mod tests {
             show_term_progress: ShowTerminalProgress::No,
         };
 
-        let output = ReporterOutput::Writer(out);
+        let output = ReporterOutput::Writer {
+            writer: out,
+            use_unicode: true,
+        };
         let reporter = builder.build(output);
         f(reporter);
     }
