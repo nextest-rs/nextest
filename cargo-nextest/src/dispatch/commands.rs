@@ -530,7 +530,11 @@ impl StoreCommand {
         }
 
         // Create redactor for snapshot testing if __NEXTEST_REDACT=1.
-        let redactor = crate::output::should_redact().then(Redactor::for_snapshot_testing);
+        let redactor = if crate::output::should_redact() {
+            Redactor::for_snapshot_testing()
+        } else {
+            Redactor::noop()
+        };
 
         match self {
             Self::List {} => {
@@ -557,7 +561,7 @@ impl StoreCommand {
                     store_path,
                     &styles,
                     &theme_characters,
-                    redactor.as_ref(),
+                    &redactor,
                 );
                 write!(paged_output, "{}", display)
                     .map_err(|err| ExpectedError::WriteError { err })?;
@@ -574,7 +578,7 @@ impl StoreCommand {
                 &styles,
                 &mut paged_output,
                 output_writer,
-                redactor.as_ref(),
+                &redactor,
             ),
         }
     }
@@ -596,7 +600,7 @@ impl PruneOpts {
         styles: &RecordStyles,
         paged_output: &mut PagedOutput,
         output_writer: &mut OutputWriter,
-        redactor: Option<&Redactor>,
+        redactor: &Redactor,
     ) -> Result<i32> {
         let store =
             RunStore::new(cache_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;

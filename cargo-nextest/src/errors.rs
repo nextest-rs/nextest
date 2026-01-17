@@ -1197,14 +1197,17 @@ impl ExpectedError {
                             count.style(styles.bold),
                             plural::runs_str(*count)
                         );
-                        let redactor =
-                            crate::output::should_redact().then(Redactor::for_snapshot_testing);
+                        let redactor = if crate::output::should_redact() {
+                            Redactor::for_snapshot_testing()
+                        } else {
+                            Redactor::noop()
+                        };
                         let alignment = RunListAlignment::from_runs(candidates);
                         for candidate in candidates {
                             info!(
                                 target: "cargo_nextest::no_heading",
                                 "{}",
-                                candidate.display(run_id_index, alignment, &styles.record_styles, redactor.as_ref())
+                                candidate.display(run_id_index, alignment, &styles.record_styles, &redactor)
                             );
                         }
                         if *count > candidates.len() {

@@ -612,7 +612,7 @@ impl RecordedRunInfo {
         run_id_index: &'a RunIdIndex,
         alignment: RunListAlignment,
         styles: &'a Styles,
-        redactor: Option<&'a Redactor>,
+        redactor: &'a Redactor,
     ) -> DisplayRecordedRunInfo<'a> {
         DisplayRecordedRunInfo::new(self, run_id_index, alignment, styles, redactor)
     }
@@ -663,7 +663,7 @@ pub struct DisplayRecordedRunInfo<'a> {
     run_id_index: &'a RunIdIndex,
     alignment: RunListAlignment,
     styles: &'a Styles,
-    redactor: Option<&'a Redactor>,
+    redactor: &'a Redactor,
 }
 
 impl<'a> DisplayRecordedRunInfo<'a> {
@@ -672,7 +672,7 @@ impl<'a> DisplayRecordedRunInfo<'a> {
         run_id_index: &'a RunIdIndex,
         alignment: RunListAlignment,
         styles: &'a Styles,
-        redactor: Option<&'a Redactor>,
+        redactor: &'a Redactor,
     ) -> Self {
         Self {
             run,
@@ -709,41 +709,21 @@ impl fmt::Display for DisplayRecordedRunInfo<'_> {
 
         let status_display = self.format_status();
 
-        // Format timestamp, duration, and size with optional redaction.
-        // When redacted, use fixed-width placeholders to preserve column alignment.
         let size_kb = run.sizes.total_compressed() / 1024;
 
-        if let Some(redactor) = self.redactor {
-            let timestamp_display = redactor.redact_timestamp(&run.started_at);
-            let duration_display = redactor.redact_store_duration(run.duration_secs);
-            let size_display = redactor.redact_size_kb(size_kb);
+        let timestamp_display = self.redactor.redact_timestamp(&run.started_at);
+        let duration_display = self.redactor.redact_store_duration(run.duration_secs);
+        let size_display = self.redactor.redact_size_kb(size_kb);
 
-            write!(
-                f,
-                "  {}  {}  {}  {:>6} KB  {}",
-                run_id_display,
-                timestamp_display.style(self.styles.timestamp),
-                duration_display.style(self.styles.duration),
-                size_display.style(self.styles.size),
-                status_display,
-            )
-        } else {
-            let timestamp_display = run.started_at.format("%Y-%m-%d %H:%M:%S");
-            let duration_display = match run.duration_secs {
-                Some(secs) => format!("{secs:>9.3}s"),
-                None => format!("{:>10}", "-"),
-            };
-
-            write!(
-                f,
-                "  {}  {}  {}  {:>6} KB  {}",
-                run_id_display,
-                timestamp_display.style(self.styles.timestamp),
-                duration_display.style(self.styles.duration),
-                size_kb.style(self.styles.size),
-                status_display,
-            )
-        }
+        write!(
+            f,
+            "  {}  {}  {}  {:>6} KB  {}",
+            run_id_display,
+            timestamp_display.style(self.styles.timestamp),
+            duration_display.style(self.styles.duration),
+            size_display.style(self.styles.size),
+            status_display,
+        )
     }
 }
 
@@ -888,7 +868,7 @@ pub struct DisplayRunList<'a> {
     store_path: Option<&'a Utf8Path>,
     styles: &'a Styles,
     theme_characters: &'a ThemeCharacters,
-    redactor: Option<&'a Redactor>,
+    redactor: &'a Redactor,
 }
 
 impl<'a> DisplayRunList<'a> {
@@ -903,7 +883,7 @@ impl<'a> DisplayRunList<'a> {
         store_path: Option<&'a Utf8Path>,
         styles: &'a Styles,
         theme_characters: &'a ThemeCharacters,
-        redactor: Option<&'a Redactor>,
+        redactor: &'a Redactor,
     ) -> Self {
         Self {
             snapshot,
@@ -963,21 +943,12 @@ impl fmt::Display for DisplayRunList<'_> {
             self.theme_characters.hbar(6),
         )?;
 
-        // Optionally redact the total size for snapshot testing.
-        if let Some(redactor) = self.redactor {
-            let size_display = redactor.redact_size_kb(total_size_kb);
-            writeln!(
-                f,
-                "                                             {:>6} KB",
-                size_display.style(self.styles.size),
-            )?;
-        } else {
-            writeln!(
-                f,
-                "                                             {:>6} KB",
-                total_size_kb.style(self.styles.size),
-            )?;
-        }
+        let size_display = self.redactor.redact_size_kb(total_size_kb);
+        writeln!(
+            f,
+            "                                             {:>6} KB",
+            size_display.style(self.styles.size),
+        )?;
 
         Ok(())
     }

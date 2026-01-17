@@ -338,7 +338,7 @@ impl PrunePlan {
         &'a self,
         run_id_index: &'a RunIdIndex,
         styles: &'a Styles,
-        redactor: Option<&'a Redactor>,
+        redactor: &'a Redactor,
     ) -> DisplayPrunePlan<'a> {
         DisplayPrunePlan {
             plan: self,
@@ -358,7 +358,7 @@ pub struct DisplayPrunePlan<'a> {
     plan: &'a PrunePlan,
     run_id_index: &'a RunIdIndex,
     styles: &'a Styles,
-    redactor: Option<&'a Redactor>,
+    redactor: &'a Redactor,
 }
 
 impl fmt::Display for DisplayPrunePlan<'_> {
@@ -1056,7 +1056,11 @@ mod tests {
         let runs = std::slice::from_ref(&run);
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
-        insta::assert_snapshot!(run.display(&index, alignment, &Styles::default(), None).to_string(), @"  550e8400  2024-06-15 10:30:00      1.000s     100 KB  95 passed / 5 failed");
+        insta::assert_snapshot!(
+            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-15 10:30:00      1.000s     100 KB  95 passed / 5 failed"
+        );
     }
 
     #[test]
@@ -1071,7 +1075,11 @@ mod tests {
         let runs = std::slice::from_ref(&run);
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
-        insta::assert_snapshot!(run.display(&index, alignment, &Styles::default(), None).to_string(), @"  550e8400  2024-06-16 11:00:00      1.000s      50 KB   incomplete");
+        insta::assert_snapshot!(
+            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-16 11:00:00      1.000s      50 KB   incomplete"
+        );
     }
 
     #[test]
@@ -1091,7 +1099,11 @@ mod tests {
         let runs = std::slice::from_ref(&run);
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
-        insta::assert_snapshot!(run.display(&index, alignment, &Styles::default(), None).to_string(), @"  550e8400  2024-06-20 15:00:00      1.000s      73 KB  10 passed / 6 failed / 1 not run");
+        insta::assert_snapshot!(
+            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-20 15:00:00      1.000s      73 KB  10 passed / 6 failed / 1 not run"
+        );
     }
 
     #[test]
@@ -1111,7 +1123,11 @@ mod tests {
         let runs = std::slice::from_ref(&run);
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
-        insta::assert_snapshot!(run.display(&index, alignment, &Styles::default(), None).to_string(), @"  550e8400  2024-06-23 16:00:00      1.000s       4 KB  0 passed");
+        insta::assert_snapshot!(
+            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-23 16:00:00      1.000s       4 KB  0 passed"
+        );
     }
 
     #[test]
@@ -1156,9 +1172,24 @@ mod tests {
         let alignment = RunListAlignment::from_runs(&runs);
 
         // All passed counts should be right-aligned to 3 digits (width of 559).
-        insta::assert_snapshot!(runs[0].display(&index, alignment, &Styles::default(), None).to_string(), @"  550e8400  2024-06-21 10:00:00      1.000s      97 KB  559 passed");
-        insta::assert_snapshot!(runs[1].display(&index, alignment, &Styles::default(), None).to_string(), @"  550e8400  2024-06-21 11:00:00      1.000s      48 KB   51 passed");
-        insta::assert_snapshot!(runs[2].display(&index, alignment, &Styles::default(), None).to_string(), @"  550e8400  2024-06-21 12:00:00      1.000s      29 KB   10 passed / 6 failed / 1 not run");
+        insta::assert_snapshot!(
+            runs[0]
+                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-21 10:00:00      1.000s      97 KB  559 passed"
+        );
+        insta::assert_snapshot!(
+            runs[1]
+                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-21 11:00:00      1.000s      48 KB   51 passed"
+        );
+        insta::assert_snapshot!(
+            runs[2]
+                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-21 12:00:00      1.000s      29 KB   10 passed / 6 failed / 1 not run"
+        );
     }
 
     #[test]
@@ -1203,18 +1234,37 @@ mod tests {
         let alignment = RunListAlignment::from_runs(&runs);
 
         // Passed counts should be right-aligned to 4 digits (width of 1000).
-        insta::assert_snapshot!(runs[0].display(&index, alignment, &Styles::default(), None).to_string(), @"  550e8400  2024-06-22 10:00:00      1.000s     195 KB  1000 passed iterations");
-        insta::assert_snapshot!(runs[1].display(&index, alignment, &Styles::default(), None).to_string(), @"  550e8400  2024-06-22 11:00:00      1.000s      97 KB    95 passed iterations / 5 failed");
-        insta::assert_snapshot!(runs[2].display(&index, alignment, &Styles::default(), None).to_string(), @"  550e8400  2024-06-22 12:00:00      1.000s      78 KB    45 passed iterations / 5 failed / 450 not run (cancelled)");
+        insta::assert_snapshot!(
+            runs[0]
+                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-22 10:00:00      1.000s     195 KB  1000 passed iterations"
+        );
+        insta::assert_snapshot!(
+            runs[1]
+                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-22 11:00:00      1.000s      97 KB    95 passed iterations / 5 failed"
+        );
+        insta::assert_snapshot!(
+            runs[2]
+                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-22 12:00:00      1.000s      78 KB    45 passed iterations / 5 failed / 450 not run (cancelled)"
+        );
     }
 
     #[test]
     fn test_display_prune_plan_empty() {
         let plan = PrunePlan::new(vec![]);
         let index = RunIdIndex::new(&[]);
-        insta::assert_snapshot!(plan.display(&index, &Styles::default(), None).to_string(), @r"
+        insta::assert_snapshot!(
+            plan.display(&index, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @r"
         no runs would be pruned
-        ");
+        "
+        );
     }
 
     #[test]
@@ -1232,11 +1282,15 @@ mod tests {
         )];
         let index = RunIdIndex::new(&runs);
         let plan = PrunePlan::new(runs);
-        insta::assert_snapshot!(plan.display(&index, &Styles::default(), None).to_string(), @r"
+        insta::assert_snapshot!(
+            plan.display(&index, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @r"
         would prune 1 run, freeing 2.0 MB:
 
           550e8400  2024-06-17 12:00:00      1.000s    2048 KB  50 passed
-        ");
+        "
+        );
     }
 
     #[test]
@@ -1263,12 +1317,16 @@ mod tests {
         ];
         let index = RunIdIndex::new(&runs);
         let plan = PrunePlan::new(runs);
-        insta::assert_snapshot!(plan.display(&index, &Styles::default(), None).to_string(), @r"
+        insta::assert_snapshot!(
+            plan.display(&index, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @r"
         would prune 2 runs, freeing 1.5 MB:
 
           550e8400  2024-06-18 13:00:00      1.000s    1024 KB  100 passed
           550e8400  2024-06-19 14:00:00      1.000s     512 KB      incomplete
-        ");
+        "
+        );
     }
 
     #[test]
