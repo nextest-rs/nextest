@@ -25,7 +25,7 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use fixture_data::{models::RunProperties, nextest_tests::EXPECTED_TEST_SUITES};
 use integration_tests::{
-    env::set_env_vars,
+    env::{TestEnvInfo, set_env_vars_for_test},
     nextest_cli::{CargoNextestCli, CargoNextestOutput},
 };
 use nextest_metadata::{
@@ -58,10 +58,10 @@ fn test_version_info() {
     )
     .unwrap();
 
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
     // First run nextest with -V to get a one-line version string.
-    let output = CargoNextestCli::for_test().args(["-V"]).output();
+    let output = CargoNextestCli::for_test(&env_info).args(["-V"]).output();
     let short_stdout = output.stdout_as_str();
     let captures = version_regex
         .captures(&short_stdout)
@@ -71,7 +71,9 @@ fn test_version_info() {
     let short_hash = captures.get(2).unwrap().as_str();
     let date = captures.get(3).unwrap().as_str();
 
-    let output = CargoNextestCli::for_test().args(["--version"]).output();
+    let output = CargoNextestCli::for_test(&env_info)
+        .args(["--version"])
+        .output();
     let long_stdout = output.stdout_as_str();
 
     // Check that all expected lines are found.
@@ -110,10 +112,10 @@ fn test_version_info() {
 
 #[test]
 fn test_list_default() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -130,10 +132,10 @@ fn test_list_default() {
 
 #[test]
 fn test_list_full() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -153,7 +155,7 @@ fn test_list_full() {
     check_list_full_output(&output.stdout, None);
 
     // Test oneline format: output should be one test per line with format "binary_id test_name".
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -168,7 +170,7 @@ fn test_list_full() {
     check_list_oneline_output(&output.stdout_as_str());
 
     // Test auto format: when stdout is not a TTY, auto should produce oneline format.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -186,10 +188,10 @@ fn test_list_full() {
 
 #[test]
 fn test_list_binaries_only() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -206,7 +208,7 @@ fn test_list_binaries_only() {
     check_list_binaries_output(&output.stdout);
 
     // Check error messages for unknown binary IDs.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -238,7 +240,7 @@ fn test_list_binaries_only() {
     insta::assert_snapshot!(output.stderr_as_str());
 
     // Test oneline format for binaries-only: output should be one binary per line.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -257,9 +259,9 @@ fn test_list_binaries_only() {
 
 #[test]
 fn test_target_dir() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
+    let p = TempProject::new(&env_info).unwrap();
 
     std::env::set_current_dir(p.workspace_root())
         .expect("changed current directory to workspace root");
@@ -267,7 +269,7 @@ fn test_target_dir() {
     let run_check = |target_dir: &str, extra_args: Vec<&str>| {
         // The test is for the target directory more than for any specific package, so pick a
         // package that builds quickly.
-        let output = CargoNextestCli::for_test()
+        let output = CargoNextestCli::for_test(&env_info)
             .args(["list", "-p", "cdylib-example", "--message-format", "json"])
             .args(extra_args)
             .output();
@@ -318,12 +320,12 @@ fn test_target_dir() {
 
 #[test]
 fn test_list_full_after_build() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
-    save_binaries_metadata(&p);
+    let p = TempProject::new(&env_info).unwrap();
+    save_binaries_metadata(&env_info, &p);
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -340,12 +342,12 @@ fn test_list_full_after_build() {
 
 #[test]
 fn test_list_host_after_build() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
-    save_binaries_metadata(&p);
+    let p = TempProject::new(&env_info).unwrap();
+    save_binaries_metadata(&env_info, &p);
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -364,12 +366,12 @@ fn test_list_host_after_build() {
 
 #[test]
 fn test_list_target_after_build() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
-    save_binaries_metadata(&p);
+    let p = TempProject::new(&env_info).unwrap();
+    save_binaries_metadata(&env_info, &p);
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -388,12 +390,12 @@ fn test_list_target_after_build() {
 
 #[test]
 fn test_run_no_tests() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
-    save_binaries_metadata(&p);
+    let p = TempProject::new(&env_info).unwrap();
+    save_binaries_metadata(&env_info, &p);
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -420,7 +422,7 @@ fn test_run_no_tests() {
         "stderr contains no tests message: {output}"
     );
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -438,7 +440,7 @@ fn test_run_no_tests() {
         "stderr contains no tests message: {output}"
     );
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -461,7 +463,7 @@ fn test_run_no_tests() {
         "stderr contains no tests message: {output}"
     );
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -481,11 +483,11 @@ fn test_run_no_tests() {
 
 #[test]
 fn test_run() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -508,7 +510,7 @@ fn test_run() {
     );
 
     // --exact with nothing else should be the same as above.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -533,7 +535,7 @@ fn test_run() {
     );
 
     // Check the output with --skip.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -558,7 +560,7 @@ fn test_run() {
     );
 
     // Equivalent filterset to the above.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -582,7 +584,7 @@ fn test_run() {
     );
 
     // Check the output with --exact.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -603,7 +605,7 @@ fn test_run() {
     );
 
     // Equivalent filterset to the above.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -622,7 +624,7 @@ fn test_run() {
     );
 
     // Check the output with --exact and --skip.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -647,7 +649,7 @@ fn test_run() {
     );
 
     // Equivalent filterset to the above.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -667,7 +669,7 @@ fn test_run() {
     );
 
     // Another equivalent.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -690,7 +692,7 @@ fn test_run() {
     );
 
     // Yet another equivalent.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -716,12 +718,12 @@ fn test_run() {
 
 #[test]
 fn test_run_after_build() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
-    save_binaries_metadata(&p);
+    let p = TempProject::new(&env_info).unwrap();
+    save_binaries_metadata(&env_info, &p);
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -751,9 +753,9 @@ fn test_run_after_build() {
 /// sleeps for 4 seconds, so it should time out.
 #[test]
 fn test_bench_override_slow_timeout() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
-    let output = CargoNextestCli::for_test()
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -788,9 +790,9 @@ fn test_bench_override_slow_timeout() {
 /// Test that bench.slow-timeout causes benchmarks to time out.
 #[test]
 fn test_bench_termination() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
-    let output = CargoNextestCli::for_test()
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -832,9 +834,9 @@ fn test_bench_termination() {
 /// bench.slow-timeout.
 #[test]
 fn test_bench_ignores_test_slow_timeout() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
-    let output = CargoNextestCli::for_test()
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -872,15 +874,15 @@ fn test_bench_ignores_test_slow_timeout() {
 
 #[test]
 fn test_relocated_run() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
     let custom_target_dir = Utf8TempDir::new().unwrap();
     let custom_target_path = custom_target_dir.path().join("target");
-    let p = TempProject::new_custom_target_dir(&custom_target_path).unwrap();
-    save_binaries_metadata(&p);
+    let p = TempProject::new_custom_target_dir(&env_info, &custom_target_path).unwrap();
+    save_binaries_metadata(&env_info, &p);
     save_cargo_metadata(&p);
 
-    let mut p2 = TempProject::new().unwrap();
+    let mut p2 = TempProject::new(&env_info).unwrap();
     let new_target_path = p2.workspace_root().join("test-subdir/target");
 
     // copy target directory over
@@ -904,7 +906,7 @@ fn test_relocated_run() {
 
     // Run relocated tests
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p2.manifest_path().as_str(),
@@ -935,11 +937,11 @@ fn test_relocated_run() {
 
 #[test]
 fn test_run_with_priorities() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -986,11 +988,11 @@ fn test_run_with_priorities() {
 
 #[test]
 fn test_run_from_archive_with_no_includes() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
     let (_p1, archive_file) =
-        create_archive("", false, "archive_no_includes").expect("archive succeeded");
-    let (_p2, extracted_target) = run_archive(&archive_file);
+        create_archive(&env_info, "", false, "archive_no_includes").expect("archive succeeded");
+    let (_p2, extracted_target) = run_archive(&env_info, &archive_file);
 
     for path in [
         APP_DATA_DIR,
@@ -1007,7 +1009,7 @@ fn test_run_from_archive_with_no_includes() {
 
 #[test]
 fn test_run_from_archive_with_includes() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
     let config = r#"
 [profile.default]
@@ -1021,8 +1023,8 @@ archive.include = [
     { path = "missing-file", relative-to = "target", on-missing = "ignore" },  # should not be printed out
 ]"#;
     let (_p1, archive_file) =
-        create_archive(config, true, "archive_includes").expect("archive succeeded");
-    let (_p2, extracted_target) = run_archive(&archive_file);
+        create_archive(&env_info, config, true, "archive_includes").expect("archive succeeded");
+    let (_p2, extracted_target) = run_archive(&env_info, &archive_file);
 
     // TODO: we should test which of these paths above warn here, either by defining a serialization
     // format or via screen-scraping.
@@ -1044,20 +1046,20 @@ archive.include = [
 
 #[test]
 fn test_run_from_archive_with_missing_includes() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
     let config = r#"
 [profile.default]
 archive.include = [
     { path = "missing-file", relative-to = "target", on-missing = "error" },
 ]"#;
-    create_archive(config, false, "archive_missing_includes")
+    create_archive(&env_info, config, false, "archive_missing_includes")
         .expect_err("archive should have failed");
 }
 
 #[test]
 fn test_archive_with_build_filter() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
     let all_test_binaries: Vec<String> = EXPECTED_TEST_SUITES
         .iter()
@@ -1067,7 +1069,7 @@ fn test_archive_with_build_filter() {
         .collect();
 
     // Check that all test files are present with the `all()` filter.
-    check_archive_contents("all()", |archive_file, paths| {
+    check_archive_contents(&env_info, "all()", |env_info, archive_file, paths| {
         for file in all_test_binaries.iter() {
             assert!(
                 paths
@@ -1078,6 +1080,7 @@ fn test_archive_with_build_filter() {
             );
         }
         run_archive_with_args(
+            env_info,
             &archive_file,
             RunProperties::RELOCATED,
             NextestExitCode::TEST_RUN_FAILED,
@@ -1085,7 +1088,7 @@ fn test_archive_with_build_filter() {
     });
 
     // Check that no test files are present with the `none()` filter.
-    check_archive_contents("none()", |archive_file, paths| {
+    check_archive_contents(&env_info, "none()", |env_info, archive_file, paths| {
         for file in all_test_binaries.iter() {
             if let Some(found) = paths
                 .iter()
@@ -1103,6 +1106,7 @@ fn test_archive_with_build_filter() {
             }
         }
         run_archive_with_args(
+            env_info,
             &archive_file,
             RunProperties::SKIP_SUMMARY_CHECK | RunProperties::EXPECT_NO_BINARIES,
             NextestExitCode::NO_TESTS_RUN,
@@ -1112,27 +1116,32 @@ fn test_archive_with_build_filter() {
     let expected_package_test_file = "cdylib_example";
     let filtered_test = "nextest_tests";
     // Check that test files are filtered by the `package()` filter.
-    check_archive_contents("package(cdylib-example)", |archive_file, paths| {
-        assert!(
-            paths
-                .iter()
-                .any(|path| path_contains_test_fixture_file(path, expected_package_test_file)),
-            "{:?} was missing from the test archive",
-            expected_package_test_file
-        );
-        assert!(
-            !paths
-                .iter()
-                .any(|path| path_contains_test_fixture_file(path, filtered_test)),
-            "{:?} was present in the test archive but it should be missing",
-            filtered_test
-        );
-        run_archive_with_args(
-            &archive_file,
-            RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER | RunProperties::SKIP_SUMMARY_CHECK,
-            NextestExitCode::OK,
-        );
-    });
+    check_archive_contents(
+        &env_info,
+        "package(cdylib-example)",
+        |env_info, archive_file, paths| {
+            assert!(
+                paths
+                    .iter()
+                    .any(|path| path_contains_test_fixture_file(path, expected_package_test_file)),
+                "{:?} was missing from the test archive",
+                expected_package_test_file
+            );
+            assert!(
+                !paths
+                    .iter()
+                    .any(|path| path_contains_test_fixture_file(path, filtered_test)),
+                "{:?} was present in the test archive but it should be missing",
+                filtered_test
+            );
+            run_archive_with_args(
+                env_info,
+                &archive_file,
+                RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER | RunProperties::SKIP_SUMMARY_CHECK,
+                NextestExitCode::OK,
+            );
+        },
+    );
 }
 
 /// Checks if the file name at `path` contains `expected_file_name`
@@ -1149,11 +1158,12 @@ fn path_contains_test_fixture_file(path: &Utf8Path, expected_file_name: &str) ->
 
 #[test]
 fn test_archive_with_unsupported_test_filter() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
     let unsupported_filter = "test(sample_test)";
     assert!(
         create_archive_with_args(
+            &env_info,
             "",
             false,
             "archive_unsupported_build_filter",
@@ -1164,9 +1174,14 @@ fn test_archive_with_unsupported_test_filter() {
     );
 }
 
-fn check_archive_contents(filter: &str, cb: impl FnOnce(Utf8PathBuf, Vec<Utf8PathBuf>)) {
+fn check_archive_contents(
+    env_info: &TestEnvInfo,
+    filter: &str,
+    cb: impl FnOnce(&TestEnvInfo, Utf8PathBuf, Vec<Utf8PathBuf>),
+) {
     let (_p1, archive_file) =
-        create_archive_with_args("", false, "", &["-E", filter], false).expect("archive succeeded");
+        create_archive_with_args(env_info, "", false, "", &["-E", filter], false)
+            .expect("archive succeeded");
     let file = File::open(archive_file.clone()).unwrap();
     let decoder = zstd::stream::read::Decoder::new(file).unwrap();
     let mut archive = tar::Archive::new(decoder);
@@ -1175,7 +1190,7 @@ fn check_archive_contents(filter: &str, cb: impl FnOnce(Utf8PathBuf, Vec<Utf8Pat
         .unwrap()
         .map(|e| e.unwrap().path().unwrap().into_owned().try_into().unwrap())
         .collect::<Vec<_>>();
-    cb(archive_file, paths);
+    cb(env_info, archive_file, paths);
 }
 
 const APP_DATA_DIR: &str = "application-data";
@@ -1193,14 +1208,23 @@ const TOP_LEVEL_DIR: &str = "top-level-dir";
 const TOP_LEVEL_DIR_OTHER_FILE: &str = "top-level-dir/other-file.txt";
 
 fn create_archive(
+    env_info: &TestEnvInfo,
     config_contents: &str,
     make_uds: bool,
     snapshot_name: &str,
 ) -> Result<(TempProject, Utf8PathBuf), CargoNextestOutput> {
-    create_archive_with_args(config_contents, make_uds, snapshot_name, &[], true)
+    create_archive_with_args(
+        env_info,
+        config_contents,
+        make_uds,
+        snapshot_name,
+        &[],
+        true,
+    )
 }
 
 fn create_archive_with_args(
+    env_info: &TestEnvInfo,
     config_contents: &str,
     make_uds: bool,
     snapshot_name: &str,
@@ -1209,7 +1233,7 @@ fn create_archive_with_args(
 ) -> Result<(TempProject, Utf8PathBuf), CargoNextestOutput> {
     let custom_target_dir = Utf8TempDir::new().unwrap();
     let custom_target_path = custom_target_dir.path().join("target");
-    let p = TempProject::new_custom_target_dir(&custom_target_path).unwrap();
+    let p = TempProject::new_custom_target_dir(env_info, &custom_target_path).unwrap();
 
     let config_path = p.workspace_root().join(".config/nextest.toml");
     std::fs::write(config_path, config_contents).unwrap();
@@ -1258,7 +1282,7 @@ fn create_archive_with_args(
     cli_args.extend(extra_args);
 
     // Write the archive to the archive_file above.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(env_info)
         .args(cli_args)
         .env("__NEXTEST_REDACT", "1")
         // Used for linked path testing. See comment in
@@ -1290,8 +1314,9 @@ fn create_archive_with_args(
     }
 }
 
-fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
+fn run_archive(env_info: &TestEnvInfo, archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
     run_archive_with_args(
+        env_info,
         archive_file,
         RunProperties::RELOCATED,
         NextestExitCode::TEST_RUN_FAILED,
@@ -1299,15 +1324,16 @@ fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
 }
 
 fn run_archive_with_args(
+    env_info: &TestEnvInfo,
     archive_file: &Utf8Path,
     run_property: RunProperties,
     expected_exit_code: i32,
 ) -> (TempProject, Utf8PathBuf) {
-    let p2 = TempProject::new().unwrap();
+    let p2 = TempProject::new(env_info).unwrap();
     let extract_to = p2.workspace_root().join("extract_to");
     std::fs::create_dir_all(&extract_to).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(env_info)
         .args([
             "run",
             "--archive-file",
@@ -1332,9 +1358,9 @@ fn run_archive_with_args(
 
 #[test]
 fn test_bench() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
-    let output = CargoNextestCli::for_test()
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1360,10 +1386,10 @@ fn test_bench() {
 
 #[test]
 fn test_show_config_test_groups() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let default_profile_output = CargoNextestCli::for_test()
+    let default_profile_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1376,7 +1402,7 @@ fn test_show_config_test_groups() {
 
     insta::assert_snapshot!(default_profile_output.stdout_as_str());
 
-    let default_profile_all_output = CargoNextestCli::for_test()
+    let default_profile_all_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1390,7 +1416,7 @@ fn test_show_config_test_groups() {
 
     insta::assert_snapshot!(default_profile_all_output.stdout_as_str());
 
-    let with_retries_output = CargoNextestCli::for_test()
+    let with_retries_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1404,7 +1430,7 @@ fn test_show_config_test_groups() {
 
     insta::assert_snapshot!(with_retries_output.stdout_as_str());
 
-    let with_retries_all_output = CargoNextestCli::for_test()
+    let with_retries_all_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1419,7 +1445,7 @@ fn test_show_config_test_groups() {
 
     insta::assert_snapshot!(with_retries_all_output.stdout_as_str());
 
-    let with_termination_output = CargoNextestCli::for_test()
+    let with_termination_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1433,7 +1459,7 @@ fn test_show_config_test_groups() {
 
     insta::assert_snapshot!(with_termination_output.stdout_as_str());
 
-    let with_termination_all_output = CargoNextestCli::for_test()
+    let with_termination_all_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1451,11 +1477,11 @@ fn test_show_config_test_groups() {
 
 #[test]
 fn test_list_with_default_filter() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     // Show the output of the default filter (does not include tests not in default-filter).
-    let default_set_output = CargoNextestCli::for_test()
+    let default_set_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1471,7 +1497,7 @@ fn test_list_with_default_filter() {
     );
 
     // Show the output with -E 'all()' (does not include tests not in default-filter).
-    let all_tests_output = CargoNextestCli::for_test()
+    let all_tests_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1489,7 +1515,7 @@ fn test_list_with_default_filter() {
     );
 
     // Show the output with --ignore-default-filter (does include tests not in default-filter).
-    let bound_all_output = CargoNextestCli::for_test()
+    let bound_all_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1506,7 +1532,7 @@ fn test_list_with_default_filter() {
     );
 
     // -E 'default()' --ignore-default-filter (same as no arguments).
-    let default_tests_output = CargoNextestCli::for_test()
+    let default_tests_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1530,7 +1556,7 @@ fn test_list_with_default_filter() {
     );
 
     // -E 'package(cdylib-example)' (empty)
-    let package_example_output = CargoNextestCli::for_test()
+    let package_example_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1548,7 +1574,7 @@ fn test_list_with_default_filter() {
     );
 
     // -E 'package(cdylib-example)' --ignore-default-filter (includes cdylib-example).
-    let package_example_bound_all_output = CargoNextestCli::for_test()
+    let package_example_bound_all_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1567,7 +1593,7 @@ fn test_list_with_default_filter() {
     );
 
     // With additional regular arguments passed in (should be affected by the default fitler).
-    let with_args_output = CargoNextestCli::for_test()
+    let with_args_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1585,7 +1611,7 @@ fn test_list_with_default_filter() {
     );
 
     // With --ignore-default-filter.
-    let with_args_bound_all_output = CargoNextestCli::for_test()
+    let with_args_bound_all_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1633,10 +1659,10 @@ fn default_filter_stdout(output: &CargoNextestOutput) -> Cow<'_, str> {
 
 #[test]
 fn test_run_with_default_filter() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1662,15 +1688,15 @@ fn test_run_with_default_filter() {
 
 #[test]
 fn test_show_config_version() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     // This is the same as dispatch.rs.
     const TEST_VERSION_ENV: &str = "__NEXTEST_TEST_VERSION";
 
     // Required 0.9.56, recommended 0.9.54.
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1682,7 +1708,7 @@ fn test_show_config_version() {
 
     insta::assert_snapshot!(output.stdout_as_str());
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1699,7 +1725,7 @@ fn test_show_config_version() {
     );
     insta::assert_snapshot!(output.stdout_as_str());
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1716,7 +1742,7 @@ fn test_show_config_version() {
     );
     insta::assert_snapshot!(output.stdout_as_str());
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1733,7 +1759,7 @@ fn test_show_config_version() {
     );
     insta::assert_snapshot!(output.stdout_as_str());
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1753,7 +1779,7 @@ fn test_show_config_version() {
     // ---
     // With --override-version-check
     // ---
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1766,7 +1792,7 @@ fn test_show_config_version() {
 
     insta::assert_snapshot!(output.stdout_as_str());
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1797,7 +1823,7 @@ fn test_show_config_version() {
     f.flush().unwrap();
     std::mem::drop(f);
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1819,8 +1845,8 @@ fn test_show_config_version() {
 /// version doesn't know about.
 #[test]
 fn test_version_error_precedes_unknown_experimental() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     const TEST_VERSION_ENV: &str = "__NEXTEST_TEST_VERSION";
 
@@ -1839,7 +1865,7 @@ fail-fast = false
     .unwrap();
 
     // Run with a "current" version that doesn't meet the requirement.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1885,7 +1911,7 @@ fail-fast = false
     )
     .unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1916,9 +1942,9 @@ fail-fast = false
 
 #[test]
 fn test_setup_scripts_not_enabled() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
+    let p = TempProject::new(&env_info).unwrap();
 
     // Remove the "experimental" line from the config file.
     let config_path = p.workspace_root().join(".config/nextest.toml");
@@ -1932,7 +1958,7 @@ fn test_setup_scripts_not_enabled() {
     }
     std::fs::write(&config_path, out).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args(["run", "--manifest-path", p.manifest_path().as_str()])
         .unchecked(true)
         .output();
@@ -1945,10 +1971,10 @@ fn test_setup_scripts_not_enabled() {
 
 #[test]
 fn test_setup_script_error() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args(["run", "--manifest-path", p.manifest_path().as_str()])
         .env("__NEXTEST_SETUP_SCRIPT_ERROR", "1")
         .unchecked(true)
@@ -1963,13 +1989,13 @@ fn test_setup_script_error() {
 
 #[test]
 fn test_target_arg() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     let build_target_platform =
         Platform::build_target().expect("should detect the host target successfully");
     let host_triple = build_target_platform.triple_str();
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2001,15 +2027,15 @@ fn test_target_arg() {
 
 #[test]
 fn test_rustc_version_verbose_errors() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
     // Set RUSTC to the shim.
-    let shim_rustc = std::env::var("NEXTEST_BIN_EXE_rustc_shim").unwrap();
+    let shim_rustc = &env_info.rustc_shim_bin;
 
-    let mut command = CargoNextestCli::for_test();
+    let mut command = CargoNextestCli::for_test(&env_info);
     command
         .args(["debug", "build-platforms", "--output-format", "triple"])
-        .env("RUSTC", &shim_rustc);
+        .env("RUSTC", shim_rustc);
 
     // --- Error cases ---
     {
@@ -2096,12 +2122,12 @@ fn test_rustc_version_verbose_errors() {
 /// Test that filterset expressions combined with string filters work correctly.
 #[test]
 fn test_filterset_with_string_filters() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     // Expression: test(test_multiply_two) | test(=tests::call_dylib_add_two)
     // String filters: call_dylib_add_two, test_flaky_mod_4
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2166,11 +2192,11 @@ fn test_filterset_with_string_filters() {
 /// Test that filterset expressions without string filters work correctly.
 #[test]
 fn test_filterset_without_string_filters() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     // Expression only, no string filters.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2213,11 +2239,11 @@ fn test_filterset_without_string_filters() {
 /// Test that string filters without filterset expressions work correctly.
 #[test]
 fn test_string_filters_without_filterset() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     // String filters only, no expression.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2261,10 +2287,10 @@ fn test_string_filters_without_filterset() {
 /// Test that `--run-ignored only` runs only ignored tests.
 #[test]
 fn test_run_ignored() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2302,10 +2328,10 @@ fn test_run_ignored() {
 /// Tests that time out with `on-timeout = "pass"` should be marked as passed.
 #[test]
 fn test_timeout_with_retries() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2343,10 +2369,10 @@ fn test_timeout_with_retries() {
 /// the test should be marked as flaky (failed twice, then passed via timeout).
 #[test]
 fn test_timeout_with_flaky() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2383,10 +2409,10 @@ fn test_timeout_with_flaky() {
 /// Flaky tests should eventually pass after the configured number of retries.
 #[test]
 fn test_retries() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2419,10 +2445,10 @@ fn test_retries() {
 /// this and should all be terminated.
 #[test]
 fn test_termination() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2456,10 +2482,10 @@ fn test_termination() {
 /// test_slow_timeout* tests should fail with timeout.
 #[test]
 fn test_override_timeout_result() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2498,15 +2524,14 @@ fn current_runner_env_var() -> String {
 /// Test that listing works correctly with a target runner set.
 #[test]
 fn test_listing_with_target_runner() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     // Get the passthrough binary path.
-    let passthrough = std::env::var("NEXTEST_BIN_EXE_passthrough")
-        .expect("passthrough binary should be available");
+    let passthrough = env_info.passthrough_bin.as_str();
 
     // First, list without target runner to get baseline counts.
-    let baseline_output = CargoNextestCli::for_test()
+    let baseline_output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2525,7 +2550,7 @@ fn test_listing_with_target_runner() {
     let runner_env = current_runner_env_var();
     let runner_value = format!("{passthrough} --ensure-this-arg-is-sent");
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2567,17 +2592,16 @@ fn test_listing_with_target_runner() {
 /// Test that running tests works correctly with a target runner set.
 #[test]
 fn test_run_with_target_runner() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
 
     // Get the passthrough binary path.
-    let passthrough = std::env::var("NEXTEST_BIN_EXE_passthrough")
-        .expect("passthrough binary should be available");
+    let passthrough = env_info.passthrough_bin.as_str();
 
     let runner_env = current_runner_env_var();
     let runner_value = format!("{passthrough} --ensure-this-arg-is-sent");
 
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),

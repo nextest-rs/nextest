@@ -4,25 +4,27 @@
 //! Integration tests for debugger and tracer modes.
 
 use super::{fixtures::*, temp_project::TempProject};
-use integration_tests::{env::set_env_vars, nextest_cli::CargoNextestCli};
+use integration_tests::{
+    env::{TestEnvInfo, set_env_vars_for_test},
+    nextest_cli::CargoNextestCli,
+};
 use nextest_metadata::NextestExitCode;
 
-fn fake_interceptor_path() -> String {
-    std::env::var("NEXTEST_BIN_EXE_fake_interceptor")
-        .expect("NEXTEST_BIN_EXE_fake_interceptor should be set by nextest")
+fn fake_interceptor_path(env_info: &TestEnvInfo) -> &str {
+    env_info.fake_interceptor_bin.as_str()
 }
 
 #[test]
 fn test_debugger_integration() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
-    save_binaries_metadata(&p);
-    let fake_interceptor = fake_interceptor_path();
-    let fake_debugger = shell_words::join([fake_interceptor.as_str(), "--mode=debugger"]);
+    let p = TempProject::new(&env_info).unwrap();
+    save_binaries_metadata(&env_info, &p);
+    let fake_interceptor = fake_interceptor_path(&env_info);
+    let fake_debugger = shell_words::join([fake_interceptor, "--mode=debugger"]);
 
     // Test: Too many tests selected: select exactly 2 tests with "multiply" filter.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -65,7 +67,7 @@ fn test_debugger_integration() {
     );
 
     // Test: No tests selected.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -92,7 +94,7 @@ fn test_debugger_integration() {
     );
 
     // Test: Debugger runs successfully with exactly one test.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -134,8 +136,8 @@ fn test_debugger_integration() {
     }
 
     // Test: --debugger conflicts with --no-run.
-    let fake_debugger = shell_words::join([fake_interceptor.as_str(), "--mode=debugger"]);
-    let output = CargoNextestCli::for_test()
+    let fake_debugger = shell_words::join([fake_interceptor, "--mode=debugger"]);
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -163,15 +165,15 @@ fn test_debugger_integration() {
 
 #[test]
 fn test_tracer_integration() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
-    save_binaries_metadata(&p);
-    let fake_interceptor = fake_interceptor_path();
-    let fake_tracer = shell_words::join([fake_interceptor.as_str(), "--mode=tracer"]);
+    let p = TempProject::new(&env_info).unwrap();
+    save_binaries_metadata(&env_info, &p);
+    let fake_interceptor = fake_interceptor_path(&env_info);
+    let fake_tracer = shell_words::join([fake_interceptor, "--mode=tracer"]);
 
     // Test: Too many tests selected: select exactly 2 tests with "multiply" filter.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -214,7 +216,7 @@ fn test_tracer_integration() {
     );
 
     // Test: No tests selected.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -241,7 +243,7 @@ fn test_tracer_integration() {
     );
 
     // Test: Tracer runs successfully with exactly one test.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -281,8 +283,8 @@ fn test_tracer_integration() {
     }
 
     // Test: --tracer conflicts with --no-run.
-    let fake_tracer = shell_words::join([fake_interceptor.as_str(), "--mode=tracer"]);
-    let output = CargoNextestCli::for_test()
+    let fake_tracer = shell_words::join([fake_interceptor, "--mode=tracer"]);
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -308,8 +310,8 @@ fn test_tracer_integration() {
     );
 
     // Test: --tracer conflicts with --debugger.
-    let fake_debugger = shell_words::join([fake_interceptor.as_str(), "--mode=debugger"]);
-    let output = CargoNextestCli::for_test()
+    let fake_debugger = shell_words::join([fake_interceptor, "--mode=debugger"]);
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -342,16 +344,16 @@ fn test_tracer_integration() {
 
 #[test]
 fn test_bench_debugger_integration() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
-    save_binaries_metadata(&p);
-    let fake_interceptor = fake_interceptor_path();
-    let fake_debugger = shell_words::join([fake_interceptor.as_str(), "--mode=debugger"]);
+    let p = TempProject::new(&env_info).unwrap();
+    save_binaries_metadata(&env_info, &p);
+    let fake_interceptor = fake_interceptor_path(&env_info);
+    let fake_debugger = shell_words::join([fake_interceptor, "--mode=debugger"]);
 
     // Test: Too many benchmarks selected (use --run-ignored all to include the
     // ignored benchmark).
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -381,7 +383,7 @@ fn test_bench_debugger_integration() {
     );
 
     // Test: No benchmarks selected.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -408,7 +410,7 @@ fn test_bench_debugger_integration() {
     );
 
     // Test: Debugger runs successfully with exactly one benchmark.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -435,7 +437,7 @@ fn test_bench_debugger_integration() {
     );
 
     // Test: --debugger conflicts with --no-run.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -463,16 +465,16 @@ fn test_bench_debugger_integration() {
 
 #[test]
 fn test_bench_tracer_integration() {
-    set_env_vars();
+    let env_info = set_env_vars_for_test();
 
-    let p = TempProject::new().unwrap();
-    save_binaries_metadata(&p);
-    let fake_interceptor = fake_interceptor_path();
-    let fake_tracer = shell_words::join([fake_interceptor.as_str(), "--mode=tracer"]);
+    let p = TempProject::new(&env_info).unwrap();
+    save_binaries_metadata(&env_info, &p);
+    let fake_interceptor = fake_interceptor_path(&env_info);
+    let fake_tracer = shell_words::join([fake_interceptor, "--mode=tracer"]);
 
     // Test: Too many benchmarks selected (use --run-ignored all to include the
     // ignored benchmark).
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -501,7 +503,7 @@ fn test_bench_tracer_integration() {
     );
 
     // Test: Tracer runs successfully with exactly one benchmark.
-    let output = CargoNextestCli::for_test()
+    let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),

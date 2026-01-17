@@ -29,7 +29,7 @@ use chrono::{DateTime, FixedOffset};
 use nextest_metadata::{MismatchReason, RustBinaryId};
 use quick_junit::ReportUuid;
 use serde::{Deserialize, Serialize};
-use std::{fmt, num::NonZero, time::Duration};
+use std::{collections::BTreeMap, fmt, num::NonZero, time::Duration};
 
 // ---
 // Record options
@@ -39,7 +39,7 @@ use std::{fmt, num::NonZero, time::Duration};
 ///
 /// These options are captured at record time and stored in the archive,
 /// allowing replay to produce the same exit code as the original run.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
 pub struct RecordOpts {
@@ -50,12 +50,28 @@ pub struct RecordOpts {
     /// The behavior when no tests are run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub no_tests: Option<NoTestsBehavior>,
+
+    /// The command-line arguments used to invoke nextest.
+    pub cli_args: Vec<String>,
+
+    /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
+    pub env_vars: BTreeMap<String, String>,
 }
 
 impl RecordOpts {
     /// Creates a new `RecordOpts` with the given settings.
-    pub fn new(run_mode: NextestRunMode, no_tests: Option<NoTestsBehavior>) -> Self {
-        Self { run_mode, no_tests }
+    pub fn new(
+        run_mode: NextestRunMode,
+        no_tests: Option<NoTestsBehavior>,
+        cli_args: Vec<String>,
+        env_vars: BTreeMap<String, String>,
+    ) -> Self {
+        Self {
+            run_mode,
+            no_tests,
+            cli_args,
+            env_vars,
+        }
     }
 }
 

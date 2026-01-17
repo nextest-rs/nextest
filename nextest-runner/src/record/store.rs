@@ -29,7 +29,7 @@ use owo_colors::{OwoColorize, Style};
 use quick_junit::ReportUuid;
 use semver::Version;
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     fmt,
     fs::{File, TryLockError},
     io::{self, Write},
@@ -355,6 +355,8 @@ impl<'store> ExclusiveLockedRunStore<'store> {
         run_id: ReportUuid,
         nextest_version: Version,
         started_at: DateTime<FixedOffset>,
+        cli_args: Vec<String>,
+        env_vars: BTreeMap<String, String>,
         max_output_size: bytesize::ByteSize,
     ) -> Result<RunRecorder, RunStoreError> {
         if let RunsJsonWritePermission::Denied {
@@ -379,6 +381,8 @@ impl<'store> ExclusiveLockedRunStore<'store> {
             started_at,
             last_written_at: Local::now().fixed_offset(),
             duration_secs: None,
+            cli_args,
+            env_vars,
             sizes: RecordedSizes::default(),
             status: RecordedRunStatus::Incomplete,
         };
@@ -414,6 +418,10 @@ pub struct RecordedRunInfo {
     ///
     /// This is `None` for incomplete runs.
     pub duration_secs: Option<f64>,
+    /// The command-line arguments used to invoke nextest.
+    pub cli_args: Vec<String>,
+    /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
+    pub env_vars: BTreeMap<String, String>,
     /// Sizes broken down by component (log and store).
     pub sizes: RecordedSizes,
     /// The status and statistics for this run.

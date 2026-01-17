@@ -9,7 +9,10 @@ use crate::{fixtures::check_run_output, temp_project::TempProject};
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::Utf8TempDir;
 use fixture_data::models::RunProperties;
-use integration_tests::{env::set_env_vars, nextest_cli::CargoNextestCli};
+use integration_tests::{
+    env::{TestEnvInfo, set_env_vars_for_test},
+    nextest_cli::CargoNextestCli,
+};
 use nextest_metadata::NextestExitCode;
 use regex::Regex;
 use std::{fs, sync::LazyLock};
@@ -87,8 +90,8 @@ fn create_cache_dir(p: &TempProject) -> Utf8PathBuf {
 }
 
 /// Returns a CLI builder with the manifest path set.
-fn cli_for_project(p: &TempProject) -> CargoNextestCli {
-    let mut cli = CargoNextestCli::for_test();
+fn cli_for_project(env_info: &TestEnvInfo, p: &TempProject) -> CargoNextestCli {
+    let mut cli = CargoNextestCli::for_test(env_info);
     cli.args(["--manifest-path", p.manifest_path().as_str()]);
     cli
 }
@@ -104,12 +107,13 @@ fn cli_for_project(p: &TempProject) -> CargoNextestCli {
 /// 5. Sets `__NEXTEST_REDACT=1` to produce fixed-width placeholders for
 ///    timestamps, durations, and sizes, preserving column alignment
 fn cli_with_recording(
+    env_info: &TestEnvInfo,
     p: &TempProject,
     cache_dir: &Utf8Path,
     user_config_path: &Utf8Path,
     run_id: Option<&str>,
 ) -> CargoNextestCli {
-    let mut cli = cli_for_project(p);
+    let mut cli = cli_for_project(env_info, p);
     cli.args(["--user-config-file", user_config_path.as_str()]);
     cli.env(NEXTEST_CACHE_DIR_ENV, cache_dir.as_str());
     cli.env(NEXTEST_REDACT_ENV, "1");
@@ -215,8 +219,8 @@ fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
 /// and explicit run ID, run ID prefix resolution, fixture model verification of outputs.
 #[test]
 fn test_record_replay_cycle() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
     let cache_dir = create_cache_dir(&p);
     let temp_root = p.temp_root();
     let (_user_config_dir, user_config_path) = create_record_user_config();
@@ -225,7 +229,7 @@ fn test_record_replay_cycle() {
     const RUN_ID: &str = "10000001-0000-0000-0000-000000000001";
 
     // Record a run with the full test suite (matching what the fixture model expects).
-    let run_output = cli_with_recording(&p, &cache_dir, &user_config_path, Some(RUN_ID))
+    let run_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
         .args(["run", "--workspace", "--all-targets"])
         .unchecked(true)
         .output();
@@ -236,7 +240,7 @@ fn test_record_replay_cycle() {
     );
 
     // Verify store list shows one run.
-    let list_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let list_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "list"])
         .output();
     assert!(
@@ -249,9 +253,10 @@ fn test_record_replay_cycle() {
     );
 
     // Verify store list -v output.
-    let list_verbose_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
-        .args(["store", "list", "-v"])
-        .output();
+    let list_verbose_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args(["store", "list", "-v"])
+            .output();
     assert!(
         list_verbose_output.exit_status.success(),
         "store list -v should succeed"
@@ -264,7 +269,7 @@ fn test_record_replay_cycle() {
     // Replay with default (most recent) and verify against fixture model.
     // Note: Replay output goes to stdout, not stderr. Replay shows SKIP lines for
     // skipped tests, so we use ALLOW_SKIPPED_NAMES_IN_OUTPUT to permit that.
-    let replay_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--status-level", "all"])
         .output();
     assert!(
@@ -278,7 +283,7 @@ fn test_record_replay_cycle() {
     );
 
     // Replay with explicit full run ID (should produce same output).
-    let replay_explicit = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_explicit = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--run-id", RUN_ID, "--status-level", "all"])
         .output();
     assert!(
@@ -291,7 +296,7 @@ fn test_record_replay_cycle() {
     );
 
     // Replay with run ID prefix (first 4 chars).
-    let replay_prefix = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_prefix = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--run-id", "1000", "--status-level", "all"])
         .output();
     assert!(
@@ -304,7 +309,7 @@ fn test_record_replay_cycle() {
     );
 
     // Replay with explicit "latest" (should produce same output as default).
-    let replay_latest = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_latest = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "-r", "latest", "--status-level", "all"])
         .output();
     assert!(
@@ -371,8 +376,8 @@ fn test_record_replay_cycle() {
 /// Coverage: Empty store, invalid run ID, nonexistent run ID. Snapshots for error messages.
 #[test]
 fn test_error_handling() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
     let cache_dir = create_cache_dir(&p);
     let temp_root = p.temp_root();
     let (_user_config_dir, user_config_path) = create_record_user_config();
@@ -381,7 +386,7 @@ fn test_error_handling() {
     const RUN_ID: &str = "20000001-0000-0000-0000-000000000001";
 
     // Replay on empty store should fail with helpful error.
-    let replay_empty = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_empty = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay"])
         .unchecked(true)
         .output();
@@ -395,7 +400,7 @@ fn test_error_handling() {
     );
 
     // Store list on empty store should succeed with empty output.
-    let list_empty = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let list_empty = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "list"])
         .output();
     assert!(
@@ -408,7 +413,7 @@ fn test_error_handling() {
     );
 
     // Store list -v on empty store should succeed.
-    let list_verbose_empty = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let list_verbose_empty = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "list", "-v"])
         .output();
     assert!(
@@ -421,7 +426,7 @@ fn test_error_handling() {
     );
 
     // Create a recording for remaining error tests.
-    let recording = cli_with_recording(&p, &cache_dir, &user_config_path, Some(RUN_ID))
+    let recording = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
         .args(["run", "-E", "test(=test_success)"])
         .output();
     assert!(
@@ -430,7 +435,7 @@ fn test_error_handling() {
     );
 
     // Invalid run ID format should fail with helpful error.
-    let replay_invalid = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_invalid = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--run-id", "not-a-uuid!!!"])
         .unchecked(true)
         .output();
@@ -444,7 +449,7 @@ fn test_error_handling() {
     );
 
     // Valid UUID format but nonexistent should fail with helpful error.
-    let replay_nonexistent = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_nonexistent = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--run-id", "00000000-0000-0000-0000-000000000000"])
         .unchecked(true)
         .output();
@@ -464,8 +469,8 @@ fn test_error_handling() {
 /// Uses fixture model for verification with the full test suite.
 #[test]
 fn test_replay_options() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
     let cache_dir = create_cache_dir(&p);
     let (_user_config_dir, user_config_path) = create_record_user_config();
 
@@ -473,7 +478,7 @@ fn test_replay_options() {
     const RUN_ID: &str = "30000001-0000-0000-0000-000000000001";
 
     // Record a run with the full test suite (matching what the fixture model expects).
-    let run_output = cli_with_recording(&p, &cache_dir, &user_config_path, Some(RUN_ID))
+    let run_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
         .args(["run", "--workspace", "--all-targets"])
         .unchecked(true)
         .output();
@@ -486,7 +491,7 @@ fn test_replay_options() {
     // Test --status-level=fail (should show only failures in status lines).
     // Note: Replay output goes to stdout. With --status-level=fail, only failures
     // appear in status lines, so we can't use the full fixture model here.
-    let replay_fail_only = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_fail_only = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--status-level", "fail"])
         .output();
     assert!(
@@ -495,7 +500,7 @@ fn test_replay_options() {
     );
 
     // Test --status-level=pass (should show passes and failures).
-    let replay_pass_level = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_pass_level = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--status-level", "pass"])
         .output();
     assert!(
@@ -506,15 +511,16 @@ fn test_replay_options() {
     // Test --status-level=all with --failure-output=final (failures grouped at end).
     // Note: Replay output goes to stdout, not stderr. Replay shows SKIP lines for
     // skipped tests, so we use ALLOW_SKIPPED_NAMES_IN_OUTPUT.
-    let replay_failure_final = cli_with_recording(&p, &cache_dir, &user_config_path, None)
-        .args([
-            "replay",
-            "--failure-output",
-            "final",
-            "--status-level",
-            "all",
-        ])
-        .output();
+    let replay_failure_final =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args([
+                "replay",
+                "--failure-output",
+                "final",
+                "--status-level",
+                "all",
+            ])
+            .output();
     assert!(
         replay_failure_final.exit_status.success(),
         "replay with --failure-output=final should succeed: {replay_failure_final}"
@@ -525,15 +531,16 @@ fn test_replay_options() {
     );
 
     // Test --success-output=immediate (success output shown inline).
-    let replay_success_immediate = cli_with_recording(&p, &cache_dir, &user_config_path, None)
-        .args([
-            "replay",
-            "--success-output",
-            "immediate",
-            "--status-level",
-            "all",
-        ])
-        .output();
+    let replay_success_immediate =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args([
+                "replay",
+                "--success-output",
+                "immediate",
+                "--status-level",
+                "all",
+            ])
+            .output();
     assert!(
         replay_success_immediate.exit_status.success(),
         "replay with --success-output=immediate should succeed: {replay_success_immediate}"
@@ -544,7 +551,7 @@ fn test_replay_options() {
     );
 
     // Test --no-capture (simulated: immediate output, no indent).
-    let replay_no_capture = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_no_capture = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--no-capture", "--status-level", "all"])
         .output();
     assert!(
@@ -558,19 +565,21 @@ fn test_replay_options() {
 
     // Test --exit-code returns the original run's exit code.
     // Without --exit-code, replay always returns 0.
-    let replay_no_exit_flag = cli_with_recording(&p, &cache_dir, &user_config_path, None)
-        .args(["replay"])
-        .output();
+    let replay_no_exit_flag =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args(["replay"])
+            .output();
     assert!(
         replay_no_exit_flag.exit_status.success(),
         "replay without --exit-code should succeed"
     );
 
     // With --exit-code, replay returns the original run's exit code (non-zero due to failures).
-    let replay_with_exit_flag = cli_with_recording(&p, &cache_dir, &user_config_path, None)
-        .args(["replay", "--exit-code"])
-        .unchecked(true)
-        .output();
+    let replay_with_exit_flag =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args(["replay", "--exit-code"])
+            .unchecked(true)
+            .output();
     assert_eq!(
         replay_with_exit_flag.exit_status.code(),
         Some(NextestExitCode::TEST_RUN_FAILED),
@@ -583,8 +592,8 @@ fn test_replay_options() {
 /// Coverage: `--exit-code` with all tests passing, no tests run (both fail and pass behaviors).
 #[test]
 fn test_exit_code_edge_cases() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
     let cache_dir = create_cache_dir(&p);
     let (_user_config_dir, user_config_path) = create_record_user_config();
 
@@ -595,16 +604,22 @@ fn test_exit_code_edge_cases() {
     const RUN_ID_NO_TESTS_PASS: &str = "40000004-0000-0000-0000-000000000004";
 
     // Record a run where all tests pass.
-    let pass_recording = cli_with_recording(&p, &cache_dir, &user_config_path, Some(RUN_ID_PASS))
-        .args(["run", "-E", "test(=test_success)"])
-        .output();
+    let pass_recording = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(RUN_ID_PASS),
+    )
+    .args(["run", "-E", "test(=test_success)"])
+    .output();
     assert!(
         pass_recording.exit_status.success(),
         "all-pass recording should succeed: {pass_recording}"
     );
 
     // Replay with --exit-code should return 0 for an all-pass run.
-    let replay_all_pass = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_all_pass = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--run-id", RUN_ID_PASS, "--exit-code"])
         .output();
     assert!(
@@ -615,6 +630,7 @@ fn test_exit_code_edge_cases() {
     // Record a run with no tests matching and default --no-tests behavior (fail).
     // The default for --no-tests is "fail", so we should get exit code 4.
     let no_tests_default = cli_with_recording(
+        &env_info,
         &p,
         &cache_dir,
         &user_config_path,
@@ -631,10 +647,11 @@ fn test_exit_code_edge_cases() {
 
     // Replay with --exit-code should return exit code 4 (NO_TESTS_RUN).
     // This tests the default behavior without explicit --no-tests flag.
-    let replay_no_tests_default = cli_with_recording(&p, &cache_dir, &user_config_path, None)
-        .args(["replay", "--run-id", RUN_ID_NO_TESTS_DEFAULT, "--exit-code"])
-        .unchecked(true)
-        .output();
+    let replay_no_tests_default =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args(["replay", "--run-id", RUN_ID_NO_TESTS_DEFAULT, "--exit-code"])
+            .unchecked(true)
+            .output();
     assert_eq!(
         replay_no_tests_default.exit_status.code(),
         Some(NextestExitCode::NO_TESTS_RUN),
@@ -643,6 +660,7 @@ fn test_exit_code_edge_cases() {
 
     // Record a run with no tests matching and explicit --no-tests=fail (exit code 4).
     let no_tests_fail = cli_with_recording(
+        &env_info,
         &p,
         &cache_dir,
         &user_config_path,
@@ -663,10 +681,11 @@ fn test_exit_code_edge_cases() {
     );
 
     // Replay with --exit-code should return exit code 4 (NO_TESTS_RUN).
-    let replay_no_tests_fail = cli_with_recording(&p, &cache_dir, &user_config_path, None)
-        .args(["replay", "--run-id", RUN_ID_NO_TESTS_FAIL, "--exit-code"])
-        .unchecked(true)
-        .output();
+    let replay_no_tests_fail =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args(["replay", "--run-id", RUN_ID_NO_TESTS_FAIL, "--exit-code"])
+            .unchecked(true)
+            .output();
     assert_eq!(
         replay_no_tests_fail.exit_status.code(),
         Some(NextestExitCode::NO_TESTS_RUN),
@@ -675,6 +694,7 @@ fn test_exit_code_edge_cases() {
 
     // Record a run with no tests matching and --no-tests=pass (exit code 0).
     let no_tests_pass = cli_with_recording(
+        &env_info,
         &p,
         &cache_dir,
         &user_config_path,
@@ -693,9 +713,10 @@ fn test_exit_code_edge_cases() {
     );
 
     // Replay with --exit-code should return 0 for no-tests-run with pass behavior.
-    let replay_no_tests_pass = cli_with_recording(&p, &cache_dir, &user_config_path, None)
-        .args(["replay", "--run-id", RUN_ID_NO_TESTS_PASS, "--exit-code"])
-        .output();
+    let replay_no_tests_pass =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args(["replay", "--run-id", RUN_ID_NO_TESTS_PASS, "--exit-code"])
+            .output();
     assert!(
         replay_no_tests_pass.exit_status.success(),
         "--exit-code should return 0 for no-tests-run with pass behavior: {replay_no_tests_pass}"
@@ -707,8 +728,8 @@ fn test_exit_code_edge_cases() {
 /// Coverage: Multiple recordings, store list with multiple runs, prune dry-run, prune execution.
 #[test]
 fn test_store_management() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
     let cache_dir = create_cache_dir(&p);
     let temp_root = p.temp_root();
     let (_user_config_dir, user_config_path) = create_record_user_config();
@@ -727,7 +748,7 @@ fn test_store_management() {
         "test(=test_success) | test(=test_cwd)",
     ];
     for (run_id, filter) in RUN_IDS.iter().zip(filters.iter()) {
-        let output = cli_with_recording(&p, &cache_dir, &user_config_path, Some(run_id))
+        let output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(run_id))
             .args(["run", "-E", filter])
             .output();
         assert!(
@@ -737,7 +758,7 @@ fn test_store_management() {
     }
 
     // Verify store list shows 3 runs with snapshot.
-    let list_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let list_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "list"])
         .output();
     assert!(list_output.exit_status.success());
@@ -752,9 +773,10 @@ fn test_store_management() {
     );
 
     // Store list -v with multiple runs.
-    let list_verbose_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
-        .args(["store", "list", "-v"])
-        .output();
+    let list_verbose_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args(["store", "list", "-v"])
+            .output();
     assert!(list_verbose_output.exit_status.success());
     insta::assert_snapshot!(
         "store_list_verbose_multiple_runs",
@@ -762,7 +784,7 @@ fn test_store_management() {
     );
 
     // Prune dry-run should show what would be deleted but not delete.
-    let prune_dry = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let prune_dry = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "prune", "--dry-run"])
         .output();
     assert!(prune_dry.exit_status.success());
@@ -772,7 +794,7 @@ fn test_store_management() {
     );
 
     // Verify still 3 runs after dry-run.
-    let list_after_dry = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let list_after_dry = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "list"])
         .output();
     assert_eq!(
@@ -782,7 +804,7 @@ fn test_store_management() {
     );
 
     // Actual prune (default policy keeps all 3 since limits aren't exceeded).
-    let prune_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let prune_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "prune"])
         .output();
     assert!(prune_output.exit_status.success());
@@ -797,8 +819,8 @@ fn test_store_management() {
 /// Coverage: Stress run recording, replay with iteration metadata.
 #[test]
 fn test_stress_runs() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
     let cache_dir = create_cache_dir(&p);
     let temp_root = p.temp_root();
     let (_user_config_dir, user_config_path) = create_record_user_config();
@@ -807,16 +829,17 @@ fn test_stress_runs() {
     const RUN_ID: &str = "60000001-0000-0000-0000-000000000001";
 
     // Record a stress run with 5 iterations.
-    let stress_output = cli_with_recording(&p, &cache_dir, &user_config_path, Some(RUN_ID))
-        .args(["run", "--stress-count", "5", "-E", "test(=test_success)"])
-        .output();
+    let stress_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
+            .args(["run", "--stress-count", "5", "-E", "test(=test_success)"])
+            .output();
     assert!(
         stress_output.exit_status.success(),
         "stress run should succeed: {stress_output}"
     );
 
     // Store list should show stress run metadata.
-    let list_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let list_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "list"])
         .output();
     assert!(list_output.exit_status.success());
@@ -826,7 +849,7 @@ fn test_stress_runs() {
     );
 
     // Replay stress run with snapshot.
-    let replay_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--status-level", "all"])
         .output();
     assert!(
@@ -857,8 +880,8 @@ fn test_stress_runs() {
 /// Coverage: Multiple simultaneous recordings, replay during recording.
 #[test]
 fn test_concurrent_access() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
     let cache_dir = create_cache_dir(&p);
     let (_user_config_dir, user_config_path) = create_record_user_config();
 
@@ -867,10 +890,15 @@ fn test_concurrent_access() {
     const INITIAL_RUN_ID: &str = "70000001-0000-0000-0000-000000000001";
 
     // First create a recording to replay later.
-    let initial_recording =
-        cli_with_recording(&p, &cache_dir, &user_config_path, Some(INITIAL_RUN_ID))
-            .args(["run", "-E", "test(=test_success)"])
-            .output();
+    let initial_recording = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(INITIAL_RUN_ID),
+    )
+    .args(["run", "-E", "test(=test_success)"])
+    .output();
     assert!(
         initial_recording.exit_status.success(),
         "initial recording should succeed: {initial_recording}"
@@ -880,13 +908,34 @@ fn test_concurrent_access() {
     let manifest = p.manifest_path().to_string();
     let cache_dir_str = cache_dir.to_string();
     let user_config_path_str = user_config_path.to_string();
+    // Clone all paths needed for TestEnvInfo in threads.
+    let cargo_nextest_dup_bin = env_info.cargo_nextest_dup_bin.clone();
+    let fake_interceptor_bin = env_info.fake_interceptor_bin.clone();
+    let rustc_shim_bin = env_info.rustc_shim_bin.clone();
+    let passthrough_bin = env_info.passthrough_bin.clone();
+    #[cfg(unix)]
+    let grab_foreground_bin = env_info.grab_foreground_bin.clone();
     let handles: Vec<_> = (0..3)
         .map(|_| {
             let m = manifest.clone();
             let c = cache_dir_str.clone();
             let u = user_config_path_str.clone();
+            let cargo_nextest_dup_bin = cargo_nextest_dup_bin.clone();
+            let fake_interceptor_bin = fake_interceptor_bin.clone();
+            let rustc_shim_bin = rustc_shim_bin.clone();
+            let passthrough_bin = passthrough_bin.clone();
+            #[cfg(unix)]
+            let grab_foreground_bin = grab_foreground_bin.clone();
             std::thread::spawn(move || {
-                CargoNextestCli::for_test()
+                let thread_env_info = TestEnvInfo {
+                    cargo_nextest_dup_bin,
+                    fake_interceptor_bin,
+                    rustc_shim_bin,
+                    passthrough_bin,
+                    #[cfg(unix)]
+                    grab_foreground_bin,
+                };
+                CargoNextestCli::for_test(&thread_env_info)
                     .args([
                         "--manifest-path",
                         &m,
@@ -912,7 +961,7 @@ fn test_concurrent_access() {
     }
 
     // Verify store is not corrupted - should have 4 runs total.
-    let list_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let list_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "list"])
         .output();
     assert!(list_output.exit_status.success());
@@ -923,7 +972,7 @@ fn test_concurrent_access() {
     );
 
     // Replay should still work.
-    let replay_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay"])
         .output();
     assert!(
@@ -937,8 +986,8 @@ fn test_concurrent_access() {
 /// Coverage: Ambiguous prefix (multiple matches), unique prefix, no match.
 #[test]
 fn test_run_id_prefix_resolution() {
-    set_env_vars();
-    let p = TempProject::new().unwrap();
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
     let cache_dir = create_cache_dir(&p);
     let temp_root = p.temp_root();
     let (_user_config_dir, user_config_path) = create_record_user_config();
@@ -957,7 +1006,7 @@ fn test_run_id_prefix_resolution() {
     ];
 
     for run_id in run_ids {
-        let output = cli_with_recording(&p, &cache_dir, &user_config_path, Some(run_id))
+        let output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(run_id))
             .args(["run", "-E", "test(=test_success)"])
             .output();
         assert!(
@@ -967,7 +1016,7 @@ fn test_run_id_prefix_resolution() {
     }
 
     // Verify store list shows 3 runs with the expected IDs.
-    let list_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let list_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "list"])
         .output();
     assert!(list_output.exit_status.success());
@@ -983,7 +1032,7 @@ fn test_run_id_prefix_resolution() {
     assert!(list_str.contains("bbbb0001"), "should show bbbb0001");
 
     // Test: Ambiguous prefix "a" matches 2 runs.
-    let replay_ambiguous = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_ambiguous = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--run-id", "a"])
         .unchecked(true)
         .output();
@@ -997,7 +1046,7 @@ fn test_run_id_prefix_resolution() {
     );
 
     // Test: Unique prefix "aaaa0001" matches only 1 run.
-    let replay_unique = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_unique = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--run-id", "aaaa0001"])
         .output();
     assert!(
@@ -1006,7 +1055,7 @@ fn test_run_id_prefix_resolution() {
     );
 
     // Test: Prefix "b" matches only 1 run.
-    let replay_b = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_b = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--run-id", "b"])
         .output();
     assert!(
@@ -1015,7 +1064,7 @@ fn test_run_id_prefix_resolution() {
     );
 
     // Test: Prefix "c" matches nothing.
-    let replay_not_found = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+    let replay_not_found = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay", "--run-id", "c"])
         .unchecked(true)
         .output();

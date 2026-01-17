@@ -529,7 +529,7 @@ mod tests {
     };
     use chrono::{FixedOffset, TimeZone};
     use semver::Version;
-    use std::num::NonZero;
+    use std::{collections::BTreeMap, num::NonZero};
 
     fn make_run(
         run_id: ReportUuid,
@@ -544,6 +544,8 @@ mod tests {
             started_at,
             last_written_at: started_at,
             duration_secs: Some(1.0),
+            cli_args: Vec::new(),
+            env_vars: BTreeMap::new(),
             sizes: RecordedSizes {
                 log: ComponentSizes::default(),
                 store: ComponentSizes {
@@ -1009,6 +1011,8 @@ mod tests {
             started_at,
             last_written_at: started_at,
             duration_secs: Some(1.0),
+            cli_args: Vec::new(),
+            env_vars: BTreeMap::new(),
             sizes: RecordedSizes {
                 log: ComponentSizes::default(),
                 store: ComponentSizes {

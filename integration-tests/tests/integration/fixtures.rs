@@ -8,7 +8,10 @@ use fixture_data::{
     nextest_tests::EXPECTED_TEST_SUITES,
 };
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
-use integration_tests::nextest_cli::{CargoNextestCli, cargo_bin};
+use integration_tests::{
+    env::TestEnvInfo,
+    nextest_cli::{CargoNextestCli, cargo_bin},
+};
 use nextest_metadata::{
     BinaryListSummary, BuildPlatform, RustBinaryId, RustTestSuiteStatusSummary, TestCaseName,
     TestListSummary,
@@ -35,8 +38,8 @@ pub fn save_cargo_metadata(p: &TempProject) {
 }
 
 #[track_caller]
-pub fn save_binaries_metadata(p: &TempProject) {
-    let output = CargoNextestCli::for_test()
+pub fn save_binaries_metadata(env_info: &TestEnvInfo, p: &TempProject) {
+    let output = CargoNextestCli::for_test(env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
