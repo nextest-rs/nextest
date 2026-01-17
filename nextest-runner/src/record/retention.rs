@@ -27,12 +27,13 @@ use std::{collections::HashSet, error::Error, fmt, time::Duration};
 /// The policy enforces limits on the number of runs, total size, and age.
 /// All limits are optional; if unset, that dimension is not limited.
 ///
-/// When pruning, runs are evaluated in order from newest to oldest. A run is
-/// kept if it satisfies all three conditions:
+/// When pruning, runs are evaluated in order from most recently used to least
+/// recently used (by `last_written_at`). A run is kept if it satisfies all
+/// three conditions:
 ///
 /// 1. The total count of kept runs is below `max_count`.
 /// 2. The cumulative size of kept runs is below `max_total_size`.
-/// 3. The run is newer than `max_age`.
+/// 3. The run was used more recently than `max_age`.
 ///
 /// Incomplete runs are treated the same as complete runs for retention purposes.
 #[derive(Clone, Debug, Default)]
@@ -60,8 +61,9 @@ impl RecordRetentionPolicy {
         runs: &[RecordedRunInfo],
         now: DateTime<Utc>,
     ) -> Vec<ReportUuid> {
+        // Sort by last_written_at (most recently used first) for LRU eviction.
         let mut sorted_runs: Vec<_> = runs.iter().collect();
-        sorted_runs.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+        sorted_runs.sort_by(|a, b| b.last_written_at.cmp(&a.last_written_at));
 
         let mut to_delete = Vec::new();
         let mut kept_count = 0usize;
@@ -85,11 +87,11 @@ impl RecordRetentionPolicy {
             if let Some(max_age) = self.max_age {
                 // Use signed_duration_since and saturate negative values to zero. A
                 // negative age can occur if the system clock moved backward between
-                // recording and pruning; treat such runs as "just created".
-                let run_age = now
-                    .signed_duration_since(run.started_at.to_utc())
+                // recording and pruning; treat such runs as "just used".
+                let time_since_last_use = now
+                    .signed_duration_since(run.last_written_at)
                     .max(TimeDelta::zero());
-                if run_age > TimeDelta::from_std(max_age).unwrap_or(TimeDelta::MAX) {
+                if time_since_last_use > TimeDelta::from_std(max_age).unwrap_or(TimeDelta::MAX) {
                     should_delete = true;
                 }
             }
@@ -530,6 +532,7 @@ mod tests {
             run_id,
             nextest_version: Version::new(0, 1, 0),
             started_at,
+            last_written_at: started_at.to_utc(),
             duration_secs: Some(1.0),
             compressed_size,
             // Use a fixed ratio for uncompressed size in tests.
@@ -982,10 +985,12 @@ mod tests {
         compressed_size: u64,
         status: RecordedRunStatus,
     ) -> RecordedRunInfo {
+        let started_at = DateTime::parse_from_rfc3339(started_at).expect("valid datetime");
         RecordedRunInfo {
             run_id: uuid.parse().expect("valid UUID"),
             nextest_version: Version::parse(version).expect("valid version"),
-            started_at: DateTime::parse_from_rfc3339(started_at).expect("valid datetime"),
+            started_at,
+            last_written_at: started_at.to_utc(),
             duration_secs: Some(1.0),
             compressed_size,
             uncompressed_size: compressed_size * 3,

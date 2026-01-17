@@ -243,13 +243,15 @@ mod tests {
 
     /// Creates a test run with the given run ID.
     fn make_run(run_id: ReportUuid) -> RecordedRunInfo {
+        let started_at = chrono::FixedOffset::east_opt(0)
+            .unwrap()
+            .with_ymd_and_hms(2024, 1, 1, 0, 0, 0)
+            .unwrap();
         RecordedRunInfo {
             run_id,
             nextest_version: Version::new(0, 1, 0),
-            started_at: chrono::FixedOffset::east_opt(0)
-                .unwrap()
-                .with_ymd_and_hms(2024, 1, 1, 0, 0, 0)
-                .unwrap(),
+            started_at,
+            last_written_at: started_at.to_utc(),
             duration_secs: None,
             compressed_size: 0,
             uncompressed_size: 0,

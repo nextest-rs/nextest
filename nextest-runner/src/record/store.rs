@@ -346,6 +346,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
             run_id,
             nextest_version,
             started_at,
+            last_written_at: Utc::now(),
             duration_secs: None,
             compressed_size: 0,
             uncompressed_size: 0,
@@ -373,6 +374,11 @@ pub struct RecordedRunInfo {
     pub nextest_version: Version,
     /// When the run started.
     pub started_at: DateTime<FixedOffset>,
+    /// When this run was last written to.
+    ///
+    /// Used for LRU eviction. Updated when the run is created, and in the
+    /// future when operations like `rerun` reference this run.
+    pub last_written_at: DateTime<Utc>,
     /// Duration of the run in seconds.
     ///
     /// This is `None` for incomplete runs.

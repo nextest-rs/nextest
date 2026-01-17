@@ -121,6 +121,11 @@ pub(super) struct RecordedRun {
     pub(super) nextest_version: Version,
     /// When the run started.
     pub(super) started_at: DateTime<FixedOffset>,
+    /// When this run was last written to.
+    ///
+    /// Used for LRU eviction. Updated when the run is created, and in the
+    /// future when operations like `rerun` reference this run.
+    pub(super) last_written_at: DateTime<Utc>,
     /// Duration of the run in seconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) duration_secs: Option<f64>,
@@ -196,6 +201,7 @@ impl From<RecordedRun> for RecordedRunInfo {
             run_id: run.run_id,
             nextest_version: run.nextest_version,
             started_at: run.started_at,
+            last_written_at: run.last_written_at,
             duration_secs: run.duration_secs,
             compressed_size: run.compressed_size,
             uncompressed_size: run.uncompressed_size,
@@ -210,6 +216,7 @@ impl From<&RecordedRunInfo> for RecordedRun {
             run_id: run.run_id,
             nextest_version: run.nextest_version.clone(),
             started_at: run.started_at,
+            last_written_at: run.last_written_at,
             duration_secs: run.duration_secs,
             compressed_size: run.compressed_size,
             uncompressed_size: run.uncompressed_size,
@@ -527,6 +534,9 @@ mod tests {
             nextest_version: Version::new(0, 9, 111),
             started_at: DateTime::parse_from_rfc3339("2024-12-19T14:22:33-08:00")
                 .expect("valid timestamp"),
+            last_written_at: DateTime::parse_from_rfc3339("2024-12-19T22:22:33Z")
+                .expect("valid timestamp")
+                .to_utc(),
             duration_secs: Some(12.345),
             compressed_size: 12345,
             uncompressed_size: 45678,
@@ -592,6 +602,7 @@ mod tests {
             "run-id": "550e8400-e29b-41d4-a716-446655440000",
             "nextest-version": "0.9.999",
             "started-at": "2024-12-19T14:22:33-08:00",
+            "last-written-at": "2024-12-19T22:22:33Z",
             "compressed-size": 12345,
             "uncompressed-size": 45678,
             "status": {
