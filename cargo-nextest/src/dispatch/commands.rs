@@ -472,11 +472,7 @@ pub enum BuildPlatformsOutputFormat {
 #[derive(Debug, Subcommand)]
 pub(super) enum StoreCommand {
     /// List all recorded runs.
-    List {
-        /// Show verbose output.
-        #[arg(short, long)]
-        verbose: bool,
-    },
+    List {},
     /// Prune old recorded runs according to retention policy.
     Prune(PruneOpts),
 }
@@ -533,7 +529,7 @@ impl StoreCommand {
         }
 
         match self {
-            Self::List { verbose } => {
+            Self::List {} => {
                 let store = RunStore::new(&cache_dir)
                     .map_err(|err| ExpectedError::RecordSetupError { err })?;
 
@@ -547,7 +543,7 @@ impl StoreCommand {
                     .runs_mut()
                     .sort_by(|a, b| b.started_at.cmp(&a.started_at));
 
-                let store_path = if verbose {
+                let store_path = if output.verbose {
                     Some(cache_dir.as_path())
                 } else {
                     None
