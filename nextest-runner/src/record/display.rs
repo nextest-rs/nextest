@@ -502,3 +502,487 @@ impl fmt::Display for DisplayRunList<'_> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        errors::RecordPruneError,
+        record::{
+            ComponentSizes, PruneKind, PrunePlan, PruneResult, RecordedRunStatus, RecordedSizes,
+            StressCompletedRunStats, run_id_index::RunIdIndex,
+        },
+        redact::Redactor,
+    };
+    use chrono::DateTime;
+    use semver::Version;
+    use std::{collections::BTreeMap, num::NonZero};
+
+    /// Creates a `RecordedRunInfo` for testing display functions.
+    fn make_run_info(
+        uuid: &str,
+        version: &str,
+        started_at: &str,
+        total_compressed_size: u64,
+        status: RecordedRunStatus,
+    ) -> RecordedRunInfo {
+        let started_at = DateTime::parse_from_rfc3339(started_at).expect("valid datetime");
+        // For simplicity in tests, put all size in the store component.
+        RecordedRunInfo {
+            run_id: uuid.parse().expect("valid UUID"),
+            nextest_version: Version::parse(version).expect("valid version"),
+            started_at,
+            last_written_at: started_at,
+            duration_secs: Some(1.0),
+            cli_args: Vec::new(),
+            env_vars: BTreeMap::new(),
+            sizes: RecordedSizes {
+                log: ComponentSizes::default(),
+                store: ComponentSizes {
+                    compressed: total_compressed_size,
+                    uncompressed: total_compressed_size * 3,
+                    entries: 0,
+                },
+            },
+            status,
+        }
+    }
+
+    #[test]
+    fn test_format_size_display() {
+        insta::assert_snapshot!(format_size_display(0), @"0 KB");
+        insta::assert_snapshot!(format_size_display(512), @"0 KB");
+        insta::assert_snapshot!(format_size_display(1024), @"1 KB");
+        insta::assert_snapshot!(format_size_display(1536), @"1 KB");
+        insta::assert_snapshot!(format_size_display(10 * 1024), @"10 KB");
+        insta::assert_snapshot!(format_size_display(1024 * 1024 - 1), @"1023 KB");
+
+        insta::assert_snapshot!(format_size_display(1024 * 1024), @"1.0 MB");
+        insta::assert_snapshot!(format_size_display(1024 * 1024 + 512 * 1024), @"1.5 MB");
+        insta::assert_snapshot!(format_size_display(10 * 1024 * 1024), @"10.0 MB");
+        insta::assert_snapshot!(format_size_display(1024 * 1024 * 1024), @"1024.0 MB");
+    }
+
+    #[test]
+    fn test_display_prune_result_nothing_to_prune() {
+        let result = PruneResult::default();
+        insta::assert_snapshot!(result.display(&Styles::default()).to_string(), @"no runs to prune");
+    }
+
+    #[test]
+    fn test_display_prune_result_nothing_pruned_with_error() {
+        let result = PruneResult {
+            kind: PruneKind::Implicit,
+            deleted_count: 0,
+            orphans_deleted: 0,
+            freed_bytes: 0,
+            errors: vec![RecordPruneError::DeleteOrphan {
+                path: "/some/path".into(),
+                error: std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"),
+            }],
+        };
+        insta::assert_snapshot!(result.display(&Styles::default()).to_string(), @"no runs pruned (1 error occurred)");
+    }
+
+    #[test]
+    fn test_display_prune_result_single_run() {
+        let result = PruneResult {
+            kind: PruneKind::Implicit,
+            deleted_count: 1,
+            orphans_deleted: 0,
+            freed_bytes: 1024,
+            errors: vec![],
+        };
+        insta::assert_snapshot!(result.display(&Styles::default()).to_string(), @"pruned 1 run, freed 1 KB");
+    }
+
+    #[test]
+    fn test_display_prune_result_multiple_runs() {
+        let result = PruneResult {
+            kind: PruneKind::Implicit,
+            deleted_count: 3,
+            orphans_deleted: 0,
+            freed_bytes: 5 * 1024 * 1024,
+            errors: vec![],
+        };
+        insta::assert_snapshot!(result.display(&Styles::default()).to_string(), @"pruned 3 runs, freed 5.0 MB");
+    }
+
+    #[test]
+    fn test_display_prune_result_with_orphan() {
+        let result = PruneResult {
+            kind: PruneKind::Implicit,
+            deleted_count: 2,
+            orphans_deleted: 1,
+            freed_bytes: 3 * 1024 * 1024,
+            errors: vec![],
+        };
+        insta::assert_snapshot!(result.display(&Styles::default()).to_string(), @"pruned 2 runs, 1 orphan, freed 3.0 MB");
+    }
+
+    #[test]
+    fn test_display_prune_result_with_multiple_orphans() {
+        let result = PruneResult {
+            kind: PruneKind::Implicit,
+            deleted_count: 1,
+            orphans_deleted: 3,
+            freed_bytes: 2 * 1024 * 1024,
+            errors: vec![],
+        };
+        insta::assert_snapshot!(result.display(&Styles::default()).to_string(), @"pruned 1 run, 3 orphans, freed 2.0 MB");
+    }
+
+    #[test]
+    fn test_display_prune_result_with_errors_implicit() {
+        let result = PruneResult {
+            kind: PruneKind::Implicit,
+            deleted_count: 2,
+            orphans_deleted: 0,
+            freed_bytes: 1024 * 1024,
+            errors: vec![
+                RecordPruneError::DeleteOrphan {
+                    path: "/path1".into(),
+                    error: std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"),
+                },
+                RecordPruneError::DeleteOrphan {
+                    path: "/path2".into(),
+                    error: std::io::Error::new(std::io::ErrorKind::NotFound, "not found"),
+                },
+            ],
+        };
+        // Implicit pruning shows summary only, no error details.
+        insta::assert_snapshot!(result.display(&Styles::default()).to_string(), @"pruned 2 runs, freed 1.0 MB (2 errors occurred)");
+    }
+
+    #[test]
+    fn test_display_prune_result_with_errors_explicit() {
+        let result = PruneResult {
+            kind: PruneKind::Explicit,
+            deleted_count: 2,
+            orphans_deleted: 0,
+            freed_bytes: 1024 * 1024,
+            errors: vec![
+                RecordPruneError::DeleteOrphan {
+                    path: "/path1".into(),
+                    error: std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"),
+                },
+                RecordPruneError::DeleteOrphan {
+                    path: "/path2".into(),
+                    error: std::io::Error::new(std::io::ErrorKind::NotFound, "not found"),
+                },
+            ],
+        };
+        // Explicit pruning shows error details as a bulleted list.
+        insta::assert_snapshot!(result.display(&Styles::default()).to_string(), @r"
+        pruned 2 runs, freed 1.0 MB (2 errors occurred)
+
+        errors:
+          - error deleting orphaned directory `/path1`: denied
+          - error deleting orphaned directory `/path2`: not found
+        ");
+    }
+
+    #[test]
+    fn test_display_prune_result_full() {
+        let result = PruneResult {
+            kind: PruneKind::Implicit,
+            deleted_count: 5,
+            orphans_deleted: 2,
+            freed_bytes: 10 * 1024 * 1024,
+            errors: vec![RecordPruneError::DeleteOrphan {
+                path: "/orphan".into(),
+                error: std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"),
+            }],
+        };
+        insta::assert_snapshot!(result.display(&Styles::default()).to_string(), @"pruned 5 runs, 2 orphans, freed 10.0 MB (1 error occurred)");
+    }
+
+    #[test]
+    fn test_display_recorded_run_info_completed() {
+        let run = make_run_info(
+            "550e8400-e29b-41d4-a716-446655440000",
+            "0.9.100",
+            "2024-06-15T10:30:00+00:00",
+            102400,
+            RecordedRunStatus::Completed(CompletedRunStats {
+                initial_run_count: 100,
+                passed: 95,
+                failed: 5,
+            }),
+        );
+        let runs = std::slice::from_ref(&run);
+        let index = RunIdIndex::new(runs);
+        let alignment = RunListAlignment::from_runs(runs);
+        insta::assert_snapshot!(
+            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-15 10:30:00      1.000s     100 KB  95 passed / 5 failed"
+        );
+    }
+
+    #[test]
+    fn test_display_recorded_run_info_incomplete() {
+        let run = make_run_info(
+            "550e8400-e29b-41d4-a716-446655440001",
+            "0.9.101",
+            "2024-06-16T11:00:00+00:00",
+            51200,
+            RecordedRunStatus::Incomplete,
+        );
+        let runs = std::slice::from_ref(&run);
+        let index = RunIdIndex::new(runs);
+        let alignment = RunListAlignment::from_runs(runs);
+        insta::assert_snapshot!(
+            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-16 11:00:00      1.000s      50 KB   incomplete"
+        );
+    }
+
+    #[test]
+    fn test_display_recorded_run_info_not_run() {
+        // Test case where some tests are not run (neither passed nor failed).
+        let run = make_run_info(
+            "550e8400-e29b-41d4-a716-446655440005",
+            "0.9.105",
+            "2024-06-20T15:00:00+00:00",
+            75000,
+            RecordedRunStatus::Completed(CompletedRunStats {
+                initial_run_count: 17,
+                passed: 10,
+                failed: 6,
+            }),
+        );
+        let runs = std::slice::from_ref(&run);
+        let index = RunIdIndex::new(runs);
+        let alignment = RunListAlignment::from_runs(runs);
+        insta::assert_snapshot!(
+            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-20 15:00:00      1.000s      73 KB  10 passed / 6 failed / 1 not run"
+        );
+    }
+
+    #[test]
+    fn test_display_recorded_run_info_no_tests() {
+        // Test case where no tests were expected to run.
+        let run = make_run_info(
+            "550e8400-e29b-41d4-a716-44665544000c",
+            "0.9.112",
+            "2024-06-23T16:00:00+00:00",
+            5000,
+            RecordedRunStatus::Completed(CompletedRunStats {
+                initial_run_count: 0,
+                passed: 0,
+                failed: 0,
+            }),
+        );
+        let runs = std::slice::from_ref(&run);
+        let index = RunIdIndex::new(runs);
+        let alignment = RunListAlignment::from_runs(runs);
+        insta::assert_snapshot!(
+            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-23 16:00:00      1.000s       4 KB  0 passed"
+        );
+    }
+
+    #[test]
+    fn test_display_alignment_multiple_runs() {
+        // Test that alignment works correctly when runs have different passed counts.
+        let runs = vec![
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440006",
+                "0.9.106",
+                "2024-06-21T10:00:00+00:00",
+                100000,
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 559,
+                    passed: 559,
+                    failed: 0,
+                }),
+            ),
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440007",
+                "0.9.107",
+                "2024-06-21T11:00:00+00:00",
+                50000,
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 51,
+                    passed: 51,
+                    failed: 0,
+                }),
+            ),
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440008",
+                "0.9.108",
+                "2024-06-21T12:00:00+00:00",
+                30000,
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 17,
+                    passed: 10,
+                    failed: 6,
+                }),
+            ),
+        ];
+        let index = RunIdIndex::new(&runs);
+        let alignment = RunListAlignment::from_runs(&runs);
+
+        // All passed counts should be right-aligned to 3 digits (width of 559).
+        insta::assert_snapshot!(
+            runs[0]
+                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-21 10:00:00      1.000s      97 KB  559 passed"
+        );
+        insta::assert_snapshot!(
+            runs[1]
+                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-21 11:00:00      1.000s      48 KB   51 passed"
+        );
+        insta::assert_snapshot!(
+            runs[2]
+                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-21 12:00:00      1.000s      29 KB   10 passed / 6 failed / 1 not run"
+        );
+    }
+
+    #[test]
+    fn test_display_stress_stats_alignment() {
+        // Test that stress test alignment works correctly.
+        let runs = vec![
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440009",
+                "0.9.109",
+                "2024-06-22T10:00:00+00:00",
+                200000,
+                RecordedRunStatus::StressCompleted(StressCompletedRunStats {
+                    initial_iteration_count: NonZero::new(1000),
+                    success_count: 1000,
+                    failed_count: 0,
+                }),
+            ),
+            make_run_info(
+                "550e8400-e29b-41d4-a716-44665544000a",
+                "0.9.110",
+                "2024-06-22T11:00:00+00:00",
+                100000,
+                RecordedRunStatus::StressCompleted(StressCompletedRunStats {
+                    initial_iteration_count: NonZero::new(100),
+                    success_count: 95,
+                    failed_count: 5,
+                }),
+            ),
+            make_run_info(
+                "550e8400-e29b-41d4-a716-44665544000b",
+                "0.9.111",
+                "2024-06-22T12:00:00+00:00",
+                80000,
+                RecordedRunStatus::StressCancelled(StressCompletedRunStats {
+                    initial_iteration_count: NonZero::new(500),
+                    success_count: 45,
+                    failed_count: 5,
+                }),
+            ),
+        ];
+        let index = RunIdIndex::new(&runs);
+        let alignment = RunListAlignment::from_runs(&runs);
+
+        // Passed counts should be right-aligned to 4 digits (width of 1000).
+        insta::assert_snapshot!(
+            runs[0]
+                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-22 10:00:00      1.000s     195 KB  1000 passed iterations"
+        );
+        insta::assert_snapshot!(
+            runs[1]
+                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-22 11:00:00      1.000s      97 KB    95 passed iterations / 5 failed"
+        );
+        insta::assert_snapshot!(
+            runs[2]
+                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-22 12:00:00      1.000s      78 KB    45 passed iterations / 5 failed / 450 not run (cancelled)"
+        );
+    }
+
+    #[test]
+    fn test_display_prune_plan_empty() {
+        let plan = PrunePlan::new(vec![]);
+        let index = RunIdIndex::new(&[]);
+        insta::assert_snapshot!(
+            plan.display(&index, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @r"
+        no runs would be pruned
+        "
+        );
+    }
+
+    #[test]
+    fn test_display_prune_plan_single_run() {
+        let runs = vec![make_run_info(
+            "550e8400-e29b-41d4-a716-446655440002",
+            "0.9.102",
+            "2024-06-17T12:00:00+00:00",
+            2048 * 1024,
+            RecordedRunStatus::Completed(CompletedRunStats {
+                initial_run_count: 50,
+                passed: 50,
+                failed: 0,
+            }),
+        )];
+        let index = RunIdIndex::new(&runs);
+        let plan = PrunePlan::new(runs);
+        insta::assert_snapshot!(
+            plan.display(&index, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @r"
+        would prune 1 run, freeing 2.0 MB:
+
+          550e8400  2024-06-17 12:00:00      1.000s    2048 KB  50 passed
+        "
+        );
+    }
+
+    #[test]
+    fn test_display_prune_plan_multiple_runs() {
+        let runs = vec![
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440003",
+                "0.9.103",
+                "2024-06-18T13:00:00+00:00",
+                1024 * 1024,
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 100,
+                    passed: 100,
+                    failed: 0,
+                }),
+            ),
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440004",
+                "0.9.104",
+                "2024-06-19T14:00:00+00:00",
+                512 * 1024,
+                RecordedRunStatus::Incomplete,
+            ),
+        ];
+        let index = RunIdIndex::new(&runs);
+        let plan = PrunePlan::new(runs);
+        insta::assert_snapshot!(
+            plan.display(&index, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @r"
+        would prune 2 runs, freeing 1.5 MB:
+
+          550e8400  2024-06-18 13:00:00      1.000s    1024 KB  100 passed
+          550e8400  2024-06-19 14:00:00      1.000s     512 KB      incomplete
+        "
+        );
+    }
+}
