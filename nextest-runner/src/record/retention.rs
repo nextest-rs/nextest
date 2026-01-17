@@ -79,7 +79,7 @@ impl RecordRetentionPolicy {
             }
 
             if let Some(max_total_size) = self.max_total_size
-                && kept_size + run.compressed_size > max_total_size.as_u64()
+                && kept_size + run.sizes.total_compressed() > max_total_size.as_u64()
             {
                 should_delete = true;
             }
@@ -100,7 +100,7 @@ impl RecordRetentionPolicy {
                 to_delete.push(run.run_id);
             } else {
                 kept_count += 1;
-                kept_size += run.compressed_size;
+                kept_size += run.sizes.total_compressed();
             }
         }
 
@@ -128,7 +128,7 @@ impl RecordRetentionPolicy {
 
         // Check size limit.
         if let Some(max_total_size) = self.max_total_size {
-            let total_size: u64 = runs.iter().map(|r| r.compressed_size).sum();
+            let total_size: u64 = runs.iter().map(|r| r.sizes.total_compressed()).sum();
             let threshold = (max_total_size.as_u64() as f64 * factor) as u64;
             if total_size > threshold {
                 return true;
@@ -325,7 +325,7 @@ impl PrunePlan {
 
     /// Returns the total size in bytes of runs that would be deleted.
     pub fn total_bytes(&self) -> u64 {
-        self.runs.iter().map(|r| r.compressed_size).sum()
+        self.runs.iter().map(|r| r.sizes.total_compressed()).sum()
     }
 
     /// Returns a display wrapper for the prune plan.
@@ -405,7 +405,7 @@ pub(crate) fn delete_runs(
         let size_bytes = runs
             .iter()
             .find(|r| &r.run_id == run_id)
-            .map(|r| r.compressed_size)
+            .map(|r| r.sizes.total_compressed())
             .unwrap_or(0);
 
         match std::fs::remove_dir_all(&run_dir) {
@@ -517,7 +517,10 @@ pub(crate) fn delete_orphaned_dirs(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::record::{CompletedRunStats, RecordedRunStatus, StressCompletedRunStats};
+    use crate::record::{
+        CompletedRunStats, ComponentSizes, RecordedRunStatus, RecordedSizes,
+        StressCompletedRunStats,
+    };
     use chrono::{FixedOffset, TimeZone};
     use semver::Version;
     use std::num::NonZero;
@@ -525,18 +528,25 @@ mod tests {
     fn make_run(
         run_id: ReportUuid,
         started_at: DateTime<FixedOffset>,
-        compressed_size: u64,
+        total_compressed_size: u64,
         status: RecordedRunStatus,
     ) -> RecordedRunInfo {
+        // For simplicity in tests, put all size in the store component.
         RecordedRunInfo {
             run_id,
             nextest_version: Version::new(0, 1, 0),
             started_at,
             last_written_at: started_at.to_utc(),
             duration_secs: Some(1.0),
-            compressed_size,
-            // Use a fixed ratio for uncompressed size in tests.
-            uncompressed_size: compressed_size * 3,
+            sizes: RecordedSizes {
+                log: ComponentSizes::default(),
+                store: ComponentSizes {
+                    compressed: total_compressed_size,
+                    // Use a fixed ratio for uncompressed size in tests.
+                    uncompressed: total_compressed_size * 3,
+                    entries: 0,
+                },
+            },
             status,
         }
     }
@@ -982,18 +992,25 @@ mod tests {
         uuid: &str,
         version: &str,
         started_at: &str,
-        compressed_size: u64,
+        total_compressed_size: u64,
         status: RecordedRunStatus,
     ) -> RecordedRunInfo {
         let started_at = DateTime::parse_from_rfc3339(started_at).expect("valid datetime");
+        // For simplicity in tests, put all size in the store component.
         RecordedRunInfo {
             run_id: uuid.parse().expect("valid UUID"),
             nextest_version: Version::parse(version).expect("valid version"),
             started_at,
             last_written_at: started_at.to_utc(),
             duration_secs: Some(1.0),
-            compressed_size,
-            uncompressed_size: compressed_size * 3,
+            sizes: RecordedSizes {
+                log: ComponentSizes::default(),
+                store: ComponentSizes {
+                    compressed: total_compressed_size,
+                    uncompressed: total_compressed_size * 3,
+                    entries: 0,
+                },
+            },
             status,
         }
     }
