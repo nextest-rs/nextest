@@ -480,6 +480,11 @@ static ABORT_RE: LazyLock<Regex> = LazyLock::new(|| {
 static TIMEOUT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^\s*(?:TRY (\d+) )?TIMEOUT \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
 });
+// TIMEOUT-PASS (and short forms TMPASS, SLOW+TMPASS) is shown when on-timeout = pass
+// is configured and the test timed out but is considered passing.
+static TIMEOUT_PASS_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*(?:TRY (\d+) )?(?:TIMEOUT-PASS|TMPASS|SLOW\+TMPASS) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
+});
 // FLAKY is shown in the summary section for tests that eventually passed.
 // Format: "FLAKY 4/5 [duration] (count/total) binary_id test_name"
 static FLAKY_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -538,6 +543,10 @@ impl ActualTestResults {
                 add_attempt(&mut tests, &caps, CheckResult::LeakFail);
             } else if let Some(caps) = ABORT_RE.captures(line) {
                 add_attempt(&mut tests, &caps, CheckResult::Abort);
+            } else if let Some(caps) = TIMEOUT_PASS_RE.captures(line) {
+                // TIMEOUT-PASS is shown when on-timeout = pass and the test timed out.
+                // We record this as a Pass since the test is configured to pass on timeout.
+                add_attempt(&mut tests, &caps, CheckResult::Pass);
             } else if let Some(caps) = TIMEOUT_RE.captures(line) {
                 add_attempt(&mut tests, &caps, CheckResult::Timeout);
             } else if let Some(caps) = LEAK_RE.captures(line) {

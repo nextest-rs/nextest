@@ -1,6 +1,0 @@
----
-source: nextest-runner/src/reporter/displayer/imp.rs
-expression: out
----
-      TMPASS [ 240.000s] ( 1/10) my-binary-id timeout_test
- SLOW+TMPASS [ 300.000s] ( 2/10) my-binary-id timeout_test
