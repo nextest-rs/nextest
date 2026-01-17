@@ -1,0 +1,81 @@
+---
+source: nextest-runner/src/reporter/displayer/imp.rs
+assertion_line: 3376
+expression: out
+---
+=== intermediate ===
+# pass: 
+        PASS [   1.000s] (  1/100) my-binary-id test_name
+# leak pass: 
+        LEAK [   2.000s] (  2/100) my-binary-id test_name
+# timeout pass: 
+TIMEOUT-PASS [ 240.000s] (  3/100) my-binary-id test_name
+# pass slow: 
+        PASS [  30.000s] (  4/100) my-binary-id test_name
+# leak pass slow: 
+        LEAK [  30.000s] (  5/100) my-binary-id test_name
+# timeout pass slow: 
+TIMEOUT-PASS [ 300.000s] (  6/100) my-binary-id test_name
+# flaky: 
+  TRY 2 PASS [   1.000s] (  7/100) my-binary-id test_name
+# fail: 
+        FAIL [   1.000s] (  8/100) my-binary-id test_name
+# fail leak: 
+ FAIL + LEAK [   1.000s] (  9/100) my-binary-id test_name
+# exec fail: 
+       XFAIL [   1.000s] ( 10/100) my-binary-id test_name
+# leak fail: 
+   LEAK-FAIL [   1.000s] ( 11/100) my-binary-id test_name
+# timeout fail: 
+     TIMEOUT [  60.000s] ( 12/100) my-binary-id test_name
+# abort unix: 
+     SIGSEGV [   1.000s] ( 13/100) my-binary-id test_name
+# abort windows: 
+       ABORT [   1.000s] ( 14/100) my-binary-id test_name
+           - with code 0xc0000005: Access violation
+# fail retry: 
+  TRY 2 FAIL [   1.000s] ( 15/100) my-binary-id test_name
+# fail leak retry: 
+ TRY 2 FL+LK [   1.000s] ( 16/100) my-binary-id test_name
+# leak fail retry: 
+TRY 2 LKFAIL [   1.000s] ( 17/100) my-binary-id test_name
+# timeout fail retry: 
+   TRY 2 TMT [  60.000s] ( 18/100) my-binary-id test_name
+=== final ===
+# pass: 
+        PASS [   1.000s] ( 19/100) my-binary-id test_name
+# leak pass: 
+        LEAK [   2.000s] ( 20/100) my-binary-id test_name
+# timeout pass: 
+TIMEOUT-PASS [ 240.000s] ( 21/100) my-binary-id test_name
+# pass slow: 
+        SLOW [  30.000s] ( 22/100) my-binary-id test_name
+# leak pass slow: 
+ SLOW + LEAK [  30.000s] ( 23/100) my-binary-id test_name
+# timeout pass slow: 
+ SLOW+TMPASS [ 300.000s] ( 24/100) my-binary-id test_name
+# flaky: 
+   FLAKY 2/2 [   1.000s] ( 25/100) my-binary-id test_name
+# fail: 
+        FAIL [   1.000s] ( 26/100) my-binary-id test_name
+# fail leak: 
+ FAIL + LEAK [   1.000s] ( 27/100) my-binary-id test_name
+# exec fail: 
+       XFAIL [   1.000s] ( 28/100) my-binary-id test_name
+# leak fail: 
+   LEAK-FAIL [   1.000s] ( 29/100) my-binary-id test_name
+# timeout fail: 
+     TIMEOUT [  60.000s] ( 30/100) my-binary-id test_name
+# abort unix: 
+     SIGSEGV [   1.000s] ( 31/100) my-binary-id test_name
+# abort windows: 
+       ABORT [   1.000s] ( 32/100) my-binary-id test_name
+           - with code 0xc0000005: Access violation
+# fail retry: 
+  TRY 2 FAIL [   1.000s] ( 33/100) my-binary-id test_name
+# fail leak retry: 
+ TRY 2 FL+LK [   1.000s] ( 34/100) my-binary-id test_name
+# leak fail retry: 
+TRY 2 LKFAIL [   1.000s] ( 35/100) my-binary-id test_name
+# timeout fail retry: 
+   TRY 2 TMT [  60.000s] ( 36/100) my-binary-id test_name

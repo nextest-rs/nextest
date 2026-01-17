@@ -25,7 +25,7 @@ use crate::{
     },
     errors::WriteEventError,
     helpers::{
-        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, plural,
+        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, ThemeCharacters, plural,
         usize_decimal_char_width,
     },
     indenter::indented,
@@ -86,15 +86,16 @@ impl DisplayReporterBuilder {
         };
 
         let mut theme_characters = ThemeCharacters::default();
-        match output {
+        match &output {
             ReporterOutput::Terminal => {
                 if supports_unicode::on(supports_unicode::Stream::Stderr) {
                     theme_characters.use_unicode();
                 }
             }
-            ReporterOutput::Writer(_) => {
-                // Always use Unicode for writers.
-                theme_characters.use_unicode();
+            ReporterOutput::Writer { use_unicode, .. } => {
+                if *use_unicode {
+                    theme_characters.use_unicode();
+                }
             }
         }
 
@@ -105,7 +106,7 @@ impl DisplayReporterBuilder {
                 let is_terminal = io::stderr().is_terminal();
                 let progress_bar = self.progress_bar(
                     is_terminal,
-                    theme_characters.progress_chars,
+                    theme_characters.progress_chars(),
                     self.max_progress_running,
                 );
                 let term_progress = TerminalProgress::new(self.show_term_progress);
@@ -120,7 +121,7 @@ impl DisplayReporterBuilder {
                     term_progress,
                 }
             }
-            ReporterOutput::Writer(writer) => ReporterOutputImpl::Writer(writer),
+            ReporterOutput::Writer { writer, .. } => ReporterOutputImpl::Writer(writer),
         };
 
         // success_output is meaningless if the runner isn't capturing any
@@ -1489,68 +1490,14 @@ impl<'a> DisplayReporterImpl<'a> {
         describe: ExecutionDescription<'_, ChildSingleOutput>,
         writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
-        let last_status = describe.last_status();
-        match describe {
-            ExecutionDescription::Success { .. } => {
-                if last_status.result
-                    == (ExecutionResultDescription::Leak {
-                        result: LeakTimeoutResult::Pass,
-                    })
-                {
-                    write!(writer, "{:>12} ", "LEAK".style(self.styles.skip))?;
-                } else {
-                    write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
-                }
-            }
-            ExecutionDescription::Flaky { .. } => {
-                // Use the skip color to also represent a flaky test.
-                write!(
-                    writer,
-                    "{:>12} ",
-                    format!("TRY {} PASS", last_status.retry_data.attempt).style(self.styles.skip)
-                )?;
-            }
-            ExecutionDescription::Failure { .. } => {
-                if last_status.retry_data.attempt == 1 {
-                    write!(
-                        writer,
-                        "{:>12} ",
-                        status_str(&last_status.result).style(self.styles.fail)
-                    )?;
-                } else {
-                    let status_str = short_status_str(&last_status.result);
-                    write!(
-                        writer,
-                        "{:>12} ",
-                        format!("TRY {} {}", last_status.retry_data.attempt, status_str)
-                            .style(self.styles.fail)
-                    )?;
-                }
-            }
-        };
-
-        write!(
+        self.write_status_line_impl(
+            stress_index,
+            counter,
+            test_instance,
+            describe,
+            StatusLineKind::Intermediate,
             writer,
-            "{}",
-            DisplayBracketedDuration(last_status.time_taken)
-        )?;
-
-        writeln!(
-            writer,
-            "{}",
-            self.display_test_instance(stress_index, counter, test_instance)
-        )?;
-
-        // For Windows aborts, print out the exception code on a separate line.
-        if let ExecutionResultDescription::Fail {
-            failure: FailureDescription::Abort { ref abort },
-            leaked: _,
-        } = last_status.result
-        {
-            write_windows_abort_line(abort, &self.styles, writer)?;
-        }
-
-        Ok(())
+        )
     }
 
     fn write_final_status_line(
@@ -1561,69 +1508,31 @@ impl<'a> DisplayReporterImpl<'a> {
         describe: ExecutionDescription<'_, ChildSingleOutput>,
         writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
-        let last_status = describe.last_status();
-        match describe {
-            ExecutionDescription::Success { .. } => {
-                match (last_status.is_slow, &last_status.result) {
-                    (
-                        true,
-                        ExecutionResultDescription::Leak {
-                            result: LeakTimeoutResult::Pass,
-                        },
-                    ) => {
-                        write!(writer, "{:>12} ", "SLOW + LEAK".style(self.styles.skip))?;
-                    }
-                    (true, ExecutionResultDescription::Pass) => {
-                        write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
-                    }
-                    (
-                        false,
-                        ExecutionResultDescription::Leak {
-                            result: LeakTimeoutResult::Pass,
-                        },
-                    ) => {
-                        write!(writer, "{:>12} ", "LEAK".style(self.styles.skip))?;
-                    }
-                    (false, ExecutionResultDescription::Pass) => {
-                        write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
-                    }
-                    (_, other) => {
-                        unreachable!("success is limited to pass and leak, found {other:?}")
-                    }
-                }
-            }
-            ExecutionDescription::Flaky { .. } => {
-                // Use the skip color to also represent a flaky test.
-                write!(
-                    writer,
-                    "{:>12} ",
-                    format!(
-                        "FLAKY {}/{}",
-                        last_status.retry_data.attempt, last_status.retry_data.total_attempts
-                    )
-                    .style(self.styles.skip)
-                )?;
-            }
-            ExecutionDescription::Failure { .. } => {
-                if last_status.retry_data.attempt == 1 {
-                    write!(
-                        writer,
-                        "{:>12} ",
-                        status_str(&last_status.result).style(self.styles.fail)
-                    )?;
-                } else {
-                    let status_str = short_status_str(&last_status.result);
-                    write!(
-                        writer,
-                        "{:>12} ",
-                        format!("TRY {} {}", last_status.retry_data.attempt, status_str)
-                            .style(self.styles.fail)
-                    )?;
-                }
-            }
-        };
+        self.write_status_line_impl(
+            stress_index,
+            counter,
+            test_instance,
+            describe,
+            StatusLineKind::Final,
+            writer,
+        )
+    }
 
-        // Next, print the time taken and the name of the test.
+    fn write_status_line_impl(
+        &self,
+        stress_index: Option<StressIndex>,
+        counter: TestInstanceCounter,
+        test_instance: TestInstanceId<'a>,
+        describe: ExecutionDescription<'_, ChildSingleOutput>,
+        kind: StatusLineKind,
+        writer: &mut dyn WriteStr,
+    ) -> io::Result<()> {
+        let last_status = describe.last_status();
+
+        // Write the status prefix (e.g., "PASS", "FAIL", "FLAKY 2/3").
+        self.write_status_line_prefix(describe, kind, writer)?;
+
+        // Write the duration and test instance.
         writeln!(
             writer,
             "{}{}",
@@ -1643,6 +1552,123 @@ impl<'a> DisplayReporterImpl<'a> {
         Ok(())
     }
 
+    fn write_status_line_prefix(
+        &self,
+        describe: ExecutionDescription<'_, ChildSingleOutput>,
+        kind: StatusLineKind,
+        writer: &mut dyn WriteStr,
+    ) -> io::Result<()> {
+        let last_status = describe.last_status();
+        match describe {
+            ExecutionDescription::Success { .. } => {
+                // Exhaustive match on (is_slow, result) to catch missing cases
+                // at compile time. For intermediate status lines, is_slow is
+                // ignored (shown via separate SLOW lines during execution).
+                match (kind, last_status.is_slow, &last_status.result) {
+                    // Final + slow variants.
+                    (StatusLineKind::Final, true, ExecutionResultDescription::Pass) => {
+                        write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
+                    }
+                    (
+                        StatusLineKind::Final,
+                        true,
+                        ExecutionResultDescription::Leak {
+                            result: LeakTimeoutResult::Pass,
+                        },
+                    ) => {
+                        write!(writer, "{:>12} ", "SLOW + LEAK".style(self.styles.skip))?;
+                    }
+                    (
+                        StatusLineKind::Final,
+                        true,
+                        ExecutionResultDescription::Timeout {
+                            result: SlowTimeoutResult::Pass,
+                        },
+                    ) => {
+                        write!(writer, "{:>12} ", "SLOW+TMPASS".style(self.styles.skip))?;
+                    }
+                    // Non-slow variants (or intermediate where is_slow is ignored).
+                    (_, _, ExecutionResultDescription::Pass) => {
+                        write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
+                    }
+                    (
+                        _,
+                        _,
+                        ExecutionResultDescription::Leak {
+                            result: LeakTimeoutResult::Pass,
+                        },
+                    ) => {
+                        write!(writer, "{:>12} ", "LEAK".style(self.styles.skip))?;
+                    }
+                    (
+                        _,
+                        _,
+                        ExecutionResultDescription::Timeout {
+                            result: SlowTimeoutResult::Pass,
+                        },
+                    ) => {
+                        write!(writer, "{:>12} ", "TIMEOUT-PASS".style(self.styles.skip))?;
+                    }
+                    // These are failure cases and cannot appear in Success.
+                    (
+                        _,
+                        _,
+                        ExecutionResultDescription::Leak {
+                            result: LeakTimeoutResult::Fail,
+                        },
+                    )
+                    | (
+                        _,
+                        _,
+                        ExecutionResultDescription::Timeout {
+                            result: SlowTimeoutResult::Fail,
+                        },
+                    )
+                    | (_, _, ExecutionResultDescription::Fail { .. })
+                    | (_, _, ExecutionResultDescription::ExecFail) => {
+                        unreachable!(
+                            "success description cannot have failure result: {:?}",
+                            last_status.result
+                        )
+                    }
+                }
+            }
+            ExecutionDescription::Flaky { .. } => {
+                // Use the skip color to also represent a flaky test.
+                let status = match kind {
+                    StatusLineKind::Intermediate => {
+                        format!("TRY {} PASS", last_status.retry_data.attempt)
+                    }
+                    StatusLineKind::Final => {
+                        format!(
+                            "FLAKY {}/{}",
+                            last_status.retry_data.attempt, last_status.retry_data.total_attempts
+                        )
+                    }
+                };
+                write!(writer, "{:>12} ", status.style(self.styles.skip))?;
+            }
+            ExecutionDescription::Failure { .. } => {
+                if last_status.retry_data.attempt == 1 {
+                    write!(
+                        writer,
+                        "{:>12} ",
+                        status_str(&last_status.result).style(self.styles.fail)
+                    )?;
+                } else {
+                    let status_str = short_status_str(&last_status.result);
+                    write!(
+                        writer,
+                        "{:>12} ",
+                        format!("TRY {} {}", last_status.retry_data.attempt, status_str)
+                            .style(self.styles.fail)
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn display_test_instance(
         &self,
         stress_index: Option<StressIndex>,
@@ -1654,7 +1680,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 Some(DisplayCounterIndex::new_counter(current, total))
             }
             (TestInstanceCounter::Padded, Some(counter_width)) => Some(
-                DisplayCounterIndex::new_padded(self.theme_characters.hbar, counter_width),
+                DisplayCounterIndex::new_padded(self.theme_characters.hbar_char(), counter_width),
             ),
             (TestInstanceCounter::None, _) | (_, None) => None,
         };
@@ -2209,12 +2235,28 @@ impl<'a> DisplayReporterImpl<'a> {
         let header_style = if is_retry {
             self.styles.retry
         } else if result.is_success() {
+            // Exhaustive match on success results to catch missing cases at
+            // compile time.
             match result {
+                ExecutionResultDescription::Pass => self.styles.pass,
                 ExecutionResultDescription::Leak {
                     result: LeakTimeoutResult::Pass,
                 } => self.styles.skip,
-                ExecutionResultDescription::Pass => self.styles.pass,
-                other => panic!("success means leak-pass or pass, found {other:?}"),
+                ExecutionResultDescription::Timeout {
+                    result: SlowTimeoutResult::Pass,
+                } => self.styles.skip,
+                // These are failure cases and cannot appear when is_success()
+                // is true.
+                ExecutionResultDescription::Leak {
+                    result: LeakTimeoutResult::Fail,
+                }
+                | ExecutionResultDescription::Timeout {
+                    result: SlowTimeoutResult::Fail,
+                }
+                | ExecutionResultDescription::Fail { .. }
+                | ExecutionResultDescription::ExecFail => {
+                    unreachable!("is_success() returned true but result is a failure: {result:?}")
+                }
             }
         } else {
             self.styles.fail
@@ -2319,6 +2361,16 @@ enum TestInstanceCounter {
     Counter { current: usize, total: usize },
     Padded,
     None,
+}
+
+/// Whether a status line is an intermediate line (during execution) or a final
+/// line (in the summary).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StatusLineKind {
+    /// Intermediate status line shown during test execution.
+    Intermediate,
+    /// Final status line shown in the summary.
+    Final,
 }
 
 const LIBTEST_PANIC_EXIT_CODE: i32 = 101;
@@ -2517,40 +2569,6 @@ fn write_windows_abort_line(
     }
 }
 
-#[derive(Debug)]
-struct ThemeCharacters {
-    hbar: char,
-    progress_chars: &'static str,
-    spinner_chars: &'static str,
-}
-
-impl Default for ThemeCharacters {
-    fn default() -> Self {
-        Self {
-            hbar: '-',
-            progress_chars: "=> ",
-            // Duplicate characters to slow down the spinner refresh rate.
-            spinner_chars: "-\\|/",
-        }
-    }
-}
-
-impl ThemeCharacters {
-    fn use_unicode(&mut self) {
-        self.hbar = '─';
-        // https://mike42.me/blog/2018-06-make-better-cli-progress-bars-with-unicode-block-characters
-        self.progress_chars = "█▉▊▋▌▍▎▏ ";
-        // https://github.com/sindresorhus/cli-spinners/blob/3860701f68e3075511f111a28ca2838fc906fca8/spinners.json#L4
-        //
-        // Duplicate characters to slow down the spinner refresh rate.
-        self.spinner_chars = "⠋⠋⠙⠙⠹⠹⠸⠸⠼⠼⠴⠴⠦⠦⠧⠧⠇⠇⠏⠏";
-    }
-
-    fn hbar(&self, width: usize) -> String {
-        std::iter::repeat_n(self.hbar, width).collect()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2609,7 +2627,10 @@ mod tests {
             show_term_progress: ShowTerminalProgress::No,
         };
 
-        let output = ReporterOutput::Writer(out);
+        let output = ReporterOutput::Writer {
+            writer: out,
+            use_unicode: true,
+        };
         let reporter = builder.build(output);
         f(reporter);
     }
@@ -2721,6 +2742,516 @@ mod tests {
         );
 
         insta::assert_snapshot!("final_status_output", out,);
+    }
+
+    #[test]
+    fn status_line_all_variants() {
+        let binary_id = RustBinaryId::new("my-binary-id");
+        let test_name = TestCaseName::new("test_name");
+        let test_instance = TestInstanceId {
+            binary_id: &binary_id,
+            test_name: &test_name,
+        };
+
+        // --- Success result types ---
+        let pass_result_internal = ExecutionResult::Pass;
+        let pass_result = ExecutionResultDescription::from(pass_result_internal);
+
+        let leak_pass_result_internal = ExecutionResult::Leak {
+            result: LeakTimeoutResult::Pass,
+        };
+        let leak_pass_result = ExecutionResultDescription::from(leak_pass_result_internal);
+
+        let timeout_pass_result_internal = ExecutionResult::Timeout {
+            result: SlowTimeoutResult::Pass,
+        };
+        let timeout_pass_result = ExecutionResultDescription::from(timeout_pass_result_internal);
+
+        // --- Failure result types ---
+        let fail_result_internal = ExecutionResult::Fail {
+            failure_status: FailureStatus::ExitCode(1),
+            leaked: false,
+        };
+        let fail_result = ExecutionResultDescription::from(fail_result_internal);
+
+        let fail_leak_result_internal = ExecutionResult::Fail {
+            failure_status: FailureStatus::ExitCode(1),
+            leaked: true,
+        };
+        let fail_leak_result = ExecutionResultDescription::from(fail_leak_result_internal);
+
+        let exec_fail_result_internal = ExecutionResult::ExecFail;
+        let exec_fail_result = ExecutionResultDescription::from(exec_fail_result_internal);
+
+        let leak_fail_result_internal = ExecutionResult::Leak {
+            result: LeakTimeoutResult::Fail,
+        };
+        let leak_fail_result = ExecutionResultDescription::from(leak_fail_result_internal);
+
+        let timeout_fail_result_internal = ExecutionResult::Timeout {
+            result: SlowTimeoutResult::Fail,
+        };
+        let timeout_fail_result = ExecutionResultDescription::from(timeout_fail_result_internal);
+
+        // Construct abort results directly as ExecutionResultDescription (platform-independent).
+        let abort_unix_result = ExecutionResultDescription::Fail {
+            failure: FailureDescription::Abort {
+                abort: AbortDescription::UnixSignal {
+                    signal: 11,
+                    name: Some("SEGV".into()),
+                },
+            },
+            leaked: false,
+        };
+        let abort_windows_result = ExecutionResultDescription::Fail {
+            failure: FailureDescription::Abort {
+                abort: AbortDescription::WindowsNtStatus {
+                    // STATUS_ACCESS_VIOLATION = 0xC0000005
+                    code: 0xC0000005_u32 as i32,
+                    message: Some("Access violation".into()),
+                },
+            },
+            leaked: false,
+        };
+
+        // --- Success statuses (is_slow = false) ---
+        let pass_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(pass_result_internal), "", ""),
+            result: pass_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let leak_pass_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(leak_pass_result_internal), "", ""),
+            result: leak_pass_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(2),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let timeout_pass_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(timeout_pass_result_internal), "", ""),
+            result: timeout_pass_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(240),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        // --- Success statuses (is_slow = true) ---
+        let pass_slow_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(pass_result_internal), "", ""),
+            result: pass_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(30),
+            is_slow: true,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let leak_pass_slow_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(leak_pass_result_internal), "", ""),
+            result: leak_pass_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(30),
+            is_slow: true,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let timeout_pass_slow_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(timeout_pass_result_internal), "", ""),
+            result: timeout_pass_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(300),
+            is_slow: true,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        // --- Flaky statuses ---
+        let flaky_first_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 2,
+            },
+            output: make_split_output(Some(fail_result_internal), "", ""),
+            result: fail_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+        let flaky_last_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 2,
+                total_attempts: 2,
+            },
+            output: make_split_output(Some(pass_result_internal), "", ""),
+            result: pass_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        // --- First-attempt failure statuses ---
+        let fail_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(fail_result_internal), "", ""),
+            result: fail_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let fail_leak_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(fail_leak_result_internal), "", ""),
+            result: fail_leak_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let exec_fail_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(exec_fail_result_internal), "", ""),
+            result: exec_fail_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let leak_fail_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(leak_fail_result_internal), "", ""),
+            result: leak_fail_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let timeout_fail_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(timeout_fail_result_internal), "", ""),
+            result: timeout_fail_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(60),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let abort_unix_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(None, "", ""),
+            result: abort_unix_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let abort_windows_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(None, "", ""),
+            result: abort_windows_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        // --- Retry failure statuses ---
+        let fail_retry_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 2,
+                total_attempts: 2,
+            },
+            output: make_split_output(Some(fail_result_internal), "", ""),
+            result: fail_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let fail_leak_retry_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 2,
+                total_attempts: 2,
+            },
+            output: make_split_output(Some(fail_leak_result_internal), "", ""),
+            result: fail_leak_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let leak_fail_retry_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 2,
+                total_attempts: 2,
+            },
+            output: make_split_output(Some(leak_fail_result_internal), "", ""),
+            result: leak_fail_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let timeout_fail_retry_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 2,
+                total_attempts: 2,
+            },
+            output: make_split_output(Some(timeout_fail_result_internal), "", ""),
+            result: timeout_fail_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(60),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        // --- Build descriptions ---
+        let pass_describe = ExecutionDescription::Success {
+            single_status: &pass_status,
+        };
+        let leak_pass_describe = ExecutionDescription::Success {
+            single_status: &leak_pass_status,
+        };
+        let timeout_pass_describe = ExecutionDescription::Success {
+            single_status: &timeout_pass_status,
+        };
+        let pass_slow_describe = ExecutionDescription::Success {
+            single_status: &pass_slow_status,
+        };
+        let leak_pass_slow_describe = ExecutionDescription::Success {
+            single_status: &leak_pass_slow_status,
+        };
+        let timeout_pass_slow_describe = ExecutionDescription::Success {
+            single_status: &timeout_pass_slow_status,
+        };
+        let flaky_describe = ExecutionDescription::Flaky {
+            last_status: &flaky_last_status,
+            prior_statuses: std::slice::from_ref(&flaky_first_status),
+        };
+        let fail_describe = ExecutionDescription::Failure {
+            first_status: &fail_status,
+            last_status: &fail_status,
+            retries: &[],
+        };
+        let fail_leak_describe = ExecutionDescription::Failure {
+            first_status: &fail_leak_status,
+            last_status: &fail_leak_status,
+            retries: &[],
+        };
+        let exec_fail_describe = ExecutionDescription::Failure {
+            first_status: &exec_fail_status,
+            last_status: &exec_fail_status,
+            retries: &[],
+        };
+        let leak_fail_describe = ExecutionDescription::Failure {
+            first_status: &leak_fail_status,
+            last_status: &leak_fail_status,
+            retries: &[],
+        };
+        let timeout_fail_describe = ExecutionDescription::Failure {
+            first_status: &timeout_fail_status,
+            last_status: &timeout_fail_status,
+            retries: &[],
+        };
+        let abort_unix_describe = ExecutionDescription::Failure {
+            first_status: &abort_unix_status,
+            last_status: &abort_unix_status,
+            retries: &[],
+        };
+        let abort_windows_describe = ExecutionDescription::Failure {
+            first_status: &abort_windows_status,
+            last_status: &abort_windows_status,
+            retries: &[],
+        };
+        let fail_retry_describe = ExecutionDescription::Failure {
+            first_status: &fail_status,
+            last_status: &fail_retry_status,
+            retries: std::slice::from_ref(&fail_retry_status),
+        };
+        let fail_leak_retry_describe = ExecutionDescription::Failure {
+            first_status: &fail_leak_status,
+            last_status: &fail_leak_retry_status,
+            retries: std::slice::from_ref(&fail_leak_retry_status),
+        };
+        let leak_fail_retry_describe = ExecutionDescription::Failure {
+            first_status: &leak_fail_status,
+            last_status: &leak_fail_retry_status,
+            retries: std::slice::from_ref(&leak_fail_retry_status),
+        };
+        let timeout_fail_retry_describe = ExecutionDescription::Failure {
+            first_status: &timeout_fail_status,
+            last_status: &timeout_fail_retry_status,
+            retries: std::slice::from_ref(&timeout_fail_retry_status),
+        };
+
+        // Collect all test cases: (label, description).
+        // The label helps identify each case in the snapshot.
+        let test_cases: Vec<(&str, ExecutionDescription<'_, ChildSingleOutput>)> = vec![
+            // Success variants (is_slow = false).
+            ("pass", pass_describe),
+            ("leak pass", leak_pass_describe),
+            ("timeout pass", timeout_pass_describe),
+            // Success variants (is_slow = true) - only different for Final.
+            ("pass slow", pass_slow_describe),
+            ("leak pass slow", leak_pass_slow_describe),
+            ("timeout pass slow", timeout_pass_slow_describe),
+            // Flaky variant.
+            ("flaky", flaky_describe),
+            // First-attempt failure variants.
+            ("fail", fail_describe),
+            ("fail leak", fail_leak_describe),
+            ("exec fail", exec_fail_describe),
+            ("leak fail", leak_fail_describe),
+            ("timeout fail", timeout_fail_describe),
+            ("abort unix", abort_unix_describe),
+            ("abort windows", abort_windows_describe),
+            // Retry failure variants.
+            ("fail retry", fail_retry_describe),
+            ("fail leak retry", fail_leak_retry_describe),
+            ("leak fail retry", leak_fail_retry_describe),
+            ("timeout fail retry", timeout_fail_retry_describe),
+        ];
+
+        let mut out = String::new();
+        let mut counter = 0usize;
+
+        with_reporter(
+            |mut reporter| {
+                let writer = reporter.output.writer_mut().unwrap();
+
+                // Loop over both StatusLineKind variants.
+                for (kind_name, kind) in [
+                    ("intermediate", StatusLineKind::Intermediate),
+                    ("final", StatusLineKind::Final),
+                ] {
+                    writeln!(writer, "=== {kind_name} ===").unwrap();
+
+                    for (label, describe) in &test_cases {
+                        counter += 1;
+                        let test_counter = TestInstanceCounter::Counter {
+                            current: counter,
+                            total: 100,
+                        };
+
+                        // Write label as a comment for clarity in snapshot.
+                        writeln!(writer, "# {label}: ").unwrap();
+
+                        reporter
+                            .inner
+                            .write_status_line_impl(
+                                None,
+                                test_counter,
+                                test_instance,
+                                *describe,
+                                kind,
+                                writer,
+                            )
+                            .unwrap();
+                    }
+                }
+            },
+            &mut out,
+        );
+
+        insta::assert_snapshot!("status_line_all_variants", out);
     }
 
     #[test]

@@ -55,9 +55,9 @@ pub use session::{
     RecordSessionSetup,
 };
 pub use store::{
-    CompletedRunStats, DisplayRecordedRunInfo, ExclusiveLockedRunStore, MostRecentRunResult,
-    RecordedRunInfo, RecordedRunStatus, RunListAlignment, RunStore, RunStoreSnapshot,
-    SharedLockedRunStore, StressCompletedRunStats, Styles,
+    CompletedRunStats, DisplayRecordedRunInfo, DisplayRunList, ExclusiveLockedRunStore,
+    MostRecentRunResult, RecordedRunInfo, RecordedRunStatus, RunListAlignment, RunStore,
+    RunStoreSnapshot, SharedLockedRunStore, StressCompletedRunStats, Styles,
 };
 pub use summary::{
     CoreEventKind, NoTestsBehavior, OutputEventKind, OutputFileName, RecordOpts,

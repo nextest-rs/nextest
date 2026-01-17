@@ -632,6 +632,61 @@ impl fmt::Display for FormattedDuration {
     }
 }
 
+/// Characters used for terminal output theming.
+///
+/// Provides both ASCII and Unicode variants for horizontal bars, progress indicators,
+/// and spinners.
+#[derive(Clone, Debug)]
+pub struct ThemeCharacters {
+    hbar: char,
+    progress_chars: &'static str,
+    spinner_chars: &'static str,
+}
+
+impl Default for ThemeCharacters {
+    fn default() -> Self {
+        Self {
+            hbar: '-',
+            progress_chars: "=> ",
+            // Duplicate characters to slow down the spinner refresh rate.
+            spinner_chars: "-\\|/",
+        }
+    }
+}
+
+impl ThemeCharacters {
+    /// Switches to Unicode characters for richer terminal output.
+    pub fn use_unicode(&mut self) {
+        self.hbar = '─';
+        // https://mike42.me/blog/2018-06-make-better-cli-progress-bars-with-unicode-block-characters
+        self.progress_chars = "█▉▊▋▌▍▎▏ ";
+        // https://github.com/sindresorhus/cli-spinners/blob/3860701f68e3075511f111a28ca2838fc906fca8/spinners.json#L4
+        //
+        // Duplicate characters to slow down the spinner refresh rate.
+        self.spinner_chars = "⠋⠋⠙⠙⠹⠹⠸⠸⠼⠼⠴⠴⠦⠦⠧⠧⠇⠇⠏⠏";
+    }
+
+    /// Returns the horizontal bar character.
+    pub fn hbar_char(&self) -> char {
+        self.hbar
+    }
+
+    /// Returns a horizontal bar of the specified width.
+    pub fn hbar(&self, width: usize) -> String {
+        std::iter::repeat_n(self.hbar, width).collect()
+    }
+
+    /// Returns the progress bar characters.
+    pub fn progress_chars(&self) -> &'static str {
+        self.progress_chars
+    }
+
+    /// Returns the spinner characters.
+    pub fn spinner_chars(&self) -> &'static str {
+        self.spinner_chars
+    }
+}
+
 // "exited with"/"terminated via"
 pub(crate) fn display_exited_with(exit_status: ExitStatus) -> String {
     match AbortStatus::extract(exit_status) {
