@@ -1577,6 +1577,14 @@ impl<'a> DisplayReporterImpl<'a> {
                         write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
                     }
                     (
+                        true,
+                        ExecutionResultDescription::Timeout {
+                            result: SlowTimeoutResult::Pass,
+                        },
+                    ) => {
+                        write!(writer, "{:>12} ", "SLOW+TMPASS".style(self.styles.skip))?;
+                    }
+                    (
                         false,
                         ExecutionResultDescription::Leak {
                             result: LeakTimeoutResult::Pass,
@@ -1587,8 +1595,18 @@ impl<'a> DisplayReporterImpl<'a> {
                     (false, ExecutionResultDescription::Pass) => {
                         write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
                     }
+                    (
+                        false,
+                        ExecutionResultDescription::Timeout {
+                            result: SlowTimeoutResult::Pass,
+                        },
+                    ) => {
+                        write!(writer, "{:>12} ", "TMPASS".style(self.styles.skip))?;
+                    }
                     (_, other) => {
-                        unreachable!("success is limited to pass and leak, found {other:?}")
+                        unreachable!(
+                            "success is limited to pass, leak, and timeout, found {other:?}"
+                        )
                     }
                 }
             }
@@ -2213,8 +2231,11 @@ impl<'a> DisplayReporterImpl<'a> {
                 ExecutionResultDescription::Leak {
                     result: LeakTimeoutResult::Pass,
                 } => self.styles.skip,
+                ExecutionResultDescription::Timeout {
+                    result: SlowTimeoutResult::Pass,
+                } => self.styles.skip,
                 ExecutionResultDescription::Pass => self.styles.pass,
-                other => panic!("success means leak-pass or pass, found {other:?}"),
+                other => panic!("success means leak-pass, timeout-pass, or pass, found {other:?}"),
             }
         } else {
             self.styles.fail
@@ -2721,6 +2742,98 @@ mod tests {
         );
 
         insta::assert_snapshot!("final_status_output", out,);
+    }
+
+    #[test]
+    fn final_status_line_timeout_pass() {
+        let binary_id = RustBinaryId::new("my-binary-id");
+        let test_name = TestCaseName::new("timeout_test");
+        let test_instance = TestInstanceId {
+            binary_id: &binary_id,
+            test_name: &test_name,
+        };
+
+        let timeout_pass_result_internal = ExecutionResult::Timeout {
+            result: SlowTimeoutResult::Pass,
+        };
+        let timeout_pass_result = ExecutionResultDescription::from(timeout_pass_result_internal);
+
+        // Test Timeout { Pass } without is_slow flag
+        let timeout_pass_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(timeout_pass_result_internal), "", ""),
+            result: timeout_pass_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(240),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+        let timeout_pass_describe = ExecutionDescription::Success {
+            single_status: &timeout_pass_status,
+        };
+
+        // Test Timeout { Pass } with is_slow flag set
+        let timeout_pass_slow_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(timeout_pass_result_internal), "", ""),
+            result: timeout_pass_result.clone(),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(300),
+            is_slow: true,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+        let timeout_pass_slow_describe = ExecutionDescription::Success {
+            single_status: &timeout_pass_slow_status,
+        };
+
+        let mut out = String::new();
+
+        with_reporter(
+            |mut reporter| {
+                // Test Timeout { Pass } - should output "TMPASS"
+                reporter
+                    .inner
+                    .write_final_status_line(
+                        None,
+                        TestInstanceCounter::Counter {
+                            current: 1,
+                            total: 10,
+                        },
+                        test_instance,
+                        timeout_pass_describe,
+                        reporter.output.writer_mut().unwrap(),
+                    )
+                    .unwrap();
+
+                // Test Timeout { Pass } with is_slow - should output "SLOW+TMPASS"
+                reporter
+                    .inner
+                    .write_final_status_line(
+                        None,
+                        TestInstanceCounter::Counter {
+                            current: 2,
+                            total: 10,
+                        },
+                        test_instance,
+                        timeout_pass_slow_describe,
+                        reporter.output.writer_mut().unwrap(),
+                    )
+                    .unwrap();
+            },
+            &mut out,
+        );
+
+        insta::assert_snapshot!("final_status_timeout_pass", out,);
     }
 
     #[test]
