@@ -2234,32 +2234,24 @@ impl<'a> DisplayReporterImpl<'a> {
     ) -> ChildOutputSpec {
         let header_style = if is_retry {
             self.styles.retry
-        } else if result.is_success() {
-            // Exhaustive match on success results to catch missing cases at
-            // compile time.
+        } else {
             match result {
                 ExecutionResultDescription::Pass => self.styles.pass,
                 ExecutionResultDescription::Leak {
                     result: LeakTimeoutResult::Pass,
                 } => self.styles.skip,
+                ExecutionResultDescription::Leak {
+                    result: LeakTimeoutResult::Fail,
+                } => self.styles.fail,
                 ExecutionResultDescription::Timeout {
                     result: SlowTimeoutResult::Pass,
                 } => self.styles.skip,
-                // These are failure cases and cannot appear when is_success()
-                // is true.
-                ExecutionResultDescription::Leak {
-                    result: LeakTimeoutResult::Fail,
-                }
-                | ExecutionResultDescription::Timeout {
+                ExecutionResultDescription::Timeout {
                     result: SlowTimeoutResult::Fail,
-                }
-                | ExecutionResultDescription::Fail { .. }
-                | ExecutionResultDescription::ExecFail => {
-                    unreachable!("is_success() returned true but result is a failure: {result:?}")
-                }
+                } => self.styles.fail,
+                ExecutionResultDescription::Fail { .. } => self.styles.fail,
+                ExecutionResultDescription::ExecFail => self.styles.fail,
             }
-        } else {
-            self.styles.fail
         };
 
         // Adding an hbar at the end gives the text a bit of visual weight that
