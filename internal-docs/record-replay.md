@@ -279,7 +279,7 @@ NEXTEST_EXPERIMENTAL_RECORD=1 cargo nextest run
 
 The retention policy uses true LRU (least recently used) eviction rather than LRC (least recently created). This ensures that frequently-used runs are kept even if they were created long ago—important for the future `rerun` feature where repeatedly rerunning from the same base run should not cause that original run to be evicted.
 
-Each run has a `last-written-at` timestamp (`DateTime<Utc>`) that tracks when the run was last used in a way that caused a write. The retention policy in `compute_runs_to_delete()` sorts runs by this timestamp and uses it for age calculation.
+Each run has a `last-written-at` timestamp (`DateTime<FixedOffset>`) that tracks when the run was last used in a way that caused a write. The retention policy in `compute_runs_to_delete()` sorts runs by this timestamp and uses it for age calculation.
 
 **Data model** (in `runs.json`):
 ```json
@@ -293,8 +293,9 @@ Each run has a `last-written-at` timestamp (`DateTime<Utc>`) that tracks when th
 
 **What updates `last-written-at`**:
 1. **Creating the run**: Set to the current time when the run is created
-2. **Rerun from this run** (future): When `cargo nextest rerun -r <run-id>` creates a new run that references this one, update `last-written-at` on the source run
-3. **Other operations** (future): Any operation that reads a run and produces a new artifact based on it
+2. **Completing the run**: Updated when the run finishes (successful or otherwise)
+3. **Rerun from this run** (future): When `cargo nextest rerun -r <run-id>` creates a new run that references this one, update `last-written-at` on the source run
+4. **Other operations** (future): Any operation that reads a run and produces a new artifact based on it
 
 ## Files to modify
 

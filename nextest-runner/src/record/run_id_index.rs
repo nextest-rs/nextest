@@ -251,7 +251,7 @@ mod tests {
             run_id,
             nextest_version: Version::new(0, 1, 0),
             started_at,
-            last_written_at: started_at.to_utc(),
+            last_written_at: started_at,
             duration_secs: None,
             sizes: RecordedSizes::default(),
             status: RecordedRunStatus::Incomplete,

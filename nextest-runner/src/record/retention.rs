@@ -536,7 +536,7 @@ mod tests {
             run_id,
             nextest_version: Version::new(0, 1, 0),
             started_at,
-            last_written_at: started_at.to_utc(),
+            last_written_at: started_at,
             duration_secs: Some(1.0),
             sizes: RecordedSizes {
                 log: ComponentSizes::default(),
@@ -1001,7 +1001,7 @@ mod tests {
             run_id: uuid.parse().expect("valid UUID"),
             nextest_version: Version::parse(version).expect("valid version"),
             started_at,
-            last_written_at: started_at.to_utc(),
+            last_written_at: started_at,
             duration_secs: Some(1.0),
             sizes: RecordedSizes {
                 log: ComponentSizes::default(),

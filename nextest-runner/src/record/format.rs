@@ -126,9 +126,10 @@ pub(super) struct RecordedRun {
     pub(super) started_at: DateTime<FixedOffset>,
     /// When this run was last written to.
     ///
-    /// Used for LRU eviction. Updated when the run is created, and in the
-    /// future when operations like `rerun` reference this run.
-    pub(super) last_written_at: DateTime<Utc>,
+    /// Used for LRU eviction. Updated when the run is created, when the run
+    /// completes, and in the future when operations like `rerun` reference
+    /// this run.
+    pub(super) last_written_at: DateTime<FixedOffset>,
     /// Duration of the run in seconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) duration_secs: Option<f64>,
@@ -589,8 +590,7 @@ mod tests {
             started_at: DateTime::parse_from_rfc3339("2024-12-19T14:22:33-08:00")
                 .expect("valid timestamp"),
             last_written_at: DateTime::parse_from_rfc3339("2024-12-19T22:22:33Z")
-                .expect("valid timestamp")
-                .to_utc(),
+                .expect("valid timestamp"),
             duration_secs: Some(12.345),
             sizes: RecordedSizesFormat {
                 log: ComponentSizesFormat {
