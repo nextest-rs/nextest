@@ -6,8 +6,8 @@
 use super::{
     cli::{
         ArchiveBuildFilter, BenchReporterOpts, BenchRunnerOpts, ListType, MessageFormat,
-        MessageFormatOpts, NoTestsBehaviorOpt, PagerOpts, ReplayOpts, ReporterOpts,
-        TestBuildFilter, TestRunnerOpts,
+        MessageFormatOpts, NoTestsBehaviorOpt, ReplayOpts, ReporterOpts, TestBuildFilter,
+        TestRunnerOpts,
     },
     helpers::{
         acquire_graph_data, build_filtersets, detect_build_platforms, final_stats_to_error,
@@ -521,7 +521,6 @@ impl App {
         &self,
         message_format: MessageFormatOpts,
         list_type: ListType,
-        pager_opts: &PagerOpts,
     ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
 
@@ -539,7 +538,8 @@ impl App {
             &self.base.build_platforms.host.platform,
             self.base.early_args.user_config_location(),
         )?;
-        let (pager_setting, paginate) = pager_opts.resolve(&resolved_user_config.ui);
+        let (pager_setting, paginate) =
+            self.base.early_args.resolve_pager(&resolved_user_config.ui);
 
         let should_page =
             !matches!(paginate, PaginateSetting::Never) && message_format.is_human_readable();
@@ -607,7 +607,6 @@ impl App {
         &self,
         show_default: bool,
         groups: Vec<nextest_runner::config::elements::TestGroup>,
-        pager_opts: &PagerOpts,
     ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
         let (_, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
@@ -646,7 +645,8 @@ impl App {
             &self.base.build_platforms.host.platform,
             self.base.early_args.user_config_location(),
         )?;
-        let (pager_setting, paginate) = pager_opts.resolve(&resolved_user_config.ui);
+        let (pager_setting, paginate) =
+            self.base.early_args.resolve_pager(&resolved_user_config.ui);
 
         let mut paged_output = PagedOutput::request_pager(
             &pager_setting,
@@ -1362,11 +1362,9 @@ pub(super) fn exec_replay(
         UserConfig::for_host_platform(&host_platform, early_args.user_config_location())
             .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })?;
 
-    let mut paged_output = PagedOutput::request_pager(
-        &user_config.ui.pager,
-        user_config.ui.paginate,
-        &user_config.ui.streampager,
-    );
+    let (pager_setting, paginate) = early_args.resolve_pager(&user_config.ui);
+    let mut paged_output =
+        PagedOutput::request_pager(&pager_setting, paginate, &user_config.ui.streampager);
 
     let should_colorize = output.color.should_colorize(supports_color::Stream::Stdout);
 
