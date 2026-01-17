@@ -640,7 +640,6 @@ impl fmt::Display for FormattedDuration {
 pub struct ThemeCharacters {
     hbar: char,
     progress_chars: &'static str,
-    spinner_chars: &'static str,
 }
 
 impl Default for ThemeCharacters {
@@ -648,8 +647,6 @@ impl Default for ThemeCharacters {
         Self {
             hbar: '-',
             progress_chars: "=> ",
-            // Duplicate characters to slow down the spinner refresh rate.
-            spinner_chars: "-\\|/",
         }
     }
 }
@@ -660,10 +657,6 @@ impl ThemeCharacters {
         self.hbar = '─';
         // https://mike42.me/blog/2018-06-make-better-cli-progress-bars-with-unicode-block-characters
         self.progress_chars = "█▉▊▋▌▍▎▏ ";
-        // https://github.com/sindresorhus/cli-spinners/blob/3860701f68e3075511f111a28ca2838fc906fca8/spinners.json#L4
-        //
-        // Duplicate characters to slow down the spinner refresh rate.
-        self.spinner_chars = "⠋⠋⠙⠙⠹⠹⠸⠸⠼⠼⠴⠴⠦⠦⠧⠧⠇⠇⠏⠏";
     }
 
     /// Returns the horizontal bar character.
@@ -679,11 +672,6 @@ impl ThemeCharacters {
     /// Returns the progress bar characters.
     pub fn progress_chars(&self) -> &'static str {
         self.progress_chars
-    }
-
-    /// Returns the spinner characters.
-    pub fn spinner_chars(&self) -> &'static str {
-        self.spinner_chars
     }
 }
 
