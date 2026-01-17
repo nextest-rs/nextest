@@ -16,6 +16,8 @@ Nextest's pager support is closely modeled after the [Jujutsu version control sy
 The following commands support paging:
 
 - [`cargo nextest list`](../listing.md)
+- [`cargo nextest replay`](../features/record-replay.md#replaying-test-runs) — replay recorded test runs
+- [`cargo nextest store list`](../features/record-replay.md#listing-recorded-runs) — list recorded test runs
 - `cargo nextest show-config test-groups` — displays [test group](../configuration/test-groups.md) configuration
 - `cargo nextest --help`, `cargo nextest <command> --help` — help output
 

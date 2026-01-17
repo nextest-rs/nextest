@@ -55,6 +55,8 @@
         #8be9fd,
         var(--nextest-color-blend) var(--nextest-color-blend-amount)
     );
+    /* Bright black as a medium gray for light backgrounds. */
+    --ansi-bright-black: #6e7781;
 
     --md-accent-fg-color: hsl(350, 45%, 40%);
     --md-typeset-a-color: hsl(192, 29%, 40%);
@@ -95,11 +97,20 @@
         #8be9fd,
         var(--nextest-color-blend) var(--nextest-color-blend-amount)
     );
+    /* Bright black as a medium gray for dark backgrounds. */
+    --ansi-bright-black: #8b949e;
 
     --md-hue: 215;
     --md-accent-fg-color: hsl(350, 45%, 60%);
     --md-typeset-color: hsl(330, 20%, 90%);
     --md-typeset-a-color: hsl(192, 29%, 60%);
+}
+
+/* Override BrightBlack to use a faded gray instead of text-shadow. */
+.-Color-BrightBlack,
+.-Color-Bold-BrightBlack {
+    color: var(--ansi-bright-black);
+    text-shadow: none;
 }
 
 .md-grid {

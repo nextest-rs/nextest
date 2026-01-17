@@ -228,10 +228,6 @@ experimental = ["record"]
 # Default: false
 enabled = true
 
-# Where to store records: "cache" (platform cache dir) or custom path
-# Default: "cache"
-store = "cache"
-
 # Maximum size per output file before truncation
 # Default: "10MB"
 max-output-size = "10MB"

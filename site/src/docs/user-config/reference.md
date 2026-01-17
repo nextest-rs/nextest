@@ -20,6 +20,67 @@ User configuration is loaded from platform-specific locations:
 
 For more information about configuration hierarchy, see [_Configuration hierarchy_](index.md#configuration-hierarchy).
 
+## Experimental features
+
+### `experimental`
+
+<!-- md:version 0.9.123 -->
+
+- **Type**: Array of strings
+- **Description**: Enables experimental features
+- **Documentation**: [_Record and replay_](../features/record-replay.md)
+- **Default**: `[]`: no experimental features are enabled
+- **Valid values**:
+  - `"record"`: Enable the record and replay feature
+- **Environment variable**: `NEXTEST_EXPERIMENTAL_RECORD=1` (for record only)
+- **Example**:
+  ```toml
+  experimental = ["record"]
+  ```
+
+## Record configuration
+
+<!-- md:version 0.9.123 -->
+
+Record configuration is specified under `[record]`. Recording requires both the `"record"` experimental feature and `enabled = true`.
+
+For detailed information, see [_Record and replay_](../features/record-replay.md).
+
+### `record.enabled`
+
+- **Type**: Boolean
+- **Description**: Whether to record test runs
+- **Default**: `false`
+- **Example**:
+  ```toml
+  [record]
+  enabled = true
+  ```
+
+### `record.max-output-size`
+
+- **Type**: String (size)
+- **Description**: Maximum size per output file before truncation
+- **Default**: `"10MB"`
+
+### `record.max-records`
+
+- **Type**: Integer
+- **Description**: Maximum number of recorded runs to retain
+- **Default**: `100`
+
+### `record.max-total-size`
+
+- **Type**: String (size)
+- **Description**: Maximum total size of all recorded runs
+- **Default**: `"1GB"`
+
+### `record.max-age`
+
+- **Type**: String (duration)
+- **Description**: Maximum age of recorded runs before eviction
+- **Default**: `"30d"`
+
 ## UI configuration
 
 UI settings are configured under `[ui]`.
@@ -244,7 +305,7 @@ Each override has a required `platform` filter and optional settings in the `ui`
 
 ### Overridable settings
 
-All `[ui]` and `[ui.streampager]` settings can be overridden within `[[overrides]]`:
+All `[ui]`, `[ui.streampager]`, and `[record]` settings can be overridden within `[[overrides]]`:
 
 - [`ui.show-progress`](#uishow-progress)
 - [`ui.max-progress-running`](#uimax-progress-running)
@@ -255,6 +316,11 @@ All `[ui]` and `[ui.streampager]` settings can be overridden within `[[overrides
 - [`ui.streampager.interface`](#uistreampagerinterface)
 - [`ui.streampager.wrapping`](#uistreampagerwrapping)
 - [`ui.streampager.show-ruler`](#uistreampagershow-ruler)
+- [`record.enabled`](#recordenabled)
+- [`record.max-output-size`](#recordmax-output-size)
+- [`record.max-records`](#recordmax-records)
+- [`record.max-total-size`](#recordmax-total-size)
+- [`record.max-age`](#recordmax-age)
 
 Each setting in an override is optional. The first matching override is applied on a per-setting basis.
 

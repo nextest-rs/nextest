@@ -54,11 +54,14 @@ Overrides are evaluated against the *host* platform (where nextest is running). 
 
 !!! note "User config versus repository config"
 
-    User config only affects UI and display settings—it does not change test execution behavior. For test execution settings like retries, timeouts, and test groups, use [repository configuration](../configuration/index.md).
+    User config primarily affects UI, display settings, and optional features like recording—it does not change test execution behavior. For test execution settings like retries, timeouts, and test groups, use [repository configuration](../configuration/index.md).
 
 ## Example configuration
 
 ```toml title="User configuration in ~/.config/nextest/config.toml"
+# Enable experimental features.
+experimental = ["record"]
+
 [ui]
 # Always show a progress bar.
 show-progress = "bar"
@@ -71,6 +74,10 @@ input-handler = false
 
 # Disable indentation for captured test output.
 output-indent = false
+
+[record]
+# Enable recording (requires experimental = ["record"]).
+enabled = true
 ```
 
 For a complete list of available settings, see the [user config reference](reference.md).
@@ -78,4 +85,5 @@ For a complete list of available settings, see the [user config reference](refer
 ## See also
 
 - [User config reference](reference.md) — complete list of user config settings
+- [Record and replay](../features/record-replay.md) — recording test runs for later inspection
 - [Repository configuration](../configuration/index.md) — per-repository configuration

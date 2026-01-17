@@ -1,0 +1,13 @@
+[32;1m   Replaying[0m recorded run [35;1m1b[0m[90med9018-d2c0-4054-ad23-29837188cc31[0m
+[32;1m     Started[0m 2026-01-16 17:08:22  status: [1mcompleted[0m
+────────────
+[32;1m Nextest run[0m ID [1m1bed9018-d2c0-4054-ad23-29837188cc31[0m with nextest profile: [1mdefault[0m
+[32;1m    Starting[0m [1m6[0m tests across [1m2[0m binaries ([1m445[0m tests [33;1mskipped[0m)
+[32;1m        PASS[0m [   0.006s] (1/6) [35;1mnextest-runner[0m [36mreporter::events::tests[0m[36m::[0m[34;1mabort_description_from_abort_status[0m
+[32;1m        PASS[0m [   0.006s] (2/6) [35;1mnextest-runner[0m [36mreporter::events::tests[0m[36m::[0m[34;1mabort_description_display[0m
+[32;1m        PASS[0m [   0.006s] (3/6) [35;1mnextest-runner[0m [36mreporter::events::tests[0m[36m::[0m[34;1mabort_description_cross_platform_deserialization[0m
+[32;1m        PASS[0m [   0.006s] (4/6) [35;1mnextest-runner[0m [36mreporter::events::tests[0m[36m::[0m[34;1mtest_is_success[0m
+[32;1m        PASS[0m [   0.025s] (5/6) [35;1mnextest-runner[0m [36mreporter::events::tests[0m[36m::[0m[34;1mabort_description_serialization[0m
+[32;1m        PASS[0m [   0.026s] (6/6) [35;1mnextest-runner[0m [36mreporter::events::tests[0m[36m::[0m[34;1mexecution_result_description_serialization[0m
+────────────
+[32;1m     Summary[0m [   0.033s] [1m6[0m tests run: [1m6[0m [32;1mpassed[0m, [1m445[0m [33;1mskipped[0m
