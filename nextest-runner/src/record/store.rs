@@ -22,7 +22,7 @@ use crate::{
     helpers::{ThemeCharacters, plural},
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use chrono::{DateTime, FixedOffset, TimeDelta, Utc};
+use chrono::{DateTime, FixedOffset, Local, TimeDelta, Utc};
 use debug_ignore::DebugIgnore;
 use owo_colors::{OwoColorize, Style};
 use quick_junit::ReportUuid;
@@ -220,6 +220,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
                 };
                 run.status = status;
                 run.duration_secs = duration_secs;
+                run.last_written_at = Local::now().fixed_offset();
                 return true;
             }
         }
@@ -356,7 +357,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
             run_id,
             nextest_version,
             started_at,
-            last_written_at: Utc::now(),
+            last_written_at: Local::now().fixed_offset(),
             duration_secs: None,
             sizes: RecordedSizes::default(),
             status: RecordedRunStatus::Incomplete,
@@ -385,9 +386,10 @@ pub struct RecordedRunInfo {
     pub started_at: DateTime<FixedOffset>,
     /// When this run was last written to.
     ///
-    /// Used for LRU eviction. Updated when the run is created, and in the
-    /// future when operations like `rerun` reference this run.
-    pub last_written_at: DateTime<Utc>,
+    /// Used for LRU eviction. Updated when the run is created, when the run
+    /// completes, and in the future when operations like `rerun` reference
+    /// this run.
+    pub last_written_at: DateTime<FixedOffset>,
     /// Duration of the run in seconds.
     ///
     /// This is `None` for incomplete runs.
