@@ -310,7 +310,8 @@ impl<'a> DisplayReporter<'a> {
             )?;
 
             // Write skipped incomplete runs if any.
-            if let Some(count) = header.newer_incomplete_count {
+            if header.newer_incomplete_count > 0 {
+                let count = header.newer_incomplete_count;
                 write!(writer, "{:>12} ", "Skipping".style(styles.skip))?;
                 writeln!(
                     writer,

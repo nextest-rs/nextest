@@ -4,7 +4,55 @@
 //! Index for run IDs enabling efficient prefix lookup and shortest unique prefix computation.
 
 use super::store::RecordedRunInfo;
+use crate::errors::InvalidRunIdSelector;
 use quick_junit::ReportUuid;
+use std::{fmt, str::FromStr};
+
+/// Selector for identifying a run, either the most recent or by prefix.
+///
+/// This is used by CLI commands that need to specify a run ID. The `Latest`
+/// variant selects the most recent completed run, while `Prefix` allows
+/// specifying a run by its ID prefix.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum RunIdSelector {
+    /// Select the most recent completed run.
+    #[default]
+    Latest,
+
+    /// Select a run by ID prefix.
+    ///
+    /// The prefix contains only hex digits and optional dashes (for UUID format).
+    Prefix(String),
+}
+
+impl FromStr for RunIdSelector {
+    type Err = InvalidRunIdSelector;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "latest" {
+            Ok(RunIdSelector::Latest)
+        } else {
+            // Validate that the prefix contains only hex digits and dashes.
+            let is_valid = !s.is_empty() && s.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
+            if is_valid {
+                Ok(RunIdSelector::Prefix(s.to_owned()))
+            } else {
+                Err(InvalidRunIdSelector {
+                    input: s.to_owned(),
+                })
+            }
+        }
+    }
+}
+
+impl fmt::Display for RunIdSelector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RunIdSelector::Latest => write!(f, "latest"),
+            RunIdSelector::Prefix(prefix) => write!(f, "{prefix}"),
+        }
+    }
+}
 
 /// An index of run IDs enabling efficient prefix lookup and shortest unique
 /// prefix computation.
@@ -420,5 +468,58 @@ mod tests {
         assert_eq!(hex_len_to_string_index(21), 25);
         // Full UUID.
         assert_eq!(hex_len_to_string_index(32), 36);
+    }
+
+    #[test]
+    fn test_run_id_selector_default() {
+        assert_eq!(RunIdSelector::default(), RunIdSelector::Latest);
+    }
+
+    #[test]
+    fn test_run_id_selector_from_str() {
+        // Only exact "latest" parses to Latest.
+        assert_eq!(
+            "latest".parse::<RunIdSelector>().unwrap(),
+            RunIdSelector::Latest
+        );
+
+        // Valid hex prefixes.
+        assert_eq!(
+            "abc123".parse::<RunIdSelector>().unwrap(),
+            RunIdSelector::Prefix("abc123".to_owned())
+        );
+        assert_eq!(
+            "550e8400-e29b-41d4".parse::<RunIdSelector>().unwrap(),
+            RunIdSelector::Prefix("550e8400-e29b-41d4".to_owned())
+        );
+        assert_eq!(
+            "ABCDEF".parse::<RunIdSelector>().unwrap(),
+            RunIdSelector::Prefix("ABCDEF".to_owned())
+        );
+        assert_eq!(
+            "0".parse::<RunIdSelector>().unwrap(),
+            RunIdSelector::Prefix("0".to_owned())
+        );
+
+        // "Latest" contains non-hex characters.
+        assert!("Latest".parse::<RunIdSelector>().is_err());
+        assert!("LATEST".parse::<RunIdSelector>().is_err());
+
+        // Contains non-hex characters.
+        assert!("xyz".parse::<RunIdSelector>().is_err());
+        assert!("abc_123".parse::<RunIdSelector>().is_err());
+        assert!("hello".parse::<RunIdSelector>().is_err());
+
+        // Empty string is invalid.
+        assert!("".parse::<RunIdSelector>().is_err());
+    }
+
+    #[test]
+    fn test_run_id_selector_display() {
+        assert_eq!(RunIdSelector::Latest.to_string(), "latest");
+        assert_eq!(
+            RunIdSelector::Prefix("abc123".to_owned()).to_string(),
+            "abc123"
+        );
     }
 }

@@ -2358,6 +2358,17 @@ pub enum RecordPruneError {
     },
 }
 
+/// Error returned when parsing an invalid run ID selector.
+///
+/// A valid selector is either "latest" or a string containing only hex digits
+/// and dashes (for UUID format).
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
+#[error("invalid run ID selector `{input}`: expected `latest` or hex digits")]
+pub struct InvalidRunIdSelector {
+    /// The invalid input string.
+    pub input: String,
+}
+
 /// An error resolving a run ID prefix.
 #[derive(Debug, Error)]
 pub enum RunIdResolutionError {
