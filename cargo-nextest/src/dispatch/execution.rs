@@ -1367,6 +1367,7 @@ pub(super) fn exec_replay(
         PagedOutput::request_pager(&pager_setting, paginate, &user_config.ui.streampager);
 
     let should_colorize = output.color.should_colorize(supports_color::Stream::Stdout);
+    let use_unicode = supports_unicode::on(supports_unicode::Stream::Stdout);
 
     let mut reporter_builder = ReplayReporterBuilder::new();
     reporter_builder.set_colorize(should_colorize);
@@ -1378,7 +1379,10 @@ pub(super) fn exec_replay(
     let mut reporter = reporter_builder.build(
         record_opts.run_mode,
         test_list.test_count(),
-        ReporterOutput::Writer(&mut paged_output),
+        ReporterOutput::Writer {
+            writer: &mut paged_output,
+            use_unicode,
+        },
     );
 
     // Write the replay header through the reporter.

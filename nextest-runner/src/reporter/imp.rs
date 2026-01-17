@@ -56,7 +56,16 @@ pub enum ReporterOutput<'a> {
 
     /// Write output to a `WriteStr` implementation (e.g., for pager support or
     /// an in-memory buffer for tests).
-    Writer(&'a mut (dyn WriteStr + Send)),
+    Writer {
+        /// The writer to use for output.
+        writer: &'a mut (dyn WriteStr + Send),
+        /// Whether to use unicode characters for output.
+        ///
+        /// The caller should determine this based on the actual output
+        /// destination (e.g., by checking `supports_unicode::on()` for the
+        /// appropriate stream).
+        use_unicode: bool,
+    },
 }
 
 /// Test reporter builder.
