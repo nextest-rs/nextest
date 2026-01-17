@@ -154,7 +154,7 @@ struct FileMetadata {
 pub fn get_seed_archive_name(hash: Sha256Hash) -> Utf8PathBuf {
     // Check in the std temp directory for the seed file.
     let temp_dir = Utf8PathBuf::try_from(std::env::temp_dir()).expect("temp dir is utf-8");
-    let username = whoami::username();
+    let username = whoami::username().expect("obtained username");
     let user_dir = temp_dir.join(format!("nextest-tests-seed-{username}"));
     user_dir.join(format!("seed-{hash}.tar.zst"))
 }
