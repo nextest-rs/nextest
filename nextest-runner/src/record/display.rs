@@ -41,6 +41,10 @@ pub struct Styles {
     pub failed: Style,
     /// Style for "cancelled" or "incomplete" status.
     pub cancelled: Style,
+    /// Style for field labels in detailed view.
+    pub label: Style,
+    /// Style for section headers in detailed view.
+    pub section: Style,
 }
 
 impl Styles {
@@ -55,6 +59,8 @@ impl Styles {
         self.passed = Style::new().bold().green();
         self.failed = Style::new().bold().red();
         self.cancelled = Style::new().bold().yellow();
+        self.label = Style::new().bold();
+        self.section = Style::new().bold();
     }
 }
 
@@ -447,6 +453,283 @@ impl DisplayRecordedRunInfo<'_> {
     }
 }
 
+/// A detailed display wrapper for [`RecordedRunInfo`].
+///
+/// Unlike [`DisplayRecordedRunInfo`] which produces a compact table row,
+/// this produces a multi-line detailed view with labeled fields.
+pub struct DisplayRecordedRunInfoDetailed<'a> {
+    run: &'a RecordedRunInfo,
+    run_id_index: &'a RunIdIndex,
+    styles: &'a Styles,
+    theme_characters: &'a ThemeCharacters,
+    redactor: &'a Redactor,
+}
+
+impl<'a> DisplayRecordedRunInfoDetailed<'a> {
+    pub(super) fn new(
+        run: &'a RecordedRunInfo,
+        run_id_index: &'a RunIdIndex,
+        styles: &'a Styles,
+        theme_characters: &'a ThemeCharacters,
+        redactor: &'a Redactor,
+    ) -> Self {
+        Self {
+            run,
+            run_id_index,
+            styles,
+            theme_characters,
+            redactor,
+        }
+    }
+
+    /// Formats the run ID header with jj-style prefix highlighting.
+    fn format_run_id(&self) -> String {
+        let run_id_str = self.run.run_id.to_string();
+        if let Some(prefix_info) = self.run_id_index.shortest_unique_prefix(self.run.run_id) {
+            let prefix_len = prefix_info.prefix.len().min(run_id_str.len());
+            let (prefix_part, rest_part) = run_id_str.split_at(prefix_len);
+            format!(
+                "{}{}",
+                prefix_part.style(self.styles.run_id_prefix),
+                rest_part.style(self.styles.run_id_rest),
+            )
+        } else {
+            run_id_str.style(self.styles.run_id_rest).to_string()
+        }
+    }
+
+    /// Writes a labeled field.
+    fn write_field(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        label: &str,
+        value: impl fmt::Display,
+    ) -> fmt::Result {
+        writeln!(
+            f,
+            "  {:18}{}",
+            format!("{}:", label).style(self.styles.label),
+            value,
+        )
+    }
+
+    /// Writes the replayable field with yes/no styling.
+    fn write_replayable(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (value, style) = if self.run.status.is_replayable() {
+            ("yes", self.styles.passed)
+        } else {
+            ("no", self.styles.failed)
+        };
+        self.write_field(f, "replayable", value.style(style))
+    }
+
+    /// Writes the stats section (tests or iterations).
+    fn write_stats_section(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.run.status {
+            RecordedRunStatus::Incomplete | RecordedRunStatus::Unknown => {
+                // No stats to show.
+                Ok(())
+            }
+            RecordedRunStatus::Completed(stats) | RecordedRunStatus::Cancelled(stats) => {
+                writeln!(f, "  {}:", "tests".style(self.styles.section))?;
+                writeln!(
+                    f,
+                    "    {:16}{}",
+                    "passed:".style(self.styles.label),
+                    stats.passed.style(self.styles.passed),
+                )?;
+                if stats.failed > 0 {
+                    writeln!(
+                        f,
+                        "    {:16}{}",
+                        "failed:".style(self.styles.label),
+                        stats.failed.style(self.styles.failed),
+                    )?;
+                }
+                let not_run = stats
+                    .initial_run_count
+                    .saturating_sub(stats.passed)
+                    .saturating_sub(stats.failed);
+                if not_run > 0 {
+                    writeln!(
+                        f,
+                        "    {:16}{}",
+                        "not run:".style(self.styles.label),
+                        not_run.style(self.styles.cancelled),
+                    )?;
+                }
+                writeln!(f)
+            }
+            RecordedRunStatus::StressCompleted(stats)
+            | RecordedRunStatus::StressCancelled(stats) => {
+                writeln!(f, "  {}:", "iterations".style(self.styles.section))?;
+                writeln!(
+                    f,
+                    "    {:16}{}",
+                    "passed:".style(self.styles.label),
+                    stats.success_count.style(self.styles.passed),
+                )?;
+                if stats.failed_count > 0 {
+                    writeln!(
+                        f,
+                        "    {:16}{}",
+                        "failed:".style(self.styles.label),
+                        stats.failed_count.style(self.styles.failed),
+                    )?;
+                }
+                if let Some(initial) = stats.initial_iteration_count {
+                    let not_run = initial
+                        .get()
+                        .saturating_sub(stats.success_count)
+                        .saturating_sub(stats.failed_count);
+                    if not_run > 0 {
+                        writeln!(
+                            f,
+                            "    {:16}{}",
+                            "not run:".style(self.styles.label),
+                            not_run.style(self.styles.cancelled),
+                        )?;
+                    }
+                }
+                writeln!(f)
+            }
+        }
+    }
+
+    /// Writes the sizes section with compressed/uncompressed breakdown.
+    fn write_sizes_section(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Put "sizes:" on the same line as the column headers, using the same
+        // format as data rows for alignment.
+        writeln!(
+            f,
+            "  {:18}{:>10}  {:>12}  {:>7}",
+            "sizes:".style(self.styles.section),
+            "compressed".style(self.styles.label),
+            "uncompressed".style(self.styles.label),
+            "entries".style(self.styles.label),
+        )?;
+
+        let sizes = &self.run.sizes;
+
+        writeln!(
+            f,
+            "    {:16}{:>10}  {:>12}  {:>7}",
+            "log".style(self.styles.label),
+            self.redactor
+                .redact_size(sizes.log.compressed)
+                .style(self.styles.size),
+            self.redactor
+                .redact_size(sizes.log.uncompressed)
+                .style(self.styles.size),
+            sizes.log.entries.style(self.styles.count),
+        )?;
+
+        writeln!(
+            f,
+            "    {:16}{:>10}  {:>12}  {:>7}",
+            "store".style(self.styles.label),
+            self.redactor
+                .redact_size(sizes.store.compressed)
+                .style(self.styles.size),
+            self.redactor
+                .redact_size(sizes.store.uncompressed)
+                .style(self.styles.size),
+            sizes.store.entries.style(self.styles.count),
+        )?;
+
+        // Draw a horizontal line before "total".
+        writeln!(
+            f,
+            "    {:16}{}  {}  {}",
+            "",
+            self.theme_characters.hbar(10),
+            self.theme_characters.hbar(12),
+            self.theme_characters.hbar(7),
+        )?;
+
+        writeln!(
+            f,
+            "    {:16}{:>10}  {:>12}  {:>7}",
+            "total".style(self.styles.section),
+            self.redactor
+                .redact_size(sizes.total_compressed())
+                .style(self.styles.size),
+            self.redactor
+                .redact_size(sizes.total_uncompressed())
+                .style(self.styles.size),
+            // Format total entries similar to KB and MB sizes.
+            sizes.total_entries().style(self.styles.size),
+        )
+    }
+
+    /// Formats env vars with redaction.
+    fn format_env_vars(&self) -> String {
+        self.redactor.redact_env_vars(&self.run.env_vars)
+    }
+
+    /// Formats CLI args with redaction.
+    fn format_cli_args(&self) -> String {
+        self.redactor.redact_cli_args(&self.run.cli_args)
+    }
+}
+
+impl fmt::Display for DisplayRecordedRunInfoDetailed<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let run = self.run;
+
+        // Header with full run ID.
+        writeln!(
+            f,
+            "{} {}",
+            "Run".style(self.styles.section),
+            self.format_run_id()
+        )?;
+        writeln!(f)?;
+
+        // Basic info fields.
+        self.write_field(f, "nextest version", &run.nextest_version)?;
+
+        // CLI args (if present).
+        if !run.cli_args.is_empty() {
+            self.write_field(f, "command", self.format_cli_args())?;
+        }
+
+        // Environment variables (if present).
+        if !run.env_vars.is_empty() {
+            self.write_field(f, "env", self.format_env_vars())?;
+        }
+
+        self.write_field(f, "status", run.status.short_status_str())?;
+        self.write_field(
+            f,
+            "started at",
+            self.redactor.redact_detailed_timestamp(&run.started_at),
+        )?;
+        self.write_field(
+            f,
+            "last written at",
+            self.redactor
+                .redact_detailed_timestamp(&run.last_written_at),
+        )?;
+        self.write_field(
+            f,
+            "duration",
+            self.redactor.redact_detailed_duration(run.duration_secs),
+        )?;
+
+        self.write_replayable(f)?;
+        writeln!(f)?;
+
+        // Stats section (tests or iterations).
+        self.write_stats_section(f)?;
+
+        // Sizes section.
+        self.write_sizes_section(f)?;
+
+        Ok(())
+    }
+}
+
 /// A display wrapper for a list of recorded runs.
 ///
 /// This struct handles the full table display including:
@@ -555,9 +838,10 @@ mod tests {
     use super::*;
     use crate::{
         errors::RecordPruneError,
+        helpers::ThemeCharacters,
         record::{
-            ComponentSizes, PruneKind, PrunePlan, PruneResult, RecordedRunStatus, RecordedSizes,
-            StressCompletedRunStats, run_id_index::RunIdIndex,
+            CompletedRunStats, ComponentSizes, PruneKind, PrunePlan, PruneResult,
+            RecordedRunStatus, RecordedSizes, StressCompletedRunStats, run_id_index::RunIdIndex,
         },
         redact::Redactor,
     };
@@ -608,6 +892,40 @@ mod tests {
                     compressed: total_compressed_size,
                     uncompressed: total_compressed_size * 3,
                     entries: 0,
+                },
+            },
+            status,
+        }
+    }
+
+    /// Creates a `RecordedRunInfo` for testing with cli_args and env_vars.
+    fn make_run_info_with_cli_env(
+        uuid: &str,
+        version: &str,
+        started_at: &str,
+        cli_args: Vec<String>,
+        env_vars: BTreeMap<String, String>,
+        status: RecordedRunStatus,
+    ) -> RecordedRunInfo {
+        let started_at = DateTime::parse_from_rfc3339(started_at).expect("valid datetime");
+        RecordedRunInfo {
+            run_id: uuid.parse().expect("valid UUID"),
+            nextest_version: Version::parse(version).expect("valid version"),
+            started_at,
+            last_written_at: started_at,
+            duration_secs: Some(12.345),
+            cli_args,
+            env_vars,
+            sizes: RecordedSizes {
+                log: ComponentSizes {
+                    compressed: 1024,
+                    uncompressed: 4096,
+                    entries: 100,
+                },
+                store: ComponentSizes {
+                    compressed: 51200,
+                    uncompressed: 204800,
+                    entries: 42,
                 },
             },
             status,
@@ -835,6 +1153,96 @@ mod tests {
             run.display(&index, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-23 16:00:00      1.000s       4 KB  0 passed"
+        );
+    }
+
+    #[test]
+    fn test_display_recorded_run_info_stress_completed() {
+        // Test StressCompleted with all iterations passing.
+        let run = make_run_info(
+            "550e8400-e29b-41d4-a716-446655440010",
+            "0.9.120",
+            "2024-06-25T10:00:00+00:00",
+            150000,
+            RecordedRunStatus::StressCompleted(StressCompletedRunStats {
+                initial_iteration_count: NonZero::new(100),
+                success_count: 100,
+                failed_count: 0,
+            }),
+        );
+        let runs = std::slice::from_ref(&run);
+        let index = RunIdIndex::new(runs);
+        let alignment = RunListAlignment::from_runs(runs);
+        insta::assert_snapshot!(
+            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-25 10:00:00      1.000s     146 KB  100 passed iterations"
+        );
+
+        // Test StressCompleted with some failures.
+        let run = make_run_info(
+            "550e8400-e29b-41d4-a716-446655440011",
+            "0.9.120",
+            "2024-06-25T11:00:00+00:00",
+            150000,
+            RecordedRunStatus::StressCompleted(StressCompletedRunStats {
+                initial_iteration_count: NonZero::new(100),
+                success_count: 95,
+                failed_count: 5,
+            }),
+        );
+        let runs = std::slice::from_ref(&run);
+        let index = RunIdIndex::new(runs);
+        let alignment = RunListAlignment::from_runs(runs);
+        insta::assert_snapshot!(
+            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-25 11:00:00      1.000s     146 KB  95 passed iterations / 5 failed"
+        );
+    }
+
+    #[test]
+    fn test_display_recorded_run_info_stress_cancelled() {
+        // Test StressCancelled with some iterations not run.
+        let run = make_run_info(
+            "550e8400-e29b-41d4-a716-446655440012",
+            "0.9.120",
+            "2024-06-25T12:00:00+00:00",
+            100000,
+            RecordedRunStatus::StressCancelled(StressCompletedRunStats {
+                initial_iteration_count: NonZero::new(100),
+                success_count: 50,
+                failed_count: 10,
+            }),
+        );
+        let runs = std::slice::from_ref(&run);
+        let index = RunIdIndex::new(runs);
+        let alignment = RunListAlignment::from_runs(runs);
+        insta::assert_snapshot!(
+            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-25 12:00:00      1.000s      97 KB  50 passed iterations / 10 failed / 40 not run (cancelled)"
+        );
+
+        // Test StressCancelled without initial_iteration_count (not run count unknown).
+        let run = make_run_info(
+            "550e8400-e29b-41d4-a716-446655440013",
+            "0.9.120",
+            "2024-06-25T13:00:00+00:00",
+            100000,
+            RecordedRunStatus::StressCancelled(StressCompletedRunStats {
+                initial_iteration_count: None,
+                success_count: 50,
+                failed_count: 10,
+            }),
+        );
+        let runs = std::slice::from_ref(&run);
+        let index = RunIdIndex::new(runs);
+        let alignment = RunListAlignment::from_runs(runs);
+        insta::assert_snapshot!(
+            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .to_string(),
+            @"  550e8400  2024-06-25 13:00:00      1.000s      97 KB  50 passed iterations / 10 failed (cancelled)"
         );
     }
 
@@ -1243,6 +1651,150 @@ mod tests {
                 &Redactor::noop()
             )
             .to_string()
+        );
+    }
+
+    #[test]
+    fn test_display_detailed() {
+        // Test with CLI args and env vars populated.
+        let cli_args = vec![
+            "cargo".to_string(),
+            "nextest".to_string(),
+            "run".to_string(),
+            "--workspace".to_string(),
+            "--features".to_string(),
+            "foo bar".to_string(),
+        ];
+        let env_vars = BTreeMap::from([
+            ("CARGO_HOME".to_string(), "/home/user/.cargo".to_string()),
+            ("NEXTEST_PROFILE".to_string(), "ci".to_string()),
+        ]);
+        let run_with_cli_env = make_run_info_with_cli_env(
+            "550e8400-e29b-41d4-a716-446655440000",
+            "0.9.122",
+            "2024-06-15T10:30:00+00:00",
+            cli_args,
+            env_vars,
+            RecordedRunStatus::Completed(CompletedRunStats {
+                initial_run_count: 100,
+                passed: 95,
+                failed: 5,
+            }),
+        );
+
+        // Test with empty CLI args and env vars.
+        let run_empty = make_run_info_with_cli_env(
+            "550e8400-e29b-41d4-a716-446655440001",
+            "0.9.122",
+            "2024-06-16T11:00:00+00:00",
+            Vec::new(),
+            BTreeMap::new(),
+            RecordedRunStatus::Incomplete,
+        );
+
+        // Test StressCompleted with all iterations passing.
+        let stress_all_passed = make_run_info_with_cli_env(
+            "550e8400-e29b-41d4-a716-446655440010",
+            "0.9.122",
+            "2024-06-25T10:00:00+00:00",
+            Vec::new(),
+            BTreeMap::new(),
+            RecordedRunStatus::StressCompleted(StressCompletedRunStats {
+                initial_iteration_count: NonZero::new(100),
+                success_count: 100,
+                failed_count: 0,
+            }),
+        );
+
+        // Test StressCompleted with some failures.
+        let stress_with_failures = make_run_info_with_cli_env(
+            "550e8400-e29b-41d4-a716-446655440011",
+            "0.9.122",
+            "2024-06-25T11:00:00+00:00",
+            Vec::new(),
+            BTreeMap::new(),
+            RecordedRunStatus::StressCompleted(StressCompletedRunStats {
+                initial_iteration_count: NonZero::new(100),
+                success_count: 95,
+                failed_count: 5,
+            }),
+        );
+
+        // Test StressCancelled with some iterations not run.
+        let stress_cancelled = make_run_info_with_cli_env(
+            "550e8400-e29b-41d4-a716-446655440012",
+            "0.9.122",
+            "2024-06-25T12:00:00+00:00",
+            Vec::new(),
+            BTreeMap::new(),
+            RecordedRunStatus::StressCancelled(StressCompletedRunStats {
+                initial_iteration_count: NonZero::new(100),
+                success_count: 50,
+                failed_count: 10,
+            }),
+        );
+
+        // Test StressCancelled without initial_iteration_count.
+        let stress_cancelled_no_initial = make_run_info_with_cli_env(
+            "550e8400-e29b-41d4-a716-446655440013",
+            "0.9.122",
+            "2024-06-25T13:00:00+00:00",
+            Vec::new(),
+            BTreeMap::new(),
+            RecordedRunStatus::StressCancelled(StressCompletedRunStats {
+                initial_iteration_count: None,
+                success_count: 50,
+                failed_count: 10,
+            }),
+        );
+
+        let runs = [
+            run_with_cli_env,
+            run_empty,
+            stress_all_passed,
+            stress_with_failures,
+            stress_cancelled,
+            stress_cancelled_no_initial,
+        ];
+        let index = RunIdIndex::new(&runs);
+        let theme_characters = ThemeCharacters::default();
+        let redactor = Redactor::noop();
+
+        insta::assert_snapshot!(
+            "with_cli_and_env",
+            runs[0]
+                .display_detailed(&index, &Styles::default(), &theme_characters, &redactor)
+                .to_string()
+        );
+        insta::assert_snapshot!(
+            "empty_cli_and_env",
+            runs[1]
+                .display_detailed(&index, &Styles::default(), &theme_characters, &redactor)
+                .to_string()
+        );
+        insta::assert_snapshot!(
+            "stress_all_passed",
+            runs[2]
+                .display_detailed(&index, &Styles::default(), &theme_characters, &redactor)
+                .to_string()
+        );
+        insta::assert_snapshot!(
+            "stress_with_failures",
+            runs[3]
+                .display_detailed(&index, &Styles::default(), &theme_characters, &redactor)
+                .to_string()
+        );
+        insta::assert_snapshot!(
+            "stress_cancelled",
+            runs[4]
+                .display_detailed(&index, &Styles::default(), &theme_characters, &redactor)
+                .to_string()
+        );
+        insta::assert_snapshot!(
+            "stress_cancelled_no_initial",
+            runs[5]
+                .display_detailed(&index, &Styles::default(), &theme_characters, &redactor)
+                .to_string()
         );
     }
 }

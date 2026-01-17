@@ -24,8 +24,8 @@ use nextest_runner::{
     helpers::ThemeCharacters,
     pager::PagedOutput,
     record::{
-        DisplayRunList, PruneKind, RecordRetentionPolicy, RunStore, Styles as RecordStyles,
-        records_cache_dir,
+        DisplayRunList, PruneKind, RecordRetentionPolicy, RunIdSelector, RunStore,
+        Styles as RecordStyles, records_cache_dir,
     },
     redact::Redactor,
     user_config::{UserConfig, elements::RecordConfig},
@@ -474,8 +474,58 @@ pub enum BuildPlatformsOutputFormat {
 pub(super) enum StoreCommand {
     /// List all recorded runs.
     List {},
+    /// Show detailed information about a recorded run.
+    Info(InfoOpts),
     /// Prune old recorded runs according to retention policy.
     Prune(PruneOpts),
+}
+
+/// Options for the `cargo nextest store info` command.
+#[derive(Debug, Args)]
+pub(super) struct InfoOpts {
+    /// Run ID to show info for.
+    ///
+    /// Accepts "latest" (the default) for the most recent completed run, or a
+    /// full UUID or unambiguous prefix.
+    #[arg(long, short = 'r', value_name = "RUN_ID", default_value_t)]
+    run_id: RunIdSelector,
+}
+
+impl InfoOpts {
+    fn exec(
+        &self,
+        cache_dir: &Utf8Path,
+        styles: &RecordStyles,
+        theme_characters: &ThemeCharacters,
+        paged_output: &mut PagedOutput,
+        redactor: &Redactor,
+    ) -> Result<i32> {
+        let store =
+            RunStore::new(cache_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
+
+        let snapshot = store
+            .lock_shared()
+            .map_err(|err| ExpectedError::RecordSetupError { err })?
+            .into_snapshot();
+
+        // Resolve run ID (or get most recent).
+        let resolved = snapshot
+            .resolve_run_id(&self.run_id)
+            .map_err(|err| ExpectedError::RunIdResolutionError { err })?;
+        let run_id = resolved.run_id;
+
+        // This should never fail since we just resolved the run ID.
+        let run = snapshot
+            .get_run(run_id)
+            .expect("run ID was just resolved, so the run should exist");
+
+        let display =
+            run.display_detailed(snapshot.run_id_index(), styles, theme_characters, redactor);
+
+        write!(paged_output, "{}", display).map_err(|err| ExpectedError::WriteError { err })?;
+
+        Ok(0)
+    }
 }
 
 impl StoreCommand {
@@ -572,6 +622,13 @@ impl StoreCommand {
 
                 Ok(0)
             }
+            Self::Info(opts) => opts.exec(
+                &cache_dir,
+                &styles,
+                &theme_characters,
+                &mut paged_output,
+                &redactor,
+            ),
             Self::Prune(opts) => opts.exec(
                 &cache_dir,
                 &user_config.record,
