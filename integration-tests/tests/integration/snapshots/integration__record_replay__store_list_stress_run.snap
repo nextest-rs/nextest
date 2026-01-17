@@ -6,3 +6,5 @@ snapshot_kind: text
 1 recorded run:
 
   60000001  [TIMESTAMP]  [DURATION]  [SIZE]  5 passed iterations
+  ──────
+  [SIZE]

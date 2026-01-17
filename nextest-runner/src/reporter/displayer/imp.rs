@@ -25,7 +25,7 @@ use crate::{
     },
     errors::WriteEventError,
     helpers::{
-        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, plural,
+        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, ThemeCharacters, plural,
         usize_decimal_char_width,
     },
     indenter::indented,
@@ -105,7 +105,7 @@ impl DisplayReporterBuilder {
                 let is_terminal = io::stderr().is_terminal();
                 let progress_bar = self.progress_bar(
                     is_terminal,
-                    theme_characters.progress_chars,
+                    theme_characters.progress_chars(),
                     self.max_progress_running,
                 );
                 let term_progress = TerminalProgress::new(self.show_term_progress);
@@ -1654,7 +1654,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 Some(DisplayCounterIndex::new_counter(current, total))
             }
             (TestInstanceCounter::Padded, Some(counter_width)) => Some(
-                DisplayCounterIndex::new_padded(self.theme_characters.hbar, counter_width),
+                DisplayCounterIndex::new_padded(self.theme_characters.hbar_char(), counter_width),
             ),
             (TestInstanceCounter::None, _) | (_, None) => None,
         };
@@ -2514,40 +2514,6 @@ fn write_windows_abort_line(
                 "job object".style(styles.count),
             )
         }
-    }
-}
-
-#[derive(Debug)]
-struct ThemeCharacters {
-    hbar: char,
-    progress_chars: &'static str,
-    spinner_chars: &'static str,
-}
-
-impl Default for ThemeCharacters {
-    fn default() -> Self {
-        Self {
-            hbar: '-',
-            progress_chars: "=> ",
-            // Duplicate characters to slow down the spinner refresh rate.
-            spinner_chars: "-\\|/",
-        }
-    }
-}
-
-impl ThemeCharacters {
-    fn use_unicode(&mut self) {
-        self.hbar = '─';
-        // https://mike42.me/blog/2018-06-make-better-cli-progress-bars-with-unicode-block-characters
-        self.progress_chars = "█▉▊▋▌▍▎▏ ";
-        // https://github.com/sindresorhus/cli-spinners/blob/3860701f68e3075511f111a28ca2838fc906fca8/spinners.json#L4
-        //
-        // Duplicate characters to slow down the spinner refresh rate.
-        self.spinner_chars = "⠋⠋⠙⠙⠹⠹⠸⠸⠼⠼⠴⠴⠦⠦⠧⠧⠇⠇⠏⠏";
-    }
-
-    fn hbar(&self, width: usize) -> String {
-        std::iter::repeat_n(self.hbar, width).collect()
     }
 }
 

@@ -1,8 +1,10 @@
 ---
 source: integration-tests/tests/integration/record_replay.rs
-expression: "redact_dynamic_fields(&list_output.stdout_as_str(), temp_root)"
+expression: "redact_dynamic_fields(&list_verbose_output.stdout_as_str(), temp_root)"
 snapshot_kind: text
 ---
+store: [TEMP_DIR]
+
 3 recorded runs:
 
   50000003  [TIMESTAMP]  [DURATION]  [SIZE]  2 passed

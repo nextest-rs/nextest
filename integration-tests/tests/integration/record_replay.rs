@@ -237,17 +237,17 @@ fn test_record_replay_cycle() {
         redact_dynamic_fields(&list_output.stdout_as_str(), temp_root)
     );
 
-    // Verify store info output.
-    let info_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
-        .args(["store", "info"])
+    // Verify store list -v output.
+    let list_verbose_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+        .args(["store", "list", "-v"])
         .output();
     assert!(
-        info_output.exit_status.success(),
-        "store info should succeed"
+        list_verbose_output.exit_status.success(),
+        "store list -v should succeed"
     );
     insta::assert_snapshot!(
-        "store_info_single_run",
-        redact_dynamic_fields(&info_output.stdout_as_str(), temp_root)
+        "store_list_verbose_single_run",
+        redact_dynamic_fields(&list_verbose_output.stdout_as_str(), temp_root)
     );
 
     // Replay with default (most recent) and verify against fixture model.
@@ -383,17 +383,17 @@ fn test_error_handling() {
         redact_dynamic_fields(&list_empty.stdout_as_str(), temp_root)
     );
 
-    // Store info on empty store should succeed.
-    let info_empty = cli_with_recording(&p, &cache_dir, &user_config_path, None)
-        .args(["store", "info"])
+    // Store list -v on empty store should succeed.
+    let list_verbose_empty = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+        .args(["store", "list", "-v"])
         .output();
     assert!(
-        info_empty.exit_status.success(),
-        "store info on empty store should succeed"
+        list_verbose_empty.exit_status.success(),
+        "store list -v on empty store should succeed"
     );
     insta::assert_snapshot!(
-        "store_info_empty",
-        redact_dynamic_fields(&info_empty.stdout_as_str(), temp_root)
+        "store_list_verbose_empty",
+        redact_dynamic_fields(&list_verbose_empty.stdout_as_str(), temp_root)
     );
 
     // Create a recording for remaining error tests.
@@ -727,14 +727,14 @@ fn test_store_management() {
         "should have 3 runs"
     );
 
-    // Store info with multiple runs.
-    let info_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
-        .args(["store", "info"])
+    // Store list -v with multiple runs.
+    let list_verbose_output = cli_with_recording(&p, &cache_dir, &user_config_path, None)
+        .args(["store", "list", "-v"])
         .output();
-    assert!(info_output.exit_status.success());
+    assert!(list_verbose_output.exit_status.success());
     insta::assert_snapshot!(
-        "store_info_multiple_runs",
-        redact_dynamic_fields(&info_output.stdout_as_str(), temp_root)
+        "store_list_verbose_multiple_runs",
+        redact_dynamic_fields(&list_verbose_output.stdout_as_str(), temp_root)
     );
 
     // Prune dry-run should show what would be deleted but not delete.

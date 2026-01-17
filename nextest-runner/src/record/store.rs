@@ -19,7 +19,7 @@ use super::{
 };
 use crate::{
     errors::{RunIdResolutionError, RunStoreError},
-    helpers::plural,
+    helpers::{ThemeCharacters, plural},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use chrono::{DateTime, FixedOffset, TimeDelta, Utc};
@@ -767,6 +767,87 @@ impl DisplayRecordedRunInfo<'_> {
         }
 
         result
+    }
+}
+
+/// A display wrapper for a list of recorded runs.
+///
+/// This struct handles the full table display including:
+/// - Optional store path header (when verbose)
+/// - Run count header
+/// - Individual run rows
+/// - Total size footer with separator
+pub struct DisplayRunList<'a> {
+    snapshot: &'a RunStoreSnapshot,
+    store_path: Option<&'a Utf8Path>,
+    styles: &'a Styles,
+    theme_characters: &'a ThemeCharacters,
+}
+
+impl<'a> DisplayRunList<'a> {
+    /// Creates a new display wrapper for a run list.
+    ///
+    /// If `store_path` is provided, it will be displayed at the top of the output.
+    pub fn new(
+        snapshot: &'a RunStoreSnapshot,
+        store_path: Option<&'a Utf8Path>,
+        styles: &'a Styles,
+        theme_characters: &'a ThemeCharacters,
+    ) -> Self {
+        Self {
+            snapshot,
+            store_path,
+            styles,
+            theme_characters,
+        }
+    }
+}
+
+impl fmt::Display for DisplayRunList<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Show store path if provided.
+        if let Some(path) = self.store_path {
+            writeln!(f, "{}: {}\n", "store".style(self.styles.count), path)?;
+        }
+
+        if self.snapshot.run_count() == 0 {
+            // No runs to display; the caller should handle the "no recorded runs" message
+            // via logging or other means.
+            return Ok(());
+        }
+
+        writeln!(
+            f,
+            "{} recorded {}:\n",
+            self.snapshot.run_count().style(self.styles.count),
+            plural::runs_str(self.snapshot.run_count()),
+        )?;
+
+        let alignment = RunListAlignment::from_runs(self.snapshot.runs());
+        for run in self.snapshot.runs() {
+            writeln!(
+                f,
+                "{}",
+                run.display(self.snapshot.run_id_index(), alignment, self.styles)
+            )?;
+        }
+
+        // Display total size at the bottom.
+        // Column positions: 2 (indent) + 8 (run_id) + 2 + 19 (timestamp)
+        // + 2 + 10 (duration) + 2 = 45 chars before the size column.
+        let total_size_kb = self.snapshot.total_size() / 1024;
+        writeln!(
+            f,
+            "                                             {}",
+            self.theme_characters.hbar(6),
+        )?;
+        writeln!(
+            f,
+            "                                             {:>6} KB",
+            total_size_kb.style(self.styles.size),
+        )?;
+
+        Ok(())
     }
 }
 

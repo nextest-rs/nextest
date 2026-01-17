@@ -176,8 +176,8 @@ pub struct RecordRetentionPolicy {
 
 Store management and inspection:
 ```
-cargo nextest store list             # List all recorded runs
-cargo nextest store info             # Show store location and size
+cargo nextest store list             # List all recorded runs (includes total size)
+cargo nextest store list -v          # Also show store location
 cargo nextest store prune            # Prune old runs per retention policy
 ```
 
@@ -213,7 +213,7 @@ Note: Progress bars are not shown during replay since events are processed insta
 - `store` subcommands handle inspection and management tasks
 
 **Implementation:**
-- `store list`, `store info`, `store prune`: Already implemented
+- `store list`, `store prune`: Already implemented
 - `replay`: Already implemented with full reporter infrastructure
 - Share reporter option parsing via `ReporterCommonOpts`
 
