@@ -9,6 +9,12 @@ filter = 'package(integration-tests) and test(test_archive_with_build_filter)'
 priority = 20
 
 [[profile.default.overrides]]
+# The sigttou tests leave nextest backgrounded in interactive terminals, which
+# means ctrl-C doesn't work. Run them last. 
+filter = 'package(integration-tests) and test(sigttou)'
+priority = -50
+
+[[profile.default.overrides]]
 filter = 'package(integration-tests)'
 priority = 10
 # test_subprocess_doesnt_exit runs a sleep command for 360 seconds. If
