@@ -14,7 +14,10 @@ use clap::{ArgAction, Args, Command};
 use nextest_runner::{
     pager::PagedOutput,
     platform::Platform,
-    user_config::{EarlyUserConfig, UserConfigLocation, elements::PaginateSetting},
+    user_config::{
+        EarlyUserConfig, UserConfigLocation,
+        elements::{PagerSetting, PaginateSetting, UiConfig},
+    },
     write_str::WriteStr,
 };
 use std::io::{IsTerminal, Write};
@@ -97,6 +100,21 @@ impl EarlyArgs {
     /// Returns the user config location.
     pub fn user_config_location(&self) -> UserConfigLocation<'_> {
         UserConfigLocation::from_cli_or_env(self.user_config_file.as_deref())
+    }
+
+    /// Returns the effective pager and paginate settings, given the resolved UI
+    /// config.
+    ///
+    /// If `--no-pager` is specified, returns `PaginateSetting::Never`.
+    /// Otherwise, falls back to the resolved config values.
+    pub fn resolve_pager(&self, resolved_ui: &UiConfig) -> (PagerSetting, PaginateSetting) {
+        if self.no_pager {
+            // --no-pager disables paging entirely.
+            return (resolved_ui.pager.clone(), PaginateSetting::Never);
+        }
+
+        // Fall back to resolved config.
+        (resolved_ui.pager.clone(), resolved_ui.paginate)
     }
 }
 

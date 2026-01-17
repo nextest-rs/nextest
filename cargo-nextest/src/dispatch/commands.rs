@@ -5,7 +5,7 @@
 
 use super::{
     EarlyArgs,
-    cli::{ConfigOpts, PagerOpts, TestBuildFilter},
+    cli::{ConfigOpts, TestBuildFilter},
     execution::{App, BaseApp},
     helpers::{detect_build_platforms, display_output_slice, extract_slice_from_output},
 };
@@ -52,9 +52,6 @@ pub(super) enum ShowConfigCommand {
 
         #[clap(flatten)]
         build_filter: TestBuildFilter,
-
-        #[clap(flatten)]
-        pager_opts: PagerOpts,
 
         #[clap(flatten)]
         reuse_build: Box<ReuseBuildOpts>,
@@ -143,7 +140,6 @@ impl ShowConfigCommand {
                 groups,
                 cargo_options,
                 build_filter,
-                pager_opts,
                 reuse_build,
             } => {
                 let base = BaseApp::new(
@@ -157,7 +153,7 @@ impl ShowConfigCommand {
                 )?;
                 let app = App::new(base, build_filter)?;
 
-                app.exec_show_test_groups(show_default, groups, &pager_opts)?;
+                app.exec_show_test_groups(show_default, groups)?;
 
                 Ok(0)
             }
@@ -486,6 +482,7 @@ pub(super) enum StoreCommand {
 impl StoreCommand {
     pub(super) fn exec(
         self,
+        early_args: &EarlyArgs,
         manifest_path: Option<Utf8PathBuf>,
         user_config: &UserConfig,
         output: OutputContext,
@@ -520,11 +517,9 @@ impl StoreCommand {
         let cache_dir = records_cache_dir(workspace_root)
             .map_err(|err| ExpectedError::RecordCacheDirNotFound { err })?;
 
-        let mut paged_output = PagedOutput::request_pager(
-            &user_config.ui.pager,
-            user_config.ui.paginate,
-            &user_config.ui.streampager,
-        );
+        let (pager_setting, paginate) = early_args.resolve_pager(&user_config.ui);
+        let mut paged_output =
+            PagedOutput::request_pager(&pager_setting, paginate, &user_config.ui.streampager);
 
         let mut styles = RecordStyles::default();
         if output.color.should_colorize(supports_color::Stream::Stdout) {

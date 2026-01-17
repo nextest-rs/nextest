@@ -44,7 +44,7 @@ use nextest_runner::{
     test_output::CaptureStrategy,
     user_config::{
         UserConfig,
-        elements::{PagerSetting, PaginateSetting, UiConfig, UiShowProgress},
+        elements::{UiConfig, UiShowProgress},
     },
 };
 use std::{collections::BTreeSet, io::Cursor, sync::Arc, time::Duration};
@@ -304,36 +304,7 @@ pub(super) struct ListOpts {
     pub(super) list_type: ListType,
 
     #[clap(flatten)]
-    pub(super) pager_opts: PagerOpts,
-
-    #[clap(flatten)]
     pub(super) reuse_build: ReuseBuildOpts,
-}
-
-/// Pager options for list output.
-#[derive(Debug, Default, Args)]
-#[command(next_help_heading = "Pager options")]
-pub(super) struct PagerOpts {
-    /// Disable paging for this invocation.
-    #[arg(long)]
-    no_pager: bool,
-}
-
-impl PagerOpts {
-    /// Returns the effective pager and paginate settings, given the resolved UI
-    /// config.
-    ///
-    /// If `--no-pager` is specified, returns `PaginateSetting::Never`.
-    /// Otherwise, falls back to the resolved config values.
-    pub(super) fn resolve(&self, resolved_ui: &UiConfig) -> (PagerSetting, PaginateSetting) {
-        if self.no_pager {
-            // --no-pager disables paging entirely.
-            return (resolved_ui.pager.clone(), PaginateSetting::Never);
-        }
-
-        // Fall back to resolved config.
-        (resolved_ui.pager.clone(), resolved_ui.paginate)
-    }
 }
 
 /// Options for the replay command.
@@ -1681,11 +1652,7 @@ impl AppOpts {
                     output_writer,
                 )?;
                 let app = super::execution::App::new(base, list_opts.build_filter)?;
-                app.exec_list(
-                    list_opts.message_format,
-                    list_opts.list_type,
-                    &list_opts.pager_opts,
-                )?;
+                app.exec_list(list_opts.message_format, list_opts.list_type)?;
                 Ok(0)
             }
             Command::Run(run_opts) => {
@@ -1773,6 +1740,7 @@ impl AppOpts {
                 )
                 .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })?;
                 command.exec(
+                    &early_args,
                     self.common.manifest_path,
                     &user_config,
                     output,
