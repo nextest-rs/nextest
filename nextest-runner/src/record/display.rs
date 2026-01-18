@@ -13,21 +13,12 @@ use super::{
 };
 use crate::{
     helpers::{ThemeCharacters, plural},
-    redact::Redactor,
+    redact::{Redactor, SizeDisplay},
 };
 use camino::Utf8Path;
 use owo_colors::{OwoColorize, Style};
 use std::{error::Error, fmt};
 use swrite::{SWrite, swrite};
-
-/// Formats a byte count as a human-readable size string (KB or MB).
-pub fn format_size_display(bytes: u64) -> String {
-    if bytes >= 1024 * 1024 {
-        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
-    } else {
-        format!("{} KB", bytes / 1024)
-    }
-}
 
 /// Styles for displaying record store information.
 #[derive(Clone, Debug, Default)]
@@ -76,9 +67,18 @@ impl Styles {
 pub struct RunListAlignment {
     /// Maximum width of the "passed" count across all runs.
     pub passed_width: usize,
+    /// Maximum width of the size column across all runs.
+    ///
+    /// This is dynamically computed based on the formatted size display width
+    /// (e.g., "123 KB" or "1.5 MB"). The minimum width is 6 to maintain
+    /// alignment for typical sizes.
+    pub size_width: usize,
 }
 
 impl RunListAlignment {
+    /// Minimum width for the size column to maintain visual consistency.
+    const MIN_SIZE_WIDTH: usize = 9;
+
     /// Creates alignment information from a slice of runs.
     ///
     /// Computes the maximum widths needed to align the statistics columns.
@@ -89,7 +89,50 @@ impl RunListAlignment {
             .max()
             .unwrap_or(1);
 
-        Self { passed_width }
+        let size_width = runs
+            .iter()
+            .map(|run| SizeDisplay(run.sizes.total_compressed()).display_width())
+            .max()
+            .unwrap_or(Self::MIN_SIZE_WIDTH)
+            .max(Self::MIN_SIZE_WIDTH);
+
+        Self {
+            passed_width,
+            size_width,
+        }
+    }
+
+    /// Creates alignment information from a slice of runs, also considering
+    /// the total size for the size column width.
+    ///
+    /// This should be used when displaying a run list with a total, to ensure
+    /// the total size aligns properly with individual run sizes.
+    pub fn from_runs_with_total(runs: &[RecordedRunInfo], total_size_bytes: u64) -> Self {
+        let passed_width = runs
+            .iter()
+            .map(|run| run.status.passed_count_width())
+            .max()
+            .unwrap_or(1);
+
+        // Compute max size width from individual runs.
+        let max_run_size_width = runs
+            .iter()
+            .map(|run| SizeDisplay(run.sizes.total_compressed()).display_width())
+            .max()
+            .unwrap_or(0);
+
+        // Also consider the total size.
+        let total_size_width = SizeDisplay(total_size_bytes).display_width();
+
+        // Calculate the width needed for the largest size.
+        let size_width = max_run_size_width
+            .max(total_size_width)
+            .max(Self::MIN_SIZE_WIDTH);
+
+        Self {
+            passed_width,
+            size_width,
+        }
     }
 }
 
@@ -142,7 +185,7 @@ impl fmt::Display for DisplayPruneResult<'_> {
                 result.deleted_count.style(self.styles.count),
                 plural::runs_str(result.deleted_count),
                 orphan_suffix,
-                format_size_display(result.freed_bytes),
+                SizeDisplay(result.freed_bytes),
                 error_suffix,
             )?;
         }
@@ -189,7 +232,7 @@ impl fmt::Display for DisplayPrunePlan<'_> {
                 "would prune {} {}, freeing {}:\n",
                 plan.runs().len().style(self.styles.count),
                 plural::runs_str(plan.runs().len()),
-                format_size_display(plan.total_bytes())
+                self.redactor.redact_size(plan.total_bytes())
             )?;
 
             let alignment = RunListAlignment::from_runs(plan.runs());
@@ -258,20 +301,19 @@ impl fmt::Display for DisplayRecordedRunInfo<'_> {
 
         let status_display = self.format_status();
 
-        let size_kb = run.sizes.total_compressed() / 1024;
-
         let timestamp_display = self.redactor.redact_timestamp(&run.started_at);
         let duration_display = self.redactor.redact_store_duration(run.duration_secs);
-        let size_display = self.redactor.redact_size_kb(size_kb);
+        let size_display = self.redactor.redact_size(run.sizes.total_compressed());
 
         write!(
             f,
-            "  {}  {}  {}  {:>6} KB  {}",
+            "  {}  {}  {}  {:>width$}  {}",
             run_id_display,
             timestamp_display.style(self.styles.timestamp),
             duration_display.style(self.styles.duration),
             size_display.style(self.styles.size),
             status_display,
+            width = self.alignment.size_width,
         )
     }
 }
@@ -467,7 +509,12 @@ impl fmt::Display for DisplayRunList<'_> {
         // Compute the latest (most recent replayable) run ID for marking.
         let latest_run_id = self.snapshot.most_recent_run().ok().map(|r| r.run_id);
 
-        let alignment = RunListAlignment::from_runs(self.snapshot.runs());
+        // Use from_runs_with_total to ensure the size column is wide enough
+        // for both individual runs and the total.
+        let alignment = RunListAlignment::from_runs_with_total(
+            self.snapshot.runs(),
+            self.snapshot.total_size(),
+        );
         for run in self.snapshot.runs() {
             let display = run.display(
                 self.snapshot.run_id_index(),
@@ -485,18 +532,18 @@ impl fmt::Display for DisplayRunList<'_> {
         // Display total size at the bottom.
         // Column positions: 2 (indent) + 8 (run_id) + 2 + 19 (timestamp)
         // + 2 + 10 (duration) + 2 = 45 chars before the size column.
-        let total_size_kb = self.snapshot.total_size() / 1024;
         writeln!(
             f,
             "                                             {}",
-            self.theme_characters.hbar(6),
+            self.theme_characters.hbar(alignment.size_width),
         )?;
 
-        let size_display = self.redactor.redact_size_kb(total_size_kb);
+        let size_display = self.redactor.redact_size(self.snapshot.total_size());
+        let size_formatted = format!("{:>width$}", size_display, width = alignment.size_width);
         writeln!(
             f,
-            "                                             {:>6} KB",
-            size_display.style(self.styles.size),
+            "                                             {}",
+            size_formatted.style(self.styles.size),
         )?;
 
         Ok(())
@@ -526,6 +573,25 @@ mod tests {
         total_compressed_size: u64,
         status: RecordedRunStatus,
     ) -> RecordedRunInfo {
+        make_run_info_with_duration(
+            uuid,
+            version,
+            started_at,
+            total_compressed_size,
+            1.0,
+            status,
+        )
+    }
+
+    /// Creates a `RecordedRunInfo` with a custom duration for testing.
+    fn make_run_info_with_duration(
+        uuid: &str,
+        version: &str,
+        started_at: &str,
+        total_compressed_size: u64,
+        duration_secs: f64,
+        status: RecordedRunStatus,
+    ) -> RecordedRunInfo {
         let started_at = DateTime::parse_from_rfc3339(started_at).expect("valid datetime");
         // For simplicity in tests, put all size in the store component.
         RecordedRunInfo {
@@ -533,7 +599,7 @@ mod tests {
             nextest_version: Version::parse(version).expect("valid version"),
             started_at,
             last_written_at: started_at,
-            duration_secs: Some(1.0),
+            duration_secs: Some(duration_secs),
             cli_args: Vec::new(),
             env_vars: BTreeMap::new(),
             sizes: RecordedSizes {
@@ -546,21 +612,6 @@ mod tests {
             },
             status,
         }
-    }
-
-    #[test]
-    fn test_format_size_display() {
-        insta::assert_snapshot!(format_size_display(0), @"0 KB");
-        insta::assert_snapshot!(format_size_display(512), @"0 KB");
-        insta::assert_snapshot!(format_size_display(1024), @"1 KB");
-        insta::assert_snapshot!(format_size_display(1536), @"1 KB");
-        insta::assert_snapshot!(format_size_display(10 * 1024), @"10 KB");
-        insta::assert_snapshot!(format_size_display(1024 * 1024 - 1), @"1023 KB");
-
-        insta::assert_snapshot!(format_size_display(1024 * 1024), @"1.0 MB");
-        insta::assert_snapshot!(format_size_display(1024 * 1024 + 512 * 1024), @"1.5 MB");
-        insta::assert_snapshot!(format_size_display(10 * 1024 * 1024), @"10.0 MB");
-        insta::assert_snapshot!(format_size_display(1024 * 1024 * 1024), @"1024.0 MB");
     }
 
     #[test]
@@ -945,7 +996,7 @@ mod tests {
             @r"
         would prune 1 run, freeing 2.0 MB:
 
-          550e8400  2024-06-17 12:00:00      1.000s    2048 KB  50 passed
+          550e8400  2024-06-17 12:00:00      1.000s     2.0 MB  50 passed
         "
         );
     }
@@ -980,9 +1031,218 @@ mod tests {
             @r"
         would prune 2 runs, freeing 1.5 MB:
 
-          550e8400  2024-06-18 13:00:00      1.000s    1024 KB  100 passed
+          550e8400  2024-06-18 13:00:00      1.000s     1.0 MB  100 passed
           550e8400  2024-06-19 14:00:00      1.000s     512 KB      incomplete
         "
+        );
+    }
+
+    #[test]
+    fn test_display_run_list() {
+        let theme_characters = ThemeCharacters::default();
+
+        // Test 1: Normal sizes (typical case with multiple runs).
+        let runs = vec![
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440001",
+                "0.9.101",
+                "2024-06-15T10:00:00+00:00",
+                50 * 1024,
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 10,
+                    passed: 10,
+                    failed: 0,
+                }),
+            ),
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440002",
+                "0.9.102",
+                "2024-06-16T11:00:00+00:00",
+                75 * 1024,
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 20,
+                    passed: 18,
+                    failed: 2,
+                }),
+            ),
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440003",
+                "0.9.103",
+                "2024-06-17T12:00:00+00:00",
+                100 * 1024,
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 30,
+                    passed: 30,
+                    failed: 0,
+                }),
+            ),
+        ];
+        let snapshot = super::super::RunStoreSnapshot::new_for_test(runs);
+        insta::assert_snapshot!(
+            "normal_sizes",
+            DisplayRunList::new(
+                &snapshot,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+
+        // Test 2: Small sizes (1-2 digits, below the 6-char minimum width).
+        let runs = vec![
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440001",
+                "0.9.101",
+                "2024-06-15T10:00:00+00:00",
+                1024, // 1 KB
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 5,
+                    passed: 5,
+                    failed: 0,
+                }),
+            ),
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440002",
+                "0.9.102",
+                "2024-06-16T11:00:00+00:00",
+                99 * 1024, // 99 KB
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 10,
+                    passed: 10,
+                    failed: 0,
+                }),
+            ),
+        ];
+        let snapshot = super::super::RunStoreSnapshot::new_for_test(runs);
+        insta::assert_snapshot!(
+            "small_sizes",
+            DisplayRunList::new(
+                &snapshot,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+
+        // Test 3: Large sizes (7-8 digits, exceeding the 6-char minimum width).
+        // 1,000,000 KB = ~1 GB, 10,000,000 KB = ~10 GB.
+        // The size column and horizontal bar should dynamically expand.
+        let runs = vec![
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440001",
+                "0.9.101",
+                "2024-06-15T10:00:00+00:00",
+                1_000_000 * 1024, // 1,000,000 KB (~1 GB)
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 100,
+                    passed: 100,
+                    failed: 0,
+                }),
+            ),
+            make_run_info(
+                "550e8400-e29b-41d4-a716-446655440002",
+                "0.9.102",
+                "2024-06-16T11:00:00+00:00",
+                10_000_000 * 1024, // 10,000,000 KB (~10 GB)
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 200,
+                    passed: 200,
+                    failed: 0,
+                }),
+            ),
+        ];
+        let snapshot = super::super::RunStoreSnapshot::new_for_test(runs);
+        insta::assert_snapshot!(
+            "large_sizes",
+            DisplayRunList::new(
+                &snapshot,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+
+        // Test 4: Varying durations (sub-second, seconds, tens, hundreds, thousands).
+        // Duration is formatted as {:>9.3}s, so all should right-align properly.
+        let runs = vec![
+            make_run_info_with_duration(
+                "550e8400-e29b-41d4-a716-446655440001",
+                "0.9.101",
+                "2024-06-15T10:00:00+00:00",
+                50 * 1024,
+                0.123, // sub-second
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 5,
+                    passed: 5,
+                    failed: 0,
+                }),
+            ),
+            make_run_info_with_duration(
+                "550e8400-e29b-41d4-a716-446655440002",
+                "0.9.102",
+                "2024-06-16T11:00:00+00:00",
+                75 * 1024,
+                9.876, // single digit seconds
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 10,
+                    passed: 10,
+                    failed: 0,
+                }),
+            ),
+            make_run_info_with_duration(
+                "550e8400-e29b-41d4-a716-446655440003",
+                "0.9.103",
+                "2024-06-17T12:00:00+00:00",
+                100 * 1024,
+                42.5, // tens of seconds
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 20,
+                    passed: 20,
+                    failed: 0,
+                }),
+            ),
+            make_run_info_with_duration(
+                "550e8400-e29b-41d4-a716-446655440004",
+                "0.9.104",
+                "2024-06-18T13:00:00+00:00",
+                125 * 1024,
+                987.654, // hundreds of seconds
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 30,
+                    passed: 28,
+                    failed: 2,
+                }),
+            ),
+            make_run_info_with_duration(
+                "550e8400-e29b-41d4-a716-446655440005",
+                "0.9.105",
+                "2024-06-19T14:00:00+00:00",
+                150 * 1024,
+                12345.678, // thousands of seconds (~3.4 hours)
+                RecordedRunStatus::Completed(CompletedRunStats {
+                    initial_run_count: 50,
+                    passed: 50,
+                    failed: 0,
+                }),
+            ),
+        ];
+        let snapshot = super::super::RunStoreSnapshot::new_for_test(runs);
+        insta::assert_snapshot!(
+            "varying_durations",
+            DisplayRunList::new(
+                &snapshot,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
         );
     }
 }

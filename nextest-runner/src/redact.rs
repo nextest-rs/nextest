@@ -6,7 +6,7 @@
 //! Used for snapshot testing.
 
 use crate::{
-    helpers::{FormattedDuration, convert_rel_path_to_forward_slash},
+    helpers::{FormattedDuration, convert_rel_path_to_forward_slash, u64_decimal_char_width},
     list::RustBuildMeta,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -158,15 +158,14 @@ impl Redactor {
         }
     }
 
-    /// Redacts a size in KB for display, producing a fixed-width placeholder.
+    /// Redacts a size (in bytes) for display as a human-readable string.
     ///
-    /// The placeholder `<size>` is 6 characters, matching the width of the
-    /// `{:>6}` format used for KB values.
-    pub fn redact_size_kb(&self, orig: u64) -> RedactorOutput<u64> {
+    /// When redacting, produces `<size>` as a placeholder.
+    pub fn redact_size(&self, orig: u64) -> RedactorOutput<SizeDisplay> {
         if self.kind.is_active() {
             RedactorOutput::Redacted(SIZE_REDACTION.to_string())
         } else {
-            RedactorOutput::Unredacted(orig)
+            RedactorOutput::Unredacted(SizeDisplay(orig))
         }
     }
 
@@ -205,6 +204,49 @@ impl fmt::Display for StoreDurationDisplay {
         match self.0 {
             Some(secs) => write!(f, "{secs:>9.3}s"),
             None => write!(f, "{:>10}", "-"),
+        }
+    }
+}
+
+/// Wrapper for sizes that formats bytes as a human-readable string (KB or MB).
+#[derive(Clone, Copy, Debug)]
+pub struct SizeDisplay(pub u64);
+
+impl SizeDisplay {
+    /// Returns the display width of this size when formatted.
+    ///
+    /// This is useful for alignment calculations.
+    pub fn display_width(self) -> usize {
+        let bytes = self.0;
+        if bytes >= 1024 * 1024 {
+            // Format: "{:.1} MB" - integer part + "." + 1 decimal + " MB".
+            let mb_int = bytes / (1024 * 1024);
+            u64_decimal_char_width(mb_int) + 2 + 3
+        } else {
+            // Format: "{} KB" - integer + " KB".
+            let kb = bytes / 1024;
+            u64_decimal_char_width(kb) + 3
+        }
+    }
+}
+
+impl fmt::Display for SizeDisplay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.0;
+        // Remove 3 from the width since we're adding " MB" or " KB" at the end.
+        match (bytes >= 1024 * 1024, f.width().map(|w| w.saturating_sub(3))) {
+            (true, Some(width)) => {
+                write!(f, "{:>width$.1} MB", bytes as f64 / (1024.0 * 1024.0))
+            }
+            (true, None) => {
+                write!(f, "{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+            }
+            (false, Some(width)) => {
+                write!(f, "{:>width$} KB", bytes / 1024)
+            }
+            (false, None) => {
+                write!(f, "{} KB", bytes / 1024)
+            }
         }
     }
 }
@@ -404,5 +446,20 @@ mod tests {
     fn make_abs_path() -> Utf8PathBuf {
         "C:\\path\\to\\target".into()
         // TODO: test with verbatim paths
+    }
+
+    #[test]
+    fn test_size_display() {
+        insta::assert_snapshot!(SizeDisplay(0).to_string(), @"0 KB");
+        insta::assert_snapshot!(SizeDisplay(512).to_string(), @"0 KB");
+        insta::assert_snapshot!(SizeDisplay(1024).to_string(), @"1 KB");
+        insta::assert_snapshot!(SizeDisplay(1536).to_string(), @"1 KB");
+        insta::assert_snapshot!(SizeDisplay(10 * 1024).to_string(), @"10 KB");
+        insta::assert_snapshot!(SizeDisplay(1024 * 1024 - 1).to_string(), @"1023 KB");
+
+        insta::assert_snapshot!(SizeDisplay(1024 * 1024).to_string(), @"1.0 MB");
+        insta::assert_snapshot!(SizeDisplay(1024 * 1024 + 512 * 1024).to_string(), @"1.5 MB");
+        insta::assert_snapshot!(SizeDisplay(10 * 1024 * 1024).to_string(), @"10.0 MB");
+        insta::assert_snapshot!(SizeDisplay(1024 * 1024 * 1024).to_string(), @"1024.0 MB");
     }
 }
