@@ -3,13 +3,14 @@
 
 //! Command dispatch and execution.
 
+mod app;
 mod clap_error;
-mod cli;
-mod commands;
-mod execution;
+mod common;
+mod core;
 mod helpers;
 mod imp;
+mod utility;
 
 pub(crate) use clap_error::EarlyArgs;
-pub(crate) use commands::ExtractOutputFormat;
 pub use imp::main_impl;
+pub(crate) use utility::ExtractOutputFormat;

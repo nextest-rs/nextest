@@ -4,8 +4,8 @@
 //! Main entry point implementation.
 
 use super::{
+    app::CargoNextestApp,
     clap_error::{EarlySetup, handle_clap_error},
-    cli::CargoNextestApp,
 };
 use clap::{CommandFactory, Parser};
 
