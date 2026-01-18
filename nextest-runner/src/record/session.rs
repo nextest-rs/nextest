@@ -268,9 +268,8 @@ impl RecordFinalizeResult {
         if let Some(prune_result) = &self.prune_result
             && (prune_result.deleted_count > 0 || prune_result.orphans_deleted > 0)
         {
-            // Use Styles::default() for plain text (no colors) in logs.
             tracing::info!(
-                "{} -- {} to replay runs",
+                "{}(hint: {} to replay runs)",
                 prune_result.display(styles),
                 "cargo nextest replay".style(styles.count),
             );
