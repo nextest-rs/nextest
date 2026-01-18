@@ -16,7 +16,7 @@ use nextest_runner::{
     pager::PagedOutput,
     record::{
         DisplayRunList, PruneKind, RecordRetentionPolicy, RunIdSelector, RunStore,
-        Styles as RecordStyles, records_cache_dir,
+        SnapshotWithReplayability, Styles as RecordStyles, records_cache_dir,
     },
     redact::Redactor,
     user_config::{UserConfig, elements::RecordConfig},
@@ -74,8 +74,14 @@ impl InfoOpts {
             .get_run(run_id)
             .expect("run ID was just resolved, so the run should exist");
 
-        let display =
-            run.display_detailed(snapshot.run_id_index(), styles, theme_characters, redactor);
+        let replayability = run.check_replayability(snapshot.runs_dir());
+        let display = run.display_detailed(
+            snapshot.run_id_index(),
+            &replayability,
+            styles,
+            theme_characters,
+            redactor,
+        );
 
         write!(paged_output, "{}", display).map_err(|err| ExpectedError::WriteError { err })?;
 
@@ -215,8 +221,9 @@ impl StoreCommand {
                 } else {
                     None
                 };
+                let snapshot_with_replayability = SnapshotWithReplayability::new(&snapshot);
                 let display = DisplayRunList::new(
-                    &snapshot,
+                    &snapshot_with_replayability,
                     store_path,
                     &styles,
                     &theme_characters,

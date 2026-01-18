@@ -252,6 +252,37 @@ NEXTEST_EXPERIMENTAL_RECORD=1 cargo nextest run
   - Delete them (simpler)
   - Mark them as incomplete in the index
 
+### Replayability checking
+
+Determining whether a run can be replayed requires checking multiple conditions. Rather than a simple boolean, nextest collects a list of reasons why a run might not be replayable:
+
+**`NonReplayableReason` enum** (definite blockers):
+- `StoreFormatTooNew { run_version, max_supported }`: The run's `store-format-version` is higher than this nextest supports. This is a definite blocker since we cannot read the archive format.
+- `StoreFormatTooOld { run_version, min_supported }`: The run's `store-format-version` is lower than this nextest supports. Reserved for future use when we drop support for old formats. Would include the range of nextest versions that might work.
+- `MissingStoreZip`: The `store.zip` file is missing from the run directory.
+- `MissingRunLog`: The `run.log.zst` file is missing from the run directory.
+- `StatusUnknown`: The run status is `Unknown` (from a newer nextest version with new status types). We cannot safely replay since we don't understand the run's state.
+
+**`MaybeNonReplayableReason` enum** (potential blockers):
+- `Incomplete`: The run status is `Incomplete`. The archive might be usable, but we'd need to open `store.zip` to verify all expected files are present.
+
+**`ReplayabilityStatus` struct**:
+```rust
+pub struct ReplayabilityStatus {
+    /// Definite reasons the run cannot be replayed.
+    pub blocking: Vec<NonReplayableReason>,
+    /// Potential reasons the run might not be replayable.
+    pub uncertain: Vec<MaybeNonReplayableReason>,
+}
+```
+
+The `check_replayability` method on `RecordedRunInfo` takes the runs directory path and checks:
+1. Store format version against `RECORD_FORMAT_VERSION`
+2. Whether `store.zip` and `run.log.zst` exist on disk
+3. Run status (Incomplete or Unknown)
+
+For display, blocking reasons show "no" with the reason, uncertain reasons show "maybe" with explanation.
+
 ### Cross-platform compatibility
 - Archive format should be portable across platforms
 - Use forward slashes in zip paths

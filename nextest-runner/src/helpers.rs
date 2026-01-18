@@ -136,6 +136,11 @@ pub mod plural {
     pub fn errors_str(count: usize) -> &'static str {
         if count == 1 { "error" } else { "errors" }
     }
+
+    /// Returns "exists" if `count` is 1, otherwise "exist".
+    pub fn exist_str(count: usize) -> &'static str {
+        if count == 1 { "exists" } else { "exist" }
+    }
 }
 
 /// A helper for displaying test instances with formatting.

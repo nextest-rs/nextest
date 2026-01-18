@@ -2403,10 +2403,10 @@ pub enum RunIdResolutionError {
 
     /// Recorded runs exist but none are completed (all are incomplete or have
     /// unknown status).
-    #[error("{incomplete_count} recorded runs exist, but none are complete")]
-    NoCompletedRuns {
-        /// The number of incomplete runs.
-        incomplete_count: usize,
+    #[error("{non_replayable_count} recorded runs exist, but none are replayable")]
+    NoReplayableRuns {
+        /// The number of non-replayable runs.
+        non_replayable_count: usize,
     },
 }
 

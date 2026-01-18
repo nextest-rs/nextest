@@ -15,7 +15,7 @@ use nextest_runner::{
     helpers::{format_interceptor_too_many_tests, plural},
     indenter::DisplayIndented,
     list::OwnedTestInstanceId,
-    record::RunListAlignment,
+    record::{ReplayabilityStatus, RunListAlignment},
     redact::Redactor,
     run_mode::NextestRunMode,
     runner::{DebuggerCommand, TracerCommand},
@@ -1217,7 +1217,7 @@ impl ExpectedError {
                             info!(
                                 target: "cargo_nextest::no_heading",
                                 "{}",
-                                candidate.display(run_id_index, alignment, &styles.record_styles, &redactor)
+                                candidate.display(run_id_index, &ReplayabilityStatus::Replayable, alignment, &styles.record_styles, &redactor)
                             );
                         }
                         if *count > candidates.len() {
@@ -1239,11 +1239,14 @@ impl ExpectedError {
                     RunIdResolutionError::NoRuns => {
                         error!("no recorded runs exist");
                     }
-                    RunIdResolutionError::NoCompletedRuns { incomplete_count } => {
+                    RunIdResolutionError::NoReplayableRuns {
+                        non_replayable_count,
+                    } => {
                         error!(
-                            "{} recorded {} exist, but none are complete",
-                            incomplete_count.style(styles.bold),
-                            plural::runs_str(*incomplete_count)
+                            "{} recorded {} {}, but none are replayable",
+                            non_replayable_count.style(styles.bold),
+                            plural::runs_str(*non_replayable_count),
+                            plural::exist_str(*non_replayable_count),
                         );
                     }
                 }

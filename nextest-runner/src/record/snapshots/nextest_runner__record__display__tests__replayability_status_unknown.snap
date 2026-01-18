@@ -1,0 +1,22 @@
+---
+source: nextest-runner/src/record/display.rs
+expression: "run.display_detailed(&index, &status_unknown, &Styles::default(),\n&theme_characters, &redactor).to_string()"
+snapshot_kind: text
+---
+Run 550e8400-e29b-41d4-a716-446655440000
+
+  nextest version:  0.9.100
+  status:           completed
+  started at:       2024-06-15 10:30:00 +00:00
+  last written at:  2024-06-15 10:30:00 +00:00
+  duration:         1.000s
+  replayable:       no: run status is unknown (from a newer nextest version)
+
+  tests:
+    passed:         100
+
+  sizes:            compressed  uncompressed  entries
+    log                   0 KB          0 KB        0
+    store               100 KB        300 KB        0
+                    ----------  ------------  -------
+    total               100 KB        300 KB        0

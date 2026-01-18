@@ -1,6 +1,6 @@
 ---
 source: nextest-runner/src/record/display.rs
-expression: "DisplayRunList::new(&snapshot, None, &Styles::default(), &theme_characters,\n&Redactor::noop()).to_string()"
+expression: "DisplayRunList::new(&snapshot, None, latest_run_id(&snapshot),\n&Styles::default(), &theme_characters, &Redactor::noop()).to_string()"
 snapshot_kind: text
 ---
 5 recorded runs:

@@ -1,0 +1,6 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&replay_output.stderr_as_str(), temp_root)"
+snapshot_kind: text
+---
+error: 1 recorded run exists, but none are replayable

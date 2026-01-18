@@ -129,14 +129,14 @@ pub(crate) fn exec_replay(
     let run_info = snapshot.get_run(run_id);
 
     // Check the store format version before opening the archive.
-    if let Some(info) = run_info {
-        if info.store_format_version != RECORD_FORMAT_VERSION {
-            return Err(ExpectedError::UnsupportedStoreFormatVersion {
-                run_id,
-                found: info.store_format_version,
-                supported: RECORD_FORMAT_VERSION,
-            });
-        }
+    if let Some(info) = run_info
+        && info.store_format_version != RECORD_FORMAT_VERSION
+    {
+        return Err(ExpectedError::UnsupportedStoreFormatVersion {
+            run_id,
+            found: info.store_format_version,
+            supported: RECORD_FORMAT_VERSION,
+        });
     }
 
     let run_dir = snapshot.runs_dir().run_dir(run_id);
@@ -209,7 +209,7 @@ pub(crate) fn exec_replay(
         run_id,
         run_info,
         Some(snapshot.run_id_index()),
-        result.newer_incomplete_count,
+        result.newer_non_replayable_count,
     );
     reporter.write_header(&header)?;
 

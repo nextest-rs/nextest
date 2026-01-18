@@ -1,6 +1,6 @@
 ---
 source: nextest-runner/src/record/display.rs
-expression: "runs[1].display_detailed(&index, &Styles::default(), &theme_characters,\n&redactor).to_string()"
+expression: "runs[1].display_detailed(&index, &incomplete, &Styles::default(),\n&theme_characters, &redactor).to_string()"
 snapshot_kind: text
 ---
 Run 550e8400-e29b-41d4-a716-446655440001
@@ -10,7 +10,7 @@ Run 550e8400-e29b-41d4-a716-446655440001
   started at:       2024-06-16 11:00:00 +00:00
   last written at:  2024-06-16 11:00:00 +00:00
   duration:         12.345s
-  replayable:       no
+  replayable:       maybe: run is incomplete (archive may be partial)
 
   sizes:            compressed  uncompressed  entries
     log                   1 KB          4 KB      100
