@@ -20,7 +20,8 @@ use nextest_runner::{
     pager::PagedOutput,
     record::{
         NoTestsBehavior, RecordOpts, RecordReader, ReplayContext, ReplayHeader,
-        ReplayReporterBuilder, RunIdSelector, RunStore, TestInstanceSummary, records_cache_dir,
+        ReplayReporterBuilder, RunIdSelector, RunStore, TestInstanceSummary,
+        format::RECORD_FORMAT_VERSION, records_cache_dir,
     },
     reporter::{
         ReporterOutput,
@@ -127,12 +128,23 @@ pub(crate) fn exec_replay(
 
     let run_info = snapshot.get_run(run_id);
 
+    // Check the store format version before opening the archive.
+    if let Some(info) = run_info {
+        if info.store_format_version != RECORD_FORMAT_VERSION {
+            return Err(ExpectedError::UnsupportedStoreFormatVersion {
+                run_id,
+                found: info.store_format_version,
+                supported: RECORD_FORMAT_VERSION,
+            });
+        }
+    }
+
     let run_dir = snapshot.runs_dir().run_dir(run_id);
     let mut reader =
         RecordReader::open(&run_dir).map_err(|err| ExpectedError::RecordReadError { err })?;
 
     reader
-        .read_and_validate_format_version()
+        .load_dictionaries()
         .map_err(|err| ExpectedError::RecordReadError { err })?;
 
     let cargo_metadata_json = reader

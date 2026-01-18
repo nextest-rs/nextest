@@ -845,7 +845,8 @@ mod tests {
         helpers::ThemeCharacters,
         record::{
             CompletedRunStats, ComponentSizes, PruneKind, PrunePlan, PruneResult,
-            RecordedRunStatus, RecordedSizes, StressCompletedRunStats, run_id_index::RunIdIndex,
+            RecordedRunStatus, RecordedSizes, StressCompletedRunStats,
+            format::RECORD_FORMAT_VERSION, run_id_index::RunIdIndex,
         },
         redact::Redactor,
     };
@@ -884,6 +885,7 @@ mod tests {
         // For simplicity in tests, put all size in the store component.
         RecordedRunInfo {
             run_id: uuid.parse().expect("valid UUID"),
+            store_format_version: RECORD_FORMAT_VERSION,
             nextest_version: Version::parse(version).expect("valid version"),
             started_at,
             last_written_at: started_at,
@@ -914,6 +916,7 @@ mod tests {
         let started_at = DateTime::parse_from_rfc3339(started_at).expect("valid datetime");
         RecordedRunInfo {
             run_id: uuid.parse().expect("valid UUID"),
+            store_format_version: RECORD_FORMAT_VERSION,
             nextest_version: Version::parse(version).expect("valid version"),
             started_at,
             last_written_at: started_at,

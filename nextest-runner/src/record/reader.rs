@@ -8,9 +8,8 @@
 
 use super::{
     format::{
-        CARGO_METADATA_JSON_PATH, FORMAT_JSON_PATH, FormatMetadata, OutputDict,
-        RECORD_FORMAT_VERSION, RECORD_OPTS_JSON_PATH, RUN_LOG_FILE_NAME, STDERR_DICT_PATH,
-        STDOUT_DICT_PATH, STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH,
+        CARGO_METADATA_JSON_PATH, OutputDict, RECORD_OPTS_JSON_PATH, RUN_LOG_FILE_NAME,
+        STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH,
     },
     summary::{RecordOpts, TestEventSummary, ZipStoreOutput},
 };
@@ -158,34 +157,18 @@ impl RecordReader {
         })
     }
 
-    /// Reads the format version from the archive and validates it.
+    /// Loads the dictionaries from the archive.
     ///
-    /// Returns `Ok(version)` if the version matches the current format version,
-    /// or an error if the format version is unsupported.
+    /// This must be called before reading output files. The dictionaries are
+    /// used for decompressing test output.
     ///
-    /// This also loads the dictionaries from the archive for later use when
-    /// reading output files.
-    pub fn read_and_validate_format_version(&mut self) -> Result<u32, RecordReadError> {
-        let bytes = self.read_archive_file(FORMAT_JSON_PATH)?;
-        let metadata: FormatMetadata = serde_json::from_slice(&bytes).map_err(|error| {
-            RecordReadError::DeserializeMetadata {
-                file_name: FORMAT_JSON_PATH.to_string(),
-                error,
-            }
-        })?;
-
-        if metadata.version != RECORD_FORMAT_VERSION {
-            return Err(RecordReadError::UnsupportedFormatVersion {
-                found: metadata.version,
-                supported: RECORD_FORMAT_VERSION,
-            });
-        }
-
-        // Load dictionaries from the archive.
+    /// Note: The store format version is checked before opening the archive,
+    /// using the `store_format_version` field in runs.json.zst. This method
+    /// assumes the version has already been validated.
+    pub fn load_dictionaries(&mut self) -> Result<(), RecordReadError> {
         self.stdout_dict = Some(self.read_archive_file(STDOUT_DICT_PATH)?);
         self.stderr_dict = Some(self.read_archive_file(STDERR_DICT_PATH)?);
-
-        Ok(metadata.version)
+        Ok(())
     }
 
     /// Returns an iterator over events in the run log.
@@ -219,7 +202,7 @@ impl RecordReader {
     ///
     /// # Panics
     ///
-    /// Panics if `read_and_validate_format_version` has not been called first.
+    /// Panics if [`load_dictionaries`](Self::load_dictionaries) has not been called first.
     pub fn read_output(&mut self, file_name: &str) -> Result<Vec<u8>, RecordReadError> {
         let path = format!("out/{file_name}");
         let compressed = self.read_archive_file(&path)?;
@@ -249,18 +232,18 @@ impl RecordReader {
     ///
     /// # Panics
     ///
-    /// Panics if `read_and_validate_format_version` has not been called first.
+    /// Panics if [`load_dictionaries`](Self::load_dictionaries) has not been called first.
     fn get_dict_for_output(&self, file_name: &str) -> Option<&[u8]> {
         match OutputDict::for_output_file_name(file_name) {
             OutputDict::Stdout => Some(
                 self.stdout_dict
                     .as_ref()
-                    .expect("read_and_validate_format_version must be called first"),
+                    .expect("load_dictionaries must be called first"),
             ),
             OutputDict::Stderr => Some(
                 self.stderr_dict
                     .as_ref()
-                    .expect("read_and_validate_format_version must be called first"),
+                    .expect("load_dictionaries must be called first"),
             ),
             OutputDict::None => None,
         }

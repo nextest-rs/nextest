@@ -11,7 +11,7 @@
 
 use super::{
     display::{DisplayRecordedRunInfo, DisplayRecordedRunInfoDetailed, RunListAlignment, Styles},
-    format::{RecordedRunList, RunsJsonWritePermission},
+    format::{RECORD_FORMAT_VERSION, RecordedRunList, RunsJsonWritePermission},
     recorder::{RunRecorder, StoreSizes},
     retention::{
         PruneKind, PrunePlan, PruneResult, RecordRetentionPolicy, delete_orphaned_dirs, delete_runs,
@@ -375,6 +375,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
 
         let run = RecordedRunInfo {
             run_id,
+            store_format_version: RECORD_FORMAT_VERSION,
             nextest_version,
             started_at,
             last_written_at: Local::now().fixed_offset(),
@@ -402,6 +403,10 @@ impl<'store> ExclusiveLockedRunStore<'store> {
 pub struct RecordedRunInfo {
     /// The unique identifier for this run.
     pub run_id: ReportUuid,
+    /// The format version of this run's store.zip archive.
+    ///
+    /// This allows checking replayability without opening the archive.
+    pub store_format_version: u32,
     /// The version of nextest that created this run.
     pub nextest_version: Version,
     /// When the run started.

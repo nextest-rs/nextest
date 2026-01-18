@@ -120,6 +120,11 @@ impl RecordedRunList {
 pub(super) struct RecordedRun {
     /// The unique identifier for this run.
     pub(super) run_id: ReportUuid,
+    /// The format version of this run's store.zip and run.log.
+    ///
+    /// Runs with a store format version different from `RECORD_FORMAT_VERSION`
+    /// cannot be replayed by this nextest version.
+    pub(super) store_format_version: u32,
     /// The version of nextest that created this run.
     pub(super) nextest_version: Version,
     /// When the run started.
@@ -264,6 +269,7 @@ impl From<RecordedRun> for RecordedRunInfo {
     fn from(run: RecordedRun) -> Self {
         Self {
             run_id: run.run_id,
+            store_format_version: run.store_format_version,
             nextest_version: run.nextest_version,
             started_at: run.started_at,
             last_written_at: run.last_written_at,
@@ -280,6 +286,7 @@ impl From<&RecordedRunInfo> for RecordedRun {
     fn from(run: &RecordedRunInfo) -> Self {
         Self {
             run_id: run.run_id,
+            store_format_version: run.store_format_version,
             nextest_version: run.nextest_version.clone(),
             started_at: run.started_at,
             last_written_at: run.last_written_at,
@@ -374,36 +381,19 @@ impl From<&RecordedRunStatus> for RecordedRunStatusFormat {
 ///
 /// Increment this when making breaking changes to the archive structure or
 /// event format. Readers should check this version and refuse to read archives
-/// with a version higher than they support.
-pub(super) const RECORD_FORMAT_VERSION: u32 = 1;
+/// with a different version.
+pub const RECORD_FORMAT_VERSION: u32 = 1;
 
 // Archive file names.
 pub(super) static STORE_ZIP_FILE_NAME: &str = "store.zip";
 pub(super) static RUN_LOG_FILE_NAME: &str = "run.log.zst";
 
 // Paths within the zip archive.
-pub(super) static FORMAT_JSON_PATH: &str = "meta/format.json";
 pub(super) static CARGO_METADATA_JSON_PATH: &str = "meta/cargo-metadata.json";
 pub(super) static TEST_LIST_JSON_PATH: &str = "meta/test-list.json";
 pub(super) static RECORD_OPTS_JSON_PATH: &str = "meta/record-opts.json";
 pub(super) static STDOUT_DICT_PATH: &str = "meta/stdout.dict";
 pub(super) static STDERR_DICT_PATH: &str = "meta/stderr.dict";
-
-/// Format metadata stored in `meta/format.json` in the archive.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct FormatMetadata {
-    /// The format version of this archive.
-    pub version: u32,
-}
-
-impl FormatMetadata {
-    /// Creates metadata for a new archive with the current format version.
-    pub fn new() -> Self {
-        Self {
-            version: RECORD_FORMAT_VERSION,
-        }
-    }
-}
 
 /// Which dictionary to use for compressing/decompressing a file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -472,7 +462,7 @@ mod tests {
     fn test_output_dict_for_path() {
         // Metadata files should not use dictionaries.
         assert_eq!(
-            OutputDict::for_path("meta/format.json".as_ref()),
+            OutputDict::for_path("meta/cargo-metadata.json".as_ref()),
             OutputDict::None
         );
         assert_eq!(
@@ -598,6 +588,7 @@ mod tests {
     fn make_test_run(status: RecordedRunStatusFormat) -> RecordedRun {
         RecordedRun {
             run_id: ReportUuid::from_u128(0x550e8400_e29b_41d4_a716_446655440000),
+            store_format_version: RECORD_FORMAT_VERSION,
             nextest_version: Version::new(0, 9, 111),
             started_at: DateTime::parse_from_rfc3339("2024-12-19T14:22:33-08:00")
                 .expect("valid timestamp"),
@@ -684,8 +675,10 @@ mod tests {
     #[test]
     fn test_recorded_run_deserialize_unknown_status() {
         // Simulate a run from a future nextest version with an unknown status.
+        // The store-format-version is set to 999 to indicate a future version.
         let json = r#"{
             "run-id": "550e8400-e29b-41d4-a716-446655440000",
+            "store-format-version": 999,
             "nextest-version": "0.9.999",
             "started-at": "2024-12-19T14:22:33-08:00",
             "last-written-at": "2024-12-19T22:22:33Z",

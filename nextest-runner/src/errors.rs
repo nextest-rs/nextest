@@ -2543,17 +2543,6 @@ pub enum RecordReadError {
         error: serde_json::Error,
     },
 
-    /// The archive format version is not supported.
-    #[error(
-        "unsupported format version {found} (this version of nextest supports version {supported})"
-    )]
-    UnsupportedFormatVersion {
-        /// The format version found in the archive.
-        found: u32,
-
-        /// The format version supported by this version of nextest.
-        supported: u32,
-    },
 }
 
 /// An error that occurred while reconstructing a TestList from a summary.

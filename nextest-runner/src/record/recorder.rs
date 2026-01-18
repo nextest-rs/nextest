@@ -11,9 +11,8 @@
 use super::{
     dicts,
     format::{
-        CARGO_METADATA_JSON_PATH, FORMAT_JSON_PATH, FormatMetadata, OutputDict,
-        RECORD_OPTS_JSON_PATH, RUN_LOG_FILE_NAME, STDERR_DICT_PATH, STDOUT_DICT_PATH,
-        STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH,
+        CARGO_METADATA_JSON_PATH, OutputDict, RECORD_OPTS_JSON_PATH, RUN_LOG_FILE_NAME,
+        STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH,
     },
     summary::{
         OutputEventKind, OutputFileName, OutputKind, RecordOpts, TestEventKindSummary,
@@ -184,21 +183,18 @@ impl RunRecorder {
         })
     }
 
-    /// Writes metadata (format version, cargo metadata, test list, options, and dictionaries) to
-    /// the archive.
+    /// Writes metadata (cargo metadata, test list, options, and dictionaries) to the archive.
     ///
     /// This should be called once at the beginning of a test run.
+    ///
+    /// Note: The store format version is stored in runs.json.zst, not in the archive itself.
+    /// This allows checking replayability without opening the archive.
     pub(crate) fn write_meta(
         &mut self,
         cargo_metadata_json: &str,
         test_list: &TestListSummary,
         opts: &RecordOpts,
     ) -> Result<(), RunStoreError> {
-        // Write format version first so readers can check compatibility.
-        let format_json = serde_json::to_string(&FormatMetadata::new())
-            .map_err(|error| RunStoreError::TestListSerialize { error })?;
-        self.write_archive_file(FORMAT_JSON_PATH, format_json.as_bytes())?;
-
         let test_list_json = serde_json::to_string(test_list)
             .map_err(|error| RunStoreError::TestListSerialize { error })?;
 

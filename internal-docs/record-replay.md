@@ -78,6 +78,7 @@ RunStore                     # Manages the runs directory
 │   ├── meta/
 │   │   ├── cargo-metadata.json
 │   │   ├── test-list.json
+│   │   ├── record-opts.json         # Recording options used
 │   │   ├── stdout.dict              # Zstd dictionary for stdout decompression
 │   │   └── stderr.dict              # Zstd dictionary for stderr decompression
 │   └── out/
@@ -275,6 +276,7 @@ Each run has a `last-written-at` timestamp (`DateTime<FixedOffset>`) that tracks
 ```json
 {
   "run-id": "...",
+  "store-format-version": 1,
   "started-at": "2024-12-19T14:22:33-08:00",
   "last-written-at": "2024-12-20T10:15:00Z",
   ...
