@@ -10,7 +10,7 @@
 //! - Individual directories for each run containing the archive and log.
 
 use super::{
-    display::{DisplayRecordedRunInfo, RunListAlignment, Styles},
+    display::{DisplayRecordedRunInfo, DisplayRecordedRunInfoDetailed, RunListAlignment, Styles},
     format::{RecordedRunList, RunsJsonWritePermission},
     recorder::{RunRecorder, StoreSizes},
     retention::{
@@ -20,7 +20,7 @@ use super::{
 };
 use crate::{
     errors::{RunIdResolutionError, RunStoreError},
-    helpers::{u32_decimal_char_width, usize_decimal_char_width},
+    helpers::{ThemeCharacters, u32_decimal_char_width, usize_decimal_char_width},
     redact::Redactor,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -585,6 +585,23 @@ impl RecordedRunInfo {
         redactor: &'a Redactor,
     ) -> DisplayRecordedRunInfo<'a> {
         DisplayRecordedRunInfo::new(self, run_id_index, alignment, styles, redactor)
+    }
+
+    /// Returns a detailed display wrapper for this run.
+    ///
+    /// Unlike [`Self::display`] which shows a compact table row, this provides
+    /// a multi-line detailed view suitable for the `store info` command.
+    ///
+    /// The `redactor` parameter redacts paths, timestamps, durations, and sizes
+    /// for snapshot testing. Use `Redactor::noop()` if no redaction is needed.
+    pub fn display_detailed<'a>(
+        &'a self,
+        run_id_index: &'a RunIdIndex,
+        styles: &'a Styles,
+        theme_characters: &'a ThemeCharacters,
+        redactor: &'a Redactor,
+    ) -> DisplayRecordedRunInfoDetailed<'a> {
+        DisplayRecordedRunInfoDetailed::new(self, run_id_index, styles, theme_characters, redactor)
     }
 }
 

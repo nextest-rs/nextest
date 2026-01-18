@@ -180,6 +180,95 @@ impl Redactor {
             RedactorOutput::Unredacted(StoreDurationDisplay(orig))
         }
     }
+
+    /// Redacts a timestamp with timezone for detailed display.
+    ///
+    /// Produces `XXXX-XX-XX XX:XX:XX` when active, otherwise formats as
+    /// `%Y-%m-%d %H:%M:%S %:z`.
+    pub fn redact_detailed_timestamp<Tz>(&self, orig: &DateTime<Tz>) -> String
+    where
+        Tz: TimeZone,
+        Tz::Offset: fmt::Display,
+    {
+        if self.kind.is_active() {
+            TIMESTAMP_REDACTION.to_string()
+        } else {
+            orig.format("%Y-%m-%d %H:%M:%S %:z").to_string()
+        }
+    }
+
+    /// Redacts a duration in seconds for detailed display.
+    ///
+    /// Produces `<duration>` when active, otherwise formats as `{:.3}s`.
+    pub fn redact_detailed_duration(&self, orig: Option<f64>) -> String {
+        if self.kind.is_active() {
+            DURATION_REDACTION.to_string()
+        } else {
+            match orig {
+                Some(secs) => format!("{:.3}s", secs),
+                None => "-".to_string(),
+            }
+        }
+    }
+
+    /// Redacts CLI args for display.
+    ///
+    /// - The first arg (the exe) is replaced with `[EXE]`
+    /// - Absolute paths in other args are replaced with `[PATH]`
+    pub fn redact_cli_args(&self, args: &[String]) -> String {
+        if !self.kind.is_active() {
+            return shell_words::join(args);
+        }
+
+        let redacted: Vec<_> = args
+            .iter()
+            .enumerate()
+            .map(|(i, arg)| {
+                if i == 0 {
+                    // First arg is always the exe.
+                    "[EXE]".to_string()
+                } else if is_absolute_path(arg) {
+                    "[PATH]".to_string()
+                } else {
+                    arg.clone()
+                }
+            })
+            .collect();
+        shell_words::join(&redacted)
+    }
+
+    /// Redacts env vars for display.
+    ///
+    /// Formats as `K=V` pairs.
+    pub fn redact_env_vars(&self, env_vars: &BTreeMap<String, String>) -> String {
+        let pairs: Vec<_> = env_vars
+            .iter()
+            .map(|(k, v)| {
+                format!(
+                    "{}={}",
+                    shell_words::quote(k),
+                    shell_words::quote(self.redact_env_value(v)),
+                )
+            })
+            .collect();
+        pairs.join(" ")
+    }
+
+    /// Redacts an env var value for display.
+    ///
+    /// Absolute paths are replaced with `[PATH]`.
+    pub fn redact_env_value<'a>(&self, value: &'a str) -> &'a str {
+        if self.kind.is_active() && is_absolute_path(value) {
+            "[PATH]"
+        } else {
+            value
+        }
+    }
+}
+
+/// Returns true if the string looks like an absolute path.
+fn is_absolute_path(s: &str) -> bool {
+    s.starts_with('/') || (s.len() >= 3 && s.chars().nth(1) == Some(':'))
 }
 
 /// Wrapper for timestamps that formats with `%Y-%m-%d %H:%M:%S`.

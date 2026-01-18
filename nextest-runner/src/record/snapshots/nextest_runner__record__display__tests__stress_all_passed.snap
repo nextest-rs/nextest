@@ -1,0 +1,22 @@
+---
+source: nextest-runner/src/record/display.rs
+expression: "runs[0].display_detailed(&index, &Styles::default(), &theme_characters,\n&redactor).to_string()"
+snapshot_kind: text
+---
+Run 550e8400-e29b-41d4-a716-446655440010
+
+  nextest version:  0.9.122
+  status:           stress completed
+  started at:       2024-06-25 10:00:00 +00:00
+  last written at:  2024-06-25 10:00:00 +00:00
+  duration:         12.345s
+  replayable:       yes
+
+  iterations:
+    passed:         100
+
+  sizes:            compressed  uncompressed  entries
+    log                   1 KB          4 KB      100
+    store                50 KB        200 KB       42
+                    ----------  ------------  -------
+    total                51 KB        204 KB      142

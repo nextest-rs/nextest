@@ -176,7 +176,7 @@ fn count_runs(output: &str) -> usize {
 /// - Timestamps with `XXXX-XX-XX XX:XX:XX` (19 chars, preserving width)
 /// - Bracketed durations like `[   0.024s]` with same-width placeholders
 ///
-/// Store list output (timestamps, durations, sizes in columns) is redacted by
+/// Store list/info output (timestamps, durations, sizes, paths) is redacted by
 /// the Redactor infrastructure when `__NEXTEST_REDACT=1` is set. This function
 /// handles additional dynamic fields in replay output.
 fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
@@ -250,6 +250,19 @@ fn test_record_replay_cycle() {
     insta::assert_snapshot!(
         "store_list_single_run",
         redact_dynamic_fields(&list_output.stdout_as_str(), temp_root)
+    );
+
+    // Verify store info shows detailed run info including CLI and env vars.
+    let info_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info"])
+        .output();
+    assert!(
+        info_output.exit_status.success(),
+        "store info should succeed"
+    );
+    insta::assert_snapshot!(
+        "store_info_single_run",
+        redact_dynamic_fields(&info_output.stdout_as_str(), temp_root)
     );
 
     // Verify store list -v output.
