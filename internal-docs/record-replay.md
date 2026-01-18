@@ -65,7 +65,7 @@ The nextest2 branch has a partial implementation in `run_store.rs`:
 ### Architecture
 ```
 RunStore                     # Manages the runs directory
-  └── ExclusiveLockedRunStore  # Holds lock, manages runs.json
+  └── ExclusiveLockedRunStore  # Holds lock, manages runs.json.zst
        └── RunRecorder         # Writes a single run
             ├── StoreWriter    # Writes to store.zip (zstd-compressed)
             └── LogEncoder     # Writes to run.log.zst (zstd-compressed JSON lines)
@@ -140,16 +140,6 @@ TestEvent<'a>  →  TestEventSummary<ChildSingleOutput>  →  TestEventSummary<Z
 **Recommended approach**: Per-output size limit with configurable threshold. Simpler to implement and covers 99% of use cases.
 
 ### Phase 3: Storage management
-
-**Record store structure:**
-```
-<cache_dir>/nextest/records/
-├── records.json        # Index of all records with metadata
-├── records.lock        # File lock for concurrent access
-└── <run_id>/
-    ├── store.zip
-    └── run.log.zst
-```
 
 **Retention implementation:**
 ```rust
@@ -281,7 +271,7 @@ The retention policy uses true LRU (least recently used) eviction rather than LR
 
 Each run has a `last-written-at` timestamp (`DateTime<FixedOffset>`) that tracks when the run was last used in a way that caused a write. The retention policy in `compute_runs_to_delete()` sorts runs by this timestamp and uses it for age calculation.
 
-**Data model** (in `runs.json`):
+**Data model** (in `runs.json.zst`):
 ```json
 {
   "run-id": "...",

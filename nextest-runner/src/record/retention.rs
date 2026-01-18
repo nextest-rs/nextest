@@ -171,7 +171,7 @@ pub struct PruneResult {
     /// Number of orphaned directories that were deleted.
     ///
     /// Orphaned directories are run directories that exist on disk but are not
-    /// tracked in `runs.json`. This can happen if a process crashes or is killed
+    /// tracked in `runs.json.zst`. This can happen if a process crashes or is killed
     /// after creating a run directory but before recording completes.
     pub orphans_deleted: usize,
 
@@ -320,7 +320,7 @@ pub(crate) fn delete_runs(
     result
 }
 
-/// Deletes orphaned run directories that are not tracked in runs.json.
+/// Deletes orphaned run directories that are not tracked in runs.json.zst.
 ///
 /// An orphaned directory is one that exists on disk but whose UUID is not
 /// present in the `known_runs` set. This can happen if a process crashes

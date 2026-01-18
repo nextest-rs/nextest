@@ -15,17 +15,17 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, num::NonZero};
 
 // ---
-// runs.json format types
+// runs.json.zst format types
 // ---
 
-/// The current format version for runs.json.
+/// The current format version for runs.json.zst.
 ///
 /// Increment this when adding new semantically important fields. Readers can
 /// read newer versions (assuming append-only evolution with serde defaults),
 /// but writers must refuse to write if the file version is higher than this.
 pub(super) const RUNS_JSON_FORMAT_VERSION: u32 = 1;
 
-/// Whether a runs.json file can be written to.
+/// Whether a runs.json.zst file can be written to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunsJsonWritePermission {
     /// Writing is allowed.
@@ -39,7 +39,7 @@ pub enum RunsJsonWritePermission {
     },
 }
 
-/// The list of recorded runs (serialization format for runs.json).
+/// The list of recorded runs (serialization format for runs.json.zst).
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(super) struct RecordedRunList {
@@ -98,7 +98,7 @@ impl RecordedRunList {
         }
     }
 
-    /// Returns whether this runs.json can be written to by this nextest version.
+    /// Returns whether this runs.json.zst can be written to by this nextest version.
     ///
     /// If the file has a newer format version than we support, writing is denied
     /// to avoid data loss.
@@ -114,7 +114,7 @@ impl RecordedRunList {
     }
 }
 
-/// Metadata about a recorded run (serialization format for runs.json).
+/// Metadata about a recorded run (serialization format for runs.json.zst).
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(super) struct RecordedRun {
@@ -138,7 +138,7 @@ pub(super) struct RecordedRun {
     pub(super) cli_args: Vec<String>,
     /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
     ///
-    /// This has a default for deserializing old runs.json files that don't have this field.
+    /// This has a default for deserializing old runs.json.zst files that don't have this field.
     #[serde(default)]
     pub(super) env_vars: BTreeMap<String, String>,
     /// Sizes broken down by component (log and store).
@@ -149,7 +149,7 @@ pub(super) struct RecordedRun {
     pub(super) status: RecordedRunStatusFormat,
 }
 
-/// Sizes broken down by component (serialization format for runs.json).
+/// Sizes broken down by component (serialization format for runs.json.zst).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(super) struct RecordedSizesFormat {
@@ -254,7 +254,7 @@ pub(super) enum RecordedRunStatusFormat {
     },
     /// An unknown status from a newer version of nextest.
     ///
-    /// This variant is used for forward compatibility when reading runs.json
+    /// This variant is used for forward compatibility when reading runs.json.zst
     /// files created by newer nextest versions that may have new status types.
     #[serde(other)]
     Unknown,
@@ -525,7 +525,7 @@ mod tests {
 
     #[test]
     fn test_runs_json_missing_version() {
-        // runs.json without format-version should fail to deserialize.
+        // runs.json.zst without format-version should fail to deserialize.
         let json = r#"{"runs": []}"#;
         let result: Result<RecordedRunList, _> = serde_json::from_str(json);
         assert!(result.is_err(), "expected error for missing format-version");
@@ -533,7 +533,7 @@ mod tests {
 
     #[test]
     fn test_runs_json_current_version() {
-        // runs.json with current version should deserialize and allow writes.
+        // runs.json.zst with current version should deserialize and allow writes.
         let json = format!(
             r#"{{"format-version": {}, "runs": []}}"#,
             RUNS_JSON_FORMAT_VERSION
@@ -544,7 +544,7 @@ mod tests {
 
     #[test]
     fn test_runs_json_older_version() {
-        // runs.json with older version (if any existed) should allow writes.
+        // runs.json.zst with older version (if any existed) should allow writes.
         // Since we only have version 1, test version 0 if we supported it.
         // For now, this test just ensures version 1 allows writes.
         let json = r#"{"format-version": 1, "runs": []}"#;
@@ -554,7 +554,7 @@ mod tests {
 
     #[test]
     fn test_runs_json_newer_version() {
-        // runs.json with newer version should deserialize but deny writes.
+        // runs.json.zst with newer version should deserialize but deny writes.
         let json = r#"{"format-version": 99, "runs": []}"#;
         let list: RecordedRunList = serde_json::from_str(json).expect("should deserialize");
         assert_eq!(
@@ -568,12 +568,12 @@ mod tests {
 
     #[test]
     fn test_runs_json_serialization_includes_version() {
-        // Serialized runs.json should always include format-version.
+        // Serialized runs.json.zst should always include format-version.
         let list = RecordedRunList::from_data(&[], None);
         let json = serde_json::to_string(&list).expect("should serialize");
         assert!(
             json.contains("format-version"),
-            "serialized runs.json should include format-version"
+            "serialized runs.json.zst should include format-version"
         );
 
         // Verify it's the current version.

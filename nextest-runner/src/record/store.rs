@@ -6,7 +6,7 @@
 //! The run store is a directory that contains all recorded test runs. It provides:
 //!
 //! - A lock file for exclusive access during modifications.
-//! - A JSON file listing all recorded runs.
+//! - A zstd-compressed JSON file (`runs.json.zst`) listing all recorded runs.
 //! - Individual directories for each run containing the archive and log.
 
 use super::{
@@ -31,14 +31,14 @@ use semver::Version;
 use std::{
     collections::{BTreeMap, HashSet},
     fs::{File, TryLockError},
-    io::{self, Write},
+    io,
     num::NonZero,
     thread,
     time::{Duration, Instant},
 };
 
 static RUNS_LOCK_FILE_NAME: &str = "runs.lock";
-static RUNS_JSON_FILE_NAME: &str = "runs.json";
+static RUNS_JSON_FILE_NAME: &str = "runs.json.zst";
 
 /// A reference to the runs directory in a run store.
 ///
@@ -172,7 +172,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
         self.runs_dir
     }
 
-    /// Returns whether this nextest can write to the runs.json file.
+    /// Returns whether this nextest can write to the runs.json.zst file.
     ///
     /// If the file has a newer format version than we support, writing is denied.
     pub fn write_permission(&self) -> RunsJsonWritePermission {
@@ -249,7 +249,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
     /// This method:
     /// 1. Determines which runs to delete based on the policy
     /// 2. Deletes those run directories from disk
-    /// 3. Deletes any orphaned directories not tracked in runs.json
+    /// 3. Deletes any orphaned directories not tracked in runs.json.zst
     /// 4. Updates the run list in memory and on disk
     ///
     /// The `kind` parameter indicates whether this is explicit pruning (from a
@@ -478,7 +478,7 @@ pub enum RecordedRunStatus {
     StressCancelled(StressCompletedRunStats),
     /// An unknown status from a newer version of nextest.
     ///
-    /// This variant is used for forward compatibility when reading runs.json
+    /// This variant is used for forward compatibility when reading runs.json.zst
     /// files created by newer nextest versions that may have new status types.
     Unknown,
 }
@@ -605,52 +605,56 @@ impl RecordedRunInfo {
     }
 }
 
-/// Result of reading runs.json.
+/// Result of reading runs.json.zst.
 struct ReadRunsJsonResult {
     runs: Vec<RecordedRunInfo>,
     last_pruned_at: Option<DateTime<Utc>>,
     write_permission: RunsJsonWritePermission,
 }
 
-/// Reads and deserializes `runs.json`, converting to the internal
+/// Reads and deserializes `runs.json.zst`, converting to the internal
 /// representation.
 fn read_runs_json(runs_dir: &Utf8Path) -> Result<ReadRunsJsonResult, RunStoreError> {
     let runs_json_path = runs_dir.join(RUNS_JSON_FILE_NAME);
-    match std::fs::read_to_string(&runs_json_path) {
-        Ok(runs_json) => {
-            let list: RecordedRunList = serde_json::from_str(&runs_json).map_err(|error| {
-                RunStoreError::RunListDeserialize {
-                    path: runs_json_path,
-                    error,
-                }
-            })?;
-            let write_permission = list.write_permission();
-            let data = list.into_data();
-            Ok(ReadRunsJsonResult {
-                runs: data.runs,
-                last_pruned_at: data.last_pruned_at,
-                write_permission,
-            })
-        }
+    let file = match File::open(&runs_json_path) {
+        Ok(file) => file,
         Err(error) => {
             if error.kind() == io::ErrorKind::NotFound {
                 // The file doesn't exist yet, so we can write a new one.
-                Ok(ReadRunsJsonResult {
+                return Ok(ReadRunsJsonResult {
                     runs: Vec::new(),
                     last_pruned_at: None,
                     write_permission: RunsJsonWritePermission::Allowed,
-                })
+                });
             } else {
-                Err(RunStoreError::RunListRead {
+                return Err(RunStoreError::RunListRead {
                     path: runs_json_path,
                     error,
-                })
+                });
             }
         }
-    }
+    };
+
+    let decoder = zstd::stream::Decoder::new(file).map_err(|error| RunStoreError::RunListRead {
+        path: runs_json_path.clone(),
+        error,
+    })?;
+
+    let list: RecordedRunList =
+        serde_json::from_reader(decoder).map_err(|error| RunStoreError::RunListDeserialize {
+            path: runs_json_path,
+            error,
+        })?;
+    let write_permission = list.write_permission();
+    let data = list.into_data();
+    Ok(ReadRunsJsonResult {
+        runs: data.runs,
+        last_pruned_at: data.last_pruned_at,
+        write_permission,
+    })
 }
 
-/// Serializes and writes runs.json from internal representation.
+/// Serializes and writes runs.json.zst from internal representation.
 fn write_runs_json(
     runs_dir: &Utf8Path,
     runs: &[RecordedRunInfo],
@@ -658,14 +662,15 @@ fn write_runs_json(
 ) -> Result<(), RunStoreError> {
     let runs_json_path = runs_dir.join(RUNS_JSON_FILE_NAME);
     let list = RecordedRunList::from_data(runs, last_pruned_at);
-    let runs_json =
-        serde_json::to_string_pretty(&list).map_err(|error| RunStoreError::RunListSerialize {
-            path: runs_json_path.clone(),
-            error,
-        })?;
 
     atomicwrites::AtomicFile::new(&runs_json_path, atomicwrites::AllowOverwrite)
-        .write(|file| file.write_all(runs_json.as_bytes()))
+        .write(|file| {
+            // Use compression level 3, consistent with other zstd usage in the crate.
+            let mut encoder = zstd::stream::Encoder::new(file, 3)?;
+            serde_json::to_writer_pretty(&mut encoder, &list)?;
+            encoder.finish()?;
+            Ok(())
+        })
         .map_err(|error| RunStoreError::RunListWrite {
             path: runs_json_path,
             error,
@@ -716,7 +721,7 @@ impl RunStoreSnapshot {
         StoreRunsDir(&self.runs_dir)
     }
 
-    /// Returns whether this nextest can write to the runs.json file.
+    /// Returns whether this nextest can write to the runs.json.zst file.
     ///
     /// If the file has a newer format version than we support, writing is denied.
     pub fn write_permission(&self) -> RunsJsonWritePermission {

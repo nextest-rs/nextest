@@ -2121,9 +2121,9 @@ pub enum RunStoreError {
         error: std::io::Error,
     },
 
-    /// Cannot write to runs.json because it has a newer format version.
+    /// Cannot write to runs.json.zst because it has a newer format version.
     #[error(
-        "cannot write to record store: runs.json format version {file_version} is newer than \
+        "cannot write to record store: runs.json.zst format version {file_version} is newer than \
          supported version {max_supported_version}"
     )]
     FormatVersionTooNew {
@@ -2259,7 +2259,7 @@ impl RecordSetupError {
     /// If this error indicates that recording should be disabled (but the test
     /// run should continue), returns the underlying error.
     ///
-    /// This is the case when the runs.json file has a newer format version than
+    /// This is the case when the runs.json.zst file has a newer format version than
     /// this nextest supports. Recording is disabled to avoid data loss, but the
     /// test run can proceed normally.
     pub fn disabled_error(&self) -> Option<&(dyn std::error::Error + 'static)> {
