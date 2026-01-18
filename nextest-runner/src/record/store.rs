@@ -20,6 +20,7 @@ use super::{
 };
 use crate::{
     errors::{RunIdResolutionError, RunStoreError},
+    helpers::{u32_decimal_char_width, usize_decimal_char_width},
     redact::Redactor,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -551,8 +552,6 @@ impl RecordedRunStatus {
     /// For non-completed runs (Incomplete, Unknown), returns 0 since they don't
     /// display a passed count.
     pub fn passed_count_width(&self) -> usize {
-        use crate::helpers::usize_decimal_char_width;
-
         match self {
             Self::Incomplete | Self::Unknown => 0,
             Self::Completed(stats) | Self::Cancelled(stats) => {
@@ -560,7 +559,7 @@ impl RecordedRunStatus {
             }
             Self::StressCompleted(stats) | Self::StressCancelled(stats) => {
                 // Stress tests use u32, convert to usize for width calculation.
-                usize_decimal_char_width(stats.success_count as usize)
+                u32_decimal_char_width(stats.success_count)
             }
         }
     }
@@ -834,6 +833,22 @@ impl RunStoreSnapshot {
     /// that would be deleted, sorted by start time (oldest first).
     pub fn compute_prune_plan(&self, policy: &RecordRetentionPolicy) -> PrunePlan {
         PrunePlan::compute(&self.runs, policy)
+    }
+}
+
+#[cfg(test)]
+impl RunStoreSnapshot {
+    /// Creates a new snapshot for testing.
+    pub(crate) fn new_for_test(runs: Vec<RecordedRunInfo>) -> Self {
+        use super::run_id_index::RunIdIndex;
+
+        let run_id_index = RunIdIndex::new(&runs);
+        Self {
+            runs_dir: Utf8PathBuf::from("/test/runs"),
+            runs,
+            write_permission: RunsJsonWritePermission::Allowed,
+            run_id_index,
+        }
     }
 }
 

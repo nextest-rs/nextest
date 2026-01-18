@@ -483,6 +483,13 @@ pub(crate) fn u32_decimal_char_width(n: u32) -> usize {
     (n.checked_ilog10().unwrap_or(0) + 1).try_into().unwrap()
 }
 
+pub(crate) fn u64_decimal_char_width(n: u64) -> usize {
+    // checked_ilog10 returns 0 for 1-9, 1 for 10-99, 2 for 100-999, etc. (And
+    // None for 0 which we unwrap to the same as 1). Add 1 to it to get the
+    // actual number of digits.
+    (n.checked_ilog10().unwrap_or(0) + 1).try_into().unwrap()
+}
+
 /// Write out a test name.
 pub(crate) fn write_test_name(
     name: &TestCaseName,
@@ -846,5 +853,20 @@ mod test {
         assert_eq!(2, usize_decimal_char_width(99));
         assert_eq!(3, usize_decimal_char_width(100));
         assert_eq!(3, usize_decimal_char_width(999));
+    }
+
+    #[test]
+    fn test_u64_decimal_char_width() {
+        assert_eq!(1, u64_decimal_char_width(0));
+        assert_eq!(1, u64_decimal_char_width(1));
+        assert_eq!(1, u64_decimal_char_width(9));
+        assert_eq!(2, u64_decimal_char_width(10));
+        assert_eq!(2, u64_decimal_char_width(99));
+        assert_eq!(3, u64_decimal_char_width(100));
+        assert_eq!(3, u64_decimal_char_width(999));
+        assert_eq!(6, u64_decimal_char_width(999_999));
+        assert_eq!(7, u64_decimal_char_width(1_000_000));
+        assert_eq!(8, u64_decimal_char_width(10_000_000));
+        assert_eq!(8, u64_decimal_char_width(11_000_000));
     }
 }

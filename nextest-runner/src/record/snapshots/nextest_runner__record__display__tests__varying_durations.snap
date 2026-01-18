@@ -1,0 +1,14 @@
+---
+source: nextest-runner/src/record/display.rs
+expression: "DisplayRunList::new(&snapshot, None, &Styles::default(), &theme_characters,\n&Redactor::noop()).to_string()"
+snapshot_kind: text
+---
+5 recorded runs:
+
+  550e8400  2024-06-15 10:00:00      0.123s      50 KB   5 passed
+  550e8400  2024-06-16 11:00:00      9.876s      75 KB  10 passed
+  550e8400  2024-06-17 12:00:00     42.500s     100 KB  20 passed
+  550e8400  2024-06-18 13:00:00    987.654s     125 KB  28 passed / 2 failed
+  550e8400  2024-06-19 14:00:00  12345.678s     150 KB  50 passed  *latest
+                                             ---------
+                                                500 KB

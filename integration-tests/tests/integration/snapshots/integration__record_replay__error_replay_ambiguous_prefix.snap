@@ -4,5 +4,5 @@ expression: "redact_dynamic_fields(&replay_ambiguous.stderr_as_str(), temp_root)
 snapshot_kind: text
 ---
 error: prefix `a` is ambiguous, matches 2 runs:
-  aaaa0002  XXXX-XX-XX XX:XX:XX  <duration>  <size> KB  1 passed
-  aaaa0001  XXXX-XX-XX XX:XX:XX  <duration>  <size> KB  1 passed
+  aaaa0002  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed
+  aaaa0001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed

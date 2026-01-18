@@ -42,7 +42,7 @@ pub(crate) mod test_helpers;
 pub use cache_dir::{NEXTEST_CACHE_DIR_ENV, records_cache_dir};
 pub use display::{
     DisplayPrunePlan, DisplayPruneResult, DisplayRecordedRunInfo, DisplayRunList, RunListAlignment,
-    Styles, format_size_display,
+    Styles,
 };
 pub use format::RunsJsonWritePermission;
 pub use reader::{RecordEventIter, RecordReader};
