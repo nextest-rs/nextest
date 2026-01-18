@@ -18,7 +18,7 @@ Nextest supports recording test runs to replay them later. Recorded runs are sto
 Recorded test runs capture:
 
 * Test statuses (pass, fail, etc) and durations.
-* Outputs for all tests, both failing and successful. (If `--no-capture` is passed in, test output cannot be captured)
+* Outputs for all tests, both failing and successful. (If `--no-capture` is passed in at the time the run is recorded, test output cannot be captured.)
 
 ## Use cases
 
