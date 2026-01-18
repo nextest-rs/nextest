@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.13.1] - 2026-01-18
+
+### Added
+
+- New `proptest1` feature enables `proptest` `Arbitrary` implementations for `RustBinaryId` and `MismatchReason`.
+
 ## [0.13.0] - 2026-01-01
 
 ### Changed
@@ -269,6 +275,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.13.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.1
 [0.13.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.0
 [0.12.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.12.3
 [0.12.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.12.2

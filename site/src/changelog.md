@@ -9,6 +9,48 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.123-b.1] - 2026-01-18
+
+### Added
+
+- Major new feature: experimental support for [recording and replaying test runs](https://nexte.st/docs/features/record-replay/). Enable by adding `record = true` to the `[experimental]` section in [user config](https://nexte.st/docs/user-config/), or by setting `NEXTEST_EXPERIMENTAL_RECORD=1`.
+
+  Once enabled, recording can be turned on by adding `enabled = true` to the `[record]` section in user config. Recorded runs are stored in the system cache directory.
+
+  New commands:
+
+  - `cargo nextest replay`: Replay a test run (by default, the latest completed run).
+  - `cargo nextest store list`: List all recorded runs.
+  - `cargo nextest store info`: Show details about a specific run.
+  - `cargo nextest store prune`: Prune old recorded runs.
+
+- A new `--user-config-file` option (environment variable `NEXTEST_USER_CONFIG_FILE`) allows explicit control over user configuration loading. Pass a path to a specific config file, or `none` to skip user config entirely.
+
+### Changed
+
+- The `experimental` section in [repository config](https://nexte.st/docs/configuration/reference/#experimental) can now also be a table, not just an array. The previous array syntax is deprecated but still supported. For example:
+
+  ```toml
+  # New style (recommended).
+  [experimental]
+  benchmarks = true
+
+  # Old style (deprecated)
+  experimental = ["benchmarks"]
+  ```
+
+  Note that user configuration's `experimental` is always a table. The array syntax is not supported in that case.
+
+  This change enables upcoming config set support over the command line.
+
+- When a config file specifies both a future `nextest-version` and an unknown experimental feature, the version error now takes precedence. This produces clearer error messages for users running older nextest versions.
+
+### Fixed
+
+- Fixed another panic with `on-timeout = "pass"` in a different code path than the 0.9.117 fix. Thanks [gakonst](https://github.com/gakonst) for your first contribution! ([#2940])
+
+[#2940]: https://github.com/nextest-rs/nextest/pull/2940
+
 ## [0.9.122] - 2026-01-14
 
 ### Added
@@ -1827,6 +1869,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.123-b.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.123-b.1
 [0.9.122]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.122
 [0.9.121]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.121
 [0.9.120]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.120
