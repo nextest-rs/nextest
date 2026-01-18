@@ -11,7 +11,10 @@
 
 use super::{
     display::{DisplayRecordedRunInfo, DisplayRecordedRunInfoDetailed, RunListAlignment, Styles},
-    format::{RECORD_FORMAT_VERSION, RecordedRunList, RunsJsonWritePermission},
+    format::{
+        RECORD_FORMAT_VERSION, RUN_LOG_FILE_NAME, RecordedRunList, RunsJsonWritePermission,
+        STORE_ZIP_FILE_NAME,
+    },
     recorder::{RunRecorder, StoreSizes},
     retention::{
         PruneKind, PrunePlan, PruneResult, RecordRetentionPolicy, delete_orphaned_dirs, delete_runs,
@@ -29,7 +32,8 @@ use debug_ignore::DebugIgnore;
 use quick_junit::ReportUuid;
 use semver::Version;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
+    fmt,
     fs::{File, TryLockError},
     io,
     num::NonZero,
@@ -500,20 +504,6 @@ impl RecordedRunStatus {
             Self::StressCancelled(_) => "stress cancelled",
         }
     }
-
-    /// Returns true if this run can be replayed.
-    ///
-    /// Incomplete runs may have an incomplete archive and cannot be replayed.
-    /// Unknown status runs are treated as not replayable for safety.
-    pub fn is_replayable(&self) -> bool {
-        match self {
-            Self::Incomplete | Self::Unknown => false,
-            Self::Completed(_)
-            | Self::Cancelled(_)
-            | Self::StressCompleted(_)
-            | Self::StressCancelled(_) => true,
-        }
-    }
 }
 
 /// Statistics for a normal test run that finished (completed or cancelled).
@@ -541,14 +531,83 @@ pub struct StressCompletedRunStats {
     pub failed_count: u32,
 }
 
+// ---
+// Replayability checking
+// ---
+
+/// The result of checking whether a run can be replayed.
+#[derive(Clone, Debug)]
+pub enum ReplayabilityStatus {
+    /// The run is definitely replayable.
+    ///
+    /// No blocking reasons and no uncertain conditions.
+    Replayable,
+    /// The run is definitely not replayable.
+    ///
+    /// Contains at least one blocking reason.
+    NotReplayable(Vec<NonReplayableReason>),
+    /// The run might be replayable but is incomplete.
+    ///
+    /// The archive might be usable, but we'd need to open `store.zip` to
+    /// verify all expected files are present.
+    Incomplete,
+}
+
+/// A definite reason why a run cannot be replayed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NonReplayableReason {
+    /// The run's store format version is newer than this nextest supports.
+    ///
+    /// This nextest version cannot read the archive format.
+    StoreFormatTooNew {
+        /// The format version in the run's archive.
+        run_version: u32,
+        /// The maximum format version this nextest supports.
+        max_supported: u32,
+    },
+    /// The `store.zip` file is missing from the run directory.
+    MissingStoreZip,
+    /// The `run.log.zst` file is missing from the run directory.
+    MissingRunLog,
+    /// The run status is `Unknown` (from a newer nextest version).
+    ///
+    /// We cannot safely replay since we don't understand the run's state.
+    StatusUnknown,
+}
+
+impl fmt::Display for NonReplayableReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::StoreFormatTooNew {
+                run_version,
+                max_supported,
+            } => {
+                write!(
+                    f,
+                    "store format version {} is newer than supported (version {})",
+                    run_version, max_supported
+                )
+            }
+            Self::MissingStoreZip => {
+                write!(f, "store.zip is missing")
+            }
+            Self::MissingRunLog => {
+                write!(f, "run.log.zst is missing")
+            }
+            Self::StatusUnknown => {
+                write!(f, "run status is unknown (from a newer nextest version)")
+            }
+        }
+    }
+}
+
 /// Result of looking up the most recent replayable run.
 #[derive(Clone, Copy, Debug)]
 pub struct ResolveRunIdResult {
     /// The run ID of the most recent replayable run.
     pub run_id: ReportUuid,
-    /// The number of newer runs that are not replayable (incomplete or unknown
-    /// status).
-    pub newer_incomplete_count: usize,
+    /// The number of newer runs that are not replayable.
+    pub newer_non_replayable_count: usize,
 }
 
 impl RecordedRunStatus {
@@ -571,6 +630,67 @@ impl RecordedRunStatus {
 }
 
 impl RecordedRunInfo {
+    /// Checks whether this run can be replayed.
+    ///
+    /// This performs a comprehensive check of all conditions that might prevent
+    /// replay, including:
+    /// - Store format version compatibility
+    /// - Presence of required files (store.zip, run.log.zst)
+    /// - Run status (unknown, incomplete)
+    ///
+    /// The `runs_dir` parameter is used to check for file existence on disk.
+    pub fn check_replayability(&self, runs_dir: StoreRunsDir<'_>) -> ReplayabilityStatus {
+        let mut blocking = Vec::new();
+        let mut is_incomplete = false;
+
+        // Check store format version.
+        if self.store_format_version > RECORD_FORMAT_VERSION {
+            blocking.push(NonReplayableReason::StoreFormatTooNew {
+                run_version: self.store_format_version,
+                max_supported: RECORD_FORMAT_VERSION,
+            });
+        }
+        // Note: When we bump format versions, add a similar StoreFormatTooOld
+        // check here.
+
+        // Check for required files on disk.
+        let run_dir = runs_dir.run_dir(self.run_id);
+        let store_zip_path = run_dir.join(STORE_ZIP_FILE_NAME);
+        let run_log_path = run_dir.join(RUN_LOG_FILE_NAME);
+
+        if !store_zip_path.exists() {
+            blocking.push(NonReplayableReason::MissingStoreZip);
+        }
+        if !run_log_path.exists() {
+            blocking.push(NonReplayableReason::MissingRunLog);
+        }
+
+        // Check run status.
+        match &self.status {
+            RecordedRunStatus::Unknown => {
+                blocking.push(NonReplayableReason::StatusUnknown);
+            }
+            RecordedRunStatus::Incomplete => {
+                is_incomplete = true;
+            }
+            RecordedRunStatus::Completed(_)
+            | RecordedRunStatus::Cancelled(_)
+            | RecordedRunStatus::StressCompleted(_)
+            | RecordedRunStatus::StressCancelled(_) => {
+                // These statuses are fine for replay.
+            }
+        }
+
+        // Return the appropriate variant based on what we found.
+        if !blocking.is_empty() {
+            ReplayabilityStatus::NotReplayable(blocking)
+        } else if is_incomplete {
+            ReplayabilityStatus::Incomplete
+        } else {
+            ReplayabilityStatus::Replayable
+        }
+    }
+
     /// Returns a display wrapper for this run.
     ///
     /// The `run_id_index` is used for computing shortest unique prefixes,
@@ -585,11 +705,19 @@ impl RecordedRunInfo {
     pub fn display<'a>(
         &'a self,
         run_id_index: &'a RunIdIndex,
+        replayability: &'a ReplayabilityStatus,
         alignment: RunListAlignment,
         styles: &'a Styles,
         redactor: &'a Redactor,
     ) -> DisplayRecordedRunInfo<'a> {
-        DisplayRecordedRunInfo::new(self, run_id_index, alignment, styles, redactor)
+        DisplayRecordedRunInfo::new(
+            self,
+            run_id_index,
+            replayability,
+            alignment,
+            styles,
+            redactor,
+        )
     }
 
     /// Returns a detailed display wrapper for this run.
@@ -597,16 +725,27 @@ impl RecordedRunInfo {
     /// Unlike [`Self::display`] which shows a compact table row, this provides
     /// a multi-line detailed view suitable for the `store info` command.
     ///
+    /// The `replayability` parameter should be computed by the caller using
+    /// [`Self::check_replayability`].
+    ///
     /// The `redactor` parameter redacts paths, timestamps, durations, and sizes
     /// for snapshot testing. Use `Redactor::noop()` if no redaction is needed.
     pub fn display_detailed<'a>(
         &'a self,
         run_id_index: &'a RunIdIndex,
+        replayability: &'a ReplayabilityStatus,
         styles: &'a Styles,
         theme_characters: &'a ThemeCharacters,
         redactor: &'a Redactor,
     ) -> DisplayRecordedRunInfoDetailed<'a> {
-        DisplayRecordedRunInfoDetailed::new(self, run_id_index, styles, theme_characters, redactor)
+        DisplayRecordedRunInfoDetailed::new(
+            self,
+            run_id_index,
+            replayability,
+            styles,
+            theme_characters,
+            redactor,
+        )
     }
 }
 
@@ -767,12 +906,12 @@ impl RunStoreSnapshot {
         selector: &RunIdSelector,
     ) -> Result<ResolveRunIdResult, RunIdResolutionError> {
         match selector {
-            RunIdSelector::Latest => self.most_recent_run(),
+            RunIdSelector::Latest => self.most_recent_run(None),
             RunIdSelector::Prefix(prefix) => {
                 let run_id = self.resolve_run_id_prefix(prefix)?;
                 Ok(ResolveRunIdResult {
                     run_id,
-                    newer_incomplete_count: 0,
+                    newer_non_replayable_count: 0,
                 })
             }
         }
@@ -822,12 +961,19 @@ impl RunStoreSnapshot {
 
     /// Returns the most recent replayable run.
     ///
-    /// If there are newer runs that are not replayable (incomplete or unknown
-    /// status), those are counted and returned in the result.
+    /// The first run (by start time, most recent first) that is definitely
+    /// replayable is returned. Replayability is checked via
+    /// [`RecordedRunInfo::check_replayability`].
+    ///
+    /// If there are newer runs that are not replayable, those are counted and
+    /// returned in the result.
     ///
     /// Returns an error if there are no runs at all, or if there are runs but
     /// none are replayable.
-    pub fn most_recent_run(&self) -> Result<ResolveRunIdResult, RunIdResolutionError> {
+    pub fn most_recent_run(
+        &self,
+        replayability: Option<&HashMap<ReportUuid, ReplayabilityStatus>>,
+    ) -> Result<ResolveRunIdResult, RunIdResolutionError> {
         if self.runs.is_empty() {
             return Err(RunIdResolutionError::NoRuns);
         }
@@ -836,20 +982,39 @@ impl RunStoreSnapshot {
         let mut sorted_runs: Vec<_> = self.runs.iter().collect();
         sorted_runs.sort_by(|a, b| b.started_at.cmp(&a.started_at));
 
-        // Find the first replayable run and count non-replayable runs before it.
-        let mut newer_incomplete_count = 0;
+        // Find the first replayable run and count non-replayable runs before
+        // it.
+        let runs_dir = self.runs_dir();
+        let mut newer_non_replayable_count = 0;
         for run in sorted_runs {
-            if run.status.is_replayable() {
+            let is_replayable = match replayability {
+                Some(replayability) => {
+                    // If the replayability index is provided, use it.
+                    let replayability = replayability.get(&run.run_id).unwrap_or_else(|| {
+                        panic!("replayability index should have run ID {}", run.run_id)
+                    });
+                    matches!(replayability, &ReplayabilityStatus::Replayable)
+                }
+                None => {
+                    // If the replayability index is not provided, then we do
+                    // I/O to check replayability.
+                    matches!(
+                        run.check_replayability(runs_dir),
+                        ReplayabilityStatus::Replayable
+                    )
+                }
+            };
+            if is_replayable {
                 return Ok(ResolveRunIdResult {
                     run_id: run.run_id,
-                    newer_incomplete_count,
+                    newer_non_replayable_count,
                 });
             }
-            newer_incomplete_count += 1;
+            newer_non_replayable_count += 1;
         }
 
-        Err(RunIdResolutionError::NoCompletedRuns {
-            incomplete_count: newer_incomplete_count,
+        Err(RunIdResolutionError::NoReplayableRuns {
+            non_replayable_count: newer_non_replayable_count,
         })
     }
 
@@ -860,6 +1025,99 @@ impl RunStoreSnapshot {
     /// that would be deleted, sorted by start time (oldest first).
     pub fn compute_prune_plan(&self, policy: &RecordRetentionPolicy) -> PrunePlan {
         PrunePlan::compute(&self.runs, policy)
+    }
+}
+
+/// A snapshot paired with precomputed replayability status for all runs.
+///
+/// This struct maintains the invariant that every run in the snapshot has a
+/// corresponding entry in the replayability map. Use [`Self::new`] to compute
+/// replayability for all runs, or `Self::new_for_test` for testing.
+#[derive(Debug)]
+pub struct SnapshotWithReplayability<'a> {
+    snapshot: &'a RunStoreSnapshot,
+    replayability: HashMap<ReportUuid, ReplayabilityStatus>,
+    latest_run_id: Option<ReportUuid>,
+}
+
+impl<'a> SnapshotWithReplayability<'a> {
+    /// Creates a new snapshot with replayability by checking all runs.
+    ///
+    /// This computes [`ReplayabilityStatus`] for each run by checking file
+    /// existence and format versions.
+    pub fn new(snapshot: &'a RunStoreSnapshot) -> Self {
+        let runs_dir = snapshot.runs_dir();
+        let replayability: HashMap<_, _> = snapshot
+            .runs()
+            .iter()
+            .map(|run| (run.run_id, run.check_replayability(runs_dir)))
+            .collect();
+
+        // Find the latest replayable run.
+        let latest_run_id = snapshot
+            .most_recent_run(Some(&replayability))
+            .ok()
+            .map(|r| r.run_id);
+
+        Self {
+            snapshot,
+            replayability,
+            latest_run_id,
+        }
+    }
+
+    /// Returns a reference to the underlying snapshot.
+    pub fn snapshot(&self) -> &'a RunStoreSnapshot {
+        self.snapshot
+    }
+
+    /// Returns the replayability map.
+    pub fn replayability(&self) -> &HashMap<ReportUuid, ReplayabilityStatus> {
+        &self.replayability
+    }
+
+    /// Returns the replayability status for a specific run.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the run ID is not in the snapshot. This maintains the
+    /// invariant that all runs in the snapshot have replayability computed.
+    pub fn get_replayability(&self, run_id: ReportUuid) -> &ReplayabilityStatus {
+        self.replayability
+            .get(&run_id)
+            .expect("run ID should be in replayability map")
+    }
+
+    /// Returns the ID of the most recent replayable run, if any.
+    pub fn latest_run_id(&self) -> Option<ReportUuid> {
+        self.latest_run_id
+    }
+}
+
+#[cfg(test)]
+impl SnapshotWithReplayability<'_> {
+    /// Creates a snapshot with replayability for testing.
+    ///
+    /// All runs are marked as [`ReplayabilityStatus::Replayable`] by default.
+    pub fn new_for_test(snapshot: &RunStoreSnapshot) -> SnapshotWithReplayability<'_> {
+        let replayability: HashMap<_, _> = snapshot
+            .runs()
+            .iter()
+            .map(|run| (run.run_id, ReplayabilityStatus::Replayable))
+            .collect();
+
+        // For tests, latest is just the most recent by time.
+        let latest_run_id = snapshot
+            .runs()
+            .iter()
+            .max_by_key(|r| r.started_at)
+            .map(|r| r.run_id);
+
+        SnapshotWithReplayability {
+            snapshot,
+            replayability,
+            latest_run_id,
+        }
     }
 }
 

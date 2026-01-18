@@ -1,0 +1,11 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+assertion_line: 1341
+expression: "redact_dynamic_fields(&list_str, temp_root)"
+---
+2 recorded runs:
+
+  83000002  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed  (not replayable)
+  83000001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed  (not replayable)
+                                             ─────────
+                                                <size>

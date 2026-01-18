@@ -1090,3 +1090,270 @@ fn test_run_id_prefix_resolution() {
         redact_dynamic_fields(&replay_not_found.stderr_as_str(), temp_root)
     );
 }
+
+/// Replayability: missing store.zip.
+///
+/// Coverage: When store.zip is deleted, the run is not replayable. `store info`
+/// shows the reason, `store list` does not mark it as `*latest`.
+#[test]
+fn test_replayability_missing_store_zip() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const RUN_ID: &str = "80000001-0000-0000-0000-000000000001";
+
+    // Create a recording.
+    let recording = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
+        .args(["run", "-E", "test(=test_success)"])
+        .output();
+    assert!(
+        recording.exit_status.success(),
+        "recording should succeed: {recording}"
+    );
+
+    // Find and delete store.zip.
+    let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
+    let run_dir = runs_dir.join(RUN_ID);
+    let store_zip = run_dir.join("store.zip");
+    assert!(store_zip.exists(), "store.zip should exist before deletion");
+    fs::remove_file(&store_zip).expect("deleted store.zip");
+
+    // Verify store info shows the run is not replayable due to missing store.zip.
+    let info_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info", "--run-id", RUN_ID])
+        .output();
+    assert!(
+        info_output.exit_status.success(),
+        "store info should succeed: {info_output}"
+    );
+    let info_str = info_output.stdout_as_str();
+    assert!(
+        info_str.contains("store.zip is missing"),
+        "store info should mention missing store.zip: {info_str}"
+    );
+    insta::assert_snapshot!(
+        "store_info_missing_store_zip",
+        redact_dynamic_fields(&info_str, temp_root)
+    );
+
+    // Verify store list does not show `*latest` marker (since the only run is
+    // not replayable).
+    let list_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "list"])
+        .output();
+    assert!(list_output.exit_status.success());
+    let list_str = list_output.stdout_as_str();
+    assert!(
+        !list_str.contains("*latest"),
+        "store list should not show *latest for non-replayable run: {list_str}"
+    );
+    insta::assert_snapshot!("store_list_no_replayable_runs_store_zip", list_str);
+
+    // Verify replay fails with appropriate error.
+    let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["replay"])
+        .unchecked(true)
+        .output();
+    assert!(
+        !replay_output.exit_status.success(),
+        "replay should fail when no replayable runs exist"
+    );
+    insta::assert_snapshot!(
+        "error_replay_no_replayable_runs_store_zip",
+        redact_dynamic_fields(&replay_output.stderr_as_str(), temp_root)
+    );
+}
+
+/// Replayability: missing run.log.zst.
+///
+/// Coverage: When run.log.zst is deleted, the run is not replayable.
+#[test]
+fn test_replayability_missing_run_log() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const RUN_ID: &str = "81000001-0000-0000-0000-000000000001";
+
+    // Create a recording.
+    let recording = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
+        .args(["run", "-E", "test(=test_success)"])
+        .output();
+    assert!(
+        recording.exit_status.success(),
+        "recording should succeed: {recording}"
+    );
+
+    // Find and delete run.log.zst.
+    let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
+    let run_dir = runs_dir.join(RUN_ID);
+    let run_log = run_dir.join("run.log.zst");
+    assert!(run_log.exists(), "run.log.zst should exist before deletion");
+    fs::remove_file(&run_log).expect("deleted run.log.zst");
+
+    // Verify store info shows the run is not replayable due to missing run.log.zst.
+    let info_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info", "--run-id", RUN_ID])
+        .output();
+    assert!(
+        info_output.exit_status.success(),
+        "store info should succeed: {info_output}"
+    );
+    let info_str = info_output.stdout_as_str();
+    assert!(
+        info_str.contains("run.log.zst is missing"),
+        "store info should mention missing run.log.zst: {info_str}"
+    );
+    insta::assert_snapshot!(
+        "store_info_missing_run_log",
+        redact_dynamic_fields(&info_str, temp_root)
+    );
+}
+
+/// Replayability: `*latest` marker with mixed replayability.
+///
+/// Coverage: When the most recent run is not replayable, `*latest` should
+/// appear on the most recent replayable run instead.
+#[test]
+fn test_replayability_latest_marker_skips_non_replayable() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    // Create two runs. Run 1 is older, run 2 is newer.
+    const RUN_ID_1: &str = "82000001-0000-0000-0000-000000000001";
+    const RUN_ID_2: &str = "82000002-0000-0000-0000-000000000002";
+
+    for run_id in [RUN_ID_1, RUN_ID_2] {
+        let recording =
+            cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(run_id))
+                .args(["run", "-E", "test(=test_success)"])
+                .output();
+        assert!(
+            recording.exit_status.success(),
+            "recording {run_id} should succeed: {recording}"
+        );
+    }
+
+    // Verify store list shows run 2 as `*latest` initially.
+    let list_before = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "list"])
+        .output();
+    assert!(list_before.exit_status.success());
+    let list_str_before = list_before.stdout_as_str();
+    // The `*latest` marker should appear on the same line as run 2's short ID.
+    assert!(
+        list_str_before.contains("82000002") && list_str_before.contains("*latest"),
+        "initially run 2 should be marked as *latest: {list_str_before}"
+    );
+
+    // Delete store.zip from run 2 (the newer one).
+    let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
+    let run_2_store_zip = runs_dir.join(RUN_ID_2).join("store.zip");
+    fs::remove_file(&run_2_store_zip).expect("deleted store.zip from run 2");
+
+    // Verify store list now shows run 1 as `*latest`.
+    let list_after = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "list"])
+        .output();
+    assert!(list_after.exit_status.success());
+    let list_str_after = list_after.stdout_as_str();
+    insta::assert_snapshot!(
+        "store_list_latest_skips_non_replayable",
+        redact_dynamic_fields(&list_str_after, temp_root)
+    );
+
+    // Check that the line with `*latest` contains run 1's ID, not run 2's.
+    for line in list_str_after.lines() {
+        if line.contains("*latest") {
+            assert!(
+                line.contains("82000001"),
+                "*latest should be on run 1's line, not run 2's: {line}"
+            );
+            assert!(
+                !line.contains("82000002"),
+                "*latest should not be on run 2's line: {line}"
+            );
+        }
+    }
+
+    // Verify replay uses run 1 (the replayable one) by default.
+    let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["replay"])
+        .output();
+    assert!(
+        replay_output.exit_status.success(),
+        "replay should succeed using run 1: {replay_output}"
+    );
+}
+
+/// Replayability: all runs non-replayable.
+///
+/// Coverage: When all runs are non-replayable, `store list` shows no `*latest`
+/// marker and `replay` (without explicit run ID) fails with appropriate error.
+#[test]
+fn test_replayability_all_runs_non_replayable() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    // Create two runs.
+    const RUN_ID_1: &str = "83000001-0000-0000-0000-000000000001";
+    const RUN_ID_2: &str = "83000002-0000-0000-0000-000000000002";
+
+    for run_id in [RUN_ID_1, RUN_ID_2] {
+        let recording =
+            cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(run_id))
+                .args(["run", "-E", "test(=test_success)"])
+                .output();
+        assert!(
+            recording.exit_status.success(),
+            "recording {run_id} should succeed: {recording}"
+        );
+    }
+
+    // Delete store.zip from both runs.
+    let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
+    for run_id in [RUN_ID_1, RUN_ID_2] {
+        let store_zip = runs_dir.join(run_id).join("store.zip");
+        fs::remove_file(&store_zip).expect("deleted store.zip");
+    }
+
+    // Verify store list shows no `*latest` marker.
+    let list_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "list"])
+        .output();
+    assert!(list_output.exit_status.success());
+    let list_str = list_output.stdout_as_str();
+    assert!(
+        !list_str.contains("*latest"),
+        "store list should not show *latest when all runs are non-replayable: {list_str}"
+    );
+    insta::assert_snapshot!(
+        "store_list_all_non_replayable",
+        redact_dynamic_fields(&list_str, temp_root)
+    );
+
+    // Verify replay fails with appropriate error message.
+    let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["replay"])
+        .unchecked(true)
+        .output();
+    assert!(
+        !replay_output.exit_status.success(),
+        "replay should fail when all runs are non-replayable"
+    );
+    insta::assert_snapshot!(
+        "error_replay_all_non_replayable",
+        redact_dynamic_fields(&replay_output.stderr_as_str(), temp_root)
+    );
+}

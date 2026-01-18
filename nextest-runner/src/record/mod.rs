@@ -57,9 +57,10 @@ pub use session::{
     RecordSessionSetup,
 };
 pub use store::{
-    CompletedRunStats, ComponentSizes, ExclusiveLockedRunStore, RecordedRunInfo, RecordedRunStatus,
-    RecordedSizes, ResolveRunIdResult, RunStore, RunStoreSnapshot, SharedLockedRunStore,
-    StoreRunsDir, StressCompletedRunStats,
+    CompletedRunStats, ComponentSizes, ExclusiveLockedRunStore, NonReplayableReason,
+    RecordedRunInfo, RecordedRunStatus, RecordedSizes, ReplayabilityStatus, ResolveRunIdResult,
+    RunStore, RunStoreSnapshot, SharedLockedRunStore, SnapshotWithReplayability, StoreRunsDir,
+    StressCompletedRunStats,
 };
 pub use summary::{
     CoreEventKind, NoTestsBehavior, OutputEventKind, OutputFileName, RecordOpts,

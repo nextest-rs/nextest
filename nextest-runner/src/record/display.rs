@@ -7,9 +7,10 @@
 //! information, prune operations, and run lists.
 
 use super::{
-    PruneKind, PrunePlan, PruneResult, RecordedRunInfo, RecordedRunStatus, RunStoreSnapshot,
+    PruneKind, PrunePlan, PruneResult, RecordedRunInfo, RecordedRunStatus,
+    SnapshotWithReplayability,
     run_id_index::RunIdIndex,
-    store::{CompletedRunStats, StressCompletedRunStats},
+    store::{CompletedRunStats, ReplayabilityStatus, StressCompletedRunStats},
 };
 use crate::{
     helpers::{ThemeCharacters, plural},
@@ -242,11 +243,19 @@ impl fmt::Display for DisplayPrunePlan<'_> {
             )?;
 
             let alignment = RunListAlignment::from_runs(plan.runs());
+            // For prune display, we don't show replayability status.
+            let replayable = ReplayabilityStatus::Replayable;
             for run in plan.runs() {
                 writeln!(
                     f,
                     "{}",
-                    run.display(self.run_id_index, alignment, self.styles, self.redactor)
+                    run.display(
+                        self.run_id_index,
+                        &replayable,
+                        alignment,
+                        self.styles,
+                        self.redactor
+                    )
                 )?;
             }
             Ok(())
@@ -259,6 +268,7 @@ impl fmt::Display for DisplayPrunePlan<'_> {
 pub struct DisplayRecordedRunInfo<'a> {
     run: &'a RecordedRunInfo,
     run_id_index: &'a RunIdIndex,
+    replayability: &'a ReplayabilityStatus,
     alignment: RunListAlignment,
     styles: &'a Styles,
     redactor: &'a Redactor,
@@ -268,6 +278,7 @@ impl<'a> DisplayRecordedRunInfo<'a> {
     pub(super) fn new(
         run: &'a RecordedRunInfo,
         run_id_index: &'a RunIdIndex,
+        replayability: &'a ReplayabilityStatus,
         alignment: RunListAlignment,
         styles: &'a Styles,
         redactor: &'a Redactor,
@@ -275,6 +286,7 @@ impl<'a> DisplayRecordedRunInfo<'a> {
         Self {
             run,
             run_id_index,
+            replayability,
             alignment,
             styles,
             redactor,
@@ -320,7 +332,20 @@ impl fmt::Display for DisplayRecordedRunInfo<'_> {
             size_display.style(self.styles.size),
             status_display,
             width = self.alignment.size_width,
-        )
+        )?;
+
+        // Show replayability status if not replayable.
+        match self.replayability {
+            ReplayabilityStatus::Replayable => {}
+            ReplayabilityStatus::NotReplayable(_) => {
+                write!(f, "  ({})", "not replayable".style(self.styles.failed))?;
+            }
+            ReplayabilityStatus::Incomplete => {
+                write!(f, "  ({})", "incomplete".style(self.styles.cancelled))?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -460,6 +485,7 @@ impl DisplayRecordedRunInfo<'_> {
 pub struct DisplayRecordedRunInfoDetailed<'a> {
     run: &'a RecordedRunInfo,
     run_id_index: &'a RunIdIndex,
+    replayability: &'a ReplayabilityStatus,
     styles: &'a Styles,
     theme_characters: &'a ThemeCharacters,
     redactor: &'a Redactor,
@@ -469,6 +495,7 @@ impl<'a> DisplayRecordedRunInfoDetailed<'a> {
     pub(super) fn new(
         run: &'a RecordedRunInfo,
         run_id_index: &'a RunIdIndex,
+        replayability: &'a ReplayabilityStatus,
         styles: &'a Styles,
         theme_characters: &'a ThemeCharacters,
         redactor: &'a Redactor,
@@ -476,6 +503,7 @@ impl<'a> DisplayRecordedRunInfoDetailed<'a> {
         Self {
             run,
             run_id_index,
+            replayability,
             styles,
             theme_characters,
             redactor,
@@ -513,14 +541,36 @@ impl<'a> DisplayRecordedRunInfoDetailed<'a> {
         )
     }
 
-    /// Writes the replayable field with yes/no styling.
+    /// Writes the replayable field with yes/no/maybe styling and reasons.
     fn write_replayable(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (value, style) = if self.run.status.is_replayable() {
-            ("yes", self.styles.passed)
-        } else {
-            ("no", self.styles.failed)
-        };
-        self.write_field(f, "replayable", value.style(style))
+        match self.replayability {
+            ReplayabilityStatus::Replayable => {
+                self.write_field(f, "replayable", "yes".style(self.styles.passed))
+            }
+            ReplayabilityStatus::NotReplayable(reasons) => {
+                let mut reasons_str = String::new();
+                for reason in reasons {
+                    if !reasons_str.is_empty() {
+                        swrite!(reasons_str, ", {reason}");
+                    } else {
+                        swrite!(reasons_str, "{reason}");
+                    }
+                }
+                self.write_field(
+                    f,
+                    "replayable",
+                    format!("{}: {}", "no".style(self.styles.failed), reasons_str),
+                )
+            }
+            ReplayabilityStatus::Incomplete => self.write_field(
+                f,
+                "replayable",
+                format!(
+                    "{}: run is incomplete (archive may be partial)",
+                    "maybe".style(self.styles.cancelled)
+                ),
+            ),
+        }
     }
 
     /// Writes the stats section (tests or iterations).
@@ -739,10 +789,10 @@ impl fmt::Display for DisplayRecordedRunInfoDetailed<'_> {
 /// This struct handles the full table display including:
 /// - Optional store path header (when verbose)
 /// - Run count header
-/// - Individual run rows
+/// - Individual run rows with replayability status
 /// - Total size footer with separator
 pub struct DisplayRunList<'a> {
-    snapshot: &'a RunStoreSnapshot,
+    snapshot_with_replayability: &'a SnapshotWithReplayability<'a>,
     store_path: Option<&'a Utf8Path>,
     styles: &'a Styles,
     theme_characters: &'a ThemeCharacters,
@@ -752,19 +802,23 @@ pub struct DisplayRunList<'a> {
 impl<'a> DisplayRunList<'a> {
     /// Creates a new display wrapper for a run list.
     ///
+    /// The `snapshot_with_replayability` provides the runs and their precomputed
+    /// replayability status. Non-replayable runs will show a suffix with the reason.
+    /// The most recent replayable run will be marked with `*latest`.
+    ///
     /// If `store_path` is provided, it will be displayed at the top of the output.
     ///
     /// If `redactor` is provided, timestamps, durations, and sizes will be
     /// redacted for snapshot testing while preserving column alignment.
     pub fn new(
-        snapshot: &'a RunStoreSnapshot,
+        snapshot_with_replayability: &'a SnapshotWithReplayability<'a>,
         store_path: Option<&'a Utf8Path>,
         styles: &'a Styles,
         theme_characters: &'a ThemeCharacters,
         redactor: &'a Redactor,
     ) -> Self {
         Self {
-            snapshot,
+            snapshot_with_replayability,
             store_path,
             styles,
             theme_characters,
@@ -775,12 +829,14 @@ impl<'a> DisplayRunList<'a> {
 
 impl fmt::Display for DisplayRunList<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let snapshot = self.snapshot_with_replayability.snapshot();
+
         // Show store path if provided.
         if let Some(path) = self.store_path {
             writeln!(f, "{}: {}\n", "store".style(self.styles.count), path)?;
         }
 
-        if self.snapshot.run_count() == 0 {
+        if snapshot.run_count() == 0 {
             // No runs to display; the caller should handle the "no recorded runs" message
             // via logging or other means.
             return Ok(());
@@ -789,22 +845,23 @@ impl fmt::Display for DisplayRunList<'_> {
         writeln!(
             f,
             "{} recorded {}:\n",
-            self.snapshot.run_count().style(self.styles.count),
-            plural::runs_str(self.snapshot.run_count()),
+            snapshot.run_count().style(self.styles.count),
+            plural::runs_str(snapshot.run_count()),
         )?;
-
-        // Compute the latest (most recent replayable) run ID for marking.
-        let latest_run_id = self.snapshot.most_recent_run().ok().map(|r| r.run_id);
 
         // Use from_runs_with_total to ensure the size column is wide enough
         // for both individual runs and the total.
-        let alignment = RunListAlignment::from_runs_with_total(
-            self.snapshot.runs(),
-            self.snapshot.total_size(),
-        );
-        for run in self.snapshot.runs() {
+        let alignment =
+            RunListAlignment::from_runs_with_total(snapshot.runs(), snapshot.total_size());
+        let latest_run_id = self.snapshot_with_replayability.latest_run_id();
+
+        for run in snapshot.runs() {
+            let replayability = self
+                .snapshot_with_replayability
+                .get_replayability(run.run_id);
             let display = run.display(
-                self.snapshot.run_id_index(),
+                snapshot.run_id_index(),
+                replayability,
                 alignment,
                 self.styles,
                 self.redactor,
@@ -825,7 +882,7 @@ impl fmt::Display for DisplayRunList<'_> {
             self.theme_characters.hbar(alignment.size_width),
         )?;
 
-        let size_display = self.redactor.redact_size(self.snapshot.total_size());
+        let size_display = self.redactor.redact_size(snapshot.total_size());
         let size_formatted = format!("{:>width$}", size_display, width = alignment.size_width);
         writeln!(
             f,
@@ -844,9 +901,10 @@ mod tests {
         errors::RecordPruneError,
         helpers::ThemeCharacters,
         record::{
-            CompletedRunStats, ComponentSizes, PruneKind, PrunePlan, PruneResult,
-            RecordedRunStatus, RecordedSizes, StressCompletedRunStats,
-            format::RECORD_FORMAT_VERSION, run_id_index::RunIdIndex,
+            CompletedRunStats, ComponentSizes, NonReplayableReason, PruneKind, PrunePlan,
+            PruneResult, RecordedRunStatus, RecordedSizes, RunStoreSnapshot,
+            SnapshotWithReplayability, StressCompletedRunStats, format::RECORD_FORMAT_VERSION,
+            run_id_index::RunIdIndex,
         },
         redact::Redactor,
     };
@@ -1090,7 +1148,7 @@ mod tests {
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
         insta::assert_snapshot!(
-            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+            run.display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-15 10:30:00      1.000s     100 KB  95 passed / 5 failed"
         );
@@ -1109,7 +1167,7 @@ mod tests {
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
         insta::assert_snapshot!(
-            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+            run.display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-16 11:00:00      1.000s      50 KB   incomplete"
         );
@@ -1133,7 +1191,7 @@ mod tests {
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
         insta::assert_snapshot!(
-            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+            run.display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-20 15:00:00      1.000s      73 KB  10 passed / 6 failed / 1 not run"
         );
@@ -1157,7 +1215,7 @@ mod tests {
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
         insta::assert_snapshot!(
-            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+            run.display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-23 16:00:00      1.000s       4 KB  0 passed"
         );
@@ -1181,7 +1239,7 @@ mod tests {
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
         insta::assert_snapshot!(
-            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+            run.display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-25 10:00:00      1.000s     146 KB  100 passed iterations"
         );
@@ -1202,7 +1260,7 @@ mod tests {
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
         insta::assert_snapshot!(
-            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+            run.display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-25 11:00:00      1.000s     146 KB  95 passed iterations / 5 failed"
         );
@@ -1226,7 +1284,7 @@ mod tests {
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
         insta::assert_snapshot!(
-            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+            run.display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-25 12:00:00      1.000s      97 KB  50 passed iterations / 10 failed / 40 not run (cancelled)"
         );
@@ -1247,7 +1305,7 @@ mod tests {
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
         insta::assert_snapshot!(
-            run.display(&index, alignment, &Styles::default(), &Redactor::noop())
+            run.display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-25 13:00:00      1.000s      97 KB  50 passed iterations / 10 failed (cancelled)"
         );
@@ -1297,19 +1355,19 @@ mod tests {
         // All passed counts should be right-aligned to 3 digits (width of 559).
         insta::assert_snapshot!(
             runs[0]
-                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-21 10:00:00      1.000s      97 KB  559 passed"
         );
         insta::assert_snapshot!(
             runs[1]
-                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-21 11:00:00      1.000s      48 KB   51 passed"
         );
         insta::assert_snapshot!(
             runs[2]
-                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-21 12:00:00      1.000s      29 KB   10 passed / 6 failed / 1 not run"
         );
@@ -1359,19 +1417,19 @@ mod tests {
         // Passed counts should be right-aligned to 4 digits (width of 1000).
         insta::assert_snapshot!(
             runs[0]
-                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-22 10:00:00      1.000s     195 KB  1000 passed iterations"
         );
         insta::assert_snapshot!(
             runs[1]
-                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-22 11:00:00      1.000s      97 KB    95 passed iterations / 5 failed"
         );
         insta::assert_snapshot!(
             runs[2]
-                .display(&index, alignment, &Styles::default(), &Redactor::noop())
+                .display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-22 12:00:00      1.000s      78 KB    45 passed iterations / 5 failed / 450 not run (cancelled)"
         );
@@ -1492,11 +1550,12 @@ mod tests {
                 }),
             ),
         ];
-        let snapshot = super::super::RunStoreSnapshot::new_for_test(runs);
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
         insta::assert_snapshot!(
             "normal_sizes",
             DisplayRunList::new(
-                &snapshot,
+                &snapshot_with_replayability,
                 None,
                 &Styles::default(),
                 &theme_characters,
@@ -1530,11 +1589,12 @@ mod tests {
                 }),
             ),
         ];
-        let snapshot = super::super::RunStoreSnapshot::new_for_test(runs);
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
         insta::assert_snapshot!(
             "small_sizes",
             DisplayRunList::new(
-                &snapshot,
+                &snapshot_with_replayability,
                 None,
                 &Styles::default(),
                 &theme_characters,
@@ -1570,11 +1630,12 @@ mod tests {
                 }),
             ),
         ];
-        let snapshot = super::super::RunStoreSnapshot::new_for_test(runs);
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
         insta::assert_snapshot!(
             "large_sizes",
             DisplayRunList::new(
-                &snapshot,
+                &snapshot_with_replayability,
                 None,
                 &Styles::default(),
                 &theme_characters,
@@ -1647,11 +1708,12 @@ mod tests {
                 }),
             ),
         ];
-        let snapshot = super::super::RunStoreSnapshot::new_for_test(runs);
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
         insta::assert_snapshot!(
             "varying_durations",
             DisplayRunList::new(
-                &snapshot,
+                &snapshot_with_replayability,
                 None,
                 &Styles::default(),
                 &theme_characters,
@@ -1766,42 +1828,210 @@ mod tests {
         let index = RunIdIndex::new(&runs);
         let theme_characters = ThemeCharacters::default();
         let redactor = Redactor::noop();
+        // Use default (definitely replayable) status for most tests.
+        let replayable = ReplayabilityStatus::Replayable;
+        // Use incomplete status for the incomplete run.
+        let incomplete = ReplayabilityStatus::Incomplete;
 
         insta::assert_snapshot!(
             "with_cli_and_env",
             runs[0]
-                .display_detailed(&index, &Styles::default(), &theme_characters, &redactor)
+                .display_detailed(
+                    &index,
+                    &replayable,
+                    &Styles::default(),
+                    &theme_characters,
+                    &redactor
+                )
                 .to_string()
         );
         insta::assert_snapshot!(
             "empty_cli_and_env",
             runs[1]
-                .display_detailed(&index, &Styles::default(), &theme_characters, &redactor)
+                .display_detailed(
+                    &index,
+                    &incomplete,
+                    &Styles::default(),
+                    &theme_characters,
+                    &redactor
+                )
                 .to_string()
         );
         insta::assert_snapshot!(
             "stress_all_passed",
             runs[2]
-                .display_detailed(&index, &Styles::default(), &theme_characters, &redactor)
+                .display_detailed(
+                    &index,
+                    &replayable,
+                    &Styles::default(),
+                    &theme_characters,
+                    &redactor
+                )
                 .to_string()
         );
         insta::assert_snapshot!(
             "stress_with_failures",
             runs[3]
-                .display_detailed(&index, &Styles::default(), &theme_characters, &redactor)
+                .display_detailed(
+                    &index,
+                    &replayable,
+                    &Styles::default(),
+                    &theme_characters,
+                    &redactor
+                )
                 .to_string()
         );
         insta::assert_snapshot!(
             "stress_cancelled",
             runs[4]
-                .display_detailed(&index, &Styles::default(), &theme_characters, &redactor)
+                .display_detailed(
+                    &index,
+                    &replayable,
+                    &Styles::default(),
+                    &theme_characters,
+                    &redactor
+                )
                 .to_string()
         );
         insta::assert_snapshot!(
             "stress_cancelled_no_initial",
             runs[5]
-                .display_detailed(&index, &Styles::default(), &theme_characters, &redactor)
+                .display_detailed(
+                    &index,
+                    &replayable,
+                    &Styles::default(),
+                    &theme_characters,
+                    &redactor
+                )
                 .to_string()
+        );
+    }
+
+    #[test]
+    fn test_display_replayability_statuses() {
+        // Create a simple run for testing replayability display.
+        let run = make_run_info(
+            "550e8400-e29b-41d4-a716-446655440000",
+            "0.9.100",
+            "2024-06-15T10:30:00+00:00",
+            102400,
+            RecordedRunStatus::Completed(CompletedRunStats {
+                initial_run_count: 100,
+                passed: 100,
+                failed: 0,
+            }),
+        );
+        let runs = std::slice::from_ref(&run);
+        let index = RunIdIndex::new(runs);
+        let theme_characters = ThemeCharacters::default();
+        let redactor = Redactor::noop();
+
+        // Test: definitely replayable (no issues).
+        let definitely_replayable = ReplayabilityStatus::Replayable;
+        insta::assert_snapshot!(
+            "replayability_yes",
+            run.display_detailed(
+                &index,
+                &definitely_replayable,
+                &Styles::default(),
+                &theme_characters,
+                &redactor
+            )
+            .to_string()
+        );
+
+        // Test: store format too new.
+        let format_too_new =
+            ReplayabilityStatus::NotReplayable(vec![NonReplayableReason::StoreFormatTooNew {
+                run_version: 5,
+                max_supported: 1,
+            }]);
+        insta::assert_snapshot!(
+            "replayability_format_too_new",
+            run.display_detailed(
+                &index,
+                &format_too_new,
+                &Styles::default(),
+                &theme_characters,
+                &redactor
+            )
+            .to_string()
+        );
+
+        // Test: missing store.zip.
+        let missing_store =
+            ReplayabilityStatus::NotReplayable(vec![NonReplayableReason::MissingStoreZip]);
+        insta::assert_snapshot!(
+            "replayability_missing_store_zip",
+            run.display_detailed(
+                &index,
+                &missing_store,
+                &Styles::default(),
+                &theme_characters,
+                &redactor
+            )
+            .to_string()
+        );
+
+        // Test: missing run.log.zst.
+        let missing_log =
+            ReplayabilityStatus::NotReplayable(vec![NonReplayableReason::MissingRunLog]);
+        insta::assert_snapshot!(
+            "replayability_missing_run_log",
+            run.display_detailed(
+                &index,
+                &missing_log,
+                &Styles::default(),
+                &theme_characters,
+                &redactor
+            )
+            .to_string()
+        );
+
+        // Test: status unknown.
+        let status_unknown =
+            ReplayabilityStatus::NotReplayable(vec![NonReplayableReason::StatusUnknown]);
+        insta::assert_snapshot!(
+            "replayability_status_unknown",
+            run.display_detailed(
+                &index,
+                &status_unknown,
+                &Styles::default(),
+                &theme_characters,
+                &redactor
+            )
+            .to_string()
+        );
+
+        // Test: incomplete (maybe replayable).
+        let incomplete = ReplayabilityStatus::Incomplete;
+        insta::assert_snapshot!(
+            "replayability_incomplete",
+            run.display_detailed(
+                &index,
+                &incomplete,
+                &Styles::default(),
+                &theme_characters,
+                &redactor
+            )
+            .to_string()
+        );
+
+        // Test: multiple blocking reasons.
+        let multiple_blocking = ReplayabilityStatus::NotReplayable(vec![
+            NonReplayableReason::MissingStoreZip,
+            NonReplayableReason::MissingRunLog,
+        ]);
+        insta::assert_snapshot!(
+            "replayability_multiple_blocking",
+            run.display_detailed(
+                &index,
+                &multiple_blocking,
+                &Styles::default(),
+                &theme_characters,
+                &redactor
+            )
+            .to_string()
         );
     }
 }

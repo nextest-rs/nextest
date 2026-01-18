@@ -611,11 +611,8 @@ pub struct ReplayHeader {
     pub started_at: DateTime<FixedOffset>,
     /// The status of the run.
     pub status: RecordedRunStatus,
-    /// Number of newer incomplete runs that were skipped.
-    ///
-    /// This is non-zero when the most recent run was not selected because
-    /// it was incomplete, and we fell back to an earlier completed run.
-    pub newer_incomplete_count: usize,
+    /// Number of newer non-replayable runs that were skipped.
+    pub newer_non_replayable_count: usize,
 }
 
 impl ReplayHeader {
@@ -628,7 +625,7 @@ impl ReplayHeader {
         run_id: ReportUuid,
         run_info: Option<&RecordedRunInfo>,
         run_id_index: Option<&RunIdIndex>,
-        newer_incomplete_count: usize,
+        newer_non_replayable_count: usize,
     ) -> Self {
         let (started_at, status) = match run_info {
             Some(info) => (info.started_at, info.status.clone()),
@@ -644,7 +641,7 @@ impl ReplayHeader {
             unique_prefix,
             started_at,
             status,
-            newer_incomplete_count,
+            newer_non_replayable_count,
         }
     }
 }

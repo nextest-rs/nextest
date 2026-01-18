@@ -1,0 +1,24 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&info_str, temp_root)"
+snapshot_kind: text
+---
+Run 80000001-0000-0000-0000-000000000001
+
+  nextest version:  <version>
+  command:          '[EXE]' nextest --no-pager --manifest-path '[PATH]' --user-config-file '[PATH]' run -E 'test(=test_success)'
+  env:              CARGO_TERM_COLOR=never NEXTEST_CACHE_DIR='[PATH]' NEXTEST_SHOW_PROGRESS=counter NEXTEST_USER_CONFIG_FILE=none
+  status:           completed
+  started at:       XXXX-XX-XX XX:XX:XX
+  last written at:  XXXX-XX-XX XX:XX:XX
+  duration:         <duration>
+  replayable:       no: store.zip is missing
+
+  tests:
+    passed:         1
+
+  sizes:            compressed  uncompressed  entries
+    log                 <size>        <size>       33
+    store               <size>        <size>        6
+                    ──────────  ────────────  ───────
+    total               <size>        <size>       39
