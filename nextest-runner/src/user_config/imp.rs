@@ -10,7 +10,7 @@ use super::{
         DeserializedRecordConfig, DeserializedRecordOverrideData, DeserializedUiConfig,
         DeserializedUiOverrideData, RecordConfig, UiConfig,
     },
-    experimental::UserConfigExperimental,
+    experimental::{ExperimentalConfig, UserConfigExperimental},
 };
 use crate::errors::UserConfigError;
 use camino::Utf8Path;
@@ -164,10 +164,14 @@ impl UserConfigWarnings for DefaultUserConfigWarnings {
 struct DeserializedUserConfig {
     /// Experimental features to enable.
     ///
-    /// Stored as strings; unknown features are silently ignored (they just
-    /// won't be enabled). This matches the repo config pattern.
+    /// This is a table with boolean fields for each experimental feature:
+    ///
+    /// ```toml
+    /// [experimental]
+    /// record = true
+    /// ```
     #[serde(default)]
-    experimental: BTreeSet<String>,
+    experimental: ExperimentalConfig,
 
     /// UI configuration.
     #[serde(default)]
@@ -272,31 +276,8 @@ impl DeserializedUserConfig {
             record_overrides.push(CompiledRecordOverride::new(platform_spec, override_.record));
         }
 
-        // Parse experimental features from strings, erroring on unknown ones.
-        let mut experimental = BTreeSet::new();
-        let unknown: BTreeSet<_> = self
-            .experimental
-            .into_iter()
-            .filter(|feature| {
-                if let Ok(feature) = feature.parse::<UserConfigExperimental>() {
-                    experimental.insert(feature);
-                    false
-                } else {
-                    true
-                }
-            })
-            .collect();
-        if !unknown.is_empty() {
-            let known = UserConfigExperimental::all()
-                .iter()
-                .map(|f| f.name())
-                .collect();
-            return Err(UserConfigError::UnknownExperimentalFeatures {
-                path: path.to_owned(),
-                unknown,
-                known,
-            });
-        }
+        // Convert the experimental config table to a set of enabled features.
+        let experimental = self.experimental.to_set();
 
         Ok(CompiledUserConfig {
             experimental,
@@ -729,7 +710,8 @@ mod tests {
     #[test]
     fn experimental_features_parsing() {
         let config_contents = r#"
-        experimental = ["record"]
+        [experimental]
+        record = true
 
         [ui]
         show-progress = "bar"
@@ -757,9 +739,10 @@ mod tests {
     }
 
     #[test]
-    fn experimental_features_unknown_error() {
+    fn experimental_features_disabled() {
         let config_contents = r#"
-        experimental = ["record", "unknown-feature"]
+        [experimental]
+        record = false
 
         [ui]
         show-progress = "bar"
@@ -770,15 +753,56 @@ mod tests {
         std::fs::write(&config_path, config_contents).unwrap();
 
         let mut warnings = TestUserConfigWarnings::default();
-        let result = CompiledUserConfig::from_path_with_warnings(&config_path, &mut warnings);
+        let config = CompiledUserConfig::from_path_with_warnings(&config_path, &mut warnings)
+            .expect("config valid")
+            .expect("config should exist");
 
-        // Unknown features should cause an error.
         assert!(
-            matches!(
-                result,
-                Err(UserConfigError::UnknownExperimentalFeatures { .. })
-            ),
-            "should fail with unknown experimental features error: {result:?}"
+            warnings.unknown_keys.is_none(),
+            "no unknown keys should be detected"
+        );
+        assert!(
+            !config
+                .experimental
+                .contains(&UserConfigExperimental::Record),
+            "record feature should not be enabled"
+        );
+    }
+
+    #[test]
+    fn experimental_features_unknown_warning() {
+        let config_contents = r#"
+        [experimental]
+        record = true
+        unknown-feature = true
+
+        [ui]
+        show-progress = "bar"
+        "#;
+
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+        std::fs::write(&config_path, config_contents).unwrap();
+
+        let mut warnings = TestUserConfigWarnings::default();
+        let config = CompiledUserConfig::from_path_with_warnings(&config_path, &mut warnings)
+            .expect("config valid")
+            .expect("config should exist");
+
+        // Unknown fields should be warnings, not errors.
+        let (path, unknown) = warnings.unknown_keys.expect("should have unknown keys");
+        assert_eq!(path, config_path, "path should match");
+        assert!(
+            unknown.contains("experimental.unknown-feature"),
+            "unknown key should be detected: {unknown:?}"
+        );
+
+        // The known feature should still be enabled.
+        assert!(
+            config
+                .experimental
+                .contains(&UserConfigExperimental::Record),
+            "record feature should be enabled"
         );
     }
 }

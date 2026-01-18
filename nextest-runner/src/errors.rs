@@ -814,19 +814,6 @@ pub enum UserConfigError {
         #[source]
         error: target_spec::Error,
     },
-
-    /// Unknown experimental features in the user config.
-    #[error(
-        "for user config at {path}, unknown experimental features: {unknown:?} (known features: {known:?})"
-    )]
-    UnknownExperimentalFeatures {
-        /// The path to the config file.
-        path: Utf8PathBuf,
-        /// The unknown features.
-        unknown: BTreeSet<String>,
-        /// The known features.
-        known: Vec<&'static str>,
-    },
 }
 
 /// Error returned while parsing a [`MaxFail`](crate::config::elements::MaxFail) input.

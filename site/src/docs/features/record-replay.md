@@ -10,7 +10,7 @@ description: Recording test runs and replaying them later.
 
 !!! experimental "Experimental: This feature is not yet stable"
 
-    - **Enable with:** Add `experimental = ["record"]` to [`~/.config/nextest/config.toml`](../user-config/index.md), or set `NEXTEST_EXPERIMENTAL_RECORD=1` in the environment
+    - **Enable with:** Add `[experimental]` with `record = true` to [`~/.config/nextest/config.toml`](../user-config/index.md), or set `NEXTEST_EXPERIMENTAL_RECORD=1` in the environment
     - **Tracking issue:** TBD
 
 Nextest supports recording test runs to replay them later. Recorded runs are stored locally in the system cache.
