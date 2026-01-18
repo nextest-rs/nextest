@@ -1940,6 +1940,105 @@ fail-fast = false
     );
 }
 
+/// Test that unknown experimental features in table format cause an error.
+///
+/// This is consistent with the array format behavior: unknown features in repo
+/// config cause an error regardless of format.
+#[test]
+fn test_experimental_table_format_unknown_error() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    // Create a config with an [experimental] table containing an unknown
+    // experimental feature.
+    let config_path = p.workspace_root().join(".config/nextest.toml");
+    std::fs::write(
+        &config_path,
+        r#"
+[experimental]
+setup-scripts = true
+unknown-feature = true
+
+[profile.default]
+fail-fast = false
+"#,
+    )
+    .unwrap();
+
+    // cargo nextest list should fail with an error.
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--message-format",
+            "human",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "expected SETUP_ERROR exit code for unknown experimental feature, got {:?}\nstderr: {}",
+        output.exit_status.code(),
+        output.stderr_as_str()
+    );
+
+    // The error message should contain the unknown feature name.
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("unknown experimental features defined: unknown-feature"),
+        "expected unknown-feature in stderr, got: {}",
+        stderr
+    );
+}
+
+/// Tests that valid experimental features in table format work correctly.
+#[test]
+fn test_experimental_table_format_valid() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    // Create a config with an [experimental] table.
+    let config_path = p.workspace_root().join(".config/nextest.toml");
+    std::fs::write(
+        &config_path,
+        r#"
+[experimental]
+setup-scripts = true
+"#,
+    )
+    .unwrap();
+
+    // cargo nextest list should succeed.
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--message-format",
+            "human",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert!(
+        output.exit_status.success(),
+        "expected success exit code with table format, got {:?}\nstderr: {}",
+        output.exit_status.code(),
+        output.stderr_as_str()
+    );
+
+    // Nextest should log that experimental features are enabled.
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("info: experimental features enabled: setup-scripts"),
+        "expected 'setup-scripts' in stderr (enabled feature), got: {}",
+        stderr
+    );
+}
+
 #[test]
 fn test_setup_scripts_not_enabled() {
     let env_info = set_env_vars_for_test();

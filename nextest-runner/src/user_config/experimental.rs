@@ -29,8 +29,9 @@ pub struct ExperimentalConfig {
 impl ExperimentalConfig {
     /// Converts to a set of enabled experimental features.
     pub fn to_set(self) -> BTreeSet<UserConfigExperimental> {
+        let Self { record } = self;
         let mut set = BTreeSet::new();
-        if self.record {
+        if record {
             set.insert(UserConfigExperimental::Record);
         }
         set

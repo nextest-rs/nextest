@@ -828,7 +828,7 @@ impl ExpectedError {
                             .join(", ");
 
                         error!(
-                            "for config file `{}`{}, unknown experimental features defined:
+                            "for config file `{}`{}, unknown experimental features defined: \
                              {unknown_str} (known features: {known_str}):",
                             err.config_file(),
                             provided_by_tool(err.tool()),

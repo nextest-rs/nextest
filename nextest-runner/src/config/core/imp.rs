@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{NextestVersionDeserialize, ToolConfigFile, ToolName};
+use super::{ExperimentalDeserialize, NextestVersionDeserialize, ToolConfigFile, ToolName};
 use crate::{
     config::{
         core::ConfigExperimental,
@@ -1442,7 +1442,7 @@ struct NextestConfigDeserialize {
     nextest_version: Option<NextestVersionDeserialize>,
     #[expect(unused)]
     #[serde(default)]
-    experimental: BTreeSet<String>,
+    experimental: ExperimentalDeserialize,
 
     #[serde(default)]
     test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,

@@ -7,7 +7,10 @@ use super::{NextestConfig, ToolConfigFile, ToolName};
 use crate::errors::{ConfigParseError, ConfigParseErrorKind};
 use camino::{Utf8Path, Utf8PathBuf};
 use semver::Version;
-use serde::{Deserialize, Deserializer};
+use serde::{
+    Deserialize, Deserializer,
+    de::{MapAccess, SeqAccess, Visitor},
+};
 use std::{borrow::Cow, collections::BTreeSet, fmt, str::FromStr};
 
 /// A "version-only" form of the nextest configuration.
@@ -80,15 +83,11 @@ impl VersionOnlyConfig {
                 nextest_version.accumulate(v, None);
             }
 
-            // Separate known and unknown features. Unknown features are stored rather than
-            // immediately causing an error, so that the nextest version check can run first.
-            for feature_str in d.experimental {
-                if let Ok(feature) = feature_str.parse::<ConfigExperimental>() {
-                    known.insert(feature);
-                } else {
-                    unknown.insert(feature_str);
-                }
-            }
+            // Process experimental features. Unknown features are stored rather
+            // than immediately causing an error, so that the nextest version
+            // check can run first.
+            known.extend(d.experimental.known);
+            unknown.extend(d.experimental.unknown);
         }
 
         Ok(Self {
@@ -128,7 +127,7 @@ impl VersionOnlyConfig {
                 config_file,
                 tool,
                 ConfigParseErrorKind::ExperimentalFeaturesInToolConfig {
-                    features: v.experimental,
+                    features: v.experimental.feature_names(),
                 },
             ));
         }
@@ -144,7 +143,119 @@ struct VersionOnlyDeserialize {
     #[serde(default)]
     nextest_version: Option<NextestVersionDeserialize>,
     #[serde(default)]
-    experimental: BTreeSet<String>,
+    experimental: ExperimentalDeserialize,
+}
+
+/// Intermediate representation for experimental config deserialization.
+///
+/// This supports both the table format (`[experimental] setup-scripts = true`)
+/// and the array format (`experimental = ["setup-scripts"]`). The array format
+/// will be deprecated in the future.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct ExperimentalDeserialize {
+    /// Known experimental features that are enabled.
+    known: BTreeSet<ConfigExperimental>,
+    /// Unknown feature names (for error reporting).
+    unknown: BTreeSet<String>,
+}
+
+impl ExperimentalDeserialize {
+    /// Returns true if no experimental features are specified.
+    fn is_empty(&self) -> bool {
+        self.known.is_empty() && self.unknown.is_empty()
+    }
+
+    /// Returns the feature names for error messages (used by tool config
+    /// validation).
+    fn feature_names(&self) -> BTreeSet<String> {
+        let mut names = self.unknown.clone();
+        for feature in &self.known {
+            names.insert(feature.to_string());
+        }
+        names
+    }
+}
+
+impl<'de> Deserialize<'de> for ExperimentalDeserialize {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ExperimentalVisitor;
+
+        impl<'de> Visitor<'de> for ExperimentalVisitor {
+            type Value = ExperimentalDeserialize;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str(
+                    "a table ({ setup-scripts = true, benchmarks = true }) \
+                     or an array ([\"setup-scripts\", \"benchmarks\"])",
+                )
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                // Array format: parse each string to ConfigExperimental.
+                let mut known = BTreeSet::new();
+                let mut unknown = BTreeSet::new();
+                while let Some(feature_str) = seq.next_element::<String>()? {
+                    if let Ok(feature) = feature_str.parse::<ConfigExperimental>() {
+                        known.insert(feature);
+                    } else {
+                        unknown.insert(feature_str);
+                    }
+                }
+                Ok(ExperimentalDeserialize { known, unknown })
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                // Table format: use typed struct with serde_ignored for unknown
+                // fields.
+                #[derive(Deserialize)]
+                #[serde(rename_all = "kebab-case")]
+                struct TableConfig {
+                    #[serde(default)]
+                    setup_scripts: bool,
+                    #[serde(default)]
+                    wrapper_scripts: bool,
+                    #[serde(default)]
+                    benchmarks: bool,
+                }
+
+                let mut unknown = BTreeSet::new();
+                let de = serde::de::value::MapAccessDeserializer::new(map);
+                let mut cb = |path: serde_ignored::Path| {
+                    unknown.insert(path.to_string());
+                };
+                let ignored_de = serde_ignored::Deserializer::new(de, &mut cb);
+                let TableConfig {
+                    setup_scripts,
+                    wrapper_scripts,
+                    benchmarks,
+                } = Deserialize::deserialize(ignored_de).map_err(serde::de::Error::custom)?;
+
+                let mut known = BTreeSet::new();
+                if setup_scripts {
+                    known.insert(ConfigExperimental::SetupScripts);
+                }
+                if wrapper_scripts {
+                    known.insert(ConfigExperimental::WrapperScripts);
+                }
+                if benchmarks {
+                    known.insert(ConfigExperimental::Benchmarks);
+                }
+
+                Ok(ExperimentalDeserialize { known, unknown })
+            }
+        }
+
+        deserializer.deserialize_any(ExperimentalVisitor)
+    }
 }
 
 /// Nextest version configuration.
@@ -230,7 +341,7 @@ pub struct ExperimentalConfig {
     /// Known experimental features that are enabled.
     known: BTreeSet<ConfigExperimental>,
 
-    /// Unknown experimental feature names found in the config.
+    /// Unknown experimental feature names.
     unknown: BTreeSet<String>,
 }
 
@@ -728,5 +839,111 @@ mod tests {
         let set = ConfigExperimental::from_env();
         assert!(!set.contains(&ConfigExperimental::SetupScripts));
         assert!(!set.contains(&ConfigExperimental::WrapperScripts));
+    }
+
+    #[test]
+    fn test_experimental_formats() {
+        // For the array format, valid features should parse correctly.
+        let input = r#"experimental = ["setup-scripts", "benchmarks"]"#;
+        let d: VersionOnlyDeserialize = toml::from_str(input).unwrap();
+        assert_eq!(
+            d.experimental.known,
+            BTreeSet::from([
+                ConfigExperimental::SetupScripts,
+                ConfigExperimental::Benchmarks
+            ]),
+            "expected 2 known features"
+        );
+        assert!(d.experimental.unknown.is_empty());
+
+        // An empty array is empty.
+        let input = r#"experimental = []"#;
+        let d: VersionOnlyDeserialize = toml::from_str(input).unwrap();
+        assert!(
+            d.experimental.is_empty(),
+            "expected empty, got {:?}",
+            d.experimental
+        );
+
+        // Unknown features in the array format are recorded.
+        let input = r#"experimental = ["setup-scripts", "unknown-feature"]"#;
+        let d: VersionOnlyDeserialize = toml::from_str(input).unwrap();
+        assert_eq!(
+            d.experimental.known,
+            BTreeSet::from([ConfigExperimental::SetupScripts])
+        );
+        assert_eq!(
+            d.experimental.unknown,
+            BTreeSet::from(["unknown-feature".to_owned()])
+        );
+
+        // Table format: valid features parse correctly.
+        let input = r#"
+[experimental]
+setup-scripts = true
+benchmarks = true
+"#;
+        let d: VersionOnlyDeserialize = toml::from_str(input).unwrap();
+        assert_eq!(
+            d.experimental.known,
+            BTreeSet::from([
+                ConfigExperimental::SetupScripts,
+                ConfigExperimental::Benchmarks
+            ])
+        );
+        assert!(d.experimental.unknown.is_empty());
+
+        // Empty table is empty.
+        let input = r#"[experimental]"#;
+        let d: VersionOnlyDeserialize = toml::from_str(input).unwrap();
+        assert!(
+            d.experimental.is_empty(),
+            "expected empty, got {:?}",
+            d.experimental
+        );
+
+        // If all features are false, the result is empty.
+        let input = r#"
+[experimental]
+setup-scripts = false
+"#;
+        let d: VersionOnlyDeserialize = toml::from_str(input).unwrap();
+        assert!(
+            d.experimental.is_empty(),
+            "expected empty, got {:?}",
+            d.experimental
+        );
+
+        // Unknown features in the table format are recorded.
+        let input = r#"
+[experimental]
+setup-scripts = true
+unknown-feature = true
+"#;
+        let d: VersionOnlyDeserialize = toml::from_str(input).unwrap();
+        assert_eq!(
+            d.experimental.known,
+            BTreeSet::from([ConfigExperimental::SetupScripts])
+        );
+        assert!(d.experimental.unknown.contains("unknown-feature"));
+
+        // An invalid type shows a helpful error mentioning both formats.
+        let input = r#"experimental = 42"#;
+        let err = toml::from_str::<VersionOnlyDeserialize>(input).unwrap_err();
+        let err_str = err.to_string();
+        assert!(
+            err_str.contains("expected a table") && err_str.contains("or an array"),
+            "expected error to mention both formats, got: {}",
+            err_str
+        );
+
+        let input = r#"experimental = "setup-scripts""#;
+        let err = toml::from_str::<VersionOnlyDeserialize>(input).unwrap_err();
+        let err_str = err.to_string();
+        assert!(
+            err_str.contains("expected a table") && err_str.contains("or an array"),
+            "expected error to mention both formats, got: {}",
+            err_str
+        );
     }
 }
