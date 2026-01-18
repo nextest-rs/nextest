@@ -1,11 +1,10 @@
 ---
 source: integration-tests/tests/integration/record_replay.rs
 expression: "redact_dynamic_fields(&info_output.stdout_as_str(), temp_root)"
-snapshot_kind: text
 ---
 Run 10000001-0000-0000-0000-000000000001
 
-  nextest version:  0.9.122
+  nextest version:  <version>
   command:          '[EXE]' nextest --no-pager --manifest-path '[PATH]' --user-config-file '[PATH]' run --workspace --all-targets
   env:              CARGO_TERM_COLOR=never NEXTEST_CACHE_DIR='[PATH]' NEXTEST_SHOW_PROGRESS=counter NEXTEST_USER_CONFIG_FILE=none
   status:           completed

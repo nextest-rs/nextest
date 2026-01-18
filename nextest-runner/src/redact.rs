@@ -32,6 +32,8 @@ static DURATION_REDACTION: &str = "<duration>";
 static TIMESTAMP_REDACTION: &str = "XXXX-XX-XX XX:XX:XX";
 /// 6 chars for numeric portion (e.g. "   123" for KB display).
 static SIZE_REDACTION: &str = "<size>";
+/// Placeholder for redacted version strings.
+static VERSION_REDACTION: &str = "<version>";
 
 /// A helper for redacting data that varies by environment.
 ///
@@ -166,6 +168,17 @@ impl Redactor {
             RedactorOutput::Redacted(SIZE_REDACTION.to_string())
         } else {
             RedactorOutput::Unredacted(SizeDisplay(orig))
+        }
+    }
+
+    /// Redacts a version for display.
+    ///
+    /// When redacting, produces `<version>` as a placeholder.
+    pub fn redact_version(&self, orig: &semver::Version) -> String {
+        if self.kind.is_active() {
+            VERSION_REDACTION.to_string()
+        } else {
+            orig.to_string()
         }
     }
 

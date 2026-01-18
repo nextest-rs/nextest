@@ -687,7 +687,11 @@ impl fmt::Display for DisplayRecordedRunInfoDetailed<'_> {
         writeln!(f)?;
 
         // Basic info fields.
-        self.write_field(f, "nextest version", &run.nextest_version)?;
+        self.write_field(
+            f,
+            "nextest version",
+            self.redactor.redact_version(&run.nextest_version),
+        )?;
 
         // CLI args (if present).
         if !run.cli_args.is_empty() {
