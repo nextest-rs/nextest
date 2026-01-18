@@ -199,7 +199,7 @@ impl RunRecorder {
             .map_err(|error| RunStoreError::TestListSerialize { error })?;
 
         let opts_json = serde_json::to_string(opts)
-            .map_err(|error| RunStoreError::TestListSerialize { error })?;
+            .map_err(|error| RunStoreError::RecordOptionsSerialize { error })?;
 
         self.write_archive_file(TEST_LIST_JSON_PATH, test_list_json.as_bytes())?;
         self.write_archive_file(CARGO_METADATA_JSON_PATH, cargo_metadata_json.as_bytes())?;

@@ -2058,6 +2058,14 @@ pub enum RunStoreError {
         error: serde_json::Error,
     },
 
+    /// An error occurred while serializing the record options.
+    #[error("error serializing record options")]
+    RecordOptionsSerialize {
+        /// The underlying error.
+        #[source]
+        error: serde_json::Error,
+    },
+
     /// An error occurred while serializing a test event.
     #[error("error serializing test event")]
     TestEventSerialize {
@@ -2542,7 +2550,6 @@ pub enum RecordReadError {
         #[source]
         error: serde_json::Error,
     },
-
 }
 
 /// An error that occurred while reconstructing a TestList from a summary.
