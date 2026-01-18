@@ -4,7 +4,7 @@
 //! Helper functions for dispatch operations.
 
 use crate::{
-    ExpectedError, Result,
+    ExpectedError, ExtractOutputFormat, Result,
     cargo_cli::{CargoCli, CargoOptions},
     output::{OutputContext, StderrStyles},
 };
@@ -194,13 +194,13 @@ pub(super) fn extract_slice_from_output<'a>(
 
 pub(super) fn display_output_slice(
     output_slice: Option<TestOutputErrorSlice<'_>>,
-    output_format: super::commands::ExtractOutputFormat,
+    output_format: ExtractOutputFormat,
 ) -> Result<()> {
     use nextest_runner::reporter::highlight_end;
     use quick_junit::XmlString;
 
     match output_format {
-        super::commands::ExtractOutputFormat::Raw => {
+        ExtractOutputFormat::Raw => {
             if let Some(kind) = output_slice
                 && let Some(out) = kind.combined_subslice()
             {
@@ -212,12 +212,12 @@ pub(super) fn display_output_slice(
                 });
             }
         }
-        super::commands::ExtractOutputFormat::JunitDescription => {
+        ExtractOutputFormat::JunitDescription => {
             if let Some(kind) = output_slice {
                 println!("{}", XmlString::new(kind.to_string()).as_str());
             }
         }
-        super::commands::ExtractOutputFormat::Highlight => {
+        ExtractOutputFormat::Highlight => {
             if let Some(kind) = output_slice
                 && let Some(out) = kind.combined_subslice()
             {

@@ -266,7 +266,7 @@ fn handle_help_output(err: clap::Error, early_args: &EarlyArgs, host_platform: &
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dispatch::cli::CargoNextestApp;
+    use crate::dispatch::app::CargoNextestApp;
     use clap::CommandFactory;
 
     fn cmd() -> Command {
