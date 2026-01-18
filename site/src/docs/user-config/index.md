@@ -60,7 +60,8 @@ Overrides are evaluated against the *host* platform (where nextest is running). 
 
 ```toml title="User configuration in ~/.config/nextest/config.toml"
 # Enable experimental features.
-experimental = ["record"]
+[experimental]
+record = true
 
 [ui]
 # Always show a progress bar.
@@ -76,7 +77,7 @@ input-handler = false
 output-indent = false
 
 [record]
-# Enable recording (requires experimental = ["record"]).
+# Enable recording (requires [experimental] record = true).
 enabled = true
 ```
 

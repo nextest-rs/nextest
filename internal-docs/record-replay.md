@@ -9,8 +9,7 @@ Implement a record and replay feature that captures test run events and outputs 
 1. **Activation mechanism**: Experimental feature + config flag
    - The `record` experimental feature must be enabled via:
      - Environment variable: `NEXTEST_EXPERIMENTAL_RECORD=1`
-     - User config: `experimental = ["record"]` in `~/.config/nextest/config.toml`
-     - Project config: `experimental = ["record"]` in `.config/nextest.toml`
+     - User config: `[experimental] record = true` in `~/.config/nextest/config.toml`
    - Additionally, `[record] enabled = true` must be set in the config
    - Recording only occurs when BOTH conditions are met
    - No CLI flag initially (keeps it experimental)
@@ -219,9 +218,10 @@ Note: Progress bars are not shown during replay since events are processed insta
 
 ### Phase 5: Configuration
 
-**Config file options** (`.config/nextest.toml` or `~/.config/nextest/config.toml`):
+**Config file options** (`~/.config/nextest/config.toml`):
 ```toml
-experimental = ["record"]
+[experimental]
+record = true
 
 [record]
 # Enable recording (required in addition to the experimental feature)

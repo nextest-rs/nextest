@@ -7,7 +7,35 @@
 //! or via environment variables. They are separate from the repository-level experimental
 //! features in [`ConfigExperimental`](crate::config::core::ConfigExperimental).
 
+use serde::Deserialize;
 use std::{collections::BTreeSet, env, fmt, str::FromStr};
+
+/// Deserialized experimental config from user config file.
+///
+/// This represents the `[experimental]` table in user config:
+///
+/// ```toml
+/// [experimental]
+/// record = true
+/// ```
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExperimentalConfig {
+    /// Enable recording of test runs.
+    #[serde(default)]
+    pub record: bool,
+}
+
+impl ExperimentalConfig {
+    /// Converts to a set of enabled experimental features.
+    pub fn to_set(self) -> BTreeSet<UserConfigExperimental> {
+        let mut set = BTreeSet::new();
+        if self.record {
+            set.insert(UserConfigExperimental::Record);
+        }
+        set
+    }
+}
 
 /// User-level experimental features.
 ///

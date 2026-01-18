@@ -57,7 +57,8 @@ static BRACKETED_DURATION_REGEX: LazyLock<Regex> =
 /// The `record` experimental feature must be enabled AND `[record] enabled = true`
 /// must be set for recording to occur.
 const RECORD_USER_CONFIG: &str = r#"
-experimental = ["record"]
+[experimental]
+record = true
 
 [record]
 enabled = true
@@ -101,7 +102,7 @@ fn cli_for_project(env_info: &TestEnvInfo, p: &TempProject) -> CargoNextestCli {
 /// This helper:
 /// 1. Sets the manifest path
 /// 2. Sets `--user-config-file` to the provided config path (which must have
-///    `experimental = ["record"]` and `[record] enabled = true`)
+///    `[experimental] record = true` and `[record] enabled = true`)
 /// 3. Sets `NEXTEST_CACHE_DIR` to a directory inside the temp project
 /// 4. Optionally sets `__NEXTEST_FORCE_RUN_ID` for deterministic run IDs
 /// 5. Sets `__NEXTEST_REDACT=1` to produce fixed-width placeholders for
