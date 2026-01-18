@@ -21,6 +21,7 @@ use nextest_runner::{
     runner::{DebuggerCommand, TracerCommand},
 };
 use owo_colors::{OwoColorize, Style};
+use quick_junit::ReportUuid;
 use semver::Version;
 use std::{error::Error, io, process::ExitStatus, string::FromUtf8Error};
 use swrite::{SWrite, swriteln};
@@ -383,6 +384,14 @@ pub enum ExpectedError {
         #[source]
         err: RecordReadError,
     },
+    #[error(
+        "run {run_id} has unsupported store format version {found} (this nextest supports version {supported})"
+    )]
+    UnsupportedStoreFormatVersion {
+        run_id: ReportUuid,
+        found: u32,
+        supported: u32,
+    },
     #[error("error reconstructing test list from archive")]
     TestListFromSummaryError {
         #[source]
@@ -582,6 +591,7 @@ impl ExpectedError {
             | Self::RecordSessionSetupError { .. }
             | Self::RunIdResolutionError { .. }
             | Self::RecordReadError { .. }
+            | Self::UnsupportedStoreFormatVersion { .. }
             | Self::TestListFromSummaryError { .. } => NextestExitCode::SETUP_ERROR,
             Self::WriteError { .. } => NextestExitCode::WRITE_OUTPUT_ERROR,
             Self::FiltersetParseError { .. } => NextestExitCode::INVALID_FILTERSET,
@@ -1242,6 +1252,20 @@ impl ExpectedError {
             Self::RecordReadError { err } => {
                 error!("error reading recorded run");
                 Some(err as &dyn Error)
+            }
+            Self::UnsupportedStoreFormatVersion {
+                run_id,
+                found,
+                supported,
+            } => {
+                error!(
+                    "run {} has unsupported store format version {} \
+                     (this nextest supports version {})",
+                    run_id.style(styles.bold),
+                    found.style(styles.bold),
+                    supported.style(styles.bold),
+                );
+                None
             }
             Self::TestListFromSummaryError { err } => {
                 error!("error reconstructing test list from archived summary");

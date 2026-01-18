@@ -22,7 +22,6 @@ const EXPECTED_ARCHIVE_FILES: &[&str] = &[
     "meta/cargo-metadata.json",
     "meta/test-list.json",
     "meta/record-opts.json",
-    "meta/format.json",
     "meta/stdout.dict",
     "meta/stderr.dict",
     // out/ directory contains content-addressed output files (variable names).
