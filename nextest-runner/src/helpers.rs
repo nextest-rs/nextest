@@ -680,10 +680,10 @@ impl fmt::Display for FormattedRelativeDuration {
             let millis = nanos / 1_000_000;
             let micros = nanos / 1_000;
 
-            // a difference from our impl than the original is that
+            // a difference between our impl and the original is that
             // we only care about the most-significant segment of the duration.
             // If the item call returns `Break`, then the `?` will early-return.
-            // This allows for a very consise impl
+            // This allows for a very concise impl
             item("y", years)?;
             item("mo", months)?;
             item("d", days)?;
