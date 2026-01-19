@@ -53,8 +53,9 @@ use temp_project::TempProject;
 fn test_version_info() {
     // Note that this is slightly overdetermined: details like the length of the short commit hash
     // are not part of the format, and we have some flexibility in changing it.
+    // The commit hash and date are optional because local dev builds may not include them.
     let version_regex = regex::Regex::new(
-        r"^cargo-nextest (0\.9\.[0-9\-a-z\.]+) \(([a-f0-9]{9}) (\d{4}-\d{2}-\d{2})\)\n$",
+        r"^cargo-nextest (0\.9\.[0-9\-a-z\.]+)(?: \(([a-f0-9]{9}) (\d{4}-\d{2}-\d{2})\))?\n$",
     )
     .unwrap();
 
@@ -68,8 +69,8 @@ fn test_version_info() {
         .unwrap_or_else(|| panic!("short version matches regex: {short_stdout}"));
 
     let version = captures.get(1).unwrap().as_str();
-    let short_hash = captures.get(2).unwrap().as_str();
-    let date = captures.get(3).unwrap().as_str();
+    let short_hash = captures.get(2).map(|m| m.as_str());
+    let date = captures.get(3).map(|m| m.as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
         .args(["--version"])
@@ -91,18 +92,20 @@ fn test_version_info() {
     let release_line = lines.next().unwrap();
     assert_eq!(release_line, format!("release: {version}"));
 
-    // Line 3 is the commit hash.
-    let commit_hash_line = lines.next().unwrap();
-    assert!(
-        commit_hash_line.starts_with(&format!("commit-hash: {short_hash}")),
-        "commit hash line matches short hash: {commit_hash_line}"
-    );
+    // Lines 3 and 4 are the commit hash and date, if present.
+    if let Some(short_hash) = short_hash {
+        let commit_hash_line = lines.next().unwrap();
+        assert!(
+            commit_hash_line.starts_with(&format!("commit-hash: {short_hash}")),
+            "commit hash line matches short hash: {commit_hash_line}"
+        );
+    }
+    if let Some(date) = date {
+        let commit_date_line = lines.next().unwrap();
+        assert_eq!(commit_date_line, format!("commit-date: {date}"));
+    }
 
-    // Line 4 is the commit date.
-    let commit_date_line = lines.next().unwrap();
-    assert_eq!(commit_date_line, format!("commit-date: {date}"));
-
-    // Line 5 is the host. Just check that it begins with "host: ".
+    // The last line is the host. Just check that it begins with "host: ".
     let host_line = lines.next().unwrap();
     assert!(
         host_line.starts_with("host: "),
