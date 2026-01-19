@@ -35,7 +35,7 @@ use tracing::warn;
 /// Options for the replay command.
 #[derive(Debug, Args)]
 pub(crate) struct ReplayOpts {
-    /// Run ID to replay.
+    /// Run ID to replay, or `latest`.
     ///
     /// Accepts "latest" (the default) for the most recent completed run,
     /// or a full UUID or unambiguous prefix.
