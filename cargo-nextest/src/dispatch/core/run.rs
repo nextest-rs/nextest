@@ -760,11 +760,24 @@ fn check_experimental_filtering(_output: crate::output::OutputContext) {
     }
 }
 
-/// Captures environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
+/// Captures environment variables that affect nextest behavior (`NEXTEST_*` and `CARGO_*`).
+///
+/// Excludes variables ending with `_TOKEN` to avoid capturing sensitive tokens.
 fn capture_env_vars_for_recording() -> BTreeMap<String, String> {
-    std::env::vars()
-        .filter(|(key, _)| key.starts_with("NEXTEST_") || key.starts_with("CARGO_"))
-        .collect()
+    filter_env_vars_for_recording(std::env::vars())
+}
+
+/// Filters environment variables for recording.
+///
+/// Includes only `NEXTEST_*` and `CARGO_*` variables, excluding those ending
+/// with `_TOKEN` to avoid capturing sensitive tokens.
+pub(super) fn filter_env_vars_for_recording(
+    vars: impl Iterator<Item = (String, String)>,
+) -> BTreeMap<String, String> {
+    vars.filter(|(key, _)| {
+        (key.starts_with("NEXTEST_") || key.starts_with("CARGO_")) && !key.ends_with("_TOKEN")
+    })
+    .collect()
 }
 
 /// Application for running tests (run/list/bench).

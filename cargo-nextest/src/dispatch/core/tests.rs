@@ -3,9 +3,11 @@
 
 //! Tests for core CLI argument parsing.
 
+use super::run::filter_env_vars_for_recording;
 use crate::dispatch::{app::CargoNextestApp, core::filter::TestBuildFilter};
 use clap::Parser;
 use nextest_runner::run_mode::NextestRunMode;
+use std::collections::BTreeMap;
 
 #[test]
 fn test_argument_parsing() {
@@ -506,4 +508,45 @@ fn test_test_binary_argument_parsing() {
             panic!("{s} should have errored out with TestBinaryArgsParseError, actual: {res:?}",);
         }
     }
+}
+
+#[test]
+fn test_filter_env_vars_for_recording() {
+    let input = [
+        // Should be included: NEXTEST_* and CARGO_* prefixes.
+        ("NEXTEST_PROFILE", "ci"),
+        ("CARGO_HOME", "/home/user/.cargo"),
+        ("NEXTEST_TEST_THREADS", "4"),
+        ("CARGO_TARGET_DIR", "/tmp/target"),
+        // Should be excluded: ends with _TOKEN.
+        ("NEXTEST_TOKEN", "secret123"),
+        ("CARGO_REGISTRY_TOKEN", "crates-io-token"),
+        ("NEXTEST_API_TOKEN", "api-secret"),
+        // Should be excluded: neither NEXTEST_* nor CARGO_*.
+        ("PATH", "/usr/bin"),
+        ("HOME", "/home/user"),
+        ("RUST_BACKTRACE", "1"),
+        // Should be excluded: has TOKEN suffix but wrong prefix.
+        ("MY_TOKEN", "other-token"),
+        // Edge case: TOKEN in the middle, not at the end (should be included).
+        ("NEXTEST_TOKEN_COUNT", "5"),
+        ("CARGO_TOKEN_PATH", "/path"),
+    ];
+
+    let result =
+        filter_env_vars_for_recording(input.into_iter().map(|(k, v)| (k.to_owned(), v.to_owned())));
+
+    let expected: BTreeMap<String, String> = [
+        ("CARGO_HOME", "/home/user/.cargo"),
+        ("CARGO_TARGET_DIR", "/tmp/target"),
+        ("CARGO_TOKEN_PATH", "/path"),
+        ("NEXTEST_PROFILE", "ci"),
+        ("NEXTEST_TEST_THREADS", "4"),
+        ("NEXTEST_TOKEN_COUNT", "5"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_owned(), v.to_owned()))
+    .collect();
+
+    assert_eq!(result, expected);
 }
