@@ -697,7 +697,7 @@ impl<'a> DisplayRecordedRunInfoDetailed<'a> {
             self.redactor
                 .redact_size(sizes.log.uncompressed)
                 .style(self.styles.size),
-            sizes.log.entries.style(self.styles.count),
+            sizes.log.entries.style(self.styles.size),
         )?;
 
         writeln!(
@@ -710,7 +710,7 @@ impl<'a> DisplayRecordedRunInfoDetailed<'a> {
             self.redactor
                 .redact_size(sizes.store.uncompressed)
                 .style(self.styles.size),
-            sizes.store.entries.style(self.styles.count),
+            sizes.store.entries.style(self.styles.size),
         )?;
 
         // Draw a horizontal line before "total".
