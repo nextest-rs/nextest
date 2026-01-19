@@ -1,14 +1,13 @@
 ---
 source: nextest-runner/src/record/display.rs
-expression: "runs[2].display_detailed(&index, &replayable, &Styles::default(),\n&theme_characters, &redactor).to_string()"
-snapshot_kind: text
+expression: "runs[2].display_detailed(&index, &replayable, now, &Styles::default(),\n&theme_characters, &redactor).to_string()"
 ---
 Run 550e8400-e29b-41d4-a716-446655440010
 
   nextest version:  0.9.122
   status:           stress completed (exit code 0)
-  started at:       2024-06-25 10:00:00 +00:00
-  last written at:  2024-06-25 10:00:00 +00:00
+  started at:       2024-06-25 10:00:00 +00:00 (3h ago)
+  last written at:  2024-06-25 10:00:00 +00:00 (3h ago)
   duration:         12.345s
   replayable:       yes
 

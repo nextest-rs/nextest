@@ -10,6 +10,7 @@ use crate::{
     output::{OutputContext, OutputWriter},
 };
 use camino::{Utf8Path, Utf8PathBuf};
+use chrono::Utc;
 use clap::{Args, Subcommand};
 use nextest_runner::{
     helpers::ThemeCharacters,
@@ -78,6 +79,7 @@ impl InfoOpts {
         let display = run.display_detailed(
             snapshot.run_id_index(),
             &replayability,
+            Utc::now(),
             styles,
             theme_characters,
             redactor,

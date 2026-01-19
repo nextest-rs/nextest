@@ -1,14 +1,13 @@
 ---
 source: nextest-runner/src/record/display.rs
-expression: "run.display_detailed(&index, &incomplete, &Styles::default(),\n&theme_characters, &redactor).to_string()"
-snapshot_kind: text
+expression: "run.display_detailed(&index, &incomplete, now, &Styles::default(),\n&theme_characters, &redactor).to_string()"
 ---
 Run 550e8400-e29b-41d4-a716-446655440000
 
   nextest version:  0.9.100
   status:           completed (exit code 0)
-  started at:       2024-06-15 10:30:00 +00:00
-  last written at:  2024-06-15 10:30:00 +00:00
+  started at:       2024-06-15 10:30:00 +00:00 (10d ago)
+  last written at:  2024-06-15 10:30:00 +00:00 (10d ago)
   duration:         1.000s
   replayable:       maybe: run is incomplete (archive may be partial)
 

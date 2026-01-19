@@ -6,7 +6,10 @@
 //! Used for snapshot testing.
 
 use crate::{
-    helpers::{FormattedDuration, convert_rel_path_to_forward_slash, u64_decimal_char_width},
+    helpers::{
+        FormattedDuration, FormattedRelativeDuration, convert_rel_path_to_forward_slash,
+        u64_decimal_char_width,
+    },
     list::RustBuildMeta,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -34,6 +37,8 @@ static TIMESTAMP_REDACTION: &str = "XXXX-XX-XX XX:XX:XX";
 static SIZE_REDACTION: &str = "<size>";
 /// Placeholder for redacted version strings.
 static VERSION_REDACTION: &str = "<version>";
+/// Placeholder for redacted relative durations (e.g. "30s ago").
+static RELATIVE_DURATION_REDACTION: &str = "<ago>";
 
 /// A helper for redacting data that varies by environment.
 ///
@@ -221,6 +226,20 @@ impl Redactor {
                 Some(secs) => format!("{:.3}s", secs),
                 None => "-".to_string(),
             }
+        }
+    }
+
+    /// Redacts a relative duration for display (e.g. "30s ago").
+    ///
+    /// Produces `<ago>` when active, otherwise formats the duration.
+    pub(crate) fn redact_relative_duration(
+        &self,
+        orig: Duration,
+    ) -> RedactorOutput<FormattedRelativeDuration> {
+        if self.kind.is_active() {
+            RedactorOutput::Redacted(RELATIVE_DURATION_REDACTION.to_string())
+        } else {
+            RedactorOutput::Unredacted(FormattedRelativeDuration(orig))
         }
     }
 

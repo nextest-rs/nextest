@@ -17,6 +17,7 @@ use crate::{
     redact::{Redactor, SizeDisplay},
 };
 use camino::Utf8Path;
+use chrono::{DateTime, Utc};
 use owo_colors::{OwoColorize, Style};
 use std::{error::Error, fmt};
 use swrite::{SWrite, swrite};
@@ -486,6 +487,7 @@ pub struct DisplayRecordedRunInfoDetailed<'a> {
     run: &'a RecordedRunInfo,
     run_id_index: &'a RunIdIndex,
     replayability: &'a ReplayabilityStatus,
+    now: DateTime<Utc>,
     styles: &'a Styles,
     theme_characters: &'a ThemeCharacters,
     redactor: &'a Redactor,
@@ -496,6 +498,7 @@ impl<'a> DisplayRecordedRunInfoDetailed<'a> {
         run: &'a RecordedRunInfo,
         run_id_index: &'a RunIdIndex,
         replayability: &'a ReplayabilityStatus,
+        now: DateTime<Utc>,
         styles: &'a Styles,
         theme_characters: &'a ThemeCharacters,
         redactor: &'a Redactor,
@@ -504,6 +507,7 @@ impl<'a> DisplayRecordedRunInfoDetailed<'a> {
             run,
             run_id_index,
             replayability,
+            now,
             styles,
             theme_characters,
             redactor,
@@ -776,16 +780,43 @@ impl fmt::Display for DisplayRecordedRunInfoDetailed<'_> {
         }
 
         self.write_status_field(f)?;
+        // Compute and display started at with relative duration.
+        let timestamp = self.redactor.redact_detailed_timestamp(&run.started_at);
+        let relative_duration = self
+            .now
+            .signed_duration_since(run.started_at.with_timezone(&Utc))
+            .to_std()
+            .unwrap_or(std::time::Duration::ZERO);
+        let relative_display = self.redactor.redact_relative_duration(relative_duration);
         self.write_field(
             f,
             "started at",
-            self.redactor.redact_detailed_timestamp(&run.started_at),
+            format!(
+                "{} ({} ago)",
+                timestamp,
+                relative_display.style(self.styles.count)
+            ),
         )?;
+        // Compute and display last written at with relative duration.
+        let last_written_timestamp = self
+            .redactor
+            .redact_detailed_timestamp(&run.last_written_at);
+        let last_written_relative_duration = self
+            .now
+            .signed_duration_since(run.last_written_at.with_timezone(&Utc))
+            .to_std()
+            .unwrap_or(std::time::Duration::ZERO);
+        let last_written_relative_display = self
+            .redactor
+            .redact_relative_duration(last_written_relative_duration);
         self.write_field(
             f,
             "last written at",
-            self.redactor
-                .redact_detailed_timestamp(&run.last_written_at),
+            format!(
+                "{} ({} ago)",
+                last_written_timestamp,
+                last_written_relative_display.style(self.styles.count)
+            ),
         )?;
         self.write_field(
             f,
@@ -930,9 +961,19 @@ mod tests {
         },
         redact::Redactor,
     };
-    use chrono::DateTime;
+    use chrono::{DateTime, Utc};
     use semver::Version;
     use std::{collections::BTreeMap, num::NonZero};
+
+    /// Returns a fixed "now" time for testing relative duration display.
+    ///
+    /// This time is 30 seconds after the latest test timestamp used in the tests,
+    /// which is "2024-06-25T13:00:00+00:00".
+    fn test_now() -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339("2024-06-25T13:00:30+00:00")
+            .expect("valid datetime")
+            .with_timezone(&Utc)
+    }
 
     /// Creates a `RecordedRunInfo` for testing display functions.
     fn make_run_info(
@@ -1882,6 +1923,7 @@ mod tests {
         let index = RunIdIndex::new(&runs);
         let theme_characters = ThemeCharacters::default();
         let redactor = Redactor::noop();
+        let now = test_now();
         // Use default (definitely replayable) status for most tests.
         let replayable = ReplayabilityStatus::Replayable;
         // Use incomplete status for the incomplete run.
@@ -1893,6 +1935,7 @@ mod tests {
                 .display_detailed(
                     &index,
                     &replayable,
+                    now,
                     &Styles::default(),
                     &theme_characters,
                     &redactor
@@ -1905,6 +1948,7 @@ mod tests {
                 .display_detailed(
                     &index,
                     &incomplete,
+                    now,
                     &Styles::default(),
                     &theme_characters,
                     &redactor
@@ -1917,6 +1961,7 @@ mod tests {
                 .display_detailed(
                     &index,
                     &replayable,
+                    now,
                     &Styles::default(),
                     &theme_characters,
                     &redactor
@@ -1929,6 +1974,7 @@ mod tests {
                 .display_detailed(
                     &index,
                     &replayable,
+                    now,
                     &Styles::default(),
                     &theme_characters,
                     &redactor
@@ -1941,6 +1987,7 @@ mod tests {
                 .display_detailed(
                     &index,
                     &replayable,
+                    now,
                     &Styles::default(),
                     &theme_characters,
                     &redactor
@@ -1953,6 +2000,7 @@ mod tests {
                 .display_detailed(
                     &index,
                     &replayable,
+                    now,
                     &Styles::default(),
                     &theme_characters,
                     &redactor
@@ -1980,6 +2028,7 @@ mod tests {
         let index = RunIdIndex::new(runs);
         let theme_characters = ThemeCharacters::default();
         let redactor = Redactor::noop();
+        let now = test_now();
 
         // Test: definitely replayable (no issues).
         let definitely_replayable = ReplayabilityStatus::Replayable;
@@ -1988,6 +2037,7 @@ mod tests {
             run.display_detailed(
                 &index,
                 &definitely_replayable,
+                now,
                 &Styles::default(),
                 &theme_characters,
                 &redactor
@@ -2006,6 +2056,7 @@ mod tests {
             run.display_detailed(
                 &index,
                 &format_too_new,
+                now,
                 &Styles::default(),
                 &theme_characters,
                 &redactor
@@ -2021,6 +2072,7 @@ mod tests {
             run.display_detailed(
                 &index,
                 &missing_store,
+                now,
                 &Styles::default(),
                 &theme_characters,
                 &redactor
@@ -2036,6 +2088,7 @@ mod tests {
             run.display_detailed(
                 &index,
                 &missing_log,
+                now,
                 &Styles::default(),
                 &theme_characters,
                 &redactor
@@ -2051,6 +2104,7 @@ mod tests {
             run.display_detailed(
                 &index,
                 &status_unknown,
+                now,
                 &Styles::default(),
                 &theme_characters,
                 &redactor
@@ -2065,6 +2119,7 @@ mod tests {
             run.display_detailed(
                 &index,
                 &incomplete,
+                now,
                 &Styles::default(),
                 &theme_characters,
                 &redactor
@@ -2082,6 +2137,7 @@ mod tests {
             run.display_detailed(
                 &index,
                 &multiple_blocking,
+                now,
                 &Styles::default(),
                 &theme_characters,
                 &redactor
