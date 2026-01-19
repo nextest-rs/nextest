@@ -741,12 +741,16 @@ impl RecordedRunInfo {
     /// The `replayability` parameter should be computed by the caller using
     /// [`Self::check_replayability`].
     ///
+    /// The `now` parameter is the current time, used to compute relative
+    /// durations (e.g. "30s ago").
+    ///
     /// The `redactor` parameter redacts paths, timestamps, durations, and sizes
     /// for snapshot testing. Use `Redactor::noop()` if no redaction is needed.
     pub fn display_detailed<'a>(
         &'a self,
         run_id_index: &'a RunIdIndex,
         replayability: &'a ReplayabilityStatus,
+        now: DateTime<Utc>,
         styles: &'a Styles,
         theme_characters: &'a ThemeCharacters,
         redactor: &'a Redactor,
@@ -755,6 +759,7 @@ impl RecordedRunInfo {
             self,
             run_id_index,
             replayability,
+            now,
             styles,
             theme_characters,
             redactor,
