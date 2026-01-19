@@ -168,6 +168,8 @@ Store management and inspection:
 ```
 cargo nextest store list             # List all recorded runs (includes total size)
 cargo nextest store list -v          # Also show store location
+cargo nextest store info <run-id>    # Show details for a specific run
+cargo nextest store info -r <run-id> # Equivalent (flag is optional)
 cargo nextest store prune            # Prune old runs per retention policy
 ```
 

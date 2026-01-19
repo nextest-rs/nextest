@@ -39,15 +39,33 @@ pub(crate) enum StoreCommand {
 /// Options for the `cargo nextest store info` command.
 #[derive(Debug, Args)]
 pub(crate) struct InfoOpts {
-    /// Run ID to show info for.
+    /// Run ID to show info for [aliases: -r].
     ///
-    /// Accepts "latest" (the default) for the most recent completed run, or a
-    /// full UUID or unambiguous prefix.
-    #[arg(long, short = 'r', value_name = "RUN_ID", default_value_t)]
-    run_id: RunIdSelector,
+    /// Accepts "latest" for the most recent completed run, or a full UUID or
+    /// unambiguous prefix.
+    #[arg(value_name = "RUN_ID", required_unless_present = "run_id_opt")]
+    run_id: Option<RunIdSelector>,
+
+    /// Run ID to show info for (alternative to positional argument).
+    #[arg(
+        short = 'r',
+        long = "run-id",
+        hide = true,
+        value_name = "RUN_ID",
+        conflicts_with = "run_id"
+    )]
+    run_id_opt: Option<RunIdSelector>,
 }
 
 impl InfoOpts {
+    fn resolved_run_id(&self) -> &RunIdSelector {
+        // One of these must be Some due to clap's required_unless_present.
+        self.run_id
+            .as_ref()
+            .or(self.run_id_opt.as_ref())
+            .expect("run_id or run_id_opt is present due to clap validation")
+    }
+
     fn exec(
         &self,
         cache_dir: &Utf8Path,
@@ -64,9 +82,8 @@ impl InfoOpts {
             .map_err(|err| ExpectedError::RecordSetupError { err })?
             .into_snapshot();
 
-        // Resolve run ID (or get most recent).
         let resolved = snapshot
-            .resolve_run_id(&self.run_id)
+            .resolve_run_id(self.resolved_run_id())
             .map_err(|err| ExpectedError::RunIdResolutionError { err })?;
         let run_id = resolved.run_id;
 

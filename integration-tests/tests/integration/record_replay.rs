@@ -254,7 +254,7 @@ fn test_record_replay_cycle() {
 
     // Verify store info shows detailed run info including CLI and env vars.
     let info_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
-        .args(["store", "info"])
+        .args(["store", "info", "latest"])
         .output();
     assert!(
         info_output.exit_status.success(),
