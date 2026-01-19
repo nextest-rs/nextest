@@ -121,10 +121,14 @@ impl RecordSession {
     /// since the recording itself has already completed successfully.
     ///
     /// This should be called after `reporter.finish()` returns the recording sizes.
+    ///
+    /// The `exit_code` parameter should be the exit code that the process will
+    /// return. This is stored in the run metadata for later inspection.
     pub fn finalize(
         self,
         recording_sizes: Option<StoreSizes>,
         run_finished: Option<RunFinishedInfo>,
+        exit_code: i32,
         policy: &RecordRetentionPolicy,
     ) -> RecordFinalizeResult {
         let mut result = RecordFinalizeResult::default();
@@ -137,7 +141,7 @@ impl RecordSession {
         // Convert run finished info to status and duration.
         let (status, duration_secs) = match run_finished {
             Some(info) => (
-                convert_run_stats_to_status(info.stats),
+                convert_run_stats_to_status(info.stats, exit_code),
                 Some(info.elapsed.as_secs_f64()),
             ),
             // This shouldn't happen when recording_sizes is Some, but handle gracefully.
@@ -210,13 +214,14 @@ impl RecordSession {
 }
 
 /// Converts `RunFinishedStats` to `RecordedRunStatus`.
-fn convert_run_stats_to_status(stats: RunFinishedStats) -> RecordedRunStatus {
+fn convert_run_stats_to_status(stats: RunFinishedStats, exit_code: i32) -> RecordedRunStatus {
     match stats {
         RunFinishedStats::Single(run_stats) => {
             let completed_stats = CompletedRunStats {
                 initial_run_count: run_stats.initial_run_count,
                 passed: run_stats.passed,
                 failed: run_stats.failed_count(),
+                exit_code,
             };
 
             // Check if the run was cancelled based on final stats.
@@ -232,6 +237,7 @@ fn convert_run_stats_to_status(stats: RunFinishedStats) -> RecordedRunStatus {
                 initial_iteration_count: stress_stats.completed.total,
                 success_count: stress_stats.success_count,
                 failed_count: stress_stats.failed_count,
+                exit_code,
             };
 
             // Check if the stress run was cancelled.

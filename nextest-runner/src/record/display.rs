@@ -541,6 +541,28 @@ impl<'a> DisplayRecordedRunInfoDetailed<'a> {
         )
     }
 
+    /// Writes the status field with exit code for completed runs.
+    fn write_status_field(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let status_str = self.run.status.short_status_str();
+        let exit_code = self.run.status.exit_code();
+
+        match exit_code {
+            Some(code) => {
+                let exit_code_style = if code == 0 {
+                    self.styles.passed
+                } else {
+                    self.styles.failed
+                };
+                self.write_field(
+                    f,
+                    "status",
+                    format!("{} (exit code {})", status_str, code.style(exit_code_style)),
+                )
+            }
+            None => self.write_field(f, "status", status_str),
+        }
+    }
+
     /// Writes the replayable field with yes/no/maybe styling and reasons.
     fn write_replayable(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.replayability {
@@ -753,7 +775,7 @@ impl fmt::Display for DisplayRecordedRunInfoDetailed<'_> {
             self.write_field(f, "env", self.format_env_vars())?;
         }
 
-        self.write_field(f, "status", run.status.short_status_str())?;
+        self.write_status_field(f)?;
         self.write_field(
             f,
             "started at",
@@ -1142,6 +1164,7 @@ mod tests {
                 initial_run_count: 100,
                 passed: 95,
                 failed: 5,
+                exit_code: 100,
             }),
         );
         let runs = std::slice::from_ref(&run);
@@ -1185,6 +1208,7 @@ mod tests {
                 initial_run_count: 17,
                 passed: 10,
                 failed: 6,
+                exit_code: 100,
             }),
         );
         let runs = std::slice::from_ref(&run);
@@ -1209,6 +1233,7 @@ mod tests {
                 initial_run_count: 0,
                 passed: 0,
                 failed: 0,
+                exit_code: 0,
             }),
         );
         let runs = std::slice::from_ref(&run);
@@ -1233,6 +1258,7 @@ mod tests {
                 initial_iteration_count: NonZero::new(100),
                 success_count: 100,
                 failed_count: 0,
+                exit_code: 0,
             }),
         );
         let runs = std::slice::from_ref(&run);
@@ -1254,6 +1280,7 @@ mod tests {
                 initial_iteration_count: NonZero::new(100),
                 success_count: 95,
                 failed_count: 5,
+                exit_code: 0,
             }),
         );
         let runs = std::slice::from_ref(&run);
@@ -1278,6 +1305,7 @@ mod tests {
                 initial_iteration_count: NonZero::new(100),
                 success_count: 50,
                 failed_count: 10,
+                exit_code: 0,
             }),
         );
         let runs = std::slice::from_ref(&run);
@@ -1299,6 +1327,7 @@ mod tests {
                 initial_iteration_count: None,
                 success_count: 50,
                 failed_count: 10,
+                exit_code: 0,
             }),
         );
         let runs = std::slice::from_ref(&run);
@@ -1324,6 +1353,7 @@ mod tests {
                     initial_run_count: 559,
                     passed: 559,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
             make_run_info(
@@ -1335,6 +1365,7 @@ mod tests {
                     initial_run_count: 51,
                     passed: 51,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
             make_run_info(
@@ -1346,6 +1377,7 @@ mod tests {
                     initial_run_count: 17,
                     passed: 10,
                     failed: 6,
+                    exit_code: 0,
                 }),
             ),
         ];
@@ -1386,6 +1418,7 @@ mod tests {
                     initial_iteration_count: NonZero::new(1000),
                     success_count: 1000,
                     failed_count: 0,
+                    exit_code: 0,
                 }),
             ),
             make_run_info(
@@ -1397,6 +1430,7 @@ mod tests {
                     initial_iteration_count: NonZero::new(100),
                     success_count: 95,
                     failed_count: 5,
+                    exit_code: 0,
                 }),
             ),
             make_run_info(
@@ -1408,6 +1442,7 @@ mod tests {
                     initial_iteration_count: NonZero::new(500),
                     success_count: 45,
                     failed_count: 5,
+                    exit_code: 0,
                 }),
             ),
         ];
@@ -1459,6 +1494,7 @@ mod tests {
                 initial_run_count: 50,
                 passed: 50,
                 failed: 0,
+                exit_code: 0,
             }),
         )];
         let index = RunIdIndex::new(&runs);
@@ -1486,6 +1522,7 @@ mod tests {
                     initial_run_count: 100,
                     passed: 100,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
             make_run_info(
@@ -1525,6 +1562,7 @@ mod tests {
                     initial_run_count: 10,
                     passed: 10,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
             make_run_info(
@@ -1536,6 +1574,7 @@ mod tests {
                     initial_run_count: 20,
                     passed: 18,
                     failed: 2,
+                    exit_code: 0,
                 }),
             ),
             make_run_info(
@@ -1547,6 +1586,7 @@ mod tests {
                     initial_run_count: 30,
                     passed: 30,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
         ];
@@ -1575,6 +1615,7 @@ mod tests {
                     initial_run_count: 5,
                     passed: 5,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
             make_run_info(
@@ -1586,6 +1627,7 @@ mod tests {
                     initial_run_count: 10,
                     passed: 10,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
         ];
@@ -1616,6 +1658,7 @@ mod tests {
                     initial_run_count: 100,
                     passed: 100,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
             make_run_info(
@@ -1627,6 +1670,7 @@ mod tests {
                     initial_run_count: 200,
                     passed: 200,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
         ];
@@ -1657,6 +1701,7 @@ mod tests {
                     initial_run_count: 5,
                     passed: 5,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
             make_run_info_with_duration(
@@ -1669,6 +1714,7 @@ mod tests {
                     initial_run_count: 10,
                     passed: 10,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
             make_run_info_with_duration(
@@ -1681,6 +1727,7 @@ mod tests {
                     initial_run_count: 20,
                     passed: 20,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
             make_run_info_with_duration(
@@ -1693,6 +1740,7 @@ mod tests {
                     initial_run_count: 30,
                     passed: 28,
                     failed: 2,
+                    exit_code: 0,
                 }),
             ),
             make_run_info_with_duration(
@@ -1705,6 +1753,7 @@ mod tests {
                     initial_run_count: 50,
                     passed: 50,
                     failed: 0,
+                    exit_code: 0,
                 }),
             ),
         ];
@@ -1748,6 +1797,7 @@ mod tests {
                 initial_run_count: 100,
                 passed: 95,
                 failed: 5,
+                exit_code: 100,
             }),
         );
 
@@ -1772,6 +1822,7 @@ mod tests {
                 initial_iteration_count: NonZero::new(100),
                 success_count: 100,
                 failed_count: 0,
+                exit_code: 0,
             }),
         );
 
@@ -1786,6 +1837,7 @@ mod tests {
                 initial_iteration_count: NonZero::new(100),
                 success_count: 95,
                 failed_count: 5,
+                exit_code: 0,
             }),
         );
 
@@ -1800,6 +1852,7 @@ mod tests {
                 initial_iteration_count: NonZero::new(100),
                 success_count: 50,
                 failed_count: 10,
+                exit_code: 0,
             }),
         );
 
@@ -1814,6 +1867,7 @@ mod tests {
                 initial_iteration_count: None,
                 success_count: 50,
                 failed_count: 10,
+                exit_code: 0,
             }),
         );
 
@@ -1919,6 +1973,7 @@ mod tests {
                 initial_run_count: 100,
                 passed: 100,
                 failed: 0,
+                exit_code: 0,
             }),
         );
         let runs = std::slice::from_ref(&run);

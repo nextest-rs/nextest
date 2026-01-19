@@ -218,24 +218,28 @@ pub(super) enum RecordedRunStatusFormat {
     /// The run was interrupted before completion.
     Incomplete,
     /// A normal test run completed.
+    #[serde(rename_all = "kebab-case")]
     Completed {
         /// The number of tests that were expected to run.
-        #[serde(rename = "initial-run-count")]
         initial_run_count: usize,
         /// The number of tests that passed.
         passed: usize,
         /// The number of tests that failed.
         failed: usize,
+        /// The exit code from the run.
+        exit_code: i32,
     },
     /// A normal test run was cancelled.
+    #[serde(rename_all = "kebab-case")]
     Cancelled {
         /// The number of tests that were expected to run.
-        #[serde(rename = "initial-run-count")]
         initial_run_count: usize,
         /// The number of tests that passed.
         passed: usize,
         /// The number of tests that failed.
         failed: usize,
+        /// The exit code from the run.
+        exit_code: i32,
     },
     /// A stress test run completed.
     #[serde(rename_all = "kebab-case")]
@@ -246,6 +250,8 @@ pub(super) enum RecordedRunStatusFormat {
         success_count: u32,
         /// The number of stress iterations that failed.
         failed_count: u32,
+        /// The exit code from the run.
+        exit_code: i32,
     },
     /// A stress test run was cancelled.
     #[serde(rename_all = "kebab-case")]
@@ -256,6 +262,8 @@ pub(super) enum RecordedRunStatusFormat {
         success_count: u32,
         /// The number of stress iterations that failed.
         failed_count: u32,
+        /// The exit code from the run.
+        exit_code: i32,
     },
     /// An unknown status from a newer version of nextest.
     ///
@@ -308,37 +316,45 @@ impl From<RecordedRunStatusFormat> for RecordedRunStatus {
                 initial_run_count,
                 passed,
                 failed,
+                exit_code,
             } => Self::Completed(CompletedRunStats {
                 initial_run_count,
                 passed,
                 failed,
+                exit_code,
             }),
             RecordedRunStatusFormat::Cancelled {
                 initial_run_count,
                 passed,
                 failed,
+                exit_code,
             } => Self::Cancelled(CompletedRunStats {
                 initial_run_count,
                 passed,
                 failed,
+                exit_code,
             }),
             RecordedRunStatusFormat::StressCompleted {
                 initial_iteration_count,
                 success_count,
                 failed_count,
+                exit_code,
             } => Self::StressCompleted(StressCompletedRunStats {
                 initial_iteration_count,
                 success_count,
                 failed_count,
+                exit_code,
             }),
             RecordedRunStatusFormat::StressCancelled {
                 initial_iteration_count,
                 success_count,
                 failed_count,
+                exit_code,
             } => Self::StressCancelled(StressCompletedRunStats {
                 initial_iteration_count,
                 success_count,
                 failed_count,
+                exit_code,
             }),
         }
     }
@@ -353,21 +369,25 @@ impl From<&RecordedRunStatus> for RecordedRunStatusFormat {
                 initial_run_count: stats.initial_run_count,
                 passed: stats.passed,
                 failed: stats.failed,
+                exit_code: stats.exit_code,
             },
             RecordedRunStatus::Cancelled(stats) => Self::Cancelled {
                 initial_run_count: stats.initial_run_count,
                 passed: stats.passed,
                 failed: stats.failed,
+                exit_code: stats.exit_code,
             },
             RecordedRunStatus::StressCompleted(stats) => Self::StressCompleted {
                 initial_iteration_count: stats.initial_iteration_count,
                 success_count: stats.success_count,
                 failed_count: stats.failed_count,
+                exit_code: stats.exit_code,
             },
             RecordedRunStatus::StressCancelled(stats) => Self::StressCancelled {
                 initial_iteration_count: stats.initial_iteration_count,
                 success_count: stats.success_count,
                 failed_count: stats.failed_count,
+                exit_code: stats.exit_code,
             },
         }
     }
@@ -634,6 +654,7 @@ mod tests {
             initial_run_count: 100,
             passed: 95,
             failed: 5,
+            exit_code: 0,
         });
         let json = serde_json::to_string_pretty(&run).expect("serialization should succeed");
         insta::assert_snapshot!(json);
@@ -645,6 +666,7 @@ mod tests {
             initial_run_count: 100,
             passed: 45,
             failed: 5,
+            exit_code: 100,
         });
         let json = serde_json::to_string_pretty(&run).expect("serialization should succeed");
         insta::assert_snapshot!(json);
@@ -656,6 +678,7 @@ mod tests {
             initial_iteration_count: NonZero::new(100),
             success_count: 98,
             failed_count: 2,
+            exit_code: 0,
         });
         let json = serde_json::to_string_pretty(&run).expect("serialization should succeed");
         insta::assert_snapshot!(json);
@@ -667,6 +690,7 @@ mod tests {
             initial_iteration_count: NonZero::new(100),
             success_count: 45,
             failed_count: 5,
+            exit_code: 100,
         });
         let json = serde_json::to_string_pretty(&run).expect("serialization should succeed");
         insta::assert_snapshot!(json);
@@ -713,6 +737,7 @@ mod tests {
             initial_run_count: 100,
             passed: 95,
             failed: 5,
+            exit_code: 0,
         });
         let json = serde_json::to_string(&original).expect("serialization should succeed");
         let roundtripped: RecordedRun =

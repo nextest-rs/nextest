@@ -8,7 +8,7 @@ Run 10000001-0000-0000-0000-000000000001
   nextest version:  <version>
   command:          '[EXE]' nextest --no-pager --manifest-path '[PATH]' --user-config-file '[PATH]' run --workspace --all-targets
   env:              CARGO_TERM_COLOR=never NEXTEST_CACHE_DIR='[PATH]' NEXTEST_SHOW_PROGRESS=counter NEXTEST_USER_CONFIG_FILE=none
-  status:           completed
+  status:           completed (exit code 100)
   started at:       XXXX-XX-XX XX:XX:XX
   last written at:  XXXX-XX-XX XX:XX:XX
   duration:         <duration>

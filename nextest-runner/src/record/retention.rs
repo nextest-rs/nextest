@@ -445,6 +445,7 @@ mod tests {
             initial_run_count: 10,
             passed: 10,
             failed: 0,
+            exit_code: 0,
         })
     }
 

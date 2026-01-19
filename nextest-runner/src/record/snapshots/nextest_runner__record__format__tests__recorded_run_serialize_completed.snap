@@ -36,6 +36,7 @@ snapshot_kind: text
     "status": "completed",
     "initial-run-count": 100,
     "passed": 95,
-    "failed": 5
+    "failed": 5,
+    "exit-code": 0
   }
 }

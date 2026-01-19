@@ -36,6 +36,7 @@ snapshot_kind: text
     "status": "stress-completed",
     "initial-iteration-count": 100,
     "success-count": 98,
-    "failed-count": 2
+    "failed-count": 2,
+    "exit-code": 0
   }
 }

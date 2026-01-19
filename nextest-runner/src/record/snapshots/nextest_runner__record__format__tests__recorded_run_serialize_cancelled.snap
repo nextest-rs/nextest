@@ -36,6 +36,7 @@ snapshot_kind: text
     "status": "cancelled",
     "initial-run-count": 100,
     "passed": 45,
-    "failed": 5
+    "failed": 5,
+    "exit-code": 100
   }
 }
