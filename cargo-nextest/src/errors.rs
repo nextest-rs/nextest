@@ -24,7 +24,7 @@ use owo_colors::{OwoColorize, Style};
 use quick_junit::ReportUuid;
 use semver::Version;
 use std::{error::Error, io, process::ExitStatus, string::FromUtf8Error};
-use swrite::{SWrite, swriteln};
+use swrite::{SWrite, swrite, swriteln};
 use thiserror::Error;
 use tracing::{Level, error, info};
 
@@ -779,25 +779,27 @@ impl ExpectedError {
                                 "- unknown scripts specified (known scripts: {known_scripts_str}):",
                             );
                             for error in unknown_scripts {
-                                errors_str.push_str(&format!(
+                                swrite!(
+                                    errors_str,
                                     "  - script `{}` specified within profile `{}`\n",
                                     error.name.style(styles.bold),
                                     error.profile_name.style(styles.bold)
-                                ));
+                                );
                             }
                         }
 
                         if !wrong_script_types.is_empty() {
                             swriteln!(errors_str, "- scripts specified with incorrect type:");
                             for error in wrong_script_types {
-                                errors_str.push_str(&format!(
+                                swrite!(
+                                    errors_str,
                                     "  - script `{}` specified within profile `{}` as {}, \
                                      but is actually {}\n",
                                     error.name.style(styles.bold),
                                     error.profile_name.style(styles.bold),
                                     error.attempted.style(styles.bold),
                                     error.actual.style(styles.bold)
-                                ));
+                                );
                             }
                         }
 

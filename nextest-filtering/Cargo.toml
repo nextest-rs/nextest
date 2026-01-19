@@ -47,3 +47,6 @@ clap.workspace = true
 proptest.workspace = true
 test-case.workspace = true
 test-strategy.workspace = true
+
+[lints]
+workspace = true

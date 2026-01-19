@@ -88,3 +88,6 @@ zip = { workspace = true, features = ["zstd"] }
 # https://docs.rs/num_threads/0.1.7/src/num_threads/lib.rs.html#5-8
 [target.'cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "macos", target_os = "ios", target_os = "aix"))'.dev-dependencies]
 num_threads.workspace = true
+
+[lints]
+workspace = true

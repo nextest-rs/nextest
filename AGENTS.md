@@ -139,6 +139,10 @@ Every Rust source file must start with:
 - Use `debug-ignore` to avoid expensive debug formatting in hot paths.
 - Stream data where possible rather than buffering.
 
+### String formatting
+
+- The `clippy::format_push_string` lint is enabled. If triggered, use the `swrite!` macro from the `swrite` crate instead of `push_str(&format!(...))`.
+
 ## Testing practices
 
 ### Running tests

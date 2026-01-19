@@ -149,6 +149,10 @@ xxhash-rust = { version = "0.8.15", features = ["xxh3", "xxh64"] }
 zip = { version = "7.1.0", default-features = false, features = ["zstd"] }
 zstd = { version = "0.13.3", features = ["zstdmt"] }
 
+[workspace.lints.clippy]
+format_push_string = "warn"
+ref_option = "warn"
+
 # make backtrace + color-eyre faster on debug builds
 [profile.dev.package.backtrace]
 opt-level = 3
