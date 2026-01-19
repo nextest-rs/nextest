@@ -34,7 +34,7 @@ pub(crate) struct ReplayOpts {
     ///
     /// Accepts "latest" (the default) for the most recent completed run,
     /// or a full UUID or unambiguous prefix.
-    #[arg(long, short = 'r', value_name = "RUN_ID", default_value_t)]
+    #[arg(long, short = 'R', value_name = "RUN_ID", default_value_t)]
     pub(crate) run_id: RunIdSelector,
 
     /// Exit with the same code as the original run.

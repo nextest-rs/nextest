@@ -57,7 +57,7 @@ To replay the last test run, run `cargo nextest replay`. This will show output t
     cat src/outputs/replay.ansi | ../scripts/strip-ansi.sh
     ```
 
-Earlier runs can be replayed by identifying them through their nextest run ID, with the `--run-id`/`-r` option to `cargo nextest replay`. Any unique prefix can be used; in colorized output, unique prefixes are highlighted in bold purple.
+Earlier runs can be replayed by identifying them through their nextest run ID, with the `--run-id`/`-R` option to `cargo nextest replay`. Any unique prefix can be used; in colorized output, unique prefixes are highlighted in bold purple.
 
 Replayed runs automatically use the [configured pager](../user-config/pager.md), such as `less`.
 
@@ -101,7 +101,7 @@ To list recorded runs, run `cargo nextest store list`. This produces output that
     cat src/outputs/store-list.ansi | ../scripts/strip-ansi.sh
     ```
 
-The highlighted prefixes can be used to uniquely identify a test run. For example, with the above output, to replay the run ID starting with `9d032152`, run `cargo nextest replay -r 9d`.
+The highlighted prefixes can be used to uniquely identify a test run. For example, with the above output, to replay the run ID starting with `9d032152`, run `cargo nextest replay -R 9d`.
 
 ## Record retention
 
