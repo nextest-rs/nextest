@@ -623,24 +623,16 @@ impl ReplayHeader {
     /// for this run ID will be computed and stored for highlighted display.
     pub fn new(
         run_id: ReportUuid,
-        run_info: Option<&RecordedRunInfo>,
+        run_info: &RecordedRunInfo,
         run_id_index: Option<&RunIdIndex>,
         newer_non_replayable_count: usize,
     ) -> Self {
-        let (started_at, status) = match run_info {
-            Some(info) => (info.started_at, info.status.clone()),
-            None => (
-                // Use current time as fallback if info is missing.
-                chrono::Utc::now().fixed_offset(),
-                RecordedRunStatus::Unknown,
-            ),
-        };
         let unique_prefix = run_id_index.and_then(|index| index.shortest_unique_prefix(run_id));
         Self {
             run_id,
             unique_prefix,
-            started_at,
-            status,
+            started_at: run_info.started_at,
+            status: run_info.status.clone(),
             newer_non_replayable_count,
         }
     }

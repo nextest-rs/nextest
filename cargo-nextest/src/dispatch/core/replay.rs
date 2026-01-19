@@ -7,8 +7,8 @@ use super::run::ReporterCommonOpts;
 use crate::{
     ExpectedError, Result,
     cargo_cli::CargoCli,
-    dispatch::{EarlyArgs, common::CommonOpts, helpers::final_stats_to_error},
-    output::{OutputContext, OutputWriter},
+    dispatch::{EarlyArgs, common::CommonOpts},
+    output::OutputContext,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Args;
@@ -19,15 +19,10 @@ use nextest_runner::{
     list::TestList,
     pager::PagedOutput,
     record::{
-        NoTestsBehavior, RecordOpts, RecordReader, ReplayContext, ReplayHeader,
-        ReplayReporterBuilder, RunIdSelector, RunStore, TestInstanceSummary,
-        format::RECORD_FORMAT_VERSION, records_cache_dir,
+        RecordReader, ReplayContext, ReplayHeader, ReplayReporterBuilder, RunIdSelector, RunStore,
+        TestInstanceSummary, format::RECORD_FORMAT_VERSION, records_cache_dir,
     },
-    reporter::{
-        ReporterOutput,
-        events::{FinalRunStats, RunFinishedStats, TestEventKind},
-    },
-    run_mode::NextestRunMode,
+    reporter::ReporterOutput,
     user_config::UserConfig,
 };
 use tracing::warn;
@@ -84,7 +79,6 @@ pub(crate) fn exec_replay(
     replay_opts: ReplayOpts,
     manifest_path: Option<Utf8PathBuf>,
     output: OutputContext,
-    _output_writer: &mut OutputWriter,
 ) -> Result<i32> {
     let mut cargo_cli = CargoCli::new("locate-project", manifest_path.as_deref(), output);
     cargo_cli.add_args(["--workspace", "--message-format=plain"]);
@@ -126,15 +120,15 @@ pub(crate) fn exec_replay(
         .map_err(|err| ExpectedError::RunIdResolutionError { err })?;
     let run_id = result.run_id;
 
-    let run_info = snapshot.get_run(run_id);
+    let run_info = snapshot
+        .get_run(run_id)
+        .expect("we just looked up the run ID so the info should be available");
 
     // Check the store format version before opening the archive.
-    if let Some(info) = run_info
-        && info.store_format_version != RECORD_FORMAT_VERSION
-    {
+    if run_info.store_format_version != RECORD_FORMAT_VERSION {
         return Err(ExpectedError::UnsupportedStoreFormatVersion {
             run_id,
-            found: info.store_format_version,
+            found: run_info.store_format_version,
             supported: RECORD_FORMAT_VERSION,
         });
     }
@@ -213,8 +207,6 @@ pub(crate) fn exec_replay(
     );
     reporter.write_header(&header)?;
 
-    let mut final_exit_code = NextestExitCode::OK;
-
     for event_result in reader
         .events()
         .map_err(|err| ExpectedError::RecordReadError { err })?
@@ -223,12 +215,6 @@ pub(crate) fn exec_replay(
 
         match replay_cx.convert_event(&event_summary, &mut reader) {
             Ok(event) => {
-                if replay_opts.exit_code
-                    && let TestEventKind::RunFinished { run_stats, .. } = &event.kind
-                {
-                    final_exit_code = compute_exit_code(run_stats, &record_opts);
-                }
-
                 reporter.write_event(&event)?;
             }
             Err(error) => {
@@ -243,21 +229,14 @@ pub(crate) fn exec_replay(
 
     reporter.finish();
 
-    Ok(final_exit_code)
-}
+    let exit_code = if replay_opts.exit_code {
+        run_info
+            .status
+            .exit_code()
+            .unwrap_or(NextestExitCode::INCOMPLETE_RUN)
+    } else {
+        NextestExitCode::OK
+    };
 
-/// Computes the exit code from run statistics using the same logic as live runs.
-fn compute_exit_code(run_stats: &RunFinishedStats, record_opts: &RecordOpts) -> i32 {
-    let final_stats = run_stats.final_stats();
-
-    if matches!(final_stats, FinalRunStats::NoTestsRun) {
-        return match record_opts.no_tests {
-            Some(NoTestsBehavior::Pass | NoTestsBehavior::Warn) => NextestExitCode::OK,
-            // None means the default behavior was used, which is "fail".
-            Some(NoTestsBehavior::Fail) | None => NextestExitCode::NO_TESTS_RUN,
-        };
-    }
-
-    final_stats_to_error(final_stats, NextestRunMode::Test)
-        .map_or(NextestExitCode::OK, |e| e.process_exit_code())
+    Ok(exit_code)
 }

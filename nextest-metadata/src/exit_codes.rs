@@ -42,6 +42,9 @@ impl NextestExitCode {
     /// A setup script failed.
     pub const SETUP_SCRIPT_FAILED: i32 = 105;
 
+    /// `cargo nextest replay` was run on an incomplete run.
+    pub const INCOMPLETE_RUN: i32 = 106;
+
     /// Writing data to stdout or stderr produced an error.
     pub const WRITE_OUTPUT_ERROR: i32 = 110;
 

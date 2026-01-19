@@ -195,13 +195,9 @@ impl AppOpts {
             ),
             Command::Self_ { command } => command.exec(output),
             Command::Debug { command } => command.exec(output),
-            Command::Replay(replay_opts) => exec_replay(
-                &early_args,
-                *replay_opts,
-                self.common.manifest_path,
-                output,
-                output_writer,
-            ),
+            Command::Replay(replay_opts) => {
+                exec_replay(&early_args, *replay_opts, self.common.manifest_path, output)
+            }
             Command::Store { command } => {
                 let host_platform =
                     Platform::build_target().expect("nextest is built for a supported platform");
