@@ -292,11 +292,12 @@ impl ProgressBarState {
             }
             if count < running_tests.len() {
                 let overflow_count = running_tests.len() - count;
-                msg.push_str(&format!(
+                swrite!(
+                    msg,
                     "\n             ... and {} more {} running",
                     overflow_count.style(styles.count),
                     plural::tests_str(self.mode, overflow_count),
-                ));
+                );
                 count += 1;
             }
             self.max_running_displayed = max(self.max_running_displayed, count);

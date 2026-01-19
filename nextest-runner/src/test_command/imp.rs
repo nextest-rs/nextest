@@ -153,8 +153,8 @@ async fn fill_buf_opt<R: AsyncRead + Unpin>(
 }
 
 /// A version of [`FusedBufReader::is_done`] that works with an `Option<FusedBufReader>`.
-fn is_done_opt<R: AsyncRead + Unpin>(reader: &Option<FusedBufReader<R>>) -> bool {
-    reader.as_ref().is_none_or(|r| r.is_done())
+fn is_done_opt<R: AsyncRead + Unpin>(reader: Option<&FusedBufReader<R>>) -> bool {
+    reader.is_none_or(|r| r.is_done())
 }
 
 /// Output and result accumulator for a child process.
@@ -223,7 +223,9 @@ impl ChildFds {
 
     pub(crate) fn is_done(&self) -> bool {
         match self {
-            Self::Split { stdout, stderr } => is_done_opt(stdout) && is_done_opt(stderr),
+            Self::Split { stdout, stderr } => {
+                is_done_opt(stdout.as_ref()) && is_done_opt(stderr.as_ref())
+            }
             Self::Combined { combined } => combined.is_done(),
         }
     }
@@ -256,10 +258,10 @@ impl ChildFds {
                 let (stdout_acc, stderr_acc) = acc.as_split_mut();
                 // Wait until either of these make progress.
                 tokio::select! {
-                    res = fill_buf_opt(stdout.as_mut(), stdout_acc), if !is_done_opt(stdout) => {
+                    res = fill_buf_opt(stdout.as_mut(), stdout_acc), if !is_done_opt(stdout.as_ref()) => {
                         res.map_err(|error| ChildFdError::ReadStdout(Arc::new(error)))
                     }
-                    res = fill_buf_opt(stderr.as_mut(), stderr_acc), if !is_done_opt(stderr) => {
+                    res = fill_buf_opt(stderr.as_mut(), stderr_acc), if !is_done_opt(stderr.as_ref()) => {
                         res.map_err(|error| ChildFdError::ReadStderr(Arc::new(error)))
                     }
                     // If both are done, do nothing.

@@ -30,3 +30,6 @@ test-case.workspace = true
 [features]
 default = []
 proptest1 = ["dep:proptest"]
+
+[lints]
+workspace = true

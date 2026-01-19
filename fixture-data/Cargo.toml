@@ -8,6 +8,9 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 bitflags.workspace = true
 iddqd.workspace = true

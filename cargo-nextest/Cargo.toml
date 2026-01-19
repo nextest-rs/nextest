@@ -74,3 +74,6 @@ pkg-url = "{ repo }/releases/download/cargo-nextest-{ version }/{ name }-{ versi
 
 [package.metadata.binstall.overrides.aarch64-apple-darwin]
 pkg-url = "{ repo }/releases/download/cargo-nextest-{ version }/{ name }-{ version }-universal-apple-darwin.tar.gz"
+
+[lints]
+workspace = true

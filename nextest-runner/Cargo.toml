@@ -182,3 +182,6 @@ experimental-tokio-console = [
     "dep:tracing-subscriber",
     "tokio/tracing",
 ]
+
+[lints]
+workspace = true
