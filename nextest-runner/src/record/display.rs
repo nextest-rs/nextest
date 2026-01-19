@@ -342,7 +342,8 @@ impl fmt::Display for DisplayRecordedRunInfo<'_> {
                 write!(f, "  ({})", "not replayable".style(self.styles.failed))?;
             }
             ReplayabilityStatus::Incomplete => {
-                write!(f, "  ({})", "incomplete".style(self.styles.cancelled))?;
+                // Don't show "incomplete" here because we already show that in
+                // the status column.
             }
         }
 
@@ -1231,7 +1232,7 @@ mod tests {
         let index = RunIdIndex::new(runs);
         let alignment = RunListAlignment::from_runs(runs);
         insta::assert_snapshot!(
-            run.display(&index, &ReplayabilityStatus::Replayable, alignment, &Styles::default(), &Redactor::noop())
+            run.display(&index, &ReplayabilityStatus::Incomplete, alignment, &Styles::default(), &Redactor::noop())
                 .to_string(),
             @"  550e8400  2024-06-16 11:00:00      1.000s      50 KB   incomplete"
         );
