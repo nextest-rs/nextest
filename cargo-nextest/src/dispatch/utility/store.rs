@@ -39,7 +39,7 @@ pub(crate) enum StoreCommand {
 /// Options for the `cargo nextest store info` command.
 #[derive(Debug, Args)]
 pub(crate) struct InfoOpts {
-    /// Run ID to show info for, or `latest` [aliases: -r].
+    /// Run ID to show info for, or `latest` [aliases: -R].
     ///
     /// Accepts "latest" for the most recent completed run, or a full UUID or
     /// unambiguous prefix.
@@ -48,7 +48,7 @@ pub(crate) struct InfoOpts {
 
     /// Run ID to show info for (alternative to positional argument).
     #[arg(
-        short = 'r',
+        short = 'R',
         long = "run-id",
         hide = true,
         value_name = "RUN_ID",

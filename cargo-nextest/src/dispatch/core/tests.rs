@@ -146,7 +146,7 @@ fn test_argument_parsing() {
         // ---
         "cargo nextest replay",
         "cargo nextest replay --run-id abc123",
-        "cargo nextest replay -r abc123",
+        "cargo nextest replay -R abc123",
         "cargo nextest replay --exit-code",
         "cargo nextest replay --no-capture",
         "cargo nextest replay --nocapture",

@@ -323,11 +323,11 @@ fn test_record_replay_cycle() {
 
     // Replay with explicit "latest" (should produce same output as default).
     let replay_latest = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
-        .args(["replay", "-r", "latest", "--status-level", "all"])
+        .args(["replay", "-R", "latest", "--status-level", "all"])
         .output();
     assert!(
         replay_latest.exit_status.success(),
-        "replay with -r latest should succeed: {replay_latest}"
+        "replay with -R latest should succeed: {replay_latest}"
     );
     check_run_output(
         &replay_latest.stdout,
