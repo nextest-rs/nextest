@@ -1035,7 +1035,10 @@ impl App {
 
         configure_handle_inheritance(no_capture)?;
         let run_stats = runner.try_execute(|event| reporter.report_event(event))?;
-        let stats = reporter.finish();
+        let reporter_stats = reporter.finish();
+
+        let result = final_result(NextestRunMode::Test, run_stats, runner_opts.no_tests);
+        let exit_code = result.as_ref().err().map_or(0, |e| e.process_exit_code());
 
         if let Some(session) = recording_session {
             let policy = RecordRetentionPolicy::from(&resolved_user_config.record);
@@ -1044,13 +1047,18 @@ impl App {
                 styles.colorize();
             }
             session
-                .finalize(stats.recording_sizes, stats.run_finished, &policy)
+                .finalize(
+                    reporter_stats.recording_sizes,
+                    reporter_stats.run_finished,
+                    exit_code,
+                    &policy,
+                )
                 .log(&styles);
         }
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
 
-        final_result(NextestRunMode::Test, run_stats, runner_opts.no_tests)
+        result
     }
 
     pub(crate) fn exec_bench(
@@ -1254,7 +1262,10 @@ impl App {
         // TODO: no_capture is always true for benchmarks for now.
         configure_handle_inheritance(true)?;
         let run_stats = runner.try_execute(|event| reporter.report_event(event))?;
-        let stats = reporter.finish();
+        let reporter_stats = reporter.finish();
+
+        let result = final_result(NextestRunMode::Benchmark, run_stats, runner_opts.no_tests);
+        let exit_code = result.as_ref().err().map_or(0, |e| e.process_exit_code());
 
         if let Some(session) = recording_session {
             let policy = RecordRetentionPolicy::from(&resolved_user_config.record);
@@ -1263,14 +1274,19 @@ impl App {
                 styles.colorize();
             }
             session
-                .finalize(stats.recording_sizes, stats.run_finished, &policy)
+                .finalize(
+                    reporter_stats.recording_sizes,
+                    reporter_stats.run_finished,
+                    exit_code,
+                    &policy,
+                )
                 .log(&styles);
         }
 
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
 
-        final_result(NextestRunMode::Benchmark, run_stats, runner_opts.no_tests)
+        result
     }
 }
 

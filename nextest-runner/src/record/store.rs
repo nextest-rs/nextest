@@ -504,6 +504,15 @@ impl RecordedRunStatus {
             Self::StressCancelled(_) => "stress cancelled",
         }
     }
+
+    /// Returns the exit code for completed runs, or `None` for incomplete/unknown runs.
+    pub fn exit_code(&self) -> Option<i32> {
+        match self {
+            Self::Incomplete | Self::Unknown => None,
+            Self::Completed(stats) | Self::Cancelled(stats) => Some(stats.exit_code),
+            Self::StressCompleted(stats) | Self::StressCancelled(stats) => Some(stats.exit_code),
+        }
+    }
 }
 
 /// Statistics for a normal test run that finished (completed or cancelled).
@@ -515,6 +524,8 @@ pub struct CompletedRunStats {
     pub passed: usize,
     /// The number of tests that failed (including exec failures and timeouts).
     pub failed: usize,
+    /// The exit code from the run.
+    pub exit_code: i32,
 }
 
 /// Statistics for a stress test run that finished (completed or cancelled).
@@ -529,6 +540,8 @@ pub struct StressCompletedRunStats {
     pub success_count: u32,
     /// The number of stress iterations that failed.
     pub failed_count: u32,
+    /// The exit code from the run.
+    pub exit_code: i32,
 }
 
 // ---
