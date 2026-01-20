@@ -13,7 +13,11 @@ use super::{
     },
     summary::{RecordOpts, TestEventSummary, ZipStoreOutput},
 };
-use crate::{errors::RecordReadError, user_config::elements::MAX_MAX_OUTPUT_SIZE};
+use crate::{
+    errors::RecordReadError,
+    record::format::{RERUN_INFO_JSON_PATH, RerunInfo},
+    user_config::elements::MAX_MAX_OUTPUT_SIZE,
+};
 use camino::{Utf8Path, Utf8PathBuf};
 use debug_ignore::DebugIgnore;
 use nextest_metadata::TestListSummary;
@@ -21,7 +25,7 @@ use std::{
     fs::File,
     io::{BufRead, BufReader, Read},
 };
-use zip::ZipArchive;
+use zip::{ZipArchive, result::ZipError};
 
 /// Reader for a recorded test run.
 ///
@@ -155,6 +159,32 @@ impl RecordReader {
             file_name: RECORD_OPTS_JSON_PATH.to_string(),
             error,
         })
+    }
+
+    /// Returns the rerun info from the archive, if this is a rerun.
+    ///
+    /// Returns `Ok(None)` if this run is not a rerun (the file doesn't exist).
+    /// Returns `Err` if the file exists but cannot be read or parsed.
+    pub fn read_rerun_info(&mut self) -> Result<Option<RerunInfo>, RecordReadError> {
+        match self.read_archive_file(RERUN_INFO_JSON_PATH) {
+            Ok(bytes) => {
+                let info = serde_json::from_slice(&bytes).map_err(|error| {
+                    RecordReadError::DeserializeMetadata {
+                        file_name: RERUN_INFO_JSON_PATH.to_string(),
+                        error,
+                    }
+                })?;
+                Ok(Some(info))
+            }
+            Err(RecordReadError::ReadArchiveFile {
+                error: ZipError::FileNotFound,
+                ..
+            }) => {
+                // File doesn't exist; this is not a rerun.
+                Ok(None)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Loads the dictionaries from the archive.

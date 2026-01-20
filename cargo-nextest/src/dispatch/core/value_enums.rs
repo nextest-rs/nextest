@@ -115,7 +115,7 @@ impl From<RunIgnoredOpt> for nextest_runner::test_filter::RunIgnored {
 /// No tests behavior options.
 #[derive(Clone, Copy, Debug, Default, ValueEnum)]
 pub(crate) enum NoTestsBehaviorOpt {
-    /// Use the default behavior (error with exit code 4).
+    /// Automatically determine behavior, defaulting to `fail`.
     #[default]
     Auto,
 

@@ -140,6 +140,7 @@ impl AppOpts {
                 let app = App::new(base, run_opts.build_filter)?;
                 app.exec_run(
                     run_opts.no_capture,
+                    run_opts.rerun.as_ref(),
                     &run_opts.runner_opts,
                     &run_opts.reporter_opts,
                     cli_args,
@@ -335,6 +336,7 @@ impl NtrOpts {
         let app = App::new(base, self.run_opts.build_filter)?;
         app.exec_run(
             self.run_opts.no_capture,
+            self.run_opts.rerun.as_ref(),
             &self.run_opts.runner_opts,
             &self.run_opts.reporter_opts,
             cli_args,

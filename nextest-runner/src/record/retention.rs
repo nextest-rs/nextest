@@ -427,6 +427,7 @@ mod tests {
             cli_args: Vec::new(),
             build_scope_args: Vec::new(),
             env_vars: BTreeMap::new(),
+            parent_run_id: None,
             sizes: RecordedSizes {
                 log: ComponentSizes::default(),
                 store: ComponentSizes {

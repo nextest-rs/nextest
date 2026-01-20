@@ -9,10 +9,15 @@ use super::{
 };
 use camino::Utf8Path;
 use chrono::{DateTime, FixedOffset, Utc};
+use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
+use nextest_metadata::{RustBinaryId, TestCaseName};
 use quick_junit::ReportUuid;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, num::NonZero};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZero,
+};
 
 // ---
 // runs.json.zst format types
@@ -152,6 +157,9 @@ pub(super) struct RecordedRun {
     /// This has a default for deserializing old runs.json.zst files that don't have this field.
     #[serde(default)]
     pub(super) env_vars: BTreeMap<String, String>,
+    /// The parent run ID.
+    #[serde(default)]
+    pub(super) parent_run_id: Option<ReportUuid>,
     /// Sizes broken down by component (log and store).
     ///
     /// This is all zeros until the run completes successfully.
@@ -291,6 +299,7 @@ impl From<RecordedRun> for RecordedRunInfo {
             cli_args: run.cli_args,
             build_scope_args: run.build_scope_args,
             env_vars: run.env_vars,
+            parent_run_id: run.parent_run_id,
             sizes: run.sizes.into(),
             status: run.status.into(),
         }
@@ -309,6 +318,7 @@ impl From<&RecordedRunInfo> for RecordedRun {
             cli_args: run.cli_args.clone(),
             build_scope_args: run.build_scope_args.clone(),
             env_vars: run.env_vars.clone(),
+            parent_run_id: run.parent_run_id,
             sizes: run.sizes.into(),
             status: (&run.status).into(),
         }
@@ -402,6 +412,82 @@ impl From<&RecordedRunStatus> for RecordedRunStatusFormat {
 }
 
 // ---
+// Rerun types
+// ---
+
+/// Rerun-specific metadata stored in `meta/rerun-info.json`.
+///
+/// This is only present for reruns (runs with a parent run).
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RerunInfo {
+    /// The immediate parent run ID.
+    pub parent_run_id: ReportUuid,
+
+    /// Root information from the original run.
+    pub root_info: RerunRootInfo,
+
+    /// The set of outstanding and passing test cases.
+    pub test_suites: IdOrdMap<RerunTestSuiteInfo>,
+}
+
+/// For a rerun, information obtained from the root of the rerun chain.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RerunRootInfo {
+    /// The run ID.
+    pub run_id: ReportUuid,
+
+    /// Build scope args from the original run.
+    pub build_scope_args: Vec<String>,
+}
+
+impl RerunRootInfo {
+    /// Creates a new `RerunRootInfo` for a root of a rerun chain.
+    ///
+    /// `build_scope_args` should be the build scope arguments extracted from
+    /// the original run's CLI args. Use `extract_build_scope_args` from
+    /// `cargo-nextest` to extract these.
+    pub fn new(run_id: ReportUuid, build_scope_args: Vec<String>) -> Self {
+        Self {
+            run_id,
+            build_scope_args,
+        }
+    }
+}
+
+/// A test suite's outstanding and passing test cases.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct RerunTestSuiteInfo {
+    /// The binary ID.
+    pub binary_id: RustBinaryId,
+
+    /// The set of passing test cases.
+    pub passing: BTreeSet<TestCaseName>,
+
+    /// The set of outstanding test cases.
+    pub outstanding: BTreeSet<TestCaseName>,
+}
+
+impl RerunTestSuiteInfo {
+    pub(super) fn new(binary_id: RustBinaryId) -> Self {
+        Self {
+            binary_id,
+            passing: BTreeSet::new(),
+            outstanding: BTreeSet::new(),
+        }
+    }
+}
+
+impl IdOrdItem for RerunTestSuiteInfo {
+    type Key<'a> = &'a RustBinaryId;
+    fn key(&self) -> Self::Key<'_> {
+        &self.binary_id
+    }
+    id_upcast!();
+}
+
+// ---
 // Archive format types
 // ---
 
@@ -420,6 +506,7 @@ pub(super) static RUN_LOG_FILE_NAME: &str = "run.log.zst";
 pub(super) static CARGO_METADATA_JSON_PATH: &str = "meta/cargo-metadata.json";
 pub(super) static TEST_LIST_JSON_PATH: &str = "meta/test-list.json";
 pub(super) static RECORD_OPTS_JSON_PATH: &str = "meta/record-opts.json";
+pub(super) static RERUN_INFO_JSON_PATH: &str = "meta/rerun-info.json";
 pub(super) static STDOUT_DICT_PATH: &str = "meta/stdout.dict";
 pub(super) static STDERR_DICT_PATH: &str = "meta/stderr.dict";
 
@@ -634,6 +721,9 @@ mod tests {
                 ("CARGO_TERM_COLOR".to_owned(), "always".to_owned()),
                 ("NEXTEST_PROFILE".to_owned(), "ci".to_owned()),
             ]),
+            parent_run_id: Some(ReportUuid::from_u128(
+                0x550e7400_e29b_41d4_a716_446655440000,
+            )),
             sizes: RecordedSizesFormat {
                 log: ComponentSizesFormat {
                     compressed: 2345,

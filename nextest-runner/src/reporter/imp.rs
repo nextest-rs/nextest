@@ -42,6 +42,12 @@ pub struct RunFinishedInfo {
     pub stats: RunFinishedStats,
     /// Total elapsed time for the run.
     pub elapsed: Duration,
+    /// The number of tests that were outstanding but not seen during this rerun.
+    ///
+    /// This is `None` if this was not a rerun. A value of `Some(0)` means all
+    /// outstanding tests from the rerun chain were seen during this run (and
+    /// either passed or failed).
+    pub outstanding_not_seen_count: Option<usize>,
 }
 
 /// Output destination for the reporter.
@@ -252,12 +258,16 @@ impl<'a> Reporter<'a> {
     fn write_event(&mut self, event: Box<TestEvent<'a>>) -> Result<(), WriteEventError> {
         // Capture run finished info before passing to reporters.
         if let TestEventKind::RunFinished {
-            run_stats, elapsed, ..
+            run_stats,
+            elapsed,
+            outstanding_not_seen,
+            ..
         } = &event.kind
         {
             self.run_finished = Some(RunFinishedInfo {
                 stats: *run_stats,
                 elapsed: *elapsed,
+                outstanding_not_seen_count: outstanding_not_seen.as_ref().map(|t| t.total_not_seen),
             });
         }
 

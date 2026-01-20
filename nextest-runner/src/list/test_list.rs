@@ -10,7 +10,9 @@ use crate::{
         scripts::{WrapperScriptConfig, WrapperScriptTargetRunner},
     },
     double_spawn::DoubleSpawnInfo,
-    errors::{CreateTestListError, FromMessagesError, WriteTestListError},
+    errors::{
+        CreateTestListError, FromMessagesError, TestListFromSummaryError, WriteTestListError,
+    },
     helpers::{convert_build_platform, dylib_path, dylib_path_envvar, write_test_name},
     indenter::indented,
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
@@ -40,10 +42,12 @@ use owo_colors::OwoColorize;
 use quick_junit::ReportUuid;
 use serde::{Deserialize, Serialize};
 use std::{
-    borrow::Cow,
+    borrow::{Borrow, Cow},
     collections::{BTreeMap, BTreeSet},
     ffi::{OsStr, OsString},
-    fmt, io,
+    fmt,
+    hash::{Hash, Hasher},
+    io,
     path::PathBuf,
     sync::{Arc, OnceLock},
 };
@@ -205,6 +209,10 @@ impl<'g> RustTestArtifact<'g> {
 pub struct SkipCounts {
     /// The number of skipped tests.
     pub skipped_tests: usize,
+
+    /// The number of skipped tests due to this being a rerun and the test was
+    /// already passing.
+    pub skipped_tests_rerun: usize,
 
     /// The number of tests skipped because they are not benchmarks.
     ///
@@ -397,19 +405,11 @@ impl<'g> TestList<'g> {
     /// This is used during replay to reconstruct a TestList without
     /// executing test binaries. The reconstructed TestList provides the
     /// data needed for display through the reporter infrastructure.
-    ///
-    /// # Arguments
-    ///
-    /// * `graph` - The package graph loaded from archived cargo metadata.
-    /// * `summary` - The test list summary loaded from the archive.
-    /// * `mode` - The run mode (normal test run or benchmark).
     pub fn from_summary(
         graph: &'g PackageGraph,
         summary: &TestListSummary,
         mode: NextestRunMode,
-    ) -> Result<Self, crate::errors::TestListFromSummaryError> {
-        use crate::errors::TestListFromSummaryError;
-
+    ) -> Result<Self, TestListFromSummaryError> {
         // Build RustBuildMeta from summary.
         let rust_build_meta = RustBuildMeta::from_summary(summary.rust_build_meta.clone())
             .map_err(TestListFromSummaryError::RustBuildMeta)?;
@@ -459,7 +459,7 @@ impl<'g> TestList<'g> {
 
                 test_count += test_cases.len();
 
-                // LISTED or any other status - treat as listed.
+                // LISTED or any other status should be treated as listed.
                 RustTestSuiteStatus::Listed {
                     test_cases: DebugIgnore(test_cases),
                 }
@@ -510,11 +510,18 @@ impl<'g> TestList<'g> {
     /// Returns the total number of skipped tests.
     pub fn skip_counts(&self) -> &SkipCounts {
         self.skip_counts.get_or_init(|| {
+            let mut skipped_tests_rerun = 0;
             let mut skipped_tests_non_benchmark = 0;
             let mut skipped_tests_default_filter = 0;
             let skipped_tests = self
                 .iter_tests()
                 .filter(|instance| match instance.test_info.filter_match {
+                    FilterMatch::Mismatch {
+                        reason: MismatchReason::RerunAlreadyPassed,
+                    } => {
+                        skipped_tests_rerun += 1;
+                        true
+                    }
                     FilterMatch::Mismatch {
                         reason: MismatchReason::NotBenchmark,
                     } => {
@@ -550,6 +557,7 @@ impl<'g> TestList<'g> {
 
             SkipCounts {
                 skipped_tests,
+                skipped_tests_rerun,
                 skipped_tests_non_benchmark,
                 skipped_tests_default_filter,
                 skipped_binaries,
@@ -1518,7 +1526,7 @@ impl fmt::Display for TestInstanceId<'_> {
 }
 
 /// An owned version of [`TestInstanceId`].
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub struct OwnedTestInstanceId {
@@ -1547,6 +1555,63 @@ impl TestInstanceId<'_> {
             binary_id: self.binary_id.clone(),
             test_name: self.test_name.clone(),
         }
+    }
+}
+
+/// Trait to allow retrieving data from a set of [`OwnedTestInstanceId`] using a
+/// [`TestInstanceId`].
+///
+/// This is an implementation of the [borrow-complex-key-example
+/// pattern](https://github.com/sunshowers-code/borrow-complex-key-example).
+pub trait TestInstanceIdKey {
+    /// Converts self to a [`TestInstanceId`].
+    fn key<'k>(&'k self) -> TestInstanceId<'k>;
+}
+
+impl TestInstanceIdKey for OwnedTestInstanceId {
+    fn key<'k>(&'k self) -> TestInstanceId<'k> {
+        TestInstanceId {
+            binary_id: &self.binary_id,
+            test_name: &self.test_name,
+        }
+    }
+}
+
+impl<'a> TestInstanceIdKey for TestInstanceId<'a> {
+    fn key<'k>(&'k self) -> TestInstanceId<'k> {
+        *self
+    }
+}
+
+impl<'a> Borrow<dyn TestInstanceIdKey + 'a> for OwnedTestInstanceId {
+    fn borrow(&self) -> &(dyn TestInstanceIdKey + 'a) {
+        self
+    }
+}
+
+impl<'a> PartialEq for dyn TestInstanceIdKey + 'a {
+    fn eq(&self, other: &(dyn TestInstanceIdKey + 'a)) -> bool {
+        self.key() == other.key()
+    }
+}
+
+impl<'a> Eq for dyn TestInstanceIdKey + 'a {}
+
+impl<'a> PartialOrd for dyn TestInstanceIdKey + 'a {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'a> Ord for dyn TestInstanceIdKey + 'a {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.key().cmp(&other.key())
+    }
+}
+
+impl<'a> Hash for dyn TestInstanceIdKey + 'a {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key().hash(state);
     }
 }
 
@@ -1580,8 +1645,9 @@ mod tests {
     use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext};
     use nextest_metadata::{FilterMatch, MismatchReason, PlatformLibdirUnavailable, RustTestKind};
     use pretty_assertions::assert_eq;
-    use std::sync::LazyLock;
+    use std::{hash::DefaultHasher, sync::LazyLock};
     use target_spec::Platform;
+    use test_strategy::proptest;
 
     #[test]
     fn test_parse_test_list() {
@@ -2317,5 +2383,56 @@ mod tests {
         let result = parse_list_lines(&binary_id, input).collect::<Result<Vec<_>, _>>();
         assert!(result.is_err());
         insta::assert_snapshot!("control_character_error", result.unwrap_err());
+    }
+
+    // Proptest to verify that the `Borrow<dyn TestInstanceIdKey>` implementation for
+    // `OwnedTestInstanceId` is consistent with Eq, Ord, and Hash.
+    #[proptest]
+    fn test_instance_id_key_borrow_consistency(
+        owned1: OwnedTestInstanceId,
+        owned2: OwnedTestInstanceId,
+    ) {
+        // Create borrowed trait object references.
+        let borrowed1: &dyn TestInstanceIdKey = &owned1;
+        let borrowed2: &dyn TestInstanceIdKey = &owned2;
+
+        // Verify Eq consistency: owned equality must match borrowed equality.
+        assert_eq!(
+            owned1 == owned2,
+            borrowed1 == borrowed2,
+            "Eq must be consistent between OwnedTestInstanceId and dyn TestInstanceIdKey"
+        );
+
+        // Verify PartialOrd consistency.
+        assert_eq!(
+            owned1.partial_cmp(&owned2),
+            borrowed1.partial_cmp(borrowed2),
+            "PartialOrd must be consistent between OwnedTestInstanceId and dyn TestInstanceIdKey"
+        );
+
+        // Verify Ord consistency.
+        assert_eq!(
+            owned1.cmp(&owned2),
+            borrowed1.cmp(borrowed2),
+            "Ord must be consistent between OwnedTestInstanceId and dyn TestInstanceIdKey"
+        );
+
+        // Verify Hash consistency.
+        fn hash_value(x: &impl Hash) -> u64 {
+            let mut hasher = DefaultHasher::new();
+            x.hash(&mut hasher);
+            hasher.finish()
+        }
+
+        assert_eq!(
+            hash_value(&owned1),
+            hash_value(&borrowed1),
+            "Hash must be consistent for owned1 and its borrowed form"
+        );
+        assert_eq!(
+            hash_value(&owned2),
+            hash_value(&borrowed2),
+            "Hash must be consistent for owned2 and its borrowed form"
+        );
     }
 }

@@ -14,12 +14,12 @@ use crate::{
         scripts::{ScriptId, SetupScriptConfig},
     },
     input::{InputEvent, InputHandler},
-    list::{TestInstance, TestInstanceId, TestList},
+    list::{OwnedTestInstanceId, TestInstance, TestInstanceId, TestInstanceIdKey, TestList},
     reporter::events::{
         CancelReason, ChildExecutionOutputDescription, ExecuteStatus, ExecutionResultDescription,
         ExecutionStatuses, FailureDescription, FinalRunStats, InfoResponse, ReporterEvent,
         RunFinishedStats, RunStats, StressIndex, StressProgress, StressRunStats, TestEvent,
-        TestEventKind,
+        TestEventKind, TestsNotSeen,
     },
     runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
     signal::{
@@ -34,7 +34,12 @@ use debug_ignore::DebugIgnore;
 use futures::future::{Fuse, FusedFuture};
 use nextest_metadata::MismatchReason;
 use quick_junit::ReportUuid;
-use std::{collections::BTreeMap, env, pin::Pin, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    env, mem,
+    pin::Pin,
+    time::Duration,
+};
 use tokio::{
     sync::{
         mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
@@ -64,6 +69,7 @@ pub(super) struct DispatcherContext<'a, F> {
     signal_count: Option<SignalCount>,
     stress_cx: DispatcherStressContext,
     tick_interval: Duration,
+    rerun_cx: DispatcherRerunContext,
     #[cfg(test)]
     disable_signal_3_times_panic: bool,
 }
@@ -82,6 +88,7 @@ where
         max_fail: MaxFail,
         global_timeout: Duration,
         stress_condition: Option<StressCondition>,
+        expected_outstanding: Option<BTreeSet<OwnedTestInstanceId>>,
     ) -> Self {
         // Tick every 50ms by default.
         let tick_interval_ms = env::var("NEXTEST_PROGRESS_TICK_INTERVAL_MS")
@@ -105,6 +112,7 @@ where
             signal_count: None,
             stress_cx: DispatcherStressContext::new(stress_condition),
             tick_interval: Duration::from_millis(tick_interval_ms),
+            rerun_cx: DispatcherRerunContext::new(expected_outstanding),
             #[cfg(test)]
             disable_signal_3_times_panic: false,
         }
@@ -891,6 +899,9 @@ where
         instance: TestInstance<'a>,
         req_tx: UnboundedSender<RunUnitRequest<'a>>,
     ) {
+        // Track this test as seen for rerun tracking.
+        self.rerun_cx.mark_seen(instance.id());
+
         let prev = self.running_tests.insert(
             instance.id(),
             ContextTestInstance {
@@ -1122,6 +1133,9 @@ where
             stress_failed,
         });
 
+        let rerun_cx = mem::replace(&mut self.rerun_cx, DispatcherRerunContext::InitialRun);
+        let tests_not_seen = rerun_cx.into_tests_not_seen();
+
         self.basic_callback(TestEventKind::RunFinished {
             start_time: stopwatch_end.start_time.fixed_offset(),
             run_id: self.run_id,
@@ -1130,7 +1144,8 @@ where
                 || RunFinishedStats::Single(self.run_stats),
                 RunFinishedStats::Stress,
             ),
-        })
+            outstanding_not_seen: tests_not_seen,
+        });
     }
 
     pub(super) fn run_stats(&self) -> RunStats {
@@ -1148,6 +1163,56 @@ enum DispatcherStressContext {
         failed: u32,
         cancelled: bool,
     },
+}
+
+/// Context for rerun tracking.
+///
+/// This enum tracks whether the current run is an initial run or a rerun, and
+/// maintains the necessary state for computing which expected tests were not
+/// seen during a rerun.
+#[derive(Clone, Debug)]
+enum DispatcherRerunContext {
+    /// This is an initial run, not a rerun. No tracking needed.
+    InitialRun,
+    /// This is a rerun of a previous run.
+    ///
+    /// Contains the set of tests expected to run. As tests are seen, they are
+    /// removed from this set. At the end of the run, any remaining tests are
+    /// reported as "not seen".
+    Rerun(BTreeSet<OwnedTestInstanceId>),
+}
+
+impl DispatcherRerunContext {
+    fn new(expected_outstanding: Option<BTreeSet<OwnedTestInstanceId>>) -> Self {
+        match expected_outstanding {
+            Some(expected) => Self::Rerun(expected),
+            None => Self::InitialRun,
+        }
+    }
+
+    /// Marks a test as seen during this run.
+    fn mark_seen(&mut self, id: TestInstanceId<'_>) {
+        if let Self::Rerun(expected) = self {
+            expected.remove(&id as &dyn TestInstanceIdKey);
+        }
+    }
+
+    /// Returns tests not seen, if this is a rerun and some tests were not seen.
+    ///
+    /// Returns `None` if this is an initial run.
+    fn into_tests_not_seen(self) -> Option<TestsNotSeen> {
+        let Self::Rerun(not_seen) = self else {
+            return None;
+        };
+
+        let total_not_seen = not_seen.len();
+        const MAX_DISPLAY: usize = 8;
+        let sample: Vec<_> = not_seen.into_iter().take(MAX_DISPLAY).collect();
+        Some(TestsNotSeen {
+            not_seen: sample,
+            total_not_seen,
+        })
+    }
 }
 
 impl DispatcherStressContext {
@@ -1438,7 +1503,8 @@ mod tests {
             0,
             MaxFail::All,
             crate::time::far_future_duration(),
-            None,
+            None, // stress_condition
+            None, // expected_outstanding
         );
 
         cx.disable_signal_3_times_panic = true;

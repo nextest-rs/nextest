@@ -21,6 +21,7 @@ use super::{
 };
 use crate::{
     errors::{RunStoreError, StoreWriterError},
+    record::format::{RERUN_INFO_JSON_PATH, RerunInfo},
     reporter::events::{
         ChildExecutionOutputDescription, ChildOutputDescription, ExecuteStatus, ExecutionStatuses,
         SetupScriptExecuteStatus,
@@ -114,9 +115,8 @@ impl Drop for LogEncoder {
 
 /// Records a single test run to disk.
 ///
-/// Created by [`ExclusiveLockedRunStore::create_run_recorder`](super::ExclusiveLockedRunStore::create_run_recorder).
-/// Writes both a zip archive with metadata and outputs, and a zstd-compressed
-/// JSON Lines log.
+/// Created by `ExclusiveLockedRunStore::create_run_recorder`. Writes both a zip
+/// archive with metadata and outputs, and a zstd-compressed JSON Lines log.
 #[derive(Debug)]
 pub struct RunRecorder {
     store_path: Utf8PathBuf,
@@ -208,6 +208,18 @@ impl RunRecorder {
         // Write dictionaries to make the archive self-contained.
         self.write_archive_file(STDOUT_DICT_PATH, dicts::STDOUT)?;
         self.write_archive_file(STDERR_DICT_PATH, dicts::STDERR)?;
+
+        Ok(())
+    }
+
+    /// Writes rerun-specific metadata to the archive.
+    ///
+    /// This should be called once at the beginning of a rerun (after setup).
+    pub(crate) fn write_rerun_info(&mut self, rerun_info: &RerunInfo) -> Result<(), RunStoreError> {
+        let rerun_info_json = serde_json::to_string(rerun_info)
+            .map_err(|error| RunStoreError::RerunInfoSerialize { error })?;
+
+        self.write_archive_file(RERUN_INFO_JSON_PATH, rerun_info_json.as_bytes())?;
 
         Ok(())
     }

@@ -72,7 +72,7 @@ home = "0.5.12"
 http = "1.4.0"
 humantime = "2.3.0"
 humantime-serde = "1.1.1"
-iddqd = "0.3.17"
+iddqd = { version = "0.3.17", features = ["serde"] }
 # Disable punycode parsing since we only access well-known domains.
 idna_adapter = "=1.0.0"
 indexmap = "2.13.0"

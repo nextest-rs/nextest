@@ -5,7 +5,10 @@
 //!
 //! These tests verify that nextest can record test runs to disk and replay them later.
 
-use crate::{fixtures::check_run_output, temp_project::TempProject};
+use crate::{
+    fixtures::{check_rerun_expanded_output, check_rerun_output, check_run_output},
+    temp_project::TempProject,
+};
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::Utf8TempDir;
 use fixture_data::models::RunProperties;
@@ -15,7 +18,7 @@ use integration_tests::{
 };
 use nextest_metadata::NextestExitCode;
 use regex::Regex;
-use std::{fs, sync::LazyLock};
+use std::{fs, io::Read as _, sync::LazyLock};
 
 /// Expected files in the store.zip archive.
 const EXPECTED_ARCHIVE_FILES: &[&str] = &[
@@ -50,6 +53,10 @@ static TIMESTAMP_REGEX: LazyLock<Regex> =
 /// Regex for matching bracketed durations in output (e.g., "[   0.024s]").
 static BRACKETED_DURATION_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[\s*\d+\.\d+s\]").unwrap());
+
+/// Regex for matching Cargo build times (e.g., "target(s) in 0.01s").
+static CARGO_BUILD_TIME_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"target\(s\) in \d+\.\d+s").unwrap());
 
 /// User config content that enables recording.
 ///
@@ -175,27 +182,43 @@ fn count_runs(output: &str) -> usize {
 /// - Temp root paths with `[TEMP_DIR]`
 /// - Timestamps with `XXXX-XX-XX XX:XX:XX` (19 chars, preserving width)
 /// - Bracketed durations like `[   0.024s]` with same-width placeholders
+/// - Cargo build times like `target(s) in 0.01s` with `target(s) in [ELAPSED]`
 ///
 /// Store list/info output (timestamps, durations, sizes, paths) is redacted by
 /// the Redactor infrastructure when `__NEXTEST_REDACT=1` is set. This function
 /// handles additional dynamic fields in replay output.
 fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
-    // Redact the temp root path (this covers both workspace and cache paths).
+    let output: String = output
+        .lines()
+        .filter(|line| {
+            if line.contains("Blocking waiting for file lock") {
+                return false;
+            }
+            // Cargo warnings from fixture Cargo.toml appear in non-deterministic
+            // order.
+            if line.contains("only one of `license` or `license-file` is necessary")
+                || line.contains("no edition set: defaulting to the 2015 edition")
+                || line.contains("`license` should be used if the package license")
+                || line.contains("`license-file` should be used if the package uses")
+                || line.contains("See https://doc.rust-lang.org/cargo/reference/manifest.html")
+            {
+                return false;
+            }
+            true
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
     let temp_root_escaped = regex::escape(temp_root.as_str());
     let temp_root_regex = Regex::new(&format!(r"{temp_root_escaped}[^\s]*")).unwrap();
-    let output = temp_root_regex.replace_all(output, "[TEMP_DIR]");
+    let output = temp_root_regex.replace_all(&output, "[TEMP_DIR]");
 
-    // Redact timestamps with fixed-width placeholder (19 chars).
     let output = TIMESTAMP_REGEX.replace_all(&output, "XXXX-XX-XX XX:XX:XX");
 
-    // Redact bracketed durations with same-width placeholder.
-    // E.g., "[   0.024s]" (11 chars) -> "[ duration ]" (11 chars).
     let output = BRACKETED_DURATION_REGEX.replace_all(&output, |caps: &regex::Captures| {
         let matched = caps.get(0).unwrap().as_str();
         let width = matched.len();
-        // Create a placeholder that fits within the brackets with same width.
-        // "[" + padding + "duration" + padding + "]"
-        let inner_width = width - 2; // subtract brackets
+        let inner_width = width - 2;
         let placeholder = "duration";
         let padding = inner_width.saturating_sub(placeholder.len());
         let left_pad = padding.div_ceil(2);
@@ -207,6 +230,8 @@ fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
             " ".repeat(right_pad)
         )
     });
+
+    let output = CARGO_BUILD_TIME_REGEX.replace_all(&output, "target(s) in [ELAPSED]");
 
     output.to_string()
 }
@@ -1355,5 +1380,553 @@ fn test_replayability_all_runs_non_replayable() {
     insta::assert_snapshot!(
         "error_replay_all_non_replayable",
         redact_dynamic_fields(&replay_output.stderr_as_str(), temp_root)
+    );
+}
+
+// --- Rerun tests ---
+
+/// Reads rerun-info.json from a recorded run's store.zip.
+///
+/// Returns None if the file doesn't exist (i.e., this is an original run, not a
+/// rerun).
+fn read_rerun_info(runs_dir: &Utf8Path, run_id: &str) -> Option<serde_json::Value> {
+    let store_zip_path = runs_dir.join(run_id).join("store.zip");
+    let file = std::fs::File::open(&store_zip_path).ok()?;
+    let mut archive = zip::ZipArchive::new(file).ok()?;
+    let mut rerun_info_file = archive.by_name("meta/rerun-info.json").ok()?;
+    let mut contents = String::new();
+    rerun_info_file.read_to_string(&mut contents).ok()?;
+    serde_json::from_str(&contents).ok()
+}
+
+/// Basic rerun flow.
+///
+/// Coverage: Record run with failures, rerun only failed tests, verify passing
+/// tests are skipped. Uses the fixture model to verify that only tests that
+/// failed in the initial run are executed in the rerun.
+#[test]
+fn test_rerun_basic_flow() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const INITIAL_RUN_ID: &str = "90000001-0000-0000-0000-000000000001";
+    const RERUN_ID: &str = "90000002-0000-0000-0000-000000000002";
+
+    let initial_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(INITIAL_RUN_ID),
+    )
+    .args(["run", "--workspace", "--all-targets"])
+    .unchecked(true)
+    .output();
+    assert_eq!(
+        initial_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "initial run should fail due to failing tests: {initial_output}"
+    );
+    check_run_output(&initial_output.stderr, RunProperties::empty());
+
+    let rerun_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RERUN_ID))
+            .args(["run", "--rerun", INITIAL_RUN_ID])
+            .unchecked(true)
+            .output();
+    assert_eq!(
+        rerun_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "rerun should fail because failing tests still fail: {rerun_output}"
+    );
+    check_rerun_output(
+        &rerun_output.stderr,
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
+    let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
+    let rerun_info =
+        read_rerun_info(&runs_dir, RERUN_ID).expect("rerun should have rerun-info.json");
+    assert_eq!(
+        rerun_info["parent-run-id"].as_str(),
+        Some(INITIAL_RUN_ID),
+        "rerun-info should reference parent run"
+    );
+    assert_eq!(
+        rerun_info["root-info"]["run-id"].as_str(),
+        Some(INITIAL_RUN_ID),
+        "root-info should reference the original run"
+    );
+    assert!(
+        read_rerun_info(&runs_dir, INITIAL_RUN_ID).is_none(),
+        "initial run should not have rerun-info.json"
+    );
+}
+
+/// Perform a rerun where all tests in the original run passed.
+///
+/// Coverage: When the original run had only passing tests and the rerun uses
+/// the same filter, there are no outstanding tests to run. The rerun should
+/// complete with all tests skipped (already passed).
+#[test]
+fn test_rerun_all_pass() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const INITIAL_RUN_ID: &str = "91000001-0000-0000-0000-000000000001";
+    const RERUN_ID: &str = "91000002-0000-0000-0000-000000000002";
+
+    let initial_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(INITIAL_RUN_ID),
+    )
+    .args(["run", "-E", "test(=test_success) | test(=test_cwd)"])
+    .output();
+    assert!(
+        initial_output.exit_status.success(),
+        "initial run should succeed: {initial_output}"
+    );
+
+    let rerun_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RERUN_ID))
+            .args([
+                "run",
+                "--rerun",
+                INITIAL_RUN_ID,
+                "-E",
+                "test(=test_success) | test(=test_cwd)",
+            ])
+            .unchecked(true)
+            .output();
+    assert!(
+        rerun_output.exit_status.success(),
+        "rerun should succeed when no outstanding tests: {rerun_output}"
+    );
+    insta::assert_snapshot!(
+        "rerun_all_pass",
+        redact_dynamic_fields(&rerun_output.stderr_as_str(), temp_root)
+    );
+}
+
+/// Rerun error handling.
+///
+/// Coverage: Invalid run ID, nonexistent run ID.
+#[test]
+fn test_rerun_errors() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const RUN_ID: &str = "92000001-0000-0000-0000-000000000001";
+
+    let recording = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
+        .args(["run", "-E", "test(=test_success)"])
+        .output();
+    assert!(
+        recording.exit_status.success(),
+        "recording should succeed: {recording}"
+    );
+
+    let invalid_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["run", "--rerun", "not-a-uuid!!!"])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        invalid_output.exit_status.code(),
+        Some(2),
+        "rerun with invalid run ID should fail with clap error: {invalid_output}"
+    );
+    insta::assert_snapshot!(
+        "rerun_error_invalid_run_id",
+        redact_dynamic_fields(&invalid_output.stderr_as_str(), temp_root)
+    );
+
+    let nonexistent_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["run", "--rerun", "00000000-0000-0000-0000-000000000000"])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        nonexistent_output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "rerun with nonexistent run ID should fail with setup error: {nonexistent_output}"
+    );
+    insta::assert_snapshot!(
+        "rerun_error_nonexistent_run_id",
+        redact_dynamic_fields(&nonexistent_output.stderr_as_str(), temp_root)
+    );
+}
+
+/// Rerun ID selectors.
+///
+/// Coverage: Full UUID, short prefix, "latest" keyword.
+#[test]
+fn test_rerun_run_id_selectors() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const RUN_ID_1: &str = "93000001-0000-0000-0000-000000000001";
+    const RUN_ID_2: &str = "93000002-0000-0000-0000-000000000002";
+
+    for run_id in [RUN_ID_1, RUN_ID_2] {
+        let recording =
+            cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(run_id))
+                .args([
+                    "run",
+                    "-E",
+                    "test(=test_success) | test(=test_failure_assert)",
+                ])
+                .unchecked(true)
+                .output();
+        assert_eq!(
+            recording.exit_status.code(),
+            Some(NextestExitCode::TEST_RUN_FAILED),
+            "recording should fail due to test_failure_assert: {recording}"
+        );
+    }
+
+    let full_uuid_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["run", "--rerun", RUN_ID_1])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        full_uuid_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "rerun with full UUID should fail: {full_uuid_output}"
+    );
+
+    let short_prefix = &RUN_ID_2[..8];
+    let prefix_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["run", "--rerun", short_prefix])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        prefix_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "rerun with short prefix should fail: {prefix_output}"
+    );
+
+    let latest_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["run", "--rerun", "latest"])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        latest_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "rerun with 'latest' should fail: {latest_output}"
+    );
+
+    // "930" matches both runs.
+    let ambiguous_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["run", "--rerun", "930"])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        ambiguous_output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "rerun with ambiguous prefix should fail with setup error: {ambiguous_output}"
+    );
+    insta::assert_snapshot!(
+        "rerun_error_ambiguous_prefix",
+        redact_dynamic_fields(&ambiguous_output.stderr_as_str(), temp_root)
+    );
+}
+
+/// Rerun chain: multiple reruns building on each other.
+///
+/// Coverage: Chain of reruns where outstanding tests are tracked across runs.
+/// Uses the fixture model to verify each rerun only runs the expected tests.
+#[test]
+fn test_rerun_chain() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const RUN_ID_1: &str = "94000001-0000-0000-0000-000000000001";
+    const RUN_ID_2: &str = "94000002-0000-0000-0000-000000000002";
+    const RUN_ID_3: &str = "94000003-0000-0000-0000-000000000003";
+
+    let initial_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID_1))
+            .args(["run", "--workspace", "--all-targets"])
+            .unchecked(true)
+            .output();
+    assert_eq!(
+        initial_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "initial run should fail: {initial_output}"
+    );
+    check_run_output(&initial_output.stderr, RunProperties::empty());
+
+    let rerun1_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID_2))
+            .args(["run", "--rerun", RUN_ID_1])
+            .unchecked(true)
+            .output();
+    assert_eq!(
+        rerun1_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "rerun 1 should fail (tests still failing): {rerun1_output}"
+    );
+    check_rerun_output(
+        &rerun1_output.stderr,
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
+    let rerun2_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID_3))
+            .args(["run", "--rerun", RUN_ID_2])
+            .unchecked(true)
+            .output();
+    assert_eq!(
+        rerun2_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "rerun 2 should fail (tests still failing): {rerun2_output}"
+    );
+    check_rerun_output(
+        &rerun2_output.stderr,
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
+    let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
+
+    assert!(
+        read_rerun_info(&runs_dir, RUN_ID_1).is_none(),
+        "initial run should not have rerun-info.json"
+    );
+
+    let rerun1_info =
+        read_rerun_info(&runs_dir, RUN_ID_2).expect("rerun 1 should have rerun-info.json");
+    assert_eq!(
+        rerun1_info["parent-run-id"].as_str(),
+        Some(RUN_ID_1),
+        "rerun 1 parent should be run 1"
+    );
+    assert_eq!(
+        rerun1_info["root-info"]["run-id"].as_str(),
+        Some(RUN_ID_1),
+        "rerun 1 root should be run 1"
+    );
+
+    let rerun2_info =
+        read_rerun_info(&runs_dir, RUN_ID_3).expect("rerun 2 should have rerun-info.json");
+    assert_eq!(
+        rerun2_info["parent-run-id"].as_str(),
+        Some(RUN_ID_2),
+        "rerun 2 parent should be run 2"
+    );
+    assert_eq!(
+        rerun2_info["root-info"]["run-id"].as_str(),
+        Some(RUN_ID_1),
+        "rerun 2 root should still be run 1 (chain root)"
+    );
+}
+
+/// Rerun with new tests added.
+///
+/// Coverage: Tests added after the initial run are included in the rerun by
+/// default.
+#[test]
+fn test_rerun_expanded() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const INITIAL_RUN_ID: &str = "95000001-0000-0000-0000-000000000001";
+    const RERUN_ID: &str = "95000002-0000-0000-0000-000000000002";
+
+    let initial_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(INITIAL_RUN_ID),
+    )
+    .args([
+        "run",
+        "-E",
+        "test(=test_success) | test(=test_failure_assert)",
+    ])
+    .unchecked(true)
+    .output();
+    assert_eq!(
+        initial_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "initial run should fail: {initial_output}"
+    );
+
+    let rerun_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RERUN_ID))
+            .args([
+                "run",
+                "--rerun",
+                INITIAL_RUN_ID,
+                "-E",
+                "test(=test_success) | test(=test_failure_assert) | test(=test_cwd)",
+            ])
+            .unchecked(true)
+            .output();
+
+    check_rerun_expanded_output(
+        &rerun_output.stderr,
+        &["test_success", "test_failure_assert"],
+        &["test_cwd"],
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+}
+
+/// Rerun with outstanding tests not seen.
+///
+/// Coverage: When a rerun uses a filter that excludes some originally-failed
+/// tests, those tests remain outstanding. If the tests that do run all pass,
+/// the exit code is `RERUN_TESTS_OUTSTANDING`.
+#[test]
+fn test_rerun_tests_outstanding() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const INITIAL_RUN_ID: &str = "96000001-0000-0000-0000-000000000001";
+    const RERUN_ID: &str = "96000002-0000-0000-0000-000000000002";
+
+    let initial_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(INITIAL_RUN_ID),
+    )
+    .args([
+        "run",
+        "-E",
+        "test(=test_failure_assert) | test(=test_failure_error)",
+    ])
+    .unchecked(true)
+    .output();
+    assert_eq!(
+        initial_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "initial run should fail: {initial_output}"
+    );
+
+    // The rerun filter excludes the originally-failed tests, including only a
+    // new passing test.
+    let rerun_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RERUN_ID))
+            .args([
+                "run",
+                "--rerun",
+                INITIAL_RUN_ID,
+                "-E",
+                "test(=test_success)",
+            ])
+            .unchecked(true)
+            .output();
+    assert_eq!(
+        rerun_output.exit_status.code(),
+        Some(NextestExitCode::RERUN_TESTS_OUTSTANDING),
+        "rerun with outstanding tests not seen should return RERUN_TESTS_OUTSTANDING: {rerun_output}"
+    );
+    insta::assert_snapshot!(
+        "rerun_tests_outstanding",
+        redact_dynamic_fields(&rerun_output.stderr_as_str(), temp_root)
+    );
+}
+
+// --- Experimental feature gating tests ---
+
+/// Rerun requires experimental feature.
+///
+/// Coverage: Using -R/--rerun without the record experimental feature enabled
+/// should produce an error.
+#[test]
+fn test_rerun_requires_experimental_feature() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let temp_root = p.temp_root();
+
+    // Run with --rerun without enabling the experimental feature.
+    // Note: We don't pass --user-config-file, so the default config is used
+    // which does not have the experimental feature enabled.
+    let output = cli_for_project(&env_info, &p)
+        .args(["run", "--rerun", "latest"])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED),
+        "--rerun without experimental feature should fail: {output}"
+    );
+
+    // Verify the error message mentions the experimental feature.
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("experimental feature"),
+        "error should mention experimental feature: {stderr}"
+    );
+    assert!(
+        stderr.contains("NEXTEST_EXPERIMENTAL_RECORD"),
+        "error should mention the environment variable: {stderr}"
+    );
+    insta::assert_snapshot!(
+        "error_rerun_experimental_not_enabled",
+        redact_dynamic_fields(&stderr, temp_root)
+    );
+}
+
+/// Replay requires experimental feature.
+///
+/// Coverage: Using `cargo nextest replay` without the record experimental
+/// feature enabled should produce an error.
+#[test]
+fn test_replay_requires_experimental_feature() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let temp_root = p.temp_root();
+
+    // Run replay without enabling the experimental feature.
+    // Note: We don't pass --user-config-file, so the default config is used
+    // which does not have the experimental feature enabled.
+    let output = cli_for_project(&env_info, &p)
+        .args(["replay"])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED),
+        "replay without experimental feature should fail: {output}"
+    );
+
+    // Verify the error message mentions the experimental feature.
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("experimental feature"),
+        "error should mention experimental feature: {stderr}"
+    );
+    assert!(
+        stderr.contains("NEXTEST_EXPERIMENTAL_RECORD"),
+        "error should mention the environment variable: {stderr}"
+    );
+    insta::assert_snapshot!(
+        "error_replay_experimental_not_enabled",
+        redact_dynamic_fields(&stderr, temp_root)
     );
 }

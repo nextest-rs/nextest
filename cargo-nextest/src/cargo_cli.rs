@@ -84,7 +84,6 @@ pub(crate) struct CargoBuildScopeOptions {
 
 impl CargoBuildScopeOptions {
     /// Returns true if any build scope arguments were provided.
-    #[expect(dead_code, reason = "will use this soon")]
     pub(crate) fn has_any(&self) -> bool {
         let Self {
             // Package selection.

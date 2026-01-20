@@ -19,6 +19,7 @@ use crate::{
 use camino::Utf8Path;
 use chrono::{DateTime, Utc};
 use owo_colors::{OwoColorize, Style};
+use quick_junit::ReportUuid;
 use std::{error::Error, fmt};
 use swrite::{SWrite, swrite};
 
@@ -517,8 +518,13 @@ impl<'a> DisplayRecordedRunInfoDetailed<'a> {
 
     /// Formats the run ID header with jj-style prefix highlighting.
     fn format_run_id(&self) -> String {
-        let run_id_str = self.run.run_id.to_string();
-        if let Some(prefix_info) = self.run_id_index.shortest_unique_prefix(self.run.run_id) {
+        self.format_run_id_with_prefix(self.run.run_id)
+    }
+
+    /// Formats a run ID with jj-style prefix highlighting.
+    fn format_run_id_with_prefix(&self, run_id: ReportUuid) -> String {
+        let run_id_str = run_id.to_string();
+        if let Some(prefix_info) = self.run_id_index.shortest_unique_prefix(run_id) {
             let prefix_len = prefix_info.prefix.len().min(run_id_str.len());
             let (prefix_part, rest_part) = run_id_str.split_at(prefix_len);
             format!(
@@ -770,6 +776,15 @@ impl fmt::Display for DisplayRecordedRunInfoDetailed<'_> {
             self.redactor.redact_version(&run.nextest_version),
         )?;
 
+        // Parent run ID (if this is a rerun).
+        if let Some(parent_run_id) = run.parent_run_id {
+            self.write_field(
+                f,
+                "parent run",
+                self.format_run_id_with_prefix(parent_run_id),
+            )?;
+        }
+
         // CLI args (if present).
         if !run.cli_args.is_empty() {
             self.write_field(f, "command", self.format_cli_args())?;
@@ -1015,6 +1030,7 @@ mod tests {
             cli_args: Vec::new(),
             build_scope_args: Vec::new(),
             env_vars: BTreeMap::new(),
+            parent_run_id: None,
             sizes: RecordedSizes {
                 log: ComponentSizes::default(),
                 store: ComponentSizes {
@@ -1036,6 +1052,19 @@ mod tests {
         env_vars: BTreeMap<String, String>,
         status: RecordedRunStatus,
     ) -> RecordedRunInfo {
+        make_run_info_with_parent(uuid, version, started_at, cli_args, env_vars, None, status)
+    }
+
+    /// Creates a `RecordedRunInfo` for testing with parent_run_id support.
+    fn make_run_info_with_parent(
+        uuid: &str,
+        version: &str,
+        started_at: &str,
+        cli_args: Vec<String>,
+        env_vars: BTreeMap<String, String>,
+        parent_run_id: Option<&str>,
+        status: RecordedRunStatus,
+    ) -> RecordedRunInfo {
         let started_at = DateTime::parse_from_rfc3339(started_at).expect("valid datetime");
         RecordedRunInfo {
             run_id: uuid.parse().expect("valid UUID"),
@@ -1047,6 +1076,7 @@ mod tests {
             cli_args,
             build_scope_args: Vec::new(),
             env_vars,
+            parent_run_id: parent_run_id.map(|s| s.parse().expect("valid UUID")),
             sizes: RecordedSizes {
                 log: ComponentSizes {
                     compressed: 1024,
@@ -1998,6 +2028,66 @@ mod tests {
         insta::assert_snapshot!(
             "stress_cancelled_no_initial",
             runs[5]
+                .display_detailed(
+                    &index,
+                    &replayable,
+                    now,
+                    &Styles::default(),
+                    &theme_characters,
+                    &redactor
+                )
+                .to_string()
+        );
+    }
+
+    #[test]
+    fn test_display_detailed_with_parent_run() {
+        // Test displaying a run with a parent run ID (rerun scenario).
+        let parent_run = make_run_info_with_cli_env(
+            "550e8400-e29b-41d4-a716-446655440000",
+            "0.9.122",
+            "2024-06-15T10:00:00+00:00",
+            Vec::new(),
+            BTreeMap::new(),
+            RecordedRunStatus::Completed(CompletedRunStats {
+                initial_run_count: 100,
+                passed: 95,
+                failed: 5,
+                exit_code: 100,
+            }),
+        );
+
+        let child_run = make_run_info_with_parent(
+            "660e8400-e29b-41d4-a716-446655440001",
+            "0.9.122",
+            "2024-06-15T11:00:00+00:00",
+            vec![
+                "cargo".to_string(),
+                "nextest".to_string(),
+                "run".to_string(),
+                "--rerun".to_string(),
+            ],
+            BTreeMap::new(),
+            Some("550e8400-e29b-41d4-a716-446655440000"),
+            RecordedRunStatus::Completed(CompletedRunStats {
+                initial_run_count: 5,
+                passed: 5,
+                failed: 0,
+                exit_code: 0,
+            }),
+        );
+
+        // Include both runs in the index so the parent run ID can be resolved.
+        let runs = [parent_run, child_run];
+        let index = RunIdIndex::new(&runs);
+        let theme_characters = ThemeCharacters::default();
+        let redactor = Redactor::noop();
+        let now = test_now();
+        let replayable = ReplayabilityStatus::Replayable;
+
+        insta::assert_snapshot!(
+            "with_parent_run",
+            runs[1]
                 .display_detailed(
                     &index,
                     &replayable,

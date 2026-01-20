@@ -2050,6 +2050,14 @@ pub enum RunStoreError {
         error: serde_json::Error,
     },
 
+    /// An error occurred while serializing rerun info.
+    #[error("error serializing rerun info")]
+    RerunInfoSerialize {
+        /// The underlying error.
+        #[source]
+        error: serde_json::Error,
+    },
+
     /// An error occurred while serializing the test list.
     #[error("error serializing test list")]
     TestListSerialize {

@@ -26,7 +26,7 @@ use semver::Version;
 use std::{error::Error, io, process::ExitStatus, string::FromUtf8Error};
 use swrite::{SWrite, swrite, swriteln};
 use thiserror::Error;
-use tracing::{Level, error, info};
+use tracing::{Level, error, info, warn};
 
 pub(crate) type Result<T, E = ExpectedError> = std::result::Result<T, E>;
 
@@ -225,7 +225,15 @@ pub enum ExpectedError {
     #[error("setup script failed")]
     SetupScriptFailed,
     #[error("test run failed")]
-    TestRunFailed,
+    TestRunFailed {
+        /// Whether the user can rerun failing tests with `-R latest`.
+        rerun_available: bool,
+    },
+    #[error("rerun tests outstanding")]
+    RerunTestsOutstanding {
+        /// The number of tests that were not seen during this rerun.
+        count: usize,
+    },
     #[error("no tests to run")]
     NoTestsRun {
         /// The run mode (test or benchmark).
@@ -506,8 +514,8 @@ impl ExpectedError {
         Self::SetupScriptFailed
     }
 
-    pub(crate) fn test_run_failed() -> Self {
-        Self::TestRunFailed
+    pub(crate) fn test_run_failed(rerun_available: bool) -> Self {
+        Self::TestRunFailed { rerun_available }
     }
 
     pub(crate) fn test_binary_args_parse_error(reason: &'static str, args: Vec<String>) -> Self {
@@ -569,7 +577,8 @@ impl ExpectedError {
                 NextestExitCode::BUILD_FAILED
             }
             Self::SetupScriptFailed => NextestExitCode::SETUP_SCRIPT_FAILED,
-            Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
+            Self::TestRunFailed { .. } => NextestExitCode::TEST_RUN_FAILED,
+            Self::RerunTestsOutstanding { .. } => NextestExitCode::RERUN_TESTS_OUTSTANDING,
             Self::NoTestsRun { .. } => NextestExitCode::NO_TESTS_RUN,
             Self::DebuggerNoTests { .. } | Self::DebuggerTooManyTests { .. }
             | Self::TracerNoTests { .. } | Self::TracerTooManyTests { .. } => NextestExitCode::SETUP_ERROR,
@@ -992,8 +1001,33 @@ impl ExpectedError {
                 error!("setup script failed");
                 None
             }
-            Self::TestRunFailed => {
+            Self::TestRunFailed { rerun_available } => {
                 error!("test run failed");
+                if *rerun_available {
+                    info!(
+                        target: "cargo_nextest::no_heading",
+                        "(hint: {} to rerun failing tests)",
+                        "cargo nextest run -R latest".style(styles.bold),
+                    );
+                }
+                None
+            }
+            Self::RerunTestsOutstanding { count } => {
+                warn!(
+                    "{} outstanding {} still {}",
+                    count.style(styles.bold),
+                    // We only support reruns for test mode.
+                    plural::tests_str(NextestRunMode::Test, *count),
+                    plural::remains_str(*count),
+                );
+                // Advice to run `cargo nextest run -R latest` might not always
+                // be complete due to the expanded build scope or disappearing
+                // tests. We just hint that the user can continue doing reruns.
+                info!(
+                    target: "cargo_nextest::no_heading",
+                    "(hint: {} to continue rerunning)",
+                    "cargo nextest run -R latest".style(styles.bold),
+                );
                 None
             }
             Self::NoTestsRun { mode, is_default } => {
