@@ -9,11 +9,10 @@
 
 use crate::{
     errors::RecordReadError,
-    list::{TestInstanceId, TestList},
+    list::{OwnedTestInstanceId, TestInstanceId, TestList},
     record::{
         CoreEventKind, OutputEventKind, OutputFileName, RecordReader, StressConditionSummary,
-        StressIndexSummary, TestEventKindSummary, TestEventSummary, TestInstanceSummary,
-        ZipStoreOutput,
+        StressIndexSummary, TestEventKindSummary, TestEventSummary, ZipStoreOutput,
     },
     reporter::events::{
         ChildExecutionOutputDescription, ChildOutputDescription, ExecuteStatus, ExecutionStatuses,
@@ -25,7 +24,7 @@ use crate::{
 };
 use bytes::Bytes;
 use nextest_metadata::{RustBinaryId, TestCaseName};
-use std::{collections::HashMap, num::NonZero};
+use std::{collections::HashSet, num::NonZero};
 
 /// Context for replaying recorded test events.
 ///
@@ -35,17 +34,11 @@ use std::{collections::HashMap, num::NonZero};
 /// The lifetime `'a` is tied to the [`TestList`] that was reconstructed from the
 /// archived metadata.
 pub struct ReplayContext<'a> {
-    /// Map from (binary_id, test_name) to owned data for that test.
-    test_data: HashMap<(RustBinaryId, String), ReplayTestData>,
+    /// Set of test instances, used for lifetime ownership.
+    test_data: HashSet<OwnedTestInstanceId>,
 
     /// The test list reconstructed from the archive.
     test_list: &'a TestList<'a>,
-}
-
-/// Owned data for a single test instance.
-struct ReplayTestData {
-    binary_id: RustBinaryId,
-    test_name: TestCaseName,
 }
 
 impl<'a> ReplayContext<'a> {
@@ -55,7 +48,7 @@ impl<'a> ReplayContext<'a> {
     /// [`TestList::from_summary`].
     pub fn new(test_list: &'a TestList<'a>) -> Self {
         Self {
-            test_data: HashMap::new(),
+            test_data: HashSet::new(),
             test_list,
         }
     }
@@ -70,30 +63,22 @@ impl<'a> ReplayContext<'a> {
         self.test_list.test_count()
     }
 
-    /// Registers a test instance from a summary.
+    /// Registers a test instance.
     ///
-    /// This must be called before converting events that reference this test.
-    pub fn register_test(&mut self, summary: &TestInstanceSummary) {
-        let key = (summary.binary_id.clone(), summary.name.clone());
-        self.test_data.entry(key).or_insert_with(|| ReplayTestData {
-            binary_id: summary.binary_id.clone(),
-            test_name: TestCaseName::new(&summary.name),
-        });
+    /// This is required for lifetime reasons. This must be called before
+    /// converting events that reference this test.
+    pub fn register_test(&mut self, test_instance: OwnedTestInstanceId) {
+        self.test_data.insert(test_instance);
     }
 
-    /// Looks up a test instance ID by binary ID and test name.
+    /// Looks up a test instance ID by its owned form.
     ///
     /// Returns `None` if the test was not previously registered.
     pub fn lookup_test_instance_id(
         &self,
-        binary_id: &RustBinaryId,
-        test_name: &str,
+        test_instance: &OwnedTestInstanceId,
     ) -> Option<TestInstanceId<'_>> {
-        let key = (binary_id.clone(), test_name.to_string());
-        self.test_data.get(&key).map(|data| TestInstanceId {
-            binary_id: &data.binary_id,
-            test_name: &data.test_name,
-        })
+        self.test_data.get(test_instance).map(|data| data.as_ref())
     }
 
     /// Converts a test event summary to a test event.
@@ -195,12 +180,12 @@ impl<'a> ReplayContext<'a> {
                 running,
                 command_line,
             } => {
-                let instance_id = self
-                    .lookup_test_instance_id(&test_instance.binary_id, &test_instance.name)
-                    .ok_or_else(|| ReplayConversionError::TestNotFound {
+                let instance_id = self.lookup_test_instance_id(test_instance).ok_or_else(|| {
+                    ReplayConversionError::TestNotFound {
                         binary_id: test_instance.binary_id.clone(),
-                        test_name: test_instance.name.clone(),
-                    })?;
+                        test_name: test_instance.test_name.clone(),
+                    }
+                })?;
                 Ok(TestEventKind::TestStarted {
                     stress_index: stress_index.as_ref().map(convert_stress_index),
                     test_instance: instance_id,
@@ -217,12 +202,12 @@ impl<'a> ReplayContext<'a> {
                 elapsed,
                 will_terminate,
             } => {
-                let instance_id = self
-                    .lookup_test_instance_id(&test_instance.binary_id, &test_instance.name)
-                    .ok_or_else(|| ReplayConversionError::TestNotFound {
+                let instance_id = self.lookup_test_instance_id(test_instance).ok_or_else(|| {
+                    ReplayConversionError::TestNotFound {
                         binary_id: test_instance.binary_id.clone(),
-                        test_name: test_instance.name.clone(),
-                    })?;
+                        test_name: test_instance.test_name.clone(),
+                    }
+                })?;
                 Ok(TestEventKind::TestSlow {
                     stress_index: stress_index.as_ref().map(convert_stress_index),
                     test_instance: instance_id,
@@ -239,12 +224,12 @@ impl<'a> ReplayContext<'a> {
                 running,
                 command_line,
             } => {
-                let instance_id = self
-                    .lookup_test_instance_id(&test_instance.binary_id, &test_instance.name)
-                    .ok_or_else(|| ReplayConversionError::TestNotFound {
+                let instance_id = self.lookup_test_instance_id(test_instance).ok_or_else(|| {
+                    ReplayConversionError::TestNotFound {
                         binary_id: test_instance.binary_id.clone(),
-                        test_name: test_instance.name.clone(),
-                    })?;
+                        test_name: test_instance.test_name.clone(),
+                    }
+                })?;
                 Ok(TestEventKind::TestRetryStarted {
                     stress_index: stress_index.as_ref().map(convert_stress_index),
                     test_instance: instance_id,
@@ -259,12 +244,12 @@ impl<'a> ReplayContext<'a> {
                 test_instance,
                 reason,
             } => {
-                let instance_id = self
-                    .lookup_test_instance_id(&test_instance.binary_id, &test_instance.name)
-                    .ok_or_else(|| ReplayConversionError::TestNotFound {
+                let instance_id = self.lookup_test_instance_id(test_instance).ok_or_else(|| {
+                    ReplayConversionError::TestNotFound {
                         binary_id: test_instance.binary_id.clone(),
-                        test_name: test_instance.name.clone(),
-                    })?;
+                        test_name: test_instance.test_name.clone(),
+                    }
+                })?;
                 Ok(TestEventKind::TestSkipped {
                     stress_index: stress_index.as_ref().map(convert_stress_index),
                     test_instance: instance_id,
@@ -364,12 +349,12 @@ impl<'a> ReplayContext<'a> {
                 failure_output,
                 running,
             } => {
-                let instance_id = self
-                    .lookup_test_instance_id(&test_instance.binary_id, &test_instance.name)
-                    .ok_or_else(|| ReplayConversionError::TestNotFound {
+                let instance_id = self.lookup_test_instance_id(test_instance).ok_or_else(|| {
+                    ReplayConversionError::TestNotFound {
                         binary_id: test_instance.binary_id.clone(),
-                        test_name: test_instance.name.clone(),
-                    })?;
+                        test_name: test_instance.test_name.clone(),
+                    }
+                })?;
                 Ok(TestEventKind::TestAttemptFailedWillRetry {
                     stress_index: stress_index.as_ref().map(convert_stress_index),
                     test_instance: instance_id,
@@ -391,12 +376,12 @@ impl<'a> ReplayContext<'a> {
                 current_stats,
                 running,
             } => {
-                let instance_id = self
-                    .lookup_test_instance_id(&test_instance.binary_id, &test_instance.name)
-                    .ok_or_else(|| ReplayConversionError::TestNotFound {
+                let instance_id = self.lookup_test_instance_id(test_instance).ok_or_else(|| {
+                    ReplayConversionError::TestNotFound {
                         binary_id: test_instance.binary_id.clone(),
-                        test_name: test_instance.name.clone(),
-                    })?;
+                        test_name: test_instance.test_name.clone(),
+                    }
+                })?;
                 Ok(TestEventKind::TestFinished {
                     stress_index: stress_index.as_ref().map(convert_stress_index),
                     test_instance: instance_id,
@@ -423,7 +408,7 @@ pub enum ReplayConversionError {
         /// The binary ID.
         binary_id: RustBinaryId,
         /// The test name.
-        test_name: String,
+        test_name: TestCaseName,
     },
 
     /// Error reading a record.

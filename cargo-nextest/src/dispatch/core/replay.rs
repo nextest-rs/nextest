@@ -16,11 +16,11 @@ use guppy::{graph::PackageGraph, platform::Platform};
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{
     errors::DisplayErrorChain,
-    list::TestList,
+    list::{OwnedTestInstanceId, TestList},
     pager::PagedOutput,
     record::{
         RecordReader, ReplayContext, ReplayHeader, ReplayReporterBuilder, RunIdSelector, RunStore,
-        TestInstanceSummary, format::RECORD_FORMAT_VERSION, records_cache_dir,
+        format::RECORD_FORMAT_VERSION, records_cache_dir,
     },
     reporter::ReporterOutput,
     user_config::UserConfig,
@@ -161,11 +161,10 @@ pub(crate) fn exec_replay(
     let mut replay_cx = ReplayContext::new(&test_list);
     for (binary_id, suite) in &test_list_summary.rust_suites {
         for test_name in suite.test_cases.keys() {
-            let test_instance = TestInstanceSummary {
+            replay_cx.register_test(OwnedTestInstanceId {
                 binary_id: binary_id.clone(),
-                name: test_name.to_string(),
-            };
-            replay_cx.register_test(&test_instance);
+                test_name: test_name.clone(),
+            });
         }
     }
 

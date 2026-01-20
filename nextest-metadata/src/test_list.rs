@@ -990,6 +990,15 @@ mod proptest_impls {
             .boxed()
         }
     }
+
+    impl Arbitrary for TestCaseName {
+        type Parameters = ();
+        type Strategy = BoxedStrategy<Self>;
+
+        fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+            any::<String>().prop_map(|s| TestCaseName::new(&s)).boxed()
+        }
+    }
 }
 
 #[cfg(test)]

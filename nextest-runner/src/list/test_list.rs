@@ -38,7 +38,7 @@ use nextest_metadata::{
 };
 use owo_colors::OwoColorize;
 use quick_junit::ReportUuid;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
@@ -1518,12 +1518,15 @@ impl fmt::Display for TestInstanceId<'_> {
 }
 
 /// An owned version of [`TestInstanceId`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub struct OwnedTestInstanceId {
     /// The binary ID.
     pub binary_id: RustBinaryId,
 
     /// The name of the test.
+    #[serde(rename = "name")]
     pub test_name: TestCaseName,
 }
 
