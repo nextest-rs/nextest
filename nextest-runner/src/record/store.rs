@@ -19,7 +19,7 @@ use super::{
     retention::{
         PruneKind, PrunePlan, PruneResult, RecordRetentionPolicy, delete_orphaned_dirs, delete_runs,
     },
-    run_id_index::{PrefixResolutionError, RunIdIndex, RunIdSelector},
+    run_id_index::{PrefixResolutionError, RunIdIndex, RunIdSelector, ShortestRunIdPrefix},
 };
 use crate::{
     errors::{RunIdResolutionError, RunStoreError},
@@ -351,7 +351,9 @@ impl<'store> ExclusiveLockedRunStore<'store> {
     /// `max_output_size` specifies the maximum size of a single output (stdout/stderr)
     /// before truncation.
     ///
-    /// Returns an error if writing is denied due to a format version mismatch.
+    /// Returns the recorder and the shortest unique prefix for the run ID (for
+    /// display purposes), or an error if writing is denied due to a format
+    /// version mismatch.
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn create_run_recorder(
         mut self,
@@ -363,7 +365,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
         env_vars: BTreeMap<String, String>,
         max_output_size: bytesize::ByteSize,
         parent_run_id: Option<ReportUuid>,
-    ) -> Result<RunRecorder, RunStoreError> {
+    ) -> Result<(RunRecorder, ShortestRunIdPrefix), RunStoreError> {
         if let RunsJsonWritePermission::Denied {
             file_version,
             max_supported_version,
@@ -406,13 +408,20 @@ impl<'store> ExclusiveLockedRunStore<'store> {
 
         write_runs_json(self.runs_dir.as_path(), &self.runs, self.last_pruned_at)?;
 
+        // Compute the unique prefix now that the run is in the list.
+        let index = RunIdIndex::new(&self.runs);
+        let unique_prefix = index
+            .shortest_unique_prefix(run_id)
+            .expect("run was just added to the list");
+
         // Create the run directory while still holding the lock. This prevents
         // a race where another process could prune the newly-added run entry
         // before the directory exists, leaving an orphaned directory. The lock
         // is released when `self` is dropped.
         let run_dir = self.runs_dir().run_dir(run_id);
 
-        RunRecorder::new(run_dir, max_output_size)
+        let recorder = RunRecorder::new(run_dir, max_output_size)?;
+        Ok((recorder, unique_prefix))
     }
 }
 

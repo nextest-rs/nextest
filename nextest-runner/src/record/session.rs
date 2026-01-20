@@ -8,7 +8,7 @@
 //! This allows both `run` and `bench` commands to share recording logic.
 
 use super::{
-    CompletedRunStats, RecordedRunStatus, RunRecorder, RunStore, StoreSizes,
+    CompletedRunStats, RecordedRunStatus, RunRecorder, RunStore, ShortestRunIdPrefix, StoreSizes,
     StressCompletedRunStats, records_cache_dir,
     retention::{PruneResult, RecordRetentionPolicy},
 };
@@ -63,6 +63,11 @@ pub struct RecordSessionSetup {
     pub session: RecordSession,
     /// The recorder to pass to the structured reporter.
     pub recorder: RunRecorder,
+    /// The shortest unique prefix for the run ID.
+    ///
+    /// This can be used for display purposes to highlight the unique prefix
+    /// portion of the run ID.
+    pub run_id_unique_prefix: ShortestRunIdPrefix,
 }
 
 /// Manages the full lifecycle of a recording session.
@@ -93,7 +98,7 @@ impl RecordSession {
             .lock_exclusive()
             .map_err(RecordSetupError::StoreLock)?;
 
-        let mut recorder = locked_store
+        let (mut recorder, run_id_unique_prefix) = locked_store
             .create_run_recorder(
                 config.run_id,
                 config.nextest_version,
@@ -118,7 +123,11 @@ impl RecordSession {
             run_id: config.run_id,
         };
 
-        Ok(RecordSessionSetup { session, recorder })
+        Ok(RecordSessionSetup {
+            session,
+            recorder,
+            run_id_unique_prefix,
+        })
     }
 
     /// Returns the run ID for this session.

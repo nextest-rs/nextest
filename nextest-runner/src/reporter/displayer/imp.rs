@@ -30,7 +30,7 @@ use crate::{
     },
     indenter::indented,
     list::TestInstanceId,
-    record::ReplayHeader,
+    record::{ReplayHeader, ShortestRunIdPrefix},
     reporter::{
         displayer::{
             ShowProgress,
@@ -168,6 +168,7 @@ impl DisplayReporterBuilder {
                     force_exec_fail_output,
                 ),
                 final_outputs: DebugIgnore(Vec::new()),
+                run_id_unique_prefix: None,
             },
             output,
         }
@@ -273,6 +274,14 @@ impl<'a> DisplayReporter<'a> {
 
     pub(crate) fn finish(&mut self) {
         self.output.finish_and_clear_bar();
+    }
+
+    /// Sets the unique prefix for the run ID.
+    ///
+    /// This is used to highlight the unique prefix portion of the run ID
+    /// in the `RunStarted` output when a recording session is active.
+    pub(crate) fn set_run_id_unique_prefix(&mut self, prefix: ShortestRunIdPrefix) {
+        self.inner.run_id_unique_prefix = Some(prefix);
     }
 
     /// Writes a replay header to the output.
@@ -499,6 +508,9 @@ struct DisplayReporterImpl<'a> {
     cancel_status: Option<CancelReason>,
     unit_output: UnitOutputReporter,
     final_outputs: DebugIgnore<Vec<FinalOutputEntry<'a>>>,
+    // The unique prefix for the current run ID, if a recording session is active.
+    // Used for highlighting the run ID in RunStarted output.
+    run_id_unique_prefix: Option<ShortestRunIdPrefix>,
 }
 
 impl<'a> DisplayReporterImpl<'a> {
@@ -517,10 +529,23 @@ impl<'a> DisplayReporterImpl<'a> {
             } => {
                 writeln!(writer, "{}", self.theme_characters.hbar(12))?;
                 write!(writer, "{:>12} ", "Nextest run".style(self.styles.pass))?;
+
+                // Display the run ID with unique prefix highlighting if a recording
+                // session is active, otherwise use plain styling.
+                let run_id_display = if let Some(prefix_info) = &self.run_id_unique_prefix {
+                    format!(
+                        "{}{}",
+                        prefix_info.prefix.style(self.styles.run_id_prefix),
+                        prefix_info.rest.style(self.styles.run_id_rest),
+                    )
+                } else {
+                    run_id.style(self.styles.count).to_string()
+                };
+
                 writeln!(
                     writer,
                     "ID {} with nextest profile: {}",
-                    run_id.style(self.styles.count),
+                    run_id_display,
                     profile_name.style(self.styles.count),
                 )?;
 

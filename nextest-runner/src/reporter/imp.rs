@@ -13,7 +13,7 @@ use crate::{
     config::core::EvaluatableProfile,
     errors::WriteEventError,
     list::TestList,
-    record::StoreSizes,
+    record::{ShortestRunIdPrefix, StoreSizes},
     reporter::{
         aggregator::EventAggregator, displayer::ShowProgress, events::*,
         structured::StructuredReporter,
@@ -243,6 +243,14 @@ impl<'a> Reporter<'a> {
             recording_sizes,
             run_finished: self.run_finished,
         }
+    }
+
+    /// Sets the unique prefix for the run ID.
+    ///
+    /// This is used to highlight the unique prefix portion of the run ID
+    /// in the `RunStarted` output when a recording session is active.
+    pub fn set_run_id_unique_prefix(&mut self, prefix: ShortestRunIdPrefix) {
+        self.display_reporter.set_run_id_unique_prefix(prefix);
     }
 
     // ---
