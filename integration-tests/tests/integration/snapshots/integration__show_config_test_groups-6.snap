@@ -1,7 +1,6 @@
 ---
 source: integration-tests/tests/integration/main.rs
 expression: with_termination_all_output.stdout_as_str()
-snapshot_kind: text
 ---
 group: flaky (max threads = 4)
     (no matches)

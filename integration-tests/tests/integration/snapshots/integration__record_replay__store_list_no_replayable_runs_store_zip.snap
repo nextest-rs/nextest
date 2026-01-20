@@ -1,7 +1,6 @@
 ---
 source: integration-tests/tests/integration/record_replay.rs
 expression: list_str
-snapshot_kind: text
 ---
 1 recorded run:
 

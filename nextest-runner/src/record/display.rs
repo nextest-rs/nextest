@@ -1171,7 +1171,7 @@ mod tests {
             ],
         };
         // Explicit pruning shows error details as a bulleted list.
-        insta::assert_snapshot!(result.display(&Styles::default()).to_string(), @r"
+        insta::assert_snapshot!(result.display(&Styles::default()).to_string(), @"
         pruned 2 runs, freed 1.0 MB (2 errors occurred)
 
         errors:
@@ -1519,9 +1519,7 @@ mod tests {
         insta::assert_snapshot!(
             plan.display(&index, &Styles::default(), &Redactor::noop())
                 .to_string(),
-            @r"
-        no runs would be pruned
-        "
+            @"no runs would be pruned"
         );
     }
 
@@ -1544,7 +1542,7 @@ mod tests {
         insta::assert_snapshot!(
             plan.display(&index, &Styles::default(), &Redactor::noop())
                 .to_string(),
-            @r"
+            @"
         would prune 1 run, freeing 2.0 MB:
 
           550e8400  2024-06-17 12:00:00      1.000s     2.0 MB  50 passed
@@ -1580,7 +1578,7 @@ mod tests {
         insta::assert_snapshot!(
             plan.display(&index, &Styles::default(), &Redactor::noop())
                 .to_string(),
-            @r"
+            @"
         would prune 2 runs, freeing 1.5 MB:
 
           550e8400  2024-06-18 13:00:00      1.000s     1.0 MB  100 passed

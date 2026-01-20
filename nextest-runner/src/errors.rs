@@ -2823,7 +2823,7 @@ mod tests {
         let err2 = StringError::new("err2", Some(err1));
         let err3 = StringError::new("err3\nerr3 line 2", Some(err2));
 
-        insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&err3)), @r"
+        insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&err3)), @"
         err3
         err3 line 2
           caused by:
@@ -2849,7 +2849,7 @@ mod tests {
             ErrorList::<StringError>::new("waiting on flowers to bloom", vec![err3.clone()])
                 .expect(">= 1 error");
         insta::assert_snapshot!(format!("{}", error_list), @"err3");
-        insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&error_list)), @r"
+        insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&error_list)), @"
         err3
           caused by:
           - err2
@@ -2866,7 +2866,7 @@ mod tests {
         )
         .expect(">= 1 error");
 
-        insta::assert_snapshot!(format!("{}", error_list), @r"
+        insta::assert_snapshot!(format!("{}", error_list), @"
         2 errors occurred waiting for the heat death of the universe:
         * err3
             caused by:
@@ -2878,7 +2878,7 @@ mod tests {
             - err5
             - err4
         ");
-        insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&error_list)), @r"
+        insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&error_list)), @"
         2 errors occurred waiting for the heat death of the universe:
         * err3
             caused by:

@@ -1,7 +1,6 @@
 ---
 source: integration-tests/tests/integration/record_replay.rs
 expression: "redact_dynamic_fields(&info_output.stdout_as_str(), temp_root)"
-snapshot_kind: text
 ---
 Run 10000001-0000-0000-0000-000000000001
 

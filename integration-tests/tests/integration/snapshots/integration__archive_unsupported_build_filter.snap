@@ -1,7 +1,6 @@
 ---
 source: integration-tests/tests/integration/main.rs
 expression: output.stderr_as_str()
-snapshot_kind: text
 ---
   error: predicate not allowed in `archive-filter` expressions
    ╭────

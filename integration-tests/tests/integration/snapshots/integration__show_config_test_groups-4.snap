@@ -1,7 +1,6 @@
 ---
 source: integration-tests/tests/integration/main.rs
 expression: with_retries_all_output.stdout_as_str()
-snapshot_kind: text
 ---
 group: flaky (max threads = 4)
   * override for with-retries profile with filter 'test(test_flaky_mod) | test(~test_flaky_mod_4)':

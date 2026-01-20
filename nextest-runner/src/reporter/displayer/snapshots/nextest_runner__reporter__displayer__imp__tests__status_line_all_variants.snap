@@ -1,6 +1,5 @@
 ---
 source: nextest-runner/src/reporter/displayer/imp.rs
-assertion_line: 3376
 expression: out
 ---
 === intermediate ===

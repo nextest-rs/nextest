@@ -1,6 +1,5 @@
 ---
 source: integration-tests/tests/integration/record_replay.rs
 expression: "redact_dynamic_fields(&replay_nonexistent.stderr_as_str(), temp_root)"
-snapshot_kind: text
 ---
 error: no recorded run found matching `00000000-0000-0000-0000-000000000000`

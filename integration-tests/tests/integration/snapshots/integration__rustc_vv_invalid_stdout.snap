@@ -1,7 +1,6 @@
 ---
 source: integration-tests/tests/integration/main.rs
 expression: command.unchecked(true).output().to_snapshot()
-snapshot_kind: text
 ---
 exit status|code: Some(96)
 --- stdout ---

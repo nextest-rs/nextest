@@ -1,6 +1,5 @@
 ---
 source: integration-tests/tests/integration/main.rs
 expression: with_args_output.stdout_as_str()
-snapshot_kind: text
 ---
 nextest-tests::basic test_stdin_closed

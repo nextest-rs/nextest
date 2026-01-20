@@ -1,7 +1,6 @@
 ---
 source: integration-tests/tests/integration/main.rs
 expression: default_profile_output.stdout_as_str()
-snapshot_kind: text
 ---
 group: flaky (max threads = 4)
     (no matches)

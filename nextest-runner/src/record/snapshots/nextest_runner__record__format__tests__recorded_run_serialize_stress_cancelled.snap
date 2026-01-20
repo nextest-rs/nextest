@@ -1,7 +1,6 @@
 ---
 source: nextest-runner/src/record/format.rs
 expression: json
-snapshot_kind: text
 ---
 {
   "run-id": "550e8400-e29b-41d4-a716-446655440000",

@@ -1,7 +1,6 @@
 ---
 source: integration-tests/tests/integration/main.rs
 expression: default_filter_stdout(&default_tests_output)
-snapshot_kind: text
 ---
 cdylib-link test_multiply_two
 nextest-derive it_works

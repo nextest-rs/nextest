@@ -1,7 +1,6 @@
 ---
 source: nextest-runner/src/list/test_list.rs
 expression: result.unwrap_err()
-snapshot_kind: text
 ---
 for `test-package::test-binary`, line "test_without_suffix" did not end with the string ": test" or ": benchmark"
 full output:

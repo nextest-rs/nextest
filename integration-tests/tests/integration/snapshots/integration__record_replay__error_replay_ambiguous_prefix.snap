@@ -1,7 +1,6 @@
 ---
 source: integration-tests/tests/integration/record_replay.rs
 expression: "redact_dynamic_fields(&replay_ambiguous.stderr_as_str(), temp_root)"
-snapshot_kind: text
 ---
 error: prefix `a` is ambiguous, matches 2 runs:
   aaaa0002  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed

@@ -1,7 +1,6 @@
 ---
 source: integration-tests/tests/integration/main.rs
 expression: output.stderr_as_str()
-snapshot_kind: text
 ---
 info: experimental features enabled: setup-scripts, wrapper-scripts, benchmarks
   error: operator didn't match any binary names
