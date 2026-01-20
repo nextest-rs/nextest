@@ -65,5 +65,5 @@ pub use store::{
 pub use summary::{
     CoreEventKind, NoTestsBehavior, OutputEventKind, OutputFileName, RecordOpts,
     StressConditionSummary, StressIndexSummary, TestEventKindSummary, TestEventSummary,
-    TestInstanceSummary, ZipStoreOutput,
+    ZipStoreOutput,
 };

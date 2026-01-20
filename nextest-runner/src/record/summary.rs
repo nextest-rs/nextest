@@ -13,7 +13,7 @@
 
 use crate::{
     config::scripts::ScriptId,
-    list::TestInstanceId,
+    list::OwnedTestInstanceId,
     reporter::{
         TestOutputDisplay,
         events::{
@@ -26,7 +26,7 @@ use crate::{
     test_output::ChildSingleOutput,
 };
 use chrono::{DateTime, FixedOffset};
-use nextest_metadata::{MismatchReason, RustBinaryId};
+use nextest_metadata::MismatchReason;
 use quick_junit::ReportUuid;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt, num::NonZero, time::Duration};
@@ -238,7 +238,7 @@ pub enum CoreEventKind {
         /// The stress index, if running a stress test.
         stress_index: Option<StressIndexSummary>,
         /// The test instance.
-        test_instance: TestInstanceSummary,
+        test_instance: OwnedTestInstanceId,
         /// The current run statistics.
         current_stats: RunStats,
         /// The number of tests currently running.
@@ -253,7 +253,7 @@ pub enum CoreEventKind {
         /// The stress index, if running a stress test.
         stress_index: Option<StressIndexSummary>,
         /// The test instance.
-        test_instance: TestInstanceSummary,
+        test_instance: OwnedTestInstanceId,
         /// Retry data.
         retry_data: RetryData,
         /// The time elapsed.
@@ -269,7 +269,7 @@ pub enum CoreEventKind {
         /// The stress index, if running a stress test.
         stress_index: Option<StressIndexSummary>,
         /// The test instance.
-        test_instance: TestInstanceSummary,
+        test_instance: OwnedTestInstanceId,
         /// Retry data.
         retry_data: RetryData,
         /// The number of tests currently running.
@@ -284,7 +284,7 @@ pub enum CoreEventKind {
         /// The stress index, if running a stress test.
         stress_index: Option<StressIndexSummary>,
         /// The test instance.
-        test_instance: TestInstanceSummary,
+        test_instance: OwnedTestInstanceId,
         /// The reason the test was skipped.
         reason: MismatchReason,
     },
@@ -388,7 +388,7 @@ pub enum OutputEventKind<O> {
         /// The stress index, if running a stress test.
         stress_index: Option<StressIndexSummary>,
         /// The test instance.
-        test_instance: TestInstanceSummary,
+        test_instance: OwnedTestInstanceId,
         /// The execution status.
         run_status: ExecuteStatus<O>,
         /// The delay before the next attempt.
@@ -406,7 +406,7 @@ pub enum OutputEventKind<O> {
         /// The stress index, if running a stress test.
         stress_index: Option<StressIndexSummary>,
         /// The test instance.
-        test_instance: TestInstanceSummary,
+        test_instance: OwnedTestInstanceId,
         /// How to display success output.
         success_output: TestOutputDisplay,
         /// How to display failure output.
@@ -482,7 +482,7 @@ impl TestEventKindSummary<ChildSingleOutput> {
                 command_line,
             } => Self::Core(CoreEventKind::TestStarted {
                 stress_index: stress_index.map(StressIndexSummary::from),
-                test_instance: TestInstanceSummary::from_test_instance_id(test_instance),
+                test_instance: test_instance.to_owned(),
                 current_stats,
                 running,
                 command_line,
@@ -495,7 +495,7 @@ impl TestEventKindSummary<ChildSingleOutput> {
                 will_terminate,
             } => Self::Core(CoreEventKind::TestSlow {
                 stress_index: stress_index.map(StressIndexSummary::from),
-                test_instance: TestInstanceSummary::from_test_instance_id(test_instance),
+                test_instance: test_instance.to_owned(),
                 retry_data,
                 elapsed,
                 will_terminate,
@@ -508,7 +508,7 @@ impl TestEventKindSummary<ChildSingleOutput> {
                 command_line,
             } => Self::Core(CoreEventKind::TestRetryStarted {
                 stress_index: stress_index.map(StressIndexSummary::from),
-                test_instance: TestInstanceSummary::from_test_instance_id(test_instance),
+                test_instance: test_instance.to_owned(),
                 retry_data,
                 running,
                 command_line,
@@ -519,7 +519,7 @@ impl TestEventKindSummary<ChildSingleOutput> {
                 reason,
             } => Self::Core(CoreEventKind::TestSkipped {
                 stress_index: stress_index.map(StressIndexSummary::from),
-                test_instance: TestInstanceSummary::from_test_instance_id(test_instance),
+                test_instance: test_instance.to_owned(),
                 reason,
             }),
             TestEventKind::RunBeginCancel {
@@ -598,7 +598,7 @@ impl TestEventKindSummary<ChildSingleOutput> {
                 running,
             } => Self::Output(OutputEventKind::TestAttemptFailedWillRetry {
                 stress_index: stress_index.map(StressIndexSummary::from),
-                test_instance: TestInstanceSummary::from_test_instance_id(test_instance),
+                test_instance: test_instance.to_owned(),
                 run_status,
                 delay_before_next_attempt,
                 failure_output,
@@ -616,7 +616,7 @@ impl TestEventKindSummary<ChildSingleOutput> {
                 running,
             } => Self::Output(OutputEventKind::TestFinished {
                 stress_index: stress_index.map(StressIndexSummary::from),
-                test_instance: TestInstanceSummary::from_test_instance_id(test_instance),
+                test_instance: test_instance.to_owned(),
                 success_output,
                 failure_output,
                 junit_store_success_output,
@@ -834,26 +834,6 @@ impl ZipStoreOutput {
             ZipStoreOutput::Full { file_name } | ZipStoreOutput::Truncated { file_name, .. } => {
                 Some(file_name)
             }
-        }
-    }
-}
-
-/// Information about a test instance, stored in a serializable format.
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-#[cfg_attr(test, derive(test_strategy::Arbitrary))]
-pub struct TestInstanceSummary {
-    /// The binary ID.
-    pub binary_id: RustBinaryId,
-    /// The test name.
-    pub name: String,
-}
-
-impl TestInstanceSummary {
-    fn from_test_instance_id(instance: TestInstanceId<'_>) -> Self {
-        Self {
-            binary_id: instance.binary_id.clone(),
-            name: instance.test_name.to_string(),
         }
     }
 }
