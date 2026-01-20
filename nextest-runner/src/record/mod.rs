@@ -63,7 +63,6 @@ pub use store::{
     StressCompletedRunStats,
 };
 pub use summary::{
-    CoreEventKind, NoTestsBehavior, OutputEventKind, OutputFileName, RecordOpts,
-    StressConditionSummary, StressIndexSummary, TestEventKindSummary, TestEventSummary,
-    ZipStoreOutput,
+    CoreEventKind, OutputEventKind, OutputFileName, RecordOpts, StressConditionSummary,
+    StressIndexSummary, TestEventKindSummary, TestEventSummary, ZipStoreOutput,
 };

@@ -177,7 +177,7 @@ pub struct TestRunnerOpts {
     #[clap(flatten)]
     pub(crate) interceptor: InterceptorOpt,
 
-    /// Behavior if there are no tests to run [default: fail].
+    /// Behavior if there are no tests to run [default: auto].
     #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
     pub(crate) no_tests: Option<NoTestsBehaviorOpt>,
 
@@ -284,7 +284,7 @@ pub(crate) struct BenchRunnerOpts {
     )]
     max_fail: Option<MaxFail>,
 
-    /// Behavior if there are no benchmarks to run [default: fail].
+    /// Behavior if there are no benchmarks to run [default: auto].
     #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
     pub(crate) no_tests: Option<NoTestsBehaviorOpt>,
 
@@ -999,19 +999,14 @@ impl App {
                 run_id: runner.run_id(),
                 nextest_version: self.base.current_version.clone(),
                 started_at: runner.started_at().fixed_offset(),
-                cli_args: cli_args_for_recording.clone(),
-                env_vars: env_vars_for_recording.clone(),
+                cli_args: cli_args_for_recording,
+                env_vars: env_vars_for_recording,
                 max_output_size: resolved_user_config.record.max_output_size,
             };
             match RecordSession::setup(config) {
                 Ok(setup) => {
                     let record = structured::RecordReporter::new(setup.recorder);
-                    let opts = RecordOpts::new(
-                        test_list.mode(),
-                        runner_opts.no_tests.map(|b| b.to_record()),
-                        cli_args_for_recording,
-                        env_vars_for_recording,
-                    );
+                    let opts = RecordOpts::new(test_list.mode());
                     record.write_meta(
                         self.base.cargo_metadata_json.clone(),
                         test_list.to_summary(),
@@ -1225,19 +1220,14 @@ impl App {
                 run_id: runner.run_id(),
                 nextest_version: self.base.current_version.clone(),
                 started_at: runner.started_at().fixed_offset(),
-                cli_args: cli_args_for_recording.clone(),
-                env_vars: env_vars_for_recording.clone(),
+                cli_args: cli_args_for_recording,
+                env_vars: env_vars_for_recording,
                 max_output_size: resolved_user_config.record.max_output_size,
             };
             match RecordSession::setup(config) {
                 Ok(setup) => {
                     let record = structured::RecordReporter::new(setup.recorder);
-                    let opts = RecordOpts::new(
-                        test_list.mode(),
-                        runner_opts.no_tests.map(|b| b.to_record()),
-                        cli_args_for_recording,
-                        env_vars_for_recording,
-                    );
+                    let opts = RecordOpts::new(test_list.mode());
                     record.write_meta(
                         self.base.cargo_metadata_json.clone(),
                         test_list.to_summary(),
@@ -1317,10 +1307,14 @@ fn final_result(
                 warn!("no {} to run", plural::tests_plural(mode));
                 Ok(())
             }
-            Some(NoTestsBehaviorOpt::Fail) => Err(ExpectedError::NoTestsRun {
-                mode,
-                is_default: false,
-            }),
+            // Auto currently behaves like Fail, but will be smarter in the
+            // future.
+            Some(NoTestsBehaviorOpt::Fail | NoTestsBehaviorOpt::Auto) => {
+                Err(ExpectedError::NoTestsRun {
+                    mode,
+                    is_default: false,
+                })
+            }
             None => Err(ExpectedError::NoTestsRun {
                 mode,
                 is_default: true,

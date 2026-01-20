@@ -6,7 +6,6 @@
 use clap::ValueEnum;
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
-    record::NoTestsBehavior,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
     user_config::elements::UiShowProgress,
 };
@@ -114,8 +113,12 @@ impl From<RunIgnoredOpt> for nextest_runner::test_filter::RunIgnored {
 }
 
 /// No tests behavior options.
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
 pub(crate) enum NoTestsBehaviorOpt {
+    /// Use the default behavior (error with exit code 4).
+    #[default]
+    Auto,
+
     /// Silently exit with code 0.
     Pass,
 
@@ -125,17 +128,6 @@ pub(crate) enum NoTestsBehaviorOpt {
     /// Produce an error message and exit with code 4.
     #[clap(alias = "error")]
     Fail,
-}
-
-impl NoTestsBehaviorOpt {
-    /// Converts to the record-layer `NoTestsBehavior` type.
-    pub(crate) fn to_record(self) -> NoTestsBehavior {
-        match self {
-            Self::Pass => NoTestsBehavior::Pass,
-            Self::Warn => NoTestsBehavior::Warn,
-            Self::Fail => NoTestsBehavior::Fail,
-        }
-    }
 }
 
 /// Test output display options.

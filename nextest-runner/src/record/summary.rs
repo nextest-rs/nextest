@@ -29,7 +29,7 @@ use chrono::{DateTime, FixedOffset};
 use nextest_metadata::MismatchReason;
 use quick_junit::ReportUuid;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fmt, num::NonZero, time::Duration};
+use std::{fmt, num::NonZero, time::Duration};
 
 // ---
 // Record options
@@ -46,49 +46,13 @@ pub struct RecordOpts {
     /// The run mode (test or benchmark).
     #[serde(default)]
     pub run_mode: NextestRunMode,
-
-    /// The behavior when no tests are run.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub no_tests: Option<NoTestsBehavior>,
-
-    /// The command-line arguments used to invoke nextest.
-    pub cli_args: Vec<String>,
-
-    /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
-    pub env_vars: BTreeMap<String, String>,
 }
 
 impl RecordOpts {
     /// Creates a new `RecordOpts` with the given settings.
-    pub fn new(
-        run_mode: NextestRunMode,
-        no_tests: Option<NoTestsBehavior>,
-        cli_args: Vec<String>,
-        env_vars: BTreeMap<String, String>,
-    ) -> Self {
-        Self {
-            run_mode,
-            no_tests,
-            cli_args,
-            env_vars,
-        }
+    pub fn new(run_mode: NextestRunMode) -> Self {
+        Self { run_mode }
     }
-}
-
-/// Behavior when no tests are selected to run.
-///
-/// This is a serializable version of the CLI's `--no-tests` option.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum NoTestsBehavior {
-    /// Silently exit with code 0.
-    Pass,
-
-    /// Produce a warning and exit with code 0.
-    Warn,
-
-    /// Produce an error and exit with a non-zero code.
-    Fail,
 }
 
 // ---
