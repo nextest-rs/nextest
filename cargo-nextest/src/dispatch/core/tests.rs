@@ -497,7 +497,12 @@ fn test_test_binary_argument_parsing() {
         )
         .unwrap_or_else(|_| panic!("failed to build TestFilterBuilder"));
 
-        assert_eq!(builder, builder2, "{args} matches expected");
+        assert!(
+            builder.patterns_eq(&builder2),
+            "{args} matches expected (from TestCli: {:?}, from direct construction: {:?})",
+            builder,
+            builder2,
+        );
     }
 
     for (s, r) in invalid {

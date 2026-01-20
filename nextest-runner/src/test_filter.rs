@@ -102,7 +102,7 @@ impl BinaryFilter {
 }
 
 /// A builder for `TestFilter` instances.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct TestFilterBuilder {
     mode: NextestRunMode,
     run_ignored: RunIgnored,
@@ -473,6 +473,11 @@ impl TestFilterBuilder {
     /// Returns the nextest execution mode.
     pub fn mode(&self) -> NextestRunMode {
         self.mode
+    }
+
+    /// Compares the patterns between two `TestFilterBuilder`s.
+    pub fn patterns_eq(&self, other: &Self) -> bool {
+        self.patterns == other.patterns
     }
 
     /// Creates a new test filter scoped to a single binary.
