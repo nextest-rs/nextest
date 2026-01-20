@@ -1000,6 +1000,7 @@ impl App {
                 nextest_version: self.base.current_version.clone(),
                 started_at: runner.started_at().fixed_offset(),
                 cli_args: cli_args_for_recording,
+                build_scope_args: self.base.build_scope_args(),
                 env_vars: env_vars_for_recording,
                 max_output_size: resolved_user_config.record.max_output_size,
             };
@@ -1221,6 +1222,7 @@ impl App {
                 nextest_version: self.base.current_version.clone(),
                 started_at: runner.started_at().fixed_offset(),
                 cli_args: cli_args_for_recording,
+                build_scope_args: self.base.build_scope_args(),
                 env_vars: env_vars_for_recording,
                 max_output_size: resolved_user_config.record.max_output_size,
             };

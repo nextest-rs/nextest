@@ -1013,6 +1013,7 @@ mod tests {
             last_written_at: started_at,
             duration_secs: Some(duration_secs),
             cli_args: Vec::new(),
+            build_scope_args: Vec::new(),
             env_vars: BTreeMap::new(),
             sizes: RecordedSizes {
                 log: ComponentSizes::default(),
@@ -1044,6 +1045,7 @@ mod tests {
             last_written_at: started_at,
             duration_secs: Some(12.345),
             cli_args,
+            build_scope_args: Vec::new(),
             env_vars,
             sizes: RecordedSizes {
                 log: ComponentSizes {

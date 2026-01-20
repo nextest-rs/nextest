@@ -304,6 +304,7 @@ mod tests {
             last_written_at: started_at,
             duration_secs: None,
             cli_args: Vec::new(),
+            build_scope_args: Vec::new(),
             env_vars: BTreeMap::new(),
             sizes: RecordedSizes::default(),
             status: RecordedRunStatus::Incomplete,
