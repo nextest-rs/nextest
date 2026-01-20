@@ -425,6 +425,7 @@ mod tests {
             last_written_at: started_at,
             duration_secs: Some(1.0),
             cli_args: Vec::new(),
+            build_scope_args: Vec::new(),
             env_vars: BTreeMap::new(),
             sizes: RecordedSizes {
                 log: ComponentSizes::default(),

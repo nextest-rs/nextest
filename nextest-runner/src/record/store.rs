@@ -352,12 +352,14 @@ impl<'store> ExclusiveLockedRunStore<'store> {
     /// before truncation.
     ///
     /// Returns an error if writing is denied due to a format version mismatch.
+    #[expect(clippy::too_many_arguments)]
     pub fn create_run_recorder(
         mut self,
         run_id: ReportUuid,
         nextest_version: Version,
         started_at: DateTime<FixedOffset>,
         cli_args: Vec<String>,
+        build_scope_args: Vec<String>,
         env_vars: BTreeMap<String, String>,
         max_output_size: bytesize::ByteSize,
     ) -> Result<RunRecorder, RunStoreError> {
@@ -385,6 +387,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
             last_written_at: Local::now().fixed_offset(),
             duration_secs: None,
             cli_args,
+            build_scope_args,
             env_vars,
             sizes: RecordedSizes::default(),
             status: RecordedRunStatus::Incomplete,
@@ -427,6 +430,11 @@ pub struct RecordedRunInfo {
     pub duration_secs: Option<f64>,
     /// The command-line arguments used to invoke nextest.
     pub cli_args: Vec<String>,
+    /// Build scope arguments (package and target selection).
+    ///
+    /// These determine which packages and targets are built. In a rerun chain,
+    /// these are inherited from the original run unless explicitly overridden.
+    pub build_scope_args: Vec<String>,
     /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
     pub env_vars: BTreeMap<String, String>,
     /// Sizes broken down by component (log and store).

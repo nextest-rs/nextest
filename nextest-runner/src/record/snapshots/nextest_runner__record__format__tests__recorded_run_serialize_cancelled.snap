@@ -15,6 +15,9 @@ expression: json
     "run",
     "--workspace"
   ],
+  "build-scope-args": [
+    "--workspace"
+  ],
   "env-vars": {
     "CARGO_TERM_COLOR": "always",
     "NEXTEST_PROFILE": "ci"

@@ -141,6 +141,12 @@ pub(super) struct RecordedRun {
     /// The command-line arguments used to invoke nextest.
     #[serde(default)]
     pub(super) cli_args: Vec<String>,
+    /// Build scope arguments (package and target selection).
+    ///
+    /// These determine which packages and targets are built. In a rerun chain,
+    /// these are inherited from the original run unless explicitly overridden.
+    #[serde(default)]
+    pub(super) build_scope_args: Vec<String>,
     /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
     ///
     /// This has a default for deserializing old runs.json.zst files that don't have this field.
@@ -283,6 +289,7 @@ impl From<RecordedRun> for RecordedRunInfo {
             last_written_at: run.last_written_at,
             duration_secs: run.duration_secs,
             cli_args: run.cli_args,
+            build_scope_args: run.build_scope_args,
             env_vars: run.env_vars,
             sizes: run.sizes.into(),
             status: run.status.into(),
@@ -300,6 +307,7 @@ impl From<&RecordedRunInfo> for RecordedRun {
             last_written_at: run.last_written_at,
             duration_secs: run.duration_secs,
             cli_args: run.cli_args.clone(),
+            build_scope_args: run.build_scope_args.clone(),
             env_vars: run.env_vars.clone(),
             sizes: run.sizes.into(),
             status: (&run.status).into(),
@@ -621,6 +629,7 @@ mod tests {
                 "run".to_owned(),
                 "--workspace".to_owned(),
             ],
+            build_scope_args: vec!["--workspace".to_owned()],
             env_vars: BTreeMap::from([
                 ("CARGO_TERM_COLOR".to_owned(), "always".to_owned()),
                 ("NEXTEST_PROFILE".to_owned(), "ci".to_owned()),

@@ -5,6 +5,7 @@
 
 use crate::{
     ExpectedError, Result, ReuseBuildKind,
+    cargo_cli::CargoOptions,
     dispatch::{
         EarlyArgs,
         common::ConfigOpts,
@@ -48,7 +49,7 @@ pub(crate) struct BaseApp {
     pub(crate) workspace_root: Utf8PathBuf,
     manifest_path: Option<Utf8PathBuf>,
     pub(crate) reuse_build: ReuseBuildInfo,
-    cargo_opts: crate::cargo_cli::CargoOptions,
+    pub(crate) cargo_opts: CargoOptions,
     pub(crate) config_opts: ConfigOpts,
     pub(crate) current_version: Version,
 
@@ -376,6 +377,15 @@ impl BaseApp {
                 &self.output.stderr_styles(),
             )
         })
+    }
+
+    pub(crate) fn build_scope_args(&self) -> Vec<String> {
+        self.cargo_opts
+            .build_scope
+            .to_cli_args()
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect()
     }
 
     pub(crate) fn build_binary_list(&self, cargo_command: &str) -> Result<Arc<BinaryList>> {

@@ -41,6 +41,11 @@ pub struct RecordSessionConfig<'a> {
     pub started_at: DateTime<FixedOffset>,
     /// The command-line arguments used to invoke nextest.
     pub cli_args: Vec<String>,
+    /// Build scope arguments (package and target selection).
+    ///
+    /// These determine which packages and targets are built. In a rerun chain,
+    /// these are inherited from the original run unless explicitly overridden.
+    pub build_scope_args: Vec<String>,
     /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
     pub env_vars: BTreeMap<String, String>,
     /// Maximum size per output file before truncation.
@@ -90,6 +95,7 @@ impl RecordSession {
                 config.nextest_version,
                 config.started_at,
                 config.cli_args,
+                config.build_scope_args,
                 config.env_vars,
                 config.max_output_size,
             )

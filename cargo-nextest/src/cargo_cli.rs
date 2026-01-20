@@ -8,12 +8,15 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Args};
 use std::{borrow::Cow, path::PathBuf};
 
-/// Options passed down to cargo.
-#[derive(Debug, Args)]
-#[command(
-    group = clap::ArgGroup::new("cargo-opts").multiple(true),
-)]
-pub(crate) struct CargoOptions {
+/// Build scope options: package selection + target selection.
+///
+/// These options determine which packages and targets are built. In a rerun
+/// chain, these are inherited from the original run unless explicitly overridden.
+#[derive(Clone, Debug, Default, Args)]
+pub(crate) struct CargoBuildScopeOptions {
+    // ---
+    // Package selection
+    // ---
     /// Package to test
     #[arg(
         short = 'p',
@@ -35,6 +38,9 @@ pub(crate) struct CargoOptions {
     #[arg(long, group = "cargo-opts", help_heading = "Package selection")]
     all: bool,
 
+    // ---
+    // Target selection
+    // ---
     /// Test only this package's library unit tests
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
     lib: bool,
@@ -74,6 +80,129 @@ pub(crate) struct CargoOptions {
     /// Test all targets
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
     all_targets: bool,
+}
+
+impl CargoBuildScopeOptions {
+    /// Returns true if any build scope arguments were provided.
+    #[expect(dead_code, reason = "will use this soon")]
+    pub(crate) fn has_any(&self) -> bool {
+        let Self {
+            // Package selection.
+            packages,
+            workspace,
+            exclude,
+            all,
+            // Target selection.
+            lib,
+            bin,
+            bins,
+            example,
+            examples,
+            test,
+            tests,
+            bench,
+            benches,
+            all_targets,
+        } = self;
+
+        !packages.is_empty()
+            || *workspace
+            || !exclude.is_empty()
+            || *all
+            || *lib
+            || !bin.is_empty()
+            || *bins
+            || !example.is_empty()
+            || *examples
+            || !test.is_empty()
+            || *tests
+            || !bench.is_empty()
+            || *benches
+            || *all_targets
+    }
+
+    /// Converts build scope args to a list of CLI arguments for storage.
+    pub(crate) fn to_cli_args(&self) -> Vec<&str> {
+        let Self {
+            // Package selection.
+            packages,
+            workspace,
+            exclude,
+            all,
+            // Target selection.
+            lib,
+            bin,
+            bins,
+            example,
+            examples,
+            test,
+            tests,
+            bench,
+            benches,
+            all_targets,
+        } = self;
+
+        let mut args = Vec::new();
+
+        // Package selection.
+        for pkg in packages {
+            args.extend(["--package", pkg.as_str()]);
+        }
+        if *workspace {
+            args.push("--workspace");
+        }
+        for exc in exclude {
+            args.extend(["--exclude", exc.as_str()]);
+        }
+        if *all {
+            args.push("--all");
+        }
+
+        // Target selection.
+        if *lib {
+            args.push("--lib");
+        }
+        for b in bin {
+            args.extend(["--bin", b.as_str()]);
+        }
+        if *bins {
+            args.push("--bins");
+        }
+        for ex in example {
+            args.extend(["--example", ex.as_str()]);
+        }
+        if *examples {
+            args.push("--examples");
+        }
+        for t in test {
+            args.extend(["--test", t.as_str()]);
+        }
+        if *tests {
+            args.push("--tests");
+        }
+        for b in bench {
+            args.extend(["--bench", b.as_str()]);
+        }
+        if *benches {
+            args.push("--benches");
+        }
+        if *all_targets {
+            args.push("--all-targets");
+        }
+
+        args
+    }
+}
+
+/// Options passed down to cargo.
+#[derive(Debug, Default, Args)]
+#[command(
+    group = clap::ArgGroup::new("cargo-opts").multiple(true),
+)]
+pub(crate) struct CargoOptions {
+    /// Build scope options (package + target selection).
+    #[command(flatten)]
+    pub(crate) build_scope: CargoBuildScopeOptions,
 
     /// Space or comma separated list of features to activate
     #[arg(
@@ -238,60 +367,29 @@ impl<'a> CargoCli<'a> {
         self
     }
 
+    /// Adds build scope options (package + target selection) to the command.
+    pub(crate) fn add_build_scope_options(
+        &mut self,
+        scope: &'a CargoBuildScopeOptions,
+    ) -> &mut Self {
+        for arg in scope.to_cli_args() {
+            self.add_arg(arg);
+        }
+        self
+    }
+
     pub(crate) fn add_options(&mut self, options: &'a CargoOptions) -> &mut Self {
-        // ---
-        // Package selection
-        // ---
-        self.add_args(
-            options
-                .packages
-                .iter()
-                .flat_map(|s| ["--package", s.as_str()]),
-        );
-        if options.workspace {
-            self.add_arg("--workspace");
-        }
-        self.add_args(
-            options
-                .exclude
-                .iter()
-                .flat_map(|s| ["--exclude", s.as_str()]),
-        );
-        if options.all {
-            self.add_arg("--all");
-        }
+        self.add_build_scope_options(&options.build_scope);
+        self.add_non_build_scope_options(options);
+        self
+    }
 
-        // ---
-        // Target selection
-        // ---
-        if options.lib {
-            self.add_arg("--lib");
-        }
-        self.add_args(options.bin.iter().flat_map(|s| ["--bin", s.as_str()]));
-        if options.bins {
-            self.add_arg("--bins");
-        }
-        self.add_args(
-            options
-                .example
-                .iter()
-                .flat_map(|s| ["--example", s.as_str()]),
-        );
-        if options.examples {
-            self.add_arg("--examples");
-        }
-        self.add_args(options.test.iter().flat_map(|s| ["--test", s.as_str()]));
-        if options.tests {
-            self.add_arg("--tests");
-        }
-        self.add_args(options.bench.iter().flat_map(|s| ["--bench", s.as_str()]));
-        if options.benches {
-            self.add_arg("--benches");
-        }
-        if options.all_targets {
-            self.add_arg("--all-targets");
-        }
-
+    /// Adds non-build-scope options from `CargoOptions`.
+    ///
+    /// This includes features, compilation options, manifest options, and other
+    /// cargo options. Used when inheriting build scope from a rerun but using
+    /// the current run's other options.
+    pub(crate) fn add_non_build_scope_options(&mut self, options: &'a CargoOptions) -> &mut Self {
         // ---
         // Feature selection
         // ---
@@ -394,7 +492,7 @@ impl<'a> CargoCli<'a> {
         self
     }
 
-    fn add_owned_arg(&mut self, arg: String) {
+    pub(crate) fn add_owned_arg(&mut self, arg: String) {
         self.args.push(Cow::Owned(arg));
     }
 
