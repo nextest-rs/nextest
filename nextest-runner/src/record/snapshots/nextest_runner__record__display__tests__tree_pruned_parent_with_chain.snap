@@ -1,0 +1,11 @@
+---
+source: nextest-runner/src/record/display.rs
+expression: "DisplayRunList::new(&snapshot_with_replayability, None, &Styles::default(),\n&theme_characters, &Redactor::noop()).to_string()"
+---
+2 recorded runs:
+
+  ???         (pruned parent)
+  \-50000002  2024-06-15 11:00:00      1.000s      60 KB  8 passed
+    50000003  2024-06-15 12:00:00      1.000s      70 KB  5 passed  *latest
+                                               ---------
+                                                  130 KB

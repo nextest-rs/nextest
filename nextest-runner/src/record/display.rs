@@ -11,6 +11,7 @@ use super::{
     SnapshotWithReplayability,
     run_id_index::RunIdIndex,
     store::{CompletedRunStats, ReplayabilityStatus, StressCompletedRunStats},
+    tree::{RunInfo, RunTree, TreeIterItem},
 };
 use crate::{
     helpers::{ThemeCharacters, plural},
@@ -20,7 +21,7 @@ use camino::Utf8Path;
 use chrono::{DateTime, Utc};
 use owo_colors::{OwoColorize, Style};
 use quick_junit::ReportUuid;
-use std::{error::Error, fmt};
+use std::{collections::HashMap, error::Error, fmt};
 use swrite::{SWrite, swrite};
 
 /// Styles for displaying record store information.
@@ -82,6 +83,12 @@ pub struct RunListAlignment {
     /// (e.g., "123 KB" or "1.5 MB"). The minimum width is 6 to maintain
     /// alignment for typical sizes.
     pub size_width: usize,
+    /// Maximum tree prefix width across all nodes, in units of 2-char segments.
+    ///
+    /// Used to align columns when displaying runs in a tree structure. Nodes
+    /// with smaller prefix widths get additional padding to align the timestamp
+    /// column.
+    pub tree_prefix_width: usize,
 }
 
 impl RunListAlignment {
@@ -108,6 +115,7 @@ impl RunListAlignment {
         Self {
             passed_width,
             size_width,
+            tree_prefix_width: 0,
         }
     }
 
@@ -123,17 +131,14 @@ impl RunListAlignment {
             .max()
             .unwrap_or(1);
 
-        // Compute max size width from individual runs.
         let max_run_size_width = runs
             .iter()
             .map(|run| SizeDisplay(run.sizes.total_compressed()).display_width())
             .max()
             .unwrap_or(0);
 
-        // Also consider the total size.
         let total_size_width = SizeDisplay(total_size_bytes).display_width();
 
-        // Calculate the width needed for the largest size.
         let size_width = max_run_size_width
             .max(total_size_width)
             .max(Self::MIN_SIZE_WIDTH);
@@ -141,7 +146,21 @@ impl RunListAlignment {
         Self {
             passed_width,
             size_width,
+            tree_prefix_width: 0,
         }
+    }
+
+    /// Sets the tree prefix width from a [`RunTree`].
+    ///
+    /// Used when displaying runs in a tree structure to ensure proper column
+    /// alignment across nodes with different tree depths.
+    pub(super) fn with_tree(mut self, tree: &RunTree) -> Self {
+        self.tree_prefix_width = tree
+            .iter()
+            .map(|item| item.tree_prefix_width())
+            .max()
+            .unwrap_or(0);
+        self
     }
 }
 
@@ -274,26 +293,10 @@ pub struct DisplayRecordedRunInfo<'a> {
     alignment: RunListAlignment,
     styles: &'a Styles,
     redactor: &'a Redactor,
-}
-
-impl<'a> DisplayRecordedRunInfo<'a> {
-    pub(super) fn new(
-        run: &'a RecordedRunInfo,
-        run_id_index: &'a RunIdIndex,
-        replayability: &'a ReplayabilityStatus,
-        alignment: RunListAlignment,
-        styles: &'a Styles,
-        redactor: &'a Redactor,
-    ) -> Self {
-        Self {
-            run,
-            run_id_index,
-            replayability,
-            alignment,
-            styles,
-            redactor,
-        }
-    }
+    /// Prefix to display before the run ID. Defaults to "  " (base indent).
+    prefix: &'a str,
+    /// Padding to add after the run ID to align columns. Defaults to 0.
+    run_id_padding: usize,
 }
 
 impl fmt::Display for DisplayRecordedRunInfo<'_> {
@@ -327,12 +330,15 @@ impl fmt::Display for DisplayRecordedRunInfo<'_> {
 
         write!(
             f,
-            "  {}  {}  {}  {:>width$}  {}",
+            "{}{}{:padding$}  {}  {}  {:>width$}  {}",
+            self.prefix,
             run_id_display,
+            "",
             timestamp_display.style(self.styles.timestamp),
             duration_display.style(self.styles.duration),
             size_display.style(self.styles.size),
             status_display,
+            padding = self.run_id_padding,
             width = self.alignment.size_width,
         )?;
 
@@ -352,7 +358,36 @@ impl fmt::Display for DisplayRecordedRunInfo<'_> {
     }
 }
 
-impl DisplayRecordedRunInfo<'_> {
+impl<'a> DisplayRecordedRunInfo<'a> {
+    pub(super) fn new(
+        run: &'a RecordedRunInfo,
+        run_id_index: &'a RunIdIndex,
+        replayability: &'a ReplayabilityStatus,
+        alignment: RunListAlignment,
+        styles: &'a Styles,
+        redactor: &'a Redactor,
+    ) -> Self {
+        Self {
+            run,
+            run_id_index,
+            replayability,
+            alignment,
+            styles,
+            redactor,
+            prefix: "  ",
+            run_id_padding: 0,
+        }
+    }
+
+    /// Sets the prefix and run ID padding for tree display.
+    ///
+    /// Used by [`DisplayRunList`] for tree-formatted output.
+    pub(super) fn with_tree_formatting(mut self, prefix: &'a str, run_id_padding: usize) -> Self {
+        self.prefix = prefix;
+        self.run_id_padding = run_id_padding;
+        self
+    }
+
     /// Formats the status portion of the display.
     fn format_status(&self) -> String {
         match &self.run.status {
@@ -918,49 +953,132 @@ impl fmt::Display for DisplayRunList<'_> {
             plural::runs_str(snapshot.run_count()),
         )?;
 
-        // Use from_runs_with_total to ensure the size column is wide enough
-        // for both individual runs and the total.
+        let tree = RunTree::build(
+            &snapshot
+                .runs()
+                .iter()
+                .map(|run| RunInfo {
+                    run_id: run.run_id,
+                    parent_run_id: run.parent_run_id,
+                    started_at: run.started_at,
+                })
+                .collect::<Vec<_>>(),
+        );
+
         let alignment =
-            RunListAlignment::from_runs_with_total(snapshot.runs(), snapshot.total_size());
+            RunListAlignment::from_runs_with_total(snapshot.runs(), snapshot.total_size())
+                .with_tree(&tree);
         let latest_run_id = self.snapshot_with_replayability.latest_run_id();
 
-        for run in snapshot.runs() {
-            let replayability = self
-                .snapshot_with_replayability
-                .get_replayability(run.run_id);
-            let display = run.display(
-                snapshot.run_id_index(),
-                replayability,
-                alignment,
-                self.styles,
-                self.redactor,
-            );
-            if Some(run.run_id) == latest_run_id {
-                writeln!(f, "{}  *{}", display, "latest".style(self.styles.count))?;
-            } else {
-                writeln!(f, "{}", display)?;
+        let run_map: HashMap<_, _> = snapshot.runs().iter().map(|r| (r.run_id, r)).collect();
+
+        for item in tree.iter() {
+            let prefix = format_tree_prefix(self.theme_characters, item);
+
+            // Nodes with smaller tree_prefix_width need more padding to align the timestamp column.
+            let run_id_padding = (alignment.tree_prefix_width - item.tree_prefix_width()) * 2;
+
+            match item.run_id {
+                Some(run_id) => {
+                    let run = run_map
+                        .get(&run_id)
+                        .expect("run ID from tree should exist in snapshot");
+                    let replayability = self
+                        .snapshot_with_replayability
+                        .get_replayability(run.run_id);
+
+                    let display = DisplayRecordedRunInfo::new(
+                        run,
+                        snapshot.run_id_index(),
+                        replayability,
+                        alignment,
+                        self.styles,
+                        self.redactor,
+                    )
+                    .with_tree_formatting(&prefix, run_id_padding);
+
+                    if Some(run.run_id) == latest_run_id {
+                        writeln!(f, "{}  *{}", display, "latest".style(self.styles.count))?;
+                    } else {
+                        writeln!(f, "{}", display)?;
+                    }
+                }
+                None => {
+                    // "???" is 3 chars, run_id is 8 chars, so we need 5 extra padding.
+                    let virtual_padding = run_id_padding + 5;
+                    writeln!(
+                        f,
+                        "{}{}{:padding$}  {}",
+                        prefix,
+                        "???".style(self.styles.run_id_rest),
+                        "",
+                        "(pruned parent)".style(self.styles.cancelled),
+                        padding = virtual_padding,
+                    )?;
+                }
             }
         }
 
-        // Display total size at the bottom.
-        // Column positions: 2 (indent) + 8 (run_id) + 2 + 19 (timestamp)
-        // + 2 + 10 (duration) + 2 = 45 chars before the size column.
+        // Column positions: base_indent (2) + tree_prefix_width * 2 (tree chars) + run_id (8)
+        // + separator (2) + timestamp (19) + separator (2) + duration (10) + separator (2).
+        let first_col_width = 2 + alignment.tree_prefix_width * 2 + 8;
+        let total_line_spacing = first_col_width + 2 + 19 + 2 + 10 + 2;
+
         writeln!(
             f,
-            "                                             {}",
+            "{:spacing$}{}",
+            "",
             self.theme_characters.hbar(alignment.size_width),
+            spacing = total_line_spacing,
         )?;
 
         let size_display = self.redactor.redact_size(snapshot.total_size());
         let size_formatted = format!("{:>width$}", size_display, width = alignment.size_width);
         writeln!(
             f,
-            "                                             {}",
+            "{:spacing$}{}",
+            "",
             size_formatted.style(self.styles.size),
+            spacing = total_line_spacing,
         )?;
 
         Ok(())
     }
+}
+
+/// Formats the tree prefix for a given tree item.
+///
+/// The prefix includes:
+/// - Base indent (2 spaces)
+/// - Continuation lines for ancestor levels (`│ ` or `  `)
+/// - Branch character (`├─` or `└─`) unless is_only_child
+fn format_tree_prefix(theme_characters: &ThemeCharacters, item: &TreeIterItem) -> String {
+    let mut prefix = String::new();
+
+    // Base indent (2 spaces, matching original format).
+    prefix.push_str("  ");
+
+    if item.depth == 0 {
+        return prefix;
+    }
+
+    for &has_continuation in &item.continuation_flags {
+        if has_continuation {
+            prefix.push_str(theme_characters.tree_continuation());
+        } else {
+            prefix.push_str(theme_characters.tree_space());
+        }
+    }
+
+    if !item.is_only_child {
+        if item.is_last {
+            prefix.push_str(theme_characters.tree_last());
+        } else {
+            prefix.push_str(theme_characters.tree_branch());
+        }
+    }
+
+    prefix
 }
 
 #[cfg(test)]
@@ -2232,6 +2350,590 @@ mod tests {
                 &Styles::default(),
                 &theme_characters,
                 &redactor
+            )
+            .to_string()
+        );
+    }
+
+    /// Creates a `RecordedRunInfo` for tree display tests with custom size.
+    fn make_run_for_tree(
+        uuid: &str,
+        started_at: &str,
+        parent_run_id: Option<&str>,
+        size_kb: u64,
+        passed: usize,
+        failed: usize,
+    ) -> RecordedRunInfo {
+        let started_at = DateTime::parse_from_rfc3339(started_at).expect("valid datetime");
+        RecordedRunInfo {
+            run_id: uuid.parse().expect("valid UUID"),
+            store_format_version: RECORD_FORMAT_VERSION,
+            nextest_version: Version::parse("0.9.100").expect("valid version"),
+            started_at,
+            last_written_at: started_at,
+            duration_secs: Some(1.0),
+            cli_args: Vec::new(),
+            build_scope_args: Vec::new(),
+            env_vars: BTreeMap::new(),
+            parent_run_id: parent_run_id.map(|s| s.parse().expect("valid UUID")),
+            sizes: RecordedSizes {
+                log: ComponentSizes::default(),
+                store: ComponentSizes {
+                    compressed: size_kb * 1024,
+                    uncompressed: size_kb * 1024 * 3,
+                    entries: 0,
+                },
+            },
+            status: RecordedRunStatus::Completed(CompletedRunStats {
+                initial_run_count: passed + failed,
+                passed,
+                failed,
+                exit_code: if failed > 0 { 1 } else { 0 },
+            }),
+        }
+    }
+
+    #[test]
+    fn test_tree_linear_chain() {
+        // parent -> child -> grandchild (compressed chain display).
+        let runs = vec![
+            make_run_for_tree(
+                "50000001-0000-0000-0000-000000000001",
+                "2024-06-15T10:00:00+00:00",
+                None,
+                50,
+                10,
+                0,
+            ),
+            make_run_for_tree(
+                "50000002-0000-0000-0000-000000000002",
+                "2024-06-15T11:00:00+00:00",
+                Some("50000001-0000-0000-0000-000000000001"),
+                60,
+                8,
+                2,
+            ),
+            make_run_for_tree(
+                "50000003-0000-0000-0000-000000000003",
+                "2024-06-15T12:00:00+00:00",
+                Some("50000002-0000-0000-0000-000000000002"),
+                70,
+                10,
+                0,
+            ),
+        ];
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
+        let theme_characters = ThemeCharacters::default();
+
+        insta::assert_snapshot!(
+            "tree_linear_chain",
+            DisplayRunList::new(
+                &snapshot_with_replayability,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn test_tree_branching() {
+        // parent -> child1, parent -> child2.
+        // Children sorted by started_at descending (child2 newer, comes first).
+        let runs = vec![
+            make_run_for_tree(
+                "50000001-0000-0000-0000-000000000001",
+                "2024-06-15T10:00:00+00:00",
+                None,
+                50,
+                10,
+                0,
+            ),
+            make_run_for_tree(
+                "50000002-0000-0000-0000-000000000002",
+                "2024-06-15T11:00:00+00:00",
+                Some("50000001-0000-0000-0000-000000000001"),
+                60,
+                5,
+                0,
+            ),
+            make_run_for_tree(
+                "50000003-0000-0000-0000-000000000003",
+                "2024-06-15T12:00:00+00:00",
+                Some("50000001-0000-0000-0000-000000000001"),
+                70,
+                3,
+                0,
+            ),
+        ];
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
+        let theme_characters = ThemeCharacters::default();
+
+        insta::assert_snapshot!(
+            "tree_branching",
+            DisplayRunList::new(
+                &snapshot_with_replayability,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn test_tree_pruned_parent() {
+        // Run whose parent doesn't exist (pruned).
+        // Should show virtual parent with "???" indicator.
+        let runs = vec![make_run_for_tree(
+            "50000002-0000-0000-0000-000000000002",
+            "2024-06-15T11:00:00+00:00",
+            Some("50000001-0000-0000-0000-000000000001"), // Parent doesn't exist.
+            60,
+            5,
+            0,
+        )];
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
+        let theme_characters = ThemeCharacters::default();
+
+        insta::assert_snapshot!(
+            "tree_pruned_parent",
+            DisplayRunList::new(
+                &snapshot_with_replayability,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn test_tree_mixed_independent_and_chain() {
+        // Independent run followed by a parent-child chain.
+        // Blank line between them since the chain has structure.
+        let runs = vec![
+            make_run_for_tree(
+                "50000001-0000-0000-0000-000000000001",
+                "2024-06-15T10:00:00+00:00",
+                None,
+                50,
+                10,
+                0,
+            ),
+            make_run_for_tree(
+                "50000002-0000-0000-0000-000000000002",
+                "2024-06-15T11:00:00+00:00",
+                None,
+                60,
+                8,
+                0,
+            ),
+            make_run_for_tree(
+                "50000003-0000-0000-0000-000000000003",
+                "2024-06-15T12:00:00+00:00",
+                Some("50000002-0000-0000-0000-000000000002"),
+                70,
+                5,
+                0,
+            ),
+        ];
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
+        let theme_characters = ThemeCharacters::default();
+
+        insta::assert_snapshot!(
+            "tree_mixed_independent_and_chain",
+            DisplayRunList::new(
+                &snapshot_with_replayability,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn test_tree_deep_chain() {
+        // 5-level deep chain to test continuation lines.
+        // a -> b -> c -> d -> e
+        let runs = vec![
+            make_run_for_tree(
+                "50000001-0000-0000-0000-000000000001",
+                "2024-06-15T10:00:00+00:00",
+                None,
+                50,
+                10,
+                0,
+            ),
+            make_run_for_tree(
+                "50000002-0000-0000-0000-000000000002",
+                "2024-06-15T11:00:00+00:00",
+                Some("50000001-0000-0000-0000-000000000001"),
+                60,
+                10,
+                0,
+            ),
+            make_run_for_tree(
+                "50000003-0000-0000-0000-000000000003",
+                "2024-06-15T12:00:00+00:00",
+                Some("50000002-0000-0000-0000-000000000002"),
+                70,
+                10,
+                0,
+            ),
+            make_run_for_tree(
+                "50000004-0000-0000-0000-000000000004",
+                "2024-06-15T13:00:00+00:00",
+                Some("50000003-0000-0000-0000-000000000003"),
+                80,
+                10,
+                0,
+            ),
+            make_run_for_tree(
+                "50000005-0000-0000-0000-000000000005",
+                "2024-06-15T14:00:00+00:00",
+                Some("50000004-0000-0000-0000-000000000004"),
+                90,
+                10,
+                0,
+            ),
+        ];
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
+        let theme_characters = ThemeCharacters::default();
+
+        insta::assert_snapshot!(
+            "tree_deep_chain",
+            DisplayRunList::new(
+                &snapshot_with_replayability,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn test_tree_branching_with_chains() {
+        // parent -> child1 -> grandchild1
+        // parent -> child2
+        // child1 is older, child2 is newer, so order: parent, child2, child1, grandchild1.
+        let runs = vec![
+            make_run_for_tree(
+                "50000001-0000-0000-0000-000000000001",
+                "2024-06-15T10:00:00+00:00",
+                None,
+                50,
+                10,
+                0,
+            ),
+            make_run_for_tree(
+                "50000002-0000-0000-0000-000000000002",
+                "2024-06-15T11:00:00+00:00",
+                Some("50000001-0000-0000-0000-000000000001"),
+                60,
+                8,
+                0,
+            ),
+            make_run_for_tree(
+                "50000003-0000-0000-0000-000000000003",
+                "2024-06-15T12:00:00+00:00",
+                Some("50000002-0000-0000-0000-000000000002"),
+                70,
+                5,
+                0,
+            ),
+            make_run_for_tree(
+                "50000004-0000-0000-0000-000000000004",
+                "2024-06-15T13:00:00+00:00",
+                Some("50000001-0000-0000-0000-000000000001"),
+                80,
+                3,
+                0,
+            ),
+        ];
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
+        let theme_characters = ThemeCharacters::default();
+
+        insta::assert_snapshot!(
+            "tree_branching_with_chains",
+            DisplayRunList::new(
+                &snapshot_with_replayability,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn test_tree_continuation_flags() {
+        // Test that continuation lines (│) appear correctly.
+        // parent -> child1 -> grandchild1 (child1 is not last, needs │ continuation)
+        // parent -> child2
+        // child1 is newer, child2 is older, so child1 is not last.
+        let runs = vec![
+            make_run_for_tree(
+                "50000001-0000-0000-0000-000000000001",
+                "2024-06-15T10:00:00+00:00",
+                None,
+                50,
+                10,
+                0,
+            ),
+            make_run_for_tree(
+                "50000002-0000-0000-0000-000000000002",
+                "2024-06-15T13:00:00+00:00", // Newer than child2.
+                Some("50000001-0000-0000-0000-000000000001"),
+                60,
+                8,
+                0,
+            ),
+            make_run_for_tree(
+                "50000003-0000-0000-0000-000000000003",
+                "2024-06-15T14:00:00+00:00",
+                Some("50000002-0000-0000-0000-000000000002"),
+                70,
+                5,
+                0,
+            ),
+            make_run_for_tree(
+                "50000004-0000-0000-0000-000000000004",
+                "2024-06-15T11:00:00+00:00", // Older than child1.
+                Some("50000001-0000-0000-0000-000000000001"),
+                80,
+                3,
+                0,
+            ),
+        ];
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
+        let theme_characters = ThemeCharacters::default();
+
+        insta::assert_snapshot!(
+            "tree_continuation_flags",
+            DisplayRunList::new(
+                &snapshot_with_replayability,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn test_tree_pruned_parent_with_chain() {
+        // Pruned parent with a chain of descendants.
+        // ??? (pruned) -> child -> grandchild
+        let runs = vec![
+            make_run_for_tree(
+                "50000002-0000-0000-0000-000000000002",
+                "2024-06-15T11:00:00+00:00",
+                Some("50000001-0000-0000-0000-000000000001"), // Parent doesn't exist.
+                60,
+                8,
+                0,
+            ),
+            make_run_for_tree(
+                "50000003-0000-0000-0000-000000000003",
+                "2024-06-15T12:00:00+00:00",
+                Some("50000002-0000-0000-0000-000000000002"),
+                70,
+                5,
+                0,
+            ),
+        ];
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
+        let theme_characters = ThemeCharacters::default();
+
+        insta::assert_snapshot!(
+            "tree_pruned_parent_with_chain",
+            DisplayRunList::new(
+                &snapshot_with_replayability,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn test_tree_pruned_parent_with_multiple_children() {
+        // Virtual (pruned) parent with multiple direct children.
+        // Both children should show branch characters (|- and \-).
+        let runs = vec![
+            make_run_for_tree(
+                "50000002-0000-0000-0000-000000000002",
+                "2024-06-15T11:00:00+00:00",
+                Some("50000001-0000-0000-0000-000000000001"), // Parent doesn't exist.
+                60,
+                5,
+                0,
+            ),
+            make_run_for_tree(
+                "50000003-0000-0000-0000-000000000003",
+                "2024-06-15T12:00:00+00:00",
+                Some("50000001-0000-0000-0000-000000000001"), // Same pruned parent.
+                70,
+                3,
+                0,
+            ),
+        ];
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
+        let theme_characters = ThemeCharacters::default();
+
+        insta::assert_snapshot!(
+            "tree_pruned_parent_with_multiple_children",
+            DisplayRunList::new(
+                &snapshot_with_replayability,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn test_tree_unicode_characters() {
+        // Test with Unicode characters (├─, └─, │).
+        let runs = vec![
+            make_run_for_tree(
+                "50000001-0000-0000-0000-000000000001",
+                "2024-06-15T10:00:00+00:00",
+                None,
+                50,
+                10,
+                0,
+            ),
+            make_run_for_tree(
+                "50000002-0000-0000-0000-000000000002",
+                "2024-06-15T11:00:00+00:00",
+                Some("50000001-0000-0000-0000-000000000001"),
+                60,
+                8,
+                0,
+            ),
+            make_run_for_tree(
+                "50000003-0000-0000-0000-000000000003",
+                "2024-06-15T12:00:00+00:00",
+                Some("50000001-0000-0000-0000-000000000001"),
+                70,
+                5,
+                0,
+            ),
+        ];
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
+        // Create ThemeCharacters with Unicode enabled.
+        let mut theme_characters = ThemeCharacters::default();
+        theme_characters.use_unicode();
+
+        insta::assert_snapshot!(
+            "tree_unicode_characters",
+            DisplayRunList::new(
+                &snapshot_with_replayability,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
+            )
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn test_tree_compressed_with_branching() {
+        // Tests the case where a compressed (only-child) node has multiple
+        // children, and one child also has children.
+        //
+        // root (1) -> X (2, only child - compressed)
+        //             ├─ Z1 (3, newer, not last)
+        //             │  └─ W (4, only child - compressed)
+        //             └─ Z2 (5, older, last)
+        //
+        // Expected display:
+        //   1
+        //   \-2        <- compressed (no branch for 2's only-child status)
+        //     |-3      <- 2's first child (Z1)
+        //     | 4      <- Z1's only child (W), compressed, with continuation for Z1
+        //     \-5      <- 2's last child (Z2)
+        let runs = vec![
+            make_run_for_tree(
+                "50000001-0000-0000-0000-000000000001",
+                "2024-06-15T10:00:00+00:00",
+                None,
+                50,
+                10,
+                0,
+            ),
+            make_run_for_tree(
+                "50000002-0000-0000-0000-000000000002",
+                "2024-06-15T11:00:00+00:00",
+                Some("50000001-0000-0000-0000-000000000001"),
+                60,
+                8,
+                0,
+            ),
+            make_run_for_tree(
+                "50000003-0000-0000-0000-000000000003",
+                "2024-06-15T14:00:00+00:00", // Newer - will be first
+                Some("50000002-0000-0000-0000-000000000002"),
+                70,
+                5,
+                0,
+            ),
+            make_run_for_tree(
+                "50000004-0000-0000-0000-000000000004",
+                "2024-06-15T15:00:00+00:00",
+                Some("50000003-0000-0000-0000-000000000003"),
+                80,
+                3,
+                0,
+            ),
+            make_run_for_tree(
+                "50000005-0000-0000-0000-000000000005",
+                "2024-06-15T12:00:00+00:00", // Older - will be last
+                Some("50000002-0000-0000-0000-000000000002"),
+                90,
+                2,
+                0,
+            ),
+        ];
+        let snapshot = RunStoreSnapshot::new_for_test(runs);
+        let snapshot_with_replayability = SnapshotWithReplayability::new_for_test(&snapshot);
+        let theme_characters = ThemeCharacters::default();
+
+        insta::assert_snapshot!(
+            "tree_compressed_with_branching",
+            DisplayRunList::new(
+                &snapshot_with_replayability,
+                None,
+                &Styles::default(),
+                &theme_characters,
+                &Redactor::noop()
             )
             .to_string()
         );

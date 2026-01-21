@@ -4,7 +4,7 @@ expression: "DisplayRunList::new(&snapshot_with_replayability, None, &Styles::de
 ---
 2 recorded runs:
 
-  550e8400  2024-06-15 10:00:00      1.000s       1 KB   5 passed
   550e8400  2024-06-16 11:00:00      1.000s      99 KB  10 passed  *latest
+  550e8400  2024-06-15 10:00:00      1.000s       1 KB   5 passed
                                              ---------
                                                 100 KB
