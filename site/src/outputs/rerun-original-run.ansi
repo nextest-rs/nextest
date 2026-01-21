@@ -1,0 +1,7 @@
+[32;1m Nextest run[0m ID [35;1mb0b[0m[90m38ba7-3a69-44c7-b52c-c0dabf839c07[0m with nextest profile: [1mdefault[0m
+[32;1m    Starting[0m [1m51[0m tests across [1m2[0m binaries
+[31;1m  Cancelling[0m due to [31;1minterrupt[0m: [1m2[0m tests still running
+[31;1m        FAIL[0m [   0.142s] (50/51) [35;1mnextest-filtering[0m [36mproptest_helpers::tests[0m[36m::[0m[34;1mproptest_regex_valid[0m
+[31;1m        FAIL[0m [   0.143s] (51/51) [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mproptest_expr_roundtrip[0m
+────────────
+[31;1m     Summary[0m [   0.143s] [1m51[0m tests run: [1m49[0m [32;1mpassed[0m, [1m2[0m [31;1mfailed[0m, [1m0[0m [33;1mskipped[0m

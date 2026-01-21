@@ -1,0 +1,20 @@
+[1mRun[0m [35;1mb0b[0m[90m38ba7-3a69-44c7-b52c-c0dabf839c07[0m
+
+  [1mnextest version:  [0m0.9.123
+  [1mcommand:          [0m/opt/cargo/bin/cargo-nextest nextest run -p nextest-filtering
+  [1menv:              [0mCARGO_HOME=/opt/cargo
+  [1mstatus:           [0mcancelled (exit code [31;1m100[0m)
+  [1mstarted at:       [0m2026-01-21 20:07:40 +00:00 ([1m1h[0m ago)
+  [1mlast written at:  [0m2026-01-21 20:30:30 +00:00 ([1m52m[0m ago)
+  [1mduration:         [0m0.143s
+  [1mreplayable:       [0m[32;1myes[0m
+
+  [1mtests[0m:
+    [1mpassed:         [0m[32;1m49[0m
+    [1mfailed:         [0m[31;1m2[0m
+
+  [1msizes:            [0m[1mcompressed[0m  [1muncompressed[0m  [1mentries[0m
+    [1mlog             [0m      5 KB        108 KB      105
+    [1mstore           [0m    200 KB        2.0 MB       77
+                    ──────────  ────────────  ───────
+    [1mtotal           [0m    206 KB        2.2 MB      182

@@ -29,8 +29,8 @@ Experimental features are configured under `[experimental]`.
 ### `experimental.record`
 
 - **Type**: Boolean
-- **Description**: Enables the record and replay feature
-- **Documentation**: [_Record and replay_](../features/record-replay.md)
+- **Description**: Enables the record feature
+- **Documentation**: [_Record, replay, and rerun_](../features/record-replay-rerun.md)
 - **Default**: `false`
 - **Environment variable**: `NEXTEST_EXPERIMENTAL_RECORD=1`
 - **Example**:
@@ -45,7 +45,7 @@ Experimental features are configured under `[experimental]`.
 
 Record configuration is specified under `[record]`. Recording requires both `[experimental] record = true` and `[record] enabled = true`.
 
-For detailed information, see [_Record and replay_](../features/record-replay.md).
+For detailed information, see [_Record, replay, and rerun_](../features/record-replay-rerun.md).
 
 ### `record.enabled`
 

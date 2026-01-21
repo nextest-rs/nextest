@@ -4,7 +4,7 @@ status: experimental
 description: Recording test runs and replaying them later.
 ---
 
-# Record and replay
+# Record, replay, and rerun
 
 <!-- md:version 0.9.123 -->
 
@@ -13,7 +13,7 @@ description: Recording test runs and replaying them later.
     - **Enable with:** Add `[experimental]` with `record = true` to [`~/.config/nextest/config.toml`](../user-config/index.md), or set `NEXTEST_EXPERIMENTAL_RECORD=1` in the environment
     - **Tracking issue:** TBD
 
-Nextest supports recording test runs to replay them later. Recorded runs are stored locally in the system cache.
+Nextest supports recording test runs to rerun failing tests, and to replay them later. Recorded runs are stored locally in the system cache.
 
 Recorded test runs capture:
 
@@ -22,13 +22,13 @@ Recorded test runs capture:
 
 ## Use cases
 
-Currently, test runs can be replayed with `cargo nextest replay`. This is particularly useful for runs done in the past, including those that might have aged past terminal scrollback.
+* Rerunning tests that failed or were not run in the past, with the goal being to iteratively converge towards a successful test run.
+* Replaying test runs, including those that might have aged past terminal scrollback.
 
 In the future, it will be possible to:
 
-* publish archives in CI that can be replayed locally
-* export replayed test runs in various formats such as JUnit and libtest-json output
-* rerun tests that failed or were not run in the past, with the goal being to converge towards a successful test run
+* Publish archives in CI that can be replayed locally.
+* Export replayed test runs in various formats such as JUnit and libtest-json output.
 
 ## Usage
 
@@ -41,7 +41,93 @@ enabled = true
 
 Now, all future `cargo nextest run` instances will automatically be recorded.
 
-### Replaying test runs
+## Rerunning failed tests
+
+When the recording feature is enabled, you can rerun failing tests with `cargo nextest run -R latest`. This command will run tests that, in the original run:
+
+- failed;
+- did not run because the test run was cancelled; or,
+- were not previously seen, typically because they were newly added since the original run.
+
+!!! tip "Rerun build scope"
+
+    Without any further arguments, `cargo nextest run -R latest` will build the same targets that the original run did. If package or target arguments are specified, they will override the set of build targets from the original run.
+
+### Example rerun flow
+
+Let's say that `cargo nextest run --package nextest-filtering` was run, and it had two failing tests:
+
+=== "Colorized"
+
+    ```bash exec="true" result="ansi"
+    cat src/outputs/rerun-original-run.ansi
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/rerun-original-run.ansi | ../scripts/strip-ansi.sh
+    ```
+
+---
+
+With `cargo nextest run -R latest proptest_helpers`, the first test is selected:
+
+=== "Colorized"
+
+    ```bash exec="true" result="ansi"
+    cat src/outputs/rerun-latest.ansi | ../scripts/strip-hyperlinks.sh
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/rerun-latest.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
+    ```
+
+All selected tests passed, but some outstanding (previously-failing) tests still remain, so nextest exits with the advisory exit code [`RERUN_TESTS_OUTSTANDING`](https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.RERUN_TESTS_OUTSTANDING) (exit code 5).
+
+---
+
+A subsequent `cargo nextest run -R latest` will run the remaining test:
+
+=== "Colorized"
+
+    ```bash exec="true" result="ansi"
+    cat src/outputs/rerun-latest-2.ansi | ../scripts/strip-hyperlinks.sh
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/rerun-latest-2.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
+    ```
+
+---
+
+It is possible to rewind the rerun logic to an earlier state by passing in a run ID to `-R`. In this case `b0b` forms an unambiguous prefix (highlighted in bold purple), so `cargo nextest run -R b0b` results in both tests being run:
+
+=== "Colorized"
+
+    ```bash exec="true" result="ansi"
+    cat src/outputs/rerun-latest-3.ansi | ../scripts/strip-hyperlinks.sh
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/rerun-latest-3.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
+    ```
+
+### Rerun heuristics
+
+Picking the set of tests to run is tricky, particularly in the face of tests being removed and new ones being added. We have attempted to pick a strategy that aims to be conservative while covering the most common use cases, but it is always possible that tests are missed. Because of this, and because code changes might include regressions in previously passing tests, it is recommended that you perform a full test run once your iterations are complete.
+
+As a best practice, it is also recommended that you use CI to gate changes making their way to production, and that you perform full runs in CI.
+
+A design document discussing the heuristics and considerations involved is forthcoming.
+
+## Replaying test runs
 
 To replay the last test run, run `cargo nextest replay`. This will show output that looks like:
 
@@ -61,7 +147,7 @@ Earlier runs can be replayed by identifying them through their nextest run ID, w
 
 Replayed runs automatically use the [configured pager](../user-config/pager.md), such as `less`.
 
-#### Reporter options for replay
+### Reporter options for replay
 
 The following [reporter options](../reporting.md) also apply to replays, allowing output to be displayed differently than the original run:
 
@@ -85,7 +171,7 @@ The following [reporter options](../reporting.md) also apply to replays, allowin
 
 For example, outputs for successful tests are hidden by default. Use `cargo nextest replay --success-output immediate` to see those outputs.
 
-### Listing recorded runs
+## Listing recorded runs
 
 To list recorded runs, run `cargo nextest store list`. This produces output that looks like:
 
@@ -101,7 +187,27 @@ To list recorded runs, run `cargo nextest store list`. This produces output that
     cat src/outputs/store-list.ansi | ../scripts/strip-ansi.sh
     ```
 
-The highlighted prefixes can be used to uniquely identify a test run. For example, with the above output, to replay the run ID starting with `9d032152`, run `cargo nextest replay -R 9d`.
+As with reruns, highlighted prefixes can be used to uniquely identify a test run. For example, with the above output, to replay the run ID starting with `b0b38ba7`, run `cargo nextest replay -R b0b`.
+
+Reruns are shown in a tree structure. Chains of reruns (e.g., with repeated `cargo nextest run -R latest` invocations) are shown linearly if possible.
+
+### Detailed information about a run
+
+For detailed information, run `cargo nextest store info <run-id>`. For example, `cargo nextest store info b0b`:
+
+=== "Colorized"
+
+    ```bash exec="true" result="ansi"
+    cat src/outputs/store-info.ansi
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/store-info.ansi | ../scripts/strip-ansi.sh
+    ```
+    
+For debugging purposes, runs capture all environment variables starting with `CARGO_` and `NEXTEST_`, other than ones ending with `_TOKEN` (since they may contain sensitive tokens).
 
 ## Record retention
 
@@ -115,7 +221,7 @@ Retention limits are applied per-workspace. The default limits are:
 
 These limits can be customized via the `[record]` section in [user configuration](../user-config/index.md).
 
-The cache is pruned in least-recently-created (LRU) order, starting from the oldest runs.
+The cache is pruned in order of _last written at_, starting from the oldest runs. The last written at time is set at initial creation, and bumped on the original run when a recorded rerun is created.
 
 ### Example pruning configuration
 

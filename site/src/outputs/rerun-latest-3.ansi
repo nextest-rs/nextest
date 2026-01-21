@@ -1,0 +1,11 @@
+[1minfo[0m: experimental features enabled: setup-scripts
+[1minfo[0m: rerun: inheriting build scope from original run: --package nextest-filtering
+[1m[92m    Finished[0m ]8;;https://doc.rust-lang.org/cargo/reference/profiles.html#default-profiles\`test` profile [unoptimized + debuginfo]]8;;\ target(s) in 0.11s
+────────────
+[32;1m Nextest run[0m ID [35;1md6a[0m[90m74827-4764-4965-9f1a-5b16417daf28[0m with nextest profile: [1mdefault[0m
+[32;1m    Starting[0m [1m2[0m tests across [1m2[0m binaries ([1m49[0m tests [33;1mskipped[0m that already passed)
+[32;1m        PASS[0m [   0.153s] [35;1mnextest-filtering[0m [36mproptest_helpers::tests[0m[36m::[0m[34;1mproptest_regex_valid[0m
+[32;1m        PASS[0m [   0.277s] [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mproptest_expr_roundtrip[0m
+────────────
+[32;1m     Summary[0m [   0.278s] [1m2[0m tests run: [1m2[0m [32;1mpassed[0m, [1m49[0m [33;1mskipped[0m
+[1minfo[0m: no outstanding tests remain

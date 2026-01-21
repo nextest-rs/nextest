@@ -86,5 +86,5 @@ For a complete list of available settings, see the [user config reference](refer
 ## See also
 
 - [User config reference](reference.md) — complete list of user config settings
-- [Record and replay](../features/record-replay.md) — recording test runs for later inspection
+- [Record, replay, and rerun](../features/record-replay-rerun.md) — recording test runs for later inspection and to rerun failing tests
 - [Repository configuration](../configuration/index.md) — per-repository configuration
