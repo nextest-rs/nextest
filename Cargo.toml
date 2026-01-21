@@ -91,7 +91,7 @@ mukti-metadata = "0.3.0"
 # own supports-color + stylesheets everywhere.
 newtype-uuid = { version = "1.3.2", features = ["v4"] }
 nextest-filtering = { version = "0.18.0", path = "nextest-filtering" }
-nextest-metadata = { version = "0.13.1", path = "nextest-metadata" }
+nextest-metadata = { version = "0.13.2", path = "nextest-metadata" }
 nextest-runner = { path = "nextest-runner" }
 nextest-workspace-hack = "0.1.0"
 nix = { version = "0.30.1", default-features = false, features = ["signal"] }
