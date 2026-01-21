@@ -9,6 +9,12 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.123-b.3] - 2026-01-21
+
+### Added
+
+[Rerun functionality](https://nexte.st/docs/features/record-replay-rerun), built on top of the record-replay feature introduced in beta 1.
+
 ## [0.9.123-b.2] - 2026-01-18
 
 Numerous improvements to record-replay, including more efficient storage and better display.
@@ -17,7 +23,7 @@ Numerous improvements to record-replay, including more efficient storage and bet
 
 ### Added
 
-- Major new feature: experimental support for [recording and replaying test runs](https://nexte.st/docs/features/record-replay/). Enable by adding `record = true` to the `[experimental]` section in [user config](https://nexte.st/docs/user-config/), or by setting `NEXTEST_EXPERIMENTAL_RECORD=1`.
+- Major new feature: experimental support for [recording and replaying test runs](https://nexte.st/docs/features/record-replay-rerun/). Enable by adding `record = true` to the `[experimental]` section in [user config](https://nexte.st/docs/user-config/), or by setting `NEXTEST_EXPERIMENTAL_RECORD=1`.
 
   Once enabled, recording can be turned on by adding `enabled = true` to the `[record]` section in user config. Recorded runs are stored in the system cache directory.
 
@@ -1873,6 +1879,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.123-b.3]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.123-b.3
 [0.9.123-b.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.123-b.2
 [0.9.123-b.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.123-b.1
 [0.9.122]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.122
