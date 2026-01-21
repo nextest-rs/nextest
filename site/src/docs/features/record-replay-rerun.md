@@ -1,7 +1,7 @@
 ---
 icon: material/history
 status: experimental
-description: Recording test runs and replaying them later.
+description: Recording test runs, replaying them later, and rerunning test failures.
 ---
 
 # Record, replay, and rerun
