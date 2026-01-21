@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.13.2] - 2026-01-21
+
+### Added
+
+- `NEXTEST_EXIT_CODE` for an
+
 ## [0.13.1] - 2026-01-18
 
 ### Added

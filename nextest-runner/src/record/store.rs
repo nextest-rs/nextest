@@ -917,13 +917,6 @@ impl RunStoreSnapshot {
         &self.runs
     }
 
-    /// Returns a mutable reference to the recorded runs.
-    ///
-    /// Useful for sorting runs before display.
-    pub fn runs_mut(&mut self) -> &mut Vec<RecordedRunInfo> {
-        &mut self.runs
-    }
-
     /// Returns the number of recorded runs.
     pub fn run_count(&self) -> usize {
         self.runs.len()

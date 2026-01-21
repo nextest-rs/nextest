@@ -225,15 +225,10 @@ impl StoreCommand {
                 let store = RunStore::new(&cache_dir)
                     .map_err(|err| ExpectedError::RecordSetupError { err })?;
 
-                let mut snapshot = store
+                let snapshot = store
                     .lock_shared()
                     .map_err(|err| ExpectedError::RecordSetupError { err })?
                     .into_snapshot();
-
-                // Sort runs by start time, most recent first.
-                snapshot
-                    .runs_mut()
-                    .sort_by(|a, b| b.started_at.cmp(&a.started_at));
 
                 let store_path = if output.verbose {
                     Some(cache_dir.as_path())
