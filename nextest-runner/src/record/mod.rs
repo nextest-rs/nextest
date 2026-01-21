@@ -39,6 +39,7 @@ mod store;
 mod summary;
 #[cfg(test)]
 pub(crate) mod test_helpers;
+mod tree;
 
 pub use cache_dir::{NEXTEST_CACHE_DIR_ENV, records_cache_dir};
 pub use display::{

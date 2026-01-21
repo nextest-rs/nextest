@@ -711,11 +711,12 @@ impl fmt::Display for FormattedRelativeDuration {
 /// Characters used for terminal output theming.
 ///
 /// Provides both ASCII and Unicode variants for horizontal bars, progress indicators,
-/// and spinners.
+/// spinners, and tree display characters.
 #[derive(Clone, Debug)]
 pub struct ThemeCharacters {
     hbar: char,
     progress_chars: &'static str,
+    use_unicode: bool,
 }
 
 impl Default for ThemeCharacters {
@@ -723,6 +724,7 @@ impl Default for ThemeCharacters {
         Self {
             hbar: '-',
             progress_chars: "=> ",
+            use_unicode: false,
         }
     }
 }
@@ -733,6 +735,7 @@ impl ThemeCharacters {
         self.hbar = '─';
         // https://mike42.me/blog/2018-06-make-better-cli-progress-bars-with-unicode-block-characters
         self.progress_chars = "█▉▊▋▌▍▎▏ ";
+        self.use_unicode = true;
     }
 
     /// Returns the horizontal bar character.
@@ -748,6 +751,26 @@ impl ThemeCharacters {
     /// Returns the progress bar characters.
     pub fn progress_chars(&self) -> &'static str {
         self.progress_chars
+    }
+
+    /// Returns the tree branch character for non-last children: `├─` or `|-`.
+    pub fn tree_branch(&self) -> &'static str {
+        if self.use_unicode { "├─" } else { "|-" }
+    }
+
+    /// Returns the tree branch character for the last child: `└─` or `\-`.
+    pub fn tree_last(&self) -> &'static str {
+        if self.use_unicode { "└─" } else { "\\-" }
+    }
+
+    /// Returns the tree continuation line: `│ ` or `| `.
+    pub fn tree_continuation(&self) -> &'static str {
+        if self.use_unicode { "│ " } else { "| " }
+    }
+
+    /// Returns the tree space (no continuation): `  `.
+    pub fn tree_space(&self) -> &'static str {
+        "  "
     }
 }
 

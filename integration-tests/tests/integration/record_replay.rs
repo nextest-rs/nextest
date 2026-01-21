@@ -1463,6 +1463,16 @@ fn test_rerun_basic_flow() {
         read_rerun_info(&runs_dir, INITIAL_RUN_ID).is_none(),
         "initial run should not have rerun-info.json"
     );
+
+    // Verify store list shows tree structure with parent-child relationship.
+    let list_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "list"])
+        .output();
+    assert!(
+        list_output.exit_status.success(),
+        "store list should succeed: {list_output}"
+    );
+    insta::assert_snapshot!("store_list_rerun_tree", list_output.stdout_as_str());
 }
 
 /// Perform a rerun where all tests in the original run passed.
@@ -1733,6 +1743,16 @@ fn test_rerun_chain() {
         Some(RUN_ID_1),
         "rerun 2 root should still be run 1 (chain root)"
     );
+
+    // Verify store list shows compressed chain tree (3 levels).
+    let list_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "list"])
+        .output();
+    assert!(
+        list_output.exit_status.success(),
+        "store list should succeed: {list_output}"
+    );
+    insta::assert_snapshot!("store_list_rerun_chain_tree", list_output.stdout_as_str());
 }
 
 /// Rerun with new tests added.
