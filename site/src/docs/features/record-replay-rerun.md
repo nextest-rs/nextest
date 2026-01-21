@@ -32,9 +32,12 @@ In the future, it will be possible to:
 
 ## Usage
 
-Once the experimental `record` feature has been enabled in user config, you can enable recording in [user configuration](../user-config/index.md):
+To enable recording in [user configuration](../user-config/index.md):
 
 ```toml title="Enabling recording in <code>~/.config/nextest/config.toml</code>"
+[experimental]
+record = true
+
 [record]
 enabled = true
 ```
