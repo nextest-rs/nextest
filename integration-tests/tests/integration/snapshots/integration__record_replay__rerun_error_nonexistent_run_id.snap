@@ -1,0 +1,6 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&nonexistent_output.stderr_as_str(), temp_root)"
+---
+info: experimental features enabled: setup-scripts, wrapper-scripts, benchmarks
+error: no recorded run found matching `00000000-0000-0000-0000-000000000000`

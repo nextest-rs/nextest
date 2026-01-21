@@ -1,0 +1,13 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&rerun_output.stderr_as_str(), temp_root)"
+---
+info: experimental features enabled: setup-scripts, wrapper-scripts, benchmarks
+info: rerun: inheriting build scope from original run: (default scope)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in [ELAPSED]
+────────────
+ Nextest run ID 91000002-0000-0000-0000-000000000002 with nextest profile: default
+    Starting 0 tests across 7 binaries (30 tests skipped, including 2 tests that already passed)
+────────────
+     Summary [ duration] 0 tests run: 0 passed, 30 skipped
+info: no outstanding tests remain

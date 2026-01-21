@@ -14,7 +14,7 @@ use crate::{
         TestRunnerBuildError, TestRunnerExecuteErrors, TracerCommandParseError,
     },
     input::{InputHandler, InputHandlerKind, InputHandlerStatus},
-    list::{TestInstanceWithSettings, TestList},
+    list::{OwnedTestInstanceId, TestInstanceWithSettings, TestList},
     reporter::events::{ReporterEvent, RunStats, StressIndex},
     runner::ExecutorEvent,
     signal::{SignalHandler, SignalHandlerKind},
@@ -28,7 +28,8 @@ use futures::{future::Fuse, prelude::*};
 use nextest_metadata::FilterMatch;
 use quick_junit::ReportUuid;
 use std::{
-    convert::Infallible, fmt, num::NonZero, pin::Pin, str::FromStr, sync::Arc, time::Duration,
+    collections::BTreeSet, convert::Infallible, fmt, num::NonZero, pin::Pin, str::FromStr,
+    sync::Arc, time::Duration,
 };
 use tokio::{
     runtime::Runtime,
@@ -226,6 +227,7 @@ pub struct TestRunnerBuilder {
     test_threads: Option<TestThreads>,
     stress_condition: Option<StressCondition>,
     interceptor: Interceptor,
+    expected_outstanding: Option<BTreeSet<OwnedTestInstanceId>>,
 }
 
 impl TestRunnerBuilder {
@@ -271,6 +273,19 @@ impl TestRunnerBuilder {
     /// Sets the interceptor (debugger or tracer) to use for running tests.
     pub fn set_interceptor(&mut self, interceptor: Interceptor) -> &mut Self {
         self.interceptor = interceptor;
+        self
+    }
+
+    /// Sets the expected outstanding tests for rerun tracking.
+    ///
+    /// When set, the dispatcher will track which tests were seen during the run
+    /// and emit a `TestsNotSeen` as part of the `RunFinished` if some expected
+    /// tests were not seen.
+    pub fn set_expected_outstanding(
+        &mut self,
+        expected: BTreeSet<OwnedTestInstanceId>,
+    ) -> &mut Self {
+        self.expected_outstanding = Some(expected);
         self
     }
 
@@ -322,6 +337,7 @@ impl TestRunnerBuilder {
                 max_fail,
                 stress_condition: self.stress_condition,
                 interceptor: self.interceptor,
+                expected_outstanding: self.expected_outstanding,
                 runtime,
             },
             signal_handler,
@@ -490,6 +506,7 @@ struct TestRunnerInner<'a> {
     max_fail: MaxFail,
     stress_condition: Option<StressCondition>,
     interceptor: Interceptor,
+    expected_outstanding: Option<BTreeSet<OwnedTestInstanceId>>,
     runtime: Runtime,
 }
 
@@ -522,6 +539,7 @@ impl<'a> TestRunnerInner<'a> {
             self.max_fail,
             global_timeout,
             self.stress_condition.clone(),
+            self.expected_outstanding.clone(),
         );
 
         let executor_cx = ExecutorContext::new(

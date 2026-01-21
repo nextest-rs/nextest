@@ -16,7 +16,7 @@ use crate::{
     },
     reporter::events::{
         ChildExecutionOutputDescription, ChildOutputDescription, ExecuteStatus, ExecutionStatuses,
-        RunStats, SetupScriptExecuteStatus, StressIndex, TestEvent, TestEventKind,
+        RunStats, SetupScriptExecuteStatus, StressIndex, TestEvent, TestEventKind, TestsNotSeen,
     },
     run_mode::NextestRunMode,
     runner::{StressCondition, StressCount},
@@ -304,11 +304,16 @@ impl<'a> ReplayContext<'a> {
                 start_time,
                 elapsed,
                 run_stats,
+                outstanding_not_seen,
             } => Ok(TestEventKind::RunFinished {
                 run_id: *run_id,
                 start_time: *start_time,
                 elapsed: *elapsed,
                 run_stats: *run_stats,
+                outstanding_not_seen: outstanding_not_seen.as_ref().map(|t| TestsNotSeen {
+                    not_seen: t.not_seen.clone(),
+                    total_not_seen: t.total_not_seen,
+                }),
             }),
         }
     }

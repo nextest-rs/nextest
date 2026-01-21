@@ -244,6 +244,7 @@ pub(super) fn display_output_slice(
 pub(super) fn final_stats_to_error(
     stats: FinalRunStats,
     mode: NextestRunMode,
+    rerun_available: bool,
 ) -> Option<ExpectedError> {
     match stats {
         FinalRunStats::Success => None,
@@ -264,6 +265,6 @@ pub(super) fn final_stats_to_error(
         }
         | FinalRunStats::Failed {
             kind: RunStatsFailureKind::Test { .. },
-        } => Some(ExpectedError::test_run_failed()),
+        } => Some(ExpectedError::test_run_failed(rerun_available)),
     }
 }

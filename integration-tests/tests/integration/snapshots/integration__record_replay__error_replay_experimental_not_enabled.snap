@@ -1,0 +1,5 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&stderr, temp_root)"
+---
+error: cargo nextest replay is an experimental feature and must be enabled with NEXTEST_EXPERIMENTAL_RECORD=1

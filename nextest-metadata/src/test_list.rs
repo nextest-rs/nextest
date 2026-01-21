@@ -935,6 +935,9 @@ pub enum MismatchReason {
     /// This test is in a different partition.
     Partition,
 
+    /// This is a rerun and the test already passed.
+    RerunAlreadyPassed,
+
     /// This test is filtered out by the default-filter.
     ///
     /// This is the lowest-priority reason for skipping a test.
@@ -951,6 +954,7 @@ impl fmt::Display for MismatchReason {
                 write!(f, "does not match the provided expression filters")
             }
             MismatchReason::Partition => write!(f, "is in a different partition"),
+            MismatchReason::RerunAlreadyPassed => write!(f, "already passed"),
             MismatchReason::DefaultFilter => {
                 write!(f, "is filtered out by the profile's default-filter")
             }
@@ -974,6 +978,15 @@ mod proptest_impls {
         }
     }
 
+    impl Arbitrary for TestCaseName {
+        type Parameters = ();
+        type Strategy = BoxedStrategy<Self>;
+
+        fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+            any::<String>().prop_map(|s| TestCaseName::new(&s)).boxed()
+        }
+    }
+
     impl Arbitrary for MismatchReason {
         type Parameters = ();
         type Strategy = BoxedStrategy<Self>;
@@ -986,17 +999,9 @@ mod proptest_impls {
                 Just(MismatchReason::Expression),
                 Just(MismatchReason::Partition),
                 Just(MismatchReason::DefaultFilter),
+                Just(MismatchReason::RerunAlreadyPassed),
             ]
             .boxed()
-        }
-    }
-
-    impl Arbitrary for TestCaseName {
-        type Parameters = ();
-        type Strategy = BoxedStrategy<Self>;
-
-        fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
-            any::<String>().prop_map(|s| TestCaseName::new(&s)).boxed()
         }
     }
 }

@@ -128,7 +128,7 @@ impl App {
                 };
 
                 let test_list =
-                    self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
+                    self.build_test_list(&ctx, binary_list, &test_filter_builder, &profile)?;
 
                 test_list.write(
                     message_format.to_output_format(self.base.output.verbose, is_interactive),
@@ -184,7 +184,7 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
+        let test_list = self.build_test_list(&ctx, binary_list, &test_filter_builder, &profile)?;
 
         let resolved_user_config = resolve_user_config(
             &self.base.build_platforms.host.platform,

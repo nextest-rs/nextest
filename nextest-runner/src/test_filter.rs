@@ -9,6 +9,7 @@ use crate::{
     errors::TestFilterBuilderError,
     list::RustTestArtifact,
     partition::{Partitioner, PartitionerBuilder},
+    record::ComputedRerunInfo,
     run_mode::NextestRunMode,
 };
 use aho_corasick::AhoCorasick;
@@ -105,6 +106,7 @@ impl BinaryFilter {
 #[derive(Clone, Debug)]
 pub struct TestFilterBuilder {
     mode: NextestRunMode,
+    rerun_info: Option<ComputedRerunInfo>,
     run_ignored: RunIgnored,
     partitioner_builder: Option<PartitionerBuilder>,
     patterns: ResolvedFilterPatterns,
@@ -437,6 +439,7 @@ impl TestFilterBuilder {
 
         Ok(Self {
             mode,
+            rerun_info: None,
             run_ignored,
             partitioner_builder,
             patterns,
@@ -463,11 +466,17 @@ impl TestFilterBuilder {
         let binary_filter = BinaryFilter::new(Vec::new());
         Self {
             mode,
+            rerun_info: None,
             run_ignored,
             partitioner_builder: None,
             patterns: ResolvedFilterPatterns::default(),
             binary_filter,
         }
+    }
+
+    /// Set the list of outstanding tests, if this is a rerun.
+    pub fn set_outstanding_tests(&mut self, rerun_info: ComputedRerunInfo) {
+        self.rerun_info = Some(rerun_info);
     }
 
     /// Returns the nextest execution mode.
@@ -492,6 +501,11 @@ impl TestFilterBuilder {
             builder: self,
             partitioner,
         }
+    }
+
+    /// Consumes self, returning the underlying [`ComputedRerunInfo`] if any.
+    pub fn into_rerun_info(self) -> Option<ComputedRerunInfo> {
+        self.rerun_info
     }
 }
 
@@ -607,10 +621,42 @@ impl TestFilter<'_> {
         bound: FilterBound,
         ignored: bool,
     ) -> FilterMatch {
+        // Handle benchmark mismatches first.
         if let Some(mismatch) = self.filter_benchmark_mismatch(test_kind) {
             return mismatch;
         }
 
+        // Check if this test already passed in a prior rerun.
+        //
+        // RerunAlreadyPassed is a high-order bit: if a test passed in a prior
+        // rerun, we shouldn't run it again, regardless of other filter results.
+        // However, we must still go through the motions of checking all other
+        // filters, particularly for counted partitioning, to maintain
+        // consistent bucketing across reruns.
+        //
+        // Note that we don't support reruns with benchmarks yet (probably
+        // ever?), so NotABenchmark and RerunAlreadyPassed are mutually
+        // exclusive.
+        if self.is_rerun_already_passed(test_binary, test_name) {
+            // Run through the base filter to maintain partition counts.
+            let _ = self.filter_match_base(test_binary, test_name, ecx, bound, ignored);
+            return FilterMatch::Mismatch {
+                reason: MismatchReason::RerunAlreadyPassed,
+            };
+        }
+
+        self.filter_match_base(test_binary, test_name, ecx, bound, ignored)
+    }
+
+    /// Core filter matching logic, used by `filter_match`.
+    fn filter_match_base(
+        &mut self,
+        test_binary: &RustTestArtifact<'_>,
+        test_name: &TestCaseName,
+        ecx: &EvalContext<'_>,
+        bound: FilterBound,
+        ignored: bool,
+    ) -> FilterMatch {
         if let Some(mismatch) = self.filter_ignored_mismatch(ignored) {
             return mismatch;
         }
@@ -659,13 +705,27 @@ impl TestFilter<'_> {
 
         // Note that partition-based filtering MUST come after all other kinds
         // of filtering, so that count-based bucketing applies after ignored,
-        // name and expression matching. This also means that mutable count
+        // name, and expression matching. This also means that mutable count
         // state must be maintained by the partitioner.
         if let Some(mismatch) = self.filter_partition_mismatch(test_name) {
             return mismatch;
         }
 
         FilterMatch::Matches
+    }
+
+    /// Returns true if this test already passed in a prior rerun.
+    fn is_rerun_already_passed(
+        &self,
+        test_binary: &RustTestArtifact<'_>,
+        test_name: &TestCaseName,
+    ) -> bool {
+        if let Some(rerun_info) = &self.builder.rerun_info
+            && let Some(suite) = rerun_info.test_suites.get(&test_binary.binary_id)
+        {
+            return suite.passing.contains(test_name);
+        }
+        false
     }
 
     fn filter_benchmark_mismatch(&self, test_kind: &RustTestKind) -> Option<FilterMatch> {

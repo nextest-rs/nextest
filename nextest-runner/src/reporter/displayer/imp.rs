@@ -1269,6 +1269,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 start_time: _start_time,
                 elapsed,
                 run_stats,
+                outstanding_not_seen: tests_not_seen,
                 ..
             } => {
                 match run_stats {
@@ -1414,6 +1415,40 @@ impl<'a> DisplayReporterImpl<'a> {
                                 }
                             }
                         }
+                    }
+                }
+
+                if let Some(not_seen) = tests_not_seen
+                    && not_seen.total_not_seen > 0
+                {
+                    writeln!(
+                        writer,
+                        "{:>12} {} outstanding {} not seen during this rerun:",
+                        "Note".style(self.styles.skip),
+                        not_seen.total_not_seen.style(self.styles.count),
+                        plural::tests_str(self.mode, not_seen.total_not_seen),
+                    )?;
+
+                    for t in &not_seen.not_seen {
+                        let display = DisplayTestInstance::new(
+                            None,
+                            None,
+                            t.as_ref(),
+                            &self.styles.list_styles,
+                        );
+                        writeln!(writer, "             {}", display)?;
+                    }
+
+                    let remaining = not_seen
+                        .total_not_seen
+                        .saturating_sub(not_seen.not_seen.len());
+                    if remaining > 0 {
+                        writeln!(
+                            writer,
+                            "             ... and {} more {}",
+                            remaining.style(self.styles.count),
+                            plural::tests_str(self.mode, remaining),
+                        )?;
                     }
                 }
 
@@ -3287,6 +3322,7 @@ mod tests {
                             start_time: Local::now().into(),
                             elapsed: Duration::from_secs(2),
                             run_stats: RunFinishedStats::Single(run_stats_success),
+                            outstanding_not_seen: None,
                         },
                     })
                     .unwrap();
@@ -3324,6 +3360,7 @@ mod tests {
                             start_time: Local::now().into(),
                             elapsed: Duration::from_millis(15750),
                             run_stats: RunFinishedStats::Single(run_stats_mixed),
+                            outstanding_not_seen: None,
                         },
                     })
                     .unwrap();
@@ -3348,6 +3385,7 @@ mod tests {
                             start_time: Local::now().into(),
                             elapsed: Duration::from_secs(120),
                             run_stats: RunFinishedStats::Stress(stress_stats_success),
+                            outstanding_not_seen: None,
                         },
                     })
                     .unwrap();
@@ -3375,6 +3413,7 @@ mod tests {
                             start_time: Local::now().into(),
                             elapsed: Duration::from_millis(45250),
                             run_stats: RunFinishedStats::Stress(stress_stats_failed),
+                            outstanding_not_seen: None,
                         },
                     })
                     .unwrap();
@@ -3412,6 +3451,7 @@ mod tests {
                             start_time: Local::now().into(),
                             elapsed: Duration::from_millis(100),
                             run_stats: RunFinishedStats::Single(run_stats_empty),
+                            outstanding_not_seen: None,
                         },
                     })
                     .unwrap();

@@ -13,7 +13,7 @@ use crate::{
         scripts::ScriptId,
     },
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
-    list::{TestInstanceId, TestList},
+    list::{OwnedTestInstanceId, TestInstanceId, TestList},
     runner::{StressCondition, StressCount},
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
@@ -398,7 +398,28 @@ pub enum TestEventKind<'a> {
 
         /// Statistics for the run, or overall statistics for stress tests.
         run_stats: RunFinishedStats,
+
+        /// Tests that were expected to run but were not seen during this run.
+        ///
+        /// This is only set for reruns when some tests from the outstanding set
+        /// did not produce any events.
+        outstanding_not_seen: Option<TestsNotSeen>,
     },
+}
+
+/// Tests that were expected to run but were not seen during a rerun.
+#[derive(Clone, Debug)]
+pub struct TestsNotSeen {
+    /// A sample of test instance IDs that were not seen, up to a reasonable
+    /// limit.
+    ///
+    /// This uses [`OwnedTestInstanceId`] rather than [`TestInstanceId`]
+    /// because the tests may not be present in the current test list (they
+    /// come from the expected outstanding set from a prior run).
+    pub not_seen: Vec<OwnedTestInstanceId>,
+
+    /// The total number of tests not seen (may exceed `not_seen.len()`).
+    pub total_not_seen: usize,
 }
 
 /// Progress for a stress test.

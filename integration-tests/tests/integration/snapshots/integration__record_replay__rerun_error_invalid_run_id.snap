@@ -1,0 +1,7 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&invalid_output.stderr_as_str(), temp_root)"
+---
+error: invalid value 'not-a-uuid!!!' for '--rerun <RUN_ID>': invalid run ID selector `not-a-uuid!!!`: expected `latest` or hex digits
+
+For more information, try '--help'.

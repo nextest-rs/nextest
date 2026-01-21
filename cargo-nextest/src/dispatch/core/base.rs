@@ -402,6 +402,65 @@ impl BaseApp {
         Ok(binary_list)
     }
 
+    /// Builds the binary list, potentially inheriting build scope from a rerun.
+    ///
+    /// If `rerun_build_scope` is provided and the CLI has no build scope args,
+    /// inherits the build scope from the original run in the rerun chain.
+    pub(crate) fn build_binary_list_with_rerun(
+        &self,
+        cargo_command: &str,
+        rerun_build_scope: Option<&[String]>,
+    ) -> Result<Arc<BinaryList>> {
+        // If reusing a build, just return that.
+        if let Some(m) = self.reuse_build.binaries_metadata() {
+            return Ok(m.binary_list.clone());
+        }
+
+        let cli_has_scope = self.cargo_opts.build_scope.has_any();
+
+        let inherited_scope = match (rerun_build_scope, cli_has_scope) {
+            (Some(scope), false) => {
+                // Inherit from the original run.
+                if scope.is_empty() {
+                    info!("rerun: inheriting build scope from original run: (default scope)");
+                } else {
+                    info!(
+                        "rerun: inheriting build scope from original run: {}",
+                        scope.join(" ")
+                    );
+                }
+                Some(scope)
+            }
+            (Some(_), true) => {
+                // User provided build scope args, not inheriting.
+                info!("rerun: using provided build scope, not inheriting from original run");
+                None
+            }
+            (None, _) => None,
+        };
+
+        let binary_list = if let Some(scope) = inherited_scope {
+            self.cargo_opts.compute_binary_list_with_inherited(
+                cargo_command,
+                scope,
+                self.graph(),
+                self.manifest_path.as_deref(),
+                self.output,
+                self.build_platforms.clone(),
+            )?
+        } else {
+            self.cargo_opts.compute_binary_list(
+                cargo_command,
+                self.graph(),
+                self.manifest_path.as_deref(),
+                self.output,
+                self.build_platforms.clone(),
+            )?
+        };
+
+        Ok(Arc::new(binary_list))
+    }
+
     #[inline]
     pub(crate) fn graph(&self) -> &PackageGraph {
         &self.package_graph
@@ -477,6 +536,41 @@ mod helpers {
             cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
             cargo_cli.add_options(self);
 
+            Self::run_cargo_build(cargo_cli, graph, build_platforms)
+        }
+
+        /// Computes the binary list using inherited build scope from a rerun.
+        ///
+        /// This uses the inherited build scope args instead of the current CLI's
+        /// build scope, but uses all other options from the current CLI.
+        pub(crate) fn compute_binary_list_with_inherited(
+            &self,
+            cargo_command: &str,
+            inherited_build_scope: &[String],
+            graph: &PackageGraph,
+            manifest_path: Option<&Utf8Path>,
+            output: OutputContext,
+            build_platforms: BuildPlatforms,
+        ) -> Result<BinaryList> {
+            let mut cargo_cli = CargoCli::new(cargo_command, manifest_path, output);
+
+            cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
+
+            // Add inherited build scope instead of self.build_scope.
+            for arg in inherited_build_scope {
+                cargo_cli.add_owned_arg(arg.clone());
+            }
+            // Add non-build-scope options from the current CLI.
+            cargo_cli.add_non_build_scope_options(self);
+
+            Self::run_cargo_build(cargo_cli, graph, build_platforms)
+        }
+
+        fn run_cargo_build(
+            cargo_cli: CargoCli<'_>,
+            graph: &PackageGraph,
+            build_platforms: BuildPlatforms,
+        ) -> Result<BinaryList> {
             let expression = cargo_cli.to_expression();
             let output = expression
                 .stdout_capture()

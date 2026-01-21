@@ -1,0 +1,23 @@
+---
+source: nextest-runner/src/record/display.rs
+expression: "runs[1].display_detailed(&index, &replayable, now, &Styles::default(),\n&theme_characters, &redactor).to_string()"
+---
+Run 660e8400-e29b-41d4-a716-446655440001
+
+  nextest version:  0.9.122
+  parent run:       550e8400-e29b-41d4-a716-446655440000
+  command:          cargo nextest run --rerun
+  status:           completed (exit code 0)
+  started at:       2024-06-15 11:00:00 +00:00 (10d ago)
+  last written at:  2024-06-15 11:00:00 +00:00 (10d ago)
+  duration:         12.345s
+  replayable:       yes
+
+  tests:
+    passed:         5
+
+  sizes:            compressed  uncompressed  entries
+    log                   1 KB          4 KB      100
+    store                50 KB        200 KB       42
+                    ----------  ------------  -------
+    total                51 KB        204 KB      142

@@ -1,0 +1,8 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&ambiguous_output.stderr_as_str(), temp_root)"
+---
+info: experimental features enabled: setup-scripts, wrapper-scripts, benchmarks
+error: prefix `930` is ambiguous, matches 2 runs:
+  93000002  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed / 1 failed
+  93000001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed / 1 failed

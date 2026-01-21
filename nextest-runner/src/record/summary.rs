@@ -310,7 +310,20 @@ pub enum CoreEventKind {
         elapsed: Duration,
         /// The final run statistics.
         run_stats: RunFinishedStats,
+        /// Tests that were expected to run but were not seen during this run.
+        outstanding_not_seen: Option<TestsNotSeenSummary>,
     },
+}
+
+/// Tests that were expected to run but were not seen during a rerun.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
+pub struct TestsNotSeenSummary {
+    /// A sample of test instance IDs that were not seen.
+    pub not_seen: Vec<OwnedTestInstanceId>,
+    /// The total number of tests not seen.
+    pub total_not_seen: usize,
 }
 
 /// Events that carry test output.
@@ -525,11 +538,16 @@ impl TestEventKindSummary<ChildSingleOutput> {
                 start_time,
                 elapsed,
                 run_stats,
+                outstanding_not_seen,
             } => Self::Core(CoreEventKind::RunFinished {
                 run_id,
                 start_time,
                 elapsed,
                 run_stats,
+                outstanding_not_seen: outstanding_not_seen.map(|t| TestsNotSeenSummary {
+                    not_seen: t.not_seen,
+                    total_not_seen: t.total_not_seen,
+                }),
             }),
 
             TestEventKind::SetupScriptFinished {

@@ -321,6 +321,48 @@ impl ExpectedTestResults {
             summary,
         }
     }
+
+    /// Builds expected test results for only the specified test names.
+    ///
+    /// This is useful for testing scenarios with specific filter expressions
+    /// like `test(=test_success) | test(=test_failure_assert)`.
+    fn for_test_names(test_names: &[&str], properties: RunProperties) -> Self {
+        let mut should_run = IdOrdMap::new();
+        let mut should_not_run = BTreeSet::new();
+        let mut summary = ExpectedSummary::default();
+
+        for fixture in &*EXPECTED_TEST_SUITES {
+            let binary_id = &fixture.binary_id;
+
+            for test in &fixture.test_cases {
+                let id = TestInstanceId::new(binary_id.as_str(), &test.name);
+
+                if !test_names.contains(&test.name.as_str()) {
+                    should_not_run.insert(id);
+                    continue;
+                }
+
+                if test.should_skip(properties) {
+                    should_not_run.insert(id);
+                    summary.skip_count += 1;
+                    continue;
+                }
+
+                let result = test.expected_result(properties);
+
+                summary.update(result);
+                should_run
+                    .insert_unique(ExpectedOutcome { id, result })
+                    .expect("duplicate ids should not be seen");
+            }
+        }
+
+        Self {
+            should_run,
+            should_not_run,
+            summary,
+        }
+    }
 }
 
 /// The expected outcome for a test that should be run.
@@ -811,26 +853,150 @@ pub fn check_run_output(stderr: &[u8], properties: RunProperties) {
     check_run_output_impl(stderr, None, properties);
 }
 
+/// Checks the output of a rerun against fixture data.
+///
+/// This function verifies that a rerun only executes tests that failed in the
+/// initial run. Tests that passed in the initial run should be skipped.
+///
+/// The function:
+/// 1. Builds expected results from fixture data for `properties`.
+/// 2. Filters to only include tests that failed (outstanding tests).
+/// 3. Verifies the rerun output against the filtered expectations.
+///
+/// Use `RunProperties::SKIP_SUMMARY_CHECK` if the summary counts don't match
+/// exactly due to additional skipped tests.
+#[track_caller]
+pub fn check_rerun_output(rerun_stderr: &[u8], properties: RunProperties) {
+    let rerun_output = String::from_utf8(rerun_stderr.to_vec()).unwrap();
+
+    println!("{rerun_output}");
+
+    let initial_expected = ExpectedTestResults::new(properties);
+    let rerun_expected = filter_for_rerun(&initial_expected);
+    let actual = ActualTestResults::parse(&rerun_output);
+
+    eprintln!("rerun_expected: {rerun_expected:?}");
+    eprintln!("actual: {actual:?}");
+
+    verify_expected_in_actual(&rerun_expected, &actual, &rerun_output, properties);
+    verify_actual_in_expected(&actual, &rerun_expected, &rerun_output);
+    verify_summary(
+        &rerun_expected.summary,
+        actual.summary.as_ref(),
+        &rerun_output,
+        properties,
+    );
+}
+
+/// Checks the output of a rerun with scope expansion.
+///
+/// In a rerun with scope expansion, the rerun filter includes tests that were
+/// not in the initial run. These "expanded" tests should run in the rerun
+/// along with any outstanding (failed) tests from the initial run.
+#[track_caller]
+pub fn check_rerun_expanded_output(
+    rerun_stderr: &[u8],
+    initial_test_names: &[&str],
+    expanded_test_names: &[&str],
+    properties: RunProperties,
+) {
+    let rerun_output = String::from_utf8(rerun_stderr.to_vec()).unwrap();
+
+    println!("{rerun_output}");
+
+    let initial_expected = ExpectedTestResults::for_test_names(initial_test_names, properties);
+    let mut rerun_expected = filter_for_rerun(&initial_expected);
+
+    let expanded_expected = ExpectedTestResults::for_test_names(expanded_test_names, properties);
+
+    for outcome in &expanded_expected.should_run {
+        rerun_expected.should_not_run.remove(&outcome.id);
+        rerun_expected
+            .should_run
+            .insert_unique(outcome.clone())
+            .expect("expanded tests should not overlap with initial run tests");
+        rerun_expected.summary.update(outcome.result);
+    }
+
+    // The fixture model includes tests (like benchmarks) that the actual run
+    // may not see, so skip summary verification for expanded reruns.
+    let properties = properties | RunProperties::SKIP_SUMMARY_CHECK;
+
+    let actual = ActualTestResults::parse(&rerun_output);
+
+    eprintln!("rerun_expected: {rerun_expected:?}");
+    eprintln!("actual: {actual:?}");
+
+    verify_expected_in_actual(&rerun_expected, &actual, &rerun_output, properties);
+    verify_actual_in_expected(&actual, &rerun_expected, &rerun_output);
+    verify_summary(
+        &rerun_expected.summary,
+        actual.summary.as_ref(),
+        &rerun_output,
+        properties,
+    );
+}
+
+/// Filters ExpectedTestResults to only include tests that should run in a
+/// rerun.
+///
+/// This returns a new ExpectedTestResults where:
+/// - `should_run` contains only tests that failed (outstanding tests).
+/// - `should_not_run` contains tests that passed (already passed, skip in
+///   rerun).
+fn filter_for_rerun(expected: &ExpectedTestResults) -> ExpectedTestResults {
+    let mut rerun_should_run = IdOrdMap::new();
+    let mut rerun_should_not_run = expected.should_not_run.clone();
+    let mut rerun_summary = ExpectedSummary {
+        skip_count: expected.summary.skip_count,
+        ..Default::default()
+    };
+
+    for outcome in &expected.should_run {
+        match outcome.result {
+            // Failed tests are still outstanding and should run.
+            CheckResult::Fail
+            | CheckResult::Abort
+            | CheckResult::Timeout
+            | CheckResult::LeakFail
+            | CheckResult::FailLeak => {
+                rerun_should_run
+                    .insert_unique(ExpectedOutcome {
+                        id: outcome.id.clone(),
+                        result: outcome.result,
+                    })
+                    .expect("no duplicates");
+                rerun_summary.update(outcome.result);
+            }
+            // Passed tests become skipped in the rerun.
+            CheckResult::Pass | CheckResult::Leak => {
+                rerun_should_not_run.insert(outcome.id.clone());
+                rerun_summary.skip_count += 1;
+            }
+        }
+    }
+
+    ExpectedTestResults {
+        should_run: rerun_should_run,
+        should_not_run: rerun_should_not_run,
+        summary: rerun_summary,
+    }
+}
+
 #[track_caller]
 fn check_run_output_impl(stderr: &[u8], junit_path: Option<&Utf8Path>, properties: RunProperties) {
     let output = String::from_utf8(stderr.to_vec()).unwrap();
 
     println!("{output}");
 
-    // Build the expected and actual test result maps.
     let expected = ExpectedTestResults::new(properties);
     let actual = ActualTestResults::parse(&output);
 
     eprintln!("expected: {expected:?}");
     eprintln!("actual: {actual:?}");
 
-    // Check that all expected tests appear (or don't appear) as required.
     verify_expected_in_actual(&expected, &actual, &output, properties);
-
-    // Check that all tests in output were expected (no unexpected tests).
     verify_actual_in_expected(&actual, &expected, &output);
-
-    // Verify summary counts match.
     verify_summary(
         &expected.summary,
         actual.summary.as_ref(),
@@ -838,7 +1004,6 @@ fn check_run_output_impl(stderr: &[u8], junit_path: Option<&Utf8Path>, propertie
         properties,
     );
 
-    // Verify JUnit output if provided.
     if let Some(path) = junit_path {
         verify_junit(&expected, path, properties);
     }

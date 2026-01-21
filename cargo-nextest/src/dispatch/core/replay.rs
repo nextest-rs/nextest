@@ -23,7 +23,7 @@ use nextest_runner::{
         format::RECORD_FORMAT_VERSION, records_cache_dir,
     },
     reporter::ReporterOutput,
-    user_config::UserConfig,
+    user_config::{UserConfig, UserConfigExperimental},
 };
 use tracing::warn;
 
@@ -106,6 +106,22 @@ pub(crate) fn exec_replay(
                 workspace_root: workspace_root.to_owned(),
             })?;
 
+    // Load user config and check the experimental feature early, before
+    // accessing the store.
+    let host_platform =
+        Platform::build_target().expect("nextest is built for a supported platform");
+    let user_config =
+        UserConfig::for_host_platform(&host_platform, early_args.user_config_location())
+            .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })?;
+
+    // The replay command requires the record experimental feature to be enabled.
+    if !user_config.is_experimental_enabled(UserConfigExperimental::Record) {
+        return Err(ExpectedError::ExperimentalFeatureNotEnabled {
+            name: "cargo nextest replay",
+            var_name: UserConfigExperimental::Record.env_var(),
+        });
+    }
+
     let cache_dir = records_cache_dir(workspace_root)
         .map_err(|err| ExpectedError::RecordCacheDirNotFound { err })?;
 
@@ -167,12 +183,6 @@ pub(crate) fn exec_replay(
             });
         }
     }
-
-    let host_platform =
-        Platform::build_target().expect("nextest is built for a supported platform");
-    let user_config =
-        UserConfig::for_host_platform(&host_platform, early_args.user_config_location())
-            .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })?;
 
     let (pager_setting, paginate) = early_args.resolve_pager(&user_config.ui);
     let mut paged_output =

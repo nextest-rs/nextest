@@ -123,11 +123,21 @@ pub(super) fn write_skip_counts(
             writer,
         )?;
 
-        // Were all tests and binaries that were skipped, skipped due to being in the
-        // default set?
-        if real_skipped_tests == skip_counts.skipped_tests_default_filter
-            && skip_counts.skipped_binaries == skip_counts.skipped_binaries_default_filter
-        {
+        // Check if all skipped items are accounted for by a single category.
+        let all_rerun = real_skipped_tests == skip_counts.skipped_tests_rerun
+            && skip_counts.skipped_binaries == 0;
+        let all_default_filter = real_skipped_tests == skip_counts.skipped_tests_default_filter
+            && skip_counts.skipped_binaries == skip_counts.skipped_binaries_default_filter;
+
+        if all_rerun {
+            // All tests skipped because they already passed in a previous run.
+            write!(
+                writer,
+                " {} that already passed",
+                "skipped".style(styles.skip)
+            )?;
+        } else if all_default_filter {
+            // All tests and binaries skipped due to default filter.
             write!(
                 writer,
                 " {} via {}",
@@ -136,23 +146,42 @@ pub(super) fn write_skip_counts(
             )?;
         } else {
             write!(writer, " {}", "skipped".style(styles.skip))?;
-            // Were *any* tests in the default set?
-            if skip_counts.skipped_binaries_default_filter > 0
-                || skip_counts.skipped_tests_default_filter > 0
-            {
+
+            // Show "including" clause for rerun and/or default filter.
+            let has_rerun = skip_counts.skipped_tests_rerun > 0;
+            let has_default_filter = skip_counts.skipped_binaries_default_filter > 0
+                || skip_counts.skipped_tests_default_filter > 0;
+
+            if has_rerun || has_default_filter {
                 write!(writer, ", including ")?;
-                write_skip_counts_impl(
-                    mode,
-                    skip_counts.skipped_tests_default_filter,
-                    skip_counts.skipped_binaries_default_filter,
-                    styles,
-                    writer,
-                )?;
-                write!(
-                    writer,
-                    " via {}",
-                    default_filter.display_config(styles.count)
-                )?;
+
+                if has_rerun {
+                    write!(
+                        writer,
+                        "{} {} that already passed",
+                        skip_counts.skipped_tests_rerun.style(styles.count),
+                        plural::tests_str(mode, skip_counts.skipped_tests_rerun),
+                    )?;
+
+                    if has_default_filter {
+                        write!(writer, ", and ")?;
+                    }
+                }
+
+                if has_default_filter {
+                    write_skip_counts_impl(
+                        mode,
+                        skip_counts.skipped_tests_default_filter,
+                        skip_counts.skipped_binaries_default_filter,
+                        styles,
+                        writer,
+                    )?;
+                    write!(
+                        writer,
+                        " via {}",
+                        default_filter.display_config(styles.count)
+                    )?;
+                }
             }
         }
         write!(writer, ")")?;
@@ -325,7 +354,9 @@ mod tests {
 
     #[test]
     fn test_write_skip_counts() {
+        // All tests skipped via default filter.
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 1,
             skipped_tests_default_filter: 1,
@@ -334,6 +365,7 @@ mod tests {
         }, false), @" (1 test skipped via profile.my-profile.default-filter)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 2,
             skipped_tests_default_filter: 2,
@@ -341,7 +373,9 @@ mod tests {
             skipped_binaries_default_filter: 0,
         }, false), @" (2 tests skipped via profile.my-profile.default-filter)");
 
+        // Tests skipped for other reasons (not default filter or rerun).
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 1,
             skipped_tests_default_filter: 0,
@@ -350,6 +384,7 @@ mod tests {
         }, false), @" (1 test skipped)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 2,
             skipped_tests_default_filter: 0,
@@ -357,7 +392,9 @@ mod tests {
             skipped_binaries_default_filter: 0,
         }, false), @" (2 tests skipped)");
 
+        // Binaries skipped via default filter.
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 0,
             skipped_tests_default_filter: 0,
@@ -366,6 +403,7 @@ mod tests {
         }, false), @" (1 binary skipped via profile.my-profile.default-filter)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 0,
             skipped_tests_default_filter: 0,
@@ -373,7 +411,9 @@ mod tests {
             skipped_binaries_default_filter: 2,
         }, true), @" (2 binaries skipped via default-filter in profile.my-profile.overrides)");
 
+        // Binaries skipped for other reasons.
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 0,
             skipped_tests_default_filter: 0,
@@ -382,6 +422,7 @@ mod tests {
         }, false), @" (1 binary skipped)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 0,
             skipped_tests_default_filter: 0,
@@ -389,7 +430,9 @@ mod tests {
             skipped_binaries_default_filter: 0,
         }, false), @" (2 binaries skipped)");
 
+        // Tests and binaries skipped via default filter.
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 1,
             skipped_tests_default_filter: 1,
@@ -398,6 +441,7 @@ mod tests {
         }, true), @" (1 test and 1 binary skipped via default-filter in profile.my-profile.overrides)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 2,
             skipped_tests_default_filter: 2,
@@ -405,7 +449,9 @@ mod tests {
             skipped_binaries_default_filter: 3,
         }, false), @" (2 tests and 3 binaries skipped via profile.my-profile.default-filter)");
 
+        // Tests and binaries skipped for other reasons.
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 1,
             skipped_tests_default_filter: 0,
@@ -414,6 +460,7 @@ mod tests {
         }, false), @" (1 test and 1 binary skipped)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 2,
             skipped_tests_default_filter: 0,
@@ -421,7 +468,9 @@ mod tests {
             skipped_binaries_default_filter: 0,
         }, false), @" (2 tests and 3 binaries skipped)");
 
+        // Mixed: tests skipped for other reasons, binaries skipped via default filter.
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 1,
             skipped_tests_default_filter: 0,
@@ -429,7 +478,9 @@ mod tests {
             skipped_binaries_default_filter: 1,
         }, true), @" (1 test and 1 binary skipped, including 1 binary via default-filter in profile.my-profile.overrides)");
 
+        // Mixed: some tests via default filter, others not.
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 3,
             skipped_tests_default_filter: 2,
@@ -437,13 +488,86 @@ mod tests {
             skipped_binaries_default_filter: 0,
         }, false), @" (3 tests and 1 binary skipped, including 2 tests via profile.my-profile.default-filter)");
 
+        // No tests or binaries skipped.
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 0,
             skipped_tests_non_benchmark: 0,
             skipped_tests: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 0,
             skipped_binaries_default_filter: 0,
         }, false), @"");
+
+        // --- Rerun tests ---
+
+        // All tests skipped due to rerun (already passed).
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 1,
+            skipped_tests_non_benchmark: 0,
+            skipped_tests: 1,
+            skipped_tests_default_filter: 0,
+            skipped_binaries: 0,
+            skipped_binaries_default_filter: 0,
+        }, false), @" (1 test skipped that already passed)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 5,
+            skipped_tests_non_benchmark: 0,
+            skipped_tests: 5,
+            skipped_tests_default_filter: 0,
+            skipped_binaries: 0,
+            skipped_binaries_default_filter: 0,
+        }, false), @" (5 tests skipped that already passed)");
+
+        // Some tests skipped due to rerun, some for other reasons.
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 3,
+            skipped_tests_non_benchmark: 0,
+            skipped_tests: 5,
+            skipped_tests_default_filter: 0,
+            skipped_binaries: 0,
+            skipped_binaries_default_filter: 0,
+        }, false), @" (5 tests skipped, including 3 tests that already passed)");
+
+        // Tests skipped due to rerun with binaries skipped.
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 2,
+            skipped_tests_non_benchmark: 0,
+            skipped_tests: 2,
+            skipped_tests_default_filter: 0,
+            skipped_binaries: 1,
+            skipped_binaries_default_filter: 0,
+        }, false), @" (2 tests and 1 binary skipped, including 2 tests that already passed)");
+
+        // Tests skipped due to rerun with binaries skipped via default filter.
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 2,
+            skipped_tests_non_benchmark: 0,
+            skipped_tests: 2,
+            skipped_tests_default_filter: 0,
+            skipped_binaries: 1,
+            skipped_binaries_default_filter: 1,
+        }, false), @" (2 tests and 1 binary skipped, including 2 tests that already passed, and 1 binary via profile.my-profile.default-filter)");
+
+        // Mixed: some tests rerun, some tests via default filter.
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 2,
+            skipped_tests_non_benchmark: 0,
+            skipped_tests: 5,
+            skipped_tests_default_filter: 3,
+            skipped_binaries: 0,
+            skipped_binaries_default_filter: 0,
+        }, false), @" (5 tests skipped, including 2 tests that already passed, and 3 tests via profile.my-profile.default-filter)");
+
+        // Mixed: rerun, default filter, and binaries.
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests_rerun: 2,
+            skipped_tests_non_benchmark: 0,
+            skipped_tests: 6,
+            skipped_tests_default_filter: 3,
+            skipped_binaries: 2,
+            skipped_binaries_default_filter: 1,
+        }, true), @" (6 tests and 2 binaries skipped, including 2 tests that already passed, and 3 tests and 1 binary via default-filter in profile.my-profile.overrides)");
     }
 
     fn skip_counts_str(skip_counts: &SkipCounts, override_section: bool) -> String {

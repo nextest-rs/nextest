@@ -141,6 +141,11 @@ pub mod plural {
     pub fn exist_str(count: usize) -> &'static str {
         if count == 1 { "exists" } else { "exist" }
     }
+
+    /// Returns "remains" if `count` is 1, otherwise "remain".
+    pub fn remains_str(count: usize) -> &'static str {
+        if count == 1 { "remains" } else { "remain" }
+    }
 }
 
 /// A helper for displaying test instances with formatting.

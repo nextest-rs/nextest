@@ -84,4 +84,11 @@ impl NextestExitCode {
     ///
     /// *Since nextest 0.9.55*.
     pub const RECOMMENDED_VERSION_NOT_MET: i32 = 10;
+
+    /// All tests in this run passed, but some outstanding tests from the rerun
+    /// chain were not run (due to a narrowed scope).
+    ///
+    /// This exit code indicates a partial success: the tests that ran all
+    /// passed, but additional reruns are needed to complete the full test suite.
+    pub const RERUN_TESTS_OUTSTANDING: i32 = 5;
 }

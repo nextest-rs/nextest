@@ -353,7 +353,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
     ///
     /// Returns an error if writing is denied due to a format version mismatch.
     #[expect(clippy::too_many_arguments)]
-    pub fn create_run_recorder(
+    pub(crate) fn create_run_recorder(
         mut self,
         run_id: ReportUuid,
         nextest_version: Version,
@@ -362,6 +362,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
         build_scope_args: Vec<String>,
         env_vars: BTreeMap<String, String>,
         max_output_size: bytesize::ByteSize,
+        parent_run_id: Option<ReportUuid>,
     ) -> Result<RunRecorder, RunStoreError> {
         if let RunsJsonWritePermission::Denied {
             file_version,
@@ -379,20 +380,30 @@ impl<'store> ExclusiveLockedRunStore<'store> {
         // does mean that there may be spurious entries in the list of runs,
         // which will be dealt with during pruning.)
 
+        let now = Local::now().fixed_offset();
         let run = RecordedRunInfo {
             run_id,
             store_format_version: RECORD_FORMAT_VERSION,
             nextest_version,
             started_at,
-            last_written_at: Local::now().fixed_offset(),
+            last_written_at: now,
             duration_secs: None,
             cli_args,
             build_scope_args,
             env_vars,
+            parent_run_id,
             sizes: RecordedSizes::default(),
             status: RecordedRunStatus::Incomplete,
         };
         self.runs.push(run);
+
+        // If the parent run ID is set, update its last written at time.
+        if let Some(parent_run_id) = parent_run_id
+            && let Some(parent_run) = self.runs.iter_mut().find(|r| r.run_id == parent_run_id)
+        {
+            parent_run.last_written_at = now;
+        }
+
         write_runs_json(self.runs_dir.as_path(), &self.runs, self.last_pruned_at)?;
 
         // Create the run directory while still holding the lock. This prevents
@@ -421,8 +432,7 @@ pub struct RecordedRunInfo {
     /// When this run was last written to.
     ///
     /// Used for LRU eviction. Updated when the run is created, when the run
-    /// completes, and in the future when operations like `rerun` reference
-    /// this run.
+    /// completes, and when a rerun references this run.
     pub last_written_at: DateTime<FixedOffset>,
     /// Duration of the run in seconds.
     ///
@@ -437,6 +447,10 @@ pub struct RecordedRunInfo {
     pub build_scope_args: Vec<String>,
     /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
     pub env_vars: BTreeMap<String, String>,
+    /// If this is a rerun, the ID of the parent run.
+    ///
+    /// This forms a chain for iterative fix-and-rerun workflows.
+    pub parent_run_id: Option<ReportUuid>,
     /// Sizes broken down by component (log and store).
     pub sizes: RecordedSizes,
     /// The status and statistics for this run.

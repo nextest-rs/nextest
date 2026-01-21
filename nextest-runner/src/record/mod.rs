@@ -31,6 +31,7 @@ pub mod format;
 mod reader;
 mod recorder;
 pub mod replay;
+mod rerun;
 mod retention;
 mod run_id_index;
 mod session;
@@ -50,6 +51,7 @@ pub use recorder::{RunRecorder, StoreSizes};
 pub use replay::{
     ReplayContext, ReplayConversionError, ReplayHeader, ReplayReporter, ReplayReporterBuilder,
 };
+pub use rerun::ComputedRerunInfo;
 pub use retention::{PruneKind, PrunePlan, PruneResult, RecordRetentionPolicy};
 pub use run_id_index::{RunIdIndex, RunIdSelector, ShortestRunIdPrefix};
 pub use session::{

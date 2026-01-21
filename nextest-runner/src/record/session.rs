@@ -14,7 +14,7 @@ use super::{
 };
 use crate::{
     errors::{RecordPruneError, RecordSetupError, RunStoreError},
-    record::Styles,
+    record::{Styles, format::RerunInfo},
     reporter::{
         RunFinishedInfo,
         events::{FinalRunStats, RunFinishedStats, StressFinalRunStats},
@@ -50,6 +50,10 @@ pub struct RecordSessionConfig<'a> {
     pub env_vars: BTreeMap<String, String>,
     /// Maximum size per output file before truncation.
     pub max_output_size: ByteSize,
+    /// Rerun-specific metadata, if this is a rerun.
+    ///
+    /// If present, this will be written to `meta/rerun-info.json` in the archive.
+    pub rerun_info: Option<RerunInfo>,
 }
 
 /// Result of setting up a recording session.
@@ -89,7 +93,7 @@ impl RecordSession {
             .lock_exclusive()
             .map_err(RecordSetupError::StoreLock)?;
 
-        let recorder = locked_store
+        let mut recorder = locked_store
             .create_run_recorder(
                 config.run_id,
                 config.nextest_version,
@@ -98,8 +102,16 @@ impl RecordSession {
                 config.build_scope_args,
                 config.env_vars,
                 config.max_output_size,
+                config.rerun_info.as_ref().map(|info| info.parent_run_id),
             )
             .map_err(RecordSetupError::RecorderCreate)?;
+
+        // If this is a rerun, write the rerun info to the archive.
+        if let Some(rerun_info) = config.rerun_info {
+            recorder
+                .write_rerun_info(&rerun_info)
+                .map_err(RecordSetupError::RecorderCreate)?;
+        }
 
         let session = RecordSession {
             cache_dir,
