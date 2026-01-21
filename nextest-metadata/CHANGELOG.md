@@ -4,7 +4,9 @@
 
 ### Added
 
-- `NEXTEST_EXIT_CODE` for an
+- `NextestExitCode::RERUN_TESTS_OUTSTANDING` indicates that all tests passed during a rerun, but there are still outstanding tests that were known to have failed earlier.
+- For test filtering, `MismatchReason::RerunAlreadyPassed`, indicating that the test run already passed.
+- With the `proptest1` feature, `impl Arbitrary for TestCaseName`.
 
 ## [0.13.1] - 2026-01-18
 
