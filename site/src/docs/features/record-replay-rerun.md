@@ -54,7 +54,9 @@ When the recording feature is enabled, you can rerun failing tests with `cargo n
 
 !!! tip "Rerun build scope"
 
-    Without any further arguments, `cargo nextest run -R latest` will build the same targets that the original run did. If package or target arguments are specified, they will override the set of build targets from the original run.
+    Without any further arguments, `cargo nextest run -R latest` will build the same targets that the original run did. If build scope arguments are specified, they will override the set of build targets from the original run.
+    
+    Build scope arguments include all arguments under the _Package selection_, _Target selection_, and _Feature selection_ headings of `cargo nextest run --help`.
 
 ### Example rerun flow
 

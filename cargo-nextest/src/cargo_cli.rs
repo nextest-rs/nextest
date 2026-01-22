@@ -8,10 +8,12 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Args};
 use std::{borrow::Cow, path::PathBuf};
 
-/// Build scope options: package selection + target selection.
+/// Build scope options: package selection, target selection, and feature
+/// selection.
 ///
-/// These options determine which packages and targets are built. In a rerun
-/// chain, these are inherited from the original run unless explicitly overridden.
+/// These options determine which packages, targets, and features are built. In
+/// a rerun chain, these are inherited from the original run unless explicitly
+/// overridden.
 #[derive(Clone, Debug, Default, Args)]
 pub(crate) struct CargoBuildScopeOptions {
     // ---
@@ -80,6 +82,26 @@ pub(crate) struct CargoBuildScopeOptions {
     /// Test all targets
     #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
     all_targets: bool,
+
+    // ---
+    // Feature selection
+    // ---
+    /// Space or comma separated list of features to activate
+    #[arg(
+        long,
+        short = 'F',
+        group = "cargo-opts",
+        help_heading = "Feature selection"
+    )]
+    features: Vec<String>,
+
+    /// Activate all available features
+    #[arg(long, group = "cargo-opts", help_heading = "Feature selection")]
+    all_features: bool,
+
+    /// Do not activate the `default` feature
+    #[arg(long, group = "cargo-opts", help_heading = "Feature selection")]
+    no_default_features: bool,
 }
 
 impl CargoBuildScopeOptions {
@@ -102,6 +124,10 @@ impl CargoBuildScopeOptions {
             bench,
             benches,
             all_targets,
+            // Feature selection.
+            features,
+            all_features,
+            no_default_features,
         } = self;
 
         !packages.is_empty()
@@ -118,6 +144,9 @@ impl CargoBuildScopeOptions {
             || !bench.is_empty()
             || *benches
             || *all_targets
+            || !features.is_empty()
+            || *all_features
+            || *no_default_features
     }
 
     /// Converts build scope args to a list of CLI arguments for storage.
@@ -139,6 +168,10 @@ impl CargoBuildScopeOptions {
             bench,
             benches,
             all_targets,
+            // Feature selection.
+            features,
+            all_features,
+            no_default_features,
         } = self;
 
         let mut args = Vec::new();
@@ -189,6 +222,17 @@ impl CargoBuildScopeOptions {
             args.push("--all-targets");
         }
 
+        // Feature selection.
+        for f in features {
+            args.extend(["--features", f.as_str()]);
+        }
+        if *all_features {
+            args.push("--all-features");
+        }
+        if *no_default_features {
+            args.push("--no-default-features");
+        }
+
         args
     }
 }
@@ -199,26 +243,9 @@ impl CargoBuildScopeOptions {
     group = clap::ArgGroup::new("cargo-opts").multiple(true),
 )]
 pub(crate) struct CargoOptions {
-    /// Build scope options (package + target selection).
+    /// Build scope options (package, target, and feature selection).
     #[command(flatten)]
     pub(crate) build_scope: CargoBuildScopeOptions,
-
-    /// Space or comma separated list of features to activate
-    #[arg(
-        long,
-        short = 'F',
-        group = "cargo-opts",
-        help_heading = "Feature selection"
-    )]
-    features: Vec<String>,
-
-    /// Activate all available features
-    #[arg(long, group = "cargo-opts", help_heading = "Feature selection")]
-    all_features: bool,
-
-    /// Do not activate the `default` feature
-    #[arg(long, group = "cargo-opts", help_heading = "Feature selection")]
-    no_default_features: bool,
 
     // jobs is handled by test runner
     /// Number of build jobs to run
@@ -366,7 +393,8 @@ impl<'a> CargoCli<'a> {
         self
     }
 
-    /// Adds build scope options (package + target selection) to the command.
+    /// Adds build scope options (package, target, and feature selection) to the
+    /// command.
     pub(crate) fn add_build_scope_options(
         &mut self,
         scope: &'a CargoBuildScopeOptions,
@@ -385,21 +413,10 @@ impl<'a> CargoCli<'a> {
 
     /// Adds non-build-scope options from `CargoOptions`.
     ///
-    /// This includes features, compilation options, manifest options, and other
-    /// cargo options. Used when inheriting build scope from a rerun but using
-    /// the current run's other options.
+    /// This includes compilation options, manifest options, and other cargo
+    /// options. Used when inheriting build scope from a rerun but using the
+    /// current run's other options.
     pub(crate) fn add_non_build_scope_options(&mut self, options: &'a CargoOptions) -> &mut Self {
-        // ---
-        // Feature selection
-        // ---
-        self.add_args(options.features.iter().flat_map(|s| ["--features", s]));
-        if options.all_features {
-            self.add_arg("--all-features");
-        }
-        if options.no_default_features {
-            self.add_arg("--no-default-features");
-        }
-
         // ---
         // Compilation options
         // ---
