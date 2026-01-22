@@ -71,6 +71,16 @@ fn test_argument_parsing() {
         "cargo nextest list --lib --bins",
         "cargo nextest run --ignore-rust-version --unit-graph",
         // ---
+        // Cargo message format options
+        // ---
+        "cargo nextest list --cargo-message-format human",
+        "cargo nextest list --cargo-message-format short",
+        "cargo nextest list --cargo-message-format json",
+        "cargo nextest list --cargo-message-format json-diagnostic-short",
+        "cargo nextest list --cargo-message-format json-diagnostic-rendered-ansi",
+        "cargo nextest list --cargo-message-format json-render-diagnostics",
+        "cargo nextest run --cargo-message-format json",
+        // ---
         // Pager options
         // ---
         "cargo nextest list --no-pager",

@@ -1509,6 +1509,8 @@ fn test_rerun_all_pass() {
         cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RERUN_ID))
             .args([
                 "run",
+                // This squelches Cargo warnings from stderr.
+                "--cargo-message-format=json",
                 "--rerun",
                 INITIAL_RUN_ID,
                 "-E",
@@ -1851,6 +1853,8 @@ fn test_rerun_tests_outstanding() {
         cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RERUN_ID))
             .args([
                 "run",
+                // This squelches Cargo warnings from stderr.
+                "--cargo-message-format=json",
                 "--rerun",
                 INITIAL_RUN_ID,
                 "-E",

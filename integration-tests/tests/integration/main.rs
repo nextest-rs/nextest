@@ -34,6 +34,7 @@ use nextest_metadata::{
 use std::{borrow::Cow, fs::File, io::Write};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
 
+mod cargo_message_format;
 mod fixtures;
 mod interceptor;
 mod large_alloc;

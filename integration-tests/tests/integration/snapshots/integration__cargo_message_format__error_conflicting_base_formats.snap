@@ -1,0 +1,6 @@
+---
+source: integration-tests/tests/integration/cargo_message_format.rs
+expression: redact_dynamic_fields(&output.stderr_as_str())
+---
+error: invalid --cargo-message-format: conflicting message formats: `human` and `json` cannot be combined
+(only JSON modifiers like `json-diagnostic-short` can be combined)

@@ -30,6 +30,35 @@ use tracing::{Level, error, info, warn};
 
 pub(crate) type Result<T, E = ExpectedError> = std::result::Result<T, E>;
 
+/// Error when combining incompatible cargo message format options.
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
+pub enum CargoMessageFormatError {
+    /// Conflicting base formats specified.
+    #[error(
+        "conflicting message formats: `{first}` and `{second}` cannot be combined\n\
+         (only JSON modifiers like `json-diagnostic-short` can be combined)"
+    )]
+    ConflictingBaseFormats {
+        first: &'static str,
+        second: &'static str,
+    },
+
+    /// JSON modifier used with non-JSON base format.
+    #[error(
+        "cannot combine {modifiers} with `{base}` format\n\
+         (JSON modifiers can only be used with JSON output)"
+    )]
+    JsonModifierWithNonJson {
+        /// Comma-separated list of modifiers, each wrapped in backticks.
+        modifiers: &'static str,
+        base: &'static str,
+    },
+
+    /// Duplicate option specified.
+    #[error("duplicate message format option: `{option}`")]
+    Duplicate { option: &'static str },
+}
+
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum ReuseBuildKind {
@@ -369,6 +398,11 @@ pub enum ExpectedError {
         #[from]
         err: FormatVersionError,
     },
+    #[error("invalid cargo message format")]
+    CargoMessageFormatError {
+        #[from]
+        err: CargoMessageFormatError,
+    },
     #[error("extract read error")]
     DebugExtractReadError {
         kind: &'static str,
@@ -553,7 +587,8 @@ impl ExpectedError {
             | Self::SignalHandlerSetupError { .. }
             | Self::ShowTestGroupsError { .. }
             | Self::InvalidMessageFormatVersion { .. }
-            | Self::DebugExtractReadError { .. } => NextestExitCode::SETUP_ERROR,
+            | Self::DebugExtractReadError { .. }
+            | Self::CargoMessageFormatError { .. } => NextestExitCode::SETUP_ERROR,
             Self::ConfigParseError { err } => {
                 // Experimental features not being enabled are their own error.
                 match err.kind() {
@@ -1214,6 +1249,10 @@ impl ExpectedError {
             Self::InvalidMessageFormatVersion { err } => {
                 error!("error parsing message format version");
                 Some(err as &dyn Error)
+            }
+            Self::CargoMessageFormatError { err } => {
+                error!("invalid --cargo-message-format: {err}");
+                None
             }
             Self::DebugExtractReadError { kind, path, err } => {
                 error!("error reading {kind} file `{}`", path.style(styles.bold),);

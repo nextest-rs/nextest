@@ -22,3 +22,4 @@ pub(crate) use filter::TestBuildFilter;
 pub(crate) use list::ListOpts;
 pub(crate) use replay::{ReplayOpts, exec_replay};
 pub(crate) use run::{App, BenchOpts, RunOpts};
+pub(crate) use value_enums::CargoMessageFormatOpt;
