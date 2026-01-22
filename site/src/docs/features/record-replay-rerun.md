@@ -4,7 +4,7 @@ status: experimental
 description: Recording test runs, replaying them later, and rerunning test failures.
 ---
 
-# Record, replay, and rerun
+# Record, replay and rerun
 
 <!-- md:version 0.9.123 -->
 
