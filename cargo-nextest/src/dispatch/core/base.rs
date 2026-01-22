@@ -512,12 +512,15 @@ mod helpers {
     use crate::{
         ExpectedError, Result,
         cargo_cli::{CargoCli, CargoOptions},
+        dispatch::core::value_enums::CargoMessageFormatOpt,
         output::OutputContext,
     };
+    use buf_list::{BufList, Cursor};
+    use bytes::Bytes;
     use camino::Utf8Path;
     use guppy::graph::PackageGraph;
     use nextest_runner::{list::BinaryList, platform::BuildPlatforms};
-    use std::io::Cursor;
+    use std::io::{BufRead, BufReader};
 
     impl CargoOptions {
         pub(crate) fn compute_binary_list(
@@ -532,11 +535,18 @@ mod helpers {
             // particular crate and runs cargo nextest, then it behaves identically to cargo test.
             let mut cargo_cli = CargoCli::new(cargo_command, manifest_path, output);
 
+            let message_format = CargoMessageFormatOpt::combine(&self.cargo_message_format)?;
+
             // Only build tests in the cargo test invocation, do not run them.
-            cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
+            cargo_cli.add_args(["--no-run", "--message-format", message_format.cargo_arg()]);
             cargo_cli.add_options(self);
 
-            Self::run_cargo_build(cargo_cli, graph, build_platforms)
+            Self::run_cargo_build(
+                cargo_cli,
+                graph,
+                build_platforms,
+                message_format.forward_json(),
+            )
         }
 
         /// Computes the binary list using inherited build scope from a rerun.
@@ -554,7 +564,9 @@ mod helpers {
         ) -> Result<BinaryList> {
             let mut cargo_cli = CargoCli::new(cargo_command, manifest_path, output);
 
-            cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
+            let message_format = CargoMessageFormatOpt::combine(&self.cargo_message_format)?;
+
+            cargo_cli.add_args(["--no-run", "--message-format", message_format.cargo_arg()]);
 
             // Add inherited build scope instead of self.build_scope.
             for arg in inherited_build_scope {
@@ -563,20 +575,47 @@ mod helpers {
             // Add non-build-scope options from the current CLI.
             cargo_cli.add_non_build_scope_options(self);
 
-            Self::run_cargo_build(cargo_cli, graph, build_platforms)
+            Self::run_cargo_build(
+                cargo_cli,
+                graph,
+                build_platforms,
+                message_format.forward_json(),
+            )
         }
 
         fn run_cargo_build(
             cargo_cli: CargoCli<'_>,
             graph: &PackageGraph,
             build_platforms: BuildPlatforms,
+            forward_json: bool,
         ) -> Result<BinaryList> {
             let expression = cargo_cli.to_expression();
-            let output = expression
+            let reader_handle = expression
                 .stdout_capture()
                 .unchecked()
-                .run()
+                .reader()
                 .map_err(|err| ExpectedError::build_exec_failed(cargo_cli.all_args(), err))?;
+
+            // Read lines as they arrive, forwarding JSON to stdout if requested.
+            // XXX should lines be Vec<u8>?
+            let mut stdout_buf = BufList::new();
+            for line in BufReader::new(&reader_handle).lines() {
+                let line = line
+                    .map_err(|err| ExpectedError::build_exec_failed(cargo_cli.all_args(), err))?;
+                if forward_json {
+                    println!("{}", line);
+                }
+                let mut line = Vec::from(line);
+                line.push(b'\n');
+                stdout_buf.push_chunk(Bytes::from(line));
+            }
+
+            // After reading completes (EOF), the handle is internally waited on.
+            // try_wait() returns the output.
+            let output = reader_handle
+                .try_wait()
+                .map_err(|err| ExpectedError::build_exec_failed(cargo_cli.all_args(), err))?
+                .expect("child process should have exited after EOF");
             if !output.status.success() {
                 return Err(ExpectedError::build_failed(
                     cargo_cli.all_args(),
@@ -585,7 +624,7 @@ mod helpers {
             }
 
             let test_binaries =
-                BinaryList::from_messages(Cursor::new(output.stdout), graph, build_platforms)?;
+                BinaryList::from_messages(Cursor::new(&stdout_buf), graph, build_platforms)?;
             Ok(test_binaries)
         }
     }

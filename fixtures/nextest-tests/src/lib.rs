@@ -5,6 +5,29 @@
 
 use std::path::Path;
 
+/// This function is deprecated to generate a compiler warning.
+#[deprecated(
+    since = "0.1.0",
+    note = "this is a test warning for --cargo-message-format"
+)]
+pub fn deprecated_function() -> u32 {
+    42
+}
+
+/// This function calls the deprecated function to trigger the warning.
+pub fn trigger_warning() -> u32 {
+    #[allow(deprecated)]
+    deprecated_function()
+}
+
+/// This function generates a warning by calling the deprecated function
+/// without suppressing the warning.
+#[allow(dead_code)]
+fn generate_warning_for_tests() -> u32 {
+    // This call will generate a deprecation warning.
+    deprecated_function()
+}
+
 /// This method is called by integration tests and benchmarks to ensure that NEXTEST_BIN_EXE
 /// environment variables are properly set.
 pub fn test_execute_bin_helper() {

@@ -12,6 +12,8 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+buf-list.workspace = true
+bytes.workspace = true
 camino.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true

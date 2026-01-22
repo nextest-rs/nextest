@@ -3,7 +3,7 @@
 
 //! Cargo CLI support.
 
-use crate::output::OutputContext;
+use crate::{dispatch::CargoMessageFormatOpt, output::OutputContext};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Args};
 use std::{borrow::Cow, path::PathBuf};
@@ -321,6 +321,20 @@ pub(crate) struct CargoOptions {
     /// Run without accessing the network
     #[arg(long, group = "cargo-opts", help_heading = "Manifest options")]
     offline: bool,
+
+    /// Cargo message format.
+    ///
+    /// Controls how Cargo reports build messages and whether to forward JSON to
+    /// stdout. Multiple JSON options can be comma-separated or repeated.
+    #[arg(
+        long,
+        value_enum,
+        value_name = "FMT",
+        value_delimiter = ',',
+        group = "cargo-opts",
+        help_heading = "Other Cargo options"
+    )]
+    pub(crate) cargo_message_format: Vec<CargoMessageFormatOpt>,
 
     //  TODO: doc?
     // no-run is handled by test runner
