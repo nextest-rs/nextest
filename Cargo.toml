@@ -94,7 +94,7 @@ nextest-filtering = { version = "0.18.0", path = "nextest-filtering" }
 nextest-metadata = { version = "0.13.2", path = "nextest-metadata" }
 nextest-runner = { path = "nextest-runner" }
 nextest-workspace-hack = "0.1.0"
-nix = { version = "0.30.1", default-features = false, features = ["signal"] }
+nix = { version = "0.31.0", default-features = false, features = ["signal"] }
 num_threads = "0.1.7"
 owo-colors = "4.2.3"
 pathdiff = { version = "0.2.3", features = ["camino"] }
