@@ -13,7 +13,7 @@ description: Recording test runs, replaying them later, and rerunning test failu
     - **Enable with:** Add `[experimental]` with `record = true` to [`~/.config/nextest/config.toml`](../user-config/index.md), or set `NEXTEST_EXPERIMENTAL_RECORD=1` in the environment
     - **Tracking issue:** TBD
 
-Nextest supports recording test runs to rerun failing tests, and to replay them later. Recorded runs are stored locally in the system cache.
+Nextest supports recording test runs to rerun failing tests and to replay them later. Recorded runs are stored locally in the system cache.
 
 Recorded test runs capture:
 
