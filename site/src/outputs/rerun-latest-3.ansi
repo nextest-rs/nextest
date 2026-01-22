@@ -1,4 +1,3 @@
-[1minfo[0m: experimental features enabled: setup-scripts
 [1minfo[0m: rerun: inheriting build scope from original run: --package nextest-filtering
 [1m[92m    Finished[0m ]8;;https://doc.rust-lang.org/cargo/reference/profiles.html#default-profiles\`test` profile [unoptimized + debuginfo]]8;;\ target(s) in 0.11s
 ────────────

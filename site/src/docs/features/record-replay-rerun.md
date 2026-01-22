@@ -88,7 +88,7 @@ With `cargo nextest run -R latest proptest_helpers`, the first test is selected:
     cat src/outputs/rerun-latest.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
-All selected tests passed, but some outstanding (previously-failing) tests still remain, so nextest exits with the advisory exit code [`RERUN_TESTS_OUTSTANDING`](https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.RERUN_TESTS_OUTSTANDING) (exit code 5).
+All selected tests passed, but some outstanding (previously-failing) tests still remain, so nextest exits with the advisory exit code 5 ([`RERUN_TESTS_OUTSTANDING`](https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.RERUN_TESTS_OUTSTANDING)).
 
 ---
 
@@ -105,6 +105,12 @@ A subsequent `cargo nextest run -R latest` will run the remaining test:
     ```bash exec="true" result="text"
     cat src/outputs/rerun-latest-2.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
+
+!!! note "Exit code for no tests in a rerun"
+
+    In regular runs, if there are no tests to run, nextest exits with the advisory exit code 4 ([`NO_TESTS_RUN`](https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.NO_TESTS_RUN)) by default.
+    
+    With reruns, if there are no tests to run, nextest exits with exit code 0 by default, indicating success. The difference in behavior is due to the goal of reruns being to converge to a successful test run.
 
 ---
 
