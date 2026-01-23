@@ -2309,7 +2309,7 @@ dependencies = [
  "nextest-filtering",
  "nextest-metadata",
  "nextest-workspace-hack",
- "nix 0.31.0",
+ "nix 0.31.1",
  "owo-colors",
  "pathdiff",
  "petgraph",
@@ -2429,9 +2429,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.31.0"
+version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db9f2b173ed7678e98df5c31c60c3d49595cb37e9b58c71e85ec03e88a278fae"
+checksum = "225e7cfe711e0ba79a68baeddb2982723e4235247aefce1482f2f16c27865b66"
 dependencies = [
  "bitflags 2.10.0",
  "cfg-if",
