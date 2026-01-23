@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-nextest"
-version = "0.9.123-b.4"
+version = "0.9.123"
 dependencies = [
  "buf-list",
  "bytes",
