@@ -16,6 +16,7 @@ members = [
 rust-version = "1.89"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+exclude = ["src/**/AGENTS.md", "src/**/CLAUDE.md"]
 
 [workspace.dependencies]
 aho-corasick = "1.1.4"

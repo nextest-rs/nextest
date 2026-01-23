@@ -10,6 +10,7 @@ edition.workspace = true
 rust-version.workspace = true
 keywords = ["nextest", "test-runner"]
 categories = ["development-tools::testing"]
+exclude.workspace = true
 # For an example build script that gates by compiler version, see the history for build.rs in this
 # directory.
 

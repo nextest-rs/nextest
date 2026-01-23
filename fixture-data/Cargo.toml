@@ -6,6 +6,7 @@ repository = "https://github.com/nextest-rs/nextest"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+exclude.workspace = true
 publish = false
 
 [lints]

@@ -12,6 +12,7 @@ keywords = ["nextest", "test-runner"]
 categories = ["development-tools::testing"]
 # Older version for nextest-metadata.
 rust-version = "1.78"
+exclude.workspace = true
 
 [dependencies]
 camino = { workspace = true, features = ["serde1"] }

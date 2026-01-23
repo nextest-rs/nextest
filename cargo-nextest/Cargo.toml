@@ -10,6 +10,7 @@ keywords = ["nextest", "test-runner", "flaky-tests", "junit"]
 categories = ["development-tools::cargo-plugins", "development-tools::testing"]
 edition.workspace = true
 rust-version.workspace = true
+exclude.workspace = true
 
 [dependencies]
 buf-list.workspace = true
