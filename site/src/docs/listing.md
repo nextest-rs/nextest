@@ -50,6 +50,11 @@ cargo nextest list
 
 `cargo nextest list` has the same behavior as `run` with default filters; see [_Running a subset of tests by default_](selecting.md#running-a-subset-of-tests-by-default) for more information.
 
+## Cargo build options
+
+`--cargo-message-format=FMT` <!-- md:version 0.9.123 -->
+: Control how Cargo reports build messages, including forwarding JSON messages to standard out. Accepts the same arguments that [`cargo test --message-format`](https://doc.rust-lang.org/cargo/commands/cargo-test.html#option-cargo-test---message-format) does, and produces results in the same formats.
+
 ## Options and arguments
 
 === "Summarized output"

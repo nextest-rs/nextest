@@ -9,38 +9,27 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.123-b.4] - 2026-01-22
+## [0.9.123] - 2026-01-23
+
+This is a major release with several new features. If you run into issues, please [file a bug](https://github.com/nextest-rs/nextest/issues/new).
 
 ### Added
 
-- `--cargo-message-format` enables live streaming of Cargo's JSON messages to standard out.
-
-## [0.9.123-b.3] - 2026-01-21
-
-### Added
-
-[Rerun functionality](https://nexte.st/docs/features/record-replay-rerun), built on top of the record-replay feature introduced in beta 1.
-
-## [0.9.123-b.2] - 2026-01-18
-
-Numerous improvements to record-replay, including more efficient storage and better display.
-
-## [0.9.123-b.1] - 2026-01-18
-
-### Added
-
-- Major new feature: experimental support for [recording and replaying test runs](https://nexte.st/docs/features/record-replay-rerun/). Enable by adding `record = true` to the `[experimental]` section in [user config](https://nexte.st/docs/user-config/), or by setting `NEXTEST_EXPERIMENTAL_RECORD=1`.
+- Major new feature: experimental support for [recording, replaying, and rerunning test runs](https://nexte.st/docs/features/record-replay-rerun/). Enable by adding `record = true` to the `[experimental]` section in [user config](https://nexte.st/docs/user-config/), or by setting `NEXTEST_EXPERIMENTAL_RECORD=1`.
 
   Once enabled, recording can be turned on by adding `enabled = true` to the `[record]` section in user config. Recorded runs are stored in the system cache directory.
 
   New commands:
 
   - `cargo nextest replay`: Replay a test run (by default, the latest completed run).
+  - `cargo nextest run -R latest`: Rerun tests that failed the last time.
   - `cargo nextest store list`: List all recorded runs.
   - `cargo nextest store info`: Show details about a specific run.
   - `cargo nextest store prune`: Prune old recorded runs.
 
 - A new `--user-config-file` option (environment variable `NEXTEST_USER_CONFIG_FILE`) allows explicit control over user configuration loading. Pass a path to a specific config file, or `none` to skip user config entirely.
+
+- A new `--cargo-message-format` option enables live streaming of Cargo's JSON messages to standard out. This feature is equivalent to `cargo test --message-format`.
 
 ### Changed
 
@@ -1885,10 +1874,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
-[0.9.123-b.4]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.123-b.4
-[0.9.123-b.3]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.123-b.3
-[0.9.123-b.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.123-b.2
-[0.9.123-b.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.123-b.1
+[0.9.123]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.123
 [0.9.122]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.122
 [0.9.121]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.121
 [0.9.120]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.120

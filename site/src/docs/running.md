@@ -147,6 +147,11 @@ fail-fast = { max-fail = 5, terminate = "immediate" }  # Stop after 5 failures, 
 
 [available parallelism]: https://doc.rust-lang.org/std/thread/fn.available_parallelism.html
 
+## Cargo build options
+
+`--cargo-message-format=FMT` <!-- md:version 0.9.123 -->
+: Control how Cargo reports build messages, including forwarding JSON messages to standard out. Accepts the same arguments that [`cargo test --message-format`](https://doc.rust-lang.org/cargo/commands/cargo-test.html#option-cargo-test---message-format) does, and produces results in the same formats.
+
 ## Controlling nextest's output
 
 For information about configuring the way nextest displays its human-readable output, see [_Reporting test results_](reporting.md).
