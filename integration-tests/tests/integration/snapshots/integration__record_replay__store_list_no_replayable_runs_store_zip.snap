@@ -4,6 +4,6 @@ expression: list_str
 ---
 1 recorded run:
 
-  80000001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed  (not replayable)
+  80000001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed  (not replayable)  *latest
                                              ─────────
                                                 <size>

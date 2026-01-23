@@ -318,18 +318,6 @@ impl<'a> DisplayReporter<'a> {
                 status_str.style(styles.count)
             )?;
 
-            // Write skipped incomplete runs if any.
-            if header.newer_non_replayable_count > 0 {
-                let count = header.newer_non_replayable_count;
-                write!(writer, "{:>12} ", "Skipping".style(styles.skip))?;
-                writeln!(
-                    writer,
-                    "{} newer non-replayable {}",
-                    count.style(styles.count),
-                    plural::runs_str(count)
-                )?;
-            }
-
             Ok(())
         })
     }

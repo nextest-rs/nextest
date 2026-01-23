@@ -220,4 +220,4 @@ outcomes
 - `NotReplayable(reasons)`: Blocking issues (format too new, missing files, unknown status).
 - `Incomplete`: Might be usable but needs verification.
 
-Used to find the most recent replayable run for `latest` selection.
+Used to display replayability status and identify issues that would prevent replay.

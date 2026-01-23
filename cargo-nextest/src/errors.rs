@@ -1314,16 +1314,6 @@ impl ExpectedError {
                     RunIdResolutionError::NoRuns => {
                         error!("no recorded runs exist");
                     }
-                    RunIdResolutionError::NoReplayableRuns {
-                        non_replayable_count,
-                    } => {
-                        error!(
-                            "{} recorded {} {}, but none are replayable",
-                            non_replayable_count.style(styles.bold),
-                            plural::runs_str(*non_replayable_count),
-                            plural::exist_str(*non_replayable_count),
-                        );
-                    }
                 }
                 None
             }

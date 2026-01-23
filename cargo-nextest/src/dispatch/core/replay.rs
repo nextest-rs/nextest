@@ -208,12 +208,7 @@ pub(crate) fn exec_replay(
     );
 
     // Write the replay header through the reporter.
-    let header = ReplayHeader::new(
-        run_id,
-        run_info,
-        Some(snapshot.run_id_index()),
-        result.newer_non_replayable_count,
-    );
+    let header = ReplayHeader::new(run_id, run_info, Some(snapshot.run_id_index()));
     reporter.write_header(&header)?;
 
     for event_result in reader

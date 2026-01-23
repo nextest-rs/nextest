@@ -1164,31 +1164,33 @@ fn test_replayability_missing_store_zip() {
         redact_dynamic_fields(&info_str, temp_root)
     );
 
-    // Verify store list does not show `*latest` marker (since the only run is
-    // not replayable).
+    // Verify store list shows `*latest` marker (it's still the most recent by
+    // time, even though it's not replayable).
     let list_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "list"])
         .output();
     assert!(list_output.exit_status.success());
     let list_str = list_output.stdout_as_str();
     assert!(
-        !list_str.contains("*latest"),
-        "store list should not show *latest for non-replayable run: {list_str}"
+        list_str.contains("*latest"),
+        "store list should show *latest for most recent run: {list_str}"
     );
     insta::assert_snapshot!("store_list_no_replayable_runs_store_zip", list_str);
 
-    // Verify replay fails with appropriate error.
+    // Verify replay fails because the run is not replayable (store.zip is
+    // missing).
     let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay"])
         .unchecked(true)
         .output();
     assert!(
         !replay_output.exit_status.success(),
-        "replay should fail when no replayable runs exist"
+        "replay should fail when run is not replayable"
     );
-    insta::assert_snapshot!(
-        "error_replay_no_replayable_runs_store_zip",
-        redact_dynamic_fields(&replay_output.stderr_as_str(), temp_root)
+    let stderr = replay_output.stderr_as_str();
+    assert!(
+        stderr.contains("error opening archive at"),
+        "replay error should mention opening archive: {stderr}"
     );
 }
 
@@ -1240,12 +1242,12 @@ fn test_replayability_missing_run_log() {
     );
 }
 
-/// Replayability: `*latest` marker with mixed replayability.
+/// Replayability: `*latest` marker is based on time, not replayability.
 ///
-/// Coverage: When the most recent run is not replayable, `*latest` should
-/// appear on the most recent replayable run instead.
+/// Coverage: The `*latest` marker always appears on the most recent run by
+/// start time, regardless of whether it is replayable.
 #[test]
-fn test_replayability_latest_marker_skips_non_replayable() {
+fn test_replayability_latest_marker_based_on_time() {
     let env_info = set_env_vars_for_test();
     let p = TempProject::new(&env_info).unwrap();
     let cache_dir = create_cache_dir(&p);
@@ -1284,45 +1286,54 @@ fn test_replayability_latest_marker_skips_non_replayable() {
     let run_2_store_zip = runs_dir.join(RUN_ID_2).join("store.zip");
     fs::remove_file(&run_2_store_zip).expect("deleted store.zip from run 2");
 
-    // Verify store list now shows run 1 as `*latest`.
+    // Verify store list still shows run 2 as `*latest` (based on time, not
+    // replayability).
     let list_after = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "list"])
         .output();
     assert!(list_after.exit_status.success());
     let list_str_after = list_after.stdout_as_str();
     insta::assert_snapshot!(
-        "store_list_latest_skips_non_replayable",
+        "store_list_latest_based_on_time",
         redact_dynamic_fields(&list_str_after, temp_root)
     );
 
-    // Check that the line with `*latest` contains run 1's ID, not run 2's.
+    // Check that the line with `*latest` still contains run 2's ID (the most
+    // recent by time).
     for line in list_str_after.lines() {
         if line.contains("*latest") {
             assert!(
-                line.contains("82000001"),
-                "*latest should be on run 1's line, not run 2's: {line}"
-            );
-            assert!(
-                !line.contains("82000002"),
-                "*latest should not be on run 2's line: {line}"
+                line.contains("82000002"),
+                "*latest should be on run 2's line (most recent by time): {line}"
             );
         }
     }
 
-    // Verify replay uses run 1 (the replayable one) by default.
-    let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+    // Verify that replaying latest (run 2) fails because it's not replayable.
+    let replay_latest = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay"])
+        .unchecked(true)
         .output();
     assert!(
-        replay_output.exit_status.success(),
-        "replay should succeed using run 1: {replay_output}"
+        !replay_latest.exit_status.success(),
+        "replay of latest (non-replayable run 2) should fail"
+    );
+
+    // Verify that replaying run 1 explicitly still works.
+    let replay_run_1 = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["replay", "--run-id", RUN_ID_1])
+        .output();
+    assert!(
+        replay_run_1.exit_status.success(),
+        "replay of run 1 (replayable) should succeed: {replay_run_1}"
     );
 }
 
 /// Replayability: all runs non-replayable.
 ///
-/// Coverage: When all runs are non-replayable, `store list` shows no `*latest`
-/// marker and `replay` (without explicit run ID) fails with appropriate error.
+/// Coverage: When all runs are non-replayable, `store list` still shows
+/// `*latest` on the most recent run (by time), and `replay` (without explicit
+/// run ID) fails because the latest run is not replayable.
 #[test]
 fn test_replayability_all_runs_non_replayable() {
     let env_info = set_env_vars_for_test();
@@ -1353,33 +1364,43 @@ fn test_replayability_all_runs_non_replayable() {
         fs::remove_file(&store_zip).expect("deleted store.zip");
     }
 
-    // Verify store list shows no `*latest` marker.
+    // Verify store list shows `*latest` on run 2 (most recent by time).
     let list_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["store", "list"])
         .output();
     assert!(list_output.exit_status.success());
     let list_str = list_output.stdout_as_str();
     assert!(
-        !list_str.contains("*latest"),
-        "store list should not show *latest when all runs are non-replayable: {list_str}"
+        list_str.contains("*latest"),
+        "store list should show *latest on most recent run: {list_str}"
     );
+    // Verify the `*latest` marker is on run 2's line.
+    for line in list_str.lines() {
+        if line.contains("*latest") {
+            assert!(
+                line.contains("83000002"),
+                "*latest should be on run 2's line: {line}"
+            );
+        }
+    }
     insta::assert_snapshot!(
         "store_list_all_non_replayable",
         redact_dynamic_fields(&list_str, temp_root)
     );
 
-    // Verify replay fails with appropriate error message.
+    // Verify replay fails because the latest run is not replayable.
     let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args(["replay"])
         .unchecked(true)
         .output();
     assert!(
         !replay_output.exit_status.success(),
-        "replay should fail when all runs are non-replayable"
+        "replay should fail when latest run is not replayable"
     );
-    insta::assert_snapshot!(
-        "error_replay_all_non_replayable",
-        redact_dynamic_fields(&replay_output.stderr_as_str(), temp_root)
+    let stderr = replay_output.stderr_as_str();
+    assert!(
+        stderr.contains("error opening archive at"),
+        "replay error should mention opening archive: {stderr}"
     );
 }
 
