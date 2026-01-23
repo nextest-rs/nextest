@@ -2261,7 +2261,7 @@ dependencies = [
 
 [[package]]
 name = "nextest-runner"
-version = "0.104.0-b.4"
+version = "0.104.0"
 dependencies = [
  "aho-corasick",
  "async-scoped",
