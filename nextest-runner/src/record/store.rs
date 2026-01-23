@@ -645,13 +645,11 @@ impl fmt::Display for NonReplayableReason {
     }
 }
 
-/// Result of looking up the most recent replayable run.
+/// Result of looking up a run by selector.
 #[derive(Clone, Copy, Debug)]
 pub struct ResolveRunIdResult {
-    /// The run ID of the most recent replayable run.
+    /// The run ID.
     pub run_id: ReportUuid,
-    /// The number of newer runs that are not replayable.
-    pub newer_non_replayable_count: usize,
 }
 
 impl RecordedRunStatus {
@@ -938,23 +936,18 @@ impl RunStoreSnapshot {
 
     /// Resolves a run ID selector to a run result.
     ///
-    /// For [`RunIdSelector::Latest`], returns the most recent replayable run.
+    /// For [`RunIdSelector::Latest`], returns the most recent run by start
+    /// time.
     /// For [`RunIdSelector::Prefix`], resolves the prefix to a specific run.
-    ///
-    /// Returns a [`ResolveRunIdResult`] containing the run ID and, for
-    /// `Latest`, the count of newer incomplete runs that were skipped.
     pub fn resolve_run_id(
         &self,
         selector: &RunIdSelector,
     ) -> Result<ResolveRunIdResult, RunIdResolutionError> {
         match selector {
-            RunIdSelector::Latest => self.most_recent_run(None),
+            RunIdSelector::Latest => self.most_recent_run(),
             RunIdSelector::Prefix(prefix) => {
                 let run_id = self.resolve_run_id_prefix(prefix)?;
-                Ok(ResolveRunIdResult {
-                    run_id,
-                    newer_non_replayable_count: 0,
-                })
+                Ok(ResolveRunIdResult { run_id })
             }
         }
     }
@@ -1001,63 +994,15 @@ impl RunStoreSnapshot {
         self.runs.iter().find(|r| r.run_id == run_id)
     }
 
-    /// Returns the most recent replayable run.
+    /// Returns the most recent run by start time.
     ///
-    /// The first run (by start time, most recent first) that is definitely
-    /// replayable is returned. Replayability is checked via
-    /// [`RecordedRunInfo::check_replayability`].
-    ///
-    /// If there are newer runs that are not replayable, those are counted and
-    /// returned in the result.
-    ///
-    /// Returns an error if there are no runs at all, or if there are runs but
-    /// none are replayable.
-    pub fn most_recent_run(
-        &self,
-        replayability: Option<&HashMap<ReportUuid, ReplayabilityStatus>>,
-    ) -> Result<ResolveRunIdResult, RunIdResolutionError> {
-        if self.runs.is_empty() {
-            return Err(RunIdResolutionError::NoRuns);
-        }
-
-        // Sort runs by started_at in descending order (most recent first).
-        let mut sorted_runs: Vec<_> = self.runs.iter().collect();
-        sorted_runs.sort_by(|a, b| b.started_at.cmp(&a.started_at));
-
-        // Find the first replayable run and count non-replayable runs before
-        // it.
-        let runs_dir = self.runs_dir();
-        let mut newer_non_replayable_count = 0;
-        for run in sorted_runs {
-            let is_replayable = match replayability {
-                Some(replayability) => {
-                    // If the replayability index is provided, use it.
-                    let replayability = replayability.get(&run.run_id).unwrap_or_else(|| {
-                        panic!("replayability index should have run ID {}", run.run_id)
-                    });
-                    matches!(replayability, &ReplayabilityStatus::Replayable)
-                }
-                None => {
-                    // If the replayability index is not provided, then we do
-                    // I/O to check replayability.
-                    matches!(
-                        run.check_replayability(runs_dir),
-                        ReplayabilityStatus::Replayable
-                    )
-                }
-            };
-            if is_replayable {
-                return Ok(ResolveRunIdResult {
-                    run_id: run.run_id,
-                    newer_non_replayable_count,
-                });
-            }
-            newer_non_replayable_count += 1;
-        }
-
-        Err(RunIdResolutionError::NoReplayableRuns {
-            non_replayable_count: newer_non_replayable_count,
-        })
+    /// Returns an error if there are no runs at all.
+    pub fn most_recent_run(&self) -> Result<ResolveRunIdResult, RunIdResolutionError> {
+        self.runs
+            .iter()
+            .max_by_key(|r| r.started_at)
+            .map(|r| ResolveRunIdResult { run_id: r.run_id })
+            .ok_or(RunIdResolutionError::NoRuns)
     }
 
     /// Computes which runs would be deleted by a prune operation.
@@ -1095,11 +1040,8 @@ impl<'a> SnapshotWithReplayability<'a> {
             .map(|run| (run.run_id, run.check_replayability(runs_dir)))
             .collect();
 
-        // Find the latest replayable run.
-        let latest_run_id = snapshot
-            .most_recent_run(Some(&replayability))
-            .ok()
-            .map(|r| r.run_id);
+        // Find the latest run by time.
+        let latest_run_id = snapshot.most_recent_run().ok().map(|r| r.run_id);
 
         Self {
             snapshot,
@@ -1130,7 +1072,7 @@ impl<'a> SnapshotWithReplayability<'a> {
             .expect("run ID should be in replayability map")
     }
 
-    /// Returns the ID of the most recent replayable run, if any.
+    /// Returns the ID of the most recent run by start time, if any.
     pub fn latest_run_id(&self) -> Option<ReportUuid> {
         self.latest_run_id
     }

@@ -4,7 +4,7 @@ expression: "redact_dynamic_fields(&list_str_after, temp_root)"
 ---
 2 recorded runs:
 
-  82000002  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed  (not replayable)
-  82000001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed  *latest
+  82000002  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed  (not replayable)  *latest
+  82000001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  1 passed
                                              ─────────
                                                 <size>

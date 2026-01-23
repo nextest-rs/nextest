@@ -908,7 +908,7 @@ impl<'a> DisplayRunList<'a> {
     ///
     /// The `snapshot_with_replayability` provides the runs and their precomputed
     /// replayability status. Non-replayable runs will show a suffix with the reason.
-    /// The most recent replayable run will be marked with `*latest`.
+    /// The most recent run by start time will be marked with `*latest`.
     ///
     /// If `store_path` is provided, it will be displayed at the top of the output.
     ///

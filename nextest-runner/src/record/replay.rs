@@ -601,12 +601,10 @@ pub struct ReplayHeader {
     pub started_at: DateTime<FixedOffset>,
     /// The status of the run.
     pub status: RecordedRunStatus,
-    /// Number of newer non-replayable runs that were skipped.
-    pub newer_non_replayable_count: usize,
 }
 
 impl ReplayHeader {
-    /// Creates a new replay header from run info and incomplete count.
+    /// Creates a new replay header from run info.
     ///
     /// The `run_id_index` parameter enables unique prefix highlighting similar
     /// to `cargo nextest store list`. If provided, the shortest unique prefix
@@ -615,7 +613,6 @@ impl ReplayHeader {
         run_id: ReportUuid,
         run_info: &RecordedRunInfo,
         run_id_index: Option<&RunIdIndex>,
-        newer_non_replayable_count: usize,
     ) -> Self {
         let unique_prefix = run_id_index.and_then(|index| index.shortest_unique_prefix(run_id));
         Self {
@@ -623,7 +620,6 @@ impl ReplayHeader {
             unique_prefix,
             started_at: run_info.started_at,
             status: run_info.status.clone(),
-            newer_non_replayable_count,
         }
     }
 }

@@ -2408,14 +2408,6 @@ pub enum RunIdResolutionError {
     /// No recorded runs exist.
     #[error("no recorded runs exist")]
     NoRuns,
-
-    /// Recorded runs exist but none are completed (all are incomplete or have
-    /// unknown status).
-    #[error("{non_replayable_count} recorded runs exist, but none are replayable")]
-    NoReplayableRuns {
-        /// The number of non-replayable runs.
-        non_replayable_count: usize,
-    },
 }
 
 /// An error that occurred while reading a recorded run.
