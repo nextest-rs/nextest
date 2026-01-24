@@ -700,6 +700,164 @@ mod tests {
     }
 
     // ---
+    // Spec property verification
+    // ---
+    //
+    // These tests verify properties of the decision table itself (not the
+    // implementation). Since the (sub)domain is finite, we enumerate all cases.
+
+    /// All possible previous states.
+    const ALL_PREV_STATUSES: [PrevStatus; 3] = [
+        PrevStatus::Passing,
+        PrevStatus::Outstanding,
+        PrevStatus::Unknown,
+    ];
+
+    /// All possible outcomes (including None = not seen).
+    fn all_outcomes() -> [Option<TestOutcome>; 5] {
+        [
+            None,
+            Some(TestOutcome::Passed),
+            Some(TestOutcome::Failed),
+            Some(TestOutcome::Skipped(TestOutcomeSkipped::Rerun)),
+            Some(TestOutcome::Skipped(TestOutcomeSkipped::Explicit)),
+        ]
+    }
+
+    /// All HasMatch filter results (test is in the list).
+    fn all_in_list_filter_results() -> Vec<FilterMatchResult> {
+        let mut results = vec![FilterMatchResult::HasMatch(FilterMatch::Matches)];
+        for &reason in MismatchReason::ALL_VARIANTS {
+            results.push(FilterMatchResult::HasMatch(FilterMatch::Mismatch {
+                reason,
+            }));
+        }
+        results
+    }
+
+    /// Spec property: Passing tests stay Passing under non-regressing conditions.
+    ///
+    /// A test that was Passing remains Passing if:
+    /// - It's still in the test list (any HasMatch variant)
+    /// - Its outcome is non-regressing (Passed, Skipped(Rerun), or Skipped(Explicit))
+    ///
+    /// Verified exhaustively: 8 filter variants × 3 outcomes = 24 cases.
+    #[test]
+    fn spec_property_passing_monotonicity() {
+        let non_regressing_outcomes = [
+            Some(TestOutcome::Passed),
+            Some(TestOutcome::Skipped(TestOutcomeSkipped::Rerun)),
+            Some(TestOutcome::Skipped(TestOutcomeSkipped::Explicit)),
+        ];
+
+        for filter in all_in_list_filter_results() {
+            for outcome in non_regressing_outcomes {
+                let decision = decide_test_outcome(PrevStatus::Passing, filter, outcome);
+                assert_eq!(
+                    decision,
+                    Decision::Passing,
+                    "monotonicity violated: Passing + {:?} + {:?} -> {:?}",
+                    filter,
+                    outcome,
+                    decision
+                );
+            }
+        }
+    }
+
+    /// Spec property: Outstanding tests become Passing when they pass.
+    ///
+    /// This is the convergence property: the only way out of Outstanding is to
+    /// pass.
+    #[test]
+    fn spec_property_outstanding_to_passing_on_pass() {
+        let passing_outcomes = [
+            Some(TestOutcome::Passed),
+            Some(TestOutcome::Skipped(TestOutcomeSkipped::Rerun)),
+        ];
+
+        for outcome in passing_outcomes {
+            let decision = decide_test_outcome(
+                PrevStatus::Outstanding,
+                FilterMatchResult::HasMatch(FilterMatch::Matches),
+                outcome,
+            );
+            assert_eq!(
+                decision,
+                Decision::Passing,
+                "convergence violated: Outstanding + Matches + {:?} -> {:?}",
+                outcome,
+                decision
+            );
+        }
+    }
+
+    /// Spec property: Failed or not-seen tests become Outstanding.
+    ///
+    /// If a test matches the filter but fails or isn't seen, it's outstanding.
+    #[test]
+    fn spec_property_failed_becomes_outstanding() {
+        let failing_outcomes = [None, Some(TestOutcome::Failed)];
+
+        for prev in ALL_PREV_STATUSES {
+            for outcome in failing_outcomes {
+                let decision = decide_test_outcome(
+                    prev,
+                    FilterMatchResult::HasMatch(FilterMatch::Matches),
+                    outcome,
+                );
+                assert_eq!(
+                    decision,
+                    Decision::Outstanding,
+                    "FAILED->OUTSTANDING VIOLATED: {:?} + Matches + {:?} -> {:?}",
+                    prev,
+                    outcome,
+                    decision
+                );
+            }
+        }
+    }
+
+    /// Spec property: Carry-forward preserves Outstanding but drops Passing for
+    /// tests not in the list.
+    ///
+    /// When a listed binary no longer contains a test (TestNotInList),
+    /// Outstanding is preserved but Passing is dropped (becomes NotTracked).
+    /// This ensures tests that disappear and reappear are re-run.
+    #[test]
+    fn spec_property_test_not_in_list_behavior() {
+        for outcome in all_outcomes() {
+            // Outstanding is preserved.
+            assert_eq!(
+                decide_test_outcome(
+                    PrevStatus::Outstanding,
+                    FilterMatchResult::TestNotInList,
+                    outcome
+                ),
+                Decision::Outstanding,
+            );
+            // Passing is dropped.
+            assert_eq!(
+                decide_test_outcome(
+                    PrevStatus::Passing,
+                    FilterMatchResult::TestNotInList,
+                    outcome
+                ),
+                Decision::NotTracked,
+            );
+            // Unknown stays untracked.
+            assert_eq!(
+                decide_test_outcome(
+                    PrevStatus::Unknown,
+                    FilterMatchResult::TestNotInList,
+                    outcome
+                ),
+                Decision::NotTracked,
+            );
+        }
+    }
+
+    // ---
     // Model types
     // ---
 
