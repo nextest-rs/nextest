@@ -52,6 +52,8 @@ When the recording feature is enabled, you can rerun failing tests with `cargo n
 - did not run because the test run was cancelled; or,
 - were not previously seen, typically because they were newly added since the original run.
 
+The rerun feature works purely at the test level, and does not track code or build changes.
+
 !!! tip "Rerun build scope"
 
     Without any further arguments, `cargo nextest run -R latest` will build the same targets that the original run did. If build scope arguments are specified, they will override the set of build targets from the original run.
