@@ -280,4 +280,34 @@ For a full list, see [_Record configuration_](../user-config/reference.md#record
 
 ## Options and arguments
 
-TODO
+=== "Summarized output"
+
+    The output of `cargo nextest replay -h`:
+
+    === "Colorized"
+
+        ```bash exec="true" result="ansi"
+        CLICOLOR_FORCE=1 cargo nextest replay -h | ../scripts/strip-hyperlinks.sh
+        ```
+
+    === "Plaintext"
+
+        ```bash exec="true" result="text"
+        cargo nextest replay -h | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
+        ```
+
+=== "Full output"
+
+    The output of `cargo nextest replay --help`:
+
+    === "Colorized"
+
+        ```bash exec="true" result="ansi"
+        CLICOLOR_FORCE=1 cargo nextest replay --help | ../scripts/strip-hyperlinks.sh
+        ```
+
+    === "Plaintext"
+
+        ```bash exec="true" result="text"
+        cargo nextest replay --help | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
+        ```
