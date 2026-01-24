@@ -944,6 +944,22 @@ pub enum MismatchReason {
     DefaultFilter,
 }
 
+impl MismatchReason {
+    /// All known variants of `MismatchReason`.
+    ///
+    /// This slice is provided for exhaustive testing. New variants may be added
+    /// in future versions, so this slice's length is not guaranteed to be stable.
+    pub const ALL_VARIANTS: &'static [Self] = &[
+        Self::NotBenchmark,
+        Self::Ignored,
+        Self::String,
+        Self::Expression,
+        Self::Partition,
+        Self::RerunAlreadyPassed,
+        Self::DefaultFilter,
+    ];
+}
+
 impl fmt::Display for MismatchReason {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -992,16 +1008,7 @@ mod proptest_impls {
         type Strategy = BoxedStrategy<Self>;
 
         fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
-            prop_oneof![
-                Just(MismatchReason::NotBenchmark),
-                Just(MismatchReason::Ignored),
-                Just(MismatchReason::String),
-                Just(MismatchReason::Expression),
-                Just(MismatchReason::Partition),
-                Just(MismatchReason::DefaultFilter),
-                Just(MismatchReason::RerunAlreadyPassed),
-            ]
-            .boxed()
+            proptest::sample::select(MismatchReason::ALL_VARIANTS).boxed()
         }
     }
 }
@@ -1090,5 +1097,29 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Verify that `MismatchReason::ALL_VARIANTS` contains all variants.
+    #[test]
+    fn mismatch_reason_all_variants_is_complete() {
+        // Exhaustive match.
+        fn check_exhaustive(reason: MismatchReason) {
+            match reason {
+                MismatchReason::NotBenchmark
+                | MismatchReason::Ignored
+                | MismatchReason::String
+                | MismatchReason::Expression
+                | MismatchReason::Partition
+                | MismatchReason::RerunAlreadyPassed
+                | MismatchReason::DefaultFilter => {}
+            }
+        }
+
+        for &reason in MismatchReason::ALL_VARIANTS {
+            check_exhaustive(reason);
+        }
+
+        // If you add a variant, update ALL_VARIANTS and this count.
+        assert_eq!(MismatchReason::ALL_VARIANTS.len(), 7);
     }
 }
