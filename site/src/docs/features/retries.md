@@ -10,13 +10,13 @@ Sometimes, tests fail nondeterministically, which can be quite annoying to devel
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/flaky-output.ansi
+    cat src/outputs/flaky-output.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/flaky-output.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/flaky-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
 `--retries 2` means that the test is retried twice, for a total of three attempts. In this case, the test fails on the first try but succeeds on the second try. The `TRY 2 PASS` text means that the test passed on the second try.

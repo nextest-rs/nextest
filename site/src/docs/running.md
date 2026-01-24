@@ -16,13 +16,13 @@ This will produce output that looks like:
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/run-output.ansi
+    cat src/outputs/run-output.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/run-output.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/run-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
 In nextest's run output:

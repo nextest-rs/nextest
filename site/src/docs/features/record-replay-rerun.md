@@ -67,13 +67,13 @@ Let's say that `cargo nextest run --package nextest-filtering` was run, and it h
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/rerun-original-run.ansi
+    cat src/outputs/rerun-original-run.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/rerun-original-run.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/rerun-original-run.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
 ---
@@ -147,13 +147,13 @@ To replay the last test run, run `cargo nextest replay`. This will show output t
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/replay.ansi
+    cat src/outputs/replay.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/replay.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/replay.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
 Earlier runs can be replayed by identifying them through their nextest run ID, with the `--run-id`/`-R` option to `cargo nextest replay`. Any unique prefix can be used; in colorized output, unique prefixes are highlighted in bold purple.
@@ -191,13 +191,13 @@ To list recorded runs, run `cargo nextest store list`. This produces output that
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/store-list.ansi
+    cat src/outputs/store-list.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/store-list.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/store-list.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
 As with reruns, highlighted prefixes can be used to uniquely identify a test run. For example, with the above output, to replay the run ID starting with `b0b38ba7`, run `cargo nextest replay -R b0b`.
@@ -211,13 +211,13 @@ For detailed information, run `cargo nextest store info <run-id>`. For example, 
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/store-info.ansi
+    cat src/outputs/store-info.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/store-info.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/store-info.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
     
 For debugging purposes, runs capture all environment variables starting with `CARGO_` and `NEXTEST_`, other than ones ending with `_TOKEN` (since they may contain sensitive tokens).

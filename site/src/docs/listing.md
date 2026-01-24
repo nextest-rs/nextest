@@ -17,13 +17,13 @@ cargo nextest list
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/list-output.ansi
+    cat src/outputs/list-output.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/list-output.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/list-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
 ??? info "Verbose output"
@@ -33,13 +33,13 @@ cargo nextest list
     === "Colorized"
 
         ```bash exec="true" result="ansi"
-        cat src/outputs/list-output-verbose.ansi
+        cat src/outputs/list-output-verbose.ansi | ../scripts/strip-hyperlinks.sh
         ```
 
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cat src/outputs/list-output-verbose.ansi | ../scripts/strip-ansi.sh
+        cat src/outputs/list-output-verbose.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
         ```
 
 [^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. For now, run doctests in a separate step with `cargo test --doc`.

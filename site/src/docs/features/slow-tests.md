@@ -14,13 +14,13 @@ For tests that take more than a certain amount of time (by default 60 seconds), 
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/slow-output.ansi
+    cat src/outputs/slow-output.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/slow-output.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/slow-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
 ## Configuring timeouts
@@ -54,13 +54,13 @@ slow-timeout = { period = "1s", terminate-after = 2 }
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/timeout-output.ansi
+    cat src/outputs/timeout-output.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/timeout-output.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/timeout-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
 ### Configuring timeout behavior

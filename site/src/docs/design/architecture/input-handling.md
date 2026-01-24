@@ -340,13 +340,13 @@ For example, nextest might display:
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/enter-output.ansi
+    cat src/outputs/enter-output.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/enter-output.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/enter-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
 Compare this behavior to what happens without input handling:
