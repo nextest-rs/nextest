@@ -27,13 +27,13 @@ For example, with `cargo nextest run --stress-count 3 test_expr_deps test_expr_p
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/stress-test-output.ansi
+    cat src/outputs/stress-test-output.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/stress-test-output.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/stress-test-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
 (Nextest does not currently support running the same test multiple times in parallel. It may gain support for this style of stress test in the future.)

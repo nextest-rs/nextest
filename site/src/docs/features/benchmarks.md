@@ -57,7 +57,7 @@ The regular `slow-timeout` and `global-timeout` settings are ignored for benchma
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest bench -h | ../scripts/strip-hyperlinks.sh
+        cargo nextest bench -h | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
         ```
 
 === "Full output"
@@ -73,5 +73,5 @@ The regular `slow-timeout` and `global-timeout` settings are ignored for benchma
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest bench --help | ../scripts/strip-hyperlinks.sh
+        cargo nextest bench --help | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
         ```

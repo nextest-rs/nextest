@@ -87,11 +87,11 @@ A failure caused by leaked handles will be marked as **LEAK-FAIL**:
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/leak-fail.ansi
+    cat src/outputs/leak-fail.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/leak-fail.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/leak-fail.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```

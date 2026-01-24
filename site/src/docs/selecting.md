@@ -118,13 +118,13 @@ skipped due to their presence in the default filter. For example:
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/default-filter-output.ansi
+    cat src/outputs/default-filter-output.ansi | ../scripts/strip-hyperlinks.sh
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/default-filter-output.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/default-filter-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
 !!! tip "Default filter vs ignored tests"

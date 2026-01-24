@@ -21,7 +21,7 @@ The run ID is available:
 - During [`cargo nextest run`](running.md), at the beginning of the test run. For example:
 
   ```bash exec="true" result="ansi"
-  cat src/outputs/run-id-example.ansi
+  cat src/outputs/run-id-example.ansi | ../scripts/strip-hyperlinks.sh
   ```
 
 - Via the [`NEXTEST_RUN_ID`](configuration/env-vars.md#environment-variables-nextest-sets) environment variable.
@@ -45,13 +45,13 @@ The binary ID is available:
 - During [`cargo nextest run`](running.md), as the first part of each test execution line. For example:
 
   ```bash exec="true" result="ansi"
-  cat src/outputs/binary-id-run-example.ansi
+  cat src/outputs/binary-id-run-example.ansi | ../scripts/strip-hyperlinks.sh
   ```
 
 - In [`cargo nextest list`](listing.md) output, as section headings. For example:
 
   ```bash exec="true" result="ansi"
-  cat src/outputs/binary-id-list-example.ansi
+  cat src/outputs/binary-id-list-example.ansi | ../scripts/strip-hyperlinks.sh
   ```
 
 - <!-- md:version 0.9.116 --> Via the [`NEXTEST_BINARY_ID`](configuration/env-vars.md#environment-variables-nextest-sets) environment variable.
