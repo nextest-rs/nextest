@@ -27,6 +27,7 @@ guppy.workspace = true
 humantime.workspace = true
 idna_adapter.workspace = true
 itertools.workspace = true
+locked-tripwire.workspace = true
 miette = { workspace = true, features = ["fancy"] }
 # Instead of using workspace dependencies which have floating versions, we pin exact versions here
 # to avoid compatibility issues.

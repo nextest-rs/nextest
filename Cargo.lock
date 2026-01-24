@@ -414,6 +414,7 @@ dependencies = [
  "idna_adapter",
  "insta",
  "itertools",
+ "locked-tripwire",
  "miette",
  "nextest-filtering",
  "nextest-metadata",
@@ -2033,6 +2034,12 @@ dependencies = [
  "autocfg",
  "scopeguard",
 ]
+
+[[package]]
+name = "locked-tripwire"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a05236a0d3f2adf28c97ae240f3b037e79a44f77da737c0e4249529e8c5c40c"
 
 [[package]]
 name = "log"

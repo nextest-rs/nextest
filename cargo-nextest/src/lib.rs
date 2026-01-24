@@ -16,8 +16,8 @@
 //! cargo install --locked cargo-nextest
 //! ```
 //!
-//! **The `--locked` flag is required.** Builds without `--locked` are not
-//! guaranteed to work.
+//! **The `--locked` flag is required.** Builds without `--locked` are, and will
+//! remain, broken.
 //!
 //! # Minimum supported Rust versions
 //!

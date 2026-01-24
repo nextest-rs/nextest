@@ -17,7 +17,9 @@ cargo install cargo-nextest --locked
 
 !!! warning
 
-    A plain `cargo install cargo-nextest` without `--locked` is **not supported**. If you run into build issues, please try with `--locked` before reporting an issue.
+    A plain `cargo install cargo-nextest` without `--locked` is not supported and **will not work**.
+    
+    <!-- md:version 0.9.124 --> If you attempt to `cargo install` nextest without `--locked`, the build will fail with a message asking you to use `--locked`.
 
 `cargo nextest` must be compiled and installed with **Rust {{ msrv }}** or later (see [_Stability policy_] for more), but it can build and run
 tests against most versions of Rust going back several years.
