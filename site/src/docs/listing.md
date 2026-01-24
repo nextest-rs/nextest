@@ -70,7 +70,7 @@ cargo nextest list
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest list -h | ../scripts/strip-hyperlinks.sh
+        cargo nextest list -h | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
         ```
 
 === "Full output"
@@ -86,5 +86,5 @@ cargo nextest list
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest list --help | ../scripts/strip-hyperlinks.sh
+        cargo nextest list --help | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
         ```

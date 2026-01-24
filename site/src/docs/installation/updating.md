@@ -77,7 +77,7 @@ The `cargo-nextest` crate has a `default-no-update` feature which consists of al
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest self update -h | ../scripts/strip-hyperlinks.sh
+        cargo nextest self update -h | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
         ```
 
 === "Full output"
@@ -93,5 +93,5 @@ The `cargo-nextest` crate has a `default-no-update` feature which consists of al
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest self update --help | ../scripts/strip-hyperlinks.sh
+        cargo nextest self update --help | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
         ```

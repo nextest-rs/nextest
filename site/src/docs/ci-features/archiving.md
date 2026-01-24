@@ -224,7 +224,7 @@ Some tests may need to be modified to handle changes in the workspace and target
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest archive -h | ../scripts/strip-hyperlinks.sh
+        cargo nextest archive -h | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
         ```
 
 === "Full output"
@@ -240,5 +240,5 @@ Some tests may need to be modified to handle changes in the workspace and target
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest archive --help | ../scripts/strip-hyperlinks.sh
+        cargo nextest archive --help | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
         ```

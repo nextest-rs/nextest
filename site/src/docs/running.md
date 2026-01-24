@@ -171,7 +171,7 @@ For information about configuring the way nextest displays its human-readable ou
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest run -h | ../scripts/strip-hyperlinks.sh
+        cargo nextest run -h | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
         ```
 
 === "Full output"
@@ -187,5 +187,5 @@ For information about configuring the way nextest displays its human-readable ou
     === "Plaintext"
 
         ```bash exec="true" result="text"
-        cargo nextest run --help | ../scripts/strip-hyperlinks.sh
+        cargo nextest run --help | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
         ```
