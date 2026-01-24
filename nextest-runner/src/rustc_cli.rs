@@ -45,10 +45,7 @@ impl<'a> RustcCli<'a> {
 
     /// Convert the command to a [`duct::Expression`].
     pub fn to_expression(&self) -> duct::Expression {
-        duct::cmd(
-            self.rustc_path.as_str(),
-            self.args.iter().map(|arg| arg.as_ref()),
-        )
+        duct::cmd(self.rustc_path.as_str(), self.args.iter().map(|arg| &**arg))
     }
 
     /// Execute the command, capture its standard output, and return the captured output as a
