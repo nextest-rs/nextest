@@ -24,6 +24,13 @@ jobs:
           - ubuntu-latest
           - windows-latest
     steps:
+      - name: Set temp directory on Windows
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          mkdir -p "D:\a\_temp"
+          echo "TEMP=D:\a\_temp" >> $GITHUB_ENV
+          echo "TMP=D:\a\_temp" >> $GITHUB_ENV
+        shell: bash
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -90,6 +97,13 @@ jobs:
         rust-version: ["1.89", stable]
       fail-fast: false
     steps:
+      - name: Set temp directory on Windows
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          mkdir -p "D:\a\_temp"
+          echo "TEMP=D:\a\_temp" >> $GITHUB_ENV
+          echo "TMP=D:\a\_temp" >> $GITHUB_ENV
+        shell: bash
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -236,6 +250,13 @@ jobs:
       - test-archive-target-runner
       - build
     steps:
+      - name: Set temp directory on Windows
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          mkdir -p "D:\a\_temp"
+          echo "TEMP=D:\a\_temp" >> $GITHUB_ENV
+          echo "TMP=D:\a\_temp" >> $GITHUB_ENV
+        shell: bash
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - name: Download nextest binary
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
