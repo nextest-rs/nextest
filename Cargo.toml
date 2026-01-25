@@ -85,6 +85,7 @@ is_ci = "1.2.0"
 itertools = "0.14.0"
 libc = "0.2.180"
 libtest-mimic = "0.8.1"
+locked-tripwire = { version = "0.1.0", features = ["nextest"] }
 log = "0.4.29"
 maplit = "1.0.2"
 miette = "7.6.0"
