@@ -9,6 +9,14 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.124] - 2026-01-25
+
+### Fixed
+
+The unsupported install mechanism, `cargo install cargo-nextest` without `--locked`, now fails with a helpful error message asking you to use `cargo install --locked cargo-nextest`.
+
+Note that this unsupported method was broken with version 0.9.123 due to a dependency update, resulting in several issues being filed. We hope that the new mechanism results in clearer, more helpful guidance.
+
 ## [0.9.123] - 2026-01-23
 
 This is a major release with several new features. If you run into issues, please [file a bug](https://github.com/nextest-rs/nextest/issues/new).
@@ -1874,6 +1882,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.124]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.124
 [0.9.123]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.123
 [0.9.122]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.122
 [0.9.121]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.121

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.13.3] - 2026-01-25
+
+### Added
+
+- `MismatchReason::ALL_VARIANTS` iterates over all known variants of `MismatchReason`.
+
 ## [0.13.2] - 2026-01-21
 
 ### Added
@@ -283,6 +289,8 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.13.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.3
+[0.13.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.2
 [0.13.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.1
 [0.13.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.0
 [0.12.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.12.3
