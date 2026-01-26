@@ -135,9 +135,8 @@ Every Rust source file must start with:
 
 - Use `Arc` or borrows for shared immutable data.
 - Use `smol_str` for efficient small string storage.
-- Careful attention to copying vs. referencing.
-- Use `debug-ignore` to avoid expensive debug formatting in hot paths.
-- Stream data where possible rather than buffering.
+- Careful attention to cloning referencing. Avoid cloning if code has a natural tree structure.
+- Stream data (e.g. iterators) where possible rather than buffering.
 
 ### String formatting
 
