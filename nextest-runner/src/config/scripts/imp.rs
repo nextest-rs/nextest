@@ -32,7 +32,7 @@ use quick_junit::ReportUuid;
 use serde::{Deserialize, de::Error};
 use smol_str::SmolStr;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
     process::Command,
     sync::Arc,
@@ -313,6 +313,11 @@ impl SetupScriptCommand {
         // NB: we will always override user-provided environment variables with the
         // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
         test_list.cargo_env().apply_env(&mut cmd);
+
+        // Set the additional user-provided environment variables assigned to the setup
+        // script configuration after the global values assigned above but before the
+        // test runner controlled ones which are assigned below, as per above note.
+        cmd.envs(config.env.iter());
 
         let env_path = camino_tempfile::Builder::new()
             .prefix("nextest-env")
@@ -657,6 +662,10 @@ pub struct SetupScriptConfig {
     /// JUnit configuration for this script.
     #[serde(default)]
     pub junit: SetupScriptJunitConfig,
+
+    /// A map of environment variables to be passed to this command.
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
 }
 
 impl SetupScriptConfig {
@@ -1059,6 +1068,10 @@ mod tests {
             # order defined below.
             setup = ["baz", "foo", "@tool:my-tool:toolscript"]
 
+            [[profile.default.scripts]]
+            filter = "test(script4)"
+            setup = "qux"
+
             [scripts.setup.foo]
             command = "command foo"
 
@@ -1072,6 +1085,12 @@ mod tests {
             leak-timeout = "1s"
             capture-stdout = true
             capture-stderr = true
+
+            [scripts.setup.qux]
+            command = "qux"
+            env = {
+                MODE = "qux_mode",
+            }
         "#
         };
 
@@ -1194,6 +1213,33 @@ mod tests {
             scripts.enabled_scripts.get_index(2).unwrap().0.as_str(),
             "baz",
             "third script should be baz"
+        );
+
+        // This query matches the qux script.
+        let test_name = TestCaseName::new("script4");
+        let query = TestQuery {
+            binary_query: target_binary_query.to_query(),
+            test_name: &test_name,
+        };
+        let scripts = SetupScripts::new_with_queries(&profile, std::iter::once(query));
+        assert_eq!(scripts.len(), 1, "one script should be enabled");
+        assert_eq!(
+            scripts.enabled_scripts.get_index(0).unwrap().0.as_str(),
+            "qux",
+            "first script should be qux"
+        );
+        assert_eq!(
+            scripts
+                .enabled_scripts
+                .get_index(0)
+                .unwrap()
+                .1
+                .config
+                .env
+                .get("MODE")
+                .map(String::as_str),
+            Some("qux_mode"),
+            "first script should be passed environment variable MODE with value qux_mode",
         );
     }
 

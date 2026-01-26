@@ -6,6 +6,6 @@ store: [TEMP_DIR]/cache/projects/[TEMP_DIR_ENCODED][SEP_ENCODED]src/records
 
 1 recorded run:
 
-  10000001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  21 passed / 9 failed  *latest
+  10000001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  22 passed / 9 failed  *latest
                                              ─────────
                                                 <size>

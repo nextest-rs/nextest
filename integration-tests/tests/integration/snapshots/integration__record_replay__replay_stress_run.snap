@@ -6,7 +6,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
      Started XXXX-XX-XX XX:XX:XX  status: stress completed
 ────────────
  Nextest run ID 60000001-0000-0000-0000-000000000001 with nextest profile: default
-    Starting 1 test across 7 binaries (29 tests skipped)
+    Starting 1 test across 7 binaries (30 tests skipped)
 ────────────
  Stress test iteration 1/5 (00:00:00 elapsed so far, 5 iterations remaining)
         SKIP [         ] [1/5] (─────) nextest-tests tests::call_dylib_add_two
@@ -23,6 +23,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [1/5] (─────) nextest-tests::basic test_ignored
         SKIP [         ] [1/5] (─────) nextest-tests::basic test_ignored_fail
         SKIP [         ] [1/5] (─────) nextest-tests::basic test_result_failure
+        SKIP [         ] [1/5] (─────) nextest-tests::basic test_setup_script_env_vars
         SKIP [         ] [1/5] (─────) nextest-tests::basic test_slow_timeout
         SKIP [         ] [1/5] (─────) nextest-tests::basic test_slow_timeout_2
         SKIP [         ] [1/5] (─────) nextest-tests::basic test_slow_timeout_subprocess
@@ -39,7 +40,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [1/5] (─────) nextest-tests::example/nextest-tests fake_test_name
         SKIP [         ] [1/5] (─────) nextest-tests::example/nextest-tests tests::example_success
         PASS [ duration] [1/5] (1/1) nextest-tests::basic test_success
- Stress test [ duration] iteration 1/5: 1 test run: 1 passed, 29 skipped
+ Stress test [ duration] iteration 1/5: 1 test run: 1 passed, 30 skipped
 ────────────
  Stress test iteration 2/5 (00:00:00 elapsed so far, 4 iterations remaining)
         SKIP [         ] [2/5] (─────) nextest-tests tests::call_dylib_add_two
@@ -56,6 +57,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [2/5] (─────) nextest-tests::basic test_ignored
         SKIP [         ] [2/5] (─────) nextest-tests::basic test_ignored_fail
         SKIP [         ] [2/5] (─────) nextest-tests::basic test_result_failure
+        SKIP [         ] [2/5] (─────) nextest-tests::basic test_setup_script_env_vars
         SKIP [         ] [2/5] (─────) nextest-tests::basic test_slow_timeout
         SKIP [         ] [2/5] (─────) nextest-tests::basic test_slow_timeout_2
         SKIP [         ] [2/5] (─────) nextest-tests::basic test_slow_timeout_subprocess
@@ -72,7 +74,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [2/5] (─────) nextest-tests::example/nextest-tests fake_test_name
         SKIP [         ] [2/5] (─────) nextest-tests::example/nextest-tests tests::example_success
         PASS [ duration] [2/5] (1/1) nextest-tests::basic test_success
- Stress test [ duration] iteration 2/5: 1 test run: 1 passed, 29 skipped
+ Stress test [ duration] iteration 2/5: 1 test run: 1 passed, 30 skipped
 ────────────
  Stress test iteration 3/5 (00:00:00 elapsed so far, 3 iterations remaining)
         SKIP [         ] [3/5] (─────) nextest-tests tests::call_dylib_add_two
@@ -89,6 +91,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [3/5] (─────) nextest-tests::basic test_ignored
         SKIP [         ] [3/5] (─────) nextest-tests::basic test_ignored_fail
         SKIP [         ] [3/5] (─────) nextest-tests::basic test_result_failure
+        SKIP [         ] [3/5] (─────) nextest-tests::basic test_setup_script_env_vars
         SKIP [         ] [3/5] (─────) nextest-tests::basic test_slow_timeout
         SKIP [         ] [3/5] (─────) nextest-tests::basic test_slow_timeout_2
         SKIP [         ] [3/5] (─────) nextest-tests::basic test_slow_timeout_subprocess
@@ -105,7 +108,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [3/5] (─────) nextest-tests::example/nextest-tests fake_test_name
         SKIP [         ] [3/5] (─────) nextest-tests::example/nextest-tests tests::example_success
         PASS [ duration] [3/5] (1/1) nextest-tests::basic test_success
- Stress test [ duration] iteration 3/5: 1 test run: 1 passed, 29 skipped
+ Stress test [ duration] iteration 3/5: 1 test run: 1 passed, 30 skipped
 ────────────
  Stress test iteration 4/5 (00:00:00 elapsed so far, 2 iterations remaining)
         SKIP [         ] [4/5] (─────) nextest-tests tests::call_dylib_add_two
@@ -122,6 +125,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [4/5] (─────) nextest-tests::basic test_ignored
         SKIP [         ] [4/5] (─────) nextest-tests::basic test_ignored_fail
         SKIP [         ] [4/5] (─────) nextest-tests::basic test_result_failure
+        SKIP [         ] [4/5] (─────) nextest-tests::basic test_setup_script_env_vars
         SKIP [         ] [4/5] (─────) nextest-tests::basic test_slow_timeout
         SKIP [         ] [4/5] (─────) nextest-tests::basic test_slow_timeout_2
         SKIP [         ] [4/5] (─────) nextest-tests::basic test_slow_timeout_subprocess
@@ -138,7 +142,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [4/5] (─────) nextest-tests::example/nextest-tests fake_test_name
         SKIP [         ] [4/5] (─────) nextest-tests::example/nextest-tests tests::example_success
         PASS [ duration] [4/5] (1/1) nextest-tests::basic test_success
- Stress test [ duration] iteration 4/5: 1 test run: 1 passed, 29 skipped
+ Stress test [ duration] iteration 4/5: 1 test run: 1 passed, 30 skipped
 ────────────
  Stress test iteration 5/5 (00:00:00 elapsed so far, 1 iteration remaining)
         SKIP [         ] [5/5] (─────) nextest-tests tests::call_dylib_add_two
@@ -155,6 +159,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [5/5] (─────) nextest-tests::basic test_ignored
         SKIP [         ] [5/5] (─────) nextest-tests::basic test_ignored_fail
         SKIP [         ] [5/5] (─────) nextest-tests::basic test_result_failure
+        SKIP [         ] [5/5] (─────) nextest-tests::basic test_setup_script_env_vars
         SKIP [         ] [5/5] (─────) nextest-tests::basic test_slow_timeout
         SKIP [         ] [5/5] (─────) nextest-tests::basic test_slow_timeout_2
         SKIP [         ] [5/5] (─────) nextest-tests::basic test_slow_timeout_subprocess
@@ -171,6 +176,6 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [5/5] (─────) nextest-tests::example/nextest-tests fake_test_name
         SKIP [         ] [5/5] (─────) nextest-tests::example/nextest-tests tests::example_success
         PASS [ duration] [5/5] (1/1) nextest-tests::basic test_success
- Stress test [ duration] iteration 5/5: 1 test run: 1 passed, 29 skipped
+ Stress test [ duration] iteration 5/5: 1 test run: 1 passed, 30 skipped
 ────────────
      Summary [ duration] 5/5 stress run iterations: 5 passed
