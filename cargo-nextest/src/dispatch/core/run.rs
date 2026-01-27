@@ -463,16 +463,34 @@ fn no_run_no_capture_reasons(no_run: bool, no_capture: bool) -> Option<&'static 
 #[derive(Debug, Default, Args)]
 pub(crate) struct ReporterCommonOpts {
     /// Output stdout and stderr on failure.
-    #[arg(long, value_enum, value_name = "WHEN", env = "NEXTEST_FAILURE_OUTPUT")]
+    #[arg(
+        long,
+        value_enum,
+        value_name = "WHEN",
+        env = "NEXTEST_FAILURE_OUTPUT",
+        help_heading = "Reporter options"
+    )]
     pub(crate) failure_output: Option<TestOutputDisplayOpt>,
 
     /// Output stdout and stderr on success.
-    #[arg(long, value_enum, value_name = "WHEN", env = "NEXTEST_SUCCESS_OUTPUT")]
+    #[arg(
+        long,
+        value_enum,
+        value_name = "WHEN",
+        env = "NEXTEST_SUCCESS_OUTPUT",
+        help_heading = "Reporter options"
+    )]
     pub(crate) success_output: Option<TestOutputDisplayOpt>,
 
     // status_level does not conflict with --no-capture because pass vs skip still makes sense.
     /// Test statuses to output.
-    #[arg(long, value_enum, value_name = "LEVEL", env = "NEXTEST_STATUS_LEVEL")]
+    #[arg(
+        long,
+        value_enum,
+        value_name = "LEVEL",
+        env = "NEXTEST_STATUS_LEVEL",
+        help_heading = "Reporter options"
+    )]
     pub(crate) status_level: Option<StatusLevelOpt>,
 
     /// Test statuses to output at the end of the run.
@@ -480,7 +498,8 @@ pub(crate) struct ReporterCommonOpts {
         long,
         value_enum,
         value_name = "LEVEL",
-        env = "NEXTEST_FINAL_STATUS_LEVEL"
+        env = "NEXTEST_FINAL_STATUS_LEVEL",
+        help_heading = "Reporter options"
     )]
     pub(crate) final_status_level: Option<FinalStatusLevelOpt>,
 
@@ -492,7 +511,12 @@ pub(crate) struct ReporterCommonOpts {
     ///
     /// This option has no effect with **--no-capture**, since that passes
     /// through standard output and standard error.
-    #[arg(long, env = "NEXTEST_NO_OUTPUT_INDENT", value_parser = BoolishValueParser::new())]
+    #[arg(
+        long,
+        env = "NEXTEST_NO_OUTPUT_INDENT",
+        value_parser = BoolishValueParser::new(),
+        help_heading = "Reporter options"
+    )]
     pub(crate) no_output_indent: bool,
 }
 
