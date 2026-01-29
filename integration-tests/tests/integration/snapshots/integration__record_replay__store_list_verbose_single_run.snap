@@ -6,6 +6,6 @@ store: [TEMP_DIR]
 
 1 recorded run:
 
-  10000001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  21 passed / 9 failed  *latest
+  10000001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  22 passed / 9 failed  *latest
                                              ─────────
                                                 <size>
