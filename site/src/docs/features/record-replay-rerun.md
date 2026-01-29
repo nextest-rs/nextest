@@ -25,10 +25,7 @@ Recorded test runs capture:
 * Rerunning tests that failed or were not run in the past, with the goal being to iteratively converge towards a successful test run.
 * Replaying test runs, including those that might have aged past terminal scrollback.
 
-In the future, it will be possible to:
-
-* Publish archives in CI that can be replayed locally.
-* Export replayed test runs in various formats such as JUnit and libtest-json output.
+In the future, it will be possible to export replayed test runs in various formats such as JUnit and libtest-json output.
 
 ## Usage
 
@@ -138,7 +135,7 @@ Picking the set of tests to run is tricky, particularly in the face of tests bei
 
 As a best practice, it is also recommended that you use CI to gate changes making their way to production, and that you perform full runs in CI.
 
-A design document discussing the heuristics and considerations involved is forthcoming.
+For more about the heuristics and considerations involved, see the [rerun decision table](../design/architecture/recording-runs.md#rerun-decision-table) in the design document.
 
 ## Replaying test runs
 
@@ -183,6 +180,40 @@ The following [reporter options](../reporting.md) also apply to replays, allowin
 : Disable indentation for test output.
 
 For example, outputs for successful tests are hidden by default. Use `cargo nextest replay --success-output immediate` to see those outputs.
+
+### Portable recordings
+
+<!-- md:version 0.9.125 -->
+
+Recorded runs can be exported as self-contained *portable recordings* for sharing across machines. For example, a recording can be created in CI and downloaded locally to be replayed or used as the basis for a rerun.
+
+To export a recording:
+
+```bash
+cargo nextest store export latest
+```
+
+By default, this creates a file named `nextest-run-<run-id>.zip` in the current directory, where `<run-id>` is the full UUID of the run. The output path can be customized with `--archive-file`:
+
+```bash
+cargo nextest store export latest --archive-file my-run.zip
+```
+
+To replay or rerun from a portable recording, pass the path to the `.zip` file as the `-R` argument:
+
+```bash
+# Replay a portable recording.
+cargo nextest replay -R my-run.zip
+
+# Rerun failing tests from a portable recording.
+cargo nextest run -R my-run.zip
+```
+
+!!! warning "Sensitive data in portable recordings"
+
+    Portable recordings contain the full captured output of every test in the run. Test outputs can inadvertently contain sensitive data such as API keys, personal information (PII), or environment variable values. Nextest does not attempt to scrub or redact recordings. You are responsible for ensuring that recordings shared outside your organization do not contain sensitive information.
+
+For more about the portable recording format, see the [design document](../design/architecture/recording-runs.md#portable-recordings).
 
 ## Listing recorded runs
 
@@ -266,8 +297,7 @@ The store location is platform-dependent:
 
 | Platform | Path |
 |----------|------|
-| Linux and other Unix | `$XDG_CACHE_HOME/nextest/` or `~/.cache/nextest/` |
-| macOS | `~/Library/Caches/nextest/` |
+| Linux, macOS, and other Unix | `$XDG_CACHE_HOME/nextest/` or `~/.cache/nextest/` |
 | Windows | `%LOCALAPPDATA%\nextest\` |
 
 The store location can be overridden via the `NEXTEST_CACHE_DIR` environment variable.

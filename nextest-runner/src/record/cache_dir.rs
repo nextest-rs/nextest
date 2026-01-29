@@ -28,9 +28,8 @@ pub const NEXTEST_CACHE_DIR_ENV: &str = "NEXTEST_CACHE_DIR";
 /// If the `NEXTEST_CACHE_DIR` environment variable is set, uses that as the base
 /// cache directory. Otherwise, uses the platform-specific default:
 ///
-/// - Linux: `$XDG_CACHE_HOME/nextest/projects/<encoded-workspace>/records/`
+/// - Linux, macOS, and other Unix: `$XDG_CACHE_HOME/nextest/projects/<encoded-workspace>/records/`
 ///   or `~/.cache/nextest/projects/<encoded-workspace>/records/`
-/// - macOS: `~/Library/Caches/nextest/projects/<encoded-workspace>/records/`
 /// - Windows: `%LOCALAPPDATA%\nextest\cache\projects\<encoded-workspace>\records\`
 ///
 /// The workspace root is canonicalized (symlinks resolved) before being encoded
