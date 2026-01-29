@@ -46,7 +46,7 @@ pub fn records_cache_dir(workspace_root: &Utf8Path) -> Result<Utf8PathBuf, Cache
     let base_cache_dir = if let Ok(cache_dir) = std::env::var(NEXTEST_CACHE_DIR_ENV) {
         Utf8PathBuf::from(cache_dir)
     } else {
-        let strategy = choose_base_strategy().map_err(|_| CacheDirError::BaseDirStrategy)?;
+        let strategy = choose_base_strategy().map_err(CacheDirError::BaseDirStrategy)?;
         let cache_dir = strategy.cache_dir();
         let nextest_cache = cache_dir.join("nextest");
         Utf8PathBuf::from_path_buf(nextest_cache.clone()).map_err(|_| {

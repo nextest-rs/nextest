@@ -22,6 +22,7 @@ use crate::{
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
+use etcetera::HomeDirError;
 use itertools::{Either, Itertools};
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::RustBinaryId;
@@ -2236,7 +2237,7 @@ pub enum CacheDirError {
     ///
     /// This typically means the platform doesn't support standard directory layouts.
     #[error("could not determine platform base directory strategy")]
-    BaseDirStrategy,
+    BaseDirStrategy(#[source] HomeDirError),
 
     /// The platform cache directory path is not valid UTF-8.
     #[error("platform cache directory is not valid UTF-8: {path:?}")]
