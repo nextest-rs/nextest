@@ -155,6 +155,10 @@ When modifying any struct that is serialized to disk or over the wire:
 
 - The `clippy::format_push_string` lint is enabled. If triggered, use the `swrite!` macro from the `swrite` crate instead of `push_str(&format!(...))`.
 
+### Lint attributes
+
+- Always use `#[expect(...)]` instead of `#[allow(...)]` for suppressing lints. The `expect` attribute will warn if the lint is no longer triggered, helping to keep the codebase clean.
+
 ## Testing practices
 
 ### Running tests

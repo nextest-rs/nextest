@@ -2552,6 +2552,75 @@ pub enum RecordReadError {
     },
 }
 
+/// An error that occurred while creating a portable archive.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum PortableArchiveError {
+    /// The run directory does not exist.
+    #[error("run directory does not exist: {path}")]
+    RunDirNotFound {
+        /// The path that was expected to exist.
+        path: Utf8PathBuf,
+    },
+
+    /// A required file is missing from the run directory.
+    #[error("required file missing from run directory `{run_dir}`: `{file_name}`")]
+    RequiredFileMissing {
+        /// The run directory that was being validated.
+        run_dir: Utf8PathBuf,
+        /// The name of the missing file.
+        file_name: &'static str,
+    },
+
+    /// Failed to serialize the manifest.
+    #[error("failed to serialize manifest")]
+    SerializeManifest(#[source] serde_json::Error),
+
+    /// Failed to start a file in the zip archive.
+    #[error("failed to start file {file_name} in archive")]
+    ZipStartFile {
+        /// The file that failed to start.
+        file_name: &'static str,
+        /// The underlying zip error.
+        #[source]
+        source: zip::result::ZipError,
+    },
+
+    /// Failed to write to the zip archive.
+    #[error("failed to write {file_name} to archive")]
+    ZipWrite {
+        /// The file being written.
+        file_name: &'static str,
+        /// The underlying I/O error.
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// Failed to read a source file.
+    #[error("failed to read {file_name}")]
+    ReadFile {
+        /// The file being read.
+        file_name: &'static str,
+        /// The underlying I/O error.
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// Failed to finalize the zip archive.
+    #[error("failed to finalize archive")]
+    ZipFinalize(#[source] zip::result::ZipError),
+
+    /// Failed to write the archive atomically.
+    #[error("failed to write archive atomically to {path}")]
+    AtomicWrite {
+        /// The destination path.
+        path: Utf8PathBuf,
+        /// The underlying error.
+        #[source]
+        source: std::io::Error,
+    },
+}
+
 /// An error that occurred while reconstructing a TestList from a summary.
 ///
 /// Returned by [`TestList::from_summary`](crate::list::TestList::from_summary).

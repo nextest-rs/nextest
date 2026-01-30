@@ -4,10 +4,7 @@
 //! Store command implementation for managing the record store.
 
 use crate::{
-    ExpectedError, Result,
-    cargo_cli::CargoCli,
-    dispatch::EarlyArgs,
-    output::{OutputContext, OutputWriter},
+    ExpectedError, Result, cargo_cli::CargoCli, dispatch::EarlyArgs, output::OutputContext,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use chrono::Utc;
@@ -16,14 +13,16 @@ use nextest_runner::{
     helpers::ThemeCharacters,
     pager::PagedOutput,
     record::{
-        DisplayRunList, PruneKind, RecordRetentionPolicy, RunIdSelector, RunStore,
-        SnapshotWithReplayability, Styles as RecordStyles, records_cache_dir,
+        DisplayRunList, PortableArchiveWriter, PruneKind, RecordRetentionPolicy, RecordedRunStatus,
+        RunIdSelector, RunStore, SnapshotWithReplayability, Styles as RecordStyles,
+        records_cache_dir,
     },
     redact::Redactor,
     user_config::{UserConfig, elements::RecordConfig},
     write_str::WriteStr,
 };
-use tracing::info;
+use owo_colors::OwoColorize;
+use tracing::{info, warn};
 
 /// Subcommands for managing the record store.
 #[derive(Debug, Subcommand)]
@@ -34,6 +33,8 @@ pub(crate) enum StoreCommand {
     Info(InfoOpts),
     /// Prune old recorded runs according to retention policy.
     Prune(PruneOpts),
+    /// Export a recorded run as a portable archive.
+    Export(ExportOpts),
 }
 
 /// Options for the `cargo nextest store info` command.
@@ -116,6 +117,94 @@ pub(crate) struct PruneOpts {
     dry_run: bool,
 }
 
+/// Options for the `cargo nextest store export` command.
+#[derive(Debug, Args)]
+pub(crate) struct ExportOpts {
+    /// Run ID to export, or `latest` [aliases: -R].
+    ///
+    /// Accepts "latest" for the most recent completed run, or a full UUID or
+    /// unambiguous prefix.
+    #[arg(value_name = "RUN_ID", required_unless_present = "run_id_opt")]
+    run_id: Option<RunIdSelector>,
+
+    /// Run ID to export (alternative to positional argument).
+    #[arg(
+        short = 'R',
+        long = "run-id",
+        hide = true,
+        value_name = "RUN_ID",
+        conflicts_with = "run_id"
+    )]
+    run_id_opt: Option<RunIdSelector>,
+
+    /// Destination for the archive file.
+    ///
+    /// Defaults to `nextest-run-<run-id>.zip` in the current directory.
+    #[arg(long, value_name = "PATH")]
+    archive_file: Option<Utf8PathBuf>,
+}
+
+impl ExportOpts {
+    fn resolved_run_id(&self) -> &RunIdSelector {
+        self.run_id
+            .as_ref()
+            .or(self.run_id_opt.as_ref())
+            .expect("run_id or run_id_opt is present due to clap validation")
+    }
+
+    fn exec(&self, cache_dir: &Utf8Path, styles: &RecordStyles) -> Result<i32> {
+        let store =
+            RunStore::new(cache_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
+
+        let snapshot = store
+            .lock_shared()
+            .map_err(|err| ExpectedError::RecordSetupError { err })?
+            .into_snapshot();
+
+        let resolved = snapshot
+            .resolve_run_id(self.resolved_run_id())
+            .map_err(|err| ExpectedError::RunIdResolutionError { err })?;
+        let run_id = resolved.run_id;
+
+        let run = snapshot
+            .get_run(run_id)
+            .expect("run ID was just resolved, so the run should exist");
+
+        // Warn if the run is incomplete.
+        if matches!(
+            run.status,
+            RecordedRunStatus::Incomplete | RecordedRunStatus::Unknown
+        ) {
+            warn!(
+                "run {} is {}: the exported archive may be incomplete or corrupted",
+                run_id.style(styles.label),
+                run.status.short_status_str(),
+            );
+        }
+
+        let writer = PortableArchiveWriter::new(run, snapshot.runs_dir())
+            .map_err(|err| ExpectedError::PortableArchiveError { err })?;
+
+        let output_path = self
+            .archive_file
+            .clone()
+            .unwrap_or_else(|| Utf8PathBuf::from(writer.default_filename()));
+
+        let result = writer
+            .write_to_path(&output_path)
+            .map_err(|err| ExpectedError::PortableArchiveError { err })?;
+
+        info!(
+            "exported run {} to {} ({} bytes)",
+            run_id.style(styles.label),
+            result.path.style(styles.label),
+            result.size,
+        );
+
+        Ok(0)
+    }
+}
+
 impl PruneOpts {
     fn exec(
         &self,
@@ -123,7 +212,6 @@ impl PruneOpts {
         record_config: &RecordConfig,
         styles: &RecordStyles,
         paged_output: &mut PagedOutput,
-        output_writer: &mut OutputWriter,
         redactor: &Redactor,
     ) -> Result<i32> {
         let store =
@@ -147,7 +235,7 @@ impl PruneOpts {
             .map_err(|err| ExpectedError::WriteError { err })?;
             Ok(0)
         } else {
-            // Actual prune: output to stderr.
+            // Actual prune: output via tracing.
             let mut locked = store
                 .lock_exclusive()
                 .map_err(|err| ExpectedError::RecordSetupError { err })?;
@@ -155,8 +243,7 @@ impl PruneOpts {
                 .prune(&policy, PruneKind::Explicit)
                 .map_err(|err| ExpectedError::RecordSetupError { err })?;
 
-            write!(output_writer.stderr_writer(), "{}", result.display(styles))
-                .map_err(|err| ExpectedError::WriteError { err })?;
+            info!("{}", result.display(styles));
             Ok(0)
         }
     }
@@ -169,7 +256,6 @@ impl StoreCommand {
         manifest_path: Option<Utf8PathBuf>,
         user_config: &UserConfig,
         output: OutputContext,
-        output_writer: &mut OutputWriter,
     ) -> Result<i32> {
         let mut cargo_cli = CargoCli::new("locate-project", manifest_path.as_deref(), output);
         cargo_cli.add_args(["--workspace", "--message-format=plain"]);
@@ -264,9 +350,9 @@ impl StoreCommand {
                 &user_config.record,
                 &styles,
                 &mut paged_output,
-                output_writer,
                 &redactor,
             ),
+            Self::Export(opts) => opts.exec(&cache_dir, &styles),
         }
     }
 }

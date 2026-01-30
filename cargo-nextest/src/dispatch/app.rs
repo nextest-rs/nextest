@@ -207,13 +207,7 @@ impl AppOpts {
                     early_args.user_config_location(),
                 )
                 .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })?;
-                command.exec(
-                    &early_args,
-                    self.common.manifest_path,
-                    &user_config,
-                    output,
-                    output_writer,
-                )
+                command.exec(&early_args, self.common.manifest_path, &user_config, output)
             }
         }
     }
