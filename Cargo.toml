@@ -50,7 +50,7 @@ config = { version = "0.15.19", default-features = false, features = [
     "preserve_order",
 ] }
 chrono = { version = "0.4.43", features = ["serde"] }
-clap = { version = "4.5.55", features = ["derive", "unstable-markdown"] }
+clap = { version = "4.5.56", features = ["derive", "unstable-markdown"] }
 console-subscriber = "0.5.0"
 countio = "0.2.19"
 cp_r = "0.5.2"
