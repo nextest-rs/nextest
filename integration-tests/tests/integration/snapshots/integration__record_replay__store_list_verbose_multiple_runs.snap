@@ -2,7 +2,7 @@
 source: integration-tests/tests/integration/record_replay.rs
 expression: "redact_dynamic_fields(&list_verbose_output.stdout_as_str(), temp_root)"
 ---
-store: [TEMP_DIR]
+store: [TEMP_DIR]/cache/projects/[TEMP_DIR_ENCODED][SEP_ENCODED]src/records
 
 3 recorded runs:
 

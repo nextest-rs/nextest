@@ -17,6 +17,7 @@ use integration_tests::{
     nextest_cli::CargoNextestCli,
 };
 use nextest_metadata::NextestExitCode;
+use nextest_runner::record::encode_workspace_path;
 use regex::Regex;
 use std::{
     collections::BTreeSet,
@@ -215,9 +216,37 @@ fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
         .collect::<Vec<_>>()
         .join("\n");
 
+    // Replace raw temp root paths, keeping suffixes with normalized slashes.
     let temp_root_escaped = regex::escape(temp_root.as_str());
-    let temp_root_regex = Regex::new(&format!(r"{temp_root_escaped}[^\s]*")).unwrap();
-    let output = temp_root_regex.replace_all(&output, "[TEMP_DIR]");
+    let temp_root_regex = Regex::new(&format!(r"{}([^\s]*)", temp_root_escaped)).unwrap();
+    let output = temp_root_regex.replace_all(&output, |caps: &regex::Captures| {
+        let suffix = caps.get(1).map_or("", |m| m.as_str());
+        let normalized_suffix = suffix.replace('\\', "/");
+        format!("[TEMP_DIR]{normalized_suffix}")
+    });
+
+    // Also replace the encoded form of the temp root (used in cache directory
+    // names). Match an optional trailing `_s` (encoded `/`) or `_b` (encoded
+    // `\`) as part of the temp root, since the encoded path typically includes
+    // the trailing separator.
+    //
+    // Canonicalize first to match the behavior of nextest itself. (In
+    // particular, Windows paths get the `\\?\` prefix when canonicalized.)
+    let temp_root_canonical = temp_root.canonicalize_utf8().expect("temp_root is valid");
+    let temp_root_encoded = encode_workspace_path(&temp_root_canonical);
+    let temp_root_encoded_escaped = regex::escape(&temp_root_encoded);
+    let temp_root_encoded_regex =
+        Regex::new(&format!(r"{}(_s|_b)?([^\s]*)", temp_root_encoded_escaped)).unwrap();
+    let output = temp_root_encoded_regex.replace_all(&output, |caps: &regex::Captures| {
+        let sep = if caps.get(1).is_some() {
+            "[SEP_ENCODED]"
+        } else {
+            ""
+        };
+        let suffix = caps.get(2).map_or("", |m| m.as_str());
+        let normalized_suffix = suffix.replace('\\', "/");
+        format!("[TEMP_DIR_ENCODED]{sep}{normalized_suffix}")
+    });
 
     let output = TIMESTAMP_REGEX.replace_all(&output, "XXXX-XX-XX XX:XX:XX");
 

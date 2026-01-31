@@ -77,6 +77,7 @@ insta.workspace = true
 itertools.workspace = true
 libtest-mimic.workspace = true
 nextest-metadata.workspace = true
+nextest-runner.workspace = true
 pathdiff.workspace = true
 quick-junit.workspace = true
 regex.workspace = true
