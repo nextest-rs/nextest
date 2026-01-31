@@ -50,9 +50,9 @@ A zstd-compressed JSON Lines file containing test events. Each line is a `TestEv
 
 There are **two separate format versions**:
 
-1. **`RUNS_JSON_FORMAT_VERSION`** (in `format.rs`): Version of `runs.json.zst` format. Controls backward/forward compatibility of the run list itself.
+1. **`RUNS_JSON_FORMAT_VERSION`** (in `format.rs`): Version of `runs.json.zst` format (newtype `RunsJsonFormatVersion`). Controls backward/forward compatibility of the run list itself.
 
-2. **`RECORD_FORMAT_VERSION`** (in `format.rs`): Version of the archive format (`store.zip` + `run.log.zst`). Stored per-run in `runs.json.zst` to enable checking replayability without opening archives.
+2. **`STORE_FORMAT_VERSION`** (in `format.rs`): Version of the archive format (`store.zip` + `run.log.zst`). This is a `StoreFormatVersion` combining a major version (`StoreFormatMajorVersion`) and minor version (`StoreFormatMinorVersion`). Stored per-run in `runs.json.zst` to enable checking replayability without opening archives. Major versions must match exactly; minor versions allow reading older archives but not newer ones.
 
 **Write permission model**: When reading `runs.json.zst`, if its format version is newer than the current nextest supports, writing is denied (`RunsJsonWritePermission::Denied`) to prevent data loss. Reading always proceeds.
 

@@ -27,7 +27,7 @@
 mod cache_dir;
 pub mod dicts;
 mod display;
-pub mod format;
+mod format;
 mod reader;
 mod recorder;
 pub mod replay;
@@ -38,7 +38,7 @@ mod session;
 mod store;
 mod summary;
 #[cfg(test)]
-pub(crate) mod test_helpers;
+mod test_helpers;
 mod tree;
 
 pub use cache_dir::{NEXTEST_CACHE_DIR_ENV, records_cache_dir};
@@ -46,7 +46,11 @@ pub use display::{
     DisplayPrunePlan, DisplayPruneResult, DisplayRecordedRunInfo, DisplayRecordedRunInfoDetailed,
     DisplayRunList, RunListAlignment, Styles,
 };
-pub use format::RunsJsonWritePermission;
+pub use format::{
+    OutputDict, RerunInfo, RerunRootInfo, RunsJsonFormatVersion, RunsJsonWritePermission,
+    STORE_FORMAT_VERSION, StoreFormatMajorVersion, StoreFormatMinorVersion, StoreFormatVersion,
+    StoreVersionIncompatibility,
+};
 pub use reader::{RecordEventIter, RecordReader};
 pub use recorder::{RunRecorder, StoreSizes};
 pub use replay::{

@@ -1090,7 +1090,8 @@ mod tests {
         record::{
             CompletedRunStats, ComponentSizes, NonReplayableReason, PruneKind, PrunePlan,
             PruneResult, RecordedRunStatus, RecordedSizes, RunStoreSnapshot,
-            SnapshotWithReplayability, StressCompletedRunStats, format::RECORD_FORMAT_VERSION,
+            SnapshotWithReplayability, StressCompletedRunStats,
+            format::{STORE_FORMAT_VERSION, StoreFormatMajorVersion, StoreVersionIncompatibility},
             run_id_index::RunIdIndex,
         },
         redact::Redactor,
@@ -1140,7 +1141,7 @@ mod tests {
         // For simplicity in tests, put all size in the store component.
         RecordedRunInfo {
             run_id: uuid.parse().expect("valid UUID"),
-            store_format_version: RECORD_FORMAT_VERSION,
+            store_format_version: STORE_FORMAT_VERSION,
             nextest_version: Version::parse(version).expect("valid version"),
             started_at,
             last_written_at: started_at,
@@ -1186,7 +1187,7 @@ mod tests {
         let started_at = DateTime::parse_from_rfc3339(started_at).expect("valid datetime");
         RecordedRunInfo {
             run_id: uuid.parse().expect("valid UUID"),
-            store_format_version: RECORD_FORMAT_VERSION,
+            store_format_version: STORE_FORMAT_VERSION,
             nextest_version: Version::parse(version).expect("valid version"),
             started_at,
             last_written_at: started_at,
@@ -2254,12 +2255,15 @@ mod tests {
             .to_string()
         );
 
-        // Test: store format too new.
-        let format_too_new =
-            ReplayabilityStatus::NotReplayable(vec![NonReplayableReason::StoreFormatTooNew {
-                run_version: 5,
-                max_supported: 1,
-            }]);
+        // Test: store format incompatible (major mismatch).
+        let format_too_new = ReplayabilityStatus::NotReplayable(vec![
+            NonReplayableReason::StoreVersionIncompatible {
+                incompatibility: StoreVersionIncompatibility::MajorMismatch {
+                    archive_major: StoreFormatMajorVersion::new(5),
+                    supported_major: StoreFormatMajorVersion::new(1),
+                },
+            },
+        ]);
         insta::assert_snapshot!(
             "replayability_format_too_new",
             run.display_detailed(
@@ -2367,7 +2371,7 @@ mod tests {
         let started_at = DateTime::parse_from_rfc3339(started_at).expect("valid datetime");
         RecordedRunInfo {
             run_id: uuid.parse().expect("valid UUID"),
-            store_format_version: RECORD_FORMAT_VERSION,
+            store_format_version: STORE_FORMAT_VERSION,
             nextest_version: Version::parse("0.9.100").expect("valid version"),
             started_at,
             last_written_at: started_at,

@@ -404,7 +404,7 @@ mod tests {
     use super::*;
     use crate::record::{
         CompletedRunStats, ComponentSizes, RecordedRunStatus, RecordedSizes,
-        format::RECORD_FORMAT_VERSION,
+        format::STORE_FORMAT_VERSION,
     };
     use chrono::{FixedOffset, TimeZone};
     use semver::Version;
@@ -419,7 +419,7 @@ mod tests {
         // For simplicity in tests, put all size in the store component.
         RecordedRunInfo {
             run_id,
-            store_format_version: RECORD_FORMAT_VERSION,
+            store_format_version: STORE_FORMAT_VERSION,
             nextest_version: Version::new(0, 1, 0),
             started_at,
             last_written_at: started_at,

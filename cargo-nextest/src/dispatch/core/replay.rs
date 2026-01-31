@@ -20,7 +20,7 @@ use nextest_runner::{
     pager::PagedOutput,
     record::{
         RecordReader, ReplayContext, ReplayHeader, ReplayReporterBuilder, RunIdSelector, RunStore,
-        format::RECORD_FORMAT_VERSION, records_cache_dir,
+        STORE_FORMAT_VERSION, records_cache_dir,
     },
     reporter::ReporterOutput,
     user_config::{UserConfig, UserConfigExperimental},
@@ -141,11 +141,13 @@ pub(crate) fn exec_replay(
         .expect("we just looked up the run ID so the info should be available");
 
     // Check the store format version before opening the archive.
-    if run_info.store_format_version != RECORD_FORMAT_VERSION {
-        return Err(ExpectedError::UnsupportedStoreFormatVersion {
+    if let Err(incompatibility) = run_info
+        .store_format_version
+        .check_readable_by(STORE_FORMAT_VERSION)
+    {
+        return Err(ExpectedError::StoreVersionIncompatible {
             run_id,
-            found: run_info.store_format_version,
-            supported: RECORD_FORMAT_VERSION,
+            incompatibility,
         });
     }
 

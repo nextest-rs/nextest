@@ -285,7 +285,7 @@ pub enum PrefixResolutionError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::record::{RecordedRunStatus, RecordedSizes, format::RECORD_FORMAT_VERSION};
+    use crate::record::{RecordedRunStatus, RecordedSizes, format::STORE_FORMAT_VERSION};
     use chrono::TimeZone;
     use semver::Version;
     use std::collections::BTreeMap;
@@ -298,7 +298,7 @@ mod tests {
             .unwrap();
         RecordedRunInfo {
             run_id,
-            store_format_version: RECORD_FORMAT_VERSION,
+            store_format_version: STORE_FORMAT_VERSION,
             nextest_version: Version::new(0, 1, 0),
             started_at,
             last_written_at: started_at,
