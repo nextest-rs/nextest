@@ -2,4 +2,4 @@
 source: integration-tests/tests/integration/record_replay.rs
 expression: "redact_dynamic_fields(&prune_output.stderr_as_str(), temp_root)"
 ---
-no runs to prune
+info: no runs to prune

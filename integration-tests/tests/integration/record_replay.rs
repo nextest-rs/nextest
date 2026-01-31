@@ -18,7 +18,13 @@ use integration_tests::{
 };
 use nextest_metadata::NextestExitCode;
 use regex::Regex;
-use std::{fs, io::Read as _, sync::LazyLock};
+use std::{
+    collections::BTreeSet,
+    fs::{self, File},
+    io::Read as _,
+    sync::LazyLock,
+};
+use zip::ZipArchive;
 
 /// Expected files in the store.zip archive.
 const EXPECTED_ARCHIVE_FILES: &[&str] = &[
@@ -406,6 +412,98 @@ fn test_record_replay_cycle() {
     assert!(
         !out_files.is_empty(),
         "archive should contain output files in out/"
+    );
+
+    // Create a portable archive with the default filename.
+    // Use current_dir to write into temp_root rather than the repo root.
+    let default_archive_filename = format!("nextest-run-{RUN_ID}.zip");
+    let portable_archive_path = temp_root.join(&default_archive_filename);
+    let mut cli = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None);
+    cli.args(["store", "export", RUN_ID]);
+    cli.current_dir(temp_root);
+    let portable_output = cli.output();
+    assert!(
+        portable_output.exit_status.success(),
+        "store export should succeed: {portable_output}"
+    );
+
+    // Verify the portable archive was created with the expected name.
+    assert!(
+        portable_archive_path.exists(),
+        "portable archive should exist at {portable_archive_path}"
+    );
+
+    // Verify stderr mentions the archive filename and size.
+    let stderr = portable_output.stderr_as_str();
+    assert!(
+        stderr.contains(&default_archive_filename),
+        "stderr should mention archive filename: {stderr}"
+    );
+    assert!(
+        stderr.contains("bytes"),
+        "stderr should mention size: {stderr}"
+    );
+
+    // Verify the portable archive contains exactly the expected files.
+    let portable_file = File::open(&portable_archive_path).unwrap();
+    let mut portable_archive = ZipArchive::new(portable_file).unwrap();
+    let portable_files: BTreeSet<_> = (0..portable_archive.len())
+        .map(|i| portable_archive.by_index(i).unwrap().name().to_string())
+        .collect();
+
+    let expected_portable_files: BTreeSet<_> = ["manifest.json", "store.zip", "run.log.zst"]
+        .into_iter()
+        .map(String::from)
+        .collect();
+    assert_eq!(
+        portable_files, expected_portable_files,
+        "portable archive should contain exactly the expected files"
+    );
+
+    // Verify manifest.json has the expected structure.
+    let mut manifest_file = portable_archive.by_name("manifest.json").unwrap();
+    let mut manifest_content = String::new();
+    manifest_file.read_to_string(&mut manifest_content).unwrap();
+    let manifest: serde_json::Value = serde_json::from_str(&manifest_content).unwrap();
+    // format-version is now a struct with major and minor fields.
+    assert_eq!(
+        manifest["format-version"]["major"].as_u64(),
+        Some(1),
+        "manifest format-version major should be 1"
+    );
+    assert_eq!(
+        manifest["format-version"]["minor"].as_u64(),
+        Some(0),
+        "manifest format-version minor should be 0"
+    );
+    assert_eq!(
+        manifest["run"]["run-id"].as_str(),
+        Some(RUN_ID),
+        "manifest run-id should match"
+    );
+
+    // portable_archive_path does not need to be cleaned up, since
+    // it is under temp_root which is automatically cleaned
+    // up when TempProject is dropped.
+
+    // Test storing the archive with the --archive-file option.
+    let custom_archive_path = temp_root.join("custom-archive.zip");
+    let custom_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args([
+            "store",
+            "export",
+            RUN_ID,
+            "--archive-file",
+            custom_archive_path.as_str(),
+        ])
+        .output();
+    assert!(
+        custom_output.exit_status.success(),
+        "store export with --archive-file should succeed: {custom_output}"
+    );
+    assert!(
+        custom_archive_path.exists(),
+        "custom archive should exist at {custom_archive_path}"
     );
 }
 

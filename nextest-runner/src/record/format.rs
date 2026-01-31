@@ -291,7 +291,7 @@ impl RecordedRunList {
     }
 }
 
-/// Metadata about a recorded run (serialization format for runs.json.zst).
+/// Metadata about a recorded run (serialization format for runs.json.zst and portable archives).
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(super) struct RecordedRun {
@@ -684,6 +684,148 @@ pub(super) static RECORD_OPTS_JSON_PATH: &str = "meta/record-opts.json";
 pub(super) static RERUN_INFO_JSON_PATH: &str = "meta/rerun-info.json";
 pub(super) static STDOUT_DICT_PATH: &str = "meta/stdout.dict";
 pub(super) static STDERR_DICT_PATH: &str = "meta/stderr.dict";
+
+// ---
+// Portable archive format types
+// ---
+
+define_format_version! {
+    /// Major version of the portable archive format for breaking changes.
+    pub struct PortableArchiveFormatMajorVersion;
+}
+
+define_format_version! {
+    @default
+    /// Minor version of the portable archive format for additive changes.
+    pub struct PortableArchiveFormatMinorVersion;
+}
+
+/// Combined major and minor version of the portable archive format.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PortableArchiveFormatVersion {
+    /// The major version (breaking changes).
+    pub major: PortableArchiveFormatMajorVersion,
+    /// The minor version (additive changes).
+    pub minor: PortableArchiveFormatMinorVersion,
+}
+
+impl PortableArchiveFormatVersion {
+    /// Creates a new `PortableArchiveFormatVersion`.
+    pub const fn new(
+        major: PortableArchiveFormatMajorVersion,
+        minor: PortableArchiveFormatMinorVersion,
+    ) -> Self {
+        Self { major, minor }
+    }
+
+    /// Checks if an archive with version `self` can be read by a reader that
+    /// supports `supported`.
+    #[cfg_attr(not(test), expect(dead_code))]
+    pub fn check_readable_by(
+        self,
+        supported: Self,
+    ) -> Result<(), PortableArchiveVersionIncompatibility> {
+        if self.major != supported.major {
+            return Err(PortableArchiveVersionIncompatibility::MajorMismatch {
+                archive_major: self.major,
+                supported_major: supported.major,
+            });
+        }
+        if self.minor > supported.minor {
+            return Err(PortableArchiveVersionIncompatibility::MinorTooNew {
+                archive_minor: self.minor,
+                supported_minor: supported.minor,
+            });
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for PortableArchiveFormatVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
+    }
+}
+
+/// An incompatibility between an archive's portable format version and what the
+/// reader supports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PortableArchiveVersionIncompatibility {
+    /// The archive's major version differs from the supported major version.
+    MajorMismatch {
+        /// The major version in the archive.
+        archive_major: PortableArchiveFormatMajorVersion,
+        /// The major version this nextest supports.
+        supported_major: PortableArchiveFormatMajorVersion,
+    },
+    /// The archive's minor version is newer than the supported minor version.
+    MinorTooNew {
+        /// The minor version in the archive.
+        archive_minor: PortableArchiveFormatMinorVersion,
+        /// The maximum minor version this nextest supports.
+        supported_minor: PortableArchiveFormatMinorVersion,
+    },
+}
+
+impl fmt::Display for PortableArchiveVersionIncompatibility {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MajorMismatch {
+                archive_major,
+                supported_major,
+            } => {
+                write!(
+                    f,
+                    "major version {} differs from supported version {}",
+                    archive_major, supported_major
+                )
+            }
+            Self::MinorTooNew {
+                archive_minor,
+                supported_minor,
+            } => {
+                write!(
+                    f,
+                    "minor version {} is newer than supported version {}",
+                    archive_minor, supported_minor
+                )
+            }
+        }
+    }
+}
+
+/// The current format version for portable archives.
+pub const PORTABLE_ARCHIVE_FORMAT_VERSION: PortableArchiveFormatVersion =
+    PortableArchiveFormatVersion::new(
+        PortableArchiveFormatMajorVersion::new(1),
+        PortableArchiveFormatMinorVersion::new(0),
+    );
+
+/// File name for the manifest in a portable archive.
+pub(super) static PORTABLE_MANIFEST_FILE_NAME: &str = "manifest.json";
+
+/// The manifest for a portable archive.
+///
+/// A portable archive packages a single recorded run into a self-contained
+/// zip file for sharing and import.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub(super) struct PortableManifest {
+    /// The format version of this portable archive.
+    pub(super) format_version: PortableArchiveFormatVersion,
+    /// The run metadata.
+    pub(super) run: RecordedRun,
+}
+
+impl PortableManifest {
+    /// Creates a new manifest for the given run.
+    pub(super) fn new(run: &RecordedRunInfo) -> Self {
+        Self {
+            format_version: PORTABLE_ARCHIVE_FORMAT_VERSION,
+            run: RecordedRun::from(run),
+        }
+    }
+}
 
 /// Which dictionary to use for compressing/decompressing a file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1121,6 +1263,84 @@ mod tests {
         assert!(
             json.contains("store-format-minor-version"),
             "serialized run should include store-format-minor-version"
+        );
+    }
+
+    // --- Portable archive format version tests ---
+
+    /// Helper to create a PortableArchiveFormatVersion.
+    fn portable_version(major: u32, minor: u32) -> PortableArchiveFormatVersion {
+        PortableArchiveFormatVersion::new(
+            PortableArchiveFormatMajorVersion::new(major),
+            PortableArchiveFormatMinorVersion::new(minor),
+        )
+    }
+
+    #[test]
+    fn test_portable_version_compatibility() {
+        assert!(
+            portable_version(1, 0)
+                .check_readable_by(portable_version(1, 0))
+                .is_ok(),
+            "same version should be compatible"
+        );
+
+        assert!(
+            portable_version(1, 0)
+                .check_readable_by(portable_version(1, 2))
+                .is_ok(),
+            "older minor version should be compatible"
+        );
+
+        let error = portable_version(1, 3)
+            .check_readable_by(portable_version(1, 2))
+            .unwrap_err();
+        assert_eq!(
+            error,
+            PortableArchiveVersionIncompatibility::MinorTooNew {
+                archive_minor: PortableArchiveFormatMinorVersion::new(3),
+                supported_minor: PortableArchiveFormatMinorVersion::new(2),
+            },
+            "newer minor version should be incompatible"
+        );
+        insta::assert_snapshot!(error.to_string(), @"minor version 3 is newer than supported version 2");
+
+        let error = portable_version(2, 0)
+            .check_readable_by(portable_version(1, 5))
+            .unwrap_err();
+        assert_eq!(
+            error,
+            PortableArchiveVersionIncompatibility::MajorMismatch {
+                archive_major: PortableArchiveFormatMajorVersion::new(2),
+                supported_major: PortableArchiveFormatMajorVersion::new(1),
+            },
+            "different major version should be incompatible"
+        );
+        insta::assert_snapshot!(error.to_string(), @"major version 2 differs from supported version 1");
+
+        insta::assert_snapshot!(portable_version(1, 2).to_string(), @"1.2");
+    }
+
+    #[test]
+    fn test_portable_version_serialization() {
+        // Test that PortableArchiveFormatVersion serializes to {major: ..., minor: ...}.
+        let version = portable_version(1, 0);
+        let json = serde_json::to_string(&version).expect("serialization should succeed");
+        insta::assert_snapshot!(json, @r#"{"major":1,"minor":0}"#);
+
+        // Test roundtrip.
+        let roundtripped: PortableArchiveFormatVersion =
+            serde_json::from_str(&json).expect("deserialization should succeed");
+        assert_eq!(roundtripped, version);
+    }
+
+    #[test]
+    fn test_portable_manifest_format_version() {
+        // Verify the current PORTABLE_ARCHIVE_FORMAT_VERSION constant.
+        assert_eq!(
+            PORTABLE_ARCHIVE_FORMAT_VERSION,
+            portable_version(1, 0),
+            "current portable archive format version should be 1.0"
         );
     }
 }

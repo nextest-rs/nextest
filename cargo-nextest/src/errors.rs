@@ -9,8 +9,8 @@ use nextest_metadata::NextestExitCode;
 use nextest_runner::{
     config::core::{ConfigExperimental, ToolName},
     errors::{
-        CacheDirError, RecordReadError, RecordSetupError, RunIdResolutionError, RunStoreError,
-        TestListFromSummaryError, UserConfigError, *,
+        CacheDirError, PortableArchiveError, RecordReadError, RecordSetupError,
+        RunIdResolutionError, RunStoreError, TestListFromSummaryError, UserConfigError, *,
     },
     helpers::{format_interceptor_too_many_tests, plural},
     indenter::DisplayIndented,
@@ -431,6 +431,11 @@ pub enum ExpectedError {
         run_id: ReportUuid,
         incompatibility: StoreVersionIncompatibility,
     },
+    #[error("error creating portable archive")]
+    PortableArchiveError {
+        #[source]
+        err: PortableArchiveError,
+    },
     #[error("error reconstructing test list from archive")]
     TestListFromSummaryError {
         #[source]
@@ -634,6 +639,7 @@ impl ExpectedError {
             | Self::RecordReadError { .. }
             | Self::StoreVersionIncompatible { .. }
             | Self::TestListFromSummaryError { .. } => NextestExitCode::SETUP_ERROR,
+            Self::PortableArchiveError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
             Self::WriteError { .. } => NextestExitCode::WRITE_OUTPUT_ERROR,
             Self::FiltersetParseError { .. } => NextestExitCode::INVALID_FILTERSET,
         }
@@ -1316,6 +1322,10 @@ impl ExpectedError {
             }
             Self::RecordReadError { err } => {
                 error!("error reading recorded run");
+                Some(err as &dyn Error)
+            }
+            Self::PortableArchiveError { err } => {
+                error!("error creating portable archive");
                 Some(err as &dyn Error)
             }
             Self::StoreVersionIncompatible {

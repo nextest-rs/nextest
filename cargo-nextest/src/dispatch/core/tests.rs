@@ -165,6 +165,22 @@ fn test_argument_parsing() {
         "cargo nextest replay --no-capture --no-output-indent",
         "cargo nextest replay --status-level pass",
         "cargo nextest replay --final-status-level flaky",
+        // ---
+        // Store commands
+        // ---
+        "cargo nextest store list",
+        "cargo nextest store info latest",
+        "cargo nextest store info abc123",
+        "cargo nextest store info -R latest",
+        "cargo nextest store info --run-id abc123",
+        "cargo nextest store export latest",
+        "cargo nextest store export abc123",
+        "cargo nextest store export -R latest",
+        "cargo nextest store export --run-id abc123",
+        "cargo nextest store export latest --archive-file output.zip",
+        "cargo nextest store export --run-id abc123 --archive-file /path/to/archive.zip",
+        "cargo nextest store prune",
+        "cargo nextest store prune --dry-run",
     ];
 
     let invalid: &[(&'static str, ErrorKind)] = &[
@@ -324,6 +340,27 @@ fn test_argument_parsing() {
         ),
         (
             "cargo nextest self update --rc --version 0.9.100",
+            ArgumentConflict,
+        ),
+        // ---
+        // Store command conflicts
+        // ---
+        ("cargo nextest store info", MissingRequiredArgument),
+        (
+            "cargo nextest store info latest -R abc123",
+            ArgumentConflict,
+        ),
+        (
+            "cargo nextest store info latest --run-id abc123",
+            ArgumentConflict,
+        ),
+        ("cargo nextest store export", MissingRequiredArgument),
+        (
+            "cargo nextest store export latest -R abc123",
+            ArgumentConflict,
+        ),
+        (
+            "cargo nextest store export latest --run-id abc123",
             ArgumentConflict,
         ),
     ];

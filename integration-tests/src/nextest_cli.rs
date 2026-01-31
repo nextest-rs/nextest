@@ -32,6 +32,7 @@ pub struct CargoNextestCli {
     args: Vec<String>,
     envs: HashMap<OsString, OsString>,
     envs_remove: Vec<OsString>,
+    current_dir: Option<Utf8PathBuf>,
     unchecked: bool,
 }
 
@@ -42,6 +43,7 @@ impl CargoNextestCli {
             args: vec!["nextest".to_owned(), "--no-pager".to_owned()],
             envs: HashMap::new(),
             envs_remove: Vec::new(),
+            current_dir: None,
             unchecked: false,
         }
     }
@@ -84,6 +86,7 @@ impl CargoNextestCli {
             args: vec!["nextest".to_owned()],
             envs: HashMap::new(),
             envs_remove: Vec::new(),
+            current_dir: None,
             unchecked: false,
         })
     }
@@ -122,6 +125,11 @@ impl CargoNextestCli {
         self
     }
 
+    pub fn current_dir(&mut self, dir: impl Into<Utf8PathBuf>) -> &mut Self {
+        self.current_dir = Some(dir.into());
+        self
+    }
+
     pub fn output(&self) -> CargoNextestOutput {
         let mut command = Command::new(&self.bin);
         command.args(&self.args);
@@ -131,6 +139,9 @@ impl CargoNextestCli {
             command.env_remove(k);
         }
         command.envs(&self.envs);
+        if let Some(dir) = &self.current_dir {
+            command.current_dir(dir);
+        }
         command
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

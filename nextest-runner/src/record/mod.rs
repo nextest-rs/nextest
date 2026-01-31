@@ -28,6 +28,7 @@ mod cache_dir;
 pub mod dicts;
 mod display;
 mod format;
+mod portable;
 mod reader;
 mod recorder;
 pub mod replay;
@@ -51,6 +52,7 @@ pub use format::{
     STORE_FORMAT_VERSION, StoreFormatMajorVersion, StoreFormatMinorVersion, StoreFormatVersion,
     StoreVersionIncompatibility,
 };
+pub use portable::{PortableArchiveResult, PortableArchiveWriter};
 pub use reader::{RecordEventIter, RecordReader};
 pub use recorder::{RunRecorder, StoreSizes};
 pub use replay::{

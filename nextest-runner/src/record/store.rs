@@ -51,6 +51,11 @@ static RUNS_JSON_FILE_NAME: &str = "runs.json.zst";
 pub struct StoreRunsDir<'a>(&'a Utf8Path);
 
 impl<'a> StoreRunsDir<'a> {
+    /// Creates a new `StoreRunsDir` from a path.
+    pub fn new(path: &'a Utf8Path) -> Self {
+        Self(path)
+    }
+
     /// Returns the path to a specific run's directory.
     pub fn run_dir(self, run_id: ReportUuid) -> Utf8PathBuf {
         self.0.join(run_id.to_string())
