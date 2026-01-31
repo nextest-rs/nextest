@@ -44,7 +44,7 @@ serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_core = { version = "1.0.228", features = ["alloc", "rc"] }
 serde_json = { version = "1.0.149", features = ["unbounded_depth"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
-target-spec = { version = "3.5.6", default-features = false, features = ["custom", "summaries"] }
+target-spec = { version = "3.5.7", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.5", default-features = false, features = ["fixtures"] }
 tokio = { version = "1.49.0", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 tracing-core = { version = "0.1.36" }
@@ -57,10 +57,10 @@ camino = { version = "1.2.2", default-features = false, features = ["serde1"] }
 memchr = { version = "2.7.6" }
 once_cell = { version = "1.21.3" }
 phf_shared = { version = "0.11.3" }
-proc-macro2 = { version = "1.0.103" }
-quote = { version = "1.0.42" }
+proc-macro2 = { version = "1.0.106" }
+quote = { version = "1.0.44" }
 serde_core = { version = "1.0.228", features = ["alloc", "rc"] }
-syn = { version = "2.0.111", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 ucd-trie = { version = "0.1.7" }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
@@ -72,11 +72,11 @@ futures-sink = { version = "0.3.31" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
-proc-macro2 = { version = "1.0.103" }
-quote = { version = "1.0.42" }
+proc-macro2 = { version = "1.0.106" }
+quote = { version = "1.0.44" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-syn = { version = "2.0.111", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
@@ -116,11 +116,11 @@ futures-sink = { version = "0.3.31" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
-proc-macro2 = { version = "1.0.103" }
-quote = { version = "1.0.42" }
+proc-macro2 = { version = "1.0.106" }
+quote = { version = "1.0.44" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-syn = { version = "2.0.111", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
@@ -160,11 +160,11 @@ futures-sink = { version = "0.3.31" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
-proc-macro2 = { version = "1.0.103" }
-quote = { version = "1.0.42" }
+proc-macro2 = { version = "1.0.106" }
+quote = { version = "1.0.44" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-syn = { version = "2.0.111", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
@@ -188,11 +188,11 @@ futures-sink = { version = "0.3.31" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
-proc-macro2 = { version = "1.0.103" }
-quote = { version = "1.0.42" }
+proc-macro2 = { version = "1.0.106" }
+quote = { version = "1.0.44" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-syn = { version = "2.0.111", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
@@ -216,11 +216,11 @@ futures-sink = { version = "0.3.31" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
-proc-macro2 = { version = "1.0.103" }
-quote = { version = "1.0.42" }
+proc-macro2 = { version = "1.0.106" }
+quote = { version = "1.0.44" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-syn = { version = "2.0.111", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
@@ -243,11 +243,11 @@ futures-sink = { version = "0.3.31" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
-proc-macro2 = { version = "1.0.103" }
-quote = { version = "1.0.42" }
+proc-macro2 = { version = "1.0.106" }
+quote = { version = "1.0.44" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-syn = { version = "2.0.111", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
