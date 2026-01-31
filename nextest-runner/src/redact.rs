@@ -329,7 +329,7 @@ impl fmt::Display for StoreDurationDisplay {
     }
 }
 
-/// Wrapper for sizes that formats bytes as a human-readable string (KB or MB).
+/// Wrapper for sizes that formats bytes as a human-readable string (B, KB, or MB).
 #[derive(Clone, Copy, Debug)]
 pub struct SizeDisplay(pub u64);
 
@@ -343,10 +343,13 @@ impl SizeDisplay {
             // Format: "{:.1} MB" - integer part + "." + 1 decimal + " MB".
             let mb_int = bytes / (1024 * 1024);
             u64_decimal_char_width(mb_int) + 2 + 3
-        } else {
+        } else if bytes >= 1024 {
             // Format: "{} KB" - integer + " KB".
             let kb = bytes / 1024;
             u64_decimal_char_width(kb) + 3
+        } else {
+            // Format: "{} B" - integer + " B".
+            u64_decimal_char_width(bytes) + 2
         }
     }
 }
@@ -354,19 +357,26 @@ impl SizeDisplay {
 impl fmt::Display for SizeDisplay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let bytes = self.0;
-        // Remove 3 from the width since we're adding " MB" or " KB" at the end.
-        match (bytes >= 1024 * 1024, f.width().map(|w| w.saturating_sub(3))) {
-            (true, Some(width)) => {
-                write!(f, "{:>width$.1} MB", bytes as f64 / (1024.0 * 1024.0))
+        if bytes >= 1024 * 1024 {
+            // Remove 3 from the width since we're adding " MB" at the end.
+            let width = f.width().map(|w| w.saturating_sub(3));
+            match width {
+                Some(w) => write!(f, "{:>w$.1} MB", bytes as f64 / (1024.0 * 1024.0)),
+                None => write!(f, "{:.1} MB", bytes as f64 / (1024.0 * 1024.0)),
             }
-            (true, None) => {
-                write!(f, "{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+        } else if bytes >= 1024 {
+            // Remove 3 from the width since we're adding " KB" at the end.
+            let width = f.width().map(|w| w.saturating_sub(3));
+            match width {
+                Some(w) => write!(f, "{:>w$} KB", bytes / 1024),
+                None => write!(f, "{} KB", bytes / 1024),
             }
-            (false, Some(width)) => {
-                write!(f, "{:>width$} KB", bytes / 1024)
-            }
-            (false, None) => {
-                write!(f, "{} KB", bytes / 1024)
+        } else {
+            // Remove 2 from the width since we're adding " B" at the end.
+            let width = f.width().map(|w| w.saturating_sub(2));
+            match width {
+                Some(w) => write!(f, "{bytes:>w$} B"),
+                None => write!(f, "{bytes} B"),
             }
         }
     }
@@ -571,16 +581,46 @@ mod tests {
 
     #[test]
     fn test_size_display() {
-        insta::assert_snapshot!(SizeDisplay(0).to_string(), @"0 KB");
-        insta::assert_snapshot!(SizeDisplay(512).to_string(), @"0 KB");
+        // Bytes (< 1024).
+        insta::assert_snapshot!(SizeDisplay(0).to_string(), @"0 B");
+        insta::assert_snapshot!(SizeDisplay(512).to_string(), @"512 B");
+        insta::assert_snapshot!(SizeDisplay(1023).to_string(), @"1023 B");
+
+        // Kilobytes (>= 1024, < 1 MB).
         insta::assert_snapshot!(SizeDisplay(1024).to_string(), @"1 KB");
         insta::assert_snapshot!(SizeDisplay(1536).to_string(), @"1 KB");
         insta::assert_snapshot!(SizeDisplay(10 * 1024).to_string(), @"10 KB");
         insta::assert_snapshot!(SizeDisplay(1024 * 1024 - 1).to_string(), @"1023 KB");
 
+        // Megabytes (>= 1 MB).
         insta::assert_snapshot!(SizeDisplay(1024 * 1024).to_string(), @"1.0 MB");
         insta::assert_snapshot!(SizeDisplay(1024 * 1024 + 512 * 1024).to_string(), @"1.5 MB");
         insta::assert_snapshot!(SizeDisplay(10 * 1024 * 1024).to_string(), @"10.0 MB");
         insta::assert_snapshot!(SizeDisplay(1024 * 1024 * 1024).to_string(), @"1024.0 MB");
+
+        // Verify that display_width returns the actual formatted string length.
+        let test_cases = [
+            0,
+            512,
+            1023,
+            1024,
+            1536,
+            10 * 1024,
+            1024 * 1024 - 1,
+            1024 * 1024,
+            1024 * 1024 + 512 * 1024,
+            10 * 1024 * 1024,
+            1024 * 1024 * 1024,
+        ];
+
+        for bytes in test_cases {
+            let display = SizeDisplay(bytes);
+            let formatted = display.to_string();
+            assert_eq!(
+                display.display_width(),
+                formatted.len(),
+                "display_width matches for {bytes} bytes: formatted as {formatted:?}"
+            );
+        }
     }
 }
