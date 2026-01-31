@@ -15,7 +15,7 @@ Run 550e8400-e29b-41d4-a716-446655440000
     passed:         100
 
   sizes:            compressed  uncompressed  entries
-    log                   0 KB          0 KB        0
+    log                    0 B           0 B        0
     store               100 KB        300 KB        0
                     ----------  ------------  -------
     total               100 KB        300 KB        0
