@@ -13,7 +13,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{Context, Result, bail};
 use etcetera::BaseStrategy;
-use nextest_runner::record::format::OutputDict;
+use nextest_runner::record::OutputDict;
 use std::{
     collections::HashMap,
     fs::{self, File},

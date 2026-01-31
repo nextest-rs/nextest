@@ -12,8 +12,8 @@
 use super::{
     display::{DisplayRecordedRunInfo, DisplayRecordedRunInfoDetailed, RunListAlignment, Styles},
     format::{
-        RECORD_FORMAT_VERSION, RUN_LOG_FILE_NAME, RecordedRunList, RunsJsonWritePermission,
-        STORE_ZIP_FILE_NAME,
+        RUN_LOG_FILE_NAME, RecordedRunList, RunsJsonWritePermission, STORE_FORMAT_VERSION,
+        STORE_ZIP_FILE_NAME, StoreFormatVersion, StoreVersionIncompatibility,
     },
     recorder::{RunRecorder, StoreSizes},
     retention::{
@@ -385,7 +385,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
         let now = Local::now().fixed_offset();
         let run = RecordedRunInfo {
             run_id,
-            store_format_version: RECORD_FORMAT_VERSION,
+            store_format_version: STORE_FORMAT_VERSION,
             nextest_version,
             started_at,
             last_written_at: now,
@@ -433,7 +433,7 @@ pub struct RecordedRunInfo {
     /// The format version of this run's store.zip archive.
     ///
     /// This allows checking replayability without opening the archive.
-    pub store_format_version: u32,
+    pub store_format_version: StoreFormatVersion,
     /// The version of nextest that created this run.
     pub nextest_version: Version,
     /// When the run started.
@@ -600,14 +600,12 @@ pub enum ReplayabilityStatus {
 /// A definite reason why a run cannot be replayed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NonReplayableReason {
-    /// The run's store format version is newer than this nextest supports.
+    /// The run's store format version is incompatible with this nextest version.
     ///
     /// This nextest version cannot read the archive format.
-    StoreFormatTooNew {
-        /// The format version in the run's archive.
-        run_version: u32,
-        /// The maximum format version this nextest supports.
-        max_supported: u32,
+    StoreVersionIncompatible {
+        /// The specific incompatibility.
+        incompatibility: StoreVersionIncompatibility,
     },
     /// The `store.zip` file is missing from the run directory.
     MissingStoreZip,
@@ -622,15 +620,8 @@ pub enum NonReplayableReason {
 impl fmt::Display for NonReplayableReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::StoreFormatTooNew {
-                run_version,
-                max_supported,
-            } => {
-                write!(
-                    f,
-                    "store format version {} is newer than supported (version {})",
-                    run_version, max_supported
-                )
+            Self::StoreVersionIncompatible { incompatibility } => {
+                write!(f, "store format version incompatible: {}", incompatibility)
             }
             Self::MissingStoreZip => {
                 write!(f, "store.zip is missing")
@@ -685,15 +676,13 @@ impl RecordedRunInfo {
         let mut blocking = Vec::new();
         let mut is_incomplete = false;
 
-        // Check store format version.
-        if self.store_format_version > RECORD_FORMAT_VERSION {
-            blocking.push(NonReplayableReason::StoreFormatTooNew {
-                run_version: self.store_format_version,
-                max_supported: RECORD_FORMAT_VERSION,
-            });
+        // Check store format version compatibility.
+        if let Err(incompatibility) = self
+            .store_format_version
+            .check_readable_by(STORE_FORMAT_VERSION)
+        {
+            blocking.push(NonReplayableReason::StoreVersionIncompatible { incompatibility });
         }
-        // Note: When we bump format versions, add a similar StoreFormatTooOld
-        // check here.
 
         // Check for required files on disk.
         let run_dir = runs_dir.run_dir(self.run_id);

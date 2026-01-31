@@ -16,19 +16,191 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt,
     num::NonZero,
 };
+
+// ---
+// Format version newtypes
+// ---
+
+/// Defines a newtype wrapper around `u32` for format versions.
+///
+/// Use `@default` variant to also derive `Default` (defaults to 0).
+macro_rules! define_format_version {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident;
+    ) => {
+        $(#[$attr])*
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+        #[serde(transparent)]
+        $vis struct $name(u32);
+
+        impl $name {
+            #[doc = concat!("Creates a new `", stringify!($name), "`.")]
+            pub const fn new(version: u32) -> Self {
+                Self(version)
+            }
+        }
+
+        impl fmt::Display for $name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+    };
+
+    (
+        @default
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident;
+    ) => {
+        $(#[$attr])*
+        #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+        #[serde(transparent)]
+        $vis struct $name(u32);
+
+        impl $name {
+            #[doc = concat!("Creates a new `", stringify!($name), "`.")]
+            pub const fn new(version: u32) -> Self {
+                Self(version)
+            }
+        }
+
+        impl fmt::Display for $name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+    };
+}
+
+define_format_version! {
+    /// Version of the `runs.json.zst` outer format.
+    ///
+    /// Increment this when adding new semantically important fields to `runs.json.zst`.
+    /// Readers can read newer versions (assuming append-only evolution with serde
+    /// defaults), but writers must refuse to write if the file version is higher
+    /// than this.
+    pub struct RunsJsonFormatVersion;
+}
+
+define_format_version! {
+    /// Major version of the `store.zip` archive format for breaking changes to the
+    /// archive structure.
+    pub struct StoreFormatMajorVersion;
+}
+
+define_format_version! {
+    @default
+    /// Minor version of the `store.zip` archive format for additive changes.
+    pub struct StoreFormatMinorVersion;
+}
+
+/// Combined major and minor version of the `store.zip` archive format.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StoreFormatVersion {
+    /// The major version (breaking changes).
+    pub major: StoreFormatMajorVersion,
+    /// The minor version (additive changes).
+    pub minor: StoreFormatMinorVersion,
+}
+
+impl StoreFormatVersion {
+    /// Creates a new `StoreFormatVersion`.
+    pub const fn new(major: StoreFormatMajorVersion, minor: StoreFormatMinorVersion) -> Self {
+        Self { major, minor }
+    }
+
+    /// Checks if an archive with version `self` can be read by a reader that
+    /// supports `supported`.
+    pub fn check_readable_by(self, supported: Self) -> Result<(), StoreVersionIncompatibility> {
+        if self.major != supported.major {
+            return Err(StoreVersionIncompatibility::MajorMismatch {
+                archive_major: self.major,
+                supported_major: supported.major,
+            });
+        }
+        if self.minor > supported.minor {
+            return Err(StoreVersionIncompatibility::MinorTooNew {
+                archive_minor: self.minor,
+                supported_minor: supported.minor,
+            });
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for StoreFormatVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
+    }
+}
+
+/// An incompatibility between an archive's store format version and what the
+/// reader supports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StoreVersionIncompatibility {
+    /// The archive's major version differs from the supported major version.
+    MajorMismatch {
+        /// The major version in the archive.
+        archive_major: StoreFormatMajorVersion,
+        /// The major version this nextest supports.
+        supported_major: StoreFormatMajorVersion,
+    },
+    /// The archive's minor version is newer than the supported minor version.
+    MinorTooNew {
+        /// The minor version in the archive.
+        archive_minor: StoreFormatMinorVersion,
+        /// The maximum minor version this nextest supports.
+        supported_minor: StoreFormatMinorVersion,
+    },
+}
+
+impl fmt::Display for StoreVersionIncompatibility {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MajorMismatch {
+                archive_major,
+                supported_major,
+            } => {
+                write!(
+                    f,
+                    "major version {} differs from supported version {}",
+                    archive_major, supported_major
+                )
+            }
+            Self::MinorTooNew {
+                archive_minor,
+                supported_minor,
+            } => {
+                write!(
+                    f,
+                    "minor version {} is newer than supported version {}",
+                    archive_minor, supported_minor
+                )
+            }
+        }
+    }
+}
 
 // ---
 // runs.json.zst format types
 // ---
 
 /// The current format version for runs.json.zst.
+pub(super) const RUNS_JSON_FORMAT_VERSION: RunsJsonFormatVersion = RunsJsonFormatVersion::new(2);
+
+/// The current format version for recorded test runs (store.zip and run.log).
 ///
-/// Increment this when adding new semantically important fields. Readers can
-/// read newer versions (assuming append-only evolution with serde defaults),
-/// but writers must refuse to write if the file version is higher than this.
-pub(super) const RUNS_JSON_FORMAT_VERSION: u32 = 1;
+/// This combines a major version (for breaking changes) and a minor version
+/// (for additive changes). Readers check compatibility via
+/// [`StoreFormatVersion::check_readable_by`].
+pub const STORE_FORMAT_VERSION: StoreFormatVersion = StoreFormatVersion::new(
+    StoreFormatMajorVersion::new(1),
+    StoreFormatMinorVersion::new(0),
+);
 
 /// Whether a runs.json.zst file can be written to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,9 +210,9 @@ pub enum RunsJsonWritePermission {
     /// Writing is not allowed because the file has a newer format version.
     Denied {
         /// The format version in the file.
-        file_version: u32,
+        file_version: RunsJsonFormatVersion,
         /// The maximum version this nextest can write.
-        max_supported_version: u32,
+        max_supported_version: RunsJsonFormatVersion,
     },
 }
 
@@ -49,7 +221,7 @@ pub enum RunsJsonWritePermission {
 #[serde(rename_all = "kebab-case")]
 pub(super) struct RecordedRunList {
     /// The format version of this file.
-    pub(super) format_version: u32,
+    pub(super) format_version: RunsJsonFormatVersion,
 
     /// When the store was last pruned.
     ///
@@ -125,11 +297,17 @@ impl RecordedRunList {
 pub(super) struct RecordedRun {
     /// The unique identifier for this run.
     pub(super) run_id: ReportUuid,
-    /// The format version of this run's store.zip and run.log.
+    /// The major format version of this run's store.zip and run.log.
     ///
-    /// Runs with a store format version different from `RECORD_FORMAT_VERSION`
-    /// cannot be replayed by this nextest version.
-    pub(super) store_format_version: u32,
+    /// Runs with a different major version cannot be replayed by this nextest
+    /// version.
+    pub(super) store_format_version: StoreFormatMajorVersion,
+    /// The minor format version of this run's store.zip and run.log.
+    ///
+    /// Runs with a newer minor version (same major) cannot be replayed by this
+    /// nextest version. Older minor versions are compatible.
+    #[serde(default)]
+    pub(super) store_format_minor_version: StoreFormatMinorVersion,
     /// The version of nextest that created this run.
     pub(super) nextest_version: Version,
     /// When the run started.
@@ -291,7 +469,10 @@ impl From<RecordedRun> for RecordedRunInfo {
     fn from(run: RecordedRun) -> Self {
         Self {
             run_id: run.run_id,
-            store_format_version: run.store_format_version,
+            store_format_version: StoreFormatVersion::new(
+                run.store_format_version,
+                run.store_format_minor_version,
+            ),
             nextest_version: run.nextest_version,
             started_at: run.started_at,
             last_written_at: run.last_written_at,
@@ -310,7 +491,8 @@ impl From<&RecordedRunInfo> for RecordedRun {
     fn from(run: &RecordedRunInfo) -> Self {
         Self {
             run_id: run.run_id,
-            store_format_version: run.store_format_version,
+            store_format_version: run.store_format_version.major,
+            store_format_minor_version: run.store_format_version.minor,
             nextest_version: run.nextest_version.clone(),
             started_at: run.started_at,
             last_written_at: run.last_written_at,
@@ -491,13 +673,6 @@ impl IdOrdItem for RerunTestSuiteInfo {
 // Archive format types
 // ---
 
-/// The current format version for recorded test runs.
-///
-/// Increment this when making breaking changes to the archive structure or
-/// event format. Readers should check this version and refuse to read archives
-/// with a different version.
-pub const RECORD_FORMAT_VERSION: u32 = 1;
-
 // Archive file names.
 pub(super) static STORE_ZIP_FILE_NAME: &str = "store.zip";
 pub(super) static RUN_LOG_FILE_NAME: &str = "run.log.zst";
@@ -665,7 +840,7 @@ mod tests {
         assert_eq!(
             list.write_permission(),
             RunsJsonWritePermission::Denied {
-                file_version: 99,
+                file_version: RunsJsonFormatVersion::new(99),
                 max_supported_version: RUNS_JSON_FORMAT_VERSION,
             }
         );
@@ -683,8 +858,10 @@ mod tests {
 
         // Verify it's the current version.
         let parsed: serde_json::Value = serde_json::from_str(&json).expect("should parse");
+        let version: RunsJsonFormatVersion =
+            serde_json::from_value(parsed["format-version"].clone()).expect("valid version");
         assert_eq!(
-            parsed["format-version"], RUNS_JSON_FORMAT_VERSION,
+            version, RUNS_JSON_FORMAT_VERSION,
             "format-version should be current version"
         );
     }
@@ -703,7 +880,8 @@ mod tests {
     fn make_test_run(status: RecordedRunStatusFormat) -> RecordedRun {
         RecordedRun {
             run_id: ReportUuid::from_u128(0x550e8400_e29b_41d4_a716_446655440000),
-            store_format_version: RECORD_FORMAT_VERSION,
+            store_format_version: STORE_FORMAT_VERSION.major,
+            store_format_minor_version: STORE_FORMAT_VERSION.minor,
             nextest_version: Version::new(0, 9, 111),
             started_at: DateTime::parse_from_rfc3339("2024-12-19T14:22:33-08:00")
                 .expect("valid timestamp"),
@@ -857,5 +1035,92 @@ mod tests {
             }
             _ => panic!("expected Completed variant"),
         }
+    }
+
+    // --- Store format version tests ---
+
+    /// Helper to create a StoreFormatVersion.
+    fn version(major: u32, minor: u32) -> StoreFormatVersion {
+        StoreFormatVersion::new(
+            StoreFormatMajorVersion::new(major),
+            StoreFormatMinorVersion::new(minor),
+        )
+    }
+
+    #[test]
+    fn test_store_version_compatibility() {
+        assert!(
+            version(1, 0).check_readable_by(version(1, 0)).is_ok(),
+            "same version should be compatible"
+        );
+
+        assert!(
+            version(1, 0).check_readable_by(version(1, 2)).is_ok(),
+            "older minor version should be compatible"
+        );
+
+        let error = version(1, 3).check_readable_by(version(1, 2)).unwrap_err();
+        assert_eq!(
+            error,
+            StoreVersionIncompatibility::MinorTooNew {
+                archive_minor: StoreFormatMinorVersion::new(3),
+                supported_minor: StoreFormatMinorVersion::new(2),
+            },
+            "newer minor version should be incompatible"
+        );
+        insta::assert_snapshot!(error.to_string(), @"minor version 3 is newer than supported version 2");
+
+        let error = version(2, 0).check_readable_by(version(1, 5)).unwrap_err();
+        assert_eq!(
+            error,
+            StoreVersionIncompatibility::MajorMismatch {
+                archive_major: StoreFormatMajorVersion::new(2),
+                supported_major: StoreFormatMajorVersion::new(1),
+            },
+            "different major version should be incompatible"
+        );
+        insta::assert_snapshot!(error.to_string(), @"major version 2 differs from supported version 1");
+
+        insta::assert_snapshot!(version(1, 2).to_string(), @"1.2");
+    }
+
+    #[test]
+    fn test_recorded_run_deserialize_without_minor_version() {
+        // Old archives without store-format-minor-version should default to 0.
+        let json = r#"{
+            "run-id": "550e8400-e29b-41d4-a716-446655440000",
+            "store-format-version": 1,
+            "nextest-version": "0.9.111",
+            "started-at": "2024-12-19T14:22:33-08:00",
+            "last-written-at": "2024-12-19T22:22:33Z",
+            "cli-args": [],
+            "env-vars": {},
+            "sizes": {
+                "log": { "compressed": 0, "uncompressed": 0 },
+                "store": { "compressed": 0, "uncompressed": 0 }
+            },
+            "status": { "status": "incomplete" }
+        }"#;
+        let run: RecordedRun = serde_json::from_str(json).expect("should deserialize");
+        assert_eq!(run.store_format_version, StoreFormatMajorVersion::new(1));
+        assert_eq!(
+            run.store_format_minor_version,
+            StoreFormatMinorVersion::new(0)
+        );
+
+        // Domain conversion should produce a StoreFormatVersion with minor 0.
+        let info: RecordedRunInfo = run.into();
+        assert_eq!(info.store_format_version, version(1, 0));
+    }
+
+    #[test]
+    fn test_recorded_run_serialize_includes_minor_version() {
+        // New archives should include store-format-minor-version in serialization.
+        let run = make_test_run(RecordedRunStatusFormat::Incomplete);
+        let json = serde_json::to_string_pretty(&run).expect("serialization should succeed");
+        assert!(
+            json.contains("store-format-minor-version"),
+            "serialized run should include store-format-minor-version"
+        );
     }
 }

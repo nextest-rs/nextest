@@ -12,7 +12,7 @@ use crate::{
     },
     helpers::{display_exited_with, dylib_path_envvar},
     indenter::{DisplayIndented, indented},
-    record::{RecordedRunInfo, RunIdIndex},
+    record::{RecordedRunInfo, RunIdIndex, RunsJsonFormatVersion},
     redact::Redactor,
     reuse_build::{ArchiveFormat, ArchiveStep},
     target_runner::PlatformRunnerSource,
@@ -2144,9 +2144,9 @@ pub enum RunStoreError {
     )]
     FormatVersionTooNew {
         /// The format version in the file.
-        file_version: u32,
+        file_version: RunsJsonFormatVersion,
         /// The maximum version this nextest can write.
-        max_supported_version: u32,
+        max_supported_version: RunsJsonFormatVersion,
     },
 }
 

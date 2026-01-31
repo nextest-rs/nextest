@@ -30,9 +30,8 @@ use nextest_runner::{
     list::{BinaryList, TestExecuteContext, TestList},
     record::{
         ComputedRerunInfo, RecordOpts, RecordReader, RecordRetentionPolicy, RecordSession,
-        RecordSessionConfig, RunIdSelector, RunStore, Styles as RecordStyles,
-        format::{RECORD_FORMAT_VERSION, RerunRootInfo},
-        records_cache_dir,
+        RecordSessionConfig, RerunRootInfo, RunIdSelector, RunStore, STORE_FORMAT_VERSION,
+        Styles as RecordStyles, records_cache_dir,
     },
     reporter::{
         FinalStatusLevel, MaxProgressRunning, ReporterBuilder, ShowTerminalProgress, StatusLevel,
@@ -1444,11 +1443,13 @@ impl App {
             .find(|r| r.run_id == parent_run_id)
             .expect("resolved run ID must be in the snapshot");
 
-        if run_info.store_format_version != RECORD_FORMAT_VERSION {
-            return Err(ExpectedError::UnsupportedStoreFormatVersion {
+        if let Err(incompatibility) = run_info
+            .store_format_version
+            .check_readable_by(STORE_FORMAT_VERSION)
+        {
+            return Err(ExpectedError::StoreVersionIncompatible {
                 run_id: parent_run_id,
-                found: run_info.store_format_version,
-                supported: RECORD_FORMAT_VERSION,
+                incompatibility,
             });
         }
 

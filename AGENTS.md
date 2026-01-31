@@ -109,6 +109,19 @@ Every Rust source file must start with:
 - Never use `#[serde(flatten)]`. Instead, copy fields to structs as necessary. The internal buffering leads to poor warnings from `serde_ignored`.
 - Never use `#[serde(untagged)]` for deserializers, since it produces poor error messages. Instead, write custom visitors with an appropriate `expecting` method.
 
+### Serialization format changes
+
+When modifying any struct that is serialized to disk or over the wire:
+
+1. **Trace the full version matrix**:
+   - Old reader + new data: Can it deserialize? Does it lose information?
+   - New reader + old data: Does `#[serde(default)]` produce correct values?
+   - Old writer + new data: Can it round-trip without data loss? (This is the easy one to miss!)
+
+2. **Bump format versions proactively**: If adding a field that will be semantically important, bump the version when adding the field, not when first using non-default values. This prevents older versions from silently corrupting data on write-back.
+
+3. **`#[serde(default)]` is necessary but not sufficient**: It allows old readers to deserialize new data, but old writers will still drop unknown fields on write-back.
+
 ### Async patterns
 
 - Use `tokio` for async runtime (multi-threaded).

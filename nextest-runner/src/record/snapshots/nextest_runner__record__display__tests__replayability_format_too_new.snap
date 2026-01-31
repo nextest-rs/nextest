@@ -9,7 +9,7 @@ Run 550e8400-e29b-41d4-a716-446655440000
   started at:       2024-06-15 10:30:00 +00:00 (10d ago)
   last written at:  2024-06-15 10:30:00 +00:00 (10d ago)
   duration:         1.000s
-  replayable:       no: store format version 5 is newer than supported (version 1)
+  replayable:       no: store format version incompatible: major version 5 differs from supported version 1
 
   tests:
     passed:         100
