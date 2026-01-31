@@ -853,6 +853,37 @@ pub fn check_run_output(stderr: &[u8], properties: RunProperties) {
     check_run_output_impl(stderr, None, properties);
 }
 
+/// Checks the output of a test run that used a filter expression.
+///
+/// This function verifies output for runs that only executed specific tests
+/// (e.g., using `-E 'test(=test_name)'`). It:
+/// - Verifies the specified tests are present with correct results.
+/// - Does NOT check for the full test suite.
+/// - Skips summary verification since counts won't match full fixture model.
+///
+/// This is useful for replay tests and other scenarios where only a subset
+/// of tests were executed.
+#[track_caller]
+pub fn check_run_output_for_test_names(
+    output: &[u8],
+    test_names: &[&str],
+    properties: RunProperties,
+) {
+    let output_str = String::from_utf8(output.to_vec()).unwrap();
+
+    println!("{output_str}");
+
+    let expected = ExpectedTestResults::for_test_names(test_names, properties);
+    let actual = ActualTestResults::parse(&output_str);
+
+    eprintln!("expected: {expected:?}");
+    eprintln!("actual: {actual:?}");
+
+    verify_expected_in_actual(&expected, &actual, &output_str, properties);
+    verify_actual_in_expected(&actual, &expected, &output_str);
+    // Skip summary verification since a filtered run won't match fixture model counts.
+}
+
 /// Checks the output of a rerun against fixture data.
 ///
 /// This function verifies that a rerun only executes tests that failed in the

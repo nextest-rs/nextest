@@ -61,9 +61,44 @@ impl<'a> StoreRunsDir<'a> {
         self.0.join(run_id.to_string())
     }
 
+    /// Returns a [`RunFilesExist`] implementation for checking file existence
+    /// for a specific run in this store.
+    pub fn run_files(self, run_id: ReportUuid) -> StoreRunFiles {
+        StoreRunFiles {
+            run_dir: self.run_dir(run_id),
+        }
+    }
+
     /// Returns the underlying path to the runs directory.
     pub fn as_path(self) -> &'a Utf8Path {
         self.0
+    }
+}
+
+/// Trait for checking whether required run files exist.
+///
+/// This abstracts over different storage backends.
+pub trait RunFilesExist {
+    /// Returns true if `store.zip` exists.
+    fn store_zip_exists(&self) -> bool;
+    /// Returns true if `run.log.zst` exists.
+    fn run_log_exists(&self) -> bool;
+}
+
+/// Checks file existence for a run stored on disk.
+///
+/// Created via [`StoreRunsDir::run_files`].
+pub struct StoreRunFiles {
+    run_dir: Utf8PathBuf,
+}
+
+impl RunFilesExist for StoreRunFiles {
+    fn store_zip_exists(&self) -> bool {
+        self.run_dir.join(STORE_ZIP_FILE_NAME).exists()
+    }
+
+    fn run_log_exists(&self) -> bool {
+        self.run_dir.join(RUN_LOG_FILE_NAME).exists()
     }
 }
 
@@ -676,8 +711,10 @@ impl RecordedRunInfo {
     /// - Presence of required files (store.zip, run.log.zst)
     /// - Run status (unknown, incomplete)
     ///
-    /// The `runs_dir` parameter is used to check for file existence on disk.
-    pub fn check_replayability(&self, runs_dir: StoreRunsDir<'_>) -> ReplayabilityStatus {
+    /// The `files` parameter is used to check for file existence. Use
+    /// [`StoreRunsDir::run_files`] for runs in the store, or pass in a
+    /// [`PortableArchive`](super::PortableArchive) directly.
+    pub fn check_replayability(&self, files: &dyn RunFilesExist) -> ReplayabilityStatus {
         let mut blocking = Vec::new();
         let mut is_incomplete = false;
 
@@ -689,15 +726,11 @@ impl RecordedRunInfo {
             blocking.push(NonReplayableReason::StoreVersionIncompatible { incompatibility });
         }
 
-        // Check for required files on disk.
-        let run_dir = runs_dir.run_dir(self.run_id);
-        let store_zip_path = run_dir.join(STORE_ZIP_FILE_NAME);
-        let run_log_path = run_dir.join(RUN_LOG_FILE_NAME);
-
-        if !store_zip_path.exists() {
+        // Check for required files.
+        if !files.store_zip_exists() {
             blocking.push(NonReplayableReason::MissingStoreZip);
         }
-        if !run_log_path.exists() {
+        if !files.run_log_exists() {
             blocking.push(NonReplayableReason::MissingRunLog);
         }
 
@@ -1031,7 +1064,12 @@ impl<'a> SnapshotWithReplayability<'a> {
         let replayability: HashMap<_, _> = snapshot
             .runs()
             .iter()
-            .map(|run| (run.run_id, run.check_replayability(runs_dir)))
+            .map(|run| {
+                (
+                    run.run_id,
+                    run.check_replayability(&runs_dir.run_files(run.run_id)),
+                )
+            })
             .collect();
 
         // Find the latest run by time.

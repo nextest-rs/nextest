@@ -10,7 +10,8 @@ use crate::{
     errors::RecordReadError,
     list::OwnedTestInstanceId,
     record::{
-        CoreEventKind, OutputEventKind, RecordReader, TestEventKindSummary,
+        CoreEventKind, OutputEventKind, PortableArchive, RecordReader, StoreReader,
+        TestEventKindSummary,
         format::{RerunInfo, RerunRootInfo, RerunTestSuiteInfo},
     },
 };
@@ -255,6 +256,39 @@ impl ComputedRerunInfo {
         let prev_test_suites = rerun_info.as_ref().map(|info| &info.test_suites);
         let new_test_suites =
             compute_outstanding_pure(prev_test_suites, &test_list, &outcomes.outcomes);
+
+        let root_info = rerun_info.map(|info| info.root_info);
+
+        Ok((
+            Self {
+                test_suites: new_test_suites,
+            },
+            root_info,
+        ))
+    }
+
+    /// Computes outstanding tests from a portable archive.
+    ///
+    /// If the archive is itself a rerun, also returns information about the
+    /// root of the chain.
+    pub fn compute_from_archive(
+        archive: &mut PortableArchive,
+    ) -> Result<(Self, Option<RerunRootInfo>), RecordReadError> {
+        let mut store = archive
+            .open_store()
+            .map_err(RecordReadError::PortableArchive)?;
+        let rerun_info = store.read_rerun_info()?;
+        let test_list = store.read_test_list()?;
+        // No need to load dictionaries since we're not using them.
+
+        // Read events from the archive's run log.
+        let run_log = archive
+            .read_run_log()
+            .map_err(RecordReadError::PortableArchive)?;
+        let outcomes = collect_from_events(run_log.events()?.map(|r| r.map(|e| e.kind)))?;
+
+        let prev_test_suites = rerun_info.as_ref().map(|info| &info.test_suites);
+        let new_test_suites = compute_outstanding_pure(prev_test_suites, &test_list, &outcomes);
 
         let root_info = rerun_info.map(|info| info.root_info);
 

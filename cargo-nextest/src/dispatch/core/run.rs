@@ -17,6 +17,7 @@ use crate::{
     output::OutputWriter,
     reuse_build::ReuseBuildOpts,
 };
+use camino::Utf8Path;
 use clap::{Args, builder::BoolishValueParser};
 use nextest_filtering::{FiltersetKind, ParseContext};
 use nextest_runner::{
@@ -29,9 +30,9 @@ use nextest_runner::{
     input::InputHandlerKind,
     list::{BinaryList, TestExecuteContext, TestList},
     record::{
-        ComputedRerunInfo, RecordOpts, RecordReader, RecordRetentionPolicy, RecordSession,
-        RecordSessionConfig, RerunRootInfo, RunIdSelector, RunStore, STORE_FORMAT_VERSION,
-        Styles as RecordStyles, records_cache_dir,
+        ComputedRerunInfo, PortableArchive, RecordOpts, RecordReader, RecordRetentionPolicy,
+        RecordSession, RecordSessionConfig, RerunRootInfo, RunIdOrArchiveSelector, RunIdSelector,
+        RunStore, STORE_FORMAT_VERSION, Styles as RecordStyles, records_cache_dir,
     },
     reporter::{
         FinalStatusLevel, MaxProgressRunning, ReporterBuilder, ShowTerminalProgress, StatusLevel,
@@ -61,18 +62,19 @@ pub(crate) struct RunOpts {
 
     /// Rerun tests that failed or didn't complete in a previous recorded run.
     ///
-    /// Accepts a run ID (full UUID, short prefix like "abc1234", or "latest").
+    /// Accepts a run ID (full UUID, short prefix like "abc1234", or "latest"),
+    /// or a path to a portable archive file (ending in `.zip`).
     /// Only tests that didn't pass in the specified run will be executed.
     ///
     /// New tests (not in the parent run) are also included by default.
     #[arg(
         long,
         short = 'R',
-        value_name = "RUN_ID",
+        value_name = "RUN_ID_OR_ARCHIVE",
         alias = "run-id",
         help_heading = "Filter options"
     )]
-    pub(crate) rerun: Option<RunIdSelector>,
+    pub(crate) rerun: Option<RunIdOrArchiveSelector>,
 
     #[clap(flatten)]
     pub(crate) build_filter: TestBuildFilter,
@@ -857,7 +859,7 @@ impl App {
     pub(crate) fn exec_run(
         &self,
         no_capture: bool,
-        rerun: Option<&RunIdSelector>,
+        rerun: Option<&RunIdOrArchiveSelector>,
         runner_opts: &TestRunnerOpts,
         reporter_opts: &ReporterOpts,
         cli_args: Vec<String>,
@@ -944,13 +946,20 @@ impl App {
         let mut test_filter_builder = self
             .build_filter
             .make_test_filter_builder(NextestRunMode::Test, filter_exprs)?;
-        let (rerun_state, expected_outstanding) = if let Some(run_id_selector) = rerun {
-            let (rerun_state, outstanding_tests) = self.resolve_rerun(run_id_selector)?;
-            let expected = outstanding_tests.expected_test_ids();
-            test_filter_builder.set_outstanding_tests(outstanding_tests);
-            (Some(rerun_state), Some(expected))
-        } else {
-            (None, None)
+        let (rerun_state, expected_outstanding) = match rerun {
+            Some(RunIdOrArchiveSelector::RunId(selector)) => {
+                let (rerun_state, outstanding_tests) = self.resolve_rerun(selector)?;
+                let expected = outstanding_tests.expected_test_ids();
+                test_filter_builder.set_outstanding_tests(outstanding_tests);
+                (Some(rerun_state), Some(expected))
+            }
+            Some(RunIdOrArchiveSelector::ArchivePath(path)) => {
+                let (rerun_state, outstanding_tests) = self.resolve_rerun_from_archive(path)?;
+                let expected = outstanding_tests.expected_test_ids();
+                test_filter_builder.set_outstanding_tests(outstanding_tests);
+                (Some(rerun_state), Some(expected))
+            }
+            None => (None, None),
         };
 
         // Start running Cargo commands at this point, once all initial
@@ -1459,6 +1468,34 @@ impl App {
 
         let (outstanding_tests, root_info) = ComputedRerunInfo::compute(&mut reader)
             .map_err(|err| ExpectedError::RecordReadError { err })?;
+        let root_info = root_info.unwrap_or_else(|| {
+            RerunRootInfo::new(parent_run_id, run_info.build_scope_args.clone())
+        });
+
+        Ok((
+            RerunState {
+                parent_run_id,
+                root_info,
+            },
+            outstanding_tests,
+        ))
+    }
+
+    fn resolve_rerun_from_archive(
+        &self,
+        archive_path: &Utf8Path,
+    ) -> Result<(RerunState, ComputedRerunInfo), ExpectedError> {
+        let mut archive = PortableArchive::open(archive_path)
+            .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+
+        let run_info = archive.run_info();
+        let parent_run_id = run_info.run_id;
+
+        let (outstanding_tests, root_info) = ComputedRerunInfo::compute_from_archive(&mut archive)
+            .map_err(|err| ExpectedError::RecordReadError { err })?;
+
+        // If the archive is itself a rerun, use its root_info.
+        // Otherwise, this archive is the root of the chain.
         let root_info = root_info.unwrap_or_else(|| {
             RerunRootInfo::new(parent_run_id, run_info.build_scope_args.clone())
         });

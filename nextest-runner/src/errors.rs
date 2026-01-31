@@ -12,7 +12,10 @@ use crate::{
     },
     helpers::{display_exited_with, dylib_path_envvar},
     indenter::{DisplayIndented, indented},
-    record::{RecordedRunInfo, RunIdIndex, RunsJsonFormatVersion},
+    record::{
+        PortableArchiveFormatVersion, PortableArchiveVersionIncompatibility, RecordedRunInfo,
+        RunIdIndex, RunsJsonFormatVersion, StoreFormatVersion, StoreVersionIncompatibility,
+    },
     redact::Redactor,
     reuse_build::{ArchiveFormat, ArchiveStep},
     target_runner::PlatformRunnerSource,
@@ -36,6 +39,8 @@ use std::{
 };
 use target_spec_miette::IntoMietteDiagnostic;
 use thiserror::Error;
+// Re-export ZipError for consumers that need to match on it.
+pub use zip::result::ZipError;
 
 /// An error that occurred while parsing the config.
 #[derive(Debug, Error)]
@@ -2372,6 +2377,19 @@ pub struct InvalidRunIdSelector {
     pub input: String,
 }
 
+/// Error returned when parsing a [`RunIdOrArchiveSelector`](crate::record::RunIdOrArchiveSelector) fails.
+///
+/// A valid selector is either "latest", a string containing only hex digits
+/// and dashes (for UUID format), or a path ending in `.zip`.
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
+#[error(
+    "invalid run ID selector `{input}`: expected `latest`, hex digits, or a path ending in `.zip`"
+)]
+pub struct InvalidRunIdOrArchiveSelector {
+    /// The invalid input string.
+    pub input: String,
+}
+
 /// An error resolving a run ID prefix.
 #[derive(Debug, Error)]
 pub enum RunIdResolutionError {
@@ -2550,6 +2568,24 @@ pub enum RecordReadError {
         #[source]
         error: serde_json::Error,
     },
+
+    /// Failed to extract a file from the store.
+    #[error("failed to extract `{store_path}` to `{output_path}`")]
+    ExtractFile {
+        /// The path within the store.
+        store_path: String,
+
+        /// The output path where extraction was attempted.
+        output_path: Utf8PathBuf,
+
+        /// The underlying I/O error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while reading a portable archive.
+    #[error("error reading portable archive")]
+    PortableArchive(#[source] PortableArchiveReadError),
 }
 
 /// An error that occurred while creating a portable archive.
@@ -2618,6 +2654,112 @@ pub enum PortableArchiveError {
         /// The underlying error.
         #[source]
         source: std::io::Error,
+    },
+}
+
+/// An error that occurred while reading a portable archive.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum PortableArchiveReadError {
+    /// Failed to open the archive file.
+    #[error("failed to open archive at `{path}`")]
+    OpenArchive {
+        /// The path to the archive.
+        path: Utf8PathBuf,
+        /// The underlying I/O error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Failed to read from the archive.
+    #[error("failed to read archive at `{path}`")]
+    ReadArchive {
+        /// The path to the archive.
+        path: Utf8PathBuf,
+        /// The underlying zip error.
+        #[source]
+        error: zip::result::ZipError,
+    },
+
+    /// A required file is missing from the archive.
+    #[error("required file `{file_name}` missing from archive at `{path}`")]
+    MissingFile {
+        /// The path to the archive.
+        path: Utf8PathBuf,
+        /// The name of the missing file.
+        file_name: &'static str,
+    },
+
+    /// Failed to parse the manifest.
+    #[error("failed to parse manifest from archive at `{path}`")]
+    ParseManifest {
+        /// The path to the archive.
+        path: Utf8PathBuf,
+        /// The underlying JSON error.
+        #[source]
+        error: serde_json::Error,
+    },
+
+    /// The portable archive format version is not supported.
+    #[error(
+        "portable archive format version {found} in `{path}` is incompatible: {incompatibility} \
+         (this nextest supports version {supported})"
+    )]
+    UnsupportedFormatVersion {
+        /// The path to the archive.
+        path: Utf8PathBuf,
+        /// The format version found in the archive.
+        found: PortableArchiveFormatVersion,
+        /// The supported format version.
+        supported: PortableArchiveFormatVersion,
+        /// The specific incompatibility.
+        incompatibility: PortableArchiveVersionIncompatibility,
+    },
+
+    /// The store format version is not supported.
+    #[error(
+        "store format version {found} in `{path}` is incompatible: {incompatibility} \
+         (this nextest supports version {supported})"
+    )]
+    UnsupportedStoreFormatVersion {
+        /// The path to the archive.
+        path: Utf8PathBuf,
+        /// The store format version found in the archive.
+        found: StoreFormatVersion,
+        /// The supported store format version.
+        supported: StoreFormatVersion,
+        /// The specific incompatibility.
+        incompatibility: StoreVersionIncompatibility,
+    },
+
+    /// A file in the archive exceeds the size limit.
+    #[error(
+        "file `{file_name}` in archive `{path}` is too large \
+         ({size} bytes, limit is {limit} bytes)"
+    )]
+    FileTooLarge {
+        /// The path to the archive.
+        path: Utf8PathBuf,
+        /// The name of the file.
+        file_name: &'static str,
+        /// The size of the file.
+        size: u64,
+        /// The size limit.
+        limit: u64,
+    },
+
+    /// Failed to extract a file from the archive.
+    #[error("failed to extract `{file_name}` from archive `{archive_path}` to `{output_path}`")]
+    ExtractFile {
+        /// The path to the archive.
+        archive_path: Utf8PathBuf,
+        /// The name of the file being extracted.
+        file_name: &'static str,
+        /// The path where extraction was attempted.
+        output_path: Utf8PathBuf,
+        /// The underlying I/O error.
+        #[source]
+        error: std::io::Error,
     },
 }
 

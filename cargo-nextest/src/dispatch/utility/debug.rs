@@ -8,10 +8,21 @@ use crate::{
     dispatch::helpers::{detect_build_platforms, display_output_slice, extract_slice_from_output},
     output::OutputContext,
 };
-use camino::Utf8PathBuf;
-use clap::{Subcommand, ValueEnum};
-use nextest_runner::cargo_config::CargoConfigs;
-use std::fmt;
+use camino::{Utf8Path, Utf8PathBuf};
+use clap::{Args, Subcommand, ValueEnum};
+use nextest_runner::{
+    cargo_config::CargoConfigs,
+    errors::{DisplayErrorChain, RecordReadError, ZipError},
+    record::{
+        CARGO_METADATA_JSON_PATH, ExtractOuterFileResult, PORTABLE_MANIFEST_FILE_NAME,
+        PortableArchive, RECORD_OPTS_JSON_PATH, RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME,
+        STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_ZIP_FILE_NAME, StoreReader, TEST_LIST_JSON_PATH,
+    },
+    redact::Redactor,
+    user_config::elements::MAX_MAX_OUTPUT_SIZE,
+};
+use std::{fmt, fs};
+use tracing::{error, warn};
 
 /// Debug subcommands.
 #[derive(Debug, Subcommand)]
@@ -55,6 +66,9 @@ pub(crate) enum DebugCommand {
         #[arg(long, value_enum, default_value_t)]
         output_format: BuildPlatformsOutputFormat,
     },
+
+    /// Extract metadata files from a portable archive.
+    ExtractPortableArchive(ExtractPortableArchiveOpts),
 }
 
 impl DebugCommand {
@@ -141,6 +155,9 @@ impl DebugCommand {
                     }
                 }
             }
+            DebugCommand::ExtractPortableArchive(opts) => {
+                return opts.exec();
+            }
         }
 
         Ok(0)
@@ -182,4 +199,166 @@ pub enum BuildPlatformsOutputFormat {
 
     /// Show just the triple.
     Triple,
+}
+
+/// Options for `nextest debug extract-portable-archive`.
+#[derive(Debug, Args)]
+pub struct ExtractPortableArchiveOpts {
+    /// Path to the portable archive (.zip file).
+    #[arg(value_name = "ARCHIVE")]
+    archive: Utf8PathBuf,
+
+    /// Output directory to extract files to.
+    #[arg(value_name = "OUTPUT_DIR")]
+    output_dir: Utf8PathBuf,
+}
+
+impl ExtractPortableArchiveOpts {
+    fn exec(&self) -> Result<i32> {
+        let redactor = if crate::output::should_redact() {
+            Redactor::for_snapshot_testing()
+        } else {
+            Redactor::noop()
+        };
+
+        // Create the output directory if it doesn't exist.
+        fs::create_dir_all(&self.output_dir).map_err(|err| {
+            ExpectedError::DebugExtractArchiveError {
+                message: format!(
+                    "failed to create output directory: {}",
+                    DisplayErrorChain::new(&err)
+                ),
+            }
+        })?;
+
+        let mut archive = PortableArchive::open(&self.archive)
+            .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+
+        let mut has_errors = false;
+
+        for file_name in [PORTABLE_MANIFEST_FILE_NAME, RUN_LOG_FILE_NAME] {
+            let output_path = self.output_dir.join(file_name);
+            match archive.extract_outer_file_to_path(file_name, &output_path, true) {
+                Ok(result) => print_extraction_result(&output_path, &result, file_name, &redactor),
+                Err(err) => {
+                    error!(
+                        "failed to extract {file_name}: {}",
+                        DisplayErrorChain::new(&err)
+                    );
+                    has_errors = true;
+                }
+            }
+        }
+
+        let store_zip_path = self.output_dir.join(STORE_ZIP_FILE_NAME);
+        match archive.extract_outer_file_to_path(
+            STORE_ZIP_FILE_NAME,
+            &store_zip_path,
+            // store.zip does not have a limit check because it can be large.
+            false,
+        ) {
+            Ok(result) => {
+                print_extraction_result(&store_zip_path, &result, STORE_ZIP_FILE_NAME, &redactor)
+            }
+            Err(err) => {
+                error!(
+                    "failed to extract {STORE_ZIP_FILE_NAME}: {}",
+                    DisplayErrorChain::new(&err)
+                );
+                has_errors = true;
+            }
+        }
+
+        // Create the meta subdirectory for store contents.
+        let meta_dir = self.output_dir.join("meta");
+        fs::create_dir_all(&meta_dir).map_err(|err| ExpectedError::DebugExtractArchiveError {
+            message: format!(
+                "failed to create meta directory: {}",
+                DisplayErrorChain::new(&err)
+            ),
+        })?;
+
+        let mut store = archive
+            .open_store()
+            .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+
+        // Extract store metadata files (streaming).
+        for store_path in [
+            CARGO_METADATA_JSON_PATH,
+            TEST_LIST_JSON_PATH,
+            RECORD_OPTS_JSON_PATH,
+            STDOUT_DICT_PATH,
+            STDERR_DICT_PATH,
+        ] {
+            let output_path = self.output_dir.join(store_path);
+            match store.extract_file_to_path(store_path, &output_path) {
+                Ok(bytes_written) => {
+                    println!(
+                        "wrote {output_path} ({})",
+                        redactor.redact_size(bytes_written)
+                    );
+                }
+                Err(err) => {
+                    error!(
+                        "failed to extract {store_path}: {}",
+                        DisplayErrorChain::new(&err)
+                    );
+                    has_errors = true;
+                }
+            }
+        }
+
+        // Extract rerun-info.json if it exists (only present for reruns).
+        let rerun_info_path = self.output_dir.join(RERUN_INFO_JSON_PATH);
+        match store.extract_file_to_path(RERUN_INFO_JSON_PATH, &rerun_info_path) {
+            Ok(bytes_written) => {
+                println!(
+                    "wrote {rerun_info_path} ({})",
+                    redactor.redact_size(bytes_written)
+                );
+            }
+            Err(RecordReadError::ReadArchiveFile {
+                error: ZipError::FileNotFound,
+                ..
+            }) => {
+                // File doesn't exist; this run is not a rerun.
+            }
+            Err(err) => {
+                error!(
+                    "failed to extract {RERUN_INFO_JSON_PATH}: {}",
+                    DisplayErrorChain::new(&err)
+                );
+                has_errors = true;
+            }
+        }
+
+        if has_errors {
+            Err(ExpectedError::DebugExtractArchiveError {
+                message: "one or more files failed to extract".to_string(),
+            })
+        } else {
+            Ok(0)
+        }
+    }
+}
+
+/// Prints the result of extracting a file, including a warning if the file
+/// exceeded the size limit.
+fn print_extraction_result(
+    output_path: &Utf8Path,
+    result: &ExtractOuterFileResult,
+    file_name: &str,
+    redactor: &Redactor,
+) {
+    println!(
+        "wrote {output_path} ({})",
+        redactor.redact_size(result.bytes_written)
+    );
+    if let Some(claimed_size) = result.exceeded_limit {
+        warn!(
+            "{file_name} size ({}) exceeds limit ({})",
+            redactor.redact_size(claimed_size),
+            redactor.redact_size(MAX_MAX_OUTPUT_SIZE.as_u64()),
+        );
+    }
 }

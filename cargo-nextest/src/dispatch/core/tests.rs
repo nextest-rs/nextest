@@ -173,6 +173,9 @@ fn test_argument_parsing() {
         "cargo nextest store info abc123",
         "cargo nextest store info -R latest",
         "cargo nextest store info --run-id abc123",
+        "cargo nextest store info archive.zip",
+        "cargo nextest store info /path/to/run.zip",
+        "cargo nextest store info -R ./relative/path.zip",
         "cargo nextest store export latest",
         "cargo nextest store export abc123",
         "cargo nextest store export -R latest",
@@ -181,6 +184,13 @@ fn test_argument_parsing() {
         "cargo nextest store export --run-id abc123 --archive-file /path/to/archive.zip",
         "cargo nextest store prune",
         "cargo nextest store prune --dry-run",
+        // ---
+        // Rerun with archive paths
+        // ---
+        "cargo nextest run --rerun archive.zip",
+        "cargo nextest run --rerun /path/to/run.zip",
+        "cargo nextest run -R ./relative/path.zip",
+        "cargo nextest run --rerun ../parent/run.zip",
     ];
 
     let invalid: &[(&'static str, ErrorKind)] = &[
@@ -362,6 +372,17 @@ fn test_argument_parsing() {
         (
             "cargo nextest store export latest --run-id abc123",
             ArgumentConflict,
+        ),
+        // store export does not accept archive paths (uses RunIdSelector, not
+        // RunIdOrArchiveSelector).
+        ("cargo nextest store export archive.zip", ValueValidation),
+        (
+            "cargo nextest store export /path/to/run.zip",
+            ValueValidation,
+        ),
+        (
+            "cargo nextest store export -R ./relative.zip",
+            ValueValidation,
         ),
     ];
 
