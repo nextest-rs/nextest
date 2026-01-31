@@ -20,7 +20,10 @@ use nextest_metadata::{
     TestListSummary,
 };
 use quick_junit::ReportUuid;
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    borrow::Borrow,
+    collections::{BTreeSet, HashMap},
+};
 
 /// Trait abstracting over test list access for rerun computation.
 ///
@@ -372,28 +375,28 @@ impl TestEventOutcomes {
     /// (had any event: started, finished, or skipped).
     fn collect(reader: &mut RecordReader) -> Result<Self, RecordReadError> {
         reader.load_dictionaries()?;
-
-        let events: Vec<_> = reader.events()?.collect::<Result<Vec<_>, _>>()?;
-        let outcomes = collect_from_events(events.iter().map(|e| &e.kind));
+        let outcomes = collect_from_events(reader.events()?.map(|r| r.map(|e| e.kind)))?;
 
         Ok(Self { outcomes })
     }
 }
 
-/// Collects test outcomes from an iterator of events.
+/// Collects test outcomes from a fallible iterator of events.
 ///
 /// This helper exists to make the event processing logic testable without
-/// requiring a full `RecordReader`.
-fn collect_from_events<'a, O>(
-    events: impl Iterator<Item = &'a TestEventKindSummary<O>>,
-) -> HashMap<OwnedTestInstanceId, TestOutcome>
+/// requiring a full `RecordReader`. It accepts a fallible iterator to enable
+/// streaming without in-memory buffering.
+fn collect_from_events<K, O, E>(
+    events: impl Iterator<Item = Result<K, E>>,
+) -> Result<HashMap<OwnedTestInstanceId, TestOutcome>, E>
 where
-    O: 'a,
+    K: Borrow<TestEventKindSummary<O>>,
 {
     let mut outcomes = HashMap::new();
 
-    for kind in events {
-        match kind {
+    for kind_result in events {
+        let kind = kind_result?;
+        match kind.borrow() {
             TestEventKindSummary::Output(OutputEventKind::TestFinished {
                 test_instance,
                 run_statuses,
@@ -433,7 +436,7 @@ where
         }
     }
 
-    outcomes
+    Ok(outcomes)
 }
 
 #[cfg(test)]
@@ -454,6 +457,7 @@ mod tests {
     use proptest::prelude::*;
     use std::{
         collections::{BTreeMap, btree_map},
+        convert::Infallible,
         num::NonZero,
         sync::OnceLock,
         time::Duration,
@@ -1527,7 +1531,7 @@ mod tests {
             make_test_finished(test_regular_fail.clone(), None, false),
         ];
 
-        let outcomes = collect_from_events(events.iter());
+        let outcomes = collect_from_events(events.iter().map(Ok::<_, Infallible>)).unwrap();
 
         assert_eq!(
             outcomes.get(&test_pass_fail_pass),
@@ -1586,7 +1590,7 @@ mod tests {
             make_test_finished(test_b.clone(), Some((1, Some(2))), false),
         ];
 
-        let outcomes = collect_from_events(events.iter());
+        let outcomes = collect_from_events(events.iter().map(Ok::<_, Infallible>)).unwrap();
 
         assert_eq!(
             outcomes.get(&test_a),
