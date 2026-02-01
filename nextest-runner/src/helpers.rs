@@ -142,8 +142,13 @@ pub mod plural {
         if count == 1 { "exists" } else { "exist" }
     }
 
+    /// Returns "ends" if `count` is 1, otherwise "end".
+    pub fn end_str(count: usize) -> &'static str {
+        if count == 1 { "ends" } else { "end" }
+    }
+
     /// Returns "remains" if `count` is 1, otherwise "remain".
-    pub fn remains_str(count: usize) -> &'static str {
+    pub fn remain_str(count: usize) -> &'static str {
         if count == 1 { "remains" } else { "remain" }
     }
 }

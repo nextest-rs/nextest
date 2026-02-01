@@ -23,7 +23,7 @@ use super::{
         CARGO_METADATA_JSON_PATH, OutputDict, PORTABLE_ARCHIVE_FORMAT_VERSION,
         PORTABLE_MANIFEST_FILE_NAME, PortableManifest, RECORD_OPTS_JSON_PATH, RERUN_INFO_JSON_PATH,
         RUN_LOG_FILE_NAME, RerunInfo, STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_FORMAT_VERSION,
-        STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH,
+        STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH, has_zip_extension,
     },
     reader::{StoreReader, decompress_with_dict},
     store::{RecordedRunInfo, RunFilesExist, StoreRunsDir},
@@ -37,10 +37,12 @@ use atomicwrites::{AtomicFile, OverwriteBehavior};
 use camino::{Utf8Path, Utf8PathBuf};
 use countio::Counter;
 use debug_ignore::DebugIgnore;
+use itertools::Either;
 use nextest_metadata::TestListSummary;
 use std::{
+    borrow::Cow,
     fs::File,
-    io::{self, BufRead, BufReader, Read, Write},
+    io::{self, BufRead, BufReader, Cursor, Read, Write},
 };
 use zip::{
     CompressionMethod, ZipArchive, ZipWriter, read::ZipFileSeek, result::ZipError,
@@ -231,12 +233,18 @@ impl<'a> PortableArchiveWriter<'a> {
 // Portable archive reading
 // ---
 
+/// Backing storage for an archive.
+///
+/// - `Left(File)`: Direct file-backed archive (normal case).
+/// - `Right(Cursor<Vec<u8>>)`: Memory-backed archive (unwrapped from a wrapper zip).
+type ArchiveReadStorage = Either<File, Cursor<Vec<u8>>>;
+
 /// A portable archive opened for reading.
 #[derive(Debug)]
 pub struct PortableArchive {
     archive_path: Utf8PathBuf,
     manifest: PortableManifest,
-    outer_archive: ZipArchive<File>,
+    outer_archive: ZipArchive<ArchiveReadStorage>,
 }
 
 impl RunFilesExist for PortableArchive {
@@ -258,21 +266,83 @@ impl PortableArchive {
     ///
     /// Validates the format and store versions on open to fail fast if the
     /// archive cannot be read by this version of nextest.
+    ///
+    /// This method also handles "wrapper" archives: if the archive does not
+    /// contain `manifest.json` but contains exactly one `.zip` file, that inner
+    /// file is treated as the nextest portable archive. This supports GitHub
+    /// Actions artifact downloads, which wrap archives in an outer zip.
     pub fn open(path: &Utf8Path) -> Result<Self, PortableArchiveReadError> {
         let file = File::open(path).map_err(|error| PortableArchiveReadError::OpenArchive {
             path: path.to_owned(),
             error,
         })?;
 
-        let mut outer_archive =
-            ZipArchive::new(file).map_err(|error| PortableArchiveReadError::ReadArchive {
+        let mut outer_archive = ZipArchive::new(Either::Left(file)).map_err(|error| {
+            PortableArchiveReadError::ReadArchive {
                 path: path.to_owned(),
                 error,
-            })?;
+            }
+        })?;
 
+        // Check if this is a direct nextest archive (has manifest.json).
+        if outer_archive
+            .index_for_name(PORTABLE_MANIFEST_FILE_NAME)
+            .is_some()
+        {
+            return Self::open_validated(path, outer_archive);
+        }
+
+        // No manifest.json found. Check if this is a wrapper archive containing
+        // exactly one .zip file. Filter out directory entries (names ending with
+        // '/' or '\').
+        let mut file_count = 0;
+        let mut zip_count = 0;
+        let mut zip_file: Option<String> = None;
+        for name in outer_archive.file_names() {
+            if name.ends_with('/') || name.ends_with('\\') {
+                // This is a directory entry, skip it.
+                continue;
+            }
+            file_count += 1;
+            if has_zip_extension(Utf8Path::new(name)) {
+                zip_count += 1;
+                if zip_count == 1 {
+                    zip_file = Some(name.to_owned());
+                }
+            }
+        }
+
+        if let Some(inner_name) = zip_file.filter(|_| file_count == 1 && zip_count == 1) {
+            // We only support reading up to the MAX_MAX_OUTPUT_SIZE cap. We'll
+            // see if anyone complains -- they have to have both a wrapper zip
+            // and to exceed the cap. (Probably worth extracting to a file on
+            // disk or something at that point.)
+            let inner_bytes = read_outer_file(&mut outer_archive, inner_name.into(), path)?;
+            let inner_archive =
+                ZipArchive::new(Either::Right(Cursor::new(inner_bytes))).map_err(|error| {
+                    PortableArchiveReadError::ReadArchive {
+                        path: path.to_owned(),
+                        error,
+                    }
+                })?;
+            Self::open_validated(path, inner_archive)
+        } else {
+            Err(PortableArchiveReadError::NotAWrapperArchive {
+                path: path.to_owned(),
+                file_count,
+                zip_count,
+            })
+        }
+    }
+
+    /// Opens and validates an archive that is known to contain `manifest.json`.
+    fn open_validated(
+        path: &Utf8Path,
+        mut outer_archive: ZipArchive<ArchiveReadStorage>,
+    ) -> Result<Self, PortableArchiveReadError> {
         // Read and parse the manifest.
         let manifest_bytes =
-            read_outer_file(&mut outer_archive, PORTABLE_MANIFEST_FILE_NAME, path)?;
+            read_outer_file(&mut outer_archive, PORTABLE_MANIFEST_FILE_NAME.into(), path)?;
         let manifest: PortableManifest =
             serde_json::from_slice(&manifest_bytes).map_err(|error| {
                 PortableArchiveReadError::ParseManifest {
@@ -330,7 +400,7 @@ impl PortableArchive {
     pub fn read_run_log(&mut self) -> Result<PortableArchiveRunLog, PortableArchiveReadError> {
         let run_log_bytes = read_outer_file(
             &mut self.outer_archive,
-            RUN_LOG_FILE_NAME,
+            RUN_LOG_FILE_NAME.into(),
             &self.archive_path,
         )?;
         Ok(PortableArchiveRunLog {
@@ -373,7 +443,7 @@ impl PortableArchive {
             .map_err(|error| match error {
                 ZipError::FileNotFound => PortableArchiveReadError::MissingFile {
                     path: self.archive_path.clone(),
-                    file_name: STORE_ZIP_FILE_NAME,
+                    file_name: Cow::Borrowed(STORE_ZIP_FILE_NAME),
                 },
                 _ => PortableArchiveReadError::ReadArchive {
                     path: self.archive_path.clone(),
@@ -399,15 +469,15 @@ impl PortableArchive {
 
 /// Reads a file from the outer archive into memory, with size limits.
 fn read_outer_file(
-    archive: &mut ZipArchive<File>,
-    file_name: &'static str,
+    archive: &mut ZipArchive<ArchiveReadStorage>,
+    file_name: Cow<'static, str>,
     archive_path: &Utf8Path,
 ) -> Result<Vec<u8>, PortableArchiveReadError> {
     let limit = MAX_MAX_OUTPUT_SIZE.as_u64();
-    let file = archive.by_name(file_name).map_err(|error| match error {
+    let file = archive.by_name(&file_name).map_err(|error| match error {
         ZipError::FileNotFound => PortableArchiveReadError::MissingFile {
             path: archive_path.to_owned(),
-            file_name,
+            file_name: file_name.clone(),
         },
         _ => PortableArchiveReadError::ReadArchive {
             path: archive_path.to_owned(),
@@ -440,7 +510,7 @@ fn read_outer_file(
 
 /// Extracts a file from the outer archive to a path, streaming directly.
 fn extract_outer_file_to_path(
-    archive: &mut ZipArchive<File>,
+    archive: &mut ZipArchive<ArchiveReadStorage>,
     file_name: &'static str,
     archive_path: &Utf8Path,
     output_path: &Utf8Path,
@@ -450,7 +520,7 @@ fn extract_outer_file_to_path(
     let mut file = archive.by_name(file_name).map_err(|error| match error {
         ZipError::FileNotFound => PortableArchiveReadError::MissingFile {
             path: archive_path.to_owned(),
-            file_name,
+            file_name: Cow::Borrowed(file_name),
         },
         _ => PortableArchiveReadError::ReadArchive {
             path: archive_path.to_owned(),
@@ -565,7 +635,7 @@ impl Iterator for PortableArchiveEventIter<'_> {
 /// Borrows from [`PortableArchive`] and implements [`StoreReader`].
 pub struct PortableStoreReader<'a> {
     archive_path: &'a Utf8Path,
-    store_archive: ZipArchive<ZipFileSeek<'a, File>>,
+    store_archive: ZipArchive<ZipFileSeek<'a, ArchiveReadStorage>>,
     /// Cached stdout dictionary loaded from the archive.
     stdout_dict: Option<Vec<u8>>,
     /// Cached stderr dictionary loaded from the archive.

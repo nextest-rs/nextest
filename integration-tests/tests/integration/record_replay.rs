@@ -28,10 +28,10 @@ use regex::Regex;
 use std::{
     collections::BTreeSet,
     fs::{self, File},
-    io::Read as _,
+    io::{Read as _, Write as _},
     sync::LazyLock,
 };
-use zip::ZipArchive;
+use zip::{CompressionMethod, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 /// Expected files in the store.zip archive.
 const EXPECTED_ARCHIVE_FILES: &[&str] = &[
@@ -1249,12 +1249,8 @@ fn test_run_id_prefix_resolution() {
     );
 }
 
-/// Portable archive reading via `store info`.
-///
-/// Coverage: Reading run info directly from a portable archive, including
-/// outside a workspace context.
 #[test]
-fn test_portable_archive_reading() {
+fn test_portable_archive_read() {
     let env_info = set_env_vars_for_test();
     let p = TempProject::new(&env_info).unwrap();
     let cache_dir = create_cache_dir(&p);
@@ -1467,6 +1463,180 @@ fn test_portable_archive_reading() {
         stderr.contains("error reading portable archive"),
         "error should mention reading archive: {stderr}"
     );
+}
+
+/// Coverage: Reading portable archives that are wrapped in an outer zip file,
+/// as happens with GitHub Actions artifact downloads.
+#[test]
+fn test_wrapped_portable_archive_read() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const RUN_ID: &str = "79000002-0000-0000-0000-000000000002";
+
+    let run_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
+        .args(["run", "-E", "test(=test_success)"])
+        .output();
+    assert!(
+        run_output.exit_status.success(),
+        "recording should succeed: {run_output}"
+    );
+
+    let archive_filename = format!("nextest-run-{RUN_ID}.zip");
+    let archive_path = temp_root.join(&archive_filename);
+    let mut cli = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None);
+    cli.args([
+        "store",
+        "export",
+        RUN_ID,
+        "--archive-file",
+        archive_path.as_str(),
+    ]);
+    let export_output = cli.output();
+    assert!(
+        export_output.exit_status.success(),
+        "store export should succeed: {export_output}"
+    );
+
+    // Wrapped archive with Stored compression.
+    let wrapped_stored_path = temp_root.join("wrapped-stored.zip");
+    wrap_archive_in_zip(
+        &archive_path,
+        &wrapped_stored_path,
+        CompressionMethod::Stored,
+    );
+
+    // Verify store info works on the wrapped archive.
+    let info_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info", wrapped_stored_path.as_str()])
+        .output();
+    assert!(
+        info_output.exit_status.success(),
+        "store info on wrapped archive (stored) should succeed: {info_output}"
+    );
+    let info_str = info_output.stdout_as_str();
+    assert!(
+        info_str.contains(RUN_ID),
+        "store info should show run ID: {info_str}"
+    );
+
+    // Verify replay works on the wrapped archive.
+    let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["replay", "-R", wrapped_stored_path.as_str()])
+        .output();
+    assert!(
+        replay_output.exit_status.success(),
+        "replay from wrapped archive (stored) should succeed: {replay_output}"
+    );
+
+    // Wrapped archive with Zstd compression.
+    let wrapped_zstd_path = temp_root.join("wrapped-zstd.zip");
+    wrap_archive_in_zip(&archive_path, &wrapped_zstd_path, CompressionMethod::Zstd);
+
+    // Verify store info works on the zstd-compressed wrapper.
+    let info_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info", wrapped_zstd_path.as_str()])
+        .output();
+    assert!(
+        info_output.exit_status.success(),
+        "store info on wrapped archive (zstd) should succeed: {info_output}"
+    );
+
+    // Wrapper with multiple files.
+    let multi_file_wrapper_path = temp_root.join("multi-file-wrapper.zip");
+    create_invalid_wrapper_multiple_files(&archive_path, &multi_file_wrapper_path);
+
+    let multi_file_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info", multi_file_wrapper_path.as_str()])
+        .unchecked(true)
+        .output();
+    assert!(
+        !multi_file_output.exit_status.success(),
+        "store info on multi-file wrapper should fail"
+    );
+    let stderr = multi_file_output.stderr_as_str();
+    assert!(
+        stderr.contains("is not a wrapper archive"),
+        "error should mention not a wrapper archive: {stderr}"
+    );
+
+    // Wrapper with no .zip files.
+    let no_zip_wrapper_path = temp_root.join("no-zip-wrapper.zip");
+    create_invalid_wrapper_no_zip(&no_zip_wrapper_path);
+
+    let no_zip_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info", no_zip_wrapper_path.as_str()])
+        .unchecked(true)
+        .output();
+    assert!(
+        !no_zip_output.exit_status.success(),
+        "store info on no-zip wrapper should fail"
+    );
+    let stderr = no_zip_output.stderr_as_str();
+    assert!(
+        stderr.contains("is not a wrapper archive"),
+        "error should mention not a wrapper archive: {stderr}"
+    );
+}
+
+/// Wraps a portable archive inside an outer zip file.
+fn wrap_archive_in_zip(
+    inner_path: &Utf8Path,
+    outer_path: &Utf8Path,
+    compression: CompressionMethod,
+) {
+    let inner_bytes = fs::read(inner_path).expect("read inner archive");
+    let outer_file = File::create(outer_path).expect("create outer archive");
+    let mut zip = ZipWriter::new(outer_file);
+
+    let options = SimpleFileOptions::default().compression_method(compression);
+    let inner_name = inner_path.file_name().expect("inner archive has filename");
+    zip.start_file(inner_name, options)
+        .expect("start file in zip");
+    zip.write_all(&inner_bytes).expect("write inner archive");
+    zip.finish().expect("finish zip");
+}
+
+/// Creates an invalid wrapper archive containing multiple files.
+fn create_invalid_wrapper_multiple_files(inner_archive_path: &Utf8Path, outer_path: &Utf8Path) {
+    let inner_bytes = fs::read(inner_archive_path).expect("read inner archive");
+    let outer_file = File::create(outer_path).expect("create outer archive");
+    let mut zip = ZipWriter::new(outer_file);
+
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+
+    // Add the real archive.
+    let inner_name = inner_archive_path
+        .file_name()
+        .expect("inner archive has filename");
+    zip.start_file(inner_name, options)
+        .expect("start file in zip");
+    zip.write_all(&inner_bytes).expect("write inner archive");
+
+    // Add an extra file to make this an invalid wrapper.
+    zip.start_file("extra-file.txt", options)
+        .expect("start extra file");
+    zip.write_all(b"extra content").expect("write extra file");
+
+    zip.finish().expect("finish zip");
+}
+
+/// Creates an invalid wrapper archive with one file that is not a .zip.
+fn create_invalid_wrapper_no_zip(outer_path: &Utf8Path) {
+    let outer_file = File::create(outer_path).expect("create outer archive");
+    let mut zip = ZipWriter::new(outer_file);
+
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+
+    zip.start_file("not-an-archive.txt", options)
+        .expect("start file in zip");
+    zip.write_all(b"this is not a zip file")
+        .expect("write content");
+
+    zip.finish().expect("finish zip");
 }
 
 /// Replayability: missing store.zip.
