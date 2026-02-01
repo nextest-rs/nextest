@@ -1882,6 +1882,7 @@ dependencies = [
  "libc",
  "libtest-mimic",
  "nextest-metadata",
+ "nextest-runner",
  "nextest-workspace-hack",
  "num_threads",
  "pathdiff",
