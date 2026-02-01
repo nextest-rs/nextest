@@ -31,6 +31,7 @@ group: @global
           test_flaky_mod_4
           test_flaky_mod_6
           test_result_failure
+          test_setup_script_env_vars
           test_stdin_closed
           test_subprocess_doesnt_exit
           test_subprocess_doesnt_exit_fail
