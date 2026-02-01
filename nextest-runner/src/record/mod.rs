@@ -53,7 +53,7 @@ pub use format::{
     RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME, RerunInfo, RerunRootInfo, RunsJsonFormatVersion,
     RunsJsonWritePermission, STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_FORMAT_VERSION,
     STORE_ZIP_FILE_NAME, StoreFormatMajorVersion, StoreFormatMinorVersion, StoreFormatVersion,
-    StoreVersionIncompatibility, TEST_LIST_JSON_PATH,
+    StoreVersionIncompatibility, TEST_LIST_JSON_PATH, has_zip_extension,
 };
 pub use portable::{
     ExtractOuterFileResult, PortableArchive, PortableArchiveEventIter, PortableArchiveResult,

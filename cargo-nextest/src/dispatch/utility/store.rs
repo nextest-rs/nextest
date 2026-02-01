@@ -15,7 +15,7 @@ use nextest_runner::{
     record::{
         DisplayRunList, PortableArchive, PortableArchiveWriter, PruneKind, RecordRetentionPolicy,
         RecordedRunStatus, RunIdIndex, RunIdOrArchiveSelector, RunIdSelector, RunStore,
-        SnapshotWithReplayability, Styles as RecordStyles, records_cache_dir,
+        SnapshotWithReplayability, Styles as RecordStyles, has_zip_extension, records_cache_dir,
     },
     redact::Redactor,
     user_config::{UserConfig, elements::RecordConfig},
@@ -178,8 +178,17 @@ pub(crate) struct ExportOpts {
     /// Destination for the archive file.
     ///
     /// Defaults to `nextest-run-<run-id>.zip` in the current directory.
-    #[arg(long, value_name = "PATH")]
+    #[arg(long, value_name = "PATH", value_parser = zip_extension_path)]
     archive_file: Option<Utf8PathBuf>,
+}
+
+fn zip_extension_path(input: &str) -> Result<Utf8PathBuf, &'static str> {
+    let path = Utf8PathBuf::from(input);
+    if has_zip_extension(&path) {
+        Ok(path)
+    } else {
+        Err("must end in .zip")
+    }
 }
 
 impl ExportOpts {
