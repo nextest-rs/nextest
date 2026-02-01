@@ -679,6 +679,12 @@ pub static STORE_ZIP_FILE_NAME: &str = "store.zip";
 /// File name for the run log.
 pub static RUN_LOG_FILE_NAME: &str = "run.log.zst";
 
+/// Returns true if the path has a `.zip` extension (case-insensitive).
+pub fn has_zip_extension(path: &Utf8Path) -> bool {
+    path.extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("zip"))
+}
+
 // Paths within the zip archive.
 /// Path to cargo metadata within the store archive.
 pub static CARGO_METADATA_JSON_PATH: &str = "meta/cargo-metadata.json";

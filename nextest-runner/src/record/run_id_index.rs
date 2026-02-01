@@ -3,9 +3,9 @@
 
 //! Index for run IDs enabling efficient prefix lookup and shortest unique prefix computation.
 
-use super::store::RecordedRunInfo;
+use super::{format::has_zip_extension, store::RecordedRunInfo};
 use crate::errors::{InvalidRunIdOrArchiveSelector, InvalidRunIdSelector};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use quick_junit::ReportUuid;
 use std::{fmt, str::FromStr};
 
@@ -29,13 +29,9 @@ impl FromStr for RunIdOrArchiveSelector {
     type Err = InvalidRunIdOrArchiveSelector;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Zip files might end in .ZIP, particularly on case-insensitive file
-        // systems.
-        if Utf8Path::new(s)
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("zip"))
-        {
-            Ok(RunIdOrArchiveSelector::ArchivePath(Utf8PathBuf::from(s)))
+        let path = Utf8PathBuf::from(s);
+        if has_zip_extension(&path) {
+            Ok(RunIdOrArchiveSelector::ArchivePath(path))
         } else {
             match s.parse::<RunIdSelector>() {
                 Ok(selector) => Ok(RunIdOrArchiveSelector::RunId(selector)),

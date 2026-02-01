@@ -1066,7 +1066,7 @@ impl ExpectedError {
                     count.style(styles.bold),
                     // We only support reruns for test mode.
                     plural::tests_str(NextestRunMode::Test, *count),
-                    plural::remains_str(*count),
+                    plural::remain_str(*count),
                 );
                 // Advice to run `cargo nextest run -R latest` might not always
                 // be complete due to the expanded build scope or disappearing

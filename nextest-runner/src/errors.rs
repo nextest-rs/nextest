@@ -10,7 +10,7 @@ use crate::{
         elements::{CustomTestGroup, TestGroup},
         scripts::{ProfileScriptType, ScriptId, ScriptType},
     },
-    helpers::{display_exited_with, dylib_path_envvar},
+    helpers::{display_exited_with, dylib_path_envvar, plural},
     indenter::{DisplayIndented, indented},
     record::{
         PortableArchiveFormatVersion, PortableArchiveVersionIncompatibility, RecordedRunInfo,
@@ -2687,7 +2687,7 @@ pub enum PortableArchiveReadError {
         /// The path to the archive.
         path: Utf8PathBuf,
         /// The name of the missing file.
-        file_name: &'static str,
+        file_name: Cow<'static, str>,
     },
 
     /// Failed to parse the manifest.
@@ -2741,7 +2741,7 @@ pub enum PortableArchiveReadError {
         /// The path to the archive.
         path: Utf8PathBuf,
         /// The name of the file.
-        file_name: &'static str,
+        file_name: Cow<'static, str>,
         /// The size of the file.
         size: u64,
         /// The size limit.
@@ -2760,6 +2760,24 @@ pub enum PortableArchiveReadError {
         /// The underlying I/O error.
         #[source]
         error: std::io::Error,
+    },
+
+    /// The archive has no manifest and is not a valid wrapper archive.
+    ///
+    /// A wrapper archive must contain exactly one `.zip` file.
+    #[error(
+        "archive at `{path}` has no manifest and is not a wrapper archive \
+         (contains {file_count} {}, {zip_count} of which {} in .zip)",
+        plural::files_str(*file_count),
+        plural::end_str(*zip_count)
+    )]
+    NotAWrapperArchive {
+        /// The path to the archive.
+        path: Utf8PathBuf,
+        /// The total number of files in the archive.
+        file_count: usize,
+        /// The number of files ending in `.zip`.
+        zip_count: usize,
     },
 }
 
