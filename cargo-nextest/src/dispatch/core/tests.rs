@@ -384,6 +384,15 @@ fn test_argument_parsing() {
             "cargo nextest store export -R ./relative.zip",
             ValueValidation,
         ),
+        // store export --archive-file must have .zip extension.
+        (
+            "cargo nextest store export latest --archive-file output.txt",
+            ValueValidation,
+        ),
+        (
+            "cargo nextest store export latest --archive-file /path/to/archive.tar.zst",
+            ValueValidation,
+        ),
     ];
 
     // Unset all NEXTEST_ env vars because they can conflict with the try_parse_from below.
