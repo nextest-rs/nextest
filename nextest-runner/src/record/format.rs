@@ -673,17 +673,25 @@ impl IdOrdItem for RerunTestSuiteInfo {
 // Archive format types
 // ---
 
-// Archive file names.
-pub(super) static STORE_ZIP_FILE_NAME: &str = "store.zip";
-pub(super) static RUN_LOG_FILE_NAME: &str = "run.log.zst";
+/// File name for the store archive.
+pub static STORE_ZIP_FILE_NAME: &str = "store.zip";
+
+/// File name for the run log.
+pub static RUN_LOG_FILE_NAME: &str = "run.log.zst";
 
 // Paths within the zip archive.
-pub(super) static CARGO_METADATA_JSON_PATH: &str = "meta/cargo-metadata.json";
-pub(super) static TEST_LIST_JSON_PATH: &str = "meta/test-list.json";
-pub(super) static RECORD_OPTS_JSON_PATH: &str = "meta/record-opts.json";
-pub(super) static RERUN_INFO_JSON_PATH: &str = "meta/rerun-info.json";
-pub(super) static STDOUT_DICT_PATH: &str = "meta/stdout.dict";
-pub(super) static STDERR_DICT_PATH: &str = "meta/stderr.dict";
+/// Path to cargo metadata within the store archive.
+pub static CARGO_METADATA_JSON_PATH: &str = "meta/cargo-metadata.json";
+/// Path to the test list within the store archive.
+pub static TEST_LIST_JSON_PATH: &str = "meta/test-list.json";
+/// Path to record options within the store archive.
+pub static RECORD_OPTS_JSON_PATH: &str = "meta/record-opts.json";
+/// Path to rerun info within the store archive (only present for reruns).
+pub static RERUN_INFO_JSON_PATH: &str = "meta/rerun-info.json";
+/// Path to the stdout dictionary within the store archive.
+pub static STDOUT_DICT_PATH: &str = "meta/stdout.dict";
+/// Path to the stderr dictionary within the store archive.
+pub static STDERR_DICT_PATH: &str = "meta/stderr.dict";
 
 // ---
 // Portable archive format types
@@ -720,7 +728,6 @@ impl PortableArchiveFormatVersion {
 
     /// Checks if an archive with version `self` can be read by a reader that
     /// supports `supported`.
-    #[cfg_attr(not(test), expect(dead_code))]
     pub fn check_readable_by(
         self,
         supported: Self,
@@ -801,8 +808,8 @@ pub const PORTABLE_ARCHIVE_FORMAT_VERSION: PortableArchiveFormatVersion =
         PortableArchiveFormatMinorVersion::new(0),
     );
 
-/// File name for the manifest in a portable archive.
-pub(super) static PORTABLE_MANIFEST_FILE_NAME: &str = "manifest.json";
+/// File name for the manifest within a portable archive.
+pub static PORTABLE_MANIFEST_FILE_NAME: &str = "manifest.json";
 
 /// The manifest for a portable archive.
 ///
@@ -810,20 +817,33 @@ pub(super) static PORTABLE_MANIFEST_FILE_NAME: &str = "manifest.json";
 /// zip file for sharing and import.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub(super) struct PortableManifest {
+pub(crate) struct PortableManifest {
     /// The format version of this portable archive.
-    pub(super) format_version: PortableArchiveFormatVersion,
+    pub(crate) format_version: PortableArchiveFormatVersion,
     /// The run metadata.
     pub(super) run: RecordedRun,
 }
 
 impl PortableManifest {
     /// Creates a new manifest for the given run.
-    pub(super) fn new(run: &RecordedRunInfo) -> Self {
+    pub(crate) fn new(run: &RecordedRunInfo) -> Self {
         Self {
             format_version: PORTABLE_ARCHIVE_FORMAT_VERSION,
             run: RecordedRun::from(run),
         }
+    }
+
+    /// Returns the run info extracted from this manifest.
+    pub(crate) fn run_info(&self) -> RecordedRunInfo {
+        RecordedRunInfo::from(self.run.clone())
+    }
+
+    /// Returns the store format version from the run metadata.
+    pub(crate) fn store_format_version(&self) -> StoreFormatVersion {
+        StoreFormatVersion::new(
+            self.run.store_format_version,
+            self.run.store_format_minor_version,
+        )
     }
 }
 

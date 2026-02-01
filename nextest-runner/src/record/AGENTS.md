@@ -17,9 +17,10 @@ Supporting modules:
 - `summary.rs`: Serializable event types that mirror runtime `TestEvent` types.
 - `replay.rs`: Converts recorded events back to `TestEvent` for display.
 - `retention.rs`: Retention policies and pruning logic.
-- `run_id_index.rs`: Efficient prefix lookup for run IDs (jj-style shortest unique prefixes).
+- `run_id_index.rs`: Efficient prefix lookup for run IDs (jj-style shortest unique prefixes), plus `RunIdOrArchiveSelector` for CLI commands that accept either.
 - `rerun.rs`: Computes outstanding tests from a recorded run for rerun workflows.
 - `session.rs`: High-level session management (setup/finalize lifecycle).
+- `portable.rs`: Portable archive creation and reading for sharing runs across machines.
 - `dicts/`: Pre-trained zstd dictionaries for output compression.
 
 ## Archive format
@@ -45,6 +46,40 @@ A zip archive with two types of content:
 ### `run.log.zst`
 
 A zstd-compressed JSON Lines file containing test events. Each line is a `TestEventSummary<ZipStoreOutput>` that references output files in the zip by name.
+
+## Portable archive format
+
+Portable archives package a single recorded run into a self-contained zip file for sharing across machines. Created via `cargo nextest store export`, they can be read via `cargo nextest replay -R archive.zip`, `cargo nextest run --rerun archive.zip`, or `cargo nextest store info archive.zip`.
+
+The outer zip contains:
+- `manifest.json`: Run metadata and format versions (`PortableManifest`).
+- `store.zip`: The inner store archive (same format as the on-disk `store.zip`).
+- `run.log.zst`: The event log (same format as on-disk).
+
+Key types:
+- `PortableArchive`: Reader for portable archives. Validates format versions on open.
+- `PortableArchiveWriter`: Creates portable archives from a recorded run.
+- `PortableStoreReader`: Implements `StoreReader` for reading from archives.
+
+Format versions:
+- `PORTABLE_ARCHIVE_FORMAT_VERSION`: Version of the outer archive structure.
+- The inner store uses `STORE_FORMAT_VERSION` (same as on-disk stores).
+
+Both versions use major/minor semantics with `check_readable_by()` for compatibility checking.
+
+## StoreReader trait
+
+`StoreReader` abstracts over reading from either on-disk stores (`RecordReader`) or portable archives (`PortableStoreReader`). This enables replay and rerun code to work with both sources transparently.
+
+Key methods:
+- `read_cargo_metadata()`, `read_test_list()`, `read_record_opts()`: Read metadata.
+- `read_rerun_info()`: Read rerun chain info (returns `None` for non-reruns).
+- `load_dictionaries()`: Must be called before `read_output()`.
+- `read_output(file_name)`: Read decompressed test output.
+
+## RunFilesExist trait
+
+`RunFilesExist` abstracts checking for required run files (`store.zip`, `run.log.zst`). Implemented by both `StoreRunFiles` (on-disk) and `PortableArchive`. Used by `RecordedRunInfo::check_replayability()`.
 
 ## Format versions
 
@@ -121,6 +156,14 @@ let prefix = index.shortest_unique_prefix(run_id);
 ```
 
 Implementation uses sorted neighbor comparison rather than a trie—simpler and sufficient for expected run counts.
+
+### RunIdOrArchiveSelector
+
+CLI commands that can consume runs from either the store or a portable archive use `RunIdOrArchiveSelector`. Parsing logic:
+- Strings ending in `.zip` → `ArchivePath(path)`
+- Everything else → `RunId(RunIdSelector)` (parses as `latest` or hex prefix)
+
+This enables commands like `cargo nextest replay -R path/to/archive.zip` to work alongside `cargo nextest replay -R latest`.
 
 ## Rerun chain model
 

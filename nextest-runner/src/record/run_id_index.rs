@@ -4,9 +4,63 @@
 //! Index for run IDs enabling efficient prefix lookup and shortest unique prefix computation.
 
 use super::store::RecordedRunInfo;
-use crate::errors::InvalidRunIdSelector;
+use crate::errors::{InvalidRunIdOrArchiveSelector, InvalidRunIdSelector};
+use camino::{Utf8Path, Utf8PathBuf};
 use quick_junit::ReportUuid;
 use std::{fmt, str::FromStr};
+
+/// Selector that can be either a run ID (for store lookup) or an archive path.
+///
+/// Used by commands that can consume recorded runs from either source, such as
+/// `store info`, `replay`, and `run --rerun`.
+///
+/// When parsing from a string:
+/// - Paths ending in `.zip` are treated as archive paths.
+/// - Everything else is parsed as a [`RunIdSelector`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RunIdOrArchiveSelector {
+    /// Select from the run store.
+    RunId(RunIdSelector),
+    /// Read from a portable archive file.
+    ArchivePath(Utf8PathBuf),
+}
+
+impl FromStr for RunIdOrArchiveSelector {
+    type Err = InvalidRunIdOrArchiveSelector;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Zip files might end in .ZIP, particularly on case-insensitive file
+        // systems.
+        if Utf8Path::new(s)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("zip"))
+        {
+            Ok(RunIdOrArchiveSelector::ArchivePath(Utf8PathBuf::from(s)))
+        } else {
+            match s.parse::<RunIdSelector>() {
+                Ok(selector) => Ok(RunIdOrArchiveSelector::RunId(selector)),
+                Err(_) => Err(InvalidRunIdOrArchiveSelector {
+                    input: s.to_owned(),
+                }),
+            }
+        }
+    }
+}
+
+impl Default for RunIdOrArchiveSelector {
+    fn default() -> Self {
+        RunIdOrArchiveSelector::RunId(RunIdSelector::Latest)
+    }
+}
+
+impl fmt::Display for RunIdOrArchiveSelector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RunIdOrArchiveSelector::RunId(selector) => write!(f, "{selector}"),
+            RunIdOrArchiveSelector::ArchivePath(path) => write!(f, "{path}"),
+        }
+    }
+}
 
 /// Selector for identifying a run, either the most recent or by prefix.
 ///
@@ -526,6 +580,70 @@ mod tests {
         assert_eq!(
             RunIdSelector::Prefix("abc123".to_owned()).to_string(),
             "abc123"
+        );
+    }
+
+    #[test]
+    fn test_run_id_or_archive_selector_default() {
+        assert_eq!(
+            RunIdOrArchiveSelector::default(),
+            RunIdOrArchiveSelector::RunId(RunIdSelector::Latest)
+        );
+    }
+
+    #[test]
+    fn test_run_id_or_archive_selector_from_str() {
+        // "latest" parses to RunId(Latest).
+        assert_eq!(
+            "latest".parse::<RunIdOrArchiveSelector>().unwrap(),
+            RunIdOrArchiveSelector::RunId(RunIdSelector::Latest)
+        );
+
+        // Hex prefixes parse to RunId(Prefix(...)).
+        assert_eq!(
+            "abc123".parse::<RunIdOrArchiveSelector>().unwrap(),
+            RunIdOrArchiveSelector::RunId(RunIdSelector::Prefix("abc123".to_owned()))
+        );
+
+        // Paths ending in .zip parse to ArchivePath.
+        assert_eq!(
+            "nextest-run-abc123.zip"
+                .parse::<RunIdOrArchiveSelector>()
+                .unwrap(),
+            RunIdOrArchiveSelector::ArchivePath(Utf8PathBuf::from("nextest-run-abc123.zip"))
+        );
+        assert_eq!(
+            "/path/to/archive.zip"
+                .parse::<RunIdOrArchiveSelector>()
+                .unwrap(),
+            RunIdOrArchiveSelector::ArchivePath(Utf8PathBuf::from("/path/to/archive.zip"))
+        );
+        assert_eq!(
+            "../relative/path.zip"
+                .parse::<RunIdOrArchiveSelector>()
+                .unwrap(),
+            RunIdOrArchiveSelector::ArchivePath(Utf8PathBuf::from("../relative/path.zip"))
+        );
+
+        // Invalid run ID selector (not hex, not .zip) still fails.
+        assert!("xyz".parse::<RunIdOrArchiveSelector>().is_err());
+        assert!("hello".parse::<RunIdOrArchiveSelector>().is_err());
+    }
+
+    #[test]
+    fn test_run_id_or_archive_selector_display() {
+        assert_eq!(
+            RunIdOrArchiveSelector::RunId(RunIdSelector::Latest).to_string(),
+            "latest"
+        );
+        assert_eq!(
+            RunIdOrArchiveSelector::RunId(RunIdSelector::Prefix("abc123".to_owned())).to_string(),
+            "abc123"
+        );
+        assert_eq!(
+            RunIdOrArchiveSelector::ArchivePath(Utf8PathBuf::from("/path/to/archive.zip"))
+                .to_string(),
+            "/path/to/archive.zip"
         );
     }
 }

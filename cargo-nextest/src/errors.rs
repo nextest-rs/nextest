@@ -9,8 +9,9 @@ use nextest_metadata::NextestExitCode;
 use nextest_runner::{
     config::core::{ConfigExperimental, ToolName},
     errors::{
-        CacheDirError, PortableArchiveError, RecordReadError, RecordSetupError,
-        RunIdResolutionError, RunStoreError, TestListFromSummaryError, UserConfigError, *,
+        CacheDirError, PortableArchiveError, PortableArchiveReadError, RecordReadError,
+        RecordSetupError, RunIdResolutionError, RunStoreError, TestListFromSummaryError,
+        UserConfigError, *,
     },
     helpers::{format_interceptor_too_many_tests, plural},
     indenter::DisplayIndented,
@@ -416,6 +417,8 @@ pub enum ExpectedError {
         #[source]
         err: std::io::Error,
     },
+    #[error("error extracting from portable archive: {message}")]
+    DebugExtractArchiveError { message: String },
     #[error("run ID resolution error")]
     RunIdResolutionError {
         #[source]
@@ -435,6 +438,11 @@ pub enum ExpectedError {
     PortableArchiveError {
         #[source]
         err: PortableArchiveError,
+    },
+    #[error("error reading portable archive")]
+    PortableArchiveReadError {
+        #[source]
+        err: PortableArchiveReadError,
     },
     #[error("error reconstructing test list from archive")]
     TestListFromSummaryError {
@@ -590,6 +598,7 @@ impl ExpectedError {
             | Self::ShowTestGroupsError { .. }
             | Self::InvalidMessageFormatVersion { .. }
             | Self::DebugExtractReadError { .. }
+            | Self::DebugExtractArchiveError { .. }
             | Self::CargoMessageFormatError { .. } => NextestExitCode::SETUP_ERROR,
             Self::ConfigParseError { err } => {
                 // Experimental features not being enabled are their own error.
@@ -640,6 +649,7 @@ impl ExpectedError {
             | Self::StoreVersionIncompatible { .. }
             | Self::TestListFromSummaryError { .. } => NextestExitCode::SETUP_ERROR,
             Self::PortableArchiveError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
+            Self::PortableArchiveReadError { .. } => NextestExitCode::SETUP_ERROR,
             Self::WriteError { .. } => NextestExitCode::WRITE_OUTPUT_ERROR,
             Self::FiltersetParseError { .. } => NextestExitCode::INVALID_FILTERSET,
         }
@@ -1265,6 +1275,10 @@ impl ExpectedError {
                 error!("error writing {format} output");
                 Some(err as &dyn Error)
             }
+            Self::DebugExtractArchiveError { message } => {
+                error!("{message}");
+                None
+            }
             Self::RunIdResolutionError { err } => {
                 match &err {
                     RunIdResolutionError::NotFound { prefix } => {
@@ -1326,6 +1340,10 @@ impl ExpectedError {
             }
             Self::PortableArchiveError { err } => {
                 error!("error creating portable archive");
+                Some(err as &dyn Error)
+            }
+            Self::PortableArchiveReadError { err } => {
+                error!("error reading portable archive");
                 Some(err as &dyn Error)
             }
             Self::StoreVersionIncompatible {

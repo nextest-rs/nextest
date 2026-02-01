@@ -13,9 +13,9 @@ use nextest_runner::{
     helpers::ThemeCharacters,
     pager::PagedOutput,
     record::{
-        DisplayRunList, PortableArchiveWriter, PruneKind, RecordRetentionPolicy, RecordedRunStatus,
-        RunIdSelector, RunStore, SnapshotWithReplayability, Styles as RecordStyles,
-        records_cache_dir,
+        DisplayRunList, PortableArchive, PortableArchiveWriter, PruneKind, RecordRetentionPolicy,
+        RecordedRunStatus, RunIdIndex, RunIdOrArchiveSelector, RunIdSelector, RunStore,
+        SnapshotWithReplayability, Styles as RecordStyles, records_cache_dir,
     },
     redact::Redactor,
     user_config::{UserConfig, elements::RecordConfig},
@@ -40,26 +40,30 @@ pub(crate) enum StoreCommand {
 /// Options for the `cargo nextest store info` command.
 #[derive(Debug, Args)]
 pub(crate) struct InfoOpts {
-    /// Run ID to show info for, or `latest` [aliases: -R].
+    /// Run ID, `latest`, or archive path to show info for [aliases: -R].
     ///
-    /// Accepts "latest" for the most recent completed run, or a full UUID or
-    /// unambiguous prefix.
-    #[arg(value_name = "RUN_ID", required_unless_present = "run_id_opt")]
-    run_id: Option<RunIdSelector>,
+    /// Accepts "latest" for the most recent completed run, a full UUID or
+    /// unambiguous prefix, or a path to a portable archive (`.zip` file).
+    #[arg(
+        value_name = "RUN_ID_OR_ARCHIVE",
+        required_unless_present = "run_id_opt"
+    )]
+    run_id: Option<RunIdOrArchiveSelector>,
 
-    /// Run ID to show info for (alternative to positional argument).
+    /// Run ID, `latest`, or archive path to show info for (alternative to
+    /// positional argument).
     #[arg(
         short = 'R',
         long = "run-id",
         hide = true,
-        value_name = "RUN_ID",
+        value_name = "RUN_ID_OR_ARCHIVE",
         conflicts_with = "run_id"
     )]
-    run_id_opt: Option<RunIdSelector>,
+    run_id_opt: Option<RunIdOrArchiveSelector>,
 }
 
 impl InfoOpts {
-    fn resolved_run_id(&self) -> &RunIdSelector {
+    fn resolved_selector(&self) -> &RunIdOrArchiveSelector {
         // One of these must be Some due to clap's required_unless_present.
         self.run_id
             .as_ref()
@@ -67,8 +71,9 @@ impl InfoOpts {
             .expect("run_id or run_id_opt is present due to clap validation")
     }
 
-    fn exec(
+    fn exec_from_store(
         &self,
+        run_id_selector: &RunIdSelector,
         cache_dir: &Utf8Path,
         styles: &RecordStyles,
         theme_characters: &ThemeCharacters,
@@ -84,7 +89,7 @@ impl InfoOpts {
             .into_snapshot();
 
         let resolved = snapshot
-            .resolve_run_id(self.resolved_run_id())
+            .resolve_run_id(run_id_selector)
             .map_err(|err| ExpectedError::RunIdResolutionError { err })?;
         let run_id = resolved.run_id;
 
@@ -93,9 +98,42 @@ impl InfoOpts {
             .get_run(run_id)
             .expect("run ID was just resolved, so the run should exist");
 
-        let replayability = run.check_replayability(snapshot.runs_dir());
+        let replayability = run.check_replayability(&snapshot.runs_dir().run_files(run_id));
         let display = run.display_detailed(
             snapshot.run_id_index(),
+            &replayability,
+            Utc::now(),
+            styles,
+            theme_characters,
+            redactor,
+        );
+
+        write!(paged_output, "{}", display).map_err(|err| ExpectedError::WriteError { err })?;
+
+        Ok(0)
+    }
+
+    fn exec_from_archive(
+        &self,
+        archive_path: &Utf8Path,
+        styles: &RecordStyles,
+        theme_characters: &ThemeCharacters,
+        paged_output: &mut PagedOutput,
+        redactor: &Redactor,
+    ) -> Result<i32> {
+        let archive = PortableArchive::open(archive_path)
+            .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+
+        let run_info = archive.run_info();
+
+        // Create a single-entry index for display purposes.
+        let run_id_index = RunIdIndex::new(std::slice::from_ref(&run_info));
+
+        // Check replayability using the archive for file existence checks.
+        let replayability = run_info.check_replayability(&archive);
+
+        let display = run_info.display_detailed(
+            &run_id_index,
             &replayability,
             Utc::now(),
             styles,
@@ -257,6 +295,40 @@ impl StoreCommand {
         user_config: &UserConfig,
         output: OutputContext,
     ) -> Result<i32> {
+        let mut styles = RecordStyles::default();
+        let mut theme_characters = ThemeCharacters::default();
+        if output.color.should_colorize(supports_color::Stream::Stdout) {
+            styles.colorize();
+        }
+        if supports_unicode::on(supports_unicode::Stream::Stdout) {
+            theme_characters.use_unicode();
+        }
+
+        let (pager_setting, paginate) = early_args.resolve_pager(&user_config.ui);
+        let mut paged_output =
+            PagedOutput::request_pager(&pager_setting, paginate, &user_config.ui.streampager);
+
+        // Create redactor for snapshot testing if __NEXTEST_REDACT=1.
+        let redactor = if crate::output::should_redact() {
+            Redactor::for_snapshot_testing()
+        } else {
+            Redactor::noop()
+        };
+
+        // Check if this is an archive-based info command first (no workspace needed).
+        if let Self::Info(ref opts) = self
+            && let RunIdOrArchiveSelector::ArchivePath(path) = opts.resolved_selector()
+        {
+            return opts.exec_from_archive(
+                path,
+                &styles,
+                &theme_characters,
+                &mut paged_output,
+                &redactor,
+            );
+        }
+
+        // All other commands require a workspace.
         let mut cargo_cli = CargoCli::new("locate-project", manifest_path.as_deref(), output);
         cargo_cli.add_args(["--workspace", "--message-format=plain"]);
         let locate_project_output = cargo_cli
@@ -285,26 +357,6 @@ impl StoreCommand {
 
         let cache_dir = records_cache_dir(workspace_root)
             .map_err(|err| ExpectedError::RecordCacheDirNotFound { err })?;
-
-        let (pager_setting, paginate) = early_args.resolve_pager(&user_config.ui);
-        let mut paged_output =
-            PagedOutput::request_pager(&pager_setting, paginate, &user_config.ui.streampager);
-
-        let mut styles = RecordStyles::default();
-        let mut theme_characters = ThemeCharacters::default();
-        if output.color.should_colorize(supports_color::Stream::Stdout) {
-            styles.colorize();
-        }
-        if supports_unicode::on(supports_unicode::Stream::Stdout) {
-            theme_characters.use_unicode();
-        }
-
-        // Create redactor for snapshot testing if __NEXTEST_REDACT=1.
-        let redactor = if crate::output::should_redact() {
-            Redactor::for_snapshot_testing()
-        } else {
-            Redactor::noop()
-        };
 
         match self {
             Self::List {} => {
@@ -338,13 +390,22 @@ impl StoreCommand {
 
                 Ok(0)
             }
-            Self::Info(opts) => opts.exec(
-                &cache_dir,
-                &styles,
-                &theme_characters,
-                &mut paged_output,
-                &redactor,
-            ),
+            Self::Info(opts) => {
+                // Archive path was already handled above, so this must be a run ID.
+                match opts.resolved_selector() {
+                    RunIdOrArchiveSelector::RunId(run_id_selector) => opts.exec_from_store(
+                        run_id_selector,
+                        &cache_dir,
+                        &styles,
+                        &theme_characters,
+                        &mut paged_output,
+                        &redactor,
+                    ),
+                    RunIdOrArchiveSelector::ArchivePath(_) => {
+                        unreachable!("archive path was handled above")
+                    }
+                }
+            }
             Self::Prune(opts) => opts.exec(
                 &cache_dir,
                 &user_config.record,

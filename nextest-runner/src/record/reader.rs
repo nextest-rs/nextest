@@ -5,6 +5,9 @@
 //!
 //! The [`RecordReader`] reads a recorded test run from disk, providing access
 //! to metadata and events stored during the run.
+//!
+//! The [`StoreReader`] trait provides a unified interface for reading from
+//! either on-disk stores or portable archives.
 
 use super::{
     format::{
@@ -23,9 +26,55 @@ use debug_ignore::DebugIgnore;
 use nextest_metadata::TestListSummary;
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Read},
+    io::{self, BufRead, BufReader, Read},
 };
 use zip::{ZipArchive, result::ZipError};
+
+/// Trait for reading from a recorded run's store.
+///
+/// This trait abstracts over reading from either an on-disk store directory
+/// (via [`RecordReader`]) or from an inner store.zip within a portable archive
+/// (via [`PortableStoreReader`](super::portable::PortableStoreReader)).
+pub trait StoreReader {
+    /// Returns the cargo metadata JSON from the store.
+    fn read_cargo_metadata(&mut self) -> Result<String, RecordReadError>;
+
+    /// Returns the test list summary from the store.
+    fn read_test_list(&mut self) -> Result<TestListSummary, RecordReadError>;
+
+    /// Returns the record options from the store.
+    fn read_record_opts(&mut self) -> Result<RecordOpts, RecordReadError>;
+
+    /// Returns the rerun info from the store, if this is a rerun.
+    ///
+    /// Returns `Ok(None)` if this run is not a rerun (the file doesn't exist).
+    fn read_rerun_info(&mut self) -> Result<Option<RerunInfo>, RecordReadError>;
+
+    /// Loads the dictionaries from the store.
+    ///
+    /// This must be called before reading output files.
+    fn load_dictionaries(&mut self) -> Result<(), RecordReadError>;
+
+    /// Reads output for a specific file from the store.
+    ///
+    /// The `file_name` should be the value from `ZipStoreOutput::file_name`,
+    /// e.g., "test-abc123-1-stdout".
+    ///
+    /// # Panics
+    ///
+    /// Panics if [`load_dictionaries`](Self::load_dictionaries) has not been called first.
+    fn read_output(&mut self, file_name: &str) -> Result<Vec<u8>, RecordReadError>;
+
+    /// Extracts a file from the store to a path, streaming directly.
+    ///
+    /// The `store_path` is relative to the store root (e.g., `meta/test-list.json`).
+    /// Returns the number of bytes written.
+    fn extract_file_to_path(
+        &mut self,
+        store_path: &str,
+        output_path: &Utf8Path,
+    ) -> Result<u64, RecordReadError>;
+}
 
 /// Reader for a recorded test run.
 ///
@@ -280,11 +329,65 @@ impl RecordReader {
     }
 }
 
+impl StoreReader for RecordReader {
+    fn read_cargo_metadata(&mut self) -> Result<String, RecordReadError> {
+        RecordReader::read_cargo_metadata(self)
+    }
+
+    fn read_test_list(&mut self) -> Result<TestListSummary, RecordReadError> {
+        RecordReader::read_test_list(self)
+    }
+
+    fn read_record_opts(&mut self) -> Result<RecordOpts, RecordReadError> {
+        RecordReader::read_record_opts(self)
+    }
+
+    fn read_rerun_info(&mut self) -> Result<Option<RerunInfo>, RecordReadError> {
+        RecordReader::read_rerun_info(self)
+    }
+
+    fn load_dictionaries(&mut self) -> Result<(), RecordReadError> {
+        RecordReader::load_dictionaries(self)
+    }
+
+    fn read_output(&mut self, file_name: &str) -> Result<Vec<u8>, RecordReadError> {
+        RecordReader::read_output(self, file_name)
+    }
+
+    fn extract_file_to_path(
+        &mut self,
+        store_path: &str,
+        output_path: &Utf8Path,
+    ) -> Result<u64, RecordReadError> {
+        let archive = self.ensure_archive()?;
+        let mut file =
+            archive
+                .by_name(store_path)
+                .map_err(|error| RecordReadError::ReadArchiveFile {
+                    file_name: store_path.to_owned(),
+                    error,
+                })?;
+
+        let mut output_file =
+            File::create(output_path).map_err(|error| RecordReadError::ExtractFile {
+                store_path: store_path.to_owned(),
+                output_path: output_path.to_owned(),
+                error,
+            })?;
+
+        io::copy(&mut file, &mut output_file).map_err(|error| RecordReadError::ExtractFile {
+            store_path: store_path.to_owned(),
+            output_path: output_path.to_owned(),
+            error,
+        })
+    }
+}
+
 /// Decompresses data using a pre-trained zstd dictionary, with a size limit.
 ///
 /// The limit prevents compression bombs where a small compressed payload
 /// expands to an extremely large decompressed output.
-fn decompress_with_dict(
+pub(super) fn decompress_with_dict(
     compressed: &[u8],
     dict_bytes: &[u8],
     limit: u64,

@@ -15,27 +15,30 @@ use clap::Args;
 use guppy::{graph::PackageGraph, platform::Platform};
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{
-    errors::DisplayErrorChain,
+    errors::{DisplayErrorChain, RecordReadError},
     list::{OwnedTestInstanceId, TestList},
     pager::PagedOutput,
     record::{
-        RecordReader, ReplayContext, ReplayHeader, ReplayReporterBuilder, RunIdSelector, RunStore,
-        STORE_FORMAT_VERSION, records_cache_dir,
+        PortableArchive, RecordReader, RecordedRunInfo, ReplayContext, ReplayHeader,
+        ReplayReporterBuilder, RunIdIndex, RunIdOrArchiveSelector, RunStore, STORE_FORMAT_VERSION,
+        StoreReader, TestEventSummary, ZipStoreOutput, records_cache_dir,
     },
     reporter::ReporterOutput,
     user_config::{UserConfig, UserConfigExperimental},
 };
+use quick_junit::ReportUuid;
 use tracing::warn;
 
 /// Options for the replay command.
 #[derive(Debug, Args)]
 pub(crate) struct ReplayOpts {
-    /// Run ID to replay, or `latest`.
+    /// Run ID, `latest`, or archive path to replay.
     ///
     /// Accepts "latest" (the default) for the most recent completed run,
-    /// or a full UUID or unambiguous prefix.
-    #[arg(long, short = 'R', value_name = "RUN_ID", default_value_t)]
-    pub(crate) run_id: RunIdSelector,
+    /// a full UUID or unambiguous prefix, or a path to a portable archive
+    /// (`.zip` file).
+    #[arg(long, short = 'R', value_name = "RUN_ID_OR_ARCHIVE", default_value_t)]
+    pub(crate) run_id: RunIdOrArchiveSelector,
 
     /// Exit with the same code as the original run.
     ///
@@ -80,6 +83,36 @@ pub(crate) fn exec_replay(
     manifest_path: Option<Utf8PathBuf>,
     output: OutputContext,
 ) -> Result<i32> {
+    // Load user config and check the experimental feature early.
+    let host_platform =
+        Platform::build_target().expect("nextest is built for a supported platform");
+    let user_config =
+        UserConfig::for_host_platform(&host_platform, early_args.user_config_location())
+            .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })?;
+
+    // The replay command requires the record experimental feature to be enabled.
+    if !user_config.is_experimental_enabled(UserConfigExperimental::Record) {
+        return Err(ExpectedError::ExperimentalFeatureNotEnabled {
+            name: "cargo nextest replay",
+            var_name: UserConfigExperimental::Record.env_var(),
+        });
+    }
+
+    // Archive-based replay doesn't require a workspace.
+    let run_id_selector = match &replay_opts.run_id {
+        RunIdOrArchiveSelector::ArchivePath(archive_path) => {
+            return exec_replay_from_archive(
+                early_args,
+                &replay_opts,
+                archive_path,
+                &user_config,
+                output,
+            );
+        }
+        RunIdOrArchiveSelector::RunId(selector) => selector,
+    };
+
+    // Workspace-based replay requires locating the workspace.
     let mut cargo_cli = CargoCli::new("locate-project", manifest_path.as_deref(), output);
     cargo_cli.add_args(["--workspace", "--message-format=plain"]);
     let locate_project_output = cargo_cli
@@ -106,22 +139,6 @@ pub(crate) fn exec_replay(
                 workspace_root: workspace_root.to_owned(),
             })?;
 
-    // Load user config and check the experimental feature early, before
-    // accessing the store.
-    let host_platform =
-        Platform::build_target().expect("nextest is built for a supported platform");
-    let user_config =
-        UserConfig::for_host_platform(&host_platform, early_args.user_config_location())
-            .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })?;
-
-    // The replay command requires the record experimental feature to be enabled.
-    if !user_config.is_experimental_enabled(UserConfigExperimental::Record) {
-        return Err(ExpectedError::ExperimentalFeatureNotEnabled {
-            name: "cargo nextest replay",
-            var_name: UserConfigExperimental::Record.env_var(),
-        });
-    }
-
     let cache_dir = records_cache_dir(workspace_root)
         .map_err(|err| ExpectedError::RecordCacheDirNotFound { err })?;
 
@@ -132,7 +149,7 @@ pub(crate) fn exec_replay(
         .into_snapshot();
 
     let result = snapshot
-        .resolve_run_id(&replay_opts.run_id)
+        .resolve_run_id(run_id_selector)
         .map_err(|err| ExpectedError::RunIdResolutionError { err })?;
     let run_id = result.run_id;
 
@@ -159,17 +176,93 @@ pub(crate) fn exec_replay(
         .load_dictionaries()
         .map_err(|err| ExpectedError::RecordReadError { err })?;
 
-    let cargo_metadata_json = reader
+    let mut events = reader
+        .events()
+        .map_err(|err| ExpectedError::RecordReadError { err })?;
+
+    run_replay_common(
+        early_args,
+        &replay_opts,
+        &user_config,
+        output,
+        run_id,
+        run_info,
+        Some(snapshot.run_id_index()),
+        &mut reader,
+        &mut events,
+    )
+}
+
+/// Executes replay from a portable archive.
+fn exec_replay_from_archive(
+    early_args: &EarlyArgs,
+    replay_opts: &ReplayOpts,
+    archive_path: &Utf8Path,
+    user_config: &UserConfig,
+    output: OutputContext,
+) -> Result<i32> {
+    let mut archive = PortableArchive::open(archive_path)
+        .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+
+    let run_info = archive.run_info();
+    let run_id = run_info.run_id;
+
+    let run_log = archive
+        .read_run_log()
+        .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+
+    let mut store_reader = archive
+        .open_store()
+        .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+
+    store_reader
+        .load_dictionaries()
+        .map_err(|err| ExpectedError::RecordReadError { err })?;
+
+    let mut events = run_log
+        .events()
+        .map_err(|err| ExpectedError::RecordReadError { err })?;
+
+    run_replay_common(
+        early_args,
+        replay_opts,
+        user_config,
+        output,
+        run_id,
+        &run_info,
+        None,
+        &mut store_reader,
+        &mut events,
+    )
+}
+
+type EventIter<'a> =
+    &'a mut dyn Iterator<Item = Result<TestEventSummary<ZipStoreOutput>, RecordReadError>>;
+
+/// Common replay logic shared between store-based and archive-based replay.
+#[expect(clippy::too_many_arguments)]
+fn run_replay_common(
+    early_args: &EarlyArgs,
+    replay_opts: &ReplayOpts,
+    user_config: &UserConfig,
+    output: OutputContext,
+    run_id: ReportUuid,
+    run_info: &RecordedRunInfo,
+    run_id_index: Option<&RunIdIndex>,
+    store_reader: &mut dyn StoreReader,
+    events: EventIter<'_>,
+) -> Result<i32> {
+    let cargo_metadata_json = store_reader
         .read_cargo_metadata()
         .map_err(|err| ExpectedError::RecordReadError { err })?;
     let graph = PackageGraph::from_json(&cargo_metadata_json)
         .map_err(|err| ExpectedError::cargo_metadata_parse_error(None, err))?;
 
-    let test_list_summary = reader
+    let test_list_summary = store_reader
         .read_test_list()
         .map_err(|err| ExpectedError::RecordReadError { err })?;
 
-    let record_opts = reader
+    let record_opts = store_reader
         .read_record_opts()
         .map_err(|err| ExpectedError::RecordReadError { err })?;
 
@@ -210,21 +303,21 @@ pub(crate) fn exec_replay(
     );
 
     // Write the replay header through the reporter.
-    let header = ReplayHeader::new(run_id, run_info, Some(snapshot.run_id_index()));
+    let header = ReplayHeader::new(run_id, run_info, run_id_index);
     reporter.write_header(&header)?;
 
-    for event_result in reader
-        .events()
-        .map_err(|err| ExpectedError::RecordReadError { err })?
-    {
+    for event_result in events {
         let event_summary = event_result.map_err(|err| ExpectedError::RecordReadError { err })?;
 
-        match replay_cx.convert_event(&event_summary, &mut reader) {
+        match replay_cx.convert_event(&event_summary, store_reader) {
             Ok(event) => {
                 reporter.write_event(&event)?;
             }
             Err(error) => {
                 // Warn about conversion errors, but continue replaying.
+                //
+                // TODO: we should use reporter.write_error here so that it is
+                // displayed in paged output.
                 warn!(
                     "error converting replay event: {}",
                     DisplayErrorChain::new(error)

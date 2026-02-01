@@ -48,19 +48,25 @@ pub use display::{
     DisplayRunList, RunListAlignment, Styles,
 };
 pub use format::{
-    OutputDict, RerunInfo, RerunRootInfo, RunsJsonFormatVersion, RunsJsonWritePermission,
-    STORE_FORMAT_VERSION, StoreFormatMajorVersion, StoreFormatMinorVersion, StoreFormatVersion,
-    StoreVersionIncompatibility,
+    CARGO_METADATA_JSON_PATH, OutputDict, PORTABLE_MANIFEST_FILE_NAME,
+    PortableArchiveFormatVersion, PortableArchiveVersionIncompatibility, RECORD_OPTS_JSON_PATH,
+    RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME, RerunInfo, RerunRootInfo, RunsJsonFormatVersion,
+    RunsJsonWritePermission, STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_FORMAT_VERSION,
+    STORE_ZIP_FILE_NAME, StoreFormatMajorVersion, StoreFormatMinorVersion, StoreFormatVersion,
+    StoreVersionIncompatibility, TEST_LIST_JSON_PATH,
 };
-pub use portable::{PortableArchiveResult, PortableArchiveWriter};
-pub use reader::{RecordEventIter, RecordReader};
+pub use portable::{
+    ExtractOuterFileResult, PortableArchive, PortableArchiveEventIter, PortableArchiveResult,
+    PortableArchiveRunLog, PortableArchiveWriter, PortableStoreReader,
+};
+pub use reader::{RecordEventIter, RecordReader, StoreReader};
 pub use recorder::{RunRecorder, StoreSizes};
 pub use replay::{
     ReplayContext, ReplayConversionError, ReplayHeader, ReplayReporter, ReplayReporterBuilder,
 };
 pub use rerun::ComputedRerunInfo;
 pub use retention::{PruneKind, PrunePlan, PruneResult, RecordRetentionPolicy};
-pub use run_id_index::{RunIdIndex, RunIdSelector, ShortestRunIdPrefix};
+pub use run_id_index::{RunIdIndex, RunIdOrArchiveSelector, RunIdSelector, ShortestRunIdPrefix};
 pub use session::{
     RecordFinalizeResult, RecordFinalizeWarning, RecordSession, RecordSessionConfig,
     RecordSessionSetup,
@@ -68,8 +74,8 @@ pub use session::{
 pub use store::{
     CompletedRunStats, ComponentSizes, ExclusiveLockedRunStore, NonReplayableReason,
     RecordedRunInfo, RecordedRunStatus, RecordedSizes, ReplayabilityStatus, ResolveRunIdResult,
-    RunStore, RunStoreSnapshot, SharedLockedRunStore, SnapshotWithReplayability, StoreRunsDir,
-    StressCompletedRunStats,
+    RunFilesExist, RunStore, RunStoreSnapshot, SharedLockedRunStore, SnapshotWithReplayability,
+    StoreRunFiles, StoreRunsDir, StressCompletedRunStats,
 };
 pub use summary::{
     CoreEventKind, OutputEventKind, OutputFileName, RecordOpts, StressConditionSummary,

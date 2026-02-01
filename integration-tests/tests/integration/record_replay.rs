@@ -6,7 +6,10 @@
 //! These tests verify that nextest can record test runs to disk and replay them later.
 
 use crate::{
-    fixtures::{check_rerun_expanded_output, check_rerun_output, check_run_output},
+    fixtures::{
+        check_rerun_expanded_output, check_rerun_output, check_run_output,
+        check_run_output_for_test_names,
+    },
     temp_project::TempProject,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -17,7 +20,10 @@ use integration_tests::{
     nextest_cli::CargoNextestCli,
 };
 use nextest_metadata::NextestExitCode;
-use nextest_runner::record::encode_workspace_path;
+use nextest_runner::record::{
+    CARGO_METADATA_JSON_PATH, PORTABLE_MANIFEST_FILE_NAME, RUN_LOG_FILE_NAME, STORE_ZIP_FILE_NAME,
+    TEST_LIST_JSON_PATH, encode_workspace_path,
+};
 use regex::Regex;
 use std::{
     collections::BTreeSet,
@@ -1243,6 +1249,226 @@ fn test_run_id_prefix_resolution() {
     );
 }
 
+/// Portable archive reading via `store info`.
+///
+/// Coverage: Reading run info directly from a portable archive, including
+/// outside a workspace context.
+#[test]
+fn test_portable_archive_reading() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const RUN_ID: &str = "79000001-0000-0000-0000-000000000001";
+
+    // Create a recording with the full test suite.
+    let run_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
+        .args(["run", "-E", "test(=test_success) | test(=test_cwd)"])
+        .output();
+    assert!(
+        run_output.exit_status.success(),
+        "recording should succeed: {run_output}"
+    );
+
+    // Export to a portable archive.
+    let archive_filename = format!("nextest-run-{RUN_ID}.zip");
+    let archive_path = temp_root.join(&archive_filename);
+    let mut cli = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None);
+    cli.args([
+        "store",
+        "export",
+        RUN_ID,
+        "--archive-file",
+        archive_path.as_str(),
+    ]);
+    let export_output = cli.output();
+    assert!(
+        export_output.exit_status.success(),
+        "store export should succeed: {export_output}"
+    );
+    assert!(
+        archive_path.exists(),
+        "portable archive should exist at {archive_path}"
+    );
+
+    // Read archive info from within the workspace.
+    let info_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info", archive_path.as_str()])
+        .output();
+    assert!(
+        info_output.exit_status.success(),
+        "store info on archive should succeed: {info_output}"
+    );
+    let info_str = info_output.stdout_as_str();
+    assert!(
+        info_str.contains(RUN_ID),
+        "store info should show run ID: {info_str}"
+    );
+    insta::assert_snapshot!(
+        "store_info_portable_archive",
+        redact_dynamic_fields(&info_str, temp_root)
+    );
+
+    // Copy the archive to a temp directory outside the workspace and read it.
+    // This verifies that reading portable archives doesn't require a workspace.
+    let external_temp = camino_tempfile::Builder::new()
+        .prefix("nextest-archive-test-")
+        .tempdir()
+        .expect("created temp dir for archive test");
+    let external_archive_path = external_temp.path().join(&archive_filename);
+    fs::copy(&archive_path, &external_archive_path).expect("copied archive to external location");
+
+    // Run `store info` from the external directory (no workspace).
+    // We use CargoNextestCli directly to avoid passing a manifest path.
+    let external_info_output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--user-config-file",
+            user_config_path.as_str(),
+            "store",
+            "info",
+            external_archive_path.as_str(),
+        ])
+        .env(NEXTEST_REDACT_ENV, "1")
+        .current_dir(external_temp.path())
+        .output();
+    assert!(
+        external_info_output.exit_status.success(),
+        "store info on archive outside workspace should succeed: {external_info_output}"
+    );
+    let external_info_str = external_info_output.stdout_as_str();
+    assert!(
+        external_info_str.contains(RUN_ID),
+        "store info should show run ID: {external_info_str}"
+    );
+
+    // Using -R flag instead of positional argument.
+    let info_with_flag = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info", "-R", archive_path.as_str()])
+        .output();
+    assert!(
+        info_with_flag.exit_status.success(),
+        "store info -R archive.zip should succeed: {info_with_flag}"
+    );
+    assert!(
+        info_with_flag.stdout_as_str().contains(RUN_ID),
+        "store info -R should show run ID"
+    );
+
+    // Replay directly from the archive within the workspace.
+    //
+    // Replay output goes to stdout, not stderr. The `--status-level all` causes
+    // SKIP lines to be shown for skipped tests, so we use
+    // ALLOW_SKIPPED_NAMES_IN_OUTPUT.
+    let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args([
+            "replay",
+            "-R",
+            archive_path.as_str(),
+            "--status-level",
+            "all",
+        ])
+        .output();
+    assert!(
+        replay_output.exit_status.success(),
+        "replay from archive should succeed: {replay_output}"
+    );
+    check_run_output_for_test_names(
+        &replay_output.stdout,
+        &["test_success", "test_cwd"],
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
+    // Replay from the archive outside the workspace (no manifest).
+    let external_replay_output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--user-config-file",
+            user_config_path.as_str(),
+            "replay",
+            "-R",
+            external_archive_path.as_str(),
+            "--status-level",
+            "all",
+        ])
+        .env(NEXTEST_REDACT_ENV, "1")
+        .current_dir(external_temp.path())
+        .output();
+    assert!(
+        external_replay_output.exit_status.success(),
+        "replay from archive outside workspace should succeed: {external_replay_output}"
+    );
+    check_run_output_for_test_names(
+        &external_replay_output.stdout,
+        &["test_success", "test_cwd"],
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
+    // Test debug extract-portable-archive command.
+    let extract_dir = temp_root.join("extracted");
+    let extract_output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "debug",
+            "extract-portable-archive",
+            archive_path.as_str(),
+            extract_dir.as_str(),
+        ])
+        .env(NEXTEST_REDACT_ENV, "1")
+        .output();
+    assert!(
+        extract_output.exit_status.success(),
+        "debug extract-portable-archive should succeed: {extract_output}"
+    );
+
+    // Snapshot the output (stdout contains the "wrote" lines).
+    insta::assert_snapshot!(
+        "debug_extract_portable_archive",
+        redact_dynamic_fields(&extract_output.stdout_as_str(), temp_root)
+    );
+
+    // Verify extracted files exist.
+    assert!(
+        extract_dir.join(PORTABLE_MANIFEST_FILE_NAME).exists(),
+        "manifest.json should exist"
+    );
+    assert!(
+        extract_dir.join(STORE_ZIP_FILE_NAME).exists(),
+        "store.zip should exist"
+    );
+    assert!(
+        extract_dir.join(RUN_LOG_FILE_NAME).exists(),
+        "run.log.zst should exist"
+    );
+    assert!(
+        extract_dir.join("meta").is_dir(),
+        "meta directory should exist"
+    );
+    assert!(
+        extract_dir.join(CARGO_METADATA_JSON_PATH).exists(),
+        "cargo-metadata.json should exist"
+    );
+    assert!(
+        extract_dir.join(TEST_LIST_JSON_PATH).exists(),
+        "test-list.json should exist"
+    );
+
+    // Error case: nonexistent archive.
+    let nonexistent_archive = temp_root.join("nonexistent.zip");
+    let nonexistent_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info", nonexistent_archive.as_str()])
+        .unchecked(true)
+        .output();
+    assert!(
+        !nonexistent_output.exit_status.success(),
+        "store info on nonexistent archive should fail"
+    );
+    let stderr = nonexistent_output.stderr_as_str();
+    assert!(
+        stderr.contains("error reading portable archive"),
+        "error should mention reading archive: {stderr}"
+    );
+}
+
 /// Replayability: missing store.zip.
 ///
 /// Coverage: When store.zip is deleted, the run is not replayable. `store info`
@@ -2018,6 +2244,188 @@ fn test_rerun_tests_outstanding() {
     insta::assert_snapshot!(
         "rerun_tests_outstanding",
         redact_dynamic_fields(&rerun_output.stderr_as_str(), temp_root)
+    );
+}
+
+/// Rerun from a portable archive.
+///
+/// Coverage: Using `--rerun archive.zip` to rerun failed tests from a portable
+/// archive. Follows the same pattern as `test_rerun_basic_flow` but sources the
+/// parent run from an archive instead of the local store.
+#[test]
+fn test_rerun_from_archive() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const INITIAL_RUN_ID: &str = "97000001-0000-0000-0000-000000000001";
+    const RERUN_FROM_ARCHIVE_ID: &str = "97000002-0000-0000-0000-000000000002";
+
+    // Create an initial run with the full test suite.
+    let initial_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(INITIAL_RUN_ID),
+    )
+    .args(["run", "--workspace", "--all-targets"])
+    .unchecked(true)
+    .output();
+    assert_eq!(
+        initial_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "initial run should fail due to failing tests: {initial_output}"
+    );
+    check_run_output(&initial_output.stderr, RunProperties::empty());
+
+    // Export the initial run to a portable archive.
+    let archive_path = temp_root.join("initial-run.zip");
+    let export_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args([
+            "store",
+            "export",
+            INITIAL_RUN_ID,
+            "--archive-file",
+            archive_path.as_str(),
+        ])
+        .output();
+    assert!(
+        export_output.exit_status.success(),
+        "export should succeed: {export_output}"
+    );
+
+    // Rerun from the archive. Only failing tests should be run.
+    let rerun_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(RERUN_FROM_ARCHIVE_ID),
+    )
+    .args(["run", "--rerun", archive_path.as_str()])
+    .unchecked(true)
+    .output();
+    assert_eq!(
+        rerun_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "rerun from archive should fail because failing tests still fail: {rerun_output}"
+    );
+    check_rerun_output(
+        &rerun_output.stderr,
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
+    // Verify the rerun's `rerun-info.json` references the archive's run as its
+    // parent.
+    let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
+    let rerun_info = read_rerun_info(&runs_dir, RERUN_FROM_ARCHIVE_ID)
+        .expect("rerun from archive should have rerun-info.json");
+    assert_eq!(
+        rerun_info["parent-run-id"].as_str(),
+        Some(INITIAL_RUN_ID),
+        "rerun-info should reference the archive's run as parent"
+    );
+    assert_eq!(
+        rerun_info["root-info"]["run-id"].as_str(),
+        Some(INITIAL_RUN_ID),
+        "root-info should reference the original run"
+    );
+
+    // Verify that build scope arguments are inherited from the archive.
+    let build_scope_args = rerun_info["root-info"]["build-scope-args"]
+        .as_array()
+        .expect("build-scope-args should be an array");
+    assert!(
+        !build_scope_args.is_empty(),
+        "build-scope-args should be preserved from the archive"
+    );
+
+    // Test rerunning from the archive at an external path.
+    let external_temp = camino_tempfile::Builder::new()
+        .prefix("nextest-rerun-archive-test-")
+        .tempdir()
+        .expect("created temp dir for archive test");
+    let external_archive_path = external_temp.path().join("run.zip");
+    fs::copy(&archive_path, &external_archive_path).expect("copied archive");
+
+    let external_rerun_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        None, // No need to force a run ID here.
+    )
+    .args(["run", "--rerun", external_archive_path.as_str()])
+    .unchecked(true)
+    .output();
+    assert_eq!(
+        external_rerun_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "rerun from external archive should fail: {external_rerun_output}"
+    );
+    check_rerun_output(
+        &external_rerun_output.stderr,
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
+    // Test that we can export a rerun, then rerun from that export, preserving
+    // the root info chain.
+    const RERUN_CHAIN_ID: &str = "97000003-0000-0000-0000-000000000003";
+
+    // Export the rerun (RERUN_FROM_ARCHIVE_ID) to a new archive.
+    let rerun_archive_path = temp_root.join("rerun.zip");
+    let export_rerun_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args([
+                "store",
+                "export",
+                RERUN_FROM_ARCHIVE_ID,
+                "--archive-file",
+                rerun_archive_path.as_str(),
+            ])
+            .output();
+    assert!(
+        export_rerun_output.exit_status.success(),
+        "export of rerun should succeed: {export_rerun_output}"
+    );
+
+    // Rerun from the rerun's archive. This tests that root_info is preserved
+    // through the archive chain.
+    let chain_rerun_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(RERUN_CHAIN_ID),
+    )
+    .args(["run", "--rerun", rerun_archive_path.as_str()])
+    .unchecked(true)
+    .output();
+    assert_eq!(
+        chain_rerun_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "rerun from rerun archive should fail: {chain_rerun_output}"
+    );
+    check_rerun_output(
+        &chain_rerun_output.stderr,
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
+    // Verify the chain rerun's rerun-info.json.
+    let chain_rerun_info = read_rerun_info(&runs_dir, RERUN_CHAIN_ID)
+        .expect("chain rerun should have rerun-info.json");
+    assert_eq!(
+        chain_rerun_info["parent-run-id"].as_str(),
+        Some(RERUN_FROM_ARCHIVE_ID),
+        "chain rerun parent should be the rerun (from the archive)"
+    );
+    assert_eq!(
+        chain_rerun_info["root-info"]["run-id"].as_str(),
+        Some(INITIAL_RUN_ID),
+        "chain rerun root should still be the original run (chain preserved through archives)"
     );
 }
 

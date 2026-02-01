@@ -1,0 +1,12 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&extract_output.stdout_as_str(), temp_root)"
+---
+wrote [TEMP_DIR]/extracted/manifest.json (<size>)
+wrote [TEMP_DIR]/extracted/run.log.zst (<size>)
+wrote [TEMP_DIR]/extracted/store.zip (<size>)
+wrote [TEMP_DIR]/extracted/meta/cargo-metadata.json (<size>)
+wrote [TEMP_DIR]/extracted/meta/test-list.json (<size>)
+wrote [TEMP_DIR]/extracted/meta/record-opts.json (<size>)
+wrote [TEMP_DIR]/extracted/meta/stdout.dict (<size>)
+wrote [TEMP_DIR]/extracted/meta/stderr.dict (<size>)
