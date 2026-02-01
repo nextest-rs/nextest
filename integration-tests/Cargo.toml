@@ -91,5 +91,9 @@ zip = { workspace = true, features = ["zstd"] }
 [target.'cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "macos", target_os = "ios", target_os = "aix"))'.dev-dependencies]
 num_threads.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+win32job.workspace = true
+windows-sys = { workspace = true, features = ["Win32_System_JobObjects"] }
+
 [lints]
 workspace = true

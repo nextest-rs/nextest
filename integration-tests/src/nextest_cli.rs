@@ -8,6 +8,8 @@ use color_eyre::{
     eyre::{Context, bail, eyre},
 };
 use nextest_metadata::TestListSummary;
+#[cfg(windows)]
+use std::os::windows::io::AsRawHandle as _;
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -17,6 +19,8 @@ use std::{
     iter,
     process::{Command, ExitStatus, Stdio},
 };
+#[cfg(windows)]
+use windows_sys::Win32::System::JobObjects::TerminateJobObject;
 
 pub fn cargo_bin() -> String {
     match std::env::var("CARGO") {
@@ -153,6 +157,26 @@ impl CargoNextestCli {
         eprintln!("*** executing: {command_str}");
 
         let mut child = command.spawn().expect("process spawn succeeded");
+
+        // On Windows, wrap the child in a job object so that any leaked
+        // grandchildren are killed when we terminate the job. This prevents
+        // leaked processes from holding onto pipe handles and causing the
+        // *outer* test to be detected as leaky.
+        //
+        // This is best-effort: if job creation or assignment fails, we proceed
+        // without it.
+        #[cfg(windows)]
+        let job = {
+            win32job::Job::create_with_limit_info(
+                win32job::ExtendedLimitInfo::new().limit_breakaway_ok(),
+            )
+            .ok()
+            .inspect(|job| {
+                let handle = child.as_raw_handle();
+                _ = job.assign_process(handle as _);
+            })
+        };
+
         let mut stdout = child.stdout.take().expect("stdout is a pipe");
         let mut stderr = child.stderr.take().expect("stderr is a pipe");
 
@@ -204,6 +228,20 @@ impl CargoNextestCli {
         // threads will exit once the process has exited and the pipes' write
         // ends have been closed.
         let exit_status = child.wait().expect("child process exited");
+
+        // On Windows, terminate the job object to kill any leaked grandchildren.
+        // This releases any pipe handles they were holding, allowing
+        // stdout/stderr to see EOF and the parent test to not be marked leaky.
+        #[cfg(windows)]
+        if let Some(job) = job {
+            let handle = job.handle();
+            // SAFETY: The handle is valid because we created the job object.
+            unsafe {
+                // Ignore the error here -- it's likely due to the process exiting.
+                // Note: 1 is the exit code returned by Windows.
+                _ = TerminateJobObject(handle as _, 1);
+            }
+        }
 
         let stdout_buf = stdout_thread
             .join()
