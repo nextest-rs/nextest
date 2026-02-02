@@ -22,7 +22,6 @@ The `{platform}` identifier is:
 - `x86_64-unknown-linux-gnu.tar.gz` for x86_64 Linux (tar.gz)
 - `x86_64-unknown-linux-musl.tar.gz` for x86_64 Linux with [musl](https://musl.libc.org/) (tar.gz)
 - `aarch64-unknown-linux-gnu.tar.gz` for aarch64 Linux (tar.gz)
-<!-- TODO: Add <!-- md:version X.Y.Z --> annotation once release version is known -->
 - `aarch64-unknown-linux-musl.tar.gz` for aarch64 Linux with [musl](https://musl.libc.org/) (tar.gz)
 - `universal-apple-darwin.tar.gz` for x86_64 and arm64 macOS (tar.gz)
 - `x86_64-pc-windows-msvc.zip` for x86_64 Windows (zip)
@@ -39,7 +38,6 @@ For convenience, the following shortcuts are defined:
 - `linux` points to `x86_64-unknown-linux-gnu.tar.gz`
 - `linux-musl` points to `x86_64-unknown-linux-musl.tar.gz`
 - `linux-arm` points to `aarch64-unknown-linux-gnu.tar.gz`
-<!-- TODO: Add <!-- md:version X.Y.Z --> annotation once release version is known -->
 - `linux-arm-musl` points to `aarch64-unknown-linux-musl.tar.gz`
 - `mac` points to `universal-apple-darwin.tar.gz`
 - `windows` points to `x86_64-pc-windows-msvc.zip`
