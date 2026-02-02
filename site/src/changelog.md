@@ -9,6 +9,16 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+<!-- TODO: This entry needs to be placed in the correct version section before release -->
+<!-- TODO: Update with PR number once PR is created -->
+<!-- BEGIN UNRELEASED ENTRY -->
+
+### Added
+
+- Nextest now publishes binaries for `aarch64-unknown-linux-musl`, providing a statically-linked ARM64 Linux binary with no runtime library dependencies.
+
+<!-- END UNRELEASED ENTRY -->
+
 ## [0.9.124] - 2026-01-25
 
 ### Fixed
