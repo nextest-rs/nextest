@@ -56,7 +56,8 @@ camino-tempfile.workspace = true
 insta.workspace = true
 
 [features]
-default = ["default-no-update", "self-update"]
+default = ["default-no-update", "self-update", "usdt"]
+usdt = ["nextest-runner/usdt"]
 experimental-tokio-console = ["nextest-runner/experimental-tokio-console"]
 # Perform self-updates (enabled by default)
 self-update = ["dep:dialoguer", "nextest-runner/self-update"]

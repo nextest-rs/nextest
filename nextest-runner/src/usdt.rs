@@ -21,43 +21,52 @@ use quick_junit::ReportUuid;
 use serde::Serialize;
 
 /// Register USDT probes on supported platforms.
-#[cfg(any(
-    all(
-        target_arch = "x86_64",
-        any(target_os = "linux", target_os = "freebsd", target_os = "illumos")
-    ),
-    all(
-        target_arch = "aarch64",
-        any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+#[cfg(all(
+    feature = "usdt",
+    any(
+        all(
+            target_arch = "x86_64",
+            any(target_os = "linux", target_os = "freebsd", target_os = "illumos")
+        ),
+        all(
+            target_arch = "aarch64",
+            any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+        )
     )
 ))]
 pub fn register_probes() -> Result<(), usdt::Error> {
     usdt::register_probes()
 }
 
-/// No-op for unsupported platforms.
-#[cfg(not(any(
-    all(
-        target_arch = "x86_64",
-        any(target_os = "linux", target_os = "freebsd", target_os = "illumos")
-    ),
-    all(
-        target_arch = "aarch64",
-        any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+/// No-op for unsupported platforms or when usdt feature is disabled.
+#[cfg(not(all(
+    feature = "usdt",
+    any(
+        all(
+            target_arch = "x86_64",
+            any(target_os = "linux", target_os = "freebsd", target_os = "illumos")
+        ),
+        all(
+            target_arch = "aarch64",
+            any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+        )
     )
 )))]
 pub fn register_probes() -> Result<(), std::convert::Infallible> {
     Ok(())
 }
 
-#[cfg(any(
-    all(
-        target_arch = "x86_64",
-        any(target_os = "linux", target_os = "freebsd", target_os = "illumos")
-    ),
-    all(
-        target_arch = "aarch64",
-        any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+#[cfg(all(
+    feature = "usdt",
+    any(
+        all(
+            target_arch = "x86_64",
+            any(target_os = "linux", target_os = "freebsd", target_os = "illumos")
+        ),
+        all(
+            target_arch = "aarch64",
+            any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+        )
     )
 ))]
 #[usdt::provider(provider = "nextest")]
@@ -128,14 +137,17 @@ pub mod usdt_probes {
 }
 
 /// Fires a USDT probe on supported platforms.
-#[cfg(any(
-    all(
-        target_arch = "x86_64",
-        any(target_os = "linux", target_os = "freebsd", target_os = "illumos")
-    ),
-    all(
-        target_arch = "aarch64",
-        any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+#[cfg(all(
+    feature = "usdt",
+    any(
+        all(
+            target_arch = "x86_64",
+            any(target_os = "linux", target_os = "freebsd", target_os = "illumos")
+        ),
+        all(
+            target_arch = "aarch64",
+            any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+        )
     )
 ))]
 #[macro_export]
@@ -238,15 +250,18 @@ macro_rules! fire_usdt {
     }};
 }
 
-/// No-op version of fire_usdt for unsupported platforms.
-#[cfg(not(any(
-    all(
-        target_arch = "x86_64",
-        any(target_os = "linux", target_os = "freebsd", target_os = "illumos")
-    ),
-    all(
-        target_arch = "aarch64",
-        any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+/// No-op version of fire_usdt for unsupported platforms or when usdt is disabled.
+#[cfg(not(all(
+    feature = "usdt",
+    any(
+        all(
+            target_arch = "x86_64",
+            any(target_os = "linux", target_os = "freebsd", target_os = "illumos")
+        ),
+        all(
+            target_arch = "aarch64",
+            any(target_os = "macos", target_os = "freebsd", target_os = "illumos")
+        )
     )
 )))]
 #[macro_export]
