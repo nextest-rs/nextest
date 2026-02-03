@@ -2135,6 +2135,12 @@ fn test_rerun_run_id_selectors() {
 
     const RUN_ID_1: &str = "93000001-0000-0000-0000-000000000001";
     const RUN_ID_2: &str = "93000002-0000-0000-0000-000000000002";
+    // Pin rerun run IDs to UUIDs that don't start with "930", so that the
+    // ambiguous prefix test below always matches exactly 2 runs.
+    const RERUN_FULL_UUID_ID: &str = "93100001-0000-0000-0000-000000000001";
+    const RERUN_SHORT_PREFIX_ID: &str = "93100002-0000-0000-0000-000000000002";
+    const RERUN_LATEST_ID: &str = "93100003-0000-0000-0000-000000000003";
+    const RERUN_AMBIGUOUS_ID: &str = "93100004-0000-0000-0000-000000000004";
 
     for run_id in [RUN_ID_1, RUN_ID_2] {
         let recording =
@@ -2153,10 +2159,16 @@ fn test_rerun_run_id_selectors() {
         );
     }
 
-    let full_uuid_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
-        .args(["run", "--rerun", RUN_ID_1])
-        .unchecked(true)
-        .output();
+    let full_uuid_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(RERUN_FULL_UUID_ID),
+    )
+    .args(["run", "--rerun", RUN_ID_1])
+    .unchecked(true)
+    .output();
     assert_eq!(
         full_uuid_output.exit_status.code(),
         Some(NextestExitCode::TEST_RUN_FAILED),
@@ -2164,31 +2176,50 @@ fn test_rerun_run_id_selectors() {
     );
 
     let short_prefix = &RUN_ID_2[..8];
-    let prefix_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
-        .args(["run", "--rerun", short_prefix])
-        .unchecked(true)
-        .output();
+    let prefix_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(RERUN_SHORT_PREFIX_ID),
+    )
+    .args(["run", "--rerun", short_prefix])
+    .unchecked(true)
+    .output();
     assert_eq!(
         prefix_output.exit_status.code(),
         Some(NextestExitCode::TEST_RUN_FAILED),
         "rerun with short prefix should fail: {prefix_output}"
     );
 
-    let latest_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
-        .args(["run", "--rerun", "latest"])
-        .unchecked(true)
-        .output();
+    let latest_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(RERUN_LATEST_ID),
+    )
+    .args(["run", "--rerun", "latest"])
+    .unchecked(true)
+    .output();
     assert_eq!(
         latest_output.exit_status.code(),
         Some(NextestExitCode::TEST_RUN_FAILED),
         "rerun with 'latest' should fail: {latest_output}"
     );
 
-    // "930" matches both runs.
-    let ambiguous_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
-        .args(["run", "--rerun", "930"])
-        .unchecked(true)
-        .output();
+    // "930" matches both RUN_ID_1 and RUN_ID_2 but not the rerun IDs
+    // (which start with "931").
+    let ambiguous_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(RERUN_AMBIGUOUS_ID),
+    )
+    .args(["run", "--rerun", "930"])
+    .unchecked(true)
+    .output();
     assert_eq!(
         ambiguous_output.exit_status.code(),
         Some(NextestExitCode::SETUP_ERROR),
