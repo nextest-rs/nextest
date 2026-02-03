@@ -56,14 +56,14 @@ camino-tempfile.workspace = true
 insta.workspace = true
 
 [features]
-default = ["default-no-update", "self-update", "usdt"]
-usdt = ["nextest-runner/usdt"]
+default = ["default-no-update", "self-update"]
 experimental-tokio-console = ["nextest-runner/experimental-tokio-console"]
 # Perform self-updates (enabled by default)
 self-update = ["dep:dialoguer", "nextest-runner/self-update"]
 # Default set of features excluding self-update. This is the recommended set of features for
 # distributor and custom CI builds.
-default-no-update = []
+default-no-update = ["usdt"]
+usdt = ["nextest-runner/usdt"]
 
 # Metadata for cargo-binstall to get the right artifacts.
 # NOTE: The URLs use GitHub Releases rather than get.nexte.st. This is so that cargo-nextest package
