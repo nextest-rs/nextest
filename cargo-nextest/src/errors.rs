@@ -9,7 +9,7 @@ use nextest_metadata::NextestExitCode;
 use nextest_runner::{
     config::core::{ConfigExperimental, ToolName},
     errors::{
-        CacheDirError, PortableArchiveError, PortableArchiveReadError, RecordReadError,
+        CacheDirError, PortableRecordingError, PortableRecordingReadError, RecordReadError,
         RecordSetupError, RunIdResolutionError, RunStoreError, TestListFromSummaryError,
         UserConfigError, *,
     },
@@ -417,8 +417,8 @@ pub enum ExpectedError {
         #[source]
         err: std::io::Error,
     },
-    #[error("error extracting from portable archive: {message}")]
-    DebugExtractArchiveError { message: String },
+    #[error("error extracting from portable recording: {message}")]
+    DebugExtractRecordingError { message: String },
     #[error("run ID resolution error")]
     RunIdResolutionError {
         #[source]
@@ -434,15 +434,15 @@ pub enum ExpectedError {
         run_id: ReportUuid,
         incompatibility: StoreVersionIncompatibility,
     },
-    #[error("error creating portable archive")]
-    PortableArchiveError {
+    #[error("error creating portable recording")]
+    PortableRecordingError {
         #[source]
-        err: PortableArchiveError,
+        err: PortableRecordingError,
     },
-    #[error("error reading portable archive")]
-    PortableArchiveReadError {
+    #[error("error reading portable recording")]
+    PortableRecordingReadError {
         #[source]
-        err: PortableArchiveReadError,
+        err: PortableRecordingReadError,
     },
     #[error("error reconstructing test list from archive")]
     TestListFromSummaryError {
@@ -598,7 +598,7 @@ impl ExpectedError {
             | Self::ShowTestGroupsError { .. }
             | Self::InvalidMessageFormatVersion { .. }
             | Self::DebugExtractReadError { .. }
-            | Self::DebugExtractArchiveError { .. }
+            | Self::DebugExtractRecordingError { .. }
             | Self::CargoMessageFormatError { .. } => NextestExitCode::SETUP_ERROR,
             Self::ConfigParseError { err } => {
                 // Experimental features not being enabled are their own error.
@@ -648,8 +648,8 @@ impl ExpectedError {
             | Self::RecordReadError { .. }
             | Self::StoreVersionIncompatible { .. }
             | Self::TestListFromSummaryError { .. } => NextestExitCode::SETUP_ERROR,
-            Self::PortableArchiveError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
-            Self::PortableArchiveReadError { .. } => NextestExitCode::SETUP_ERROR,
+            Self::PortableRecordingError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
+            Self::PortableRecordingReadError { .. } => NextestExitCode::SETUP_ERROR,
             Self::WriteError { .. } => NextestExitCode::WRITE_OUTPUT_ERROR,
             Self::FiltersetParseError { .. } => NextestExitCode::INVALID_FILTERSET,
         }
@@ -1275,7 +1275,7 @@ impl ExpectedError {
                 error!("error writing {format} output");
                 Some(err as &dyn Error)
             }
-            Self::DebugExtractArchiveError { message } => {
+            Self::DebugExtractRecordingError { message } => {
                 error!("{message}");
                 None
             }
@@ -1338,12 +1338,12 @@ impl ExpectedError {
                 error!("error reading recorded run");
                 Some(err as &dyn Error)
             }
-            Self::PortableArchiveError { err } => {
-                error!("error creating portable archive");
+            Self::PortableRecordingError { err } => {
+                error!("error creating portable recording");
                 Some(err as &dyn Error)
             }
-            Self::PortableArchiveReadError { err } => {
-                error!("error reading portable archive");
+            Self::PortableRecordingReadError { err } => {
+                error!("error reading portable recording");
                 Some(err as &dyn Error)
             }
             Self::StoreVersionIncompatible {

@@ -449,10 +449,10 @@ fn test_record_replay_cycle() {
         "archive should contain output files in out/"
     );
 
-    // Create a portable archive with the default filename.
+    // Create a portable recording with the default filename.
     // Use current_dir to write into temp_root rather than the repo root.
     let default_archive_filename = format!("nextest-run-{RUN_ID}.zip");
-    let portable_archive_path = temp_root.join(&default_archive_filename);
+    let portable_recording_path = temp_root.join(&default_archive_filename);
     let mut cli = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None);
     cli.args(["store", "export", RUN_ID]);
     cli.current_dir(temp_root);
@@ -462,10 +462,10 @@ fn test_record_replay_cycle() {
         "store export should succeed: {portable_output}"
     );
 
-    // Verify the portable archive was created with the expected name.
+    // Verify the portable recording was created with the expected name.
     assert!(
-        portable_archive_path.exists(),
-        "portable archive should exist at {portable_archive_path}"
+        portable_recording_path.exists(),
+        "portable recording should exist at {portable_recording_path}"
     );
 
     // Verify stderr mentions the archive filename and size.
@@ -479,11 +479,11 @@ fn test_record_replay_cycle() {
         "stderr should mention size: {stderr}"
     );
 
-    // Verify the portable archive contains exactly the expected files.
-    let portable_file = File::open(&portable_archive_path).unwrap();
-    let mut portable_archive = ZipArchive::new(portable_file).unwrap();
-    let portable_files: BTreeSet<_> = (0..portable_archive.len())
-        .map(|i| portable_archive.by_index(i).unwrap().name().to_string())
+    // Verify the portable recording contains exactly the expected files.
+    let portable_file = File::open(&portable_recording_path).unwrap();
+    let mut portable_recording = ZipArchive::new(portable_file).unwrap();
+    let portable_files: BTreeSet<_> = (0..portable_recording.len())
+        .map(|i| portable_recording.by_index(i).unwrap().name().to_string())
         .collect();
 
     let expected_portable_files: BTreeSet<_> = ["manifest.json", "store.zip", "run.log.zst"]
@@ -492,11 +492,11 @@ fn test_record_replay_cycle() {
         .collect();
     assert_eq!(
         portable_files, expected_portable_files,
-        "portable archive should contain exactly the expected files"
+        "portable recording should contain exactly the expected files"
     );
 
     // Verify manifest.json has the expected structure.
-    let mut manifest_file = portable_archive.by_name("manifest.json").unwrap();
+    let mut manifest_file = portable_recording.by_name("manifest.json").unwrap();
     let mut manifest_content = String::new();
     manifest_file.read_to_string(&mut manifest_content).unwrap();
     let manifest: serde_json::Value = serde_json::from_str(&manifest_content).unwrap();
@@ -517,7 +517,7 @@ fn test_record_replay_cycle() {
         "manifest run-id should match"
     );
 
-    // portable_archive_path does not need to be cleaned up, since
+    // portable_recording_path does not need to be cleaned up, since
     // it is under temp_root which is automatically cleaned
     // up when TempProject is dropped.
 
@@ -1250,7 +1250,7 @@ fn test_run_id_prefix_resolution() {
 }
 
 #[test]
-fn test_portable_archive_read() {
+fn test_portable_recording_read() {
     let env_info = set_env_vars_for_test();
     let p = TempProject::new(&env_info).unwrap();
     let cache_dir = create_cache_dir(&p);
@@ -1268,7 +1268,7 @@ fn test_portable_archive_read() {
         "recording should succeed: {run_output}"
     );
 
-    // Export to a portable archive.
+    // Export to a portable recording.
     let archive_filename = format!("nextest-run-{RUN_ID}.zip");
     let archive_path = temp_root.join(&archive_filename);
     let mut cli = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None);
@@ -1286,7 +1286,7 @@ fn test_portable_archive_read() {
     );
     assert!(
         archive_path.exists(),
-        "portable archive should exist at {archive_path}"
+        "portable recording should exist at {archive_path}"
     );
 
     // Read archive info from within the workspace.
@@ -1303,12 +1303,12 @@ fn test_portable_archive_read() {
         "store info should show run ID: {info_str}"
     );
     insta::assert_snapshot!(
-        "store_info_portable_archive",
+        "store_info_portable_recording",
         redact_dynamic_fields(&info_str, temp_root)
     );
 
     // Copy the archive to a temp directory outside the workspace and read it.
-    // This verifies that reading portable archives doesn't require a workspace.
+    // This verifies that reading portable recordings doesn't require a workspace.
     let external_temp = camino_tempfile::Builder::new()
         .prefix("nextest-archive-test-")
         .tempdir()
@@ -1400,12 +1400,12 @@ fn test_portable_archive_read() {
         RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
     );
 
-    // Test debug extract-portable-archive command.
+    // Test debug extract-portable-recording command.
     let extract_dir = temp_root.join("extracted");
     let extract_output = CargoNextestCli::for_test(&env_info)
         .args([
             "debug",
-            "extract-portable-archive",
+            "extract-portable-recording",
             archive_path.as_str(),
             extract_dir.as_str(),
         ])
@@ -1413,12 +1413,12 @@ fn test_portable_archive_read() {
         .output();
     assert!(
         extract_output.exit_status.success(),
-        "debug extract-portable-archive should succeed: {extract_output}"
+        "debug extract-portable-recording should succeed: {extract_output}"
     );
 
     // Snapshot the output (stdout contains the "wrote" lines).
     insta::assert_snapshot!(
-        "debug_extract_portable_archive",
+        "debug_extract_portable_recording",
         redact_dynamic_fields(&extract_output.stdout_as_str(), temp_root)
     );
 
@@ -1460,15 +1460,15 @@ fn test_portable_archive_read() {
     );
     let stderr = nonexistent_output.stderr_as_str();
     assert!(
-        stderr.contains("error reading portable archive"),
+        stderr.contains("error reading portable recording"),
         "error should mention reading archive: {stderr}"
     );
 }
 
-/// Coverage: Reading portable archives that are wrapped in an outer zip file,
+/// Coverage: Reading portable recordings that are wrapped in an outer zip file,
 /// as happens with GitHub Actions artifact downloads.
 #[test]
-fn test_wrapped_portable_archive_read() {
+fn test_wrapped_portable_recording_read() {
     let env_info = set_env_vars_for_test();
     let p = TempProject::new(&env_info).unwrap();
     let cache_dir = create_cache_dir(&p);
@@ -1582,7 +1582,7 @@ fn test_wrapped_portable_archive_read() {
     );
 }
 
-/// Wraps a portable archive inside an outer zip file.
+/// Wraps a portable recording inside an outer zip file.
 fn wrap_archive_in_zip(
     inner_path: &Utf8Path,
     outer_path: &Utf8Path,
@@ -2417,7 +2417,7 @@ fn test_rerun_tests_outstanding() {
     );
 }
 
-/// Rerun from a portable archive.
+/// Rerun from a portable recording.
 ///
 /// Coverage: Using `--rerun archive.zip` to rerun failed tests from a portable
 /// archive. Follows the same pattern as `test_rerun_basic_flow` but sources the
@@ -2451,7 +2451,7 @@ fn test_rerun_from_archive() {
     );
     check_run_output(&initial_output.stderr, RunProperties::empty());
 
-    // Export the initial run to a portable archive.
+    // Export the initial run to a portable recording.
     let archive_path = temp_root.join("initial-run.zip");
     let export_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
         .args([

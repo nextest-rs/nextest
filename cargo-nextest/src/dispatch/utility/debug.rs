@@ -15,7 +15,7 @@ use nextest_runner::{
     errors::{DisplayErrorChain, RecordReadError, ZipError},
     record::{
         CARGO_METADATA_JSON_PATH, ExtractOuterFileResult, PORTABLE_MANIFEST_FILE_NAME,
-        PortableArchive, RECORD_OPTS_JSON_PATH, RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME,
+        PortableRecording, RECORD_OPTS_JSON_PATH, RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME,
         STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_ZIP_FILE_NAME, StoreReader, TEST_LIST_JSON_PATH,
     },
     redact::Redactor,
@@ -67,8 +67,8 @@ pub(crate) enum DebugCommand {
         output_format: BuildPlatformsOutputFormat,
     },
 
-    /// Extract metadata files from a portable archive.
-    ExtractPortableArchive(ExtractPortableArchiveOpts),
+    /// Extract metadata files from a portable recording.
+    ExtractPortableRecording(ExtractPortableRecordingOpts),
 }
 
 impl DebugCommand {
@@ -155,7 +155,7 @@ impl DebugCommand {
                     }
                 }
             }
-            DebugCommand::ExtractPortableArchive(opts) => {
+            DebugCommand::ExtractPortableRecording(opts) => {
                 return opts.exec();
             }
         }
@@ -201,10 +201,10 @@ pub enum BuildPlatformsOutputFormat {
     Triple,
 }
 
-/// Options for `nextest debug extract-portable-archive`.
+/// Options for `nextest debug extract-portable-recording`.
 #[derive(Debug, Args)]
-pub struct ExtractPortableArchiveOpts {
-    /// Path to the portable archive (.zip file).
+pub struct ExtractPortableRecordingOpts {
+    /// Path to the portable recording (.zip file).
     #[arg(value_name = "ARCHIVE")]
     archive: Utf8PathBuf,
 
@@ -213,7 +213,7 @@ pub struct ExtractPortableArchiveOpts {
     output_dir: Utf8PathBuf,
 }
 
-impl ExtractPortableArchiveOpts {
+impl ExtractPortableRecordingOpts {
     fn exec(&self) -> Result<i32> {
         let redactor = if crate::output::should_redact() {
             Redactor::for_snapshot_testing()
@@ -223,7 +223,7 @@ impl ExtractPortableArchiveOpts {
 
         // Create the output directory if it doesn't exist.
         fs::create_dir_all(&self.output_dir).map_err(|err| {
-            ExpectedError::DebugExtractArchiveError {
+            ExpectedError::DebugExtractRecordingError {
                 message: format!(
                     "failed to create output directory: {}",
                     DisplayErrorChain::new(&err)
@@ -231,8 +231,8 @@ impl ExtractPortableArchiveOpts {
             }
         })?;
 
-        let mut archive = PortableArchive::open(&self.archive)
-            .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+        let mut archive = PortableRecording::open(&self.archive)
+            .map_err(|err| ExpectedError::PortableRecordingReadError { err })?;
 
         let mut has_errors = false;
 
@@ -271,7 +271,7 @@ impl ExtractPortableArchiveOpts {
 
         // Create the meta subdirectory for store contents.
         let meta_dir = self.output_dir.join("meta");
-        fs::create_dir_all(&meta_dir).map_err(|err| ExpectedError::DebugExtractArchiveError {
+        fs::create_dir_all(&meta_dir).map_err(|err| ExpectedError::DebugExtractRecordingError {
             message: format!(
                 "failed to create meta directory: {}",
                 DisplayErrorChain::new(&err)
@@ -280,7 +280,7 @@ impl ExtractPortableArchiveOpts {
 
         let mut store = archive
             .open_store()
-            .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+            .map_err(|err| ExpectedError::PortableRecordingReadError { err })?;
 
         // Extract store metadata files (streaming).
         for store_path in [
@@ -333,7 +333,7 @@ impl ExtractPortableArchiveOpts {
         }
 
         if has_errors {
-            Err(ExpectedError::DebugExtractArchiveError {
+            Err(ExpectedError::DebugExtractRecordingError {
                 message: "one or more files failed to extract".to_string(),
             })
         } else {

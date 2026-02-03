@@ -49,15 +49,15 @@ pub use display::{
 };
 pub use format::{
     CARGO_METADATA_JSON_PATH, OutputDict, PORTABLE_MANIFEST_FILE_NAME,
-    PortableArchiveFormatVersion, PortableArchiveVersionIncompatibility, RECORD_OPTS_JSON_PATH,
+    PortableRecordingFormatVersion, PortableRecordingVersionIncompatibility, RECORD_OPTS_JSON_PATH,
     RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME, RerunInfo, RerunRootInfo, RunsJsonFormatVersion,
     RunsJsonWritePermission, STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_FORMAT_VERSION,
     STORE_ZIP_FILE_NAME, StoreFormatMajorVersion, StoreFormatMinorVersion, StoreFormatVersion,
     StoreVersionIncompatibility, TEST_LIST_JSON_PATH, has_zip_extension,
 };
 pub use portable::{
-    ExtractOuterFileResult, PortableArchive, PortableArchiveEventIter, PortableArchiveResult,
-    PortableArchiveRunLog, PortableArchiveWriter, PortableStoreReader,
+    ExtractOuterFileResult, PortableRecording, PortableRecordingEventIter, PortableRecordingResult,
+    PortableRecordingRunLog, PortableRecordingWriter, PortableStoreReader,
 };
 pub use reader::{RecordEventIter, RecordReader, StoreReader};
 pub use recorder::{RunRecorder, StoreSizes};
@@ -66,7 +66,7 @@ pub use replay::{
 };
 pub use rerun::ComputedRerunInfo;
 pub use retention::{PruneKind, PrunePlan, PruneResult, RecordRetentionPolicy};
-pub use run_id_index::{RunIdIndex, RunIdOrArchiveSelector, RunIdSelector, ShortestRunIdPrefix};
+pub use run_id_index::{RunIdIndex, RunIdOrRecordingSelector, RunIdSelector, ShortestRunIdPrefix};
 pub use session::{
     RecordFinalizeResult, RecordFinalizeWarning, RecordSession, RecordSessionConfig,
     RecordSessionSetup,
