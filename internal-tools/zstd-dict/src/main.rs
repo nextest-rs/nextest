@@ -61,13 +61,18 @@ enum Command {
 
     /// Analyze compression across all archives.
     Analyze {
-        /// Directory containing trained dictionaries (uses embedded if not specified).
-        #[arg(short, long)]
+        /// Directory containing trained dictionaries.
+        #[arg(short, long, conflicts_with = "no_dict")]
         dict_dir: Option<Utf8PathBuf>,
 
         /// Maximum number of archives to analyze.
         #[arg(short, long, default_value = "50")]
         max_archives: usize,
+
+        /// Compress with plain zstd (no dictionary) instead of dict-compressed.
+        /// Useful for comparing dict vs no-dict compression.
+        #[arg(long, conflicts_with = "dict_dir")]
+        no_dict: bool,
     },
 
     /// Test different dictionary sizes to find optimal size.
@@ -77,11 +82,50 @@ enum Command {
         max_samples: usize,
     },
 
+    /// Sweep compression levels to find optimal level.
+    LevelSweep {
+        /// Maximum number of samples per category.
+        #[arg(short, long, default_value = "10000")]
+        max_samples: usize,
+
+        /// Directory containing trained dictionaries.
+        #[arg(short, long, conflicts_with = "no_dict")]
+        dict_dir: Option<Utf8PathBuf>,
+
+        /// Test with plain zstd only (no dictionary).
+        #[arg(long, conflicts_with = "dict_dir")]
+        no_dict: bool,
+    },
+
     /// Analyze compression per-project.
     PerProject {
-        /// Directory containing trained dictionaries (uses embedded if not specified).
+        /// Directory containing trained dictionaries.
+        #[arg(short, long, conflicts_with = "no_dict")]
+        dict_dir: Option<Utf8PathBuf>,
+
+        /// Compress with plain zstd (no dictionary) instead of dict-compressed.
+        #[arg(long, conflicts_with = "dict_dir")]
+        no_dict: bool,
+    },
+
+    /// Dump per-entry compression sizes for CDF plotting.
+    ///
+    /// Outputs to stdout in space-separated format suitable for gnuplot:
+    ///
+    ///   category uncompressed dict_compressed plain_compressed
+    ///
+    /// where `category` is a label for the entry (for example, stdout, stderr,
+    /// or combined), and the remaining columns are sizes in bytes. One line per
+    /// test output entry. Not pre-sorted; the accompanying gnuplot scripts
+    /// handle sorting and CDF computation.
+    DumpCdf {
+        /// Directory containing trained dictionaries.
         #[arg(short, long)]
         dict_dir: Option<Utf8PathBuf>,
+
+        /// Maximum number of archives to process.
+        #[arg(short, long, default_value = "50")]
+        max_archives: usize,
     },
 }
 
@@ -103,9 +147,28 @@ fn main() -> Result<()> {
         Command::Analyze {
             dict_dir,
             max_archives,
-        } => analyze_compression(dict_dir.as_deref(), max_archives),
+            no_dict,
+        } => {
+            let source = DictSource::from_cli(dict_dir, no_dict);
+            analyze_compression(&source, max_archives)
+        }
         Command::SizeSweep { max_samples } => size_sweep(max_samples),
-        Command::PerProject { dict_dir } => analyze_per_project(dict_dir.as_deref()),
+        Command::LevelSweep {
+            max_samples,
+            dict_dir,
+            no_dict,
+        } => {
+            let source = DictSource::from_cli(dict_dir, no_dict);
+            level_sweep(max_samples, &source)
+        }
+        Command::PerProject { dict_dir, no_dict } => {
+            let source = DictSource::from_cli(dict_dir, no_dict);
+            analyze_per_project(&source)
+        }
+        Command::DumpCdf {
+            dict_dir,
+            max_archives,
+        } => dump_cdf(dict_dir.as_deref(), max_archives),
     }
 }
 
@@ -115,7 +178,7 @@ fn main() -> Result<()> {
 
 /// Find the nextest cache directory.
 fn find_cache_dir() -> Result<Utf8PathBuf> {
-    let base = etcetera::base_strategy::choose_native_strategy()
+    let base = etcetera::base_strategy::choose_base_strategy()
         .wrap_err("failed to determine base directories")?;
     let cache_dir = base.cache_dir();
     let nextest_cache = Utf8PathBuf::try_from(cache_dir.join("nextest"))
@@ -212,6 +275,62 @@ impl SampleCategory {
 }
 
 // ---
+// Dictionary source
+// ---
+
+/// Where to load recompression dictionaries from.
+enum DictSource {
+    /// Do not use dictionaries; compress with plain zstd.
+    NoDictionary,
+
+    /// Use the dictionaries embedded in the nextest-runner binary.
+    Embedded,
+
+    /// Use dictionaries from the given directory on disk.
+    Directory(Utf8PathBuf),
+}
+
+impl DictSource {
+    /// Construct from the CLI flags. `--no-dict` and `--dict-dir` are mutually
+    /// exclusive (enforced by clap).
+    fn from_cli(dict_dir: Option<Utf8PathBuf>, no_dict: bool) -> Self {
+        if no_dict {
+            Self::NoDictionary
+        } else if let Some(dir) = dict_dir {
+            Self::Directory(dir)
+        } else {
+            Self::Embedded
+        }
+    }
+
+    fn label(&self) -> &'static str {
+        match self {
+            Self::NoDictionary => "plain zstd-3",
+            Self::Embedded => "embedded dict",
+            Self::Directory(_) => "custom dict",
+        }
+    }
+
+    /// Load a dictionary for the given category. Returns `None` for
+    /// `NoDictionary` or if the category has no dictionary.
+    fn load(&self, category: SampleCategory) -> Result<Option<Vec<u8>>> {
+        match self {
+            Self::NoDictionary => Ok(None),
+            Self::Embedded => Ok(category.embedded_dict().map(|d| d.to_vec())),
+            Self::Directory(dir) => {
+                let dict_path = dir.join(category.dict_filename());
+                if dict_path.exists() {
+                    Ok(Some(fs::read(&dict_path)?))
+                } else {
+                    // Fall back to embedded if not on disk.
+                    Ok(category.embedded_dict().map(|d| d.to_vec()))
+                }
+            }
+        }
+    }
+}
+
+// ---
 // Dictionary training
 // ---
 
@@ -237,6 +356,8 @@ fn train_dictionaries(output_dir: &Utf8Path, max_samples: usize, dict_size: usiz
             }
         };
 
+        let dicts = ArchiveDicts::load(&mut archive);
+
         for i in 0..archive.len() {
             let mut entry = match archive.by_index(i) {
                 Ok(e) => e,
@@ -253,12 +374,14 @@ fn train_dictionaries(output_dir: &Utf8Path, max_samples: usize, dict_size: usiz
                 continue;
             }
 
-            let mut data = Vec::new();
-            if entry.read_to_end(&mut data).is_ok() && !data.is_empty() {
-                // Skip very large samples (>1MB) as they skew the dictionary.
-                if data.len() <= 1_000_000 {
-                    samples_for_category.push(data);
-                }
+            let data = match read_out_entry_raw(&mut entry, category, &dicts) {
+                Ok(d) if !d.is_empty() => d,
+                _ => continue,
+            };
+
+            // Skip very large samples (>1MB) as they skew the dictionary.
+            if data.len() <= 1_000_000 {
+                samples_for_category.push(data);
             }
         }
 
@@ -362,15 +485,22 @@ fn recompress_archive(
 
     let mut stats = CompressionStats::default();
 
+    let source_dicts = ArchiveDicts::load(&mut source);
+
     // Process each entry.
     for i in 0..source.len() {
         let mut entry = source.by_index(i)?;
         let name = entry.name().to_string();
         let category = SampleCategory::from_filename(&name);
 
-        // Read the decompressed data.
-        let mut data = Vec::new();
-        entry.read_to_end(&mut data)?;
+        // Read the raw (decompressed) data, handling dict-compressed entries.
+        let data = if let Some(cat) = category {
+            read_out_entry_raw(&mut entry, cat, &source_dicts)?
+        } else {
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf)?;
+            buf
+        };
 
         let original_compressed = entry.compressed_size();
         stats.original_uncompressed += data.len() as u64;
@@ -458,6 +588,92 @@ fn compress_with_dict(data: &[u8], dict: &[u8], level: i32) -> Result<Vec<u8>> {
     Ok(encoder.finish()?)
 }
 
+/// Decompress data that was compressed with a zstd dictionary.
+///
+/// This is a local copy of the logic in nextest-runner's reader, without the
+/// size limit (this tool only processes trusted local data).
+fn decompress_with_dict(compressed: &[u8], dict: &[u8]) -> Result<Vec<u8>> {
+    let dict = zstd::dict::DecoderDictionary::copy(dict);
+    let mut decoder = zstd::stream::Decoder::with_prepared_dictionary(compressed, &dict)?;
+    let mut decompressed = Vec::new();
+    decoder.read_to_end(&mut decompressed)?;
+    Ok(decompressed)
+}
+
+// ---
+// Archive dictionary loading and decompression
+// ---
+
+/// Dictionaries embedded in a store.zip archive.
+///
+/// Newer archives store `out/` entries as zstd+dict compressed data with
+/// `CompressionMethod::Stored`. The dictionaries needed to decompress these
+/// entries are at `meta/stdout.dict` and `meta/stderr.dict` within the archive.
+/// Older archives used `CompressionMethod::Zstd` (no dictionary), and don't
+/// contain these dictionary entries.
+struct ArchiveDicts {
+    stdout: Option<Vec<u8>>,
+    stderr: Option<Vec<u8>>,
+}
+
+impl ArchiveDicts {
+    /// Load dictionaries from the archive. Returns `None` values for any
+    /// dictionary entries that are missing (e.g. old-format archives).
+    fn load<R: Read + std::io::Seek>(archive: &mut zip::ZipArchive<R>) -> Self {
+        let stdout = Self::read_dict_entry(archive, "meta/stdout.dict");
+        let stderr = Self::read_dict_entry(archive, "meta/stderr.dict");
+        Self { stdout, stderr }
+    }
+
+    fn read_dict_entry<R: Read + std::io::Seek>(
+        archive: &mut zip::ZipArchive<R>,
+        path: &str,
+    ) -> Option<Vec<u8>> {
+        let mut entry = archive.by_name(path).ok()?;
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data).ok()?;
+        Some(data)
+    }
+
+    /// Get the dictionary bytes for the given output category.
+    fn dict_for_category(&self, category: SampleCategory) -> Option<&[u8]> {
+        match category {
+            SampleCategory::Stdout => self.stdout.as_deref(),
+            SampleCategory::Stderr => self.stderr.as_deref(),
+            SampleCategory::Meta => None,
+        }
+    }
+}
+
+/// Read the raw (decompressed) data for an `out/` zip entry.
+///
+/// Handles both archive formats transparently:
+/// - New format: entry is `CompressionMethod::Stored` containing zstd+dict data.
+///   We decompress using the archive's embedded dictionary.
+/// - Old format: entry is `CompressionMethod::Zstd` and the zip library
+///   decompresses it for us.
+fn read_out_entry_raw<R: Read>(
+    entry: &mut zip::read::ZipFile<'_, R>,
+    category: SampleCategory,
+    dicts: &ArchiveDicts,
+) -> Result<Vec<u8>> {
+    let mut data = Vec::new();
+    entry.read_to_end(&mut data)?;
+
+    // If the entry is stored (not compressed by the zip layer) and we have a
+    // dictionary for this category, the data is zstd+dict compressed and needs
+    // to be decompressed.
+    if entry.compression() == zip::CompressionMethod::Stored
+        && let Some(dict) = dicts.dict_for_category(category)
+    {
+        return decompress_with_dict(&data, dict);
+    }
+
+    // Otherwise the zip library already decompressed the entry (old format with
+    // CompressionMethod::Zstd), or this category has no dictionary.
+    Ok(data)
+}
+
 /// Write a file with standard zstd compression.
 fn write_zstd(dest: &mut zip::ZipWriter<File>, name: &str, data: &[u8]) -> Result<(u64, String)> {
     let options = zip::write::SimpleFileOptions::default()
@@ -484,26 +700,35 @@ struct CompressionStats {
 // ---
 
 /// Analyze compression improvement across all archives.
-fn analyze_compression(dict_dir: Option<&Utf8Path>, max_archives: usize) -> Result<()> {
-    // Load dictionaries (from disk or embedded).
-    let stdout_dict = load_dictionary(dict_dir, SampleCategory::Stdout)?;
-    let stderr_dict = load_dictionary(dict_dir, SampleCategory::Stderr)?;
-    let meta_dict = load_dictionary(dict_dir, SampleCategory::Meta)?;
+fn analyze_compression(dict_source: &DictSource, max_archives: usize) -> Result<()> {
+    let stdout_dict = dict_source.load(SampleCategory::Stdout)?;
+    let stderr_dict = dict_source.load(SampleCategory::Stderr)?;
+    let meta_dict = dict_source.load(SampleCategory::Meta)?;
 
-    if stdout_dict.is_none() && stderr_dict.is_none() && meta_dict.is_none() {
+    if !matches!(dict_source, DictSource::NoDictionary)
+        && stdout_dict.is_none()
+        && stderr_dict.is_none()
+        && meta_dict.is_none()
+    {
         bail!("no dictionaries found");
     }
+
+    let label = dict_source.label();
 
     let archives = find_archives()?;
     let archives: Vec<_> = archives.into_iter().take(max_archives).collect();
 
-    eprintln!("Analyzing {} archives...\n", archives.len());
+    eprintln!(
+        "Analyzing {} archives (mode: {})...\n",
+        archives.len(),
+        label
+    );
 
     let mut total_original: u64 = 0;
-    let mut total_with_dict: u64 = 0;
+    let mut total_recompressed: u64 = 0;
     let mut total_uncompressed: u64 = 0;
 
-    // Per-category stats.
+    // Per-category stats: (uncompressed, in_archive, recompressed).
     let mut category_stats: HashMap<SampleCategory, (u64, u64, u64)> = HashMap::new();
 
     for archive_path in &archives {
@@ -517,6 +742,8 @@ fn analyze_compression(dict_dir: Option<&Utf8Path>, max_archives: usize) -> Resu
             Err(_) => continue,
         };
 
+        let archive_dicts = ArchiveDicts::load(&mut archive);
+
         for i in 0..archive.len() {
             let mut entry = match archive.by_index(i) {
                 Ok(e) => e,
@@ -528,70 +755,80 @@ fn analyze_compression(dict_dir: Option<&Utf8Path>, max_archives: usize) -> Resu
                 continue;
             };
 
-            let mut data = Vec::new();
-            if entry.read_to_end(&mut data).is_err() {
-                continue;
-            }
-
             let original_compressed = entry.compressed_size();
+
+            let data = match read_out_entry_raw(&mut entry, category, &archive_dicts) {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+
             let uncompressed = data.len() as u64;
 
-            // Compress with dictionary.
+            // Recompress according to the chosen mode.
             let dict = match category {
                 SampleCategory::Stdout => stdout_dict.as_deref(),
                 SampleCategory::Stderr => stderr_dict.as_deref(),
                 SampleCategory::Meta => meta_dict.as_deref(),
             };
 
-            let dict_compressed = if let Some(dict_data) = dict {
+            let recompressed = if let Some(dict_data) = dict {
                 compress_with_dict(&data, dict_data, 3)
                     .map(|c| c.len() as u64)
                     .unwrap_or(original_compressed)
             } else {
-                original_compressed
+                // No dictionary for this category: use plain zstd.
+                zstd::encode_all(data.as_slice(), 3)
+                    .map(|c| c.len() as u64)
+                    .unwrap_or(original_compressed)
             };
 
             total_original += original_compressed;
-            total_with_dict += dict_compressed;
+            total_recompressed += recompressed;
             total_uncompressed += uncompressed;
 
-            let (cat_uncomp, cat_orig, cat_dict) = category_stats.entry(category).or_default();
+            let (cat_uncomp, cat_orig, cat_recomp) = category_stats.entry(category).or_default();
             *cat_uncomp += uncompressed;
             *cat_orig += original_compressed;
-            *cat_dict += dict_compressed;
+            *cat_recomp += recompressed;
         }
     }
 
     // Print results.
-    eprintln!("=== Overall Results ===");
+    eprintln!("=== Overall Results ({}) ===", label);
     eprintln!("Total uncompressed:     {:>12} bytes", total_uncompressed);
-    eprintln!("Total original zstd:    {:>12} bytes", total_original);
-    eprintln!("Total with dictionary:  {:>12} bytes", total_with_dict);
+    eprintln!("Total in archive:       {:>12} bytes", total_original);
     eprintln!(
-        "Improvement:            {:>12.1}%",
-        (1.0 - total_with_dict as f64 / total_original as f64) * 100.0
+        "Total recompressed:     {:>12} bytes ({})",
+        total_recompressed, label
     );
     eprintln!(
-        "Original ratio:         {:>12.2}x",
+        "Improvement:            {:>12.1}%",
+        (1.0 - total_recompressed as f64 / total_original as f64) * 100.0
+    );
+    eprintln!(
+        "Archive ratio:          {:>12.2}x",
         total_uncompressed as f64 / total_original as f64
     );
     eprintln!(
-        "Dictionary ratio:       {:>12.2}x",
-        total_uncompressed as f64 / total_with_dict as f64
+        "Recompressed ratio:     {:>12.2}x",
+        total_uncompressed as f64 / total_recompressed as f64
     );
 
-    eprintln!("\n=== Per-Category Results ===");
-    for (category, (uncomp, orig, dict)) in &category_stats {
+    eprintln!("\n=== Per-Category Results ({}) ===", label);
+    for (category, (uncomp, orig, recomp)) in &category_stats {
         eprintln!("\n{:?}:", category);
         eprintln!("  Uncompressed:   {:>12} bytes", uncomp);
-        eprintln!("  Original zstd:  {:>12} bytes", orig);
-        eprintln!("  With dict:      {:>12} bytes", dict);
+        eprintln!("  In archive:     {:>12} bytes", orig);
+        eprintln!("  Recompressed:   {:>12} bytes ({})", recomp, label);
         eprintln!(
             "  Improvement:    {:>12.1}%",
-            (1.0 - *dict as f64 / *orig as f64) * 100.0
+            (1.0 - *recomp as f64 / *orig as f64) * 100.0
         );
-        eprintln!("  Original ratio: {:>12.2}x", *uncomp as f64 / *orig as f64);
-        eprintln!("  Dict ratio:     {:>12.2}x", *uncomp as f64 / *dict as f64);
+        eprintln!("  Archive ratio:  {:>12.2}x", *uncomp as f64 / *orig as f64);
+        eprintln!(
+            "  Recomp ratio:   {:>12.2}x",
+            *uncomp as f64 / *recomp as f64
+        );
     }
 
     Ok(())
@@ -623,6 +860,8 @@ fn size_sweep(max_samples: usize) -> Result<()> {
             Err(_) => continue,
         };
 
+        let dicts = ArchiveDicts::load(&mut archive);
+
         for i in 0..archive.len() {
             let mut entry = match archive.by_index(i) {
                 Ok(e) => e,
@@ -645,10 +884,12 @@ fn size_sweep(max_samples: usize) -> Result<()> {
                 continue;
             }
 
-            let mut data = Vec::new();
-            if entry.read_to_end(&mut data).is_ok() && !data.is_empty() && data.len() <= 100_000 {
-                samples.push(data);
-            }
+            let data = match read_out_entry_raw(&mut entry, category, &dicts) {
+                Ok(d) if !d.is_empty() && d.len() <= 100_000 => d,
+                _ => continue,
+            };
+
+            samples.push(data);
         }
 
         if stdout_samples.len() >= max_samples && stderr_samples.len() >= max_samples {
@@ -725,21 +966,190 @@ fn size_sweep(max_samples: usize) -> Result<()> {
 }
 
 // ---
+// Level sweep
+// ---
+
+/// Sweep compression levels to find the optimal level for each category.
+///
+/// Unlike `size_sweep` (which varies dictionary size at a fixed level), this
+/// varies the compression level at a fixed dictionary. Includes meta, which
+/// does not use a dictionary but still benefits from level tuning.
+fn level_sweep(max_samples: usize, dict_source: &DictSource) -> Result<()> {
+    let archives = find_archives()?;
+
+    let all_categories = [
+        SampleCategory::Stdout,
+        SampleCategory::Stderr,
+        SampleCategory::Meta,
+    ];
+
+    // Collect samples by category (including meta).
+    let mut samples_by_category: HashMap<SampleCategory, Vec<Vec<u8>>> = HashMap::new();
+
+    eprintln!("Collecting samples from {} archives...", archives.len());
+
+    for archive_path in &archives {
+        let file = match File::open(archive_path) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        let reader = BufReader::new(file);
+
+        let mut archive = match zip::ZipArchive::new(reader) {
+            Ok(a) => a,
+            Err(_) => continue,
+        };
+
+        let dicts = ArchiveDicts::load(&mut archive);
+
+        for i in 0..archive.len() {
+            let mut entry = match archive.by_index(i) {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
+            let name = entry.name().to_string();
+            let Some(category) = SampleCategory::from_filename(&name) else {
+                continue;
+            };
+
+            let samples = samples_by_category.entry(category).or_default();
+            if samples.len() >= max_samples {
+                continue;
+            }
+
+            let data = match read_out_entry_raw(&mut entry, category, &dicts) {
+                Ok(d) if !d.is_empty() && d.len() <= 100_000 => d,
+                _ => continue,
+            };
+
+            samples.push(data);
+        }
+
+        let all_full = all_categories.iter().all(|cat| {
+            samples_by_category
+                .get(cat)
+                .is_some_and(|s| s.len() >= max_samples)
+        });
+        if all_full {
+            break;
+        }
+    }
+
+    for &category in &all_categories {
+        let count = samples_by_category.get(&category).map_or(0, Vec::len);
+        eprintln!("  {:?}: {} samples", category, count);
+    }
+    eprintln!();
+
+    let levels = [1, 3, 5, 7, 9];
+
+    for &category in &all_categories {
+        let Some(samples) = samples_by_category.get(&category) else {
+            continue;
+        };
+        if samples.is_empty() {
+            continue;
+        }
+
+        // Use a subset for testing compression.
+        let test_samples: Vec<_> = samples.iter().take(2000).collect();
+        let total_uncompressed: usize = test_samples.iter().map(|s| s.len()).sum();
+
+        // Load dictionary for this category.
+        let dict_data = dict_source.load(category)?;
+        let has_dict = dict_data.is_some();
+
+        if has_dict {
+            eprintln!("=== {:?} ({}) ===", category, dict_source.label());
+        } else {
+            eprintln!("=== {:?} (no dictionary) ===", category);
+        }
+        eprintln!(
+            "Uncompressed: {:>8} bytes ({} samples)\n",
+            total_uncompressed,
+            test_samples.len()
+        );
+
+        if has_dict {
+            eprintln!(
+                "{:>5}  {:>10} {:>7}  {:>10} {:>7} {:>7}",
+                "Level", "No-dict", "Ratio", "Dict", "Ratio", "Improv"
+            );
+            eprintln!("{}", "-".repeat(55));
+        } else {
+            eprintln!("{:>5}  {:>10} {:>7}", "Level", "Compressed", "Ratio");
+            eprintln!("{}", "-".repeat(25));
+        }
+
+        for &level in &levels {
+            // No-dict compression at this level.
+            let no_dict_compressed: usize = test_samples
+                .iter()
+                .map(|s| zstd::encode_all(s.as_slice(), level).unwrap().len())
+                .sum();
+            let no_dict_ratio = total_uncompressed as f64 / no_dict_compressed as f64;
+
+            if let Some(ref dict_bytes) = dict_data {
+                // Dict compression at this level.
+                let dict = zstd::dict::EncoderDictionary::copy(dict_bytes, level);
+                let dict_compressed: usize = test_samples
+                    .iter()
+                    .map(|s| {
+                        let mut enc =
+                            zstd::stream::Encoder::with_prepared_dictionary(Vec::new(), &dict)
+                                .unwrap();
+                        enc.write_all(s).unwrap();
+                        enc.finish().unwrap().len()
+                    })
+                    .sum();
+                let dict_ratio = total_uncompressed as f64 / dict_compressed as f64;
+                let improvement =
+                    (1.0 - dict_compressed as f64 / no_dict_compressed as f64) * 100.0;
+
+                eprintln!(
+                    "{:>5}  {:>10} {:>6.2}x  {:>10} {:>6.2}x {:>6.1}%",
+                    level,
+                    no_dict_compressed,
+                    no_dict_ratio,
+                    dict_compressed,
+                    dict_ratio,
+                    improvement
+                );
+            } else {
+                eprintln!(
+                    "{:>5}  {:>10} {:>6.2}x",
+                    level, no_dict_compressed, no_dict_ratio
+                );
+            }
+        }
+
+        eprintln!();
+    }
+
+    Ok(())
+}
+
+// ---
 // Per-project analysis
 // ---
 
 /// Analyze compression per-project to see which benefit most.
-fn analyze_per_project(dict_dir: Option<&Utf8Path>) -> Result<()> {
+fn analyze_per_project(dict_source: &DictSource) -> Result<()> {
     let cache_dir = find_cache_dir()?;
     let projects_dir = cache_dir.join("projects");
 
-    // Load dictionaries (from disk or embedded).
-    let stdout_dict = load_dictionary(dict_dir, SampleCategory::Stdout)?;
-    let stderr_dict = load_dictionary(dict_dir, SampleCategory::Stderr)?;
+    let stdout_dict = dict_source.load(SampleCategory::Stdout)?;
+    let stderr_dict = dict_source.load(SampleCategory::Stderr)?;
 
-    if stdout_dict.is_none() {
-        bail!("no stdout dictionary found");
+    if !matches!(dict_source, DictSource::NoDictionary)
+        && stdout_dict.is_none()
+        && stderr_dict.is_none()
+    {
+        bail!("no stdout or stderr dictionary found");
     }
+
+    let label = dict_source.label();
 
     let mut results: Vec<(String, u64, u64, u64, usize)> = Vec::new();
 
@@ -773,7 +1183,7 @@ fn analyze_per_project(dict_dir: Option<&Utf8Path>) -> Result<()> {
 
         let mut total_uncompressed: u64 = 0;
         let mut total_original: u64 = 0;
-        let mut total_dict: u64 = 0;
+        let mut total_recompressed: u64 = 0;
         let mut test_count: usize = 0;
 
         for archive_path in archives {
@@ -786,6 +1196,8 @@ fn analyze_per_project(dict_dir: Option<&Utf8Path>) -> Result<()> {
                 Ok(a) => a,
                 Err(_) => continue,
             };
+
+            let archive_dicts = ArchiveDicts::load(&mut archive);
 
             for i in 0..archive.len() {
                 let mut entry = match archive.by_index(i) {
@@ -800,34 +1212,50 @@ fn analyze_per_project(dict_dir: Option<&Utf8Path>) -> Result<()> {
                     continue;
                 }
 
-                let mut data = Vec::new();
-                if entry.read_to_end(&mut data).is_err() {
-                    continue;
-                }
+                let category = SampleCategory::from_filename(&name);
 
                 let original_compressed = entry.compressed_size();
-                let uncompressed = data.len() as u64;
 
-                let dict = if name.ends_with("-stdout") {
-                    test_count += 1;
-                    stdout_dict.as_deref()
-                } else if name.ends_with("-stderr") {
-                    stderr_dict.as_deref()
+                let data = if let Some(cat) = category {
+                    match read_out_entry_raw(&mut entry, cat, &archive_dicts) {
+                        Ok(d) => d,
+                        Err(_) => continue,
+                    }
                 } else {
-                    None
+                    let mut buf = Vec::new();
+                    if entry.read_to_end(&mut buf).is_err() {
+                        continue;
+                    }
+                    buf
                 };
 
-                let dict_compressed = if let Some(dict_data) = dict {
+                let uncompressed = data.len() as u64;
+
+                if name.ends_with("-stdout") || name.ends_with("-combined") {
+                    test_count += 1;
+                }
+
+                // Recompress using the same logic as analyze_compression.
+                let dict = match category {
+                    Some(SampleCategory::Stdout) => stdout_dict.as_deref(),
+                    Some(SampleCategory::Stderr) => stderr_dict.as_deref(),
+                    _ => None,
+                };
+
+                let recompressed = if let Some(dict_data) = dict {
                     compress_with_dict(&data, dict_data, 3)
                         .map(|c| c.len() as u64)
                         .unwrap_or(original_compressed)
                 } else {
-                    original_compressed
+                    // No dictionary for this category: use plain zstd.
+                    zstd::encode_all(data.as_slice(), 3)
+                        .map(|c| c.len() as u64)
+                        .unwrap_or(original_compressed)
                 };
 
                 total_uncompressed += uncompressed;
                 total_original += original_compressed;
-                total_dict += dict_compressed;
+                total_recompressed += recompressed;
             }
         }
 
@@ -836,7 +1264,7 @@ fn analyze_per_project(dict_dir: Option<&Utf8Path>) -> Result<()> {
                 short_name,
                 total_uncompressed,
                 total_original,
-                total_dict,
+                total_recompressed,
                 test_count,
             ));
         }
@@ -847,19 +1275,19 @@ fn analyze_per_project(dict_dir: Option<&Utf8Path>) -> Result<()> {
 
     eprintln!(
         "{:<15} {:>6} {:>10} {:>10} {:>10} {:>7}",
-        "Project", "Tests", "Uncomp", "Original", "WithDict", "Improv"
+        "Project", "Tests", "Uncomp", "InArchive", label, "Improv"
     );
     eprintln!("{}", "-".repeat(70));
 
-    for (name, uncomp, orig, dict, count) in &results {
+    for (name, uncomp, orig, recomp, count) in &results {
         let improvement = if *orig > 0 {
-            (1.0 - *dict as f64 / *orig as f64) * 100.0
+            (1.0 - *recomp as f64 / *orig as f64) * 100.0
         } else {
             0.0
         };
         eprintln!(
             "{:<15} {:>6} {:>10} {:>10} {:>10} {:>6.1}%",
-            name, count, uncomp, orig, dict, improvement
+            name, count, uncomp, orig, recomp, improvement
         );
     }
 
@@ -867,17 +1295,219 @@ fn analyze_per_project(dict_dir: Option<&Utf8Path>) -> Result<()> {
     let large_repos: Vec<_> = results.iter().filter(|r| r.4 >= 300).collect();
     if !large_repos.is_empty() {
         let total_orig: u64 = large_repos.iter().map(|r| r.2).sum();
-        let total_dict: u64 = large_repos.iter().map(|r| r.3).sum();
+        let total_recomp: u64 = large_repos.iter().map(|r| r.3).sum();
         let total_tests: usize = large_repos.iter().map(|r| r.4).sum();
-        eprintln!("\n=== Large repos (300+ tests) ===");
+        eprintln!("\n=== Large repos (300+ tests, {}) ===", label);
         eprintln!("Total tests: {}", total_tests);
-        eprintln!("Original: {} bytes", total_orig);
-        eprintln!("With dict: {} bytes", total_dict);
+        eprintln!("In archive: {} bytes", total_orig);
+        eprintln!("Recompressed: {} bytes ({})", total_recomp, label);
         eprintln!(
             "Improvement: {:.1}%",
-            (1.0 - total_dict as f64 / total_orig as f64) * 100.0
+            (1.0 - total_recomp as f64 / total_orig as f64) * 100.0
         );
     }
 
     Ok(())
+}
+
+// ---
+// CDF data dump
+// ---
+
+/// A single test output entry's sizes for CDF output.
+struct CdfEntry {
+    category: SampleCategory,
+    uncompressed: u64,
+    dict_compressed: u64,
+    plain_compressed: u64,
+}
+
+/// Dump per-entry compression sizes for CDF plotting.
+///
+/// For each test output entry (stdout, stderr, combined) across archives,
+/// computes the uncompressed size, dict-compressed size, and plain
+/// zstd-compressed size. Outputs to stdout in a format suitable for gnuplot's
+/// `smooth cnormal`.
+///
+/// Output format (space-separated):
+///
+///   category uncompressed dict_compressed plain_compressed
+///
+/// where category is `stdout` or `stderr`, and sizes are in bytes.
+fn dump_cdf(dict_dir: Option<&Utf8Path>, max_archives: usize) -> Result<()> {
+    // Always compare dict vs plain: load dictionaries from disk or embedded.
+    let source = match dict_dir {
+        Some(dir) => DictSource::Directory(dir.to_owned()),
+        None => DictSource::Embedded,
+    };
+
+    let stdout_dict = source.load(SampleCategory::Stdout)?;
+    let stderr_dict = source.load(SampleCategory::Stderr)?;
+
+    let archives = find_archives()?;
+    let archives: Vec<_> = archives.into_iter().take(max_archives).collect();
+
+    eprintln!(
+        "Processing {} archives ({})...",
+        archives.len(),
+        source.label()
+    );
+
+    let mut entries: Vec<CdfEntry> = Vec::new();
+
+    for archive_path in &archives {
+        let file = match File::open(archive_path) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        let reader = BufReader::new(file);
+        let mut archive = match zip::ZipArchive::new(reader) {
+            Ok(a) => a,
+            Err(_) => continue,
+        };
+
+        let archive_dicts = ArchiveDicts::load(&mut archive);
+
+        for i in 0..archive.len() {
+            let mut entry = match archive.by_index(i) {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
+            let name = entry.name().to_string();
+
+            // Only test output entries.
+            if !name.starts_with("out/") {
+                continue;
+            }
+
+            let Some(category) = SampleCategory::from_filename(&name) else {
+                continue;
+            };
+
+            let data = match read_out_entry_raw(&mut entry, category, &archive_dicts) {
+                Ok(d) if !d.is_empty() => d,
+                _ => continue,
+            };
+
+            let uncompressed = data.len() as u64;
+
+            // Compress with dictionary.
+            let dict = match category {
+                SampleCategory::Stdout => stdout_dict.as_deref(),
+                SampleCategory::Stderr => stderr_dict.as_deref(),
+                SampleCategory::Meta => None,
+            };
+
+            let dict_compressed = if let Some(dict_data) = dict {
+                compress_with_dict(&data, dict_data, 3)
+                    .map(|c| c.len() as u64)
+                    .unwrap_or(uncompressed)
+            } else {
+                zstd::encode_all(data.as_slice(), 3)
+                    .map(|c| c.len() as u64)
+                    .unwrap_or(uncompressed)
+            };
+
+            // Compress without dictionary (plain zstd level 3).
+            let plain_compressed = zstd::encode_all(data.as_slice(), 3)
+                .map(|c| c.len() as u64)
+                .unwrap_or(uncompressed);
+
+            entries.push(CdfEntry {
+                category,
+                uncompressed,
+                dict_compressed,
+                plain_compressed,
+            });
+        }
+    }
+
+    let n = entries.len();
+    eprintln!("Collected {} entries", n);
+
+    if n == 0 {
+        bail!("no test output entries found");
+    }
+
+    // Print summary statistics to stderr, overall and per-category.
+    print_cdf_summary("All", &entries);
+
+    let stdout_entries: Vec<_> = entries
+        .iter()
+        .filter(|e| matches!(e.category, SampleCategory::Stdout))
+        .collect();
+    let stderr_entries: Vec<_> = entries
+        .iter()
+        .filter(|e| matches!(e.category, SampleCategory::Stderr))
+        .collect();
+    print_cdf_summary("Stdout", &stdout_entries);
+    print_cdf_summary("Stderr", &stderr_entries);
+
+    // Output raw sizes to stdout for gnuplot.
+    let stdout = std::io::stdout();
+    let mut out = std::io::BufWriter::new(stdout.lock());
+    writeln!(
+        out,
+        "# category uncompressed dict_compressed plain_compressed"
+    )?;
+    for entry in &entries {
+        let cat_label = match entry.category {
+            SampleCategory::Stdout => "stdout",
+            SampleCategory::Stderr => "stderr",
+            SampleCategory::Meta => "meta",
+        };
+        writeln!(
+            out,
+            "{} {} {} {}",
+            cat_label, entry.uncompressed, entry.dict_compressed, entry.plain_compressed,
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Print percentile summary for a set of CDF entries.
+fn print_cdf_summary(label: &str, entries: &[impl std::borrow::Borrow<CdfEntry>]) {
+    let n = entries.len();
+    if n == 0 {
+        eprintln!("{}: (no entries)", label);
+        return;
+    }
+
+    let mut uncompressed: Vec<u64> = entries.iter().map(|e| e.borrow().uncompressed).collect();
+    let mut dict: Vec<u64> = entries.iter().map(|e| e.borrow().dict_compressed).collect();
+    let mut plain: Vec<u64> = entries
+        .iter()
+        .map(|e| e.borrow().plain_compressed)
+        .collect();
+    uncompressed.sort_unstable();
+    dict.sort_unstable();
+    plain.sort_unstable();
+
+    eprintln!("{} ({} entries):", label, n);
+    eprintln!(
+        "  Uncompressed: p50 {} B, p75 {} B, p95 {} B, p99 {} B, max {} B",
+        uncompressed[n / 2],
+        uncompressed[n * 75 / 100],
+        uncompressed[n * 95 / 100],
+        uncompressed[n * 99 / 100],
+        uncompressed[n - 1],
+    );
+    eprintln!(
+        "  Dict zstd-3:  p50 {} B, p75 {} B, p95 {} B, p99 {} B, max {} B",
+        dict[n / 2],
+        dict[n * 75 / 100],
+        dict[n * 95 / 100],
+        dict[n * 99 / 100],
+        dict[n - 1],
+    );
+    eprintln!(
+        "  Plain zstd-3: p50 {} B, p75 {} B, p95 {} B, p99 {} B, max {} B",
+        plain[n / 2],
+        plain[n * 75 / 100],
+        plain[n * 95 / 100],
+        plain[n * 99 / 100],
+        plain[n - 1],
+    );
 }
