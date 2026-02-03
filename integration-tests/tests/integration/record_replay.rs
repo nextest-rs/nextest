@@ -2680,3 +2680,52 @@ fn test_replay_requires_experimental_feature() {
         redact_dynamic_fields(&stderr, temp_root)
     );
 }
+
+/// Replay of a run recorded with `--no-capture` shows "(output not captured)".
+///
+/// Coverage: When output was not captured during recording, replay shows a
+/// helpful message rather than blank lines.
+#[test]
+fn test_replay_output_not_captured() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let temp_root = p.temp_root();
+    let cache_dir = create_cache_dir(&p);
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const RUN_ID: &str = "50000001-0000-0000-0000-000000000001";
+
+    // Record a run with --no-capture, so output is not captured.
+    // Use a failing test so we have output to display.
+    let recording = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
+        .args(["run", "--no-capture", "-E", "test(=test_failure_assert)"])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        recording.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "recording with failing test should fail: {recording}"
+    );
+
+    // Replay the run with failure output displayed.
+    let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args([
+            "replay",
+            "--run-id",
+            RUN_ID,
+            "--failure-output",
+            "immediate",
+        ])
+        .output();
+    assert!(
+        replay_output.exit_status.success(),
+        "replay should succeed: {replay_output}"
+    );
+
+    // Snapshot the replay output to verify the "not captured" message.
+    let stdout = replay_output.stdout_as_str();
+    insta::assert_snapshot!(
+        "replay_output_not_captured",
+        redact_dynamic_fields(&stdout, temp_root)
+    );
+}

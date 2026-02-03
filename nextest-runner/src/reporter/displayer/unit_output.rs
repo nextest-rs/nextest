@@ -3,6 +3,7 @@
 
 //! Code to write out test and script outputs to the displayer.
 
+use super::DisplayerKind;
 use crate::{
     errors::DisplayErrorChain,
     indenter::indented,
@@ -14,7 +15,7 @@ use crate::{
     test_output::ChildSingleOutput,
     write_str::WriteStr,
 };
-use owo_colors::Style;
+use owo_colors::{OwoColorize, Style};
 use serde::Deserialize;
 use std::{fmt, io};
 
@@ -75,6 +76,7 @@ pub(super) struct UnitOutputReporter {
     force_failure_output: Option<TestOutputDisplay>,
     force_exec_fail_output: Option<TestOutputDisplay>,
     display_empty_outputs: bool,
+    displayer_kind: DisplayerKind,
 }
 
 impl UnitOutputReporter {
@@ -82,6 +84,7 @@ impl UnitOutputReporter {
         force_success_output: Option<TestOutputDisplay>,
         force_failure_output: Option<TestOutputDisplay>,
         force_exec_fail_output: Option<TestOutputDisplay>,
+        displayer_kind: DisplayerKind,
     ) -> Self {
         // Ordinarily, empty stdout and stderr are not displayed. This
         // environment variable is set in integration tests to ensure that they
@@ -94,6 +97,7 @@ impl UnitOutputReporter {
             force_failure_output,
             force_exec_fail_output,
             display_empty_outputs,
+            displayer_kind,
         }
     }
 
@@ -183,39 +187,61 @@ impl UnitOutputReporter {
     ) -> io::Result<()> {
         match output {
             ChildOutputDescription::Split { stdout, stderr } => {
-                if let Some(stdout) = stdout
-                    && (self.display_empty_outputs || !stdout.is_empty())
+                // In replay mode, show a message if output was not captured.
+                if self.displayer_kind == DisplayerKind::Replay
+                    && stdout.is_none()
+                    && stderr.is_none()
                 {
-                    writeln!(writer, "{}", spec.stdout_header)?;
-
-                    // If there's no output indent, this is a no-op, though
-                    // it will bear the perf cost of a vtable indirection +
-                    // whatever internal state IndentWriter tracks. Doubt
-                    // this will be an issue in practice though!
-                    let mut indent_writer = indented(writer).with_str(spec.output_indent);
-                    self.write_test_single_output_with_description(
-                        styles,
-                        stdout,
-                        highlight_slice.and_then(|d| d.stdout_subslice()),
-                        &mut indent_writer,
-                    )?;
-                    indent_writer.write_str_flush()?;
-                    writer = indent_writer.into_inner();
+                    // Use a hardcoded 4-space indentation even if there's no
+                    // output indent. That makes replay --nocapture look a bit
+                    // better.
+                    writeln!(writer, "    (output {})", "not captured".style(styles.skip))?;
+                    return Ok(());
                 }
 
-                if let Some(stderr) = stderr
-                    && (self.display_empty_outputs || !stderr.is_empty())
-                {
-                    writeln!(writer, "{}", spec.stderr_header)?;
+                if let Some(stdout) = stdout {
+                    if self.display_empty_outputs || !stdout.is_empty() {
+                        writeln!(writer, "{}", spec.stdout_header)?;
 
-                    let mut indent_writer = indented(writer).with_str(spec.output_indent);
-                    self.write_test_single_output_with_description(
-                        styles,
-                        stderr,
-                        highlight_slice.and_then(|d| d.stderr_subslice()),
-                        &mut indent_writer,
-                    )?;
-                    indent_writer.write_str_flush()?;
+                        // If there's no output indent, this is a no-op, though
+                        // it will bear the perf cost of a vtable indirection +
+                        // whatever internal state IndentWriter tracks. Doubt
+                        // this will be an issue in practice though!
+                        let mut indent_writer = indented(writer).with_str(spec.output_indent);
+                        self.write_test_single_output_with_description(
+                            styles,
+                            stdout,
+                            highlight_slice.and_then(|d| d.stdout_subslice()),
+                            &mut indent_writer,
+                        )?;
+                        indent_writer.write_str_flush()?;
+                        writer = indent_writer.into_inner();
+                    }
+                } else if self.displayer_kind == DisplayerKind::Replay {
+                    // Use a hardcoded 4-space indentation even if there's no
+                    // output indent. That makes replay --nocapture look a bit
+                    // better.
+                    writeln!(writer, "    (stdout {})", "not captured".style(styles.skip))?;
+                }
+
+                if let Some(stderr) = stderr {
+                    if self.display_empty_outputs || !stderr.is_empty() {
+                        writeln!(writer, "{}", spec.stderr_header)?;
+
+                        let mut indent_writer = indented(writer).with_str(spec.output_indent);
+                        self.write_test_single_output_with_description(
+                            styles,
+                            stderr,
+                            highlight_slice.and_then(|d| d.stderr_subslice()),
+                            &mut indent_writer,
+                        )?;
+                        indent_writer.write_str_flush()?;
+                    }
+                } else if self.displayer_kind == DisplayerKind::Replay {
+                    // Use a hardcoded 4-space indentation even if there's no
+                    // output indent. That makes replay --nocapture look a bit
+                    // better.
+                    writeln!(writer, "    (stderr {})", "not captured".style(styles.skip))?;
                 }
             }
             ChildOutputDescription::Combined { output } => {
@@ -347,6 +373,120 @@ impl fmt::Display for FmtSuffix<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::reporter::events::UnitKind;
+
+    fn make_test_spec() -> ChildOutputSpec {
+        ChildOutputSpec {
+            kind: UnitKind::Test,
+            stdout_header: "--- STDOUT ---".to_string(),
+            stderr_header: "--- STDERR ---".to_string(),
+            combined_header: "--- OUTPUT ---".to_string(),
+            exec_fail_header: "--- EXEC FAIL ---".to_string(),
+            output_indent: "    ",
+        }
+    }
+
+    fn make_unit_output_reporter(displayer_kind: DisplayerKind) -> UnitOutputReporter {
+        UnitOutputReporter::new(None, None, None, displayer_kind)
+    }
+
+    #[test]
+    fn test_replay_output_not_captured() {
+        let reporter = make_unit_output_reporter(DisplayerKind::Replay);
+        let spec = make_test_spec();
+        let styles = Styles::default();
+
+        // Test: both stdout and stderr not captured.
+        let output = ChildOutputDescription::Split {
+            stdout: None,
+            stderr: None,
+        };
+        let mut buf = String::new();
+        reporter
+            .write_child_output(&styles, &spec, &output, None, &mut buf)
+            .unwrap();
+        insta::assert_snapshot!("replay_neither_captured", buf);
+    }
+
+    #[test]
+    fn test_replay_stdout_not_captured() {
+        let reporter = make_unit_output_reporter(DisplayerKind::Replay);
+        let spec = make_test_spec();
+        let styles = Styles::default();
+
+        // Test: only stdout not captured (stderr is captured).
+        let output = ChildOutputDescription::Split {
+            stdout: None,
+            stderr: Some(ChildSingleOutput::from(bytes::Bytes::from_static(
+                b"stderr output\n",
+            ))),
+        };
+        let mut buf = String::new();
+        reporter
+            .write_child_output(&styles, &spec, &output, None, &mut buf)
+            .unwrap();
+        insta::assert_snapshot!("replay_stdout_not_captured", buf);
+    }
+
+    #[test]
+    fn test_replay_stderr_not_captured() {
+        let reporter = make_unit_output_reporter(DisplayerKind::Replay);
+        let spec = make_test_spec();
+        let styles = Styles::default();
+
+        // Test: only stderr not captured (stdout is captured).
+        let output = ChildOutputDescription::Split {
+            stdout: Some(ChildSingleOutput::from(bytes::Bytes::from_static(
+                b"stdout output\n",
+            ))),
+            stderr: None,
+        };
+        let mut buf = String::new();
+        reporter
+            .write_child_output(&styles, &spec, &output, None, &mut buf)
+            .unwrap();
+        insta::assert_snapshot!("replay_stderr_not_captured", buf);
+    }
+
+    #[test]
+    fn test_replay_both_captured() {
+        let reporter = make_unit_output_reporter(DisplayerKind::Replay);
+        let spec = make_test_spec();
+        let styles = Styles::default();
+
+        // Test: both captured (no "not captured" message).
+        let output = ChildOutputDescription::Split {
+            stdout: Some(ChildSingleOutput::from(bytes::Bytes::from_static(
+                b"stdout output\n",
+            ))),
+            stderr: Some(ChildSingleOutput::from(bytes::Bytes::from_static(
+                b"stderr output\n",
+            ))),
+        };
+        let mut buf = String::new();
+        reporter
+            .write_child_output(&styles, &spec, &output, None, &mut buf)
+            .unwrap();
+        insta::assert_snapshot!("replay_both_captured", buf);
+    }
+
+    #[test]
+    fn test_live_output_not_captured_no_message() {
+        let reporter = make_unit_output_reporter(DisplayerKind::Live);
+        let spec = make_test_spec();
+        let styles = Styles::default();
+
+        // Test: live mode with neither captured should NOT show the message.
+        let output = ChildOutputDescription::Split {
+            stdout: None,
+            stderr: None,
+        };
+        let mut buf = String::new();
+        reporter
+            .write_child_output(&styles, &spec, &output, None, &mut buf)
+            .unwrap();
+        insta::assert_snapshot!("live_neither_captured", buf);
+    }
 
     #[test]
     fn test_write_output_with_highlight() {

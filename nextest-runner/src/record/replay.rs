@@ -576,9 +576,9 @@ use crate::{
         store::{RecordedRunInfo, RecordedRunStatus},
     },
     reporter::{
-        DisplayReporter, DisplayReporterBuilder, FinalStatusLevel, MaxProgressRunning,
-        ReporterOutput, ShowProgress, ShowTerminalProgress, StatusLevel, StatusLevels,
-        TestOutputDisplay,
+        DisplayReporter, DisplayReporterBuilder, DisplayerKind, FinalStatusLevel,
+        MaxProgressRunning, ReporterOutput, ShowProgress, ShowTerminalProgress, StatusLevel,
+        StatusLevels, TestOutputDisplay,
     },
 };
 use chrono::{DateTime, FixedOffset};
@@ -743,6 +743,7 @@ impl ReplayReporterBuilder {
             // For replay, we don't show terminal progress (OSC 9;4 codes) since
             // we're replaying events, not running live tests.
             show_term_progress: ShowTerminalProgress::No,
+            displayer_kind: DisplayerKind::Replay,
         }
         .build(output);
 

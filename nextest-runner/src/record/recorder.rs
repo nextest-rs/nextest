@@ -631,8 +631,15 @@ impl SerializeTestEventContext<'_> {
     ) -> Result<ChildOutputDescription<ZipStoreOutput>, StoreWriterError> {
         match output {
             ChildOutputDescription::Split { stdout, stderr } => Ok(ChildOutputDescription::Split {
-                stdout: Some(self.write_single_output(stdout.as_ref(), OutputKind::Stdout)?),
-                stderr: Some(self.write_single_output(stderr.as_ref(), OutputKind::Stderr)?),
+                // Preserve None (not captured) vs Some (captured, possibly empty).
+                stdout: stdout
+                    .as_ref()
+                    .map(|o| self.write_single_output(Some(o), OutputKind::Stdout))
+                    .transpose()?,
+                stderr: stderr
+                    .as_ref()
+                    .map(|o| self.write_single_output(Some(o), OutputKind::Stderr))
+                    .transpose()?,
             }),
             ChildOutputDescription::Combined { output } => Ok(ChildOutputDescription::Combined {
                 output: self.write_single_output(Some(output), OutputKind::Combined)?,

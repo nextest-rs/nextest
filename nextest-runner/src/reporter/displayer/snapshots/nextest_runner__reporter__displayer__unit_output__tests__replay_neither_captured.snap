@@ -1,0 +1,5 @@
+---
+source: nextest-runner/src/reporter/displayer/unit_output.rs
+expression: buf
+---
+    (output not captured)
