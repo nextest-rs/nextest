@@ -13,9 +13,10 @@ use nextest_runner::{
     helpers::ThemeCharacters,
     pager::PagedOutput,
     record::{
-        DisplayRunList, PortableArchive, PortableArchiveWriter, PruneKind, RecordRetentionPolicy,
-        RecordedRunStatus, RunIdIndex, RunIdOrArchiveSelector, RunIdSelector, RunStore,
-        SnapshotWithReplayability, Styles as RecordStyles, has_zip_extension, records_cache_dir,
+        DisplayRunList, PortableRecording, PortableRecordingWriter, PruneKind,
+        RecordRetentionPolicy, RecordedRunStatus, RunIdIndex, RunIdOrRecordingSelector,
+        RunIdSelector, RunStore, SnapshotWithReplayability, Styles as RecordStyles,
+        has_zip_extension, records_cache_dir,
     },
     redact::Redactor,
     user_config::{UserConfig, elements::RecordConfig},
@@ -33,37 +34,37 @@ pub(crate) enum StoreCommand {
     Info(InfoOpts),
     /// Prune old recorded runs according to retention policy.
     Prune(PruneOpts),
-    /// Export a recorded run as a portable archive.
+    /// Export a recorded run as a portable recording.
     Export(ExportOpts),
 }
 
 /// Options for the `cargo nextest store info` command.
 #[derive(Debug, Args)]
 pub(crate) struct InfoOpts {
-    /// Run ID, `latest`, or archive path to show info for [aliases: -R].
+    /// Run ID, `latest`, or recording path to show info for [aliases: -R].
     ///
     /// Accepts "latest" for the most recent completed run, a full UUID or
-    /// unambiguous prefix, or a path to a portable archive (`.zip` file).
+    /// unambiguous prefix, or a path to a portable recording (`.zip` file).
     #[arg(
-        value_name = "RUN_ID_OR_ARCHIVE",
+        value_name = "RUN_ID_OR_RECORDING",
         required_unless_present = "run_id_opt"
     )]
-    run_id: Option<RunIdOrArchiveSelector>,
+    run_id: Option<RunIdOrRecordingSelector>,
 
-    /// Run ID, `latest`, or archive path to show info for (alternative to
+    /// Run ID, `latest`, or recording path to show info for (alternative to
     /// positional argument).
     #[arg(
         short = 'R',
         long = "run-id",
         hide = true,
-        value_name = "RUN_ID_OR_ARCHIVE",
+        value_name = "RUN_ID_OR_RECORDING",
         conflicts_with = "run_id"
     )]
-    run_id_opt: Option<RunIdOrArchiveSelector>,
+    run_id_opt: Option<RunIdOrRecordingSelector>,
 }
 
 impl InfoOpts {
-    fn resolved_selector(&self) -> &RunIdOrArchiveSelector {
+    fn resolved_selector(&self) -> &RunIdOrRecordingSelector {
         // One of these must be Some due to clap's required_unless_present.
         self.run_id
             .as_ref()
@@ -121,8 +122,8 @@ impl InfoOpts {
         paged_output: &mut PagedOutput,
         redactor: &Redactor,
     ) -> Result<i32> {
-        let archive = PortableArchive::open(archive_path)
-            .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+        let archive = PortableRecording::open(archive_path)
+            .map_err(|err| ExpectedError::PortableRecordingReadError { err })?;
 
         let run_info = archive.run_info();
 
@@ -229,8 +230,8 @@ impl ExportOpts {
             );
         }
 
-        let writer = PortableArchiveWriter::new(run, snapshot.runs_dir())
-            .map_err(|err| ExpectedError::PortableArchiveError { err })?;
+        let writer = PortableRecordingWriter::new(run, snapshot.runs_dir())
+            .map_err(|err| ExpectedError::PortableRecordingError { err })?;
 
         let output_path = self
             .archive_file
@@ -239,7 +240,7 @@ impl ExportOpts {
 
         let result = writer
             .write_to_path(&output_path)
-            .map_err(|err| ExpectedError::PortableArchiveError { err })?;
+            .map_err(|err| ExpectedError::PortableRecordingError { err })?;
 
         info!(
             "exported run {} to {} ({} bytes)",
@@ -326,7 +327,7 @@ impl StoreCommand {
 
         // Check if this is an archive-based info command first (no workspace needed).
         if let Self::Info(ref opts) = self
-            && let RunIdOrArchiveSelector::ArchivePath(path) = opts.resolved_selector()
+            && let RunIdOrRecordingSelector::RecordingPath(path) = opts.resolved_selector()
         {
             return opts.exec_from_archive(
                 path,
@@ -402,7 +403,7 @@ impl StoreCommand {
             Self::Info(opts) => {
                 // Archive path was already handled above, so this must be a run ID.
                 match opts.resolved_selector() {
-                    RunIdOrArchiveSelector::RunId(run_id_selector) => opts.exec_from_store(
+                    RunIdOrRecordingSelector::RunId(run_id_selector) => opts.exec_from_store(
                         run_id_selector,
                         &cache_dir,
                         &styles,
@@ -410,8 +411,8 @@ impl StoreCommand {
                         &mut paged_output,
                         &redactor,
                     ),
-                    RunIdOrArchiveSelector::ArchivePath(_) => {
-                        unreachable!("archive path was handled above")
+                    RunIdOrRecordingSelector::RecordingPath(_) => {
+                        unreachable!("recording path was handled above")
                     }
                 }
             }

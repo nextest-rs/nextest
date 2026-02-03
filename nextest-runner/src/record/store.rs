@@ -713,7 +713,7 @@ impl RecordedRunInfo {
     ///
     /// The `files` parameter is used to check for file existence. Use
     /// [`StoreRunsDir::run_files`] for runs in the store, or pass in a
-    /// [`PortableArchive`](super::PortableArchive) directly.
+    /// [`PortableRecording`](super::PortableRecording) directly.
     pub fn check_replayability(&self, files: &dyn RunFilesExist) -> ReplayabilityStatus {
         let mut blocking = Vec::new();
         let mut is_incomplete = false;

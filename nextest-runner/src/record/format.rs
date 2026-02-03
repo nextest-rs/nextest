@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Archive format metadata shared between recorder and reader.
+//! Recording format metadata shared between recorder and reader.
 
 use super::{
     CompletedRunStats, ComponentSizes, RecordedRunInfo, RecordedRunStatus, RecordedSizes,
@@ -291,7 +291,7 @@ impl RecordedRunList {
     }
 }
 
-/// Metadata about a recorded run (serialization format for runs.json.zst and portable archives).
+/// Metadata about a recorded run (serialization format for runs.json.zst and portable recordings).
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(super) struct RecordedRun {
@@ -670,7 +670,7 @@ impl IdOrdItem for RerunTestSuiteInfo {
 }
 
 // ---
-// Archive format types
+// Recording format types
 // ---
 
 /// File name for the store archive.
@@ -700,34 +700,34 @@ pub static STDOUT_DICT_PATH: &str = "meta/stdout.dict";
 pub static STDERR_DICT_PATH: &str = "meta/stderr.dict";
 
 // ---
-// Portable archive format types
+// Portable recording format types
 // ---
 
 define_format_version! {
-    /// Major version of the portable archive format for breaking changes.
-    pub struct PortableArchiveFormatMajorVersion;
+    /// Major version of the portable recording format for breaking changes.
+    pub struct PortableRecordingFormatMajorVersion;
 }
 
 define_format_version! {
     @default
-    /// Minor version of the portable archive format for additive changes.
-    pub struct PortableArchiveFormatMinorVersion;
+    /// Minor version of the portable recording format for additive changes.
+    pub struct PortableRecordingFormatMinorVersion;
 }
 
-/// Combined major and minor version of the portable archive format.
+/// Combined major and minor version of the portable recording format.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
-pub struct PortableArchiveFormatVersion {
+pub struct PortableRecordingFormatVersion {
     /// The major version (breaking changes).
-    pub major: PortableArchiveFormatMajorVersion,
+    pub major: PortableRecordingFormatMajorVersion,
     /// The minor version (additive changes).
-    pub minor: PortableArchiveFormatMinorVersion,
+    pub minor: PortableRecordingFormatMinorVersion,
 }
 
-impl PortableArchiveFormatVersion {
-    /// Creates a new `PortableArchiveFormatVersion`.
+impl PortableRecordingFormatVersion {
+    /// Creates a new `PortableRecordingFormatVersion`.
     pub const fn new(
-        major: PortableArchiveFormatMajorVersion,
-        minor: PortableArchiveFormatMinorVersion,
+        major: PortableRecordingFormatMajorVersion,
+        minor: PortableRecordingFormatMinorVersion,
     ) -> Self {
         Self { major, minor }
     }
@@ -737,15 +737,15 @@ impl PortableArchiveFormatVersion {
     pub fn check_readable_by(
         self,
         supported: Self,
-    ) -> Result<(), PortableArchiveVersionIncompatibility> {
+    ) -> Result<(), PortableRecordingVersionIncompatibility> {
         if self.major != supported.major {
-            return Err(PortableArchiveVersionIncompatibility::MajorMismatch {
+            return Err(PortableRecordingVersionIncompatibility::MajorMismatch {
                 archive_major: self.major,
                 supported_major: supported.major,
             });
         }
         if self.minor > supported.minor {
-            return Err(PortableArchiveVersionIncompatibility::MinorTooNew {
+            return Err(PortableRecordingVersionIncompatibility::MinorTooNew {
                 archive_minor: self.minor,
                 supported_minor: supported.minor,
             });
@@ -754,7 +754,7 @@ impl PortableArchiveFormatVersion {
     }
 }
 
-impl fmt::Display for PortableArchiveFormatVersion {
+impl fmt::Display for PortableRecordingFormatVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}.{}", self.major, self.minor)
     }
@@ -763,24 +763,24 @@ impl fmt::Display for PortableArchiveFormatVersion {
 /// An incompatibility between an archive's portable format version and what the
 /// reader supports.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PortableArchiveVersionIncompatibility {
+pub enum PortableRecordingVersionIncompatibility {
     /// The archive's major version differs from the supported major version.
     MajorMismatch {
         /// The major version in the archive.
-        archive_major: PortableArchiveFormatMajorVersion,
+        archive_major: PortableRecordingFormatMajorVersion,
         /// The major version this nextest supports.
-        supported_major: PortableArchiveFormatMajorVersion,
+        supported_major: PortableRecordingFormatMajorVersion,
     },
     /// The archive's minor version is newer than the supported minor version.
     MinorTooNew {
         /// The minor version in the archive.
-        archive_minor: PortableArchiveFormatMinorVersion,
+        archive_minor: PortableRecordingFormatMinorVersion,
         /// The maximum minor version this nextest supports.
-        supported_minor: PortableArchiveFormatMinorVersion,
+        supported_minor: PortableRecordingFormatMinorVersion,
     },
 }
 
-impl fmt::Display for PortableArchiveVersionIncompatibility {
+impl fmt::Display for PortableRecordingVersionIncompatibility {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::MajorMismatch {
@@ -807,25 +807,25 @@ impl fmt::Display for PortableArchiveVersionIncompatibility {
     }
 }
 
-/// The current format version for portable archives.
-pub const PORTABLE_ARCHIVE_FORMAT_VERSION: PortableArchiveFormatVersion =
-    PortableArchiveFormatVersion::new(
-        PortableArchiveFormatMajorVersion::new(1),
-        PortableArchiveFormatMinorVersion::new(0),
+/// The current format version for portable recordings.
+pub const PORTABLE_RECORDING_FORMAT_VERSION: PortableRecordingFormatVersion =
+    PortableRecordingFormatVersion::new(
+        PortableRecordingFormatMajorVersion::new(1),
+        PortableRecordingFormatMinorVersion::new(0),
     );
 
-/// File name for the manifest within a portable archive.
+/// File name for the manifest within a portable recording.
 pub static PORTABLE_MANIFEST_FILE_NAME: &str = "manifest.json";
 
-/// The manifest for a portable archive.
+/// The manifest for a portable recording.
 ///
-/// A portable archive packages a single recorded run into a self-contained
+/// A portable recording packages a single recorded run into a self-contained
 /// zip file for sharing and import.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct PortableManifest {
-    /// The format version of this portable archive.
-    pub(crate) format_version: PortableArchiveFormatVersion,
+    /// The format version of this portable recording.
+    pub(crate) format_version: PortableRecordingFormatVersion,
     /// The run metadata.
     pub(super) run: RecordedRun,
 }
@@ -834,7 +834,7 @@ impl PortableManifest {
     /// Creates a new manifest for the given run.
     pub(crate) fn new(run: &RecordedRunInfo) -> Self {
         Self {
-            format_version: PORTABLE_ARCHIVE_FORMAT_VERSION,
+            format_version: PORTABLE_RECORDING_FORMAT_VERSION,
             run: RecordedRun::from(run),
         }
     }
@@ -1294,11 +1294,11 @@ mod tests {
 
     // --- Portable archive format version tests ---
 
-    /// Helper to create a PortableArchiveFormatVersion.
-    fn portable_version(major: u32, minor: u32) -> PortableArchiveFormatVersion {
-        PortableArchiveFormatVersion::new(
-            PortableArchiveFormatMajorVersion::new(major),
-            PortableArchiveFormatMinorVersion::new(minor),
+    /// Helper to create a PortableRecordingFormatVersion.
+    fn portable_version(major: u32, minor: u32) -> PortableRecordingFormatVersion {
+        PortableRecordingFormatVersion::new(
+            PortableRecordingFormatMajorVersion::new(major),
+            PortableRecordingFormatMinorVersion::new(minor),
         )
     }
 
@@ -1323,9 +1323,9 @@ mod tests {
             .unwrap_err();
         assert_eq!(
             error,
-            PortableArchiveVersionIncompatibility::MinorTooNew {
-                archive_minor: PortableArchiveFormatMinorVersion::new(3),
-                supported_minor: PortableArchiveFormatMinorVersion::new(2),
+            PortableRecordingVersionIncompatibility::MinorTooNew {
+                archive_minor: PortableRecordingFormatMinorVersion::new(3),
+                supported_minor: PortableRecordingFormatMinorVersion::new(2),
             },
             "newer minor version should be incompatible"
         );
@@ -1336,9 +1336,9 @@ mod tests {
             .unwrap_err();
         assert_eq!(
             error,
-            PortableArchiveVersionIncompatibility::MajorMismatch {
-                archive_major: PortableArchiveFormatMajorVersion::new(2),
-                supported_major: PortableArchiveFormatMajorVersion::new(1),
+            PortableRecordingVersionIncompatibility::MajorMismatch {
+                archive_major: PortableRecordingFormatMajorVersion::new(2),
+                supported_major: PortableRecordingFormatMajorVersion::new(1),
             },
             "different major version should be incompatible"
         );
@@ -1349,24 +1349,24 @@ mod tests {
 
     #[test]
     fn test_portable_version_serialization() {
-        // Test that PortableArchiveFormatVersion serializes to {major: ..., minor: ...}.
+        // Test that PortableRecordingFormatVersion serializes to {major: ..., minor: ...}.
         let version = portable_version(1, 0);
         let json = serde_json::to_string(&version).expect("serialization should succeed");
         insta::assert_snapshot!(json, @r#"{"major":1,"minor":0}"#);
 
         // Test roundtrip.
-        let roundtripped: PortableArchiveFormatVersion =
+        let roundtripped: PortableRecordingFormatVersion =
             serde_json::from_str(&json).expect("deserialization should succeed");
         assert_eq!(roundtripped, version);
     }
 
     #[test]
     fn test_portable_manifest_format_version() {
-        // Verify the current PORTABLE_ARCHIVE_FORMAT_VERSION constant.
+        // Verify the current PORTABLE_RECORDING_FORMAT_VERSION constant.
         assert_eq!(
-            PORTABLE_ARCHIVE_FORMAT_VERSION,
+            PORTABLE_RECORDING_FORMAT_VERSION,
             portable_version(1, 0),
-            "current portable archive format version should be 1.0"
+            "current portable recording format version should be 1.0"
         );
     }
 }

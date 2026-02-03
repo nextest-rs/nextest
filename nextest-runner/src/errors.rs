@@ -13,7 +13,7 @@ use crate::{
     helpers::{display_exited_with, dylib_path_envvar, plural},
     indenter::{DisplayIndented, indented},
     record::{
-        PortableArchiveFormatVersion, PortableArchiveVersionIncompatibility, RecordedRunInfo,
+        PortableRecordingFormatVersion, PortableRecordingVersionIncompatibility, RecordedRunInfo,
         RunIdIndex, RunsJsonFormatVersion, StoreFormatVersion, StoreVersionIncompatibility,
     },
     redact::Redactor,
@@ -2378,7 +2378,7 @@ pub struct InvalidRunIdSelector {
     pub input: String,
 }
 
-/// Error returned when parsing a [`RunIdOrArchiveSelector`](crate::record::RunIdOrArchiveSelector) fails.
+/// Error returned when parsing a [`RunIdOrRecordingSelector`](crate::record::RunIdOrRecordingSelector) fails.
 ///
 /// A valid selector is either "latest", a string containing only hex digits
 /// and dashes (for UUID format), or a path ending in `.zip`.
@@ -2386,7 +2386,7 @@ pub struct InvalidRunIdSelector {
 #[error(
     "invalid run ID selector `{input}`: expected `latest`, hex digits, or a path ending in `.zip`"
 )]
-pub struct InvalidRunIdOrArchiveSelector {
+pub struct InvalidRunIdOrRecordingSelector {
     /// The invalid input string.
     pub input: String,
 }
@@ -2584,15 +2584,15 @@ pub enum RecordReadError {
         error: std::io::Error,
     },
 
-    /// An error occurred while reading a portable archive.
-    #[error("error reading portable archive")]
-    PortableArchive(#[source] PortableArchiveReadError),
+    /// An error occurred while reading a portable recording.
+    #[error("error reading portable recording")]
+    PortableRecording(#[source] PortableRecordingReadError),
 }
 
-/// An error that occurred while creating a portable archive.
+/// An error that occurred while creating a portable recording.
 #[derive(Debug, Error)]
 #[non_exhaustive]
-pub enum PortableArchiveError {
+pub enum PortableRecordingError {
     /// The run directory does not exist.
     #[error("run directory does not exist: {path}")]
     RunDirNotFound {
@@ -2658,10 +2658,10 @@ pub enum PortableArchiveError {
     },
 }
 
-/// An error that occurred while reading a portable archive.
+/// An error that occurred while reading a portable recording.
 #[derive(Debug, Error)]
 #[non_exhaustive]
-pub enum PortableArchiveReadError {
+pub enum PortableRecordingReadError {
     /// Failed to open the archive file.
     #[error("failed to open archive at `{path}`")]
     OpenArchive {
@@ -2701,20 +2701,20 @@ pub enum PortableArchiveReadError {
         error: serde_json::Error,
     },
 
-    /// The portable archive format version is not supported.
+    /// The portable recording format version is not supported.
     #[error(
-        "portable archive format version {found} in `{path}` is incompatible: {incompatibility} \
+        "portable recording format version {found} in `{path}` is incompatible: {incompatibility} \
          (this nextest supports version {supported})"
     )]
     UnsupportedFormatVersion {
         /// The path to the archive.
         path: Utf8PathBuf,
         /// The format version found in the archive.
-        found: PortableArchiveFormatVersion,
+        found: PortableRecordingFormatVersion,
         /// The supported format version.
-        supported: PortableArchiveFormatVersion,
+        supported: PortableRecordingFormatVersion,
         /// The specific incompatibility.
-        incompatibility: PortableArchiveVersionIncompatibility,
+        incompatibility: PortableRecordingVersionIncompatibility,
     },
 
     /// The store format version is not supported.

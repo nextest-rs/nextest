@@ -374,7 +374,7 @@ fn test_argument_parsing() {
             ArgumentConflict,
         ),
         // store export does not accept archive paths (uses RunIdSelector, not
-        // RunIdOrArchiveSelector).
+        // RunIdOrRecordingSelector).
         ("cargo nextest store export archive.zip", ValueValidation),
         (
             "cargo nextest store export /path/to/run.zip",

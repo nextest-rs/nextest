@@ -19,9 +19,9 @@ use nextest_runner::{
     list::{OwnedTestInstanceId, TestList},
     pager::PagedOutput,
     record::{
-        PortableArchive, RecordReader, RecordedRunInfo, ReplayContext, ReplayHeader,
-        ReplayReporterBuilder, RunIdIndex, RunIdOrArchiveSelector, RunStore, STORE_FORMAT_VERSION,
-        StoreReader, TestEventSummary, ZipStoreOutput, records_cache_dir,
+        PortableRecording, RecordReader, RecordedRunInfo, ReplayContext, ReplayHeader,
+        ReplayReporterBuilder, RunIdIndex, RunIdOrRecordingSelector, RunStore,
+        STORE_FORMAT_VERSION, StoreReader, TestEventSummary, ZipStoreOutput, records_cache_dir,
     },
     reporter::ReporterOutput,
     user_config::{UserConfig, UserConfigExperimental},
@@ -32,13 +32,13 @@ use tracing::warn;
 /// Options for the replay command.
 #[derive(Debug, Args)]
 pub(crate) struct ReplayOpts {
-    /// Run ID, `latest`, or archive path to replay.
+    /// Run ID, `latest`, or recording path to replay.
     ///
     /// Accepts "latest" (the default) for the most recent completed run,
-    /// a full UUID or unambiguous prefix, or a path to a portable archive
+    /// a full UUID or unambiguous prefix, or a path to a portable recording
     /// (`.zip` file).
-    #[arg(long, short = 'R', value_name = "RUN_ID_OR_ARCHIVE", default_value_t)]
-    pub(crate) run_id: RunIdOrArchiveSelector,
+    #[arg(long, short = 'R', value_name = "RUN_ID_OR_RECORDING", default_value_t)]
+    pub(crate) run_id: RunIdOrRecordingSelector,
 
     /// Exit with the same code as the original run.
     ///
@@ -100,7 +100,7 @@ pub(crate) fn exec_replay(
 
     // Archive-based replay doesn't require a workspace.
     let run_id_selector = match &replay_opts.run_id {
-        RunIdOrArchiveSelector::ArchivePath(archive_path) => {
+        RunIdOrRecordingSelector::RecordingPath(archive_path) => {
             return exec_replay_from_archive(
                 early_args,
                 &replay_opts,
@@ -109,7 +109,7 @@ pub(crate) fn exec_replay(
                 output,
             );
         }
-        RunIdOrArchiveSelector::RunId(selector) => selector,
+        RunIdOrRecordingSelector::RunId(selector) => selector,
     };
 
     // Workspace-based replay requires locating the workspace.
@@ -193,7 +193,7 @@ pub(crate) fn exec_replay(
     )
 }
 
-/// Executes replay from a portable archive.
+/// Executes replay from a portable recording.
 fn exec_replay_from_archive(
     early_args: &EarlyArgs,
     replay_opts: &ReplayOpts,
@@ -201,19 +201,19 @@ fn exec_replay_from_archive(
     user_config: &UserConfig,
     output: OutputContext,
 ) -> Result<i32> {
-    let mut archive = PortableArchive::open(archive_path)
-        .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+    let mut archive = PortableRecording::open(archive_path)
+        .map_err(|err| ExpectedError::PortableRecordingReadError { err })?;
 
     let run_info = archive.run_info();
     let run_id = run_info.run_id;
 
     let run_log = archive
         .read_run_log()
-        .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+        .map_err(|err| ExpectedError::PortableRecordingReadError { err })?;
 
     let mut store_reader = archive
         .open_store()
-        .map_err(|err| ExpectedError::PortableArchiveReadError { err })?;
+        .map_err(|err| ExpectedError::PortableRecordingReadError { err })?;
 
     store_reader
         .load_dictionaries()
