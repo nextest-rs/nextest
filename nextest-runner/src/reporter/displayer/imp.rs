@@ -56,6 +56,19 @@ use std::{
     time::Duration,
 };
 
+/// The kind of displayer being used.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum DisplayerKind {
+    /// The displayer is showing output from a live test run.
+    Live,
+
+    /// The displayer is showing output from a replay of a recorded run.
+    ///
+    /// In replay mode, if output was not captured during the original run, a
+    /// helpful message is displayed to indicate this.
+    Replay,
+}
+
 pub(crate) struct DisplayReporterBuilder {
     pub(crate) mode: NextestRunMode,
     pub(crate) default_filter: CompiledDefaultFilter,
@@ -70,6 +83,7 @@ pub(crate) struct DisplayReporterBuilder {
     pub(crate) no_output_indent: bool,
     pub(crate) max_progress_running: MaxProgressRunning,
     pub(crate) show_term_progress: ShowTerminalProgress,
+    pub(crate) displayer_kind: DisplayerKind,
 }
 
 impl DisplayReporterBuilder {
@@ -166,6 +180,7 @@ impl DisplayReporterBuilder {
                     force_success_output,
                     force_failure_output,
                     force_exec_fail_output,
+                    self.displayer_kind,
                 ),
                 final_outputs: DebugIgnore(Vec::new()),
                 run_id_unique_prefix: None,
@@ -2666,6 +2681,7 @@ mod tests {
             no_output_indent: false,
             max_progress_running: MaxProgressRunning::default(),
             show_term_progress: ShowTerminalProgress::No,
+            displayer_kind: DisplayerKind::Live,
         };
 
         let output = ReporterOutput::Writer {

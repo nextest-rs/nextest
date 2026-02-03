@@ -6,7 +6,7 @@
 //! The main structure in this module is [`TestReporter`].
 
 use super::{
-    FinalStatusLevel, MaxProgressRunning, StatusLevel, TestOutputDisplay,
+    DisplayerKind, FinalStatusLevel, MaxProgressRunning, StatusLevel, TestOutputDisplay,
     displayer::{DisplayReporter, DisplayReporterBuilder, ShowTerminalProgress, StatusLevels},
 };
 use crate::{
@@ -195,6 +195,7 @@ impl ReporterBuilder {
             no_output_indent: self.no_output_indent,
             max_progress_running: self.max_progress_running,
             show_term_progress,
+            displayer_kind: DisplayerKind::Live,
         }
         .build(output);
 

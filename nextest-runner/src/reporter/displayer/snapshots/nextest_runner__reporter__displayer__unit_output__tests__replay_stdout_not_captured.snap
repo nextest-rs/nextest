@@ -1,0 +1,7 @@
+---
+source: nextest-runner/src/reporter/displayer/unit_output.rs
+expression: buf
+---
+    (stdout not captured)
+--- STDERR ---
+    stderr output
