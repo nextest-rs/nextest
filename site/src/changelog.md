@@ -9,7 +9,7 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## Unreleased
+## [0.9.125] - 2026-02-03
 
 ### Added
 
@@ -26,6 +26,10 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 ### Fixed
 
 - In replay mode, when output was not captured during recording (e.g. with `--no-capture`), nextest now shows a "(output not captured)" message rather than blank output. ([#3028])
+
+### Other
+
+- Published a [design document](https://nexte.st/docs/design/architecture/recording-runs/) describing how nextest does records, replays and reruns. The audience for this document is nextest contributors and curious readers. We hope you enjoy it!
 
 ### Security
 
@@ -1911,6 +1915,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.125]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.125
 [0.9.124]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.124
 [0.9.123]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.123
 [0.9.122]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.122
