@@ -9,6 +9,23 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.126] - 2026-02-04
+
+### Changed
+
+- Recorded test runs are now stored in the system **state directory** rather than the cache directory, since they are not regenerable. ([#3043])
+
+  | Platform | New location |
+  |----------|--------------|
+  | Linux, macOS, and other Unix | `$XDG_STATE_HOME/nextest/` or `~/.local/state/nextest/` |
+  | Windows | `%LOCALAPPDATA%\nextest\` (unchanged) |
+
+  The store location can now be overridden via `NEXTEST_STATE_DIR` (previously `NEXTEST_CACHE_DIR`).
+
+  For this release, records in the cache directory will be automatically migrated on the next nextest run. Since this feature is experimental, the migration path will be removed soon (in the next 1-2 releases).
+
+[#3043]: https://github.com/nextest-rs/nextest/pull/3043
+
 ## [0.9.125] - 2026-02-03
 
 ### Added
@@ -1915,6 +1932,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.126]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.126
 [0.9.125]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.125
 [0.9.124]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.124
 [0.9.123]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.123
