@@ -13,9 +13,30 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
 ### Added
 
-- Nextest now publishes binaries for `aarch64-unknown-linux-musl`, providing a statically-linked ARM64 Linux binary with no runtime library dependencies. ([#3025])
+- New `cargo nextest store export` command to export recorded runs as portable recordings. Portable recordings are zip archives that can be shared and uploaded as CI artifacts. ([#3010])
 
+- `cargo nextest replay`, `cargo nextest run -R`, and `cargo nextest store info` now accept paths to portable recordings (`.zip` files) in addition to run IDs. This enables replaying and rerunning test results from exported archives, including those downloaded from CI. ([#3012])
+
+- Nextest now publishes binaries for `aarch64-unknown-linux-musl`, providing a statically-linked ARM64 Linux binary with no runtime library dependencies. Thanks [altendky](https://github.com/altendky) for your first contribution! ([#3025])
+
+### Changed
+
+- USDT tracing probes are now an optional default feature, `usdt`. This fixes cross-compilation for some targets. Thanks [konstin](https://github.com/konstin) for your first contribution! ([#3027])
+
+### Fixed
+
+- In replay mode, when output was not captured during recording (e.g. with `--no-capture`), nextest now shows a "(output not captured)" message rather than blank output. ([#3028])
+
+### Security
+
+- Update `bytes` crate to v1.11.1 for a security fix. ([#3032])
+
+[#3010]: https://github.com/nextest-rs/nextest/pull/3010
+[#3012]: https://github.com/nextest-rs/nextest/pull/3012
 [#3025]: https://github.com/nextest-rs/nextest/pull/3025
+[#3027]: https://github.com/nextest-rs/nextest/pull/3027
+[#3028]: https://github.com/nextest-rs/nextest/pull/3028
+[#3032]: https://github.com/nextest-rs/nextest/pull/3032
 
 ## [0.9.124] - 2026-01-25
 
