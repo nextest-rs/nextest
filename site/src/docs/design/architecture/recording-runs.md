@@ -9,7 +9,7 @@ description: Design document describing how and why nextest records and replays 
 
     This is a design document intended for nextest contributors and curious readers.
 
-After a test run completes (or crashes), nextest persists the full event stream, captured test outputs, and workspace metadata so that runs can be replayed, analyzed, and used as the basis for iterative reruns. Getting this right is a challenging problem. Here's how nextest does it.
+When recording is enabled, nextest persists the full event stream, captured test outputs, and workspace metadata for every test run. This information can be used to [replay and analyze](../../features/record-replay-rerun.md) test runs, and also as the basis for iterative reruns. Getting this right is a challenging problem. Here's how nextest does it.
 
 ## Design principles
 
