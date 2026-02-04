@@ -2012,7 +2012,7 @@ pub enum RunStoreError {
 
     /// Timed out waiting to acquire a file lock.
     #[error(
-        "timed out acquiring lock on `{path}` after {timeout_secs}s (is the cache directory \
+        "timed out acquiring lock on `{path}` after {timeout_secs}s (is the state directory \
          on a networked filesystem?)"
     )]
     FileLockTimeout {
@@ -2230,18 +2230,18 @@ pub enum RecordReporterError {
     },
 }
 
-/// An error determining the cache directory for recordings.
+/// An error determining the state directory for recordings.
 #[derive(Debug, Error)]
-pub enum CacheDirError {
+pub enum StateDirError {
     /// The platform base strategy could not be determined.
     ///
     /// This typically means the platform doesn't support standard directory layouts.
     #[error("could not determine platform base directory strategy")]
     BaseDirStrategy(#[source] HomeDirError),
 
-    /// The platform cache directory path is not valid UTF-8.
-    #[error("platform cache directory is not valid UTF-8: {path:?}")]
-    CacheDirNotUtf8 {
+    /// The platform state directory path is not valid UTF-8.
+    #[error("platform state directory is not valid UTF-8: {path:?}")]
+    StateDirNotUtf8 {
         /// The path that was not valid UTF-8.
         path: PathBuf,
     },
@@ -2260,9 +2260,9 @@ pub enum CacheDirError {
 /// An error during recording session setup.
 #[derive(Debug, Error)]
 pub enum RecordSetupError {
-    /// The platform cache directory could not be determined.
-    #[error("could not determine platform cache directory for recording")]
-    CacheDirNotFound(#[source] CacheDirError),
+    /// The platform state directory could not be determined.
+    #[error("could not determine platform state directory for recording")]
+    StateDirNotFound(#[source] StateDirError),
 
     /// Failed to create the run store.
     #[error("failed to create run store")]

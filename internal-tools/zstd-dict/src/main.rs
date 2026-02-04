@@ -3,17 +3,17 @@
 
 //! Train and analyze zstd dictionaries for nextest record archives.
 //!
-//! This tool:
-//! 1. Scans ~/.cache/nextest for existing store.zip archives
-//! 2. Extracts stdout/stderr samples from them
-//! 3. Trains separate zstd dictionaries for stdout and stderr
-//! 4. Analyzes compression improvement across archives
+//! This tool does the following.
+//! 1. Scans the nextest recordings directory for existing store.zip archives.
+//! 2. Extracts stdout and stderr samples from them.
+//! 3. Trains separate zstd dictionaries for stdout and stderr.
+//! 4. Analyzes compression improvement across archives.
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{Context, Result, bail};
 use etcetera::BaseStrategy;
-use nextest_runner::record::OutputDict;
+use nextest_runner::record::{NEXTEST_STATE_DIR_ENV, OutputDict};
 use std::{
     collections::HashMap,
     fs::{self, File},
@@ -173,26 +173,35 @@ fn main() -> Result<()> {
 }
 
 // ---
-// Cache directory and archive discovery
+// State directory and archive discovery
 // ---
 
-/// Find the nextest cache directory.
-fn find_cache_dir() -> Result<Utf8PathBuf> {
+/// Find the nextest recordings directory.
+fn find_state_dir() -> Result<Utf8PathBuf> {
+    if let Ok(base_dir) = std::env::var(NEXTEST_STATE_DIR_ENV) {
+        return Ok(Utf8PathBuf::from(base_dir));
+    }
+
     let base = etcetera::base_strategy::choose_base_strategy()
         .wrap_err("failed to determine base directories")?;
-    let cache_dir = base.cache_dir();
-    let nextest_cache = Utf8PathBuf::try_from(cache_dir.join("nextest"))
-        .wrap_err("cache path is not valid UTF-8")?;
-    Ok(nextest_cache)
+    let nextest_dir = if let Some(state_dir) = base.state_dir() {
+        state_dir.join("nextest")
+    } else {
+        base.cache_dir().join("nextest")
+    };
+
+    let nextest_state =
+        Utf8PathBuf::try_from(nextest_dir).wrap_err("state path is not valid UTF-8")?;
+    Ok(nextest_state)
 }
 
-/// Find all store.zip files in the cache.
+/// Find all store.zip files in the recordings directory.
 fn find_archives() -> Result<Vec<Utf8PathBuf>> {
-    let cache_dir = find_cache_dir()?;
-    let projects_dir = cache_dir.join("projects");
+    let state_dir = find_state_dir()?;
+    let projects_dir = state_dir.join("projects");
 
     if !projects_dir.exists() {
-        bail!("no nextest cache found at {}", projects_dir);
+        bail!("no nextest recordings found at {}", projects_dir);
     }
 
     let mut archives = Vec::new();
@@ -1136,8 +1145,8 @@ fn level_sweep(max_samples: usize, dict_source: &DictSource) -> Result<()> {
 
 /// Analyze compression per-project to see which benefit most.
 fn analyze_per_project(dict_source: &DictSource) -> Result<()> {
-    let cache_dir = find_cache_dir()?;
-    let projects_dir = cache_dir.join("projects");
+    let state_dir = find_state_dir()?;
+    let projects_dir = state_dir.join("projects");
 
     let stdout_dict = dict_source.load(SampleCategory::Stdout)?;
     let stderr_dict = dict_source.load(SampleCategory::Stderr)?;

@@ -297,10 +297,10 @@ The store location is platform-dependent:
 
 | Platform | Path |
 |----------|------|
-| Linux, macOS, and other Unix | `$XDG_CACHE_HOME/nextest/` or `~/.cache/nextest/` |
+| Linux, macOS, and other Unix | `$XDG_STATE_HOME/nextest/` or `~/.local/state/nextest/` |
 | Windows | `%LOCALAPPDATA%\nextest\` |
 
-The store location can be overridden via the `NEXTEST_CACHE_DIR` environment variable.
+The store location can be overridden via the `NEXTEST_STATE_DIR` environment variable.
 
 Within the store, recorded runs are indexed by canonicalized workspace path.
 

@@ -21,7 +21,7 @@ use nextest_runner::{
     record::{
         PortableRecording, RecordReader, RecordedRunInfo, ReplayContext, ReplayHeader,
         ReplayReporterBuilder, RunIdIndex, RunIdOrRecordingSelector, RunStore,
-        STORE_FORMAT_VERSION, StoreReader, TestEventSummary, ZipStoreOutput, records_cache_dir,
+        STORE_FORMAT_VERSION, StoreReader, TestEventSummary, ZipStoreOutput, records_state_dir,
     },
     reporter::ReporterOutput,
     user_config::{UserConfig, UserConfigExperimental},
@@ -139,10 +139,10 @@ pub(crate) fn exec_replay(
                 workspace_root: workspace_root.to_owned(),
             })?;
 
-    let cache_dir = records_cache_dir(workspace_root)
-        .map_err(|err| ExpectedError::RecordCacheDirNotFound { err })?;
+    let state_dir = records_state_dir(workspace_root)
+        .map_err(|err| ExpectedError::RecordStateDirNotFound { err })?;
 
-    let store = RunStore::new(&cache_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
+    let store = RunStore::new(&state_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
     let snapshot = store
         .lock_shared()
         .map_err(|err| ExpectedError::RecordSetupError { err })?

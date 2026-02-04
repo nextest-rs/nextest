@@ -16,7 +16,7 @@ use nextest_runner::{
         DisplayRunList, PortableRecording, PortableRecordingWriter, PruneKind,
         RecordRetentionPolicy, RecordedRunStatus, RunIdIndex, RunIdOrRecordingSelector,
         RunIdSelector, RunStore, SnapshotWithReplayability, Styles as RecordStyles,
-        has_zip_extension, records_cache_dir,
+        has_zip_extension, records_state_dir,
     },
     redact::Redactor,
     user_config::{UserConfig, elements::RecordConfig},
@@ -75,14 +75,14 @@ impl InfoOpts {
     fn exec_from_store(
         &self,
         run_id_selector: &RunIdSelector,
-        cache_dir: &Utf8Path,
+        state_dir: &Utf8Path,
         styles: &RecordStyles,
         theme_characters: &ThemeCharacters,
         paged_output: &mut PagedOutput,
         redactor: &Redactor,
     ) -> Result<i32> {
         let store =
-            RunStore::new(cache_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
+            RunStore::new(state_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
 
         let snapshot = store
             .lock_shared()
@@ -200,9 +200,9 @@ impl ExportOpts {
             .expect("run_id or run_id_opt is present due to clap validation")
     }
 
-    fn exec(&self, cache_dir: &Utf8Path, styles: &RecordStyles) -> Result<i32> {
+    fn exec(&self, state_dir: &Utf8Path, styles: &RecordStyles) -> Result<i32> {
         let store =
-            RunStore::new(cache_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
+            RunStore::new(state_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
 
         let snapshot = store
             .lock_shared()
@@ -256,14 +256,14 @@ impl ExportOpts {
 impl PruneOpts {
     fn exec(
         &self,
-        cache_dir: &Utf8Path,
+        state_dir: &Utf8Path,
         record_config: &RecordConfig,
         styles: &RecordStyles,
         paged_output: &mut PagedOutput,
         redactor: &Redactor,
     ) -> Result<i32> {
         let store =
-            RunStore::new(cache_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
+            RunStore::new(state_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
         let policy = RecordRetentionPolicy::from(record_config);
 
         if self.dry_run {
@@ -365,12 +365,12 @@ impl StoreCommand {
                     workspace_root: workspace_root.to_owned(),
                 })?;
 
-        let cache_dir = records_cache_dir(workspace_root)
-            .map_err(|err| ExpectedError::RecordCacheDirNotFound { err })?;
+        let state_dir = records_state_dir(workspace_root)
+            .map_err(|err| ExpectedError::RecordStateDirNotFound { err })?;
 
         match self {
             Self::List {} => {
-                let store = RunStore::new(&cache_dir)
+                let store = RunStore::new(&state_dir)
                     .map_err(|err| ExpectedError::RecordSetupError { err })?;
 
                 let snapshot = store
@@ -379,7 +379,7 @@ impl StoreCommand {
                     .into_snapshot();
 
                 let store_path = if output.verbose {
-                    Some(cache_dir.as_path())
+                    Some(state_dir.as_path())
                 } else {
                     None
                 };
@@ -405,7 +405,7 @@ impl StoreCommand {
                 match opts.resolved_selector() {
                     RunIdOrRecordingSelector::RunId(run_id_selector) => opts.exec_from_store(
                         run_id_selector,
-                        &cache_dir,
+                        &state_dir,
                         &styles,
                         &theme_characters,
                         &mut paged_output,
@@ -417,13 +417,13 @@ impl StoreCommand {
                 }
             }
             Self::Prune(opts) => opts.exec(
-                &cache_dir,
+                &state_dir,
                 &user_config.record,
                 &styles,
                 &mut paged_output,
                 &redactor,
             ),
-            Self::Export(opts) => opts.exec(&cache_dir, &styles),
+            Self::Export(opts) => opts.exec(&state_dir, &styles),
         }
     }
 }

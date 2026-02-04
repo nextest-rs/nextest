@@ -15,7 +15,7 @@
 //!   and the list of recorded runs.
 //! - [`RunRecorder`]: Writes a single run's data to disk, including metadata and events.
 //! - [`RecordReader`]: Reads a recorded run from disk for replay or inspection.
-//! - [`records_cache_dir`]: Returns the platform-specific cache directory for recordings.
+//! - [`records_state_dir`]: Returns the platform-specific state directory for recordings.
 //!
 //! # Archive format
 //!
@@ -24,7 +24,6 @@
 //! - `store.zip`: A zstd-compressed archive containing metadata and test outputs.
 //! - `run.log.zst`: A zstd-compressed JSON Lines file of test events.
 
-mod cache_dir;
 pub mod dicts;
 mod display;
 mod format;
@@ -36,13 +35,13 @@ mod rerun;
 mod retention;
 mod run_id_index;
 mod session;
+mod state_dir;
 mod store;
 mod summary;
 #[cfg(test)]
 mod test_helpers;
 mod tree;
 
-pub use cache_dir::{NEXTEST_CACHE_DIR_ENV, encode_workspace_path, records_cache_dir};
 pub use display::{
     DisplayPrunePlan, DisplayPruneResult, DisplayRecordedRunInfo, DisplayRecordedRunInfoDetailed,
     DisplayRunList, RunListAlignment, Styles,
@@ -71,6 +70,7 @@ pub use session::{
     RecordFinalizeResult, RecordFinalizeWarning, RecordSession, RecordSessionConfig,
     RecordSessionSetup,
 };
+pub use state_dir::{NEXTEST_STATE_DIR_ENV, encode_workspace_path, records_state_dir};
 pub use store::{
     CompletedRunStats, ComponentSizes, ExclusiveLockedRunStore, NonReplayableReason,
     RecordedRunInfo, RecordedRunStatus, RecordedSizes, ReplayabilityStatus, ResolveRunIdResult,
