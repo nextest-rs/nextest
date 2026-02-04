@@ -43,10 +43,10 @@ const EXPECTED_ARCHIVE_FILES: &[&str] = &[
     // out/ directory contains content-addressed output files (variable names).
 ];
 
-/// Environment variable to override the nextest cache directory.
+/// Environment variable to override the nextest state directory.
 ///
-/// This is the same constant as `nextest_runner::record::NEXTEST_CACHE_DIR_ENV`.
-const NEXTEST_CACHE_DIR_ENV: &str = "NEXTEST_CACHE_DIR";
+/// This is the same constant as `nextest_runner::record::NEXTEST_STATE_DIR_ENV`.
+const NEXTEST_STATE_DIR_ENV: &str = "NEXTEST_STATE_DIR";
 
 /// Environment variable to force a specific run ID (for testing).
 ///
@@ -98,11 +98,11 @@ fn create_record_user_config() -> (Utf8TempDir, Utf8PathBuf) {
     (temp_dir, config_path)
 }
 
-/// Creates a cache directory inside the temp project and returns its path.
+/// Creates a base directory inside the temp project and returns its path.
 ///
-/// Tests should set `NEXTEST_CACHE_DIR` to this path to ensure recordings
-/// are stored within the temp directory, making cleanup automatic and
-/// path redaction simple.
+/// Tests set `NEXTEST_STATE_DIR` to this path to override the default state directory and ensure
+/// recordings are stored within the temp directory, making cleanup automatic and path redaction
+/// simple.
 fn create_cache_dir(p: &TempProject) -> Utf8PathBuf {
     let cache_dir = p.temp_root().join("cache");
     std::fs::create_dir_all(&cache_dir).expect("cache directory should be created");
@@ -116,26 +116,27 @@ fn cli_for_project(env_info: &TestEnvInfo, p: &TempProject) -> CargoNextestCli {
     cli
 }
 
-/// Returns a CLI builder with recording enabled and cache directory configured.
+/// Returns a CLI builder with recording enabled and the recordings directory configured.
 ///
-/// This helper:
-/// 1. Sets the manifest path
+/// This helper does the following.
+/// 1. Sets the manifest path.
 /// 2. Sets `--user-config-file` to the provided config path (which must have
-///    `[experimental] record = true` and `[record] enabled = true`)
-/// 3. Sets `NEXTEST_CACHE_DIR` to a directory inside the temp project
-/// 4. Optionally sets `__NEXTEST_FORCE_RUN_ID` for deterministic run IDs
+///    `[experimental] record = true` and `[record] enabled = true`).
+/// 3. Sets `NEXTEST_STATE_DIR` to a directory inside the temp project to override the default
+///    state directory.
+/// 4. Optionally sets `__NEXTEST_FORCE_RUN_ID` for deterministic run IDs.
 /// 5. Sets `__NEXTEST_REDACT=1` to produce fixed-width placeholders for
-///    timestamps, durations, and sizes, preserving column alignment
+///    timestamps, durations, and sizes, preserving column alignment.
 fn cli_with_recording(
     env_info: &TestEnvInfo,
     p: &TempProject,
-    cache_dir: &Utf8Path,
+    state_dir: &Utf8Path,
     user_config_path: &Utf8Path,
     run_id: Option<&str>,
 ) -> CargoNextestCli {
     let mut cli = cli_for_project(env_info, p);
     cli.args(["--user-config-file", user_config_path.as_str()]);
-    cli.env(NEXTEST_CACHE_DIR_ENV, cache_dir.as_str());
+    cli.env(NEXTEST_STATE_DIR_ENV, state_dir.as_str());
     cli.env(NEXTEST_REDACT_ENV, "1");
     if let Some(run_id) = run_id {
         cli.env(FORCE_RUN_ID_ENV, run_id);
@@ -145,11 +146,11 @@ fn cli_with_recording(
 
 /// Returns the runs directory within the record store.
 ///
-/// When using `NEXTEST_CACHE_DIR`, records are stored at:
-/// `$NEXTEST_CACHE_DIR/projects/<encoded-workspace>/records/runs/`
-fn find_runs_dir(cache_dir: &Utf8Path) -> Option<Utf8PathBuf> {
-    // The runs directory is at: cache_dir/projects/<encoded>/records/runs
-    let projects_dir = cache_dir.join("projects");
+/// When using `NEXTEST_STATE_DIR`, recordings are stored at the following path.
+/// `$NEXTEST_STATE_DIR/projects/<encoded-workspace>/records/runs/`
+fn find_runs_dir(state_dir: &Utf8Path) -> Option<Utf8PathBuf> {
+    // The runs directory is at: state_dir/projects/<encoded>/records/runs
+    let projects_dir = state_dir.join("projects");
     if !projects_dir.exists() {
         return None;
     }
@@ -231,7 +232,7 @@ fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
         format!("[TEMP_DIR]{normalized_suffix}")
     });
 
-    // Also replace the encoded form of the temp root (used in cache directory
+    // Also replace the encoded form of the temp root (used in recordings directory
     // names). Match an optional trailing `_s` (encoded `/`) or `_b` (encoded
     // `\`) as part of the temp root, since the encoded path typically includes
     // the trailing separator.
@@ -1116,7 +1117,7 @@ fn test_concurrent_access() {
                         "-E",
                         "test(=test_success)",
                     ])
-                    .env(NEXTEST_CACHE_DIR_ENV, &c)
+                    .env(NEXTEST_STATE_DIR_ENV, &c)
                     .output()
             })
         })

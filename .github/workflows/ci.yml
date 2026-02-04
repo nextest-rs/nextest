@@ -139,14 +139,14 @@ jobs:
       - name: Test with locally built nextest
         shell: bash
         env:
-          NEXTEST_CACHE_DIR: ${{ runner.temp }}/nextest-cache
+          NEXTEST_STATE_DIR: ${{ runner.temp }}/nextest-state
         run: cargo local-nt run --profile ci --user-config-file "$RUNNER_TEMP/nextest-config/config.toml"
 
       - name: Create portable archive from recorded run
         # Run this step even if the test step fails.
         if: "!cancelled()"
         env:
-          NEXTEST_CACHE_DIR: ${{ runner.temp }}/nextest-cache
+          NEXTEST_STATE_DIR: ${{ runner.temp }}/nextest-state
         shell: bash
         run: |
           cargo local-nt store export latest \

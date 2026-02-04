@@ -32,7 +32,7 @@ use nextest_runner::{
     record::{
         ComputedRerunInfo, PortableRecording, RecordOpts, RecordReader, RecordRetentionPolicy,
         RecordSession, RecordSessionConfig, RerunRootInfo, RunIdOrRecordingSelector, RunIdSelector,
-        RunStore, STORE_FORMAT_VERSION, Styles as RecordStyles, records_cache_dir,
+        RunStore, STORE_FORMAT_VERSION, Styles as RecordStyles, records_state_dir,
     },
     reporter::{
         FinalStatusLevel, MaxProgressRunning, ReporterBuilder, ShowTerminalProgress, StatusLevel,
@@ -1424,11 +1424,11 @@ impl App {
         &self,
         run_id_selector: &RunIdSelector,
     ) -> Result<(RerunState, ComputedRerunInfo), ExpectedError> {
-        let cache_dir = records_cache_dir(&self.base.workspace_root)
-            .map_err(|err| ExpectedError::RecordCacheDirNotFound { err })?;
+        let state_dir = records_state_dir(&self.base.workspace_root)
+            .map_err(|err| ExpectedError::RecordStateDirNotFound { err })?;
 
         let store =
-            RunStore::new(&cache_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
+            RunStore::new(&state_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;
 
         // First, acquire a shared lock to resolve the run ID and read the
         // parent run.

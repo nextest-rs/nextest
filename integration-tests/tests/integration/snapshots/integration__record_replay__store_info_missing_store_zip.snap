@@ -6,7 +6,7 @@ Run 80000001-0000-0000-0000-000000000001
 
   nextest version:  <version>
   command:          '[EXE]' nextest --no-pager --manifest-path '[PATH]' --user-config-file '[PATH]' run -E 'test(=test_success)'
-  env:              CARGO_TERM_COLOR=never NEXTEST_CACHE_DIR='[PATH]' NEXTEST_SHOW_PROGRESS=counter NEXTEST_USER_CONFIG_FILE=none
+  env:              CARGO_TERM_COLOR=never NEXTEST_SHOW_PROGRESS=counter NEXTEST_STATE_DIR='[PATH]' NEXTEST_USER_CONFIG_FILE=none
   status:           completed (exit code 0)
   started at:       XXXX-XX-XX XX:XX:XX (<ago> ago)
   last written at:  XXXX-XX-XX XX:XX:XX (<ago> ago)

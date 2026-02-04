@@ -1,11 +1,19 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Platform-specific cache directory discovery for nextest records.
+//! Platform-specific state directory discovery for nextest records.
+//!
+//! Test run recordings are stored in `XDG_STATE_HOME` (on Linux/macOS) rather
+//! than `XDG_CACHE_HOME` because they are accumulated state, not regenerable
+//! cache data. The XDG spec defines cache as "non-essential data files [that]
+//! the application must be able to regenerate," but recordings capture a
+//! specific execution at a specific point in time and cannot be regenerated.
 
-use crate::errors::CacheDirError;
+use crate::errors::{DisplayErrorChain, StateDirError};
 use camino::{Utf8Path, Utf8PathBuf};
 use etcetera::{BaseStrategy, choose_base_strategy};
+use std::fs;
+use tracing::{info, warn};
 use xxhash_rust::xxh3::xxh3_64;
 
 /// Maximum length of the encoded workspace path in bytes.
@@ -17,59 +25,131 @@ const MAX_ENCODED_LEN: usize = 96;
 /// enough entropy to disambiguate repos.
 const HASH_SUFFIX_LEN: usize = 8;
 
-/// Environment variable to override the nextest cache directory.
+/// Environment variable to override the nextest state directory.
 ///
-/// When set, this overrides the platform-specific cache directory. The records
-/// directory will be `$NEXTEST_CACHE_DIR/projects/<encoded-workspace>/records/`.
-pub const NEXTEST_CACHE_DIR_ENV: &str = "NEXTEST_CACHE_DIR";
+/// When set, this overrides the platform-specific state directory. The records
+/// directory will be `$NEXTEST_STATE_DIR/projects/<encoded-workspace>/records/`.
+pub const NEXTEST_STATE_DIR_ENV: &str = "NEXTEST_STATE_DIR";
 
-/// Returns the platform-specific cache directory for nextest records for a workspace.
+/// Returns the platform-specific state directory for nextest records for a workspace.
 ///
-/// If the `NEXTEST_CACHE_DIR` environment variable is set, uses that as the base
-/// cache directory. Otherwise, uses the platform-specific default:
+/// If the `NEXTEST_STATE_DIR` environment variable is set, uses that as the base
+/// directory. Otherwise, uses the platform-specific default:
 ///
-/// - Linux, macOS, and other Unix: `$XDG_CACHE_HOME/nextest/projects/<encoded-workspace>/records/`
-///   or `~/.cache/nextest/projects/<encoded-workspace>/records/`
-/// - Windows: `%LOCALAPPDATA%\nextest\cache\projects\<encoded-workspace>\records\`
+/// - Linux, macOS, and other Unix: `$XDG_STATE_HOME/nextest/projects/<encoded-workspace>/records/`
+///   or `~/.local/state/nextest/projects/<encoded-workspace>/records/`
+/// - Windows: `%LOCALAPPDATA%\nextest\projects\<encoded-workspace>\records\`
+///   (Windows has no state directory concept, so falls back to cache directory.)
 ///
 /// The workspace root is canonicalized (symlinks resolved) before being encoded
 /// using `encode_workspace_path` to produce a directory-safe, bijective
 /// representation. This ensures that accessing a workspace via a symlink
-/// produces the same cache directory as accessing it via the real path.
+/// produces the same state directory as accessing it via the real path.
+///
+/// ## Migration from cache to state directory
+///
+/// On first access after upgrading, this function automatically migrates the
+/// entire `~/.cache/nextest/` directory (nextest <= 0.9.125) to
+/// `~/.local/state/nextest/` if the old location exists and the new one does
+/// not. This is a one-time migration.
 ///
 /// Returns an error if:
-/// - The platform cache directory cannot be determined
-/// - The workspace path cannot be canonicalized (e.g., doesn't exist)
-/// - Any path is not valid UTF-8
-pub fn records_cache_dir(workspace_root: &Utf8Path) -> Result<Utf8PathBuf, CacheDirError> {
-    let base_cache_dir = if let Ok(cache_dir) = std::env::var(NEXTEST_CACHE_DIR_ENV) {
-        Utf8PathBuf::from(cache_dir)
-    } else {
-        let strategy = choose_base_strategy().map_err(CacheDirError::BaseDirStrategy)?;
-        let cache_dir = strategy.cache_dir();
-        let nextest_cache = cache_dir.join("nextest");
-        Utf8PathBuf::from_path_buf(nextest_cache.clone()).map_err(|_| {
-            CacheDirError::CacheDirNotUtf8 {
-                path: nextest_cache,
-            }
-        })?
-    };
+///
+/// - The platform state directory cannot be determined.
+/// - The workspace path cannot be canonicalized (e.g., doesn't exist).
+/// - Any path is not valid UTF-8.
+pub fn records_state_dir(workspace_root: &Utf8Path) -> Result<Utf8PathBuf, StateDirError> {
+    // If NEXTEST_STATE_DIR is set, use it directly (no migration).
+    if let Ok(state_dir) = std::env::var(NEXTEST_STATE_DIR_ENV) {
+        let base_dir = Utf8PathBuf::from(state_dir);
+        let canonical_workspace =
+            workspace_root
+                .canonicalize_utf8()
+                .map_err(|error| StateDirError::Canonicalize {
+                    workspace_root: workspace_root.to_owned(),
+                    error,
+                })?;
+        let encoded_workspace = encode_workspace_path(&canonical_workspace);
+        return Ok(base_dir
+            .join("projects")
+            .join(&encoded_workspace)
+            .join("records"));
+    }
+
+    let strategy = choose_base_strategy().map_err(StateDirError::BaseDirStrategy)?;
 
     // Canonicalize the workspace root to resolve symlinks. This ensures that
-    // accessing a workspace via a symlink produces the same cache directory.
+    // accessing a workspace via a symlink produces the same state directory.
     let canonical_workspace =
         workspace_root
             .canonicalize_utf8()
-            .map_err(|error| CacheDirError::Canonicalize {
+            .map_err(|error| StateDirError::Canonicalize {
                 workspace_root: workspace_root.to_owned(),
                 error,
             })?;
-
     let encoded_workspace = encode_workspace_path(&canonical_workspace);
-    Ok(base_cache_dir
+
+    // Compute the state directory path. Use state_dir() if available, otherwise
+    // fall back to cache_dir() (Windows has no state directory concept).
+    let nextest_dir = if let Some(base_state_dir) = strategy.state_dir() {
+        // The state directory is available (Unix with XDG). Attempt a one-time
+        // migration from the old cache location.
+        let nextest_state = base_state_dir.join("nextest");
+        let nextest_cache = strategy.cache_dir().join("nextest");
+        if let (Ok(nextest_state_utf8), Ok(nextest_cache_utf8)) = (
+            Utf8PathBuf::from_path_buf(nextest_state.clone()),
+            Utf8PathBuf::from_path_buf(nextest_cache),
+        ) && nextest_state_utf8 != nextest_cache_utf8
+        {
+            migrate_nextest_dir(&nextest_cache_utf8, &nextest_state_utf8);
+        };
+        nextest_state
+    } else {
+        // No state directory (Windows). Use cache directory directly.
+        strategy.cache_dir().join("nextest")
+    };
+
+    let nextest_dir_utf8 = Utf8PathBuf::from_path_buf(nextest_dir.clone())
+        .map_err(|_| StateDirError::StateDirNotUtf8 { path: nextest_dir })?;
+
+    Ok(nextest_dir_utf8
         .join("projects")
         .join(&encoded_workspace)
         .join("records"))
+}
+
+/// Attempts to migrate the entire nextest directory from cache to state location.
+///
+/// This is a one-time migration.
+fn migrate_nextest_dir(old_dir: &Utf8Path, new_dir: &Utf8Path) {
+    if !old_dir.exists() || new_dir.exists() {
+        return;
+    }
+
+    if let Some(parent) = new_dir.parent()
+        && let Err(error) = fs::create_dir_all(parent)
+    {
+        warn!(
+            "failed to create parent directory for new state location \
+             at `{new_dir}`: {}",
+            DisplayErrorChain::new(&error),
+        );
+        return;
+    }
+
+    // Attempt an atomic rename.
+    match fs::rename(old_dir, new_dir) {
+        Ok(()) => {
+            info!("migrated nextest recordings from `{old_dir}` to `{new_dir}`");
+        }
+        Err(error) => {
+            warn!(
+                "failed to migrate nextest recordings from `{old_dir}` to `{new_dir}` \
+                 (cross-filesystem move or permission issue): {}",
+                DisplayErrorChain::new(&error),
+            );
+        }
+    }
 }
 
 /// Encodes a workspace path into a directory-safe string.
@@ -191,35 +271,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_records_cache_dir() {
+    fn test_records_state_dir() {
         // Use a real existing path (the temp dir always exists).
         let temp_dir =
             Utf8PathBuf::try_from(std::env::temp_dir()).expect("temp dir should be valid UTF-8");
-        let cache_dir = records_cache_dir(&temp_dir).expect("cache directory should be available");
+        let state_dir = records_state_dir(&temp_dir).expect("state directory should be available");
 
         assert!(
-            cache_dir.as_str().contains("nextest"),
-            "cache dir should contain 'nextest': {cache_dir}"
+            state_dir.as_str().contains("nextest"),
+            "state dir should contain 'nextest': {state_dir}"
         );
         assert!(
-            cache_dir.as_str().contains("projects"),
-            "cache dir should contain 'projects': {cache_dir}"
+            state_dir.as_str().contains("projects"),
+            "state dir should contain 'projects': {state_dir}"
         );
         assert!(
-            cache_dir.as_str().contains("records"),
-            "cache dir should contain 'records': {cache_dir}"
+            state_dir.as_str().contains("records"),
+            "state dir should contain 'records': {state_dir}"
         );
     }
 
     #[test]
-    fn test_records_cache_dir_canonicalizes_symlinks() {
+    fn test_records_state_dir_canonicalizes_symlinks() {
         // Create a temp directory and a symlink pointing to it.
         let temp_dir = camino_tempfile::tempdir().expect("tempdir should be created");
         let real_path = temp_dir.path().to_path_buf();
 
         // Create a subdirectory to serve as the "workspace".
         let workspace = real_path.join("workspace");
-        std::fs::create_dir(&workspace).expect("workspace dir should be created");
+        fs::create_dir(&workspace).expect("workspace dir should be created");
 
         // Create a symlink pointing to the workspace.
         let symlink_path = real_path.join("symlink-to-workspace");
@@ -232,19 +312,130 @@ mod tests {
         std::os::windows::fs::symlink_dir(&workspace, &symlink_path)
             .expect("symlink should be created on Windows");
 
-        // Get cache dir via the real path.
-        let cache_via_real =
-            records_cache_dir(&workspace).expect("cache dir via real path should be available");
+        // Get state dir via the real path.
+        let state_via_real =
+            records_state_dir(&workspace).expect("state dir via real path should be available");
 
-        // Get cache dir via the symlink.
-        let cache_via_symlink =
-            records_cache_dir(&symlink_path).expect("cache dir via symlink should be available");
+        // Get state dir via the symlink.
+        let state_via_symlink =
+            records_state_dir(&symlink_path).expect("state dir via symlink should be available");
 
         // They should be the same because canonicalization resolves the symlink.
         assert_eq!(
-            cache_via_real, cache_via_symlink,
-            "cache dir should be the same whether accessed via real path or symlink"
+            state_via_real, state_via_symlink,
+            "state dir should be the same whether accessed via real path or symlink"
         );
+    }
+
+    #[test]
+    fn test_migration_from_cache_to_state() {
+        // This test verifies that the entire nextest directory is migrated at once.
+        let temp_dir = camino_tempfile::tempdir().expect("tempdir should be created");
+        let base = temp_dir.path();
+
+        // Create the old cache nextest directory with multiple workspaces.
+        let old_nextest = base.join("cache").join("nextest");
+        let workspace1_records = old_nextest
+            .join("projects")
+            .join("workspace1")
+            .join("records");
+        let workspace2_records = old_nextest
+            .join("projects")
+            .join("workspace2")
+            .join("records");
+        fs::create_dir_all(&workspace1_records).expect("workspace1 dir should be created");
+        fs::create_dir_all(&workspace2_records).expect("workspace2 dir should be created");
+
+        // Create marker files in both workspaces.
+        fs::write(workspace1_records.join("runs.json.zst"), b"workspace1 data")
+            .expect("workspace1 marker should be created");
+        fs::write(workspace2_records.join("runs.json.zst"), b"workspace2 data")
+            .expect("workspace2 marker should be created");
+
+        // Verify the old location exists.
+        assert!(
+            old_nextest.exists(),
+            "old nextest dir should exist before migration"
+        );
+
+        // Simulate migration by calling migrate_nextest_dir directly.
+        let new_nextest = base.join("state").join("nextest");
+        migrate_nextest_dir(&old_nextest, &new_nextest);
+
+        // Verify migration succeeded: old is gone, new has all the content.
+        assert!(
+            !old_nextest.exists(),
+            "old nextest dir should not exist after migration"
+        );
+        assert!(
+            new_nextest.exists(),
+            "new nextest dir should exist after migration"
+        );
+        assert!(
+            new_nextest
+                .join("projects")
+                .join("workspace1")
+                .join("records")
+                .join("runs.json.zst")
+                .exists(),
+            "workspace1 marker should exist in new location"
+        );
+        assert!(
+            new_nextest
+                .join("projects")
+                .join("workspace2")
+                .join("records")
+                .join("runs.json.zst")
+                .exists(),
+            "workspace2 marker should exist in new location"
+        );
+    }
+
+    #[test]
+    fn test_migration_skipped_if_new_exists() {
+        let temp_dir = camino_tempfile::tempdir().expect("tempdir should be created");
+        let base = temp_dir.path();
+
+        let old_nextest = base.join("cache").join("nextest");
+        let new_nextest = base.join("state").join("nextest");
+        fs::create_dir_all(old_nextest.join("projects")).expect("old dir should be created");
+        fs::create_dir_all(new_nextest.join("projects")).expect("new dir should be created");
+
+        // Put different content in each to verify no migration occurs.
+        fs::write(old_nextest.join("old_marker"), b"old").expect("old marker should be created");
+        fs::write(new_nextest.join("new_marker"), b"new").expect("new marker should be created");
+
+        migrate_nextest_dir(&old_nextest, &new_nextest);
+
+        // Both should still exist with their original content.
+        assert!(old_nextest.exists(), "old dir should still exist");
+        assert!(new_nextest.exists(), "new dir should still exist");
+        assert!(
+            old_nextest.join("old_marker").exists(),
+            "old marker should still exist"
+        );
+        assert!(
+            new_nextest.join("new_marker").exists(),
+            "new marker should still exist"
+        );
+    }
+
+    #[test]
+    fn test_migration_skipped_if_old_does_not_exist() {
+        // Migration should not occur if the old directory doesn't exist.
+        let temp_dir = camino_tempfile::tempdir().expect("tempdir should be created");
+        let base = temp_dir.path();
+
+        let old_nextest = base.join("cache").join("nextest");
+        let new_nextest = base.join("state").join("nextest");
+
+        assert!(!old_nextest.exists());
+        assert!(!new_nextest.exists());
+
+        migrate_nextest_dir(&old_nextest, &new_nextest);
+
+        assert!(!old_nextest.exists());
+        assert!(!new_nextest.exists());
     }
 
     // Basic encoding tests.

@@ -9,8 +9,8 @@ use nextest_metadata::NextestExitCode;
 use nextest_runner::{
     config::core::{ConfigExperimental, ToolName},
     errors::{
-        CacheDirError, PortableRecordingError, PortableRecordingReadError, RecordReadError,
-        RecordSetupError, RunIdResolutionError, RunStoreError, TestListFromSummaryError,
+        PortableRecordingError, PortableRecordingReadError, RecordReadError, RecordSetupError,
+        RunIdResolutionError, RunStoreError, StateDirError, TestListFromSummaryError,
         UserConfigError, *,
     },
     helpers::{format_interceptor_too_many_tests, plural},
@@ -355,10 +355,10 @@ pub enum ExpectedError {
         config_file: Utf8PathBuf,
         missing: Vec<ConfigExperimental>,
     },
-    #[error("could not determine cache directory for recording")]
-    RecordCacheDirNotFound {
+    #[error("could not determine state directory for recording")]
+    RecordStateDirNotFound {
         #[source]
-        err: CacheDirError,
+        err: StateDirError,
     },
     #[error("error setting up recording")]
     RecordSetupError {
@@ -641,7 +641,7 @@ impl ExpectedError {
             | Self::ConfigExperimentalFeaturesNotEnabled { .. } => {
                 NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED
             }
-            Self::RecordCacheDirNotFound { .. }
+            Self::RecordStateDirNotFound { .. }
             | Self::RecordSetupError { .. }
             | Self::RecordSessionSetupError { .. }
             | Self::RunIdResolutionError { .. }
@@ -1208,8 +1208,8 @@ impl ExpectedError {
                 );
                 None
             }
-            Self::RecordCacheDirNotFound { err } => {
-                error!("could not determine cache directory for recording test runs");
+            Self::RecordStateDirNotFound { err } => {
+                error!("could not determine state directory for recording test runs");
                 Some(err as &dyn Error)
             }
             Self::RecordSetupError { err } => {

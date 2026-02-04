@@ -9,7 +9,7 @@
 
 use super::{
     CompletedRunStats, RecordedRunStatus, RunRecorder, RunStore, ShortestRunIdPrefix, StoreSizes,
-    StressCompletedRunStats, records_cache_dir,
+    StressCompletedRunStats, records_state_dir,
     retention::{PruneResult, RecordRetentionPolicy},
 };
 use crate::{
@@ -31,7 +31,7 @@ use std::{collections::BTreeMap, fmt};
 /// Configuration for creating a recording session.
 #[derive(Clone, Debug)]
 pub struct RecordSessionConfig<'a> {
-    /// The workspace root path, used to determine the cache directory.
+    /// The workspace root path, used to determine the state directory.
     pub workspace_root: &'a Utf8Path,
     /// The unique identifier for this run.
     pub run_id: ReportUuid,
@@ -75,7 +75,7 @@ pub struct RecordSessionSetup {
 /// This type encapsulates setup, execution integration, and finalization.
 #[derive(Debug)]
 pub struct RecordSession {
-    cache_dir: Utf8PathBuf,
+    state_dir: Utf8PathBuf,
     run_id: ReportUuid,
 }
 
@@ -89,10 +89,10 @@ impl RecordSession {
     /// Returns a setup result containing the session handle and recorder, or an
     /// error if setup fails.
     pub fn setup(config: RecordSessionConfig<'_>) -> Result<RecordSessionSetup, RecordSetupError> {
-        let cache_dir =
-            records_cache_dir(config.workspace_root).map_err(RecordSetupError::CacheDirNotFound)?;
+        let state_dir =
+            records_state_dir(config.workspace_root).map_err(RecordSetupError::StateDirNotFound)?;
 
-        let store = RunStore::new(&cache_dir).map_err(RecordSetupError::StoreCreate)?;
+        let store = RunStore::new(&state_dir).map_err(RecordSetupError::StoreCreate)?;
 
         let locked_store = store
             .lock_exclusive()
@@ -119,7 +119,7 @@ impl RecordSession {
         }
 
         let session = RecordSession {
-            cache_dir,
+            state_dir,
             run_id: config.run_id,
         };
 
@@ -135,9 +135,9 @@ impl RecordSession {
         self.run_id
     }
 
-    /// Returns the cache directory for this session.
-    pub fn cache_dir(&self) -> &Utf8Path {
-        &self.cache_dir
+    /// Returns the state directory for this session.
+    pub fn state_dir(&self) -> &Utf8Path {
+        &self.state_dir
     }
 
     /// Finalizes the recording session after the run completes.
@@ -176,7 +176,7 @@ impl RecordSession {
         };
 
         // Re-open the store and acquire the lock.
-        let store = match RunStore::new(&self.cache_dir) {
+        let store = match RunStore::new(&self.state_dir) {
             Ok(store) => store,
             Err(err) => {
                 result
