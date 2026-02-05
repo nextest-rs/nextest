@@ -104,7 +104,7 @@ pathdiff = { version = "0.2.3", features = ["camino"] }
 petgraph = "0.8.3"
 pin-project-lite = "0.2.16"
 pretty_assertions = "1.4.1"
-proptest = "1.9.0"
+proptest = "1.10.0"
 quick-junit = "0.5.2"
 rand = "0.9.2"
 recursion = "0.5.4"
