@@ -16,12 +16,13 @@ use crate::{
     helpers::{convert_build_platform, dylib_path, dylib_path_envvar, write_test_name},
     indenter::indented,
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
+    partition::{Partitioner, PartitionerBuilder, PartitionerScope},
     reuse_build::PathMapper,
     run_mode::NextestRunMode,
     runner::Interceptor,
     target_runner::{PlatformRunner, TargetRunner},
     test_command::{LocalExecuteContext, TestCommand, TestCommandPhase},
-    test_filter::{BinaryMismatchReason, FilterBinaryMatch, FilterBound, TestFilterBuilder},
+    test_filter::{BinaryMismatchReason, FilterBinaryMatch, FilterBound, TestFilter},
     write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -250,7 +251,8 @@ impl<'g> TestList<'g> {
         ctx: &TestExecuteContext<'_>,
         test_artifacts: I,
         rust_build_meta: RustBuildMeta<TestListState>,
-        filter: &TestFilterBuilder,
+        filter: &TestFilter,
+        partitioner_builder: Option<&PartitionerBuilder>,
         workspace_root: Utf8PathBuf,
         env: EnvironmentMap,
         profile: &impl ListProfile,
@@ -318,11 +320,13 @@ impl<'g> TestList<'g> {
         });
         let fut = stream.buffer_unordered(list_threads).try_collect();
 
-        let rust_suites: IdOrdMap<_> = runtime.block_on(fut)?;
+        let mut rust_suites: IdOrdMap<_> = runtime.block_on(fut)?;
 
         // Ensure that the runtime doesn't stay hanging even if a custom test framework misbehaves
         // (can be an issue on Windows).
         runtime.shutdown_background();
+
+        Self::apply_partitioning(&mut rust_suites, partitioner_builder);
 
         let test_count = rust_suites
             .iter()
@@ -343,22 +347,22 @@ impl<'g> TestList<'g> {
 
     /// Creates a new test list with the given binary names and outputs.
     #[cfg(test)]
+    #[expect(clippy::too_many_arguments)]
     fn new_with_outputs(
         test_bin_outputs: impl IntoIterator<
             Item = (RustTestArtifact<'g>, impl AsRef<str>, impl AsRef<str>),
         >,
         workspace_root: Utf8PathBuf,
         rust_build_meta: RustBuildMeta<TestListState>,
-        filter: &TestFilterBuilder,
+        filter: &TestFilter,
+        partitioner_builder: Option<&PartitionerBuilder>,
         env: EnvironmentMap,
         ecx: &EvalContext<'_>,
         bound: FilterBound,
     ) -> Result<Self, CreateTestListError> {
-        let mut test_count = 0;
-
         let updated_dylib_path = Self::create_dylib_path(&rust_build_meta)?;
 
-        let rust_suites = test_bin_outputs
+        let mut rust_suites = test_bin_outputs
             .into_iter()
             .map(|(test_binary, non_ignored, ignored)| {
                 let binary_match = filter.filter_binary_match(&test_binary, ecx, bound);
@@ -377,7 +381,6 @@ impl<'g> TestList<'g> {
                             non_ignored.as_ref(),
                             ignored.as_ref(),
                         )?;
-                        test_count += info.status.test_count();
                         Ok(info)
                     }
                     FilterBinaryMatch::Mismatch { reason } => {
@@ -387,6 +390,13 @@ impl<'g> TestList<'g> {
                 }
             })
             .collect::<Result<IdOrdMap<_>, _>>()?;
+
+        Self::apply_partitioning(&mut rust_suites, partitioner_builder);
+
+        let test_count = rust_suites
+            .iter()
+            .map(|suite| suite.status.test_count())
+            .sum();
 
         Ok(Self {
             rust_suites,
@@ -737,7 +747,7 @@ impl<'g> TestList<'g> {
 
     fn process_output(
         test_binary: RustTestArtifact<'g>,
-        filter: &TestFilterBuilder,
+        filter: &TestFilter,
         ecx: &EvalContext<'_>,
         bound: FilterBound,
         non_ignored: impl AsRef<str>,
@@ -745,13 +755,9 @@ impl<'g> TestList<'g> {
     ) -> Result<RustTestSuite<'g>, CreateTestListError> {
         let mut test_cases = IdOrdMap::new();
 
-        // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
-        // based on one doesn't affect the other.
-        let mut non_ignored_filter = filter.build();
         for (test_name, kind) in Self::parse(&test_binary.binary_id, non_ignored.as_ref())? {
             let name = TestCaseName::new(test_name);
-            let filter_match =
-                non_ignored_filter.filter_match(&test_binary, &name, &kind, ecx, bound, false);
+            let filter_match = filter.filter_match(&test_binary, &name, &kind, ecx, bound, false);
             test_cases.insert_overwrite(RustTestCase {
                 name,
                 test_info: RustTestCaseSummary {
@@ -762,15 +768,13 @@ impl<'g> TestList<'g> {
             });
         }
 
-        let mut ignored_filter = filter.build();
         for (test_name, kind) in Self::parse(&test_binary.binary_id, ignored.as_ref())? {
             // Note that libtest prints out:
             // * just ignored tests if --ignored is passed in
             // * all tests, both ignored and non-ignored, if --ignored is not passed in
             // Adding ignored tests after non-ignored ones makes everything resolve correctly.
             let name = TestCaseName::new(test_name);
-            let filter_match =
-                ignored_filter.filter_match(&test_binary, &name, &kind, ecx, bound, true);
+            let filter_match = filter.filter_match(&test_binary, &name, &kind, ecx, bound, true);
             test_cases.insert_overwrite(RustTestCase {
                 name,
                 test_info: RustTestCaseSummary {
@@ -791,6 +795,75 @@ impl<'g> TestList<'g> {
         reason: BinaryMismatchReason,
     ) -> RustTestSuite<'g> {
         test_binary.into_test_suite(RustTestSuiteStatus::Skipped { reason })
+    }
+
+    /// Applies partitioning to the test suites as a post-filtering step.
+    ///
+    /// This is called after all other filtering (name, expression, ignored) has
+    /// been applied. Partitioning operates on the set of tests that matched all
+    /// other filters, distributing them across shards.
+    fn apply_partitioning(
+        rust_suites: &mut IdOrdMap<RustTestSuite<'_>>,
+        partitioner_builder: Option<&PartitionerBuilder>,
+    ) {
+        let Some(partitioner_builder) = partitioner_builder else {
+            return;
+        };
+
+        match partitioner_builder.scope() {
+            PartitionerScope::PerBinary => {
+                Self::apply_per_binary_partitioning(rust_suites, partitioner_builder);
+            }
+            PartitionerScope::CrossBinary => {
+                Self::apply_cross_binary_partitioning(rust_suites, partitioner_builder);
+            }
+        }
+    }
+
+    /// Applies per-binary partitioning: each binary gets its own independent
+    /// partitioner instance, matching the old inline behavior.
+    fn apply_per_binary_partitioning(
+        rust_suites: &mut IdOrdMap<RustTestSuite<'_>>,
+        partitioner_builder: &PartitionerBuilder,
+    ) {
+        for mut suite in rust_suites.iter_mut() {
+            let RustTestSuiteStatus::Listed { test_cases } = &mut suite.status else {
+                continue;
+            };
+
+            // Non-ignored and ignored tests get independent partitioner state.
+            let mut non_ignored_partitioner = partitioner_builder.build();
+            apply_partitioner_to_tests(test_cases, &mut *non_ignored_partitioner, false);
+
+            let mut ignored_partitioner = partitioner_builder.build();
+            apply_partitioner_to_tests(test_cases, &mut *ignored_partitioner, true);
+        }
+    }
+
+    /// Applies cross-binary partitioning: a single partitioner instance spans
+    /// all binaries, producing even shard sizes regardless of how tests are
+    /// distributed across binaries.
+    fn apply_cross_binary_partitioning(
+        rust_suites: &mut IdOrdMap<RustTestSuite<'_>>,
+        partitioner_builder: &PartitionerBuilder,
+    ) {
+        // Pass 1: non-ignored tests across all binaries.
+        let mut non_ignored_partitioner = partitioner_builder.build();
+        for mut suite in rust_suites.iter_mut() {
+            let RustTestSuiteStatus::Listed { test_cases } = &mut suite.status else {
+                continue;
+            };
+            apply_partitioner_to_tests(test_cases, &mut *non_ignored_partitioner, false);
+        }
+
+        // Pass 2: ignored tests across all binaries.
+        let mut ignored_partitioner = partitioner_builder.build();
+        for mut suite in rust_suites.iter_mut() {
+            let RustTestSuiteStatus::Listed { test_cases } = &mut suite.status else {
+                continue;
+            };
+            apply_partitioner_to_tests(test_cases, &mut *ignored_partitioner, true);
+        }
     }
 
     /// Parses the output of --list --message-format terse and returns a sorted list.
@@ -960,6 +1033,47 @@ impl<'g> TestList<'g> {
         }
 
         Ok(())
+    }
+}
+
+/// Applies a partitioner to all test cases with the given ignored status.
+fn apply_partitioner_to_tests(
+    test_cases: &mut IdOrdMap<RustTestCase>,
+    partitioner: &mut dyn Partitioner,
+    ignored: bool,
+) {
+    for mut test_case in test_cases.iter_mut() {
+        if test_case.test_info.ignored == ignored {
+            apply_partition_to_test(&mut test_case, partitioner);
+        }
+    }
+}
+
+/// Applies a partitioner to a single test case.
+///
+/// - If the test currently matches, the partitioner decides whether to keep or exclude it.
+/// - If the test is `RerunAlreadyPassed`, the partitioner counts it (to maintain stable bucketing)
+///   but preserves its status.
+/// - All other mismatch reasons mean the test was already filtered out and should not be counted by
+///   the partitioner.
+fn apply_partition_to_test(test_case: &mut RustTestCase, partitioner: &mut dyn Partitioner) {
+    match test_case.test_info.filter_match {
+        FilterMatch::Matches => {
+            if !partitioner.test_matches(test_case.name.as_str()) {
+                test_case.test_info.filter_match = FilterMatch::Mismatch {
+                    reason: MismatchReason::Partition,
+                };
+            }
+        }
+        FilterMatch::Mismatch {
+            reason: MismatchReason::RerunAlreadyPassed,
+        } => {
+            // Count the test to maintain consistent bucketing, but don't change its status.
+            let _ = partitioner.test_matches(test_case.name.as_str());
+        }
+        FilterMatch::Mismatch { .. } => {
+            // Already filtered out by another criterion; don't count it.
+        }
     }
 }
 
@@ -1212,6 +1326,14 @@ impl RustTestSuiteStatus {
         match self {
             RustTestSuiteStatus::Listed { test_cases } => test_cases.len(),
             RustTestSuiteStatus::Skipped { .. } => 0,
+        }
+    }
+
+    /// Returns a test case by name, or `None` if the suite was skipped or the test doesn't exist.
+    pub fn get(&self, name: &TestCaseName) -> Option<&RustTestCase> {
+        match self {
+            RustTestSuiteStatus::Listed { test_cases } => test_cases.get(name),
+            RustTestSuiteStatus::Skipped { .. } => None,
         }
     }
 
@@ -1665,10 +1787,9 @@ mod tests {
 
         let cx = ParseContext::new(&PACKAGE_GRAPH_FIXTURE);
 
-        let test_filter = TestFilterBuilder::new(
+        let test_filter = TestFilter::new(
             NextestRunMode::Test,
             RunIgnored::Default,
-            None,
             TestFilterPatterns::default(),
             // Test against the platform() predicate because this is the most important one here.
             vec![
@@ -1744,6 +1865,7 @@ mod tests {
             Utf8PathBuf::from("/fake/path"),
             rust_build_meta,
             &test_filter,
+            None,
             fake_env,
             &ecx,
             FilterBound::All,
@@ -2020,6 +2142,567 @@ mod tests {
         );
     }
 
+    /// Verifies that per-binary partitioning (applied as post-processing)
+    /// produces the same results as the old inline approach: count:1/2 should
+    /// select every other test, independently within each binary.
+    #[test]
+    fn test_apply_per_binary_partitioning_count() {
+        let binary1_output = indoc::indoc! {"
+            alpha: test
+            beta: test
+            gamma: test
+            delta: test
+        "};
+        let binary2_output = indoc::indoc! {"
+            one: test
+            two: test
+            three: test
+        "};
+
+        let test_filter = TestFilter::new(
+            NextestRunMode::Test,
+            RunIgnored::Default,
+            TestFilterPatterns::default(),
+            Vec::new(),
+        )
+        .unwrap();
+
+        let partitioner = PartitionerBuilder::Count {
+            shard: 1,
+            total_shards: 2,
+        };
+
+        let ecx = simple_ecx();
+        let test_list = TestList::new_with_outputs(
+            [
+                (make_test_artifact("pkg::binary1"), binary1_output, ""),
+                (make_test_artifact("pkg::binary2"), binary2_output, ""),
+            ],
+            Utf8PathBuf::from("/fake/path"),
+            simple_build_meta(),
+            &test_filter,
+            Some(&partitioner),
+            EnvironmentMap::empty(),
+            &ecx,
+            FilterBound::All,
+        )
+        .expect("valid output");
+
+        // count:1/2 selects every other test (index 0, 2, ...) within each
+        // binary independently.
+        //
+        // Binary 1 (sorted: alpha, beta, delta, gamma): shard 1 gets alpha, delta.
+        // Binary 2 (sorted: one, three, two): shard 1 gets one, two.
+        let binary1_suite = test_list
+            .rust_suites
+            .get(&RustBinaryId::new("pkg::binary1"))
+            .expect("binary1 should exist");
+        assert_eq!(
+            collect_matching_tests(binary1_suite),
+            vec!["alpha", "delta"]
+        );
+
+        let binary2_suite = test_list
+            .rust_suites
+            .get(&RustBinaryId::new("pkg::binary2"))
+            .expect("binary2 should exist");
+        assert_eq!(collect_matching_tests(binary2_suite), vec!["one", "two"]);
+    }
+
+    /// Verifies that non-ignored and ignored tests are partitioned
+    /// independently: adding or removing an ignored test does not change which
+    /// non-ignored tests are selected, and vice versa.
+    #[test]
+    fn test_partition_ignored_independent() {
+        // 4 non-ignored tests, 3 ignored tests.
+        let non_ignored_output = indoc::indoc! {"
+            alpha: test
+            beta: test
+            gamma: test
+            delta: test
+        "};
+        let ignored_output = indoc::indoc! {"
+            ig_one: test
+            ig_two: test
+            ig_three: test
+        "};
+
+        // Use RunIgnored::All so both non-ignored and ignored tests are included.
+        let test_filter = TestFilter::new(
+            NextestRunMode::Test,
+            RunIgnored::All,
+            TestFilterPatterns::default(),
+            Vec::new(),
+        )
+        .unwrap();
+
+        let partitioner = PartitionerBuilder::Count {
+            shard: 1,
+            total_shards: 2,
+        };
+
+        let ecx = simple_ecx();
+        let test_list = TestList::new_with_outputs(
+            [(
+                make_test_artifact("pkg::binary"),
+                non_ignored_output,
+                ignored_output,
+            )],
+            Utf8PathBuf::from("/fake/path"),
+            simple_build_meta(),
+            &test_filter,
+            Some(&partitioner),
+            EnvironmentMap::empty(),
+            &ecx,
+            FilterBound::All,
+        )
+        .expect("valid output");
+
+        let suite = test_list
+            .rust_suites
+            .get(&RustBinaryId::new("pkg::binary"))
+            .expect("binary should exist");
+
+        // Non-ignored (sorted: alpha, beta, delta, gamma): shard 1 picks
+        // indices 0, 2 => alpha, delta.
+        let non_ignored_matches: Vec<_> = suite
+            .status
+            .test_cases()
+            .filter(|tc| !tc.test_info.ignored && tc.test_info.filter_match.is_match())
+            .map(|tc| tc.name.as_str())
+            .collect();
+        assert_eq!(non_ignored_matches, vec!["alpha", "delta"]);
+
+        // Ignored (sorted: ig_one, ig_three, ig_two): shard 1 picks indices
+        // 0, 2 => ig_one, ig_two. Independent of the non-ignored partitioner.
+        let ignored_matches: Vec<_> = suite
+            .status
+            .test_cases()
+            .filter(|tc| tc.test_info.ignored && tc.test_info.filter_match.is_match())
+            .map(|tc| tc.name.as_str())
+            .collect();
+        assert_eq!(ignored_matches, vec!["ig_one", "ig_two"]);
+    }
+
+    /// Verifies that `RerunAlreadyPassed` tests participate in partition
+    /// counting (to maintain stable shard assignment) but their status is
+    /// preserved as `RerunAlreadyPassed`, not changed to `Partition`.
+    #[test]
+    fn test_partition_rerun_already_passed() {
+        use crate::record::{ComputedRerunInfo, RerunTestSuiteInfo};
+
+        let binary_id = RustBinaryId::new("pkg::binary");
+        let non_ignored_output = indoc::indoc! {"
+            alpha: test
+            beta: test
+            gamma: test
+            delta: test
+        "};
+        let partitioner = PartitionerBuilder::Count {
+            shard: 1,
+            total_shards: 2,
+        };
+        let ecx = simple_ecx();
+
+        // Mark "beta" as already passed in a prior rerun. "beta" is at sorted
+        // index 1. The filter will mark it RerunAlreadyPassed before
+        // partitioning runs.
+        let rerun_suite = RerunTestSuiteInfo {
+            binary_id: binary_id.clone(),
+            passing: BTreeSet::from([TestCaseName::new("beta")]),
+            outstanding: BTreeSet::from([
+                TestCaseName::new("alpha"),
+                TestCaseName::new("delta"),
+                TestCaseName::new("gamma"),
+            ]),
+        };
+        let mut rerun_filter = TestFilter::new(
+            NextestRunMode::Test,
+            RunIgnored::Default,
+            TestFilterPatterns::default(),
+            Vec::new(),
+        )
+        .unwrap();
+        rerun_filter.set_outstanding_tests(ComputedRerunInfo {
+            test_suites: iddqd::id_ord_map! { rerun_suite },
+        });
+
+        let rerun_list = TestList::new_with_outputs(
+            [(make_test_artifact("pkg::binary"), non_ignored_output, "")],
+            Utf8PathBuf::from("/fake/path"),
+            simple_build_meta(),
+            &rerun_filter,
+            Some(&partitioner),
+            EnvironmentMap::empty(),
+            &ecx,
+            FilterBound::All,
+        )
+        .expect("valid output");
+
+        let suite = rerun_list
+            .rust_suites
+            .get(&binary_id)
+            .expect("binary should exist");
+
+        // After filtering, test states are (sorted: alpha, beta, delta, gamma):
+        //   alpha (index 0): Matches
+        //   beta  (index 1): RerunAlreadyPassed
+        //   delta (index 2): Matches
+        //   gamma (index 3): Matches
+        //
+        // The count:1/2 partitioner sees 4 tests (including beta, which
+        // participates in counting). Shard 1 picks indices 0 and 2:
+        //   alpha (0): Matches -> kept by partitioner
+        //   beta  (1): RerunAlreadyPassed -> counted, status preserved
+        //   delta (2): Matches -> kept by partitioner
+        //   gamma (3): Matches -> excluded by partitioner (Partition mismatch)
+        let rerun_results: Vec<_> = suite
+            .status
+            .test_cases()
+            .map(|tc| (tc.name.as_str(), tc.test_info.filter_match))
+            .collect();
+
+        assert_eq!(
+            rerun_results,
+            vec![
+                ("alpha", FilterMatch::Matches),
+                (
+                    "beta",
+                    FilterMatch::Mismatch {
+                        reason: MismatchReason::RerunAlreadyPassed,
+                    }
+                ),
+                ("delta", FilterMatch::Matches),
+                (
+                    "gamma",
+                    FilterMatch::Mismatch {
+                        reason: MismatchReason::Partition,
+                    }
+                ),
+            ]
+        );
+
+        // If beta were not counted by the partitioner, the partitioner would
+        // only see 3 Matches tests (alpha, delta, gamma) and shard 1 would
+        // pick alpha(0) and gamma(2) instead of alpha(0) and delta(2). Build
+        // the counterfactual to confirm the results actually differ.
+        let no_rerun_filter = TestFilter::new(
+            NextestRunMode::Test,
+            RunIgnored::Default,
+            TestFilterPatterns::default(),
+            Vec::new(),
+        )
+        .unwrap();
+
+        let no_rerun_list = TestList::new_with_outputs(
+            [(make_test_artifact("pkg::binary"), non_ignored_output, "")],
+            Utf8PathBuf::from("/fake/path"),
+            simple_build_meta(),
+            &no_rerun_filter,
+            Some(&partitioner),
+            EnvironmentMap::empty(),
+            &ecx,
+            FilterBound::All,
+        )
+        .expect("valid output");
+
+        let suite = no_rerun_list
+            .rust_suites
+            .get(&binary_id)
+            .expect("binary should exist");
+
+        // Without rerun info, all 4 tests are Matches. The partitioner sees
+        // all 4, and shard 1 still picks indexes 0 and 2: alpha and delta.
+        // This is the same result as the rerun case, confirming that the
+        // RerunAlreadyPassed test (beta) participated in counting and kept
+        // shard assignments stable.
+        let no_rerun_results: Vec<_> = suite
+            .status
+            .test_cases()
+            .map(|tc| (tc.name.as_str(), tc.test_info.filter_match))
+            .collect();
+
+        assert_eq!(
+            no_rerun_results,
+            vec![
+                ("alpha", FilterMatch::Matches),
+                (
+                    "beta",
+                    FilterMatch::Mismatch {
+                        reason: MismatchReason::Partition,
+                    }
+                ),
+                ("delta", FilterMatch::Matches),
+                (
+                    "gamma",
+                    FilterMatch::Mismatch {
+                        reason: MismatchReason::Partition,
+                    }
+                ),
+            ]
+        );
+
+        // The key property: the set of Matches tests that actually run is
+        // {alpha, delta} in both cases. The RerunAlreadyPassed counting
+        // ensures shard stability across reruns.
+        let rerun_running: Vec<_> = rerun_results
+            .iter()
+            .filter(|(_, fm)| fm.is_match())
+            .map(|(name, _)| *name)
+            .collect();
+        let no_rerun_running: Vec<_> = no_rerun_results
+            .iter()
+            .filter(|(_, fm)| fm.is_match())
+            .map(|(name, _)| *name)
+            .collect();
+        assert_eq!(rerun_running, no_rerun_running);
+    }
+
+    /// Verifies that tests filtered out by name patterns do not participate
+    /// in partition counting. If pre-filtered tests were counted, shard
+    /// assignments would shift when name filters change.
+    #[test]
+    fn test_partition_prefiltered_excluded_from_counting() {
+        let non_ignored_output = indoc::indoc! {"
+            alpha: test
+            beta: test
+            gamma: test
+            delta: test
+            epsilon: test
+        "};
+
+        // Filter to only tests containing "a" (alpha, beta, gamma, delta match;
+        // epsilon does not).
+        let test_filter = TestFilter::new(
+            NextestRunMode::Test,
+            RunIgnored::Default,
+            TestFilterPatterns::new(vec!["a".to_string()]),
+            Vec::new(),
+        )
+        .unwrap();
+
+        let partitioner = PartitionerBuilder::Count {
+            shard: 1,
+            total_shards: 2,
+        };
+
+        let ecx = simple_ecx();
+        let filtered_list = TestList::new_with_outputs(
+            [(make_test_artifact("pkg::binary"), non_ignored_output, "")],
+            Utf8PathBuf::from("/fake/path"),
+            simple_build_meta(),
+            &test_filter,
+            Some(&partitioner),
+            EnvironmentMap::empty(),
+            &ecx,
+            FilterBound::All,
+        )
+        .expect("valid output");
+
+        let suite = filtered_list
+            .rust_suites
+            .get(&RustBinaryId::new("pkg::binary"))
+            .expect("binary should exist");
+
+        // Pre-filter: sorted tests are alpha, beta, delta, epsilon, gamma.
+        // After name filter, epsilon is Mismatch(String). The remaining 4
+        // matching tests (alpha, beta, delta, gamma) are partitioned by
+        // count:1/2, which picks indices 0 and 2 => alpha, delta.
+        assert_eq!(collect_matching_tests(suite), vec!["alpha", "delta"]);
+
+        // Verify epsilon was filtered out by name, not by partition.
+        let epsilon = suite
+            .status
+            .get(&TestCaseName::new("epsilon"))
+            .expect("epsilon should exist");
+        assert_eq!(
+            epsilon.test_info.filter_match,
+            FilterMatch::Mismatch {
+                reason: MismatchReason::String,
+            }
+        );
+
+        // Now build a list without name filters. All 5 tests are Matches, and
+        // count:1/2 picks indices 0, 2, 4 => alpha, delta, gamma.
+        let no_name_filter = TestFilter::new(
+            NextestRunMode::Test,
+            RunIgnored::Default,
+            TestFilterPatterns::default(),
+            Vec::new(),
+        )
+        .unwrap();
+
+        let unfiltered_list = TestList::new_with_outputs(
+            [(make_test_artifact("pkg::binary"), non_ignored_output, "")],
+            Utf8PathBuf::from("/fake/path"),
+            simple_build_meta(),
+            &no_name_filter,
+            Some(&partitioner),
+            EnvironmentMap::empty(),
+            &ecx,
+            FilterBound::All,
+        )
+        .expect("valid output");
+
+        let suite = unfiltered_list
+            .rust_suites
+            .get(&RustBinaryId::new("pkg::binary"))
+            .expect("binary should exist");
+
+        // With 5 tests and no name filter, count:1/2 picks indices 0, 2, 4 =>
+        // alpha, delta, gamma. This differs from the filtered case (alpha,
+        // delta), proving that the pre-filtered epsilon did not participate in
+        // partition counting.
+        assert_eq!(
+            collect_matching_tests(suite),
+            vec!["alpha", "delta", "gamma"]
+        );
+    }
+
+    /// Verifies that hash-based partitioning works correctly when wired
+    /// through `TestList::new_with_outputs`. Since hash partitioning is
+    /// stateless, the results should be deterministic and independent of
+    /// binary boundaries.
+    #[test]
+    fn test_partition_hash() {
+        let non_ignored_output = indoc::indoc! {"
+            alpha: test
+            beta: test
+            gamma: test
+            delta: test
+        "};
+
+        let test_filter = TestFilter::new(
+            NextestRunMode::Test,
+            RunIgnored::Default,
+            TestFilterPatterns::default(),
+            Vec::new(),
+        )
+        .unwrap();
+
+        // hash:1/2 and hash:2/2 should partition all tests between them.
+        let partitioner_shard1 = PartitionerBuilder::Hash {
+            shard: 1,
+            total_shards: 2,
+        };
+        let partitioner_shard2 = PartitionerBuilder::Hash {
+            shard: 2,
+            total_shards: 2,
+        };
+
+        let ecx = simple_ecx();
+        let list_shard1 = TestList::new_with_outputs(
+            [(make_test_artifact("pkg::binary"), non_ignored_output, "")],
+            Utf8PathBuf::from("/fake/path"),
+            simple_build_meta(),
+            &test_filter,
+            Some(&partitioner_shard1),
+            EnvironmentMap::empty(),
+            &ecx,
+            FilterBound::All,
+        )
+        .expect("valid output");
+
+        let list_shard2 = TestList::new_with_outputs(
+            [(make_test_artifact("pkg::binary"), non_ignored_output, "")],
+            Utf8PathBuf::from("/fake/path"),
+            simple_build_meta(),
+            &test_filter,
+            Some(&partitioner_shard2),
+            EnvironmentMap::empty(),
+            &ecx,
+            FilterBound::All,
+        )
+        .expect("valid output");
+
+        let suite1 = list_shard1
+            .rust_suites
+            .get(&RustBinaryId::new("pkg::binary"))
+            .expect("binary should exist");
+        let suite2 = list_shard2
+            .rust_suites
+            .get(&RustBinaryId::new("pkg::binary"))
+            .expect("binary should exist");
+
+        let shard1_matches = collect_matching_tests(suite1);
+        let shard2_matches = collect_matching_tests(suite2);
+
+        // The two shards should be disjoint and together cover all tests.
+        let mut all_tests: Vec<&str> = shard1_matches
+            .iter()
+            .chain(shard2_matches.iter())
+            .copied()
+            .collect();
+        all_tests.sort();
+        assert_eq!(all_tests, vec!["alpha", "beta", "delta", "gamma"]);
+
+        // Each shard should have at least one test (with 4 tests and 2 shards,
+        // a proper hash function won't put all tests in one shard).
+        assert!(
+            !shard1_matches.is_empty() && !shard2_matches.is_empty(),
+            "both shards should have tests: shard1={shard1_matches:?}, shard2={shard2_matches:?}"
+        );
+
+        // The shards must not overlap.
+        for test in &shard1_matches {
+            assert!(
+                !shard2_matches.contains(test),
+                "test {test} should not appear in both shards"
+            );
+        }
+    }
+
+    /// Verifies that `test_count` and `run_count` are correct after
+    /// partitioning: `test_count` counts all tests (including partitioned-out
+    /// ones), while `run_count` excludes skipped tests.
+    #[test]
+    fn test_partition_test_count_and_run_count() {
+        let non_ignored_output = indoc::indoc! {"
+            alpha: test
+            beta: test
+            gamma: test
+            delta: test
+        "};
+
+        let test_filter = TestFilter::new(
+            NextestRunMode::Test,
+            RunIgnored::Default,
+            TestFilterPatterns::default(),
+            Vec::new(),
+        )
+        .unwrap();
+
+        let partitioner = PartitionerBuilder::Count {
+            shard: 1,
+            total_shards: 2,
+        };
+
+        let ecx = simple_ecx();
+        let test_list = TestList::new_with_outputs(
+            [(make_test_artifact("pkg::binary"), non_ignored_output, "")],
+            Utf8PathBuf::from("/fake/path"),
+            simple_build_meta(),
+            &test_filter,
+            Some(&partitioner),
+            EnvironmentMap::empty(),
+            &ecx,
+            FilterBound::All,
+        )
+        .expect("valid output");
+
+        // test_count includes all tests (matching and non-matching).
+        assert_eq!(test_list.test_count(), 4);
+
+        // count:1/2 selects 2 out of 4 tests (alpha, delta).
+        assert_eq!(test_list.run_count(), 2);
+
+        // Verify the invariant: run_count + skip_count == test_count.
+        assert_eq!(
+            test_list.run_count() + test_list.skip_counts().skipped_tests,
+            test_list.test_count()
+        );
+    }
+
     #[test]
     fn apply_wrappers_examples() {
         cfg_if::cfg_if! {
@@ -2280,6 +2963,50 @@ mod tests {
                 vec![wrapper_path, "--verbose", "binary", "arg"],
             );
         }
+    }
+
+    /// Creates a test artifact with the given binary ID and sensible defaults.
+    fn make_test_artifact(binary_id: &str) -> RustTestArtifact<'static> {
+        let binary_name = binary_id.rsplit("::").next().unwrap_or(binary_id);
+        RustTestArtifact {
+            binary_path: format!("/fake/{binary_name}").into(),
+            cwd: "/fake/cwd".into(),
+            package: package_metadata(),
+            binary_name: binary_name.to_owned(),
+            binary_id: RustBinaryId::new(binary_id),
+            kind: RustTestBinaryKind::LIB,
+            non_test_binaries: BTreeSet::new(),
+            build_platform: BuildPlatform::Target,
+        }
+    }
+
+    /// Creates a minimal build meta for tests that don't need cross-compilation.
+    fn simple_build_meta() -> RustBuildMeta<TestListState> {
+        let build_platforms = BuildPlatforms {
+            host: HostPlatform {
+                platform: TargetTriple::x86_64_unknown_linux_gnu().platform,
+                libdir: PlatformLibdir::Available("/fake/libdir".into()),
+            },
+            target: None,
+        };
+        RustBuildMeta::new("/fake", build_platforms).map_paths(&PathMapper::noop())
+    }
+
+    /// Creates a default eval context using `CompiledExpr::ALL`.
+    fn simple_ecx() -> EvalContext<'static> {
+        EvalContext {
+            default_filter: &CompiledExpr::ALL,
+        }
+    }
+
+    /// Collects the names of tests that match filters from a suite.
+    fn collect_matching_tests<'a>(suite: &'a RustTestSuite<'_>) -> Vec<&'a str> {
+        suite
+            .status
+            .test_cases()
+            .filter(|tc| tc.test_info.filter_match.is_match())
+            .map(|tc| tc.name.as_str())
+            .collect()
     }
 
     static PACKAGE_GRAPH_FIXTURE: LazyLock<PackageGraph> = LazyLock::new(|| {

@@ -3,9 +3,15 @@
 
 //! Support for partitioning test runs across several machines.
 //!
-//! At the moment this only supports simple hash-based and count-based sharding. In the future it
-//! could potentially be made smarter: e.g. using data to pick different sets of binaries and tests
-//! to run, with an aim to minimize total build and test times.
+//! Two kinds of partitioning are currently supported:
+//! - **Counted** (`count:M/N`): round-robin partitioning within each binary.
+//! - **Hashed** (`hash:M/N`): deterministic hash-based partitioning within each binary.
+//!
+//! A third kind, **sliced** (`slice:M/N`), providing round-robin partitioning across all binaries
+//! (cross-binary), is planned.
+//!
+//! In the future, partitioning could potentially be made smarter: e.g. using data to pick different
+//! sets of binaries and tests to run, with an aim to minimize total build and test times.
 
 use crate::errors::PartitionerBuilderParseError;
 use std::{fmt, str::FromStr};
@@ -37,6 +43,16 @@ pub enum PartitionerBuilder {
     },
 }
 
+/// The scope at which a partitioner operates.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PartitionerScope {
+    /// Partitioning is applied independently to each test binary.
+    PerBinary,
+
+    /// Partitioning is applied across all test binaries together.
+    CrossBinary,
+}
+
 /// Represents an individual partitioner, typically scoped to a test binary.
 pub trait Partitioner: fmt::Debug {
     /// Returns true if the given test name matches the partition.
@@ -44,9 +60,24 @@ pub trait Partitioner: fmt::Debug {
 }
 
 impl PartitionerBuilder {
+    /// Returns the scope at which this partitioner operates.
+    pub fn scope(&self) -> PartitionerScope {
+        match self {
+            PartitionerBuilder::Count { .. } => {
+                // Count is stateful (round-robin), so it must be per-binary
+                // to preserve existing shard assignment behavior.
+                PartitionerScope::PerBinary
+            }
+            PartitionerBuilder::Hash { .. } => {
+                // Hash is stateless: scope doesn't affect results. Per-binary
+                // is chosen arbitrarily.
+                PartitionerScope::PerBinary
+            }
+        }
+    }
+
     /// Creates a new `Partitioner` from this `PartitionerBuilder`.
     pub fn build(&self) -> Box<dyn Partitioner> {
-        // Note we don't use test_binary at the moment but might in the future.
         match self {
             PartitionerBuilder::Count {
                 shard,
@@ -182,6 +213,26 @@ impl Partitioner for HashPartitioner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn partitioner_builder_scope() {
+        assert_eq!(
+            PartitionerBuilder::Count {
+                shard: 1,
+                total_shards: 2,
+            }
+            .scope(),
+            PartitionerScope::PerBinary,
+        );
+        assert_eq!(
+            PartitionerBuilder::Hash {
+                shard: 1,
+                total_shards: 2,
+            }
+            .scope(),
+            PartitionerScope::PerBinary,
+        );
+    }
 
     #[test]
     fn partitioner_builder_from_str() {

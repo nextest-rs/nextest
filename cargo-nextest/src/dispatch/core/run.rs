@@ -46,7 +46,7 @@ use nextest_runner::{
         TracerCommand, configure_handle_inheritance,
     },
     signal::SignalHandlerKind,
-    test_filter::TestFilterBuilder,
+    test_filter::TestFilter,
     test_output::CaptureStrategy,
     user_config::{UserConfigExperimental, elements::UiConfig},
 };
@@ -840,7 +840,7 @@ impl App {
         &self,
         ctx: &TestExecuteContext<'_>,
         binary_list: Arc<BinaryList>,
-        test_filter_builder: &TestFilterBuilder,
+        test_filter: &TestFilter,
         profile: &nextest_runner::config::core::EvaluatableProfile<'_>,
     ) -> Result<TestList<'_>> {
         let env = EnvironmentMap::new(&self.base.cargo_configs);
@@ -849,7 +849,7 @@ impl App {
             self.base.graph(),
             self.base.workspace_root.clone(),
             binary_list,
-            test_filter_builder,
+            test_filter,
             env,
             profile,
             &self.base.reuse_build,
@@ -943,20 +943,20 @@ impl App {
 
         let filter_exprs =
             build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
-        let mut test_filter_builder = self
+        let mut test_filter = self
             .build_filter
-            .make_test_filter_builder(NextestRunMode::Test, filter_exprs)?;
+            .make_test_filter(NextestRunMode::Test, filter_exprs)?;
         let (rerun_state, expected_outstanding) = match rerun {
             Some(RunIdOrRecordingSelector::RunId(selector)) => {
                 let (rerun_state, outstanding_tests) = self.resolve_rerun(selector)?;
                 let expected = outstanding_tests.expected_test_ids();
-                test_filter_builder.set_outstanding_tests(outstanding_tests);
+                test_filter.set_outstanding_tests(outstanding_tests);
                 (Some(rerun_state), Some(expected))
             }
             Some(RunIdOrRecordingSelector::RecordingPath(path)) => {
                 let (rerun_state, outstanding_tests) = self.resolve_rerun_from_archive(path)?;
                 let expected = outstanding_tests.expected_test_ids();
-                test_filter_builder.set_outstanding_tests(outstanding_tests);
+                test_filter.set_outstanding_tests(outstanding_tests);
                 (Some(rerun_state), Some(expected))
             }
             None => (None, None),
@@ -981,7 +981,7 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter_builder, &profile)?;
+        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
 
         // Validate interceptor mode requirements.
         if runner_opts.interceptor.is_active() {
@@ -1077,7 +1077,7 @@ impl App {
         {
             let env_vars_for_recording = capture_env_vars_for_recording();
 
-            let outstanding_tests = test_filter_builder.into_rerun_info();
+            let outstanding_tests = test_filter.into_rerun_info();
             let rerun_info = if let Some(outstanding) = outstanding_tests {
                 let rerun_state =
                     rerun_state.expect("rerun_state is Some iff outstanding_tests is Some");
@@ -1220,9 +1220,9 @@ impl App {
 
         let filter_exprs =
             build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
-        let test_filter_builder = self
+        let test_filter = self
             .build_filter
-            .make_test_filter_builder(NextestRunMode::Benchmark, filter_exprs)?;
+            .make_test_filter(NextestRunMode::Benchmark, filter_exprs)?;
 
         let binary_list = self.base.build_binary_list("bench")?;
         let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
@@ -1236,7 +1236,7 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter_builder, &profile)?;
+        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
 
         // Validate interceptor mode requirements.
         if runner_opts.interceptor.is_active() {

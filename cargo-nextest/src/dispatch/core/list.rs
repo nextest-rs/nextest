@@ -73,9 +73,9 @@ impl App {
         let profile = self.base.load_profile(&config)?;
         let filter_exprs =
             build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
-        let test_filter_builder = self
+        let test_filter = self
             .build_filter
-            .make_test_filter_builder(NextestRunMode::Test, filter_exprs)?;
+            .make_test_filter(NextestRunMode::Test, filter_exprs)?;
 
         let binary_list = self.base.build_binary_list("test")?;
 
@@ -127,8 +127,7 @@ impl App {
                     target_runner,
                 };
 
-                let test_list =
-                    self.build_test_list(&ctx, binary_list, &test_filter_builder, &profile)?;
+                let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
 
                 test_list.write(
                     message_format.to_output_format(self.base.output.verbose, is_interactive),
@@ -168,9 +167,9 @@ impl App {
 
         let filter_exprs =
             build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
-        let test_filter_builder = self
+        let test_filter = self
             .build_filter
-            .make_test_filter_builder(NextestRunMode::Test, filter_exprs)?;
+            .make_test_filter(NextestRunMode::Test, filter_exprs)?;
 
         let binary_list = self.base.build_binary_list("test")?;
         let build_platforms = binary_list.rust_build_meta.build_platforms.clone();
@@ -184,7 +183,7 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter_builder, &profile)?;
+        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
 
         let resolved_user_config = resolve_user_config(
             &self.base.build_platforms.host.platform,
