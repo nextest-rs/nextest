@@ -911,10 +911,74 @@ pub struct EarlyProfile<'cfg> {
     pub(in crate::config) compiled_data: CompiledData<PreBuildPlatform>,
 }
 
+/// These macros return a specific config field from a profile, checking in
+/// order: custom profile, inheritance chain, then default profile.
+macro_rules! profile_field {
+    ($eval_prof:ident.$field:ident) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$field)
+            .unwrap_or($eval_prof.default_profile.$field)
+    };
+    ($eval_prof:ident.$nested:ident.$field:ident) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$nested.$field)
+            .unwrap_or($eval_prof.default_profile.$nested.$field)
+    };
+    // Variant for method calls with arguments.
+    ($eval_prof:ident.$method:ident($($arg:expr),*)) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$method($($arg),*))
+            .unwrap_or_else(|| $eval_prof.default_profile.$method($($arg),*))
+    };
+}
+macro_rules! profile_field_from_ref {
+    ($eval_prof:ident.$field:ident.$ref_func:ident()) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$field.$ref_func())
+            .unwrap_or(&$eval_prof.default_profile.$field)
+    };
+    ($eval_prof:ident.$nested:ident.$field:ident.$ref_func:ident()) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$nested.$field.$ref_func())
+            .unwrap_or(&$eval_prof.default_profile.$nested.$field)
+    };
+}
+// Variant for fields where both custom and default are Option.
+macro_rules! profile_field_optional {
+    ($eval_prof:ident.$nested:ident.$field:ident.$ref_func:ident()) => {
+        $eval_prof
+            .custom_profile
+            .iter()
+            .chain($eval_prof.inheritance_chain.iter())
+            .find_map(|p| p.$nested.$field.$ref_func())
+            .or($eval_prof.default_profile.$nested.$field.$ref_func())
+    };
+}
+
 impl<'cfg> EarlyProfile<'cfg> {
     /// Returns the absolute profile-specific store directory.
     pub fn store_dir(&self) -> &Utf8Path {
         &self.store_dir
+    }
+
+    /// Returns true if JUnit XML output is configured for this profile.
+    pub fn has_junit(&self) -> bool {
+        profile_field_optional!(self.junit.path.as_deref()).is_some()
     }
 
     /// Returns the global test group configuration.
@@ -981,65 +1045,6 @@ pub struct EvaluatableProfile<'cfg> {
     // The default filter that's been resolved after considering overrides (i.e.
     // platforms).
     resolved_default_filter: CompiledDefaultFilter,
-}
-
-/// These macros return a specific config field from an EvaluatableProfile,
-/// checking in order: custom profile, inheritance chain, then default profile.
-macro_rules! profile_field {
-    ($eval_prof:ident.$field:ident) => {
-        $eval_prof
-            .custom_profile
-            .iter()
-            .chain($eval_prof.inheritance_chain.iter())
-            .find_map(|p| p.$field)
-            .unwrap_or($eval_prof.default_profile.$field)
-    };
-    ($eval_prof:ident.$nested:ident.$field:ident) => {
-        $eval_prof
-            .custom_profile
-            .iter()
-            .chain($eval_prof.inheritance_chain.iter())
-            .find_map(|p| p.$nested.$field)
-            .unwrap_or($eval_prof.default_profile.$nested.$field)
-    };
-    // Variant for method calls with arguments.
-    ($eval_prof:ident.$method:ident($($arg:expr),*)) => {
-        $eval_prof
-            .custom_profile
-            .iter()
-            .chain($eval_prof.inheritance_chain.iter())
-            .find_map(|p| p.$method($($arg),*))
-            .unwrap_or_else(|| $eval_prof.default_profile.$method($($arg),*))
-    };
-}
-macro_rules! profile_field_from_ref {
-    ($eval_prof:ident.$field:ident.$ref_func:ident()) => {
-        $eval_prof
-            .custom_profile
-            .iter()
-            .chain($eval_prof.inheritance_chain.iter())
-            .find_map(|p| p.$field.$ref_func())
-            .unwrap_or(&$eval_prof.default_profile.$field)
-    };
-    ($eval_prof:ident.$nested:ident.$field:ident.$ref_func:ident()) => {
-        $eval_prof
-            .custom_profile
-            .iter()
-            .chain($eval_prof.inheritance_chain.iter())
-            .find_map(|p| p.$nested.$field.$ref_func())
-            .unwrap_or(&$eval_prof.default_profile.$nested.$field)
-    };
-}
-// Variant for fields where both custom and default are Option.
-macro_rules! profile_field_optional {
-    ($eval_prof:ident.$nested:ident.$field:ident.$ref_func:ident()) => {
-        $eval_prof
-            .custom_profile
-            .iter()
-            .chain($eval_prof.inheritance_chain.iter())
-            .find_map(|p| p.$nested.$field.$ref_func())
-            .or($eval_prof.default_profile.$nested.$field.$ref_func())
-    };
 }
 
 impl<'cfg> EvaluatableProfile<'cfg> {
