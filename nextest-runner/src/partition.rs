@@ -3,12 +3,10 @@
 
 //! Support for partitioning test runs across several machines.
 //!
-//! Two kinds of partitioning are currently supported:
+//! Three kinds of partitioning are currently supported:
 //! - **Counted** (`count:M/N`): round-robin partitioning within each binary.
 //! - **Hashed** (`hash:M/N`): deterministic hash-based partitioning within each binary.
-//!
-//! A third kind, **sliced** (`slice:M/N`), providing round-robin partitioning across all binaries
-//! (cross-binary), is planned.
+//! - **Sliced** (`slice:M/N`): round-robin partitioning across all binaries (cross-binary).
 //!
 //! In the future, partitioning could potentially be made smarter: e.g. using data to pick different
 //! sets of binaries and tests to run, with an aim to minimize total build and test times.
@@ -22,7 +20,6 @@ use xxhash_rust::xxh64::xxh64;
 /// The relationship between `PartitionerBuilder` and `Partitioner` is similar to that between
 /// `std`'s `BuildHasher` and `Hasher`.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[non_exhaustive]
 pub enum PartitionerBuilder {
     /// Partition based on counting test numbers.
     Count {
@@ -35,6 +32,19 @@ pub enum PartitionerBuilder {
 
     /// Partition based on hashing. Individual partitions are stateless.
     Hash {
+        /// The shard this is in, counting up from 1.
+        shard: u64,
+
+        /// The total number of shards.
+        total_shards: u64,
+    },
+
+    /// Partition by slicing across all binaries (cross-binary round-robin).
+    ///
+    /// Unlike `Count` (which partitions independently within each binary), `Slice` collects all
+    /// tests across all binaries and distributes them round-robin. This produces even shard sizes
+    /// regardless of how tests are distributed across binaries.
+    Slice {
         /// The shard this is in, counting up from 1.
         shard: u64,
 
@@ -73,6 +83,7 @@ impl PartitionerBuilder {
                 // is chosen arbitrarily.
                 PartitionerScope::PerBinary
             }
+            PartitionerBuilder::Slice { .. } => PartitionerScope::CrossBinary,
         }
     }
 
@@ -80,6 +91,10 @@ impl PartitionerBuilder {
     pub fn build(&self) -> Box<dyn Partitioner> {
         match self {
             PartitionerBuilder::Count {
+                shard,
+                total_shards,
+            }
+            | PartitionerBuilder::Slice {
                 shard,
                 total_shards,
             } => Box::new(CountPartitioner::new(*shard, *total_shards)),
@@ -95,7 +110,6 @@ impl FromStr for PartitionerBuilder {
     type Err = PartitionerBuilderParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Parse the string: it looks like "hash:<shard>/<total_shards>".
         if let Some(input) = s.strip_prefix("hash:") {
             let (shard, total_shards) = parse_shards(input, "hash:M/N")?;
 
@@ -110,10 +124,19 @@ impl FromStr for PartitionerBuilder {
                 shard,
                 total_shards,
             })
+        } else if let Some(input) = s.strip_prefix("slice:") {
+            let (shard, total_shards) = parse_shards(input, "slice:M/N")?;
+
+            Ok(PartitionerBuilder::Slice {
+                shard,
+                total_shards,
+            })
         } else {
             Err(PartitionerBuilderParseError::new(
                 None,
-                format!("partition input '{s}' must begin with \"hash:\" or \"count:\""),
+                format!(
+                    "partition input '{s}' must begin with \"hash:\", \"count:\", or \"slice:\""
+                ),
             ))
         }
     }
@@ -232,6 +255,14 @@ mod tests {
             .scope(),
             PartitionerScope::PerBinary,
         );
+        assert_eq!(
+            PartitionerBuilder::Slice {
+                shard: 1,
+                total_shards: 3,
+            }
+            .scope(),
+            PartitionerScope::CrossBinary,
+        );
     }
 
     #[test]
@@ -258,6 +289,27 @@ mod tests {
                     total_shards: 200,
                 },
             ),
+            (
+                "slice:1/3",
+                PartitionerBuilder::Slice {
+                    shard: 1,
+                    total_shards: 3,
+                },
+            ),
+            (
+                "slice:3/3",
+                PartitionerBuilder::Slice {
+                    shard: 3,
+                    total_shards: 3,
+                },
+            ),
+            (
+                "slice:1/1",
+                PartitionerBuilder::Slice {
+                    shard: 1,
+                    total_shards: 1,
+                },
+            ),
         ];
 
         let failures = vec![
@@ -271,6 +323,9 @@ mod tests {
             "hash:m/2",
             "hash:1/n",
             "hash:1/2/3",
+            "slice:",
+            "slice:0/2",
+            "slice:4/3",
         ];
 
         for (input, output) in successes {

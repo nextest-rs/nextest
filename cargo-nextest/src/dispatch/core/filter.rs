@@ -27,7 +27,7 @@ pub(crate) struct TestBuildFilter {
     #[arg(long, value_enum, value_name = "WHICH")]
     run_ignored: Option<RunIgnoredOpt>,
 
-    /// Test partition, e.g. hash:1/2 or count:2/3.
+    /// Test partition, e.g. hash:1/2, count:2/3, or slice:1/3.
     #[arg(long)]
     partition: Option<PartitionerBuilder>,
 
