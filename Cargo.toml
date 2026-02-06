@@ -149,7 +149,7 @@ win32job = "2.0.3"
 windows-sys = "0.61.2"
 winnow = "0.7.14"
 xxhash-rust = { version = "0.8.15", features = ["xxh3", "xxh64"] }
-zip = { version = "7.3.0", default-features = false, features = ["zstd"] }
+zip = { version = "7.4.0", default-features = false, features = ["zstd"] }
 zstd = { version = "0.13.3", features = ["zstdmt"] }
 
 [workspace.lints.clippy]
