@@ -10,7 +10,11 @@
 mod binary_list;
 mod display_filter;
 mod output_format;
+#[cfg(test)]
+mod partition_tests;
 mod rust_build_meta;
+#[cfg(test)]
+mod test_helpers;
 mod test_list;
 
 pub use binary_list::*;
