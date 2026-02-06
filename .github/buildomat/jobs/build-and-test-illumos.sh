@@ -4,6 +4,9 @@
 #: variety = "basic"
 #: target = "helios-latest"
 #: rust_toolchain = "stable"
+#: output_rules = [
+#:     "/tmp/nextest-run-archive.zip",
+#: ]
 
 # Build and test on illumos.
 
