@@ -3,13 +3,10 @@
 
 //! Filtering tests based on user-specified parameters.
 //!
-//! The main structure in this module is [`TestFilter`], which is created by a [`TestFilterBuilder`].
+//! The main structure in this module is [`TestFilter`].
 
 use crate::{
-    errors::TestFilterBuilderError,
-    list::RustTestArtifact,
-    partition::{Partitioner, PartitionerBuilder},
-    record::ComputedRerunInfo,
+    errors::TestFilterBuildError, list::RustTestArtifact, record::ComputedRerunInfo,
     run_mode::NextestRunMode,
 };
 use aho_corasick::AhoCorasick;
@@ -102,13 +99,14 @@ impl BinaryFilter {
     }
 }
 
-/// A builder for `TestFilter` instances.
+/// Filter for selecting which tests to run.
+///
+/// Constructed via [`TestFilter::new`].
 #[derive(Clone, Debug)]
-pub struct TestFilterBuilder {
+pub struct TestFilter {
     mode: NextestRunMode,
     rerun_info: Option<ComputedRerunInfo>,
     run_ignored: RunIgnored,
-    partitioner_builder: Option<PartitionerBuilder>,
     patterns: ResolvedFilterPatterns,
     binary_filter: BinaryFilter,
 }
@@ -253,7 +251,7 @@ impl TestFilterPatterns {
         }
     }
 
-    fn resolve(self) -> Result<ResolvedFilterPatterns, TestFilterBuilderError> {
+    fn resolve(self) -> Result<ResolvedFilterPatterns, TestFilterBuildError> {
         match self {
             Self::SkipOnly {
                 mut skip_patterns,
@@ -422,17 +420,16 @@ impl PartialEq for ResolvedFilterPatterns {
 
 impl Eq for ResolvedFilterPatterns {}
 
-impl TestFilterBuilder {
-    /// Creates a new `TestFilterBuilder` from the given patterns.
+impl TestFilter {
+    /// Creates a new `TestFilter` from the given patterns.
     ///
     /// If an empty slice is passed, the test filter matches all possible test names.
     pub fn new(
         mode: NextestRunMode,
         run_ignored: RunIgnored,
-        partitioner_builder: Option<PartitionerBuilder>,
         patterns: TestFilterPatterns,
         exprs: Vec<Filterset>,
-    ) -> Result<Self, TestFilterBuilderError> {
+    ) -> Result<Self, TestFilterBuildError> {
         let patterns = patterns.resolve()?;
 
         let binary_filter = BinaryFilter::new(exprs);
@@ -441,7 +438,6 @@ impl TestFilterBuilder {
             mode,
             rerun_info: None,
             run_ignored,
-            partitioner_builder,
             patterns,
             binary_filter,
         })
@@ -449,9 +445,6 @@ impl TestFilterBuilder {
 
     /// Returns a value indicating whether this binary should or should not be run to obtain the
     /// list of tests within it.
-    ///
-    /// This method is implemented directly on `TestFilterBuilder`. The statefulness of `TestFilter`
-    /// is only used for counted test partitioning, and is not currently relevant for binaries.
     pub fn filter_binary_match(
         &self,
         test_binary: &RustTestArtifact<'_>,
@@ -461,20 +454,19 @@ impl TestFilterBuilder {
         self.binary_filter.check_match(test_binary, ecx, bound)
     }
 
-    /// Creates a new `TestFilterBuilder` that matches the default set of tests.
+    /// Creates a new `TestFilter` that matches the default set of tests.
     pub fn default_set(mode: NextestRunMode, run_ignored: RunIgnored) -> Self {
         let binary_filter = BinaryFilter::new(Vec::new());
         Self {
             mode,
             rerun_info: None,
             run_ignored,
-            partitioner_builder: None,
             patterns: ResolvedFilterPatterns::default(),
             binary_filter,
         }
     }
 
-    /// Set the list of outstanding tests, if this is a rerun.
+    /// Sets the list of outstanding tests, if this is a rerun.
     pub fn set_outstanding_tests(&mut self, rerun_info: ComputedRerunInfo) {
         self.rerun_info = Some(rerun_info);
     }
@@ -484,34 +476,187 @@ impl TestFilterBuilder {
         self.mode
     }
 
-    /// Compares the patterns between two `TestFilterBuilder`s.
+    /// Compares the patterns between two `TestFilter`s.
     pub fn patterns_eq(&self, other: &Self) -> bool {
         self.patterns == other.patterns
-    }
-
-    /// Creates a new test filter scoped to a single binary.
-    ///
-    /// This test filter may be stateful.
-    pub fn build(&self) -> TestFilter<'_> {
-        let partitioner = self
-            .partitioner_builder
-            .as_ref()
-            .map(|partitioner_builder| partitioner_builder.build());
-        TestFilter {
-            builder: self,
-            partitioner,
-        }
     }
 
     /// Consumes self, returning the underlying [`ComputedRerunInfo`] if any.
     pub fn into_rerun_info(self) -> Option<ComputedRerunInfo> {
         self.rerun_info
     }
+
+    /// Returns an enum describing the match status of this filter.
+    pub fn filter_match(
+        &self,
+        test_binary: &RustTestArtifact<'_>,
+        test_name: &TestCaseName,
+        test_kind: &RustTestKind,
+        ecx: &EvalContext<'_>,
+        bound: FilterBound,
+        ignored: bool,
+    ) -> FilterMatch {
+        // Handle benchmark mismatches first.
+        if let Some(mismatch) = self.filter_benchmark_mismatch(test_kind) {
+            return mismatch;
+        }
+
+        // Check if this test already passed in a prior rerun.
+        if self.is_rerun_already_passed(test_binary, test_name) {
+            return FilterMatch::Mismatch {
+                reason: MismatchReason::RerunAlreadyPassed,
+            };
+        }
+
+        self.filter_match_base(test_binary, test_name, ecx, bound, ignored)
+    }
+
+    /// Core filter matching logic, used by `filter_match`.
+    fn filter_match_base(
+        &self,
+        test_binary: &RustTestArtifact<'_>,
+        test_name: &TestCaseName,
+        ecx: &EvalContext<'_>,
+        bound: FilterBound,
+        ignored: bool,
+    ) -> FilterMatch {
+        if let Some(mismatch) = self.filter_ignored_mismatch(ignored) {
+            return mismatch;
+        }
+
+        {
+            // ---
+            // NOTE
+            // ---
+            //
+            // Previously, if either expression OR string filters matched, we'd run the tests.
+            // The current (stable) implementation is that *both* the expression AND the string
+            // filters should match.
+            //
+            // This is because we try and skip running test binaries which don't match
+            // expression filters. So for example:
+            //
+            //     cargo nextest run -E 'binary(foo)' test_bar
+            //
+            // would not even get to the point of enumerating the tests not in binary(foo), thus
+            // not running any test_bars in the workspace. But, with the OR semantics:
+            //
+            //     cargo nextest run -E 'binary(foo) or test(test_foo)' test_bar
+            //
+            // would run all the test_bars in the repo. This is inconsistent, so nextest must
+            // use AND semantics.
+            use FilterNameMatch::*;
+            match (
+                self.filter_name_match(test_name),
+                self.filter_expression_match(test_binary, test_name, ecx, bound),
+            ) {
+                // Tests must be accepted by both expressions and filters.
+                (
+                    MatchEmptyPatterns | MatchWithPatterns,
+                    MatchEmptyPatterns | MatchWithPatterns,
+                ) => {}
+                // If rejected by at least one of the filtering strategies, the test is
+                // rejected. Note we use the _name_ mismatch reason first. That's because
+                // expression-based matches can also match against the default set. If a test
+                // fails both name and expression matches, then the name reason is more directly
+                // relevant.
+                (Mismatch(reason), _) | (_, Mismatch(reason)) => {
+                    return FilterMatch::Mismatch { reason };
+                }
+            }
+        }
+
+        FilterMatch::Matches
+    }
+
+    /// Returns true if this test already passed in a prior rerun.
+    fn is_rerun_already_passed(
+        &self,
+        test_binary: &RustTestArtifact<'_>,
+        test_name: &TestCaseName,
+    ) -> bool {
+        if let Some(rerun_info) = &self.rerun_info
+            && let Some(suite) = rerun_info.test_suites.get(&test_binary.binary_id)
+        {
+            return suite.passing.contains(test_name);
+        }
+        false
+    }
+
+    fn filter_benchmark_mismatch(&self, test_kind: &RustTestKind) -> Option<FilterMatch> {
+        if self.mode == NextestRunMode::Benchmark && test_kind != &RustTestKind::BENCH {
+            Some(FilterMatch::Mismatch {
+                reason: MismatchReason::NotBenchmark,
+            })
+        } else {
+            None
+        }
+    }
+
+    fn filter_ignored_mismatch(&self, ignored: bool) -> Option<FilterMatch> {
+        match self.run_ignored {
+            RunIgnored::Only => {
+                if !ignored {
+                    return Some(FilterMatch::Mismatch {
+                        reason: MismatchReason::Ignored,
+                    });
+                }
+            }
+            RunIgnored::Default => {
+                if ignored {
+                    return Some(FilterMatch::Mismatch {
+                        reason: MismatchReason::Ignored,
+                    });
+                }
+            }
+            RunIgnored::All => {}
+        }
+        None
+    }
+
+    fn filter_name_match(&self, test_name: &TestCaseName) -> FilterNameMatch {
+        self.patterns.name_match(test_name)
+    }
+
+    fn filter_expression_match(
+        &self,
+        test_binary: &RustTestArtifact<'_>,
+        test_name: &TestCaseName,
+        ecx: &EvalContext<'_>,
+        bound: FilterBound,
+    ) -> FilterNameMatch {
+        let query = TestQuery {
+            binary_query: test_binary.to_binary_query(),
+            test_name,
+        };
+
+        let expr_result = match &self.binary_filter.exprs {
+            TestFilterExprs::All => FilterNameMatch::MatchEmptyPatterns,
+            TestFilterExprs::Sets(exprs) => {
+                if exprs.iter().any(|expr| expr.matches_test(&query, ecx)) {
+                    FilterNameMatch::MatchWithPatterns
+                } else {
+                    return FilterNameMatch::Mismatch(MismatchReason::Expression);
+                }
+            }
+        };
+
+        match bound {
+            FilterBound::All => expr_result,
+            FilterBound::DefaultSet => {
+                if ecx.default_filter.matches_test(&query, ecx) {
+                    expr_result
+                } else {
+                    FilterNameMatch::Mismatch(MismatchReason::DefaultFilter)
+                }
+            }
+        }
+    }
 }
 
 /// Whether a binary matched filters and should be run to obtain the list of tests within.
 ///
-/// The result of [`TestFilterBuilder::filter_binary_match`].
+/// The result of [`TestFilter::filter_binary_match`].
 #[derive(Copy, Clone, Debug)]
 pub enum FilterBinaryMatch {
     /// This is a definite match -- binaries should be run.
@@ -575,7 +720,7 @@ impl FilterBinaryMatch {
 
 /// The reason for a binary mismatch.
 ///
-/// Part of [`FilterBinaryMatch`], as returned by [`TestFilterBuilder::filter_binary_match`].
+/// Part of [`FilterBinaryMatch`], as returned by [`TestFilter::filter_binary_match`].
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum BinaryMismatchReason {
     /// The binary doesn't match any of the provided filtersets.
@@ -599,216 +744,6 @@ impl fmt::Display for BinaryMismatchReason {
         match self {
             Self::Expression => write!(f, "didn't match filtersets"),
             Self::DefaultSet => write!(f, "didn't match the default set"),
-        }
-    }
-}
-
-/// Test filter, scoped to a single binary.
-#[derive(Debug)]
-pub struct TestFilter<'builder> {
-    builder: &'builder TestFilterBuilder,
-    partitioner: Option<Box<dyn Partitioner>>,
-}
-
-impl TestFilter<'_> {
-    /// Returns an enum describing the match status of this filter.
-    pub fn filter_match(
-        &mut self,
-        test_binary: &RustTestArtifact<'_>,
-        test_name: &TestCaseName,
-        test_kind: &RustTestKind,
-        ecx: &EvalContext<'_>,
-        bound: FilterBound,
-        ignored: bool,
-    ) -> FilterMatch {
-        // Handle benchmark mismatches first.
-        if let Some(mismatch) = self.filter_benchmark_mismatch(test_kind) {
-            return mismatch;
-        }
-
-        // Check if this test already passed in a prior rerun.
-        //
-        // RerunAlreadyPassed is a high-order bit: if a test passed in a prior
-        // rerun, we shouldn't run it again, regardless of other filter results.
-        // However, we must still go through the motions of checking all other
-        // filters, particularly for counted partitioning, to maintain
-        // consistent bucketing across reruns.
-        //
-        // Note that we don't support reruns with benchmarks yet (probably
-        // ever?), so NotABenchmark and RerunAlreadyPassed are mutually
-        // exclusive.
-        if self.is_rerun_already_passed(test_binary, test_name) {
-            // Run through the base filter to maintain partition counts.
-            let _ = self.filter_match_base(test_binary, test_name, ecx, bound, ignored);
-            return FilterMatch::Mismatch {
-                reason: MismatchReason::RerunAlreadyPassed,
-            };
-        }
-
-        self.filter_match_base(test_binary, test_name, ecx, bound, ignored)
-    }
-
-    /// Core filter matching logic, used by `filter_match`.
-    fn filter_match_base(
-        &mut self,
-        test_binary: &RustTestArtifact<'_>,
-        test_name: &TestCaseName,
-        ecx: &EvalContext<'_>,
-        bound: FilterBound,
-        ignored: bool,
-    ) -> FilterMatch {
-        if let Some(mismatch) = self.filter_ignored_mismatch(ignored) {
-            return mismatch;
-        }
-
-        {
-            // ---
-            // NOTE
-            // ---
-            //
-            // Previously, if either expression OR string filters matched, we'd run the tests.
-            // The current (stable) implementation is that *both* the expression AND the string
-            // filters should match.
-            //
-            // This is because we try and skip running test binaries which don't match
-            // expression filters. So for example:
-            //
-            //     cargo nextest run -E 'binary(foo)' test_bar
-            //
-            // would not even get to the point of enumerating the tests not in binary(foo), thus
-            // not running any test_bars in the workspace. But, with the OR semantics:
-            //
-            //     cargo nextest run -E 'binary(foo) or test(test_foo)' test_bar
-            //
-            // would run all the test_bars in the repo. This is inconsistent, so nextest must
-            // use AND semantics.
-            use FilterNameMatch::*;
-            match (
-                self.filter_name_match(test_name),
-                self.filter_expression_match(test_binary, test_name, ecx, bound),
-            ) {
-                // Tests must be accepted by both expressions and filters.
-                (
-                    MatchEmptyPatterns | MatchWithPatterns,
-                    MatchEmptyPatterns | MatchWithPatterns,
-                ) => {}
-                // If rejected by at least one of the filtering strategies, the test is
-                // rejected. Note we use the _name_ mismatch reason first. That's because
-                // expression-based matches can also match against the default set. If a test
-                // fails both name and expression matches, then the name reason is more directly
-                // relevant.
-                (Mismatch(reason), _) | (_, Mismatch(reason)) => {
-                    return FilterMatch::Mismatch { reason };
-                }
-            }
-        }
-
-        // Note that partition-based filtering MUST come after all other kinds
-        // of filtering, so that count-based bucketing applies after ignored,
-        // name, and expression matching. This also means that mutable count
-        // state must be maintained by the partitioner.
-        if let Some(mismatch) = self.filter_partition_mismatch(test_name) {
-            return mismatch;
-        }
-
-        FilterMatch::Matches
-    }
-
-    /// Returns true if this test already passed in a prior rerun.
-    fn is_rerun_already_passed(
-        &self,
-        test_binary: &RustTestArtifact<'_>,
-        test_name: &TestCaseName,
-    ) -> bool {
-        if let Some(rerun_info) = &self.builder.rerun_info
-            && let Some(suite) = rerun_info.test_suites.get(&test_binary.binary_id)
-        {
-            return suite.passing.contains(test_name);
-        }
-        false
-    }
-
-    fn filter_benchmark_mismatch(&self, test_kind: &RustTestKind) -> Option<FilterMatch> {
-        if self.builder.mode == NextestRunMode::Benchmark && test_kind != &RustTestKind::BENCH {
-            Some(FilterMatch::Mismatch {
-                reason: MismatchReason::NotBenchmark,
-            })
-        } else {
-            None
-        }
-    }
-
-    fn filter_ignored_mismatch(&self, ignored: bool) -> Option<FilterMatch> {
-        match self.builder.run_ignored {
-            RunIgnored::Only => {
-                if !ignored {
-                    return Some(FilterMatch::Mismatch {
-                        reason: MismatchReason::Ignored,
-                    });
-                }
-            }
-            RunIgnored::Default => {
-                if ignored {
-                    return Some(FilterMatch::Mismatch {
-                        reason: MismatchReason::Ignored,
-                    });
-                }
-            }
-            _ => {}
-        }
-        None
-    }
-
-    fn filter_name_match(&self, test_name: &TestCaseName) -> FilterNameMatch {
-        self.builder.patterns.name_match(test_name)
-    }
-
-    fn filter_expression_match(
-        &self,
-        test_binary: &RustTestArtifact<'_>,
-        test_name: &TestCaseName,
-        ecx: &EvalContext<'_>,
-        bound: FilterBound,
-    ) -> FilterNameMatch {
-        let query = TestQuery {
-            binary_query: test_binary.to_binary_query(),
-            test_name,
-        };
-
-        let expr_result = match &self.builder.binary_filter.exprs {
-            TestFilterExprs::All => FilterNameMatch::MatchEmptyPatterns,
-            TestFilterExprs::Sets(exprs) => {
-                if exprs.iter().any(|expr| expr.matches_test(&query, ecx)) {
-                    FilterNameMatch::MatchWithPatterns
-                } else {
-                    return FilterNameMatch::Mismatch(MismatchReason::Expression);
-                }
-            }
-        };
-
-        match bound {
-            FilterBound::All => expr_result,
-            FilterBound::DefaultSet => {
-                if ecx.default_filter.matches_test(&query, ecx) {
-                    expr_result
-                } else {
-                    FilterNameMatch::Mismatch(MismatchReason::DefaultFilter)
-                }
-            }
-        }
-    }
-
-    fn filter_partition_mismatch(&mut self, test_name: &TestCaseName) -> Option<FilterMatch> {
-        let partition_match = match &mut self.partitioner {
-            Some(partitioner) => partitioner.test_matches(test_name.as_str()),
-            None => true,
-        };
-        if partition_match {
-            None
-        } else {
-            Some(FilterMatch::Mismatch {
-                reason: MismatchReason::Partition,
-            })
         }
     }
 }
@@ -842,18 +777,16 @@ mod tests {
     #[proptest(cases = 50)]
     fn proptest_empty(#[strategy(vec(any::<String>(), 0..16))] test_names: Vec<String>) {
         let patterns = TestFilterPatterns::default();
-        let test_filter = TestFilterBuilder::new(
+        let test_filter = TestFilter::new(
             NextestRunMode::Test,
             RunIgnored::Default,
-            None,
             patterns,
             Vec::new(),
         )
         .unwrap();
-        let single_filter = test_filter.build();
         for test_name in test_names {
             let test_name = TestCaseName::new(&test_name);
-            prop_assert!(single_filter.filter_name_match(&test_name).is_match());
+            prop_assert!(test_filter.filter_name_match(&test_name).is_match());
         }
     }
 
@@ -862,18 +795,16 @@ mod tests {
     fn proptest_exact(#[strategy(vec(any::<String>(), 0..16))] test_names: Vec<String>) {
         // Test with the default matcher.
         let patterns = TestFilterPatterns::new(test_names.clone());
-        let test_filter = TestFilterBuilder::new(
+        let test_filter = TestFilter::new(
             NextestRunMode::Test,
             RunIgnored::Default,
-            None,
             patterns,
             Vec::new(),
         )
         .unwrap();
-        let single_filter = test_filter.build();
         for test_name in &test_names {
             let test_name = TestCaseName::new(test_name);
-            prop_assert!(single_filter.filter_name_match(&test_name).is_match());
+            prop_assert!(test_filter.filter_name_match(&test_name).is_match());
         }
 
         // Test with the exact matcher.
@@ -881,18 +812,16 @@ mod tests {
         for test_name in &test_names {
             patterns.add_exact_pattern(test_name.clone());
         }
-        let test_filter = TestFilterBuilder::new(
+        let test_filter = TestFilter::new(
             NextestRunMode::Test,
             RunIgnored::Default,
-            None,
             patterns,
             Vec::new(),
         )
         .unwrap();
-        let single_filter = test_filter.build();
         for test_name in &test_names {
             let test_name = TestCaseName::new(test_name);
-            prop_assert!(single_filter.filter_name_match(&test_name).is_match());
+            prop_assert!(test_filter.filter_name_match(&test_name).is_match());
         }
     }
 
@@ -908,18 +837,16 @@ mod tests {
             patterns.add_substring_pattern(substring);
         }
 
-        let test_filter = TestFilterBuilder::new(
+        let test_filter = TestFilter::new(
             NextestRunMode::Test,
             RunIgnored::Default,
-            None,
             patterns,
             Vec::new(),
         )
         .unwrap();
-        let single_filter = test_filter.build();
         for test_name in test_names {
             let test_name = TestCaseName::new(&test_name);
-            prop_assert!(single_filter.filter_name_match(&test_name).is_match());
+            prop_assert!(test_filter.filter_name_match(&test_name).is_match());
         }
     }
 
@@ -929,17 +856,15 @@ mod tests {
         prop_assume!(!substring.is_empty() && !prefix.is_empty() && !suffix.is_empty());
         let pattern = prefix + &substring + &suffix;
         let patterns = TestFilterPatterns::new(vec![pattern]);
-        let test_filter = TestFilterBuilder::new(
+        let test_filter = TestFilter::new(
             NextestRunMode::Test,
             RunIgnored::Default,
-            None,
             patterns,
             Vec::new(),
         )
         .unwrap();
-        let single_filter = test_filter.build();
         let substring = TestCaseName::new(&substring);
-        prop_assert!(!single_filter.filter_name_match(&substring).is_match());
+        prop_assert!(!test_filter.filter_name_match(&substring).is_match());
     }
 
     fn test_name(s: &str) -> TestCaseName {

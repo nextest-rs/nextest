@@ -936,10 +936,10 @@ impl fmt::Display for PartitionerBuilderParseError {
     }
 }
 
-/// An error that occurs while operating on a
-/// [`TestFilterBuilder`](crate::test_filter::TestFilterBuilder).
+/// An error that occurs while building a
+/// [`TestFilter`](crate::test_filter::TestFilter).
 #[derive(Clone, Debug, Error)]
-pub enum TestFilterBuilderError {
+pub enum TestFilterBuildError {
     /// An error that occurred while constructing test filters.
     #[error("error constructing test filters")]
     Construct {

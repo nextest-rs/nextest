@@ -15,7 +15,7 @@ use nextest_runner::{
     partition::PartitionerBuilder,
     reuse_build::ReuseBuildInfo,
     run_mode::NextestRunMode,
-    test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
+    test_filter::{FilterBound, RunIgnored, TestFilter, TestFilterPatterns},
 };
 use std::sync::Arc;
 
@@ -86,7 +86,7 @@ impl TestBuildFilter {
         graph: &'g PackageGraph,
         workspace_root: Utf8PathBuf,
         binary_list: Arc<BinaryList>,
-        test_filter_builder: &TestFilterBuilder,
+        test_filter: &TestFilter,
         env: EnvironmentMap,
         profile: &EvaluatableProfile<'_>,
         reuse_build: &ReuseBuildInfo,
@@ -109,7 +109,8 @@ impl TestBuildFilter {
             ctx,
             test_artifacts,
             rust_build_meta,
-            test_filter_builder,
+            test_filter,
+            self.partition.as_ref(),
             workspace_root,
             env,
             profile,
@@ -124,20 +125,19 @@ impl TestBuildFilter {
         .map_err(|err| ExpectedError::CreateTestListError { err })
     }
 
-    pub(crate) fn make_test_filter_builder(
+    pub(crate) fn make_test_filter(
         &self,
         mode: NextestRunMode,
         filter_exprs: Vec<nextest_filtering::Filterset>,
-    ) -> Result<TestFilterBuilder> {
+    ) -> Result<TestFilter> {
         // Merge the test binary args into the patterns.
         let mut run_ignored = self.run_ignored.map(Into::into);
         let mut patterns = TestFilterPatterns::new(self.pre_double_dash_filters.clone());
         self.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
 
-        Ok(TestFilterBuilder::new(
+        Ok(TestFilter::new(
             mode,
             run_ignored.unwrap_or_default(),
-            self.partition.clone(),
             patterns,
             filter_exprs,
         )?)

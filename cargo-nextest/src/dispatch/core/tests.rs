@@ -465,13 +465,13 @@ struct TestCli {
 #[test]
 fn test_test_binary_argument_parsing() {
     use crate::{ExpectedError, Result};
-    use nextest_runner::test_filter::{RunIgnored, TestFilterBuilder, TestFilterPatterns};
+    use nextest_runner::test_filter::{RunIgnored, TestFilter, TestFilterPatterns};
 
-    fn get_test_filter_builder(cmd: &str) -> Result<TestFilterBuilder> {
+    fn get_test_filter(cmd: &str) -> Result<TestFilter> {
         let app = TestCli::try_parse_from(shell_words::split(cmd).expect("valid command line"))
             .unwrap_or_else(|_| panic!("{cmd} should have successfully parsed"));
         app.build_filter
-            .make_test_filter_builder(NextestRunMode::Test, vec![])
+            .make_test_filter(NextestRunMode::Test, vec![])
     }
 
     let valid = &[
@@ -552,27 +552,25 @@ fn test_test_binary_argument_parsing() {
     for (a, b) in valid {
         let a_str = format!(
             "{:?}",
-            get_test_filter_builder(a).unwrap_or_else(|_| panic!("failed to parse {a}"))
+            get_test_filter(a).unwrap_or_else(|_| panic!("failed to parse {a}"))
         );
         let b_str = format!(
             "{:?}",
-            get_test_filter_builder(b).unwrap_or_else(|_| panic!("failed to parse {b}"))
+            get_test_filter(b).unwrap_or_else(|_| panic!("failed to parse {b}"))
         );
         assert_eq!(a_str, b_str);
     }
 
     for (args, patterns) in skip_exact {
-        let builder =
-            get_test_filter_builder(args).unwrap_or_else(|_| panic!("failed to parse {args}"));
+        let builder = get_test_filter(args).unwrap_or_else(|_| panic!("failed to parse {args}"));
 
-        let builder2 = TestFilterBuilder::new(
+        let builder2 = TestFilter::new(
             NextestRunMode::Test,
             RunIgnored::Default,
-            None,
             patterns.clone(),
             Vec::new(),
         )
-        .unwrap_or_else(|_| panic!("failed to build TestFilterBuilder"));
+        .unwrap_or_else(|_| panic!("failed to build TestFilter"));
 
         assert!(
             builder.patterns_eq(&builder2),
@@ -583,7 +581,7 @@ fn test_test_binary_argument_parsing() {
     }
 
     for (s, r) in invalid {
-        let res = get_test_filter_builder(s);
+        let res = get_test_filter(s);
         if let Err(ExpectedError::TestBinaryArgsParseError { reason, .. }) = &res {
             assert_eq!(reason, r);
         } else {

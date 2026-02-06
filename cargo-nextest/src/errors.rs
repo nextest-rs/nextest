@@ -139,9 +139,9 @@ pub enum ExpectedError {
         err: Box<UserConfigError>,
     },
     #[error("test filter build error")]
-    TestFilterBuilderError {
+    TestFilterBuildError {
         #[from]
-        err: TestFilterBuilderError,
+        err: TestFilterBuildError,
     },
     #[error("unknown host platform")]
     HostPlatformDetectError {
@@ -581,7 +581,7 @@ impl ExpectedError {
             | Self::RootManifestNotFound { .. }
             | Self::CargoConfigError { .. }
             | Self::UserConfigError { .. }
-            | Self::TestFilterBuilderError { .. }
+            | Self::TestFilterBuildError { .. }
             | Self::HostPlatformDetectError { .. }
             | Self::TargetTripleError { .. }
             | Self::RemapAbsoluteError { .. }
@@ -915,7 +915,7 @@ impl ExpectedError {
                 error!("{err}");
                 err.source()
             }
-            Self::TestFilterBuilderError { err } => {
+            Self::TestFilterBuildError { err } => {
                 error!("{err}");
                 err.source()
             }
