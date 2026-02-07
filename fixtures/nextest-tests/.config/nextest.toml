@@ -28,6 +28,16 @@ run-wrapper = "wrapper1-windows"
 
 [[profile.default.scripts]]
 platform = { host = "cfg(unix)" }
+filter = "test(=test_setup_script_env_vars)"
+setup = "my-script-unix-with-env"
+
+[[profile.default.scripts]]
+platform = { host = "cfg(windows)" }
+filter = "test(=test_setup_script_env_vars)"
+setup = "my-script-windows-with-env"
+
+[[profile.default.scripts]]
+platform = { host = "cfg(unix)" }
 filter = "binary(nextest-tests)"
 setup = "my-script-unix"
 list-wrapper = "wrapper1-unix"
@@ -184,6 +194,22 @@ command = { command-line = "my-script.sh", relative-to = "workspace-root" }
 # this case we also want to check that the cwd is the workspace root. Passing in
 # "scripts\\my-script.bat" ensures this.
 command = 'cmd /c "scripts\\my-script.bat"'
+
+[scripts.setup.my-script-unix-with-env]
+command = { command-line = "my-script.sh", relative-to = "workspace-root" }
+env = {
+    NEXTEST = "0",
+    NEXTEST_PROFILE = "0",
+    MY_ENV_VAR = "my-env-var-override",
+}
+
+[scripts.setup.my-script-windows-with-env]
+command = 'cmd /c "scripts\\my-script.bat"'
+env = {
+    NEXTEST = "0",
+    NEXTEST_PROFILE = "0",
+    MY_ENV_VAR = "my-env-var-override",
+}
 
 [scripts.wrapper.wrapper1-unix]
 command = { command-line = "./debug/wrapper within", relative-to = "target" }

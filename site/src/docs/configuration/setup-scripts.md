@@ -84,6 +84,9 @@ Setup scripts can have the following configuration options attached to them:
 `capture-stderr`
 : `true` if the script's standard error should be captured, `false` if not. By default, this is `false`.
 
+`env`
+: A map of environment variables to be passed to the setup script.
+
 ### Example
 
 ```toml title="Advanced setup script definition"
@@ -93,6 +96,9 @@ slow-timeout = { period = "60s", terminate-after = 2 }
 leak-timeout = "1s"
 capture-stdout = true
 capture-stderr = false
+env = {
+    DB_PATH = "sqlite:memory:",
+}
 ```
 
 ## Setting up rules

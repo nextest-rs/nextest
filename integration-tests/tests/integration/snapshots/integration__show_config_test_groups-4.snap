@@ -32,6 +32,7 @@ group: @global
           test_failure_error
           test_failure_should_panic
           test_result_failure
+          test_setup_script_env_vars
           test_stdin_closed
           test_subprocess_doesnt_exit
           test_subprocess_doesnt_exit_fail

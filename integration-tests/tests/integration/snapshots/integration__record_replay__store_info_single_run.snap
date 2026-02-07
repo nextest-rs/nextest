@@ -14,11 +14,11 @@ Run 10000001-0000-0000-0000-000000000001
   replayable:       yes
 
   tests:
-    passed:         21
+    passed:         22
     failed:         9
 
   sizes:            compressed  uncompressed  entries
-    log                 <size>        <size>       74
-    store               <size>        <size>       44
+    log                 <size>        <size>       78
+    store               <size>        <size>       45
                     ──────────  ────────────  ───────
-    total               <size>        <size>      118
+    total               <size>        <size>      123
