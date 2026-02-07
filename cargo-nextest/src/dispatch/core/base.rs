@@ -482,11 +482,15 @@ impl BaseApp {
         let profile = config
             .profile(profile_name)
             .map_err(ExpectedError::profile_not_found)?;
-        let store_dir = profile.store_dir();
-        std::fs::create_dir_all(store_dir).map_err(|err| ExpectedError::StoreDirCreateError {
-            store_dir: store_dir.to_owned(),
-            err,
-        })?;
+        if profile.has_junit() {
+            let store_dir = profile.store_dir();
+            std::fs::create_dir_all(store_dir).map_err(|err| {
+                ExpectedError::StoreDirCreateError {
+                    store_dir: store_dir.to_owned(),
+                    err,
+                }
+            })?;
+        }
         Ok(profile)
     }
 }
