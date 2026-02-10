@@ -196,19 +196,24 @@ command = { command-line = "my-script.sh", relative-to = "workspace-root" }
 command = 'cmd /c "scripts\\my-script.bat"'
 
 [scripts.setup.my-script-unix-with-env]
-command = { command-line = "my-script.sh", relative-to = "workspace-root" }
-env = {
-    NEXTEST = "0",
-    NEXTEST_PROFILE = "0",
-    MY_ENV_VAR = "my-env-var-override",
+command = {
+    command-line = "my-script.sh",
+    env = {
+        NEXTEST = "0",
+        NEXTEST_PROFILE = "0",
+        MY_ENV_VAR = "my-env-var-override",
+    },
+    relative-to = "workspace-root",
 }
 
 [scripts.setup.my-script-windows-with-env]
-command = 'cmd /c "scripts\\my-script.bat"'
-env = {
-    NEXTEST = "0",
-    NEXTEST_PROFILE = "0",
-    MY_ENV_VAR = "my-env-var-override",
+command = {
+    command-line = 'cmd /c "scripts\\my-script.bat"',
+    env = {
+        NEXTEST = "0",
+        NEXTEST_PROFILE = "0",
+        MY_ENV_VAR = "my-env-var-override",
+    },
 }
 
 [scripts.wrapper.wrapper1-unix]

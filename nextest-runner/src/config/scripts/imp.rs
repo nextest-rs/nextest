@@ -317,7 +317,7 @@ impl SetupScriptCommand {
         // Set the additional user-provided environment variables assigned to the setup
         // script configuration after the global values assigned above but before the
         // test runner controlled ones which are assigned below, as per above note.
-        cmd.envs(config.env.iter());
+        cmd.envs(config.command.env.iter());
 
         let env_path = camino_tempfile::Builder::new()
             .prefix("nextest-env")
@@ -662,10 +662,6 @@ pub struct SetupScriptConfig {
     /// JUnit configuration for this script.
     #[serde(default)]
     pub junit: SetupScriptJunitConfig,
-
-    /// A map of environment variables to be passed to this command.
-    #[serde(default)]
-    pub env: BTreeMap<String, String>,
 }
 
 impl SetupScriptConfig {
@@ -808,6 +804,9 @@ pub struct ScriptCommand {
     /// The arguments to pass to the program.
     pub args: Vec<String>,
 
+    /// A map of environment variables to pass to the program.
+    pub env: BTreeMap<String, String>,
+
     /// Which directory to interpret the program as relative to.
     ///
     /// This controls just how `program` is interpreted, in case it is a
@@ -857,7 +856,7 @@ impl<'de> Deserialize<'de> for ScriptCommand {
             type Value = ScriptCommand;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a Unix shell command, a list of arguments, or a table with command-line and relative-to")
+                formatter.write_str("a Unix shell command, a list of arguments, or a table with command-line, env, and relative-to")
             }
 
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
@@ -872,6 +871,7 @@ impl<'de> Deserialize<'de> for ScriptCommand {
                 Ok(ScriptCommand {
                     program,
                     args,
+                    env: BTreeMap::new(),
                     relative_to: ScriptCommandRelativeTo::None,
                 })
             }
@@ -890,6 +890,7 @@ impl<'de> Deserialize<'de> for ScriptCommand {
                 Ok(ScriptCommand {
                     program,
                     args,
+                    env: BTreeMap::new(),
                     relative_to: ScriptCommandRelativeTo::None,
                 })
             }
@@ -900,6 +901,7 @@ impl<'de> Deserialize<'de> for ScriptCommand {
             {
                 let mut command_line = None;
                 let mut relative_to = None;
+                let mut env = None;
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
@@ -915,10 +917,16 @@ impl<'de> Deserialize<'de> for ScriptCommand {
                             }
                             relative_to = Some(map.next_value::<ScriptCommandRelativeTo>()?);
                         }
+                        "env" => {
+                            if env.is_some() {
+                                return Err(A::Error::duplicate_field("env"));
+                            }
+                            env = Some(map.next_value::<BTreeMap<String, String>>()?);
+                        }
                         _ => {
                             return Err(A::Error::unknown_field(
                                 &key,
-                                &["command-line", "relative-to"],
+                                &["command-line", "env", "relative-to"],
                             ));
                         }
                     }
@@ -926,11 +934,13 @@ impl<'de> Deserialize<'de> for ScriptCommand {
 
                 let (program, arguments) =
                     command_line.ok_or_else(|| A::Error::missing_field("command-line"))?;
+                let env = env.unwrap_or_default();
                 let relative_to = relative_to.unwrap_or(ScriptCommandRelativeTo::None);
 
                 Ok(ScriptCommand {
                     program,
                     args: arguments,
+                    env,
                     relative_to,
                 })
             }
@@ -1087,9 +1097,11 @@ mod tests {
             capture-stderr = true
 
             [scripts.setup.qux]
-            command = "qux"
-            env = {
-                MODE = "qux_mode",
+            command = {
+                command-line = "qux",
+                env = {
+                    MODE = "qux_mode",
+                },
             }
         "#
         };
@@ -1235,6 +1247,7 @@ mod tests {
                 .unwrap()
                 .1
                 .config
+                .command
                 .env
                 .get("MODE")
                 .map(String::as_str),
@@ -1249,7 +1262,7 @@ mod tests {
             command = ""
         "#},
         "invalid value: string \"\", expected a Unix shell command, a list of arguments, \
-         or a table with command-line and relative-to"
+         or a table with command-line, env, and relative-to"
 
         ; "empty command"
     )]
@@ -1259,7 +1272,7 @@ mod tests {
             command = []
         "#},
         "invalid length 0, expected a Unix shell command, a list of arguments, \
-         or a table with command-line and relative-to"
+         or a table with command-line, env, and relative-to"
 
         ; "empty command list"
     )]
@@ -1312,7 +1325,7 @@ mod tests {
             [scripts.setup.foo]
             command = { command-line = "my-command", unknown-field = "value" }
         "#},
-        r#"unknown field `unknown-field`, expected `command-line` or `relative-to`"#
+        r#"unknown field `unknown-field`, expected one of `command-line`, `env`, `relative-to`"#
 
         ; "unknown field in command table"
     )]
