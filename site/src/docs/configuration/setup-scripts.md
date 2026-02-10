@@ -68,6 +68,20 @@ command = { command-line = "debug/my-setup-bin", relative-to = "target" }
 command = { command-line = "scripts/setup-script.sh", relative-to = "workspace-root" }
 ```
 
+### Specifying `env`
+
+A map of environment variables may be passed to a command by specifying the `env` parameter.
+
+```toml
+[scripts.setup.script1]
+command = {
+    command-line = "cargo run -p setup-test-db",
+    env = {
+        DB_PATH = "sqlite:memory:",
+    },
+}
+```
+
 ### Setup script configuration
 
 Setup scripts can have the following configuration options attached to them:
