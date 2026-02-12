@@ -20,8 +20,8 @@ aho-corasick = { version = "1.1.4" }
 bit-set = { version = "0.8.0" }
 bit-vec = { version = "0.8.0" }
 camino = { version = "1.2.2", default-features = false, features = ["serde1"] }
-clap = { version = "4.5.57", features = ["derive", "env", "unicode", "unstable-markdown", "wrap_help"] }
-clap_builder = { version = "4.5.57", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
+clap = { version = "4.5.58", features = ["derive", "env", "unicode", "unstable-markdown", "wrap_help"] }
+clap_builder = { version = "4.5.58", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
 either = { version = "1.15.0", features = ["use_std"] }
 getrandom = { version = "0.3.3", default-features = false, features = ["std"] }
 hashbrown = { version = "0.16.1", default-features = false, features = ["allocator-api2", "inline-more"] }
