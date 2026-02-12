@@ -1,10 +1,11 @@
 ---
 source: nextest-runner/src/record/display.rs
+assertion_line: 1870
 expression: "DisplayRunList::new(&snapshot_with_replayability, None, &Styles::default(),\n&theme_characters, &Redactor::noop()).to_string()"
 ---
 2 recorded runs:
 
-  550e8400  2024-06-16 11:00:00      1.000s   9765.6 MB  200 passed  *latest
-  550e8400  2024-06-15 10:00:00      1.000s    976.6 MB  100 passed
-                                             ----------
-                                             10742.2 MB
+  550e8400  2024-06-16 11:00:00      1.000s     9.5 GB  200 passed  *latest
+  550e8400  2024-06-15 10:00:00      1.000s   976.6 MB  100 passed
+                                             ---------
+                                               10.5 GB

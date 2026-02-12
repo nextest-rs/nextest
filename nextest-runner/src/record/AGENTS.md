@@ -161,9 +161,16 @@ Implementation uses sorted neighbor comparison rather than a trie—simpler and 
 
 CLI commands that can consume runs from either the store or a portable recording use `RunIdOrRecordingSelector`. Parsing logic:
 - Strings ending in `.zip` → `RecordingPath(path)`
+- Strings containing `/` or `\` → `RecordingPath(path)` (handles process substitution paths like `/proc/self/fd/11` or `/dev/fd/5`, and relative paths like `./recording`)
 - Everything else → `RunId(RunIdSelector)` (parses as `latest` or hex prefix)
 
-This enables commands like `cargo nextest replay -R path/to/archive.zip` to work alongside `cargo nextest replay -R latest`.
+Bare filenames without separators or `.zip` are *not* treated as paths (by design), so typos like `latets` produce clear error messages rather than confusing "file not found" errors.
+
+This enables commands like `cargo nextest replay -R path/to/archive.zip` and `cargo nextest replay -R <(curl url)` to work alongside `cargo nextest replay -R latest`.
+
+### Non-seekable input handling
+
+`PortableRecording::open` handles non-seekable inputs (pipes from process substitution) via `ensure_seekable`. Detection is platform-specific: on Windows, `GetFileType` is used because `SetFilePointerEx` spuriously succeeds on named pipe handles; on Unix, `lseek` reliably fails with `ESPIPE`. Non-seekable inputs are spooled to an anonymous temp file via `camino_tempfile::tempfile()`, with a 4 GiB safety limit. The temp file fits into the existing `ArchiveReadStorage = Either<File, Cursor<Vec<u8>>>` without type changes.
 
 ## Rerun chain model
 

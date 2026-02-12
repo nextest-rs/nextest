@@ -93,7 +93,7 @@ num_threads.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 win32job.workspace = true
-windows-sys = { workspace = true, features = ["Win32_System_JobObjects"] }
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_Pipes"] }
 
 [lints]
 workspace = true

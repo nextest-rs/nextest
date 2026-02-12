@@ -2,6 +2,6 @@
 source: integration-tests/tests/integration/record_replay.rs
 expression: "redact_dynamic_fields(&invalid_output.stderr_as_str(), temp_root)"
 ---
-error: invalid value 'not-a-uuid!!!' for '--rerun <RUN_ID_OR_RECORDING>': invalid run ID selector `not-a-uuid!!!`: expected `latest`, hex digits, or a path ending in `.zip`
+error: invalid value 'not-a-uuid!!!' for '--rerun <RUN_ID_OR_RECORDING>': invalid run ID selector `not-a-uuid!!!`: expected `latest`, hex digits, or a file path (ending in `.zip` or containing path separators)
 
 For more information, try '--help'.

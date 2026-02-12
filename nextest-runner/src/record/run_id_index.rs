@@ -16,6 +16,9 @@ use std::{fmt, str::FromStr};
 ///
 /// When parsing from a string:
 /// - Paths ending in `.zip` are treated as recording paths.
+/// - Strings containing path separators (`/` or `\`) are treated as recording
+///   paths. This enables process substitution paths like `/proc/self/fd/11`
+///   (Linux) or `/dev/fd/5` (macOS).
 /// - Everything else is parsed as a [`RunIdSelector`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RunIdOrRecordingSelector {
@@ -31,13 +34,24 @@ impl FromStr for RunIdOrRecordingSelector {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let path = Utf8PathBuf::from(s);
         if has_zip_extension(&path) {
-            Ok(RunIdOrRecordingSelector::RecordingPath(path))
-        } else {
-            match s.parse::<RunIdSelector>() {
-                Ok(selector) => Ok(RunIdOrRecordingSelector::RunId(selector)),
-                Err(_) => Err(InvalidRunIdOrRecordingSelector {
-                    input: s.to_owned(),
-                }),
+            return Ok(RunIdOrRecordingSelector::RecordingPath(path));
+        }
+
+        match s.parse::<RunIdSelector>() {
+            Ok(selector) => Ok(RunIdOrRecordingSelector::RunId(selector)),
+            Err(_) => {
+                // If the input contains path separators, treat it as a file
+                // path. This handles process substitution paths like
+                // `/proc/self/fd/11` or `/dev/fd/5`, as well as relative paths
+                // like `./recording` or `../path/to/file`. Valid run ID
+                // selectors never contain `/` or `\`, so this is unambiguous.
+                if s.contains('/') || s.contains(std::path::MAIN_SEPARATOR) {
+                    Ok(RunIdOrRecordingSelector::RecordingPath(path))
+                } else {
+                    Err(InvalidRunIdOrRecordingSelector {
+                        input: s.to_owned(),
+                    })
+                }
             }
         }
     }
@@ -621,9 +635,50 @@ mod tests {
             RunIdOrRecordingSelector::RecordingPath(Utf8PathBuf::from("../relative/path.zip"))
         );
 
-        // Invalid run ID selector (not hex, not .zip) still fails.
+        // Paths with separators (no .zip) parse to RecordingPath. This
+        // covers process substitution paths and relative paths.
+        assert_eq!(
+            "/proc/self/fd/11"
+                .parse::<RunIdOrRecordingSelector>()
+                .unwrap(),
+            RunIdOrRecordingSelector::RecordingPath(Utf8PathBuf::from("/proc/self/fd/11"))
+        );
+        assert_eq!(
+            "/dev/fd/5".parse::<RunIdOrRecordingSelector>().unwrap(),
+            RunIdOrRecordingSelector::RecordingPath(Utf8PathBuf::from("/dev/fd/5"))
+        );
+        assert_eq!(
+            "./my-recording"
+                .parse::<RunIdOrRecordingSelector>()
+                .unwrap(),
+            RunIdOrRecordingSelector::RecordingPath(Utf8PathBuf::from("./my-recording"))
+        );
+        assert_eq!(
+            "../path/to/file"
+                .parse::<RunIdOrRecordingSelector>()
+                .unwrap(),
+            RunIdOrRecordingSelector::RecordingPath(Utf8PathBuf::from("../path/to/file"))
+        );
+        // Backslash is treated as a path separator (Windows paths).
+        #[cfg(windows)]
+        {
+            assert_eq!(
+                r"C:\path\to\file"
+                    .parse::<RunIdOrRecordingSelector>()
+                    .unwrap(),
+                RunIdOrRecordingSelector::RecordingPath(Utf8PathBuf::from(r"C:\path\to\file"))
+            );
+        }
+
+        // Invalid run ID selector (not hex, not .zip, no path separator)
+        // still fails.
         assert!("xyz".parse::<RunIdOrRecordingSelector>().is_err());
         assert!("hello".parse::<RunIdOrRecordingSelector>().is_err());
+        // Typos of "latest" should still fail, not be treated as paths.
+        assert!("latets".parse::<RunIdOrRecordingSelector>().is_err());
+        assert!("latestt".parse::<RunIdOrRecordingSelector>().is_err());
+        // Bare filenames without separators or .zip extension should fail.
+        assert!("recording".parse::<RunIdOrRecordingSelector>().is_err());
     }
 
     #[test]
