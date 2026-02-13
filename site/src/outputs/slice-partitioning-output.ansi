@@ -1,0 +1,20 @@
+[1minfo[0m: experimental features enabled: setup-scripts
+[1m[92m    Finished[0m ]8;;https://doc.rust-lang.org/cargo/reference/profiles.html#default-profiles\`test` profile [unoptimized + debuginfo]]8;;\ target(s) in 0.11s
+────────────
+[32;1m Nextest run[0m ID [35;1m21[0m[90m6a1d43-74c3-4b34-8673-7663cb18117c[0m with nextest profile: [1mdefault[0m
+[32;1m    Starting[0m [1m13[0m tests across [1m2[0m binaries ([1m38[0m tests [33;1mskipped[0m)
+[32;1m        PASS[0m [   0.005s] ( 1/13) [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mtest_invalid_platform[0m
+[32;1m        PASS[0m [   0.005s] ( 2/13) [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mtest_parse_expr_difference[0m
+[32;1m        PASS[0m [   0.005s] ( 3/13) [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mtest_invalid_and_operator[0m
+[32;1m        PASS[0m [   0.005s] ( 4/13) [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mtest_parse_name_matcher_quote[0m
+[32;1m        PASS[0m [   0.005s] ( 5/13) [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mtest_parse_expr_set[0m
+[32;1m        PASS[0m [   0.005s] ( 6/13) [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mtest_missing_close_regex[0m
+[32;1m        PASS[0m [   0.006s] ( 7/13) [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mtest_unexpected_comma[0m
+[32;1m        PASS[0m [   0.006s] ( 8/13) [35;1mnextest-filtering::match[0m [36mtest_expr_test_union[0m[36m::[0m[34;1mwith_pipe[0m
+[32;1m        PASS[0m [   0.007s] ( 9/13) [35;1mnextest-filtering::match[0m [34;1mtest_expr_binary_id_glob[0m
+[32;1m        PASS[0m [   0.025s] (10/13) [35;1mnextest-filtering::match[0m [36mtest_expr_test_intersect[0m[36m::[0m[34;1mwith_ampersand[0m
+[32;1m        PASS[0m [   0.026s] (11/13) [35;1mnextest-filtering::match[0m [34;1mtest_expr_package_contains[0m
+[32;1m        PASS[0m [   0.027s] (12/13) [35;1mnextest-filtering::match[0m [34;1mtest_expr_rdeps[0m
+[32;1m        PASS[0m [   0.309s] (13/13) [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mproptest_expr_roundtrip[0m
+────────────
+[32;1m     Summary[0m [   0.310s] [1m13[0m tests run: [1m13[0m [32;1mpassed[0m, [1m38[0m [33;1mskipped[0m
