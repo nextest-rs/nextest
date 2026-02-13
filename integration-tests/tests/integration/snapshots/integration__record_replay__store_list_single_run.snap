@@ -4,6 +4,6 @@ expression: "redact_dynamic_fields(&list_output.stdout_as_str(), temp_root)"
 ---
 1 recorded run:
 
-  10000001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  21 passed / 9 failed  *latest
+  10000001  XXXX-XX-XX XX:XX:XX  <duration>     <size>  22 passed / 9 failed  *latest
                                              ─────────
                                                 <size>

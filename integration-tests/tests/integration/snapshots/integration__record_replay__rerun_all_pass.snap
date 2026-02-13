@@ -7,7 +7,7 @@ info: rerun: inheriting build scope from original run: (default scope)
     Finished `test` profile [unoptimized + debuginfo] target(s) in [ELAPSED]
 ────────────
  Nextest run ID 91000002-0000-0000-0000-000000000002 with nextest profile: default
-    Starting 0 tests across 7 binaries (30 tests skipped, including 2 tests that already passed)
+    Starting 0 tests across 7 binaries (31 tests skipped, including 2 tests that already passed)
 ────────────
-     Summary [ duration] 0 tests run: 0 passed, 30 skipped
+     Summary [ duration] 0 tests run: 0 passed, 31 skipped
 info: no outstanding tests remain

@@ -4,7 +4,7 @@ expression: list_output.stdout_as_str()
 ---
 2 recorded runs:
 
-  90000001    XXXX-XX-XX XX:XX:XX  <duration>     <size>  21 passed / 9 failed
+  90000001    XXXX-XX-XX XX:XX:XX  <duration>     <size>  22 passed / 9 failed
   └─90000002  XXXX-XX-XX XX:XX:XX  <duration>     <size>   0 passed / 9 failed  *latest
                                                ─────────
                                                   <size>

@@ -12,6 +12,7 @@ nextest-tests::basic test_failure_assert
 nextest-tests::basic test_failure_error
 nextest-tests::basic test_failure_should_panic
 nextest-tests::basic test_result_failure
+nextest-tests::basic test_setup_script_env_vars
 nextest-tests::basic test_stdin_closed
 nextest-tests::basic test_subprocess_doesnt_exit
 nextest-tests::basic test_subprocess_doesnt_exit_fail
