@@ -9,6 +9,29 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.127] - 2026-02-13
+
+### Added
+
+- A new `--partition slice:m/n` mode for [partitioning test runs](https://nexte.st/docs/ci-features/partitioning/). Sliced partitioning distributes tests evenly across shards regardless of how tests are distributed across binaries. This addresses the issue where `count:m/n` operates per-binary, leading to uneven shard sizes when tests span multiple binaries of varying sizes. ([#3052])
+
+  The existing `count:m/n` partitioner is now deprecated in favor of `slice:m/n`. Hashed sharding (`hash:m/n`) continues to be available for use cases where stability across test additions/removals matters more than even distribution.
+
+- Replay and rerun commands (`cargo nextest replay`, `cargo nextest run -R`) now accept portable recordings from pipes and process substitutions. For example, `cargo nextest run -R <(curl url)` now works. ([#3071])
+
+### Changed
+
+- Nextest no longer creates the store directory unless JUnit output is enabled. This is a step towards deprecating the store directory in favor of portable recordings. ([#3053])
+
+### Fixed
+
+- Fixed display of file sizes near unit boundaries (e.g. sizes near 1 KiB or 1 MiB) in recording output. ([#3072])
+
+[#3052]: https://github.com/nextest-rs/nextest/pull/3052
+[#3053]: https://github.com/nextest-rs/nextest/pull/3053
+[#3071]: https://github.com/nextest-rs/nextest/pull/3071
+[#3072]: https://github.com/nextest-rs/nextest/pull/3072
+
 ## [0.9.126] - 2026-02-04
 
 ### Changed
@@ -1932,6 +1955,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.127]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.127
 [0.9.126]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.126
 [0.9.125]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.125
 [0.9.124]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.124
