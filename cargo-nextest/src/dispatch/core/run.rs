@@ -63,7 +63,8 @@ pub(crate) struct RunOpts {
     /// Rerun tests that failed or didn't complete in a previous recorded run.
     ///
     /// Accepts a run ID (full UUID, short prefix like "abc1234", or "latest"),
-    /// or a path to a portable recording file (ending in `.zip`).
+    /// or a file path (ending in `.zip` or containing path separators,
+    /// e.g. `<(curl url)`).
     /// Only tests that didn't pass in the specified run will be executed.
     ///
     /// New tests (not in the parent run) are also included by default.

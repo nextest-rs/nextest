@@ -204,7 +204,8 @@ pub enum BuildPlatformsOutputFormat {
 /// Options for `nextest debug extract-portable-recording`.
 #[derive(Debug, Args)]
 pub struct ExtractPortableRecordingOpts {
-    /// Path to the portable recording (.zip file).
+    /// Path to a portable recording (`.zip` file, or a pipe from process
+    /// substitution such as `<(curl url)`).
     #[arg(value_name = "ARCHIVE")]
     archive: Utf8PathBuf,
 

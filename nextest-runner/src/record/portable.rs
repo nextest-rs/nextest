@@ -34,6 +34,7 @@ use crate::{
     user_config::elements::MAX_MAX_OUTPUT_SIZE,
 };
 use atomicwrites::{AtomicFile, OverwriteBehavior};
+use bytesize::ByteSize;
 use camino::{Utf8Path, Utf8PathBuf};
 use countio::Counter;
 use debug_ignore::DebugIgnore;
@@ -42,7 +43,7 @@ use nextest_metadata::TestListSummary;
 use std::{
     borrow::Cow,
     fs::File,
-    io::{self, BufRead, BufReader, Cursor, Read, Write},
+    io::{self, BufRead, BufReader, Cursor, Read, Seek, SeekFrom, Write},
 };
 use zip::{
     CompressionMethod, ZipArchive, ZipWriter, read::ZipFileSeek, result::ZipError,
@@ -233,6 +234,151 @@ impl<'a> PortableRecordingWriter<'a> {
 // Portable recording reading
 // ---
 
+/// Maximum size for spooling a non-seekable input to a temporary file (4 GiB).
+///
+/// This is a safety limit to avoid filling up disk when reading from a pipe.
+/// Portable recordings are typically small (a few hundred MB at most), so this
+/// is generous.
+const SPOOL_SIZE_LIMIT: ByteSize = ByteSize(4 * 1024 * 1024 * 1024);
+
+/// Classifies a Windows file handle for seekability.
+///
+/// On Windows, `SetFilePointerEx` can spuriously succeed on named pipe handles
+/// (returning meaningless position values), so seek-based probing is
+/// unreliable. We use `GetFileType` instead, which definitively classifies the
+/// handle.
+#[cfg(windows)]
+enum WindowsFileKind {
+    /// A regular disk file (seekable).
+    Disk,
+    /// A pipe, FIFO, or socket (not seekable, must be spooled).
+    Pipe,
+    /// A character device or unknown handle type (not expected for recording
+    /// files).
+    Other(u32),
+}
+
+/// Classifies a Windows file handle using `GetFileType`.
+#[cfg(windows)]
+fn classify_windows_handle(file: &File) -> WindowsFileKind {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{FILE_TYPE_DISK, FILE_TYPE_PIPE, GetFileType};
+
+    // SAFETY: the handle is valid because `file` is a live `File`.
+    let file_type = unsafe { GetFileType(file.as_raw_handle()) };
+    match file_type {
+        FILE_TYPE_DISK => WindowsFileKind::Disk,
+        FILE_TYPE_PIPE => WindowsFileKind::Pipe,
+        other => WindowsFileKind::Other(other),
+    }
+}
+
+/// Returns true if the I/O error indicates that the file descriptor does not
+/// support seeking (i.e. it is a pipe, FIFO, or socket).
+#[cfg(unix)]
+fn is_not_seekable_error(e: &io::Error) -> bool {
+    // Pipes/FIFOs/sockets fail lseek with ESPIPE.
+    e.raw_os_error() == Some(libc::ESPIPE)
+}
+
+/// Ensures that a file is seekable, spooling to a temp file if necessary.
+///
+/// Process substitution paths (e.g. `/proc/self/fd/11` from `<(curl url)`)
+/// produce pipe fds that are not seekable. ZIP reading requires seeking, so we
+/// spool the pipe contents to an anonymous temporary file first.
+///
+/// Returns the original file if it's already seekable, or a new temp file
+/// containing the spooled data.
+fn ensure_seekable(file: File, path: &Utf8Path) -> Result<File, PortableRecordingReadError> {
+    ensure_seekable_impl(file, path, SPOOL_SIZE_LIMIT)
+}
+
+/// Inner implementation of [`ensure_seekable`] with a configurable size limit.
+///
+/// Separated so tests can exercise the limit enforcement without writing 4 GiB.
+fn ensure_seekable_impl(
+    file: File,
+    path: &Utf8Path,
+    spool_limit: ByteSize,
+) -> Result<File, PortableRecordingReadError> {
+    // On Unix, lseek reliably fails with ESPIPE on pipes/FIFOs/sockets, so
+    // a seek probe is sufficient.
+    #[cfg(unix)]
+    {
+        let mut file = file;
+        match file.stream_position() {
+            Ok(_) => Ok(file),
+            Err(e) if is_not_seekable_error(&e) => spool_to_temp(file, path, spool_limit),
+            Err(e) => {
+                // Unexpected seek error (e.g. EBADF, EIO): propagate rather than
+                // silently falling into the spool path.
+                Err(PortableRecordingReadError::SeekProbe {
+                    path: path.to_owned(),
+                    error: e,
+                })
+            }
+        }
+    }
+
+    // On Windows, SetFilePointerEx can spuriously succeed on named pipe
+    // handles, so seek-based probing is unreliable. Use GetFileType to
+    // definitively classify the handle.
+    #[cfg(windows)]
+    match classify_windows_handle(&file) {
+        WindowsFileKind::Disk => Ok(file),
+        WindowsFileKind::Pipe => spool_to_temp(file, path, spool_limit),
+        WindowsFileKind::Other(file_type) => Err(PortableRecordingReadError::SeekProbe {
+            path: path.to_owned(),
+            error: io::Error::other(format!(
+                "unexpected file handle type {file_type:#x} (expected disk or pipe)"
+            )),
+        }),
+    }
+}
+
+/// Spools the contents of a non-seekable file to an anonymous temporary file.
+///
+/// Returns the temp file, rewound to the beginning so callers can read it.
+fn spool_to_temp(
+    file: File,
+    path: &Utf8Path,
+    spool_limit: ByteSize,
+) -> Result<File, PortableRecordingReadError> {
+    let mut temp =
+        camino_tempfile::tempfile().map_err(|error| PortableRecordingReadError::SpoolTempFile {
+            path: path.to_owned(),
+            error,
+        })?;
+
+    // Read up to spool_limit + 1 bytes. If we get more than the limit, the
+    // input is too large. Use saturating_add to avoid wrapping if the limit
+    // is u64::MAX (not an issue in practice since the limit is 4 GiB).
+    let bytes_copied = io::copy(
+        &mut (&file).take(spool_limit.0.saturating_add(1)),
+        &mut temp,
+    )
+    .map_err(|error| PortableRecordingReadError::SpoolTempFile {
+        path: path.to_owned(),
+        error,
+    })?;
+
+    if bytes_copied > spool_limit.0 {
+        return Err(PortableRecordingReadError::SpoolTooLarge {
+            path: path.to_owned(),
+            limit: spool_limit,
+        });
+    }
+
+    // Rewind so ZipArchive can read from the beginning.
+    temp.seek(SeekFrom::Start(0))
+        .map_err(|error| PortableRecordingReadError::SpoolTempFile {
+            path: path.to_owned(),
+            error,
+        })?;
+
+    Ok(temp)
+}
+
 /// Backing storage for an archive.
 ///
 /// - `Left(File)`: Direct file-backed archive (normal case).
@@ -276,6 +422,10 @@ impl PortableRecording {
             path: path.to_owned(),
             error,
         })?;
+
+        // Ensure the file is seekable. Process substitution paths (e.g.
+        // `/proc/self/fd/11`) produce pipe fds; spool to a temp file if needed.
+        let file = ensure_seekable(file, path)?;
 
         let mut outer_archive = ZipArchive::new(Either::Left(file)).map_err(|error| {
             PortableRecordingReadError::ReadArchive {
@@ -818,7 +968,7 @@ mod tests {
         format::{PORTABLE_RECORDING_FORMAT_VERSION, STORE_FORMAT_VERSION},
         store::{CompletedRunStats, RecordedRunStatus, RecordedSizes},
     };
-    use camino_tempfile::Utf8TempDir;
+    use camino_tempfile::{NamedUtf8TempFile, Utf8TempDir};
     use chrono::Local;
     use quick_junit::ReportUuid;
     use semver::Version;
@@ -1021,5 +1171,187 @@ mod tests {
             ),
             "expected RequiredFileMissing for run.log.zst, got {result:?}"
         );
+    }
+
+    #[test]
+    fn test_ensure_seekable_regular_file() {
+        // A regular file is already seekable and should be returned as-is.
+        let temp = NamedUtf8TempFile::new().expect("created temp file");
+        let path = temp.path().to_owned();
+
+        std::fs::write(&path, b"hello world").expect("wrote to temp file");
+        let file = File::open(&path).expect("opened temp file");
+
+        // Get the file's OS-level fd/handle for identity comparison.
+        #[cfg(unix)]
+        let original_fd = {
+            use std::os::unix::io::AsRawFd;
+            file.as_raw_fd()
+        };
+
+        let result = ensure_seekable(file, &path).expect("ensure_seekable succeeded");
+
+        // The returned file should be the same fd (no spooling occurred).
+        #[cfg(unix)]
+        {
+            use std::os::unix::io::AsRawFd;
+            assert_eq!(
+                result.as_raw_fd(),
+                original_fd,
+                "seekable file should be returned as-is"
+            );
+        }
+
+        // Verify the content is still readable.
+        let mut contents = String::new();
+        let mut reader = io::BufReader::new(result);
+        reader
+            .read_to_string(&mut contents)
+            .expect("read file contents");
+        assert_eq!(contents, "hello world");
+    }
+
+    /// Converts a `PipeReader` into a `File` using platform-specific owned
+    /// I/O types.
+    #[cfg(unix)]
+    fn pipe_reader_to_file(reader: std::io::PipeReader) -> File {
+        use std::os::fd::OwnedFd;
+        File::from(OwnedFd::from(reader))
+    }
+
+    /// Converts a `PipeReader` into a `File` using platform-specific owned
+    /// I/O types.
+    #[cfg(windows)]
+    fn pipe_reader_to_file(reader: std::io::PipeReader) -> File {
+        use std::os::windows::io::OwnedHandle;
+        File::from(OwnedHandle::from(reader))
+    }
+
+    /// Tests that non-seekable inputs (pipes) are spooled to a temp file.
+    ///
+    /// This test uses `std::io::pipe()` to create a real pipe, which is the
+    /// same mechanism the OS uses for process substitution (`<(command)`).
+    #[test]
+    fn test_ensure_seekable_pipe() {
+        let (pipe_reader, mut pipe_writer) = std::io::pipe().expect("created pipe");
+        let test_data = b"zip-like test content for pipe spooling";
+
+        // Write data and close the write end so the read end reaches EOF.
+        pipe_writer.write_all(test_data).expect("wrote to pipe");
+        drop(pipe_writer);
+
+        let pipe_file = pipe_reader_to_file(pipe_reader);
+
+        let path = Utf8Path::new("/dev/fd/99");
+        let result = ensure_seekable(pipe_file, path).expect("ensure_seekable succeeded");
+
+        // The result should be a seekable temp file containing the pipe data.
+        let mut contents = Vec::new();
+        let mut reader = io::BufReader::new(result);
+        reader
+            .read_to_end(&mut contents)
+            .expect("read spooled contents");
+        assert_eq!(contents, test_data);
+    }
+
+    /// Tests that an empty pipe (zero bytes) is handled correctly.
+    ///
+    /// This simulates a download failure where the source produces no data.
+    /// `ensure_seekable` should succeed (the temp file is created and rewound),
+    /// and the downstream ZIP reader will report a proper error.
+    #[test]
+    fn test_ensure_seekable_empty_pipe() {
+        let (pipe_reader, pipe_writer) = std::io::pipe().expect("created pipe");
+        // Close writer immediately to produce an empty pipe.
+        drop(pipe_writer);
+
+        let pipe_file = pipe_reader_to_file(pipe_reader);
+        let path = Utf8Path::new("/dev/fd/42");
+        let mut result = ensure_seekable(pipe_file, path).expect("empty pipe should succeed");
+
+        let mut contents = Vec::new();
+        result.read_to_end(&mut contents).expect("read contents");
+        assert!(contents.is_empty());
+    }
+
+    /// Tests that the spool size limit is enforced for pipes.
+    ///
+    /// Uses `ensure_seekable_impl` with a small limit so we can trigger the
+    /// `SpoolTooLarge` error without writing gigabytes.
+    #[test]
+    fn test_ensure_seekable_spool_too_large() {
+        let (pipe_reader, mut pipe_writer) = std::io::pipe().expect("created pipe");
+
+        // Write 20 bytes, then set a limit of 10.
+        pipe_writer
+            .write_all(b"01234567890123456789")
+            .expect("wrote to pipe");
+        drop(pipe_writer);
+
+        let pipe_file = pipe_reader_to_file(pipe_reader);
+
+        let path = Utf8Path::new("/dev/fd/42");
+        let result = ensure_seekable_impl(pipe_file, path, ByteSize(10));
+        assert!(
+            matches!(
+                &result,
+                Err(PortableRecordingReadError::SpoolTooLarge {
+                    limit: ByteSize(10),
+                    ..
+                })
+            ),
+            "expected SpoolTooLarge, got {result:?}"
+        );
+    }
+
+    /// Tests that data exactly one byte over the spool limit fails.
+    ///
+    /// This is the precise boundary: `take(limit + 1)` reads exactly
+    /// `limit + 1` bytes, and `bytes_copied > limit` triggers the error.
+    #[test]
+    fn test_ensure_seekable_spool_one_over_limit() {
+        let (pipe_reader, mut pipe_writer) = std::io::pipe().expect("created pipe");
+
+        // Write exactly limit + 1 = 11 bytes with a limit of 10.
+        pipe_writer
+            .write_all(b"01234567890")
+            .expect("wrote to pipe");
+        drop(pipe_writer);
+
+        let pipe_file = pipe_reader_to_file(pipe_reader);
+
+        let path = Utf8Path::new("/dev/fd/42");
+        let result = ensure_seekable_impl(pipe_file, path, ByteSize(10));
+        assert!(
+            matches!(
+                &result,
+                Err(PortableRecordingReadError::SpoolTooLarge {
+                    limit: ByteSize(10),
+                    ..
+                })
+            ),
+            "expected SpoolTooLarge at limit+1 bytes, got {result:?}"
+        );
+    }
+
+    /// Tests that data exactly at the spool limit succeeds.
+    #[test]
+    fn test_ensure_seekable_spool_exact_limit() {
+        let (pipe_reader, mut pipe_writer) = std::io::pipe().expect("created pipe");
+
+        // Write exactly 10 bytes with a limit of 10.
+        pipe_writer.write_all(b"0123456789").expect("wrote to pipe");
+        drop(pipe_writer);
+
+        let pipe_file = pipe_reader_to_file(pipe_reader);
+
+        let path = Utf8Path::new("/dev/fd/42");
+        let mut result = ensure_seekable_impl(pipe_file, path, ByteSize(10))
+            .expect("exact limit should succeed");
+
+        // Verify the spooled content is correct.
+        let mut contents = Vec::new();
+        result.read_to_end(&mut contents).expect("read contents");
+        assert_eq!(contents, b"0123456789");
     }
 }

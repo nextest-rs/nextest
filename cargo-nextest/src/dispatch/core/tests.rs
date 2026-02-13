@@ -165,6 +165,8 @@ fn test_argument_parsing() {
         "cargo nextest replay --no-capture --no-output-indent",
         "cargo nextest replay --status-level pass",
         "cargo nextest replay --final-status-level flaky",
+        "cargo nextest replay -R /proc/self/fd/11",
+        "cargo nextest replay -R /dev/fd/5",
         // ---
         // Store commands
         // ---
@@ -176,6 +178,8 @@ fn test_argument_parsing() {
         "cargo nextest store info archive.zip",
         "cargo nextest store info /path/to/run.zip",
         "cargo nextest store info -R ./relative/path.zip",
+        "cargo nextest store info /proc/self/fd/11",
+        "cargo nextest store info /dev/fd/5",
         "cargo nextest store export latest",
         "cargo nextest store export abc123",
         "cargo nextest store export -R latest",
@@ -191,6 +195,8 @@ fn test_argument_parsing() {
         "cargo nextest run --rerun /path/to/run.zip",
         "cargo nextest run -R ./relative/path.zip",
         "cargo nextest run --rerun ../parent/run.zip",
+        "cargo nextest run --rerun /proc/self/fd/11",
+        "cargo nextest run -R /dev/fd/5",
     ];
 
     let invalid: &[(&'static str, ErrorKind)] = &[

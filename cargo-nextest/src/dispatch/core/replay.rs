@@ -35,8 +35,8 @@ pub(crate) struct ReplayOpts {
     /// Run ID, `latest`, or recording path to replay.
     ///
     /// Accepts "latest" (the default) for the most recent completed run,
-    /// a full UUID or unambiguous prefix, or a path to a portable recording
-    /// (`.zip` file).
+    /// a full UUID or unambiguous prefix, or a file path (ending in `.zip`
+    /// or containing path separators, e.g. `<(curl url)`).
     #[arg(long, short = 'R', value_name = "RUN_ID_OR_RECORDING", default_value_t)]
     pub(crate) run_id: RunIdOrRecordingSelector,
 

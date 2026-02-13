@@ -16,10 +16,11 @@ use crate::{
         PortableRecordingFormatVersion, PortableRecordingVersionIncompatibility, RecordedRunInfo,
         RunIdIndex, RunsJsonFormatVersion, StoreFormatVersion, StoreVersionIncompatibility,
     },
-    redact::Redactor,
+    redact::{Redactor, SizeDisplay},
     reuse_build::{ArchiveFormat, ArchiveStep},
     target_runner::PlatformRunnerSource,
 };
+use bytesize::ByteSize;
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
 use etcetera::HomeDirError;
@@ -2381,10 +2382,12 @@ pub struct InvalidRunIdSelector {
 /// Error returned when parsing a [`RunIdOrRecordingSelector`](crate::record::RunIdOrRecordingSelector) fails.
 ///
 /// A valid selector is either "latest", a string containing only hex digits
-/// and dashes (for UUID format), or a path ending in `.zip`.
+/// and dashes (for UUID format), or a file path (ending in `.zip` or
+/// containing path separators).
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 #[error(
-    "invalid run ID selector `{input}`: expected `latest`, hex digits, or a path ending in `.zip`"
+    "invalid run ID selector `{input}`: expected `latest`, hex digits, \
+     or a file path (ending in `.zip` or containing path separators)"
 )]
 pub struct InvalidRunIdOrRecordingSelector {
     /// The invalid input string.
@@ -2779,6 +2782,48 @@ pub enum PortableRecordingReadError {
         file_count: usize,
         /// The number of files ending in `.zip`.
         zip_count: usize,
+    },
+
+    /// An unexpected I/O error occurred while probing whether the input is
+    /// seekable.
+    ///
+    /// This is distinct from the expected `ESPIPE`/`ERROR_INVALID_FUNCTION`
+    /// errors that indicate a pipe or FIFO. Unexpected errors (e.g. `EBADF`,
+    /// `EIO`) are propagated here rather than falling into the spool path.
+    #[error("unexpected I/O error while probing seekability of `{path}`")]
+    SeekProbe {
+        /// The path to the recording.
+        path: Utf8PathBuf,
+        /// The underlying I/O error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An I/O error occurred while spooling a non-seekable input to a
+    /// temporary file.
+    ///
+    /// This covers temp file creation, data copying, and seeking back to
+    /// the start.
+    #[error("failed to spool non-seekable input `{path}` to a temporary file")]
+    SpoolTempFile {
+        /// The path to the recording (e.g. `/proc/self/fd/11`).
+        path: Utf8PathBuf,
+        /// The underlying I/O error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// The input being spooled to a temporary file exceeded the size limit.
+    #[error(
+        "recording at `{path}` exceeds the spool size limit \
+         ({}); use a file path instead of process substitution",
+        SizeDisplay(.limit.0)
+    )]
+    SpoolTooLarge {
+        /// The path to the recording.
+        path: Utf8PathBuf,
+        /// The size limit.
+        limit: ByteSize,
     },
 }
 

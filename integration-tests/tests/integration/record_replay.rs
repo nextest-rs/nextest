@@ -1466,6 +1466,199 @@ fn test_portable_recording_read() {
     );
 }
 
+/// Coverage: Reading a portable recording from a named pipe (non-seekable
+/// input), simulating the `<(curl url)` process substitution use case.
+#[test]
+fn test_portable_recording_from_named_pipe() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const RUN_ID: &str = "79000003-0000-0000-0000-000000000001";
+
+    // 1. Create a recording.
+    let run_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
+        .args(["run", "-E", "test(=test_success)"])
+        .output();
+    assert!(
+        run_output.exit_status.success(),
+        "recording should succeed: {run_output}"
+    );
+
+    // 2. Export to a portable recording zip.
+    let archive_path = temp_root.join(format!("nextest-run-{RUN_ID}.zip"));
+    let mut cli = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None);
+    cli.args([
+        "store",
+        "export",
+        RUN_ID,
+        "--archive-file",
+        archive_path.as_str(),
+    ]);
+    let export_output = cli.output();
+    assert!(
+        export_output.exit_status.success(),
+        "store export should succeed: {export_output}"
+    );
+
+    // 3. Read the archive bytes.
+    let archive_bytes = fs::read(&archive_path).expect("read archive bytes");
+
+    // 4. Create a named pipe and spawn a writer thread.
+    let (pipe_path, writer_thread) = named_pipe::create_and_spawn_writer(temp_root, archive_bytes);
+
+    // 5. Run `store info -R <pipe-path>`. The CLI opens the pipe for reading,
+    // which unblocks the writer thread. The path contains path separators, so
+    // `RunIdOrRecordingSelector` correctly treats it as a recording path.
+    let info_output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--user-config-file",
+            user_config_path.as_str(),
+            "store",
+            "info",
+            "-R",
+            pipe_path.as_str(),
+        ])
+        .env(NEXTEST_REDACT_ENV, "1")
+        .output();
+
+    // Join the writer thread before asserting on CLI output. If the writer
+    // panicked (e.g. broken pipe from an early CLI crash), we want to see that
+    // panic payload rather than a misleading "store info should succeed" message.
+    let writer_result = writer_thread.join();
+
+    // Check the writer first: if the CLI crashed early, the writer's broken-pipe
+    // panic is the root cause, and the CLI exit status is just a symptom.
+    writer_result.expect("writer thread completed without panic");
+    assert!(
+        info_output.exit_status.success(),
+        "store info from named pipe should succeed: {info_output}"
+    );
+    let info_str = info_output.stdout_as_str();
+    assert!(
+        info_str.contains(RUN_ID),
+        "store info from named pipe should show run ID: {info_str}"
+    );
+}
+
+mod named_pipe {
+    use camino::{Utf8Path, Utf8PathBuf};
+    use std::{io::Write as _, thread::JoinHandle};
+
+    /// Creates a named pipe and spawns a thread that writes `data` to it.
+    ///
+    /// Returns the pipe path (which the CLI can open) and the writer thread
+    /// handle. The writer blocks until a reader opens the pipe, so no sleeps
+    /// or polling are needed for synchronization.
+    pub(super) fn create_and_spawn_writer(
+        dir: &Utf8Path,
+        data: Vec<u8>,
+    ) -> (Utf8PathBuf, JoinHandle<()>) {
+        cfg_if::cfg_if! {
+            if #[cfg(unix)] {
+                create_and_spawn_writer_unix(dir, data)
+            } else if #[cfg(windows)] {
+                create_and_spawn_writer_windows(dir, data)
+            } else {
+                compile_error!("named pipe test is not supported on this platform");
+            }
+        }
+    }
+
+    /// Unix: creates a FIFO with `mkfifo` and spawns a writer that opens it
+    /// for writing (blocking until the reader connects).
+    #[cfg(unix)]
+    fn create_and_spawn_writer_unix(
+        dir: &Utf8Path,
+        data: Vec<u8>,
+    ) -> (Utf8PathBuf, JoinHandle<()>) {
+        let path = dir.join("recording.fifo");
+        let cstr = std::ffi::CString::new(path.as_str()).expect("valid CString for FIFO path");
+        let ret = unsafe { libc::mkfifo(cstr.as_ptr(), 0o644) };
+        assert_eq!(ret, 0, "mkfifo failed: {}", std::io::Error::last_os_error());
+
+        let write_path = path.clone();
+        let handle = std::thread::spawn(move || {
+            // Opening a FIFO for writing blocks until a reader opens the
+            // other end.
+            let mut file = std::fs::File::create(&write_path).expect("opened FIFO for writing");
+            file.write_all(&data).expect("wrote data to FIFO");
+        });
+
+        (path, handle)
+    }
+
+    /// Windows: creates a named pipe with `CreateNamedPipeW` and spawns a
+    /// writer that waits for a client connection then writes the data.
+    #[cfg(windows)]
+    fn create_and_spawn_writer_windows(
+        _dir: &Utf8Path,
+        data: Vec<u8>,
+    ) -> (Utf8PathBuf, JoinHandle<()>) {
+        use std::os::windows::io::{FromRawHandle, OwnedHandle};
+        use windows_sys::Win32::{
+            Foundation::INVALID_HANDLE_VALUE,
+            Storage::FileSystem::PIPE_ACCESS_OUTBOUND,
+            System::Pipes::{ConnectNamedPipe, CreateNamedPipeW, PIPE_TYPE_BYTE, PIPE_WAIT},
+        };
+
+        // The pipe name must be unique per process. Under nextest, each test
+        // runs in its own process, so the PID suffices.
+        let pipe_name = format!(r"\\.\pipe\nextest-test-{}", std::process::id());
+        let wide: Vec<u16> = pipe_name.encode_utf16().chain(std::iter::once(0)).collect();
+
+        let raw_handle = unsafe {
+            CreateNamedPipeW(
+                wide.as_ptr(),
+                PIPE_ACCESS_OUTBOUND,
+                PIPE_TYPE_BYTE | PIPE_WAIT,
+                1,         // single instance
+                64 * 1024, // output buffer
+                64 * 1024, // input buffer
+                0,         // default timeout
+                std::ptr::null(),
+            )
+        };
+        assert_ne!(
+            raw_handle,
+            INVALID_HANDLE_VALUE,
+            "CreateNamedPipeW failed: {}",
+            std::io::Error::last_os_error()
+        );
+
+        // Transfer ownership to OwnedHandle so it's cleaned up on panic.
+        let server_handle =
+            unsafe { OwnedHandle::from_raw_handle(raw_handle as std::os::windows::io::RawHandle) };
+        let path = Utf8PathBuf::from(pipe_name);
+
+        let handle = std::thread::spawn(move || {
+            // ConnectNamedPipe blocks until a client connects. We consume
+            // the OwnedHandle to get the raw handle for the FFI call and
+            // then immediately wrap it in a File for safe I/O.
+            use std::os::windows::io::IntoRawHandle;
+            let raw = server_handle.into_raw_handle();
+            let ret = unsafe { ConnectNamedPipe(raw, std::ptr::null_mut()) };
+            if ret == 0 {
+                let err = std::io::Error::last_os_error();
+                // ERROR_PIPE_CONNECTED means the client connected before
+                // ConnectNamedPipe was called, which is fine.
+                use windows_sys::Win32::Foundation::ERROR_PIPE_CONNECTED;
+                assert_eq!(
+                    err.raw_os_error(),
+                    Some(ERROR_PIPE_CONNECTED as i32),
+                    "ConnectNamedPipe failed: {err}"
+                );
+            }
+            let mut file = unsafe { std::fs::File::from_raw_handle(raw) };
+            file.write_all(&data).expect("wrote data to named pipe");
+        });
+
+        (path, handle)
+    }
+}
+
 /// Coverage: Reading portable recordings that are wrapped in an outer zip file,
 /// as happens with GitHub Actions artifact downloads.
 #[test]

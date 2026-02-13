@@ -44,7 +44,8 @@ pub(crate) struct InfoOpts {
     /// Run ID, `latest`, or recording path to show info for [aliases: -R].
     ///
     /// Accepts "latest" for the most recent completed run, a full UUID or
-    /// unambiguous prefix, or a path to a portable recording (`.zip` file).
+    /// unambiguous prefix, or a file path (ending in `.zip`, or, on Unix,
+    /// `<(curl url)`).
     #[arg(
         value_name = "RUN_ID_OR_RECORDING",
         required_unless_present = "run_id_opt"

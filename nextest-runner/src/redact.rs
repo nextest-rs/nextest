@@ -329,7 +329,8 @@ impl fmt::Display for StoreDurationDisplay {
     }
 }
 
-/// Wrapper for sizes that formats bytes as a human-readable string (B, KB, or MB).
+/// Wrapper for sizes that formats bytes as a human-readable string (B, KB, MB,
+/// or GB).
 #[derive(Clone, Copy, Debug)]
 pub struct SizeDisplay(pub u64);
 
@@ -339,7 +340,11 @@ impl SizeDisplay {
     /// This is useful for alignment calculations.
     pub fn display_width(self) -> usize {
         let bytes = self.0;
-        if bytes >= 1024 * 1024 {
+        if bytes >= 1024 * 1024 * 1024 {
+            // Format: "{:.1} GB" - integer part + "." + 1 decimal + " GB".
+            let gb_int = bytes / (1024 * 1024 * 1024);
+            u64_decimal_char_width(gb_int) + 2 + 3
+        } else if bytes >= 1024 * 1024 {
             // Format: "{:.1} MB" - integer part + "." + 1 decimal + " MB".
             let mb_int = bytes / (1024 * 1024);
             u64_decimal_char_width(mb_int) + 2 + 3
@@ -357,7 +362,16 @@ impl SizeDisplay {
 impl fmt::Display for SizeDisplay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let bytes = self.0;
-        if bytes >= 1024 * 1024 {
+        if bytes >= 1024 * 1024 * 1024 {
+            // Remove 3 from the width since we're adding " GB" at the end.
+            let width = f.width().map(|w| w.saturating_sub(3));
+            match width {
+                Some(w) => {
+                    write!(f, "{:>w$.1} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+                }
+                None => write!(f, "{:.1} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0)),
+            }
+        } else if bytes >= 1024 * 1024 {
             // Remove 3 from the width since we're adding " MB" at the end.
             let width = f.width().map(|w| w.saturating_sub(3));
             match width {
@@ -592,11 +606,15 @@ mod tests {
         insta::assert_snapshot!(SizeDisplay(10 * 1024).to_string(), @"10 KB");
         insta::assert_snapshot!(SizeDisplay(1024 * 1024 - 1).to_string(), @"1023 KB");
 
-        // Megabytes (>= 1 MB).
+        // Megabytes (>= 1 MB, < 1 GB).
         insta::assert_snapshot!(SizeDisplay(1024 * 1024).to_string(), @"1.0 MB");
         insta::assert_snapshot!(SizeDisplay(1024 * 1024 + 512 * 1024).to_string(), @"1.5 MB");
         insta::assert_snapshot!(SizeDisplay(10 * 1024 * 1024).to_string(), @"10.0 MB");
-        insta::assert_snapshot!(SizeDisplay(1024 * 1024 * 1024).to_string(), @"1024.0 MB");
+        insta::assert_snapshot!(SizeDisplay(1024 * 1024 * 1024 - 1).to_string(), @"1024.0 MB");
+
+        // Gigabytes (>= 1 GB).
+        insta::assert_snapshot!(SizeDisplay(1024 * 1024 * 1024).to_string(), @"1.0 GB");
+        insta::assert_snapshot!(SizeDisplay(4 * 1024 * 1024 * 1024).to_string(), @"4.0 GB");
 
         // Verify that display_width returns the actual formatted string length.
         let test_cases = [
@@ -610,7 +628,9 @@ mod tests {
             1024 * 1024,
             1024 * 1024 + 512 * 1024,
             10 * 1024 * 1024,
+            1024 * 1024 * 1024 - 1,
             1024 * 1024 * 1024,
+            4 * 1024 * 1024 * 1024,
         ];
 
         for bytes in test_cases {
