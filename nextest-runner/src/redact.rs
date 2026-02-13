@@ -342,12 +342,12 @@ impl SizeDisplay {
         let bytes = self.0;
         if bytes >= 1024 * 1024 * 1024 {
             // Format: "{:.1} GB" - integer part + "." + 1 decimal + " GB".
-            let gb_int = bytes / (1024 * 1024 * 1024);
-            u64_decimal_char_width(gb_int) + 2 + 3
+            let gb_val = bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+            u64_decimal_char_width(rounded_1dp_integer_part(gb_val)) + 2 + 3
         } else if bytes >= 1024 * 1024 {
             // Format: "{:.1} MB" - integer part + "." + 1 decimal + " MB".
-            let mb_int = bytes / (1024 * 1024);
-            u64_decimal_char_width(mb_int) + 2 + 3
+            let mb_val = bytes as f64 / (1024.0 * 1024.0);
+            u64_decimal_char_width(rounded_1dp_integer_part(mb_val)) + 2 + 3
         } else if bytes >= 1024 {
             // Format: "{} KB" - integer + " KB".
             let kb = bytes / 1024;
@@ -357,6 +357,15 @@ impl SizeDisplay {
             u64_decimal_char_width(bytes) + 2
         }
     }
+}
+
+/// Returns the integer part of a value after rounding to 1 decimal place.
+///
+/// This matches the integer part produced by `{:.1}` formatting: for example,
+/// `rounded_1dp_integer_part(9.95)` returns 10, matching how `{:.1}` formats
+/// it as "10.0".
+fn rounded_1dp_integer_part(val: f64) -> u64 {
+    (val * 10.0).round() as u64 / 10
 }
 
 impl fmt::Display for SizeDisplay {
@@ -616,6 +625,19 @@ mod tests {
         insta::assert_snapshot!(SizeDisplay(1024 * 1024 * 1024).to_string(), @"1.0 GB");
         insta::assert_snapshot!(SizeDisplay(4 * 1024 * 1024 * 1024).to_string(), @"4.0 GB");
 
+        // Rounding boundaries: values where {:.1} formatting rounds up to the
+        // next power of 10 (e.g. 9.95 → "10.0"). These verify that
+        // display_width accounts for the extra digit.
+        //
+        // The byte values are computed as ceil(X.X5 * divisor) to land just
+        // above the rounding boundary.
+        insta::assert_snapshot!(SizeDisplay(10433332).to_string(), @"10.0 MB");
+        insta::assert_snapshot!(SizeDisplay(104805172).to_string(), @"100.0 MB");
+        insta::assert_snapshot!(SizeDisplay(1048523572).to_string(), @"1000.0 MB");
+        insta::assert_snapshot!(SizeDisplay(10683731149).to_string(), @"10.0 GB");
+        insta::assert_snapshot!(SizeDisplay(107320495309).to_string(), @"100.0 GB");
+        insta::assert_snapshot!(SizeDisplay(1073688136909).to_string(), @"1000.0 GB");
+
         // Verify that display_width returns the actual formatted string length.
         let test_cases = [
             0,
@@ -628,9 +650,17 @@ mod tests {
             1024 * 1024,
             1024 * 1024 + 512 * 1024,
             10 * 1024 * 1024,
+            // MB rounding boundaries.
+            10433332,
+            104805172,
+            1048523572,
             1024 * 1024 * 1024 - 1,
             1024 * 1024 * 1024,
             4 * 1024 * 1024 * 1024,
+            // GB rounding boundaries.
+            10683731149,
+            107320495309,
+            1073688136909,
         ];
 
         for bytes in test_cases {
