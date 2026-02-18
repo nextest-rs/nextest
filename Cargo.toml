@@ -66,7 +66,7 @@ etcetera = "0.11.0"
 fixture-data = { path = "fixture-data" }
 fs-err = "3.2.2"
 future-queue = "0.4.0"
-futures = "0.3.31"
+futures = "0.3.32"
 globset = "0.4.18"
 guppy = "0.17.25"
 hex = "0.4.3"

@@ -66,15 +66,16 @@ ucd-trie = { version = "0.1.7" }
 [target.x86_64-unknown-linux-gnu.dependencies]
 bitflags = { version = "2.10.0", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-futures-channel = { version = "0.3.31", features = ["sink"] }
-futures-core = { version = "0.3.31" }
-futures-sink = { version = "0.3.31" }
+futures-channel = { version = "0.3.32", features = ["sink"] }
+futures-core = { version = "0.3.32" }
+futures-sink = { version = "0.3.32" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.44" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
+slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
@@ -93,13 +94,14 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 
 [target.aarch64-unknown-linux-gnu.dependencies]
 bitflags = { version = "2.10.0", default-features = false, features = ["std"] }
-futures-channel = { version = "0.3.31", features = ["sink"] }
-futures-core = { version = "0.3.31" }
-futures-sink = { version = "0.3.31" }
+futures-channel = { version = "0.3.32", features = ["sink"] }
+futures-core = { version = "0.3.32" }
+futures-sink = { version = "0.3.32" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
+slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
 
@@ -110,15 +112,16 @@ libc = { version = "0.2.180", features = ["extra_traits"] }
 [target.x86_64-unknown-linux-musl.dependencies]
 bitflags = { version = "2.10.0", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-futures-channel = { version = "0.3.31", features = ["sink"] }
-futures-core = { version = "0.3.31" }
-futures-sink = { version = "0.3.31" }
+futures-channel = { version = "0.3.32", features = ["sink"] }
+futures-core = { version = "0.3.32" }
+futures-sink = { version = "0.3.32" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.44" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
+slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
@@ -137,13 +140,14 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 
 [target.aarch64-unknown-linux-musl.dependencies]
 bitflags = { version = "2.10.0", default-features = false, features = ["std"] }
-futures-channel = { version = "0.3.31", features = ["sink"] }
-futures-core = { version = "0.3.31" }
-futures-sink = { version = "0.3.31" }
+futures-channel = { version = "0.3.32", features = ["sink"] }
+futures-core = { version = "0.3.32" }
+futures-sink = { version = "0.3.32" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
+slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
 
@@ -154,15 +158,16 @@ libc = { version = "0.2.180", features = ["extra_traits"] }
 [target.x86_64-unknown-illumos.dependencies]
 bitflags = { version = "2.10.0", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-futures-channel = { version = "0.3.31", features = ["sink"] }
-futures-core = { version = "0.3.31" }
-futures-sink = { version = "0.3.31" }
+futures-channel = { version = "0.3.32", features = ["sink"] }
+futures-core = { version = "0.3.32" }
+futures-sink = { version = "0.3.32" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.44" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
+slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
@@ -182,15 +187,16 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 [target.x86_64-unknown-freebsd.dependencies]
 bitflags = { version = "2.10.0", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-futures-channel = { version = "0.3.31", features = ["sink"] }
-futures-core = { version = "0.3.31" }
-futures-sink = { version = "0.3.31" }
+futures-channel = { version = "0.3.32", features = ["sink"] }
+futures-core = { version = "0.3.32" }
+futures-sink = { version = "0.3.32" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.44" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
+slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
@@ -210,15 +216,16 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 [target.aarch64-unknown-freebsd.dependencies]
 bitflags = { version = "2.10.0", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-futures-channel = { version = "0.3.31", features = ["sink"] }
-futures-core = { version = "0.3.31" }
-futures-sink = { version = "0.3.31" }
+futures-channel = { version = "0.3.32", features = ["sink"] }
+futures-core = { version = "0.3.32" }
+futures-sink = { version = "0.3.32" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.44" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
+slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
@@ -237,15 +244,16 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 
 [target.aarch64-apple-darwin.dependencies]
 bitflags = { version = "2.10.0", default-features = false, features = ["std"] }
-futures-channel = { version = "0.3.31", features = ["sink"] }
-futures-core = { version = "0.3.31" }
-futures-sink = { version = "0.3.31" }
+futures-channel = { version = "0.3.32", features = ["sink"] }
+futures-core = { version = "0.3.32" }
+futures-sink = { version = "0.3.32" }
 libc = { version = "0.2.180", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.44" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
+slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
@@ -262,9 +270,10 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
-futures-channel = { version = "0.3.31", features = ["sink"] }
-futures-core = { version = "0.3.31" }
-futures-sink = { version = "0.3.31" }
+futures-channel = { version = "0.3.32", features = ["sink"] }
+futures-core = { version = "0.3.32" }
+futures-sink = { version = "0.3.32" }
+slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
 windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59.0", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
@@ -275,9 +284,10 @@ windows-sys-d4189bed749088b6 = { package = "windows-sys", version = "0.61.2", fe
 getrandom = { version = "0.3.3", default-features = false, features = ["std"] }
 
 [target.aarch64-pc-windows-msvc.dependencies]
-futures-channel = { version = "0.3.31", features = ["sink"] }
-futures-core = { version = "0.3.31" }
-futures-sink = { version = "0.3.31" }
+futures-channel = { version = "0.3.32", features = ["sink"] }
+futures-core = { version = "0.3.32" }
+futures-sink = { version = "0.3.32" }
+slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 tokio = { version = "1.49.0", default-features = false, features = ["net"] }
 windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59.0", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
