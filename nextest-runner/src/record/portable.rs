@@ -24,6 +24,7 @@ use super::{
         PORTABLE_RECORDING_FORMAT_VERSION, PortableManifest, RECORD_OPTS_JSON_PATH,
         RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME, RerunInfo, STDERR_DICT_PATH, STDOUT_DICT_PATH,
         STORE_FORMAT_VERSION, STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH, has_zip_extension,
+        stored_file_options,
     },
     reader::{StoreReader, decompress_with_dict},
     store::{RecordedRunInfo, RunFilesExist, StoreRunsDir},
@@ -39,16 +40,13 @@ use bytesize::ByteSize;
 use camino::{Utf8Path, Utf8PathBuf};
 use countio::Counter;
 use debug_ignore::DebugIgnore;
+use eazip::{Archive, ArchiveWriter, CompressionMethod};
 use itertools::Either;
 use nextest_metadata::TestListSummary;
 use std::{
     borrow::Cow,
     fs::File,
     io::{self, BufRead, BufReader, Cursor, Read, Seek, SeekFrom, Write},
-};
-use zip::{
-    CompressionMethod, ZipArchive, ZipWriter, read::ZipFileSeek, result::ZipError,
-    write::SimpleFileOptions,
 };
 
 /// Result of writing a portable recording.
@@ -143,7 +141,7 @@ impl<'a> PortableRecordingWriter<'a> {
         let final_size = atomic_file
             .write(|temp_file| {
                 let counter = Counter::new(temp_file);
-                let mut zip_writer = ZipWriter::new(counter);
+                let mut zip_writer = ArchiveWriter::new(counter);
 
                 self.write_manifest(&mut zip_writer)?;
                 self.copy_file(&mut zip_writer, RUN_LOG_FILE_NAME)?;
@@ -153,10 +151,10 @@ impl<'a> PortableRecordingWriter<'a> {
                     .finish()
                     .map_err(PortableRecordingError::ZipFinalize)?;
 
-                // Prefer the actual file size from metadata since ZipWriter
-                // seeks and overwrites headers, causing the counter to
-                // overcount. Fall back to the counter value if metadata is
-                // unavailable.
+                // Prefer the actual file size from metadata since ArchiveWriter
+                // writes data descriptors after entries, causing the counter to
+                // slightly overcount. Fall back to the counter value if metadata
+                // is unavailable.
                 let counter_bytes = counter.writer_bytes() as u64;
                 let file = counter.into_inner();
                 let size = file.metadata().map(|m| m.len()).unwrap_or(counter_bytes);
@@ -178,29 +176,22 @@ impl<'a> PortableRecordingWriter<'a> {
     }
 
     /// Writes the manifest to the archive.
-    fn write_manifest<W: Write + io::Seek>(
+    fn write_manifest<W: Write>(
         &self,
-        zip_writer: &mut ZipWriter<W>,
+        zip_writer: &mut ArchiveWriter<W>,
     ) -> Result<(), PortableRecordingError> {
         let manifest = PortableManifest::new(self.run_info);
         let manifest_json = serde_json::to_vec_pretty(&manifest)
             .map_err(PortableRecordingError::SerializeManifest)?;
 
-        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        let options = stored_file_options();
 
         zip_writer
-            .start_file(PORTABLE_MANIFEST_FILE_NAME, options)
-            .map_err(|source| PortableRecordingError::ZipStartFile {
+            .add_file(PORTABLE_MANIFEST_FILE_NAME, &manifest_json[..], &options)
+            .map_err(|source| PortableRecordingError::ZipWrite {
                 file_name: PORTABLE_MANIFEST_FILE_NAME,
                 source,
             })?;
-
-        zip_writer.write_all(&manifest_json).map_err(|source| {
-            PortableRecordingError::ZipWrite {
-                file_name: PORTABLE_MANIFEST_FILE_NAME,
-                source,
-            }
-        })?;
 
         Ok(())
     }
@@ -209,22 +200,26 @@ impl<'a> PortableRecordingWriter<'a> {
     ///
     /// The file is stored without additional compression since `run.log.zst`
     /// and `store.zip` are already compressed.
-    fn copy_file<W: Write + io::Seek>(
+    fn copy_file<W: Write>(
         &self,
-        zip_writer: &mut ZipWriter<W>,
+        zip_writer: &mut ArchiveWriter<W>,
         file_name: &'static str,
     ) -> Result<(), PortableRecordingError> {
         let source_path = self.run_dir.join(file_name);
         let mut file = File::open(&source_path)
             .map_err(|source| PortableRecordingError::ReadFile { file_name, source })?;
 
-        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        let options = stored_file_options();
 
-        zip_writer
-            .start_file(file_name, options)
+        let mut streamer = zip_writer
+            .stream_file(file_name, &options)
             .map_err(|source| PortableRecordingError::ZipStartFile { file_name, source })?;
 
-        io::copy(&mut file, zip_writer)
+        io::copy(&mut file, &mut streamer)
+            .map_err(|source| PortableRecordingError::ZipWrite { file_name, source })?;
+
+        streamer
+            .finish()
             .map_err(|source| PortableRecordingError::ZipWrite { file_name, source })?;
 
         Ok(())
@@ -370,7 +365,7 @@ fn spool_to_temp(
         });
     }
 
-    // Rewind so ZipArchive can read from the beginning.
+    // Rewind so the archive reader can read from the beginning.
     temp.seek(SeekFrom::Start(0))
         .map_err(|error| PortableRecordingReadError::SpoolTempFile {
             path: path.to_owned(),
@@ -387,24 +382,28 @@ fn spool_to_temp(
 type ArchiveReadStorage = Either<File, Cursor<Vec<u8>>>;
 
 /// A portable recording opened for reading.
-#[derive(Debug)]
 pub struct PortableRecording {
     archive_path: Utf8PathBuf,
     manifest: PortableManifest,
-    outer_archive: ZipArchive<ArchiveReadStorage>,
+    outer_archive: Archive<BufReader<ArchiveReadStorage>>,
+}
+
+impl std::fmt::Debug for PortableRecording {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PortableRecording")
+            .field("archive_path", &self.archive_path)
+            .field("manifest", &self.manifest)
+            .finish_non_exhaustive()
+    }
 }
 
 impl RunFilesExist for PortableRecording {
     fn store_zip_exists(&self) -> bool {
-        self.outer_archive
-            .index_for_name(STORE_ZIP_FILE_NAME)
-            .is_some()
+        self.outer_archive.index_of(STORE_ZIP_FILE_NAME).is_some()
     }
 
     fn run_log_exists(&self) -> bool {
-        self.outer_archive
-            .index_for_name(RUN_LOG_FILE_NAME)
-            .is_some()
+        self.outer_archive.index_of(RUN_LOG_FILE_NAME).is_some()
     }
 }
 
@@ -428,16 +427,17 @@ impl PortableRecording {
         // `/proc/self/fd/11`) produce pipe fds; spool to a temp file if needed.
         let file = ensure_seekable(file, path)?;
 
-        let mut outer_archive = ZipArchive::new(Either::Left(file)).map_err(|error| {
-            PortableRecordingReadError::ReadArchive {
-                path: path.to_owned(),
-                error,
-            }
-        })?;
+        let mut outer_archive =
+            Archive::new(BufReader::new(Either::Left(file))).map_err(|error| {
+                PortableRecordingReadError::ReadArchive {
+                    path: path.to_owned(),
+                    error,
+                }
+            })?;
 
         // Check if this is a direct nextest archive (has manifest.json).
         if outer_archive
-            .index_for_name(PORTABLE_MANIFEST_FILE_NAME)
+            .index_of(PORTABLE_MANIFEST_FILE_NAME)
             .is_some()
         {
             return Self::open_validated(path, outer_archive);
@@ -449,7 +449,8 @@ impl PortableRecording {
         let mut file_count = 0;
         let mut zip_count = 0;
         let mut zip_file: Option<String> = None;
-        for name in outer_archive.file_names() {
+        for metadata in outer_archive.entries() {
+            let name = metadata.name();
             if name.ends_with('/') || name.ends_with('\\') {
                 // This is a directory entry, skip it.
                 continue;
@@ -469,13 +470,13 @@ impl PortableRecording {
             // and to exceed the cap. (Probably worth extracting to a file on
             // disk or something at that point.)
             let inner_bytes = read_outer_file(&mut outer_archive, inner_name.into(), path)?;
-            let inner_archive =
-                ZipArchive::new(Either::Right(Cursor::new(inner_bytes))).map_err(|error| {
-                    PortableRecordingReadError::ReadArchive {
-                        path: path.to_owned(),
-                        error,
-                    }
-                })?;
+            let inner_archive = Archive::new(BufReader::new(Either::Right(Cursor::new(
+                inner_bytes,
+            ))))
+            .map_err(|error| PortableRecordingReadError::ReadArchive {
+                path: path.to_owned(),
+                error,
+            })?;
             Self::open_validated(path, inner_archive)
         } else {
             Err(PortableRecordingReadError::NotAWrapperArchive {
@@ -489,7 +490,7 @@ impl PortableRecording {
     /// Opens and validates an archive that is known to contain `manifest.json`.
     fn open_validated(
         path: &Utf8Path,
-        mut outer_archive: ZipArchive<ArchiveReadStorage>,
+        mut outer_archive: Archive<BufReader<ArchiveReadStorage>>,
     ) -> Result<Self, PortableRecordingReadError> {
         // Read and parse the manifest.
         let manifest_bytes =
@@ -585,29 +586,41 @@ impl PortableRecording {
 
     /// Opens the inner store.zip for reading.
     ///
-    /// The returned reader borrows from this archive and implements [`StoreReader`].
+    /// The returned reader borrows from this archive via a zero-copy
+    /// `Take` window into the outer archive's reader. CRC verification of
+    /// the outer store.zip entry is skipped because each inner entry has its
+    /// own CRC check.
     pub fn open_store(&mut self) -> Result<PortableStoreReader<'_>, PortableRecordingReadError> {
-        // Use by_name_seek to get a seekable handle to store.zip.
-        let store_handle = self
+        let file = self
             .outer_archive
-            .by_name_seek(STORE_ZIP_FILE_NAME)
-            .map_err(|error| match error {
-                ZipError::FileNotFound => PortableRecordingReadError::MissingFile {
-                    path: self.archive_path.clone(),
-                    file_name: Cow::Borrowed(STORE_ZIP_FILE_NAME),
-                },
-                _ => PortableRecordingReadError::ReadArchive {
-                    path: self.archive_path.clone(),
-                    error,
-                },
+            .get_by_name(STORE_ZIP_FILE_NAME)
+            .ok_or_else(|| PortableRecordingReadError::MissingFile {
+                path: self.archive_path.clone(),
+                file_name: Cow::Borrowed(STORE_ZIP_FILE_NAME),
             })?;
 
-        let store_archive = ZipArchive::new(store_handle).map_err(|error| {
-            PortableRecordingReadError::ReadArchive {
+        let metadata = file.metadata();
+        if metadata.compression_method != CompressionMethod::STORE {
+            return Err(PortableRecordingReadError::CompressedInnerArchive {
+                archive_path: self.archive_path.clone(),
+                compression: metadata.compression_method,
+            });
+        }
+
+        let reader = file.into_reader();
+        let raw =
+            metadata
+                .read_raw(reader)
+                .map_err(|error| PortableRecordingReadError::ReadArchive {
+                    path: self.archive_path.clone(),
+                    error,
+                })?;
+
+        let store_archive =
+            Archive::new(raw).map_err(|error| PortableRecordingReadError::ReadArchive {
                 path: self.archive_path.clone(),
                 error,
-            }
-        })?;
+            })?;
 
         Ok(PortableStoreReader {
             archive_path: &self.archive_path,
@@ -620,23 +633,20 @@ impl PortableRecording {
 
 /// Reads a file from the outer archive into memory, with size limits.
 fn read_outer_file(
-    archive: &mut ZipArchive<ArchiveReadStorage>,
+    archive: &mut Archive<BufReader<ArchiveReadStorage>>,
     file_name: Cow<'static, str>,
     archive_path: &Utf8Path,
 ) -> Result<Vec<u8>, PortableRecordingReadError> {
     let limit = MAX_MAX_OUTPUT_SIZE.as_u64();
-    let file = archive.by_name(&file_name).map_err(|error| match error {
-        ZipError::FileNotFound => PortableRecordingReadError::MissingFile {
-            path: archive_path.to_owned(),
-            file_name: file_name.clone(),
-        },
-        _ => PortableRecordingReadError::ReadArchive {
-            path: archive_path.to_owned(),
-            error,
-        },
-    })?;
+    let mut file =
+        archive
+            .get_by_name(&file_name)
+            .ok_or_else(|| PortableRecordingReadError::MissingFile {
+                path: archive_path.to_owned(),
+                file_name: file_name.clone(),
+            })?;
 
-    let claimed_size = file.size();
+    let claimed_size = file.metadata().uncompressed_size;
     if claimed_size > limit {
         return Err(PortableRecordingReadError::FileTooLarge {
             path: archive_path.to_owned(),
@@ -649,11 +659,11 @@ fn read_outer_file(
     let capacity = usize::try_from(claimed_size).unwrap_or(usize::MAX);
     let mut contents = Vec::with_capacity(capacity);
 
-    file.take(limit)
-        .read_to_end(&mut contents)
+    file.read()
+        .and_then(|reader| reader.take(limit).read_to_end(&mut contents))
         .map_err(|error| PortableRecordingReadError::ReadArchive {
             path: archive_path.to_owned(),
-            error: ZipError::Io(error),
+            error,
         })?;
 
     Ok(contents)
@@ -661,25 +671,22 @@ fn read_outer_file(
 
 /// Extracts a file from the outer archive to a path, streaming directly.
 fn extract_outer_file_to_path(
-    archive: &mut ZipArchive<ArchiveReadStorage>,
+    archive: &mut Archive<BufReader<ArchiveReadStorage>>,
     file_name: &'static str,
     archive_path: &Utf8Path,
     output_path: &Utf8Path,
     check_limit: bool,
 ) -> Result<ExtractOuterFileResult, PortableRecordingReadError> {
     let limit = MAX_MAX_OUTPUT_SIZE.as_u64();
-    let mut file = archive.by_name(file_name).map_err(|error| match error {
-        ZipError::FileNotFound => PortableRecordingReadError::MissingFile {
-            path: archive_path.to_owned(),
-            file_name: Cow::Borrowed(file_name),
-        },
-        _ => PortableRecordingReadError::ReadArchive {
-            path: archive_path.to_owned(),
-            error,
-        },
-    })?;
+    let mut file =
+        archive
+            .get_by_name(file_name)
+            .ok_or_else(|| PortableRecordingReadError::MissingFile {
+                path: archive_path.to_owned(),
+                file_name: Cow::Borrowed(file_name),
+            })?;
 
-    let claimed_size = file.size();
+    let claimed_size = file.metadata().uncompressed_size;
     let exceeded_limit = if check_limit && claimed_size > limit {
         Some(claimed_size)
     } else {
@@ -694,7 +701,14 @@ fn extract_outer_file_to_path(
             error,
         })?;
 
-    let bytes_written = io::copy(&mut file, &mut output_file).map_err(|error| {
+    let mut reader = file
+        .read()
+        .map_err(|error| PortableRecordingReadError::ReadArchive {
+            path: archive_path.to_owned(),
+            error,
+        })?;
+
+    let bytes_written = io::copy(&mut reader, &mut output_file).map_err(|error| {
         PortableRecordingReadError::ExtractFile {
             archive_path: archive_path.to_owned(),
             file_name,
@@ -783,10 +797,11 @@ impl Iterator for PortableRecordingEventIter<'_> {
 
 /// Reader for the inner store.zip within a portable recording.
 ///
-/// Borrows from [`PortableRecording`] and implements [`StoreReader`].
+/// Borrows from [`PortableRecording`] via a zero-copy `Take` window into the
+/// outer archive's reader. Implements [`StoreReader`].
 pub struct PortableStoreReader<'a> {
     archive_path: &'a Utf8Path,
-    store_archive: ZipArchive<ZipFileSeek<'a, ArchiveReadStorage>>,
+    store_archive: Archive<io::Take<&'a mut BufReader<ArchiveReadStorage>>>,
     /// Cached stdout dictionary loaded from the archive.
     stdout_dict: Option<Vec<u8>>,
     /// Cached stderr dictionary loaded from the archive.
@@ -807,14 +822,13 @@ impl PortableStoreReader<'_> {
     /// Reads a file from the store archive as bytes, with size limit.
     fn read_store_file(&mut self, file_name: &str) -> Result<Vec<u8>, RecordReadError> {
         let limit = MAX_MAX_OUTPUT_SIZE.as_u64();
-        let file = self.store_archive.by_name(file_name).map_err(|error| {
-            RecordReadError::ReadArchiveFile {
+        let mut file = self.store_archive.get_by_name(file_name).ok_or_else(|| {
+            RecordReadError::FileNotFound {
                 file_name: file_name.to_string(),
-                error,
             }
         })?;
 
-        let claimed_size = file.size();
+        let claimed_size = file.metadata().uncompressed_size;
         if claimed_size > limit {
             return Err(RecordReadError::FileTooLarge {
                 file_name: file_name.to_string(),
@@ -826,8 +840,8 @@ impl PortableStoreReader<'_> {
         let capacity = usize::try_from(claimed_size).unwrap_or(usize::MAX);
         let mut contents = Vec::with_capacity(capacity);
 
-        file.take(limit)
-            .read_to_end(&mut contents)
+        file.read()
+            .and_then(|reader| reader.take(limit).read_to_end(&mut contents))
             .map_err(|error| RecordReadError::Decompress {
                 file_name: file_name.to_string(),
                 error,
@@ -899,10 +913,7 @@ impl StoreReader for PortableStoreReader<'_> {
                 })?;
                 Ok(Some(info))
             }
-            Err(RecordReadError::ReadArchiveFile {
-                error: ZipError::FileNotFound,
-                ..
-            }) => {
+            Err(RecordReadError::FileNotFound { .. }) => {
                 // File doesn't exist; this is not a rerun.
                 Ok(None)
             }
@@ -940,10 +951,9 @@ impl StoreReader for PortableStoreReader<'_> {
         store_path: &str,
         output_path: &Utf8Path,
     ) -> Result<u64, RecordReadError> {
-        let mut file = self.store_archive.by_name(store_path).map_err(|error| {
-            RecordReadError::ReadArchiveFile {
+        let mut file = self.store_archive.get_by_name(store_path).ok_or_else(|| {
+            RecordReadError::FileNotFound {
                 file_name: store_path.to_owned(),
-                error,
             }
         })?;
 
@@ -954,7 +964,14 @@ impl StoreReader for PortableStoreReader<'_> {
                 error,
             })?;
 
-        io::copy(&mut file, &mut output_file).map_err(|error| RecordReadError::ExtractFile {
+        let mut reader = file
+            .read()
+            .map_err(|error| RecordReadError::ReadArchiveFile {
+                file_name: store_path.to_owned(),
+                error,
+            })?;
+
+        io::copy(&mut reader, &mut output_file).map_err(|error| RecordReadError::ExtractFile {
             store_path: store_path.to_owned(),
             output_path: output_path.to_owned(),
             error,
@@ -971,10 +988,10 @@ mod tests {
     };
     use camino_tempfile::{NamedUtf8TempFile, Utf8TempDir};
     use chrono::Local;
+    use eazip::write::FileOptions;
     use quick_junit::ReportUuid;
     use semver::Version;
     use std::{collections::BTreeMap, io::Read};
-    use zip::ZipArchive;
 
     fn create_test_run_dir(run_id: ReportUuid) -> (Utf8TempDir, Utf8PathBuf) {
         let temp_dir = camino_tempfile::tempdir().expect("create temp dir");
@@ -984,13 +1001,11 @@ mod tests {
 
         let store_path = run_dir.join(STORE_ZIP_FILE_NAME);
         let store_file = File::create(&store_path).expect("create store.zip");
-        let mut zip_writer = ZipWriter::new(store_file);
+        let mut zip_writer = ArchiveWriter::new(store_file);
+        let options = FileOptions::default();
         zip_writer
-            .start_file("test.txt", SimpleFileOptions::default())
-            .expect("start file");
-        zip_writer
-            .write_all(b"test content")
-            .expect("write content");
+            .add_file("test.txt", &b"test content"[..], &options)
+            .expect("add file");
         zip_writer.finish().expect("finish zip");
 
         let log_path = run_dir.join(RUN_LOG_FILE_NAME);
@@ -1073,16 +1088,18 @@ mod tests {
         );
 
         let archive_file = File::open(&result.path).expect("open archive");
-        let mut archive = ZipArchive::new(archive_file).expect("read archive");
+        let mut archive = Archive::new(BufReader::new(archive_file)).expect("read archive");
 
-        assert_eq!(archive.len(), 3);
+        assert_eq!(archive.entries().len(), 3);
 
         {
             let mut manifest_file = archive
-                .by_name(PORTABLE_MANIFEST_FILE_NAME)
+                .get_by_name(PORTABLE_MANIFEST_FILE_NAME)
                 .expect("manifest");
             let mut manifest_content = String::new();
             manifest_file
+                .read()
+                .expect("get reader")
                 .read_to_string(&mut manifest_content)
                 .expect("read manifest");
             let manifest: PortableManifest =
@@ -1092,13 +1109,13 @@ mod tests {
         }
 
         {
-            let store_file = archive.by_name(STORE_ZIP_FILE_NAME).expect("store.zip");
-            assert!(store_file.size() > 0);
+            let store_file = archive.get_by_name(STORE_ZIP_FILE_NAME).expect("store.zip");
+            assert!(store_file.metadata().uncompressed_size > 0);
         }
 
         {
-            let log_file = archive.by_name(RUN_LOG_FILE_NAME).expect("run.log.zst");
-            assert!(log_file.size() > 0);
+            let log_file = archive.get_by_name(RUN_LOG_FILE_NAME).expect("run.log.zst");
+            assert!(log_file.metadata().uncompressed_size > 0);
         }
     }
 
@@ -1154,11 +1171,11 @@ mod tests {
 
         let store_path = run_dir.join(STORE_ZIP_FILE_NAME);
         let store_file = File::create(&store_path).expect("create store.zip");
-        let mut zip_writer = ZipWriter::new(store_file);
+        let mut zip_writer = ArchiveWriter::new(store_file);
+        let options = FileOptions::default();
         zip_writer
-            .start_file("test.txt", SimpleFileOptions::default())
-            .expect("start");
-        zip_writer.write_all(b"test").expect("write");
+            .add_file("test.txt", &b"test"[..], &options)
+            .expect("add file");
         zip_writer.finish().expect("finish");
 
         let run_info = create_test_run_info(run_id);

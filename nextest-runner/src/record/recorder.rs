@@ -13,6 +13,7 @@ use super::{
     format::{
         CARGO_METADATA_JSON_PATH, OutputDict, RECORD_OPTS_JSON_PATH, RUN_LOG_FILE_NAME,
         STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH,
+        stored_file_options, zstd_file_options,
     },
     summary::{
         OutputEventKind, OutputFileName, OutputKind, RecordOpts, TestEventKindSummary,
@@ -32,6 +33,7 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use countio::Counter;
 use debug_ignore::DebugIgnore;
+use eazip::ArchiveWriter;
 use nextest_metadata::TestListSummary;
 use std::{
     borrow::Cow,
@@ -39,7 +41,6 @@ use std::{
     fs::File,
     io::{self, Write},
 };
-use zip::{CompressionMethod, ZipWriter};
 
 /// Zstd encoder that auto-finishes on drop but also supports explicit finish.
 ///
@@ -305,7 +306,7 @@ impl RunRecorder {
 /// Writes files to a zstd-compressed zip archive.
 #[derive(Debug)]
 pub(crate) struct StoreWriter {
-    writer: DebugIgnore<ZipWriter<Counter<File>>>,
+    writer: DebugIgnore<ArchiveWriter<Counter<File>>>,
     added_files: HashSet<Utf8PathBuf>,
     /// Total uncompressed size of all files added to the archive.
     uncompressed_size: u64,
@@ -320,7 +321,7 @@ impl StoreWriter {
             .write(true)
             .open(store_path)
             .map_err(|error| StoreWriterError::Create { error })?;
-        let writer = ZipWriter::new(Counter::new(zip_file));
+        let writer = ArchiveWriter::new(Counter::new(zip_file));
 
         Ok(Self {
             writer: DebugIgnore(writer),
@@ -346,35 +347,24 @@ impl StoreWriter {
         let dict = OutputDict::for_path(&path);
         match dict.dict_bytes() {
             Some(dict_bytes) => {
+                // Output files: pre-compress with zstd dictionary, store as-is
+                // in the archive.
                 let compressed = compress_with_dict(contents, dict_bytes)
                     .map_err(|error| StoreWriterError::Compress { error })?;
 
-                let options = zip::write::FileOptions::<'_, ()>::default()
-                    .compression_method(CompressionMethod::Stored);
+                let options = stored_file_options();
                 self.writer
-                    .start_file(path.as_str(), options)
-                    .map_err(|error| StoreWriterError::StartFile {
-                        path: path.clone(),
-                        error,
-                    })?;
-                self.writer
-                    .write_all(&compressed)
+                    .add_file(path.as_str(), &compressed[..], &options)
                     .map_err(|error| StoreWriterError::Write {
                         path: path.clone(),
                         error,
                     })?;
             }
             None => {
-                let options = zip::write::FileOptions::<'_, ()>::default()
-                    .compression_method(CompressionMethod::Zstd);
+                // Metadata files: let the archive handle zstd compression.
+                let options = zstd_file_options();
                 self.writer
-                    .start_file(path.as_str(), options)
-                    .map_err(|error| StoreWriterError::StartFile {
-                        path: path.clone(),
-                        error,
-                    })?;
-                self.writer
-                    .write_all(contents)
+                    .add_file(path.as_str(), contents, &options)
                     .map_err(|error| StoreWriterError::Write {
                         path: path.clone(),
                         error,

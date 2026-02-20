@@ -24,12 +24,12 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use debug_ignore::DebugIgnore;
+use eazip::Archive;
 use nextest_metadata::TestListSummary;
 use std::{
     fs::File,
     io::{self, BufRead, BufReader, Read},
 };
-use zip::{ZipArchive, result::ZipError};
 
 /// Trait for reading from a recorded run's store.
 ///
@@ -84,7 +84,7 @@ pub trait StoreReader {
 #[derive(Debug)]
 pub struct RecordReader {
     run_dir: Utf8PathBuf,
-    archive: Option<ZipArchive<File>>,
+    archive: Option<DebugIgnore<Archive<BufReader<File>>>>,
     /// Cached stdout dictionary loaded from the archive.
     stdout_dict: Option<Vec<u8>>,
     /// Cached stderr dictionary loaded from the archive.
@@ -116,19 +116,20 @@ impl RecordReader {
     }
 
     /// Opens the zip archive if not already open.
-    fn ensure_archive(&mut self) -> Result<&mut ZipArchive<File>, RecordReadError> {
+    fn ensure_archive(&mut self) -> Result<&mut Archive<BufReader<File>>, RecordReadError> {
         if self.archive.is_none() {
             let store_path = self.run_dir.join(STORE_ZIP_FILE_NAME);
             let file = File::open(&store_path).map_err(|error| RecordReadError::OpenArchive {
-                path: store_path,
+                path: store_path.clone(),
                 error,
             })?;
-            let archive =
-                ZipArchive::new(file).map_err(|error| RecordReadError::ReadArchiveFile {
-                    file_name: STORE_ZIP_FILE_NAME.to_string(),
+            let archive = Archive::new(BufReader::new(file)).map_err(|error| {
+                RecordReadError::ParseArchive {
+                    path: store_path,
                     error,
-                })?;
-            self.archive = Some(archive);
+                }
+            })?;
+            self.archive = Some(DebugIgnore(archive));
         }
         Ok(self.archive.as_mut().expect("archive was just set"))
     }
@@ -145,15 +146,14 @@ impl RecordReader {
     fn read_archive_file(&mut self, file_name: &str) -> Result<Vec<u8>, RecordReadError> {
         let limit = MAX_MAX_OUTPUT_SIZE.as_u64();
         let archive = self.ensure_archive()?;
-        let file =
+        let mut file =
             archive
-                .by_name(file_name)
-                .map_err(|error| RecordReadError::ReadArchiveFile {
+                .get_by_name(file_name)
+                .ok_or_else(|| RecordReadError::FileNotFound {
                     file_name: file_name.to_string(),
-                    error,
                 })?;
 
-        let claimed_size = file.size();
+        let claimed_size = file.metadata().uncompressed_size;
         if claimed_size > limit {
             return Err(RecordReadError::FileTooLarge {
                 file_name: file_name.to_string(),
@@ -165,8 +165,10 @@ impl RecordReader {
         let capacity = usize::try_from(claimed_size).unwrap_or(usize::MAX);
         let mut contents = Vec::with_capacity(capacity);
 
-        file.take(limit)
-            .read_to_end(&mut contents)
+        // file.read() returns a reader that decompresses and verifies CRC32 +
+        // size. The take(limit) is a safety belt against spoofed headers.
+        file.read()
+            .and_then(|reader| reader.take(limit).read_to_end(&mut contents))
             .map_err(|error| RecordReadError::Decompress {
                 file_name: file_name.to_string(),
                 error,
@@ -226,10 +228,7 @@ impl RecordReader {
                 })?;
                 Ok(Some(info))
             }
-            Err(RecordReadError::ReadArchiveFile {
-                error: ZipError::FileNotFound,
-                ..
-            }) => {
+            Err(RecordReadError::FileNotFound { .. }) => {
                 // File doesn't exist; this is not a rerun.
                 Ok(None)
             }
@@ -363,10 +362,9 @@ impl StoreReader for RecordReader {
         let archive = self.ensure_archive()?;
         let mut file =
             archive
-                .by_name(store_path)
-                .map_err(|error| RecordReadError::ReadArchiveFile {
+                .get_by_name(store_path)
+                .ok_or_else(|| RecordReadError::FileNotFound {
                     file_name: store_path.to_owned(),
-                    error,
                 })?;
 
         let mut output_file =
@@ -376,7 +374,15 @@ impl StoreReader for RecordReader {
                 error,
             })?;
 
-        io::copy(&mut file, &mut output_file).map_err(|error| RecordReadError::ExtractFile {
+        // file.read() decompresses and verifies CRC32 + size.
+        let mut reader = file
+            .read()
+            .map_err(|error| RecordReadError::ReadArchiveFile {
+                file_name: store_path.to_owned(),
+                error,
+            })?;
+
+        io::copy(&mut reader, &mut output_file).map_err(|error| RecordReadError::ExtractFile {
             store_path: store_path.to_owned(),
             output_path: output_path.to_owned(),
             error,

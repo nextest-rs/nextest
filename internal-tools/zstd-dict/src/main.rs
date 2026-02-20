@@ -12,12 +12,15 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{Context, Result, bail};
+use eazip::{
+    Archive, ArchiveWriter, CompressionMethod, read::File as EazipFile, write::FileOptions,
+};
 use etcetera::BaseStrategy;
 use nextest_runner::record::{NEXTEST_STATE_DIR_ENV, OutputDict};
 use std::{
     collections::HashMap,
     fs::{self, File},
-    io::{BufReader, Read, Write},
+    io::{BufRead, BufReader, BufWriter, Read, Seek, Write},
 };
 
 #[derive(Parser)]
@@ -357,7 +360,7 @@ fn train_dictionaries(output_dir: &Utf8Path, max_samples: usize, dict_size: usiz
             .wrap_err_with(|| format!("failed to open {}", archive_path))?;
         let reader = BufReader::new(file);
 
-        let mut archive = match zip::ZipArchive::new(reader) {
+        let mut archive = match Archive::new(reader) {
             Ok(a) => a,
             Err(e) => {
                 eprintln!("Warning: failed to read {}: {}", archive_path, e);
@@ -367,13 +370,11 @@ fn train_dictionaries(output_dir: &Utf8Path, max_samples: usize, dict_size: usiz
 
         let dicts = ArchiveDicts::load(&mut archive);
 
-        for i in 0..archive.len() {
-            let mut entry = match archive.by_index(i) {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
+        let entry_count = archive.entries().len();
+        for i in 0..entry_count {
+            let mut file = archive.get_by_index(i).expect("index is in bounds");
 
-            let name = entry.name().to_string();
+            let name = file.metadata().name().to_string();
             let Some(category) = SampleCategory::from_filename(&name) else {
                 continue;
             };
@@ -383,7 +384,7 @@ fn train_dictionaries(output_dir: &Utf8Path, max_samples: usize, dict_size: usiz
                 continue;
             }
 
-            let data = match read_out_entry_raw(&mut entry, category, &dicts) {
+            let data = match read_out_entry_raw(&mut file, category, &dicts) {
                 Ok(d) if !d.is_empty() => d,
                 _ => continue,
             };
@@ -479,7 +480,7 @@ fn recompress_archive(
     // Open source archive.
     let file = File::open(archive_path)?;
     let reader = BufReader::new(file);
-    let mut source = zip::ZipArchive::new(reader)?;
+    let mut source = Archive::new(reader)?;
 
     let original_size = fs::metadata(archive_path)?.len();
 
@@ -490,28 +491,29 @@ fn recompress_archive(
     });
 
     let output_file = File::create(&output)?;
-    let mut dest = zip::ZipWriter::new(output_file);
+    let mut dest = ArchiveWriter::new(output_file);
 
     let mut stats = CompressionStats::default();
 
     let source_dicts = ArchiveDicts::load(&mut source);
 
     // Process each entry.
-    for i in 0..source.len() {
-        let mut entry = source.by_index(i)?;
-        let name = entry.name().to_string();
+    let entry_count = source.entries().len();
+    for i in 0..entry_count {
+        let mut file = source.get_by_index(i).expect("index is in bounds");
+        let name = file.metadata().name().to_string();
         let category = SampleCategory::from_filename(&name);
 
         // Read the raw (decompressed) data, handling dict-compressed entries.
         let data = if let Some(cat) = category {
-            read_out_entry_raw(&mut entry, cat, &source_dicts)?
+            read_out_entry_raw(&mut file, cat, &source_dicts)?
         } else {
             let mut buf = Vec::new();
-            entry.read_to_end(&mut buf)?;
+            file.read()?.read_to_end(&mut buf)?;
             buf
         };
 
-        let original_compressed = entry.compressed_size();
+        let original_compressed = file.metadata().compressed_size;
         stats.original_uncompressed += data.len() as u64;
         stats.original_compressed += original_compressed;
 
@@ -529,10 +531,9 @@ fn recompress_archive(
                 let compressed_size = compressed.len() as u64;
 
                 // Write as stored (already compressed).
-                let options = zip::write::SimpleFileOptions::default()
-                    .compression_method(zip::CompressionMethod::Stored);
-                dest.start_file(&name, options)?;
-                dest.write_all(&compressed)?;
+                let mut options = FileOptions::default();
+                options.compression_method = CompressionMethod::STORE;
+                dest.add_file(&name, &compressed[..], &options)?;
 
                 (compressed_size, format!("{:?}+dict", cat))
             } else {
@@ -616,9 +617,9 @@ fn decompress_with_dict(compressed: &[u8], dict: &[u8]) -> Result<Vec<u8>> {
 /// Dictionaries embedded in a store.zip archive.
 ///
 /// Newer archives store `out/` entries as zstd+dict compressed data with
-/// `CompressionMethod::Stored`. The dictionaries needed to decompress these
+/// `CompressionMethod::STORE`. The dictionaries needed to decompress these
 /// entries are at `meta/stdout.dict` and `meta/stderr.dict` within the archive.
-/// Older archives used `CompressionMethod::Zstd` (no dictionary), and don't
+/// Older archives used `CompressionMethod::ZSTD` (no dictionary), and don't
 /// contain these dictionary entries.
 struct ArchiveDicts {
     stdout: Option<Vec<u8>>,
@@ -628,20 +629,22 @@ struct ArchiveDicts {
 impl ArchiveDicts {
     /// Load dictionaries from the archive. Returns `None` values for any
     /// dictionary entries that are missing (e.g. old-format archives).
-    fn load<R: Read + std::io::Seek>(archive: &mut zip::ZipArchive<R>) -> Self {
+    fn load<R: BufRead + Seek>(archive: &mut Archive<R>) -> Self {
         let stdout = Self::read_dict_entry(archive, "meta/stdout.dict");
         let stderr = Self::read_dict_entry(archive, "meta/stderr.dict");
         Self { stdout, stderr }
     }
 
-    fn read_dict_entry<R: Read + std::io::Seek>(
-        archive: &mut zip::ZipArchive<R>,
-        path: &str,
-    ) -> Option<Vec<u8>> {
-        let mut entry = archive.by_name(path).ok()?;
+    fn read_dict_entry<R: BufRead + Seek>(archive: &mut Archive<R>, path: &str) -> Option<Vec<u8>> {
+        let mut entry = archive.get_by_name(path)?;
         let mut data = Vec::new();
-        entry.read_to_end(&mut data).ok()?;
-        Some(data)
+        match entry.read().and_then(|mut r| r.read_to_end(&mut data)) {
+            Ok(_) => Some(data),
+            Err(e) => {
+                eprintln!("Warning: failed to read dictionary {path}: {e}");
+                None
+            }
+        }
     }
 
     /// Get the dictionary bytes for the given output category.
@@ -657,42 +660,44 @@ impl ArchiveDicts {
 /// Read the raw (decompressed) data for an `out/` zip entry.
 ///
 /// Handles both archive formats transparently:
-/// - New format: entry is `CompressionMethod::Stored` containing zstd+dict data.
+/// - New format: entry is `CompressionMethod::STORE` containing zstd+dict data.
 ///   We decompress using the archive's embedded dictionary.
-/// - Old format: entry is `CompressionMethod::Zstd` and the zip library
-///   decompresses it for us.
-fn read_out_entry_raw<R: Read>(
-    entry: &mut zip::read::ZipFile<'_, R>,
+/// - Old format: entry is `CompressionMethod::ZSTD` and eazip decompresses it
+///   for us.
+fn read_out_entry_raw<R: BufRead + Seek>(
+    file: &mut EazipFile<'_, R>,
     category: SampleCategory,
     dicts: &ArchiveDicts,
 ) -> Result<Vec<u8>> {
+    // Extract compression method before taking the mutable read() borrow.
+    let compression = file.metadata().compression_method;
+
     let mut data = Vec::new();
-    entry.read_to_end(&mut data)?;
+    file.read()?.read_to_end(&mut data)?;
 
     // If the entry is stored (not compressed by the zip layer) and we have a
     // dictionary for this category, the data is zstd+dict compressed and needs
     // to be decompressed.
-    if entry.compression() == zip::CompressionMethod::Stored
+    if compression == CompressionMethod::STORE
         && let Some(dict) = dicts.dict_for_category(category)
     {
         return decompress_with_dict(&data, dict);
     }
 
-    // Otherwise the zip library already decompressed the entry (old format with
-    // CompressionMethod::Zstd), or this category has no dictionary.
+    // Otherwise eazip already decompressed the entry (old format with
+    // CompressionMethod::ZSTD), or this category has no dictionary.
     Ok(data)
 }
 
 /// Write a file with standard zstd compression.
-fn write_zstd(dest: &mut zip::ZipWriter<File>, name: &str, data: &[u8]) -> Result<(u64, String)> {
-    let options = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Zstd)
-        .compression_level(Some(3));
-    dest.start_file(name, options)?;
-    dest.write_all(data)?;
+fn write_zstd(dest: &mut ArchiveWriter<File>, name: &str, data: &[u8]) -> Result<(u64, String)> {
+    let mut options = FileOptions::default();
+    options.compression_method = CompressionMethod::ZSTD;
+    options.level = Some(3);
+    dest.add_file(name, data, &options)?;
 
-    // Estimate compressed size (we don't have exact size until finish).
-    // This is approximate but good enough for comparison.
+    // Estimate compressed size. eazip doesn't expose per-entry compressed
+    // sizes, so we compress independently to get the approximate size.
     let compressed = zstd::encode_all(data, 3)?;
     Ok((compressed.len() as u64, "zstd".to_string()))
 }
@@ -746,27 +751,25 @@ fn analyze_compression(dict_source: &DictSource, max_archives: usize) -> Result<
             Err(_) => continue,
         };
         let reader = BufReader::new(file);
-        let mut archive = match zip::ZipArchive::new(reader) {
+        let mut archive = match Archive::new(reader) {
             Ok(a) => a,
             Err(_) => continue,
         };
 
         let archive_dicts = ArchiveDicts::load(&mut archive);
 
-        for i in 0..archive.len() {
-            let mut entry = match archive.by_index(i) {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
+        let entry_count = archive.entries().len();
+        for i in 0..entry_count {
+            let mut file = archive.get_by_index(i).expect("index is in bounds");
 
-            let name = entry.name().to_string();
+            let name = file.metadata().name().to_string();
             let Some(category) = SampleCategory::from_filename(&name) else {
                 continue;
             };
 
-            let original_compressed = entry.compressed_size();
+            let original_compressed = file.metadata().compressed_size;
 
-            let data = match read_out_entry_raw(&mut entry, category, &archive_dicts) {
+            let data = match read_out_entry_raw(&mut file, category, &archive_dicts) {
                 Ok(d) => d,
                 Err(_) => continue,
             };
@@ -864,20 +867,18 @@ fn size_sweep(max_samples: usize) -> Result<()> {
         };
         let reader = BufReader::new(file);
 
-        let mut archive = match zip::ZipArchive::new(reader) {
+        let mut archive = match Archive::new(reader) {
             Ok(a) => a,
             Err(_) => continue,
         };
 
         let dicts = ArchiveDicts::load(&mut archive);
 
-        for i in 0..archive.len() {
-            let mut entry = match archive.by_index(i) {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
+        let entry_count = archive.entries().len();
+        for i in 0..entry_count {
+            let mut file = archive.get_by_index(i).expect("index is in bounds");
 
-            let name = entry.name().to_string();
+            let name = file.metadata().name().to_string();
             let Some(category) = SampleCategory::from_filename(&name) else {
                 continue;
             };
@@ -893,7 +894,7 @@ fn size_sweep(max_samples: usize) -> Result<()> {
                 continue;
             }
 
-            let data = match read_out_entry_raw(&mut entry, category, &dicts) {
+            let data = match read_out_entry_raw(&mut file, category, &dicts) {
                 Ok(d) if !d.is_empty() && d.len() <= 100_000 => d,
                 _ => continue,
             };
@@ -1004,20 +1005,18 @@ fn level_sweep(max_samples: usize, dict_source: &DictSource) -> Result<()> {
         };
         let reader = BufReader::new(file);
 
-        let mut archive = match zip::ZipArchive::new(reader) {
+        let mut archive = match Archive::new(reader) {
             Ok(a) => a,
             Err(_) => continue,
         };
 
         let dicts = ArchiveDicts::load(&mut archive);
 
-        for i in 0..archive.len() {
-            let mut entry = match archive.by_index(i) {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
+        let entry_count = archive.entries().len();
+        for i in 0..entry_count {
+            let mut file = archive.get_by_index(i).expect("index is in bounds");
 
-            let name = entry.name().to_string();
+            let name = file.metadata().name().to_string();
             let Some(category) = SampleCategory::from_filename(&name) else {
                 continue;
             };
@@ -1027,7 +1026,7 @@ fn level_sweep(max_samples: usize, dict_source: &DictSource) -> Result<()> {
                 continue;
             }
 
-            let data = match read_out_entry_raw(&mut entry, category, &dicts) {
+            let data = match read_out_entry_raw(&mut file, category, &dicts) {
                 Ok(d) if !d.is_empty() && d.len() <= 100_000 => d,
                 _ => continue,
             };
@@ -1201,20 +1200,18 @@ fn analyze_per_project(dict_source: &DictSource) -> Result<()> {
                 Err(_) => continue,
             };
             let reader = BufReader::new(file);
-            let mut archive = match zip::ZipArchive::new(reader) {
+            let mut archive = match Archive::new(reader) {
                 Ok(a) => a,
                 Err(_) => continue,
             };
 
             let archive_dicts = ArchiveDicts::load(&mut archive);
 
-            for i in 0..archive.len() {
-                let mut entry = match archive.by_index(i) {
-                    Ok(e) => e,
-                    Err(_) => continue,
-                };
+            let entry_count = archive.entries().len();
+            for i in 0..entry_count {
+                let mut file = archive.get_by_index(i).expect("index is in bounds");
 
-                let name = entry.name().to_string();
+                let name = file.metadata().name().to_string();
 
                 // Only analyze stdout/stderr (skip meta).
                 if !name.starts_with("out/") {
@@ -1223,16 +1220,21 @@ fn analyze_per_project(dict_source: &DictSource) -> Result<()> {
 
                 let category = SampleCategory::from_filename(&name);
 
-                let original_compressed = entry.compressed_size();
+                let original_compressed = file.metadata().compressed_size;
 
                 let data = if let Some(cat) = category {
-                    match read_out_entry_raw(&mut entry, cat, &archive_dicts) {
+                    match read_out_entry_raw(&mut file, cat, &archive_dicts) {
                         Ok(d) => d,
                         Err(_) => continue,
                     }
                 } else {
                     let mut buf = Vec::new();
-                    if entry.read_to_end(&mut buf).is_err() {
+                    if file
+                        .read()
+                        .ok()
+                        .and_then(|mut r| r.read_to_end(&mut buf).ok())
+                        .is_none()
+                    {
                         continue;
                     }
                     buf
@@ -1370,20 +1372,18 @@ fn dump_cdf(dict_dir: Option<&Utf8Path>, max_archives: usize) -> Result<()> {
             Err(_) => continue,
         };
         let reader = BufReader::new(file);
-        let mut archive = match zip::ZipArchive::new(reader) {
+        let mut archive = match Archive::new(reader) {
             Ok(a) => a,
             Err(_) => continue,
         };
 
         let archive_dicts = ArchiveDicts::load(&mut archive);
 
-        for i in 0..archive.len() {
-            let mut entry = match archive.by_index(i) {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
+        let entry_count = archive.entries().len();
+        for i in 0..entry_count {
+            let mut file = archive.get_by_index(i).expect("index is in bounds");
 
-            let name = entry.name().to_string();
+            let name = file.metadata().name().to_string();
 
             // Only test output entries.
             if !name.starts_with("out/") {
@@ -1394,7 +1394,7 @@ fn dump_cdf(dict_dir: Option<&Utf8Path>, max_archives: usize) -> Result<()> {
                 continue;
             };
 
-            let data = match read_out_entry_raw(&mut entry, category, &archive_dicts) {
+            let data = match read_out_entry_raw(&mut file, category, &archive_dicts) {
                 Ok(d) if !d.is_empty() => d,
                 _ => continue,
             };
@@ -1455,7 +1455,7 @@ fn dump_cdf(dict_dir: Option<&Utf8Path>, max_archives: usize) -> Result<()> {
 
     // Output raw sizes to stdout for gnuplot.
     let stdout = std::io::stdout();
-    let mut out = std::io::BufWriter::new(stdout.lock());
+    let mut out = BufWriter::new(stdout.lock());
     writeln!(
         out,
         "# category uncompressed dict_compressed plain_compressed"

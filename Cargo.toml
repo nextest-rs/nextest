@@ -22,15 +22,14 @@ exclude = ["src/**/AGENTS.md", "src/**/CLAUDE.md"]
 aho-corasick = "1.1.4"
 async-scoped = { version = "0.9.0", features = ["use-tokio"] }
 atomicwrites = "0.4.4"
-bstr = { version = "1.12.1", default-features = false, features = ["std"] }
 bitflags = "2.11.0"
+bstr = { version = "1.12.1", default-features = false, features = ["std"] }
 buf-list = "1.1.2"
 bytesize = { version = "2.3.1", features = ["serde"] }
 bytes = "1.11.1"
 camino = "1.2.2"
 camino-tempfile = "1.4.1"
 camino-tempfile-ext = "0.3.3"
-cargo_metadata = "0.23.1"
 # We specify default-no-update here because if users just run:
 #
 # cargo build --no-default-features --features default-no-update
@@ -41,7 +40,10 @@ cargo_metadata = "0.23.1"
 cargo-nextest = { path = "cargo-nextest", default-features = false, features = [
     "default-no-update",
 ] }
+cargo_metadata = "0.23.1"
 cfg-if = "1.0.4"
+chrono = { version = "0.4.43", features = ["serde"] }
+clap = { version = "4.5.60", features = ["derive", "unstable-markdown"] }
 color-eyre = "0.6.5"
 # config's "preserve_order" feature is needed for preserving the order of
 # setup scripts in .config/nextest.toml.
@@ -49,18 +51,17 @@ config = { version = "0.15.19", default-features = false, features = [
     "toml",
     "preserve_order",
 ] }
-chrono = { version = "0.4.43", features = ["serde"] }
-clap = { version = "4.5.60", features = ["derive", "unstable-markdown"] }
 console-subscriber = "0.5.0"
 countio = "0.2.19"
 cp_r = "0.5.2"
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 datatest-stable = { version = "0.3.3", features = ["include-dir"] }
-dialoguer = "0.12.0"
 debug-ignore = "1.0.5"
 derive-where = "1.6.0"
+dialoguer = "0.12.0"
 duct = "1.1.1"
 dunce = "1.0.5"
+eazip = { version = "0.2.1", default-features = false, features = ["std", "zstd"] }
 enable-ansi-support = "0.3.1"
 etcetera = "0.11.0"
 fixture-data = { path = "fixture-data" }
@@ -90,8 +91,6 @@ log = "0.4.29"
 maplit = "1.0.2"
 miette = "7.6.0"
 mukti-metadata = "0.3.0"
-# note: we don't use owo-colors' if_supports_color support for now, instead preferring to use our
-# own supports-color + stylesheets everywhere.
 newtype-uuid = { version = "1.3.2", features = ["v4"] }
 nextest-filtering = { version = "0.18.0", path = "nextest-filtering" }
 nextest-metadata = { version = "0.13.3", path = "nextest-metadata" }
@@ -99,6 +98,8 @@ nextest-runner = { path = "nextest-runner" }
 nextest-workspace-hack = "0.1.0"
 nix = { version = "0.31.1", default-features = false, features = ["signal"] }
 num_threads = "0.1.7"
+# Note: we don't use owo-colors' if_supports_color support for now, instead preferring to use our
+# own supports-color + stylesheets everywhere.
 owo-colors = "4.2.3"
 pathdiff = { version = "0.2.3", features = ["camino"] }
 petgraph = "0.8.3"
@@ -111,11 +112,11 @@ recursion = "0.5.4"
 regex = "1.12.3"
 regex-syntax = "0.8.9"
 sapling-streampager = "0.12.0"
-semver = "1.0.27"
 self_update = { version = "0.42.0", default-features = false, features = [
     "archive-tar",
     "compression-flate2",
 ] }
+semver = "1.0.27"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_ignored = "0.1.14"
 serde_json = "1.0.149"
@@ -149,7 +150,6 @@ win32job = "2.0.3"
 windows-sys = "0.61.2"
 winnow = "0.7.14"
 xxhash-rust = { version = "0.8.15", features = ["xxh3", "xxh64"] }
-zip = { version = "8.0.0", default-features = false, features = ["zstd"] }
 zstd = { version = "0.13.3", features = ["zstdmt"] }
 
 [workspace.lints.clippy]

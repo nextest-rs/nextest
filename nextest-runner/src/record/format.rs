@@ -9,6 +9,7 @@ use super::{
 };
 use camino::Utf8Path;
 use chrono::{DateTime, FixedOffset, Utc};
+use eazip::{CompressionMethod, write::FileOptions};
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_metadata::{RustBinaryId, TestCaseName};
 use quick_junit::ReportUuid;
@@ -910,6 +911,26 @@ impl OutputDict {
             Self::None => None,
         }
     }
+}
+
+// ---
+// Zip file options helpers
+// ---
+
+/// Returns file options for storing pre-compressed data (no additional
+/// compression).
+pub(super) fn stored_file_options() -> FileOptions {
+    let mut options = FileOptions::default();
+    options.compression_method = CompressionMethod::STORE;
+    options
+}
+
+/// Returns file options for zstd-compressed data.
+pub(super) fn zstd_file_options() -> FileOptions {
+    let mut options = FileOptions::default();
+    options.compression_method = CompressionMethod::ZSTD;
+    options.level = Some(3);
+    options
 }
 
 #[cfg(test)]

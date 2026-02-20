@@ -23,6 +23,7 @@ use crate::{
 use bytesize::ByteSize;
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
+use eazip::CompressionMethod;
 use etcetera::HomeDirError;
 use itertools::{Either, Itertools};
 use nextest_filtering::errors::FiltersetParseErrors;
@@ -41,8 +42,6 @@ use std::{
 };
 use target_spec_miette::IntoMietteDiagnostic;
 use thiserror::Error;
-// Re-export ZipError for consumers that need to match on it.
-pub use zip::result::ZipError;
 
 /// An error that occurred while parsing the config.
 #[derive(Debug, Error)]
@@ -2169,17 +2168,6 @@ pub enum StoreWriterError {
         error: std::io::Error,
     },
 
-    /// An error occurred while starting a new file in the store.
-    #[error("error creating path `{path}` in store")]
-    StartFile {
-        /// The path within the store.
-        path: Utf8PathBuf,
-
-        /// The underlying error.
-        #[source]
-        error: zip::result::ZipError,
-    },
-
     /// An error occurred while writing to a file in the store.
     #[error("error writing to path `{path}` in store")]
     Write {
@@ -2204,7 +2192,7 @@ pub enum StoreWriterError {
     Finish {
         /// The underlying error.
         #[source]
-        error: zip::result::ZipError,
+        error: std::io::Error,
     },
 
     /// An error occurred while flushing the store.
@@ -2453,6 +2441,17 @@ pub enum RecordReadError {
         error: std::io::Error,
     },
 
+    /// Failed to parse the archive (corrupt or truncated).
+    #[error("error parsing archive at `{path}`")]
+    ParseArchive {
+        /// The path to the archive.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
     /// Failed to read an archive file.
     #[error("error reading `{file_name}` from archive")]
     ReadArchiveFile {
@@ -2461,7 +2460,7 @@ pub enum RecordReadError {
 
         /// The underlying error.
         #[source]
-        error: zip::result::ZipError,
+        error: std::io::Error,
     },
 
     /// Failed to open the run log.
@@ -2621,9 +2620,9 @@ pub enum PortableRecordingError {
     ZipStartFile {
         /// The file that failed to start.
         file_name: &'static str,
-        /// The underlying zip error.
+        /// The underlying I/O error.
         #[source]
-        source: zip::result::ZipError,
+        source: std::io::Error,
     },
 
     /// Failed to write to the zip archive.
@@ -2648,7 +2647,7 @@ pub enum PortableRecordingError {
 
     /// Failed to finalize the zip archive.
     #[error("failed to finalize archive")]
-    ZipFinalize(#[source] zip::result::ZipError),
+    ZipFinalize(#[source] std::io::Error),
 
     /// Failed to write the archive atomically.
     #[error("failed to write archive atomically to {path}")]
@@ -2680,9 +2679,9 @@ pub enum PortableRecordingReadError {
     ReadArchive {
         /// The path to the archive.
         path: Utf8PathBuf,
-        /// The underlying zip error.
+        /// The underlying I/O error.
         #[source]
-        error: zip::result::ZipError,
+        error: std::io::Error,
     },
 
     /// A required file is missing from the archive.
@@ -2764,6 +2763,21 @@ pub enum PortableRecordingReadError {
         /// The underlying I/O error.
         #[source]
         error: std::io::Error,
+    },
+
+    /// The inner archive is compressed.
+    ///
+    /// With portable recordings, the inner archive must be stored uncompressed.
+    #[error(
+        "for portable recording `{archive_path}`, the inner archive is stored \
+         with {:?} compression -- it must be stored uncompressed",
+        compression
+    )]
+    CompressedInnerArchive {
+        /// The path to the archive.
+        archive_path: Utf8PathBuf,
+        /// The compression method used.
+        compression: CompressionMethod,
     },
 
     /// The archive has no manifest and is not a valid wrapper archive.

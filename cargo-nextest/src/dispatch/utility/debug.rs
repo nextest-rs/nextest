@@ -12,7 +12,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Args, Subcommand, ValueEnum};
 use nextest_runner::{
     cargo_config::CargoConfigs,
-    errors::{DisplayErrorChain, RecordReadError, ZipError},
+    errors::{DisplayErrorChain, RecordReadError},
     record::{
         CARGO_METADATA_JSON_PATH, ExtractOuterFileResult, PORTABLE_MANIFEST_FILE_NAME,
         PortableRecording, RECORD_OPTS_JSON_PATH, RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME,
@@ -318,10 +318,7 @@ impl ExtractPortableRecordingOpts {
                     redactor.redact_size(bytes_written)
                 );
             }
-            Err(RecordReadError::ReadArchiveFile {
-                error: ZipError::FileNotFound,
-                ..
-            }) => {
+            Err(RecordReadError::FileNotFound { .. }) => {
                 // File doesn't exist; this run is not a rerun.
             }
             Err(err) => {

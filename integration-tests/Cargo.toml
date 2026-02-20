@@ -84,7 +84,7 @@ regex.workspace = true
 target-spec.workspace = true
 target-spec-miette = { workspace = true, features = ["fixtures"] }
 tokio.workspace = true
-zip = { workspace = true, features = ["zstd"] }
+eazip = { workspace = true }
 
 # These platforms are supported by num_threads.
 # https://docs.rs/num_threads/0.1.7/src/num_threads/lib.rs.html#5-8

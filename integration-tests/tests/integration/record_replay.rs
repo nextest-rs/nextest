@@ -14,6 +14,7 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::Utf8TempDir;
+use eazip::{Archive, ArchiveWriter, CompressionMethod, write::FileOptions};
 use fixture_data::models::RunProperties;
 use integration_tests::{
     env::{TestEnvInfo, set_env_vars_for_test},
@@ -28,10 +29,9 @@ use regex::Regex;
 use std::{
     collections::BTreeSet,
     fs::{self, File},
-    io::{Read as _, Write as _},
+    io::{BufReader, Read as _},
     sync::LazyLock,
 };
-use zip::{CompressionMethod, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 /// Expected files in the store.zip archive.
 const EXPECTED_ARCHIVE_FILES: &[&str] = &[
@@ -428,9 +428,11 @@ fn test_record_replay_cycle() {
     // Verify archive contains all expected metadata files.
     let store_zip = run_dir.join("store.zip");
     let file = std::fs::File::open(&store_zip).unwrap();
-    let mut archive = zip::ZipArchive::new(file).unwrap();
-    let archive_files: Vec<_> = (0..archive.len())
-        .map(|i| archive.by_index(i).unwrap().name().to_string())
+    let archive = Archive::new(BufReader::new(file)).unwrap();
+    let archive_files: Vec<_> = archive
+        .entries()
+        .iter()
+        .map(|m| m.name().to_string())
         .collect();
 
     for expected in EXPECTED_ARCHIVE_FILES {
@@ -482,9 +484,11 @@ fn test_record_replay_cycle() {
 
     // Verify the portable recording contains exactly the expected files.
     let portable_file = File::open(&portable_recording_path).unwrap();
-    let mut portable_recording = ZipArchive::new(portable_file).unwrap();
-    let portable_files: BTreeSet<_> = (0..portable_recording.len())
-        .map(|i| portable_recording.by_index(i).unwrap().name().to_string())
+    let mut portable_recording = Archive::new(BufReader::new(portable_file)).unwrap();
+    let portable_files: BTreeSet<_> = portable_recording
+        .entries()
+        .iter()
+        .map(|m| m.name().to_string())
         .collect();
 
     let expected_portable_files: BTreeSet<_> = ["manifest.json", "store.zip", "run.log.zst"]
@@ -497,9 +501,13 @@ fn test_record_replay_cycle() {
     );
 
     // Verify manifest.json has the expected structure.
-    let mut manifest_file = portable_recording.by_name("manifest.json").unwrap();
+    let mut manifest_file = portable_recording.get_by_name("manifest.json").unwrap();
     let mut manifest_content = String::new();
-    manifest_file.read_to_string(&mut manifest_content).unwrap();
+    manifest_file
+        .read()
+        .unwrap()
+        .read_to_string(&mut manifest_content)
+        .unwrap();
     let manifest: serde_json::Value = serde_json::from_str(&manifest_content).unwrap();
     // format-version is now a struct with major and minor fields.
     assert_eq!(
@@ -1700,7 +1708,7 @@ fn test_wrapped_portable_recording_read() {
     wrap_archive_in_zip(
         &archive_path,
         &wrapped_stored_path,
-        CompressionMethod::Stored,
+        CompressionMethod::STORE,
     );
 
     // Verify store info works on the wrapped archive.
@@ -1728,7 +1736,7 @@ fn test_wrapped_portable_recording_read() {
 
     // Wrapped archive with Zstd compression.
     let wrapped_zstd_path = temp_root.join("wrapped-zstd.zip");
-    wrap_archive_in_zip(&archive_path, &wrapped_zstd_path, CompressionMethod::Zstd);
+    wrap_archive_in_zip(&archive_path, &wrapped_zstd_path, CompressionMethod::ZSTD);
 
     // Verify store info works on the zstd-compressed wrapper.
     let info_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
@@ -1784,13 +1792,13 @@ fn wrap_archive_in_zip(
 ) {
     let inner_bytes = fs::read(inner_path).expect("read inner archive");
     let outer_file = File::create(outer_path).expect("create outer archive");
-    let mut zip = ZipWriter::new(outer_file);
+    let mut zip = ArchiveWriter::new(outer_file);
 
-    let options = SimpleFileOptions::default().compression_method(compression);
+    let mut options = FileOptions::default();
+    options.compression_method = compression;
     let inner_name = inner_path.file_name().expect("inner archive has filename");
-    zip.start_file(inner_name, options)
-        .expect("start file in zip");
-    zip.write_all(&inner_bytes).expect("write inner archive");
+    zip.add_file(inner_name, &inner_bytes[..], &options)
+        .expect("add inner archive");
     zip.finish().expect("finish zip");
 }
 
@@ -1798,22 +1806,21 @@ fn wrap_archive_in_zip(
 fn create_invalid_wrapper_multiple_files(inner_archive_path: &Utf8Path, outer_path: &Utf8Path) {
     let inner_bytes = fs::read(inner_archive_path).expect("read inner archive");
     let outer_file = File::create(outer_path).expect("create outer archive");
-    let mut zip = ZipWriter::new(outer_file);
+    let mut zip = ArchiveWriter::new(outer_file);
 
-    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    let mut options = FileOptions::default();
+    options.compression_method = CompressionMethod::STORE;
 
     // Add the real archive.
     let inner_name = inner_archive_path
         .file_name()
         .expect("inner archive has filename");
-    zip.start_file(inner_name, options)
-        .expect("start file in zip");
-    zip.write_all(&inner_bytes).expect("write inner archive");
+    zip.add_file(inner_name, &inner_bytes[..], &options)
+        .expect("add inner archive");
 
     // Add an extra file to make this an invalid wrapper.
-    zip.start_file("extra-file.txt", options)
-        .expect("start extra file");
-    zip.write_all(b"extra content").expect("write extra file");
+    zip.add_file("extra-file.txt", &b"extra content"[..], &options)
+        .expect("add extra file");
 
     zip.finish().expect("finish zip");
 }
@@ -1821,14 +1828,17 @@ fn create_invalid_wrapper_multiple_files(inner_archive_path: &Utf8Path, outer_pa
 /// Creates an invalid wrapper archive with one file that is not a .zip.
 fn create_invalid_wrapper_no_zip(outer_path: &Utf8Path) {
     let outer_file = File::create(outer_path).expect("create outer archive");
-    let mut zip = ZipWriter::new(outer_file);
+    let mut zip = ArchiveWriter::new(outer_file);
 
-    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    let mut options = FileOptions::default();
+    options.compression_method = CompressionMethod::STORE;
 
-    zip.start_file("not-an-archive.txt", options)
-        .expect("start file in zip");
-    zip.write_all(b"this is not a zip file")
-        .expect("write content");
+    zip.add_file(
+        "not-an-archive.txt",
+        &b"this is not a zip file"[..],
+        &options,
+    )
+    .expect("add file");
 
     zip.finish().expect("finish zip");
 }
@@ -2130,10 +2140,14 @@ fn test_replayability_all_runs_non_replayable() {
 fn read_rerun_info(runs_dir: &Utf8Path, run_id: &str) -> Option<serde_json::Value> {
     let store_zip_path = runs_dir.join(run_id).join("store.zip");
     let file = std::fs::File::open(&store_zip_path).ok()?;
-    let mut archive = zip::ZipArchive::new(file).ok()?;
-    let mut rerun_info_file = archive.by_name("meta/rerun-info.json").ok()?;
+    let mut archive = Archive::new(BufReader::new(file)).ok()?;
+    let mut rerun_info_file = archive.get_by_name("meta/rerun-info.json")?;
     let mut contents = String::new();
-    rerun_info_file.read_to_string(&mut contents).ok()?;
+    rerun_info_file
+        .read()
+        .ok()?
+        .read_to_string(&mut contents)
+        .ok()?;
     serde_json::from_str(&contents).ok()
 }
 
