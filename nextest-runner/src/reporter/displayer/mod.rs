@@ -3,12 +3,14 @@
 
 //! The displayer for human-friendly output.
 
+mod config;
 mod formatters;
 mod imp;
 mod progress;
 mod status_level;
 mod unit_output;
 
+pub(crate) use config::*;
 pub(crate) use formatters::DisplayUnitKind;
 pub(crate) use imp::*;
 pub use progress::{MaxProgressRunning, ShowProgress, ShowTerminalProgress};

@@ -325,10 +325,9 @@ impl UiConfig {
 
 /// Show progress setting for UI configuration.
 ///
-/// This is separate from [`ShowProgress`] because the `Only` variant has
-/// special behavior: it implies `--status-level=slow` and
-/// `--final-status-level=none`. This information would be lost if we converted
-/// directly to `ShowProgress`.
+/// This is a serde-friendly config enum, separate from [`ShowProgress`] (the
+/// runtime enum). `UiShowProgress` is deserialized from nextest profiles and
+/// then converted to `ShowProgress` for use at runtime.
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum UiShowProgress {
@@ -341,18 +340,26 @@ pub enum UiShowProgress {
     Bar,
     /// Show a simple counter (e.g., "(1/10)").
     Counter,
-    /// Like `Bar`, but also sets `status-level=slow` and
-    /// `final-status-level=none`.
+    /// Like `Bar` in interactive terminals, but also hides successful test
+    /// output by defaulting to `status-level=slow` and
+    /// `final-status-level=none`. In non-interactive contexts (piped output,
+    /// CI), behaves identically to `Auto`: successful test output is shown
+    /// normally.
     Only,
 }
 
 impl From<UiShowProgress> for ShowProgress {
     fn from(ui: UiShowProgress) -> Self {
         match ui {
-            UiShowProgress::Auto => ShowProgress::Auto,
+            UiShowProgress::Auto => ShowProgress::Auto {
+                suppress_success: false,
+            },
             UiShowProgress::None => ShowProgress::None,
-            UiShowProgress::Bar | UiShowProgress::Only => ShowProgress::Running,
+            UiShowProgress::Bar => ShowProgress::Running,
             UiShowProgress::Counter => ShowProgress::Counter,
+            UiShowProgress::Only => ShowProgress::Auto {
+                suppress_success: true,
+            },
         }
     }
 }
@@ -749,7 +756,12 @@ mod tests {
     #[test]
     fn test_ui_show_progress_to_show_progress() {
         // Test conversion to ShowProgress.
-        assert_eq!(ShowProgress::from(UiShowProgress::Auto), ShowProgress::Auto);
+        assert_eq!(
+            ShowProgress::from(UiShowProgress::Auto),
+            ShowProgress::Auto {
+                suppress_success: false
+            }
+        );
         assert_eq!(ShowProgress::from(UiShowProgress::None), ShowProgress::None);
         assert_eq!(
             ShowProgress::from(UiShowProgress::Bar),
@@ -759,10 +771,13 @@ mod tests {
             ShowProgress::from(UiShowProgress::Counter),
             ShowProgress::Counter
         );
-        // Only maps to Running (special behavior handled separately).
+        // Only maps to Auto with suppress_success: the displayer handles hiding
+        // successful output when interactive.
         assert_eq!(
             ShowProgress::from(UiShowProgress::Only),
-            ShowProgress::Running
+            ShowProgress::Auto {
+                suppress_success: true
+            }
         );
     }
 

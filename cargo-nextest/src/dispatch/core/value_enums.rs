@@ -6,10 +6,7 @@
 use crate::errors::CargoMessageFormatError;
 use clap::ValueEnum;
 use nextest_metadata::BuildPlatform;
-use nextest_runner::{
-    reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
-    user_config::elements::UiShowProgress,
-};
+use nextest_runner::reporter::{FinalStatusLevel, ShowProgress, StatusLevel, TestOutputDisplay};
 use std::collections::HashSet;
 
 /// Platform filter options.
@@ -226,20 +223,26 @@ pub(crate) enum ShowProgressOpt {
     /// Display a counter next to each completed test.
     Counter,
 
-    /// Display a progress bar with running tests, and hide successful test
-    /// output; equivalent to `--show-progress=running --status-level=slow
-    /// --final-status-level=none`.
+    /// In interactive terminals, display a progress bar with running tests and
+    /// hide successful test output (equivalent to `--show-progress=bar
+    /// --status-level=slow --final-status-level=none`). In non-interactive
+    /// contexts (piped output, CI), behaves like `auto`: successful test output
+    /// is shown normally.
     Only,
 }
 
-impl From<ShowProgressOpt> for UiShowProgress {
+impl From<ShowProgressOpt> for ShowProgress {
     fn from(opt: ShowProgressOpt) -> Self {
         match opt {
-            ShowProgressOpt::Auto => UiShowProgress::Auto,
-            ShowProgressOpt::None => UiShowProgress::None,
-            ShowProgressOpt::Bar => UiShowProgress::Bar,
-            ShowProgressOpt::Counter => UiShowProgress::Counter,
-            ShowProgressOpt::Only => UiShowProgress::Only,
+            ShowProgressOpt::Auto => ShowProgress::Auto {
+                suppress_success: false,
+            },
+            ShowProgressOpt::None => ShowProgress::None,
+            ShowProgressOpt::Bar => ShowProgress::Running,
+            ShowProgressOpt::Counter => ShowProgress::Counter,
+            ShowProgressOpt::Only => ShowProgress::Auto {
+                suppress_success: true,
+            },
         }
     }
 }

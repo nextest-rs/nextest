@@ -6,8 +6,9 @@
 //! The main structure in this module is [`TestReporter`].
 
 use super::{
-    DisplayerKind, FinalStatusLevel, MaxProgressRunning, StatusLevel, TestOutputDisplay,
-    displayer::{DisplayReporter, DisplayReporterBuilder, ShowTerminalProgress, StatusLevels},
+    DisplayConfig, DisplayerKind, FinalStatusLevel, MaxProgressRunning, StatusLevel,
+    TestOutputDisplay,
+    displayer::{DisplayReporter, DisplayReporterBuilder, ShowTerminalProgress},
 };
 use crate::{
     config::core::EvaluatableProfile,
@@ -173,25 +174,22 @@ impl ReporterBuilder {
     ) -> Reporter<'a> {
         let aggregator = EventAggregator::new(test_list.mode(), profile);
 
-        let status_level = self.status_level.unwrap_or_else(|| profile.status_level());
-        let final_status_level = self
-            .final_status_level
-            .unwrap_or_else(|| profile.final_status_level());
-
         let display_reporter = DisplayReporterBuilder {
             mode: test_list.mode(),
             default_filter: profile.default_filter().clone(),
-            status_levels: StatusLevels {
-                status_level,
-                final_status_level,
+            display_config: DisplayConfig {
+                show_progress: self.show_progress,
+                no_capture: self.no_capture,
+                status_level: self.status_level,
+                final_status_level: self.final_status_level,
+                profile_status_level: profile.status_level(),
+                profile_final_status_level: profile.final_status_level(),
             },
             test_count: test_list.test_count(),
             success_output: self.success_output,
             failure_output: self.failure_output,
             should_colorize: self.should_colorize,
-            no_capture: self.no_capture,
             verbose: self.verbose,
-            show_progress: self.show_progress,
             no_output_indent: self.no_output_indent,
             max_progress_running: self.max_progress_running,
             show_term_progress,

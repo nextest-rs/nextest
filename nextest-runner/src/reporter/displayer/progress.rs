@@ -85,11 +85,23 @@ impl fmt::Display for MaxProgressRunning {
 }
 
 /// How to show progress.
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+///
+/// In the `Auto` variant, the progress display is chosen based on the
+/// environment: a progress bar in interactive terminals, a counter otherwise.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShowProgress {
     /// Automatically decide based on environment.
-    #[default]
-    Auto,
+    ///
+    /// When `suppress_success` is true and a progress bar is shown,
+    /// successful test output is suppressed (status level defaults to
+    /// `Slow`, final status level defaults to `None`). In non-interactive
+    /// contexts, output behaves identically to `suppress_success: false`:
+    /// all test results are displayed normally.
+    Auto {
+        /// Whether to hide successful test output when a progress bar is
+        /// shown.
+        suppress_success: bool,
+    },
 
     /// No progress display.
     None,
@@ -97,8 +109,16 @@ pub enum ShowProgress {
     /// Show a counter on each line.
     Counter,
 
-    /// Show a progress bar and the running tests
+    /// Show a progress bar and the running tests.
     Running,
+}
+
+impl Default for ShowProgress {
+    fn default() -> Self {
+        ShowProgress::Auto {
+            suppress_success: false,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -514,10 +534,6 @@ impl ProgressBarState {
 
     fn should_hide(&self) -> bool {
         self.hidden_no_capture || self.hidden_run_paused || self.hidden_info_response
-    }
-
-    pub(super) fn is_hidden(&self) -> bool {
-        self.bar.is_hidden()
     }
 }
 

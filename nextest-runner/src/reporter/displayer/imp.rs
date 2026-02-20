@@ -8,6 +8,7 @@
 use super::{
     ChildOutputSpec, FinalStatusLevel, OutputStoreFinal, StatusLevel, StatusLevels,
     UnitOutputReporter,
+    config::{DisplayConfig, ProgressDisplay},
     formatters::{
         DisplayBracketedDuration, DisplayDurationBy, DisplaySlowDuration, DisplayUnitKind,
         write_final_warnings, write_skip_counts,
@@ -33,7 +34,6 @@ use crate::{
     record::{ReplayHeader, ShortestRunIdPrefix},
     reporter::{
         displayer::{
-            ShowProgress,
             formatters::DisplayHhMmSs,
             progress::{ShowTerminalProgress, TerminalProgress},
         },
@@ -72,14 +72,12 @@ pub(crate) enum DisplayerKind {
 pub(crate) struct DisplayReporterBuilder {
     pub(crate) mode: NextestRunMode,
     pub(crate) default_filter: CompiledDefaultFilter,
-    pub(crate) status_levels: StatusLevels,
+    pub(crate) display_config: DisplayConfig,
     pub(crate) test_count: usize,
     pub(crate) success_output: Option<TestOutputDisplay>,
     pub(crate) failure_output: Option<TestOutputDisplay>,
     pub(crate) should_colorize: bool,
-    pub(crate) no_capture: bool,
     pub(crate) verbose: bool,
-    pub(crate) show_progress: ShowProgress,
     pub(crate) no_output_indent: bool,
     pub(crate) max_progress_running: MaxProgressRunning,
     pub(crate) show_term_progress: ShowTerminalProgress,
@@ -92,12 +90,6 @@ impl DisplayReporterBuilder {
         if self.should_colorize {
             styles.colorize();
         }
-
-        let status_level = match self.no_capture {
-            // In no-capture mode, the status level is treated as at least pass.
-            true => self.status_levels.status_level.max(StatusLevel::Pass),
-            false => self.status_levels.status_level,
-        };
 
         let mut theme_characters = ThemeCharacters::default();
         match &output {
@@ -113,23 +105,24 @@ impl DisplayReporterBuilder {
             }
         }
 
-        let mut show_progress_bar = false;
+        let is_terminal = matches!(&output, ReporterOutput::Terminal) && io::stderr().is_terminal();
+        let is_ci = is_ci::uncached();
+
+        let resolved = self.display_config.resolve(is_terminal, is_ci);
 
         let output = match output {
             ReporterOutput::Terminal => {
-                let is_terminal = io::stderr().is_terminal();
-                let progress_bar = self.progress_bar(
-                    is_terminal,
-                    theme_characters.progress_chars(),
-                    self.max_progress_running,
-                );
+                let progress_bar = if resolved.progress_display == ProgressDisplay::Bar {
+                    Some(ProgressBarState::new(
+                        self.mode,
+                        self.test_count,
+                        theme_characters.progress_chars(),
+                        self.max_progress_running,
+                    ))
+                } else {
+                    None
+                };
                 let term_progress = TerminalProgress::new(self.show_term_progress);
-
-                show_progress_bar = progress_bar
-                    .as_ref()
-                    .map(|progress_bar| !progress_bar.is_hidden())
-                    .unwrap_or_default();
-
                 ReporterOutputImpl::Terminal {
                     progress_bar: progress_bar.map(Box::new),
                     term_progress,
@@ -138,38 +131,33 @@ impl DisplayReporterBuilder {
             ReporterOutput::Writer { writer, .. } => ReporterOutputImpl::Writer(writer),
         };
 
+        let no_capture = self.display_config.no_capture;
+
         // success_output is meaningless if the runner isn't capturing any
         // output. However, failure output is still meaningful for exec fail
         // events.
-        let force_success_output = match self.no_capture {
+        let force_success_output = match no_capture {
             true => Some(TestOutputDisplay::Never),
             false => self.success_output,
         };
-        let force_failure_output = match self.no_capture {
+        let force_failure_output = match no_capture {
             true => Some(TestOutputDisplay::Never),
             false => self.failure_output,
         };
-        let force_exec_fail_output = match self.no_capture {
+        let force_exec_fail_output = match no_capture {
             true => Some(TestOutputDisplay::Immediate),
             false => self.failure_output,
         };
 
-        let show_counter = match self.show_progress {
-            ShowProgress::Auto => is_ci::uncached() || !show_progress_bar,
-            ShowProgress::Running | ShowProgress::None => false,
-            ShowProgress::Counter => true,
-        };
-        let counter_width = show_counter.then_some(usize_decimal_char_width(self.test_count));
+        let counter_width = matches!(resolved.progress_display, ProgressDisplay::Counter)
+            .then_some(usize_decimal_char_width(self.test_count));
 
         DisplayReporter {
             inner: DisplayReporterImpl {
                 mode: self.mode,
                 default_filter: self.default_filter,
-                status_levels: StatusLevels {
-                    status_level,
-                    final_status_level: self.status_levels.final_status_level,
-                },
-                no_capture: self.no_capture,
+                status_levels: resolved.status_levels,
+                no_capture,
                 verbose: self.verbose,
                 no_output_indent: self.no_output_indent,
                 counter_width,
@@ -186,53 +174,6 @@ impl DisplayReporterBuilder {
                 run_id_unique_prefix: None,
             },
             output,
-        }
-    }
-
-    fn progress_bar(
-        &self,
-        is_terminal: bool,
-        progress_chars: &'static str,
-        max_progress_running: MaxProgressRunning,
-    ) -> Option<ProgressBarState> {
-        if self.no_capture {
-            // Do not use a progress bar if --no-capture is passed in.
-            // This is required since we pass down stderr to the child
-            // process.
-            //
-            // In the future, we could potentially switch to using a
-            // pty, in which case we could still potentially use the
-            // progress bar as a status bar. However, that brings about
-            // its own complications: what if a test's output doesn't
-            // include a newline? We might have to use a curses-like UI
-            // which would be a lot of work for not much gain.
-            return None;
-        }
-
-        if is_ci::uncached() {
-            // Some CI environments appear to pretend to be a terminal.
-            // Disable the progress bar in these environments.
-            return None;
-        }
-
-        // If this is not a terminal, don't enable the progress bar. indicatif
-        // also has this logic internally, but we do this check outside so we
-        // know whether we're writing to an external buffer or to indicatif.
-        if !is_terminal {
-            return None;
-        }
-
-        match self.show_progress {
-            ShowProgress::None | ShowProgress::Counter => None,
-            ShowProgress::Auto | ShowProgress::Running => {
-                let state = ProgressBarState::new(
-                    self.mode,
-                    self.test_count,
-                    progress_chars,
-                    max_progress_running,
-                );
-                Some(state)
-            }
         }
     }
 }
@@ -2630,8 +2571,12 @@ mod tests {
     use super::*;
     use crate::{
         errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
-        reporter::events::{
-            ChildExecutionOutputDescription, ExecutionResult, FailureStatus, UnitTerminateReason,
+        reporter::{
+            ShowProgress,
+            events::{
+                ChildExecutionOutputDescription, ExecutionResult, FailureStatus,
+                UnitTerminateReason,
+            },
         },
         test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput, ChildSplitOutput},
     };
@@ -2667,17 +2612,19 @@ mod tests {
         let builder = DisplayReporterBuilder {
             mode: NextestRunMode::Test,
             default_filter: CompiledDefaultFilter::for_default_config(),
-            status_levels: StatusLevels {
-                status_level: StatusLevel::Fail,
-                final_status_level: FinalStatusLevel::Fail,
+            display_config: DisplayConfig {
+                show_progress: ShowProgress::Counter,
+                no_capture: true,
+                status_level: Some(StatusLevel::Fail),
+                final_status_level: Some(FinalStatusLevel::Fail),
+                profile_status_level: StatusLevel::Fail,
+                profile_final_status_level: FinalStatusLevel::Fail,
             },
             test_count: 5000,
             success_output: Some(TestOutputDisplay::Immediate),
             failure_output: Some(TestOutputDisplay::Immediate),
             should_colorize: false,
-            no_capture: true,
             verbose,
-            show_progress: ShowProgress::Counter,
             no_output_indent: false,
             max_progress_running: MaxProgressRunning::default(),
             show_term_progress: ShowTerminalProgress::No,

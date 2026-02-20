@@ -576,9 +576,9 @@ use crate::{
         store::{RecordedRunInfo, RecordedRunStatus},
     },
     reporter::{
-        DisplayReporter, DisplayReporterBuilder, DisplayerKind, FinalStatusLevel,
+        DisplayConfig, DisplayReporter, DisplayReporterBuilder, DisplayerKind, FinalStatusLevel,
         MaxProgressRunning, ReporterOutput, ShowProgress, ShowTerminalProgress, StatusLevel,
-        StatusLevels, TestOutputDisplay,
+        TestOutputDisplay,
     },
 };
 use chrono::{DateTime, FixedOffset};
@@ -647,7 +647,7 @@ impl Default for ReplayReporterBuilder {
             failure_output: None,
             should_colorize: false,
             verbose: false,
-            show_progress: ShowProgress::Auto,
+            show_progress: ShowProgress::default(),
             max_progress_running: MaxProgressRunning::default(),
             no_output_indent: false,
         }
@@ -727,17 +727,17 @@ impl ReplayReporterBuilder {
         let display_reporter = DisplayReporterBuilder {
             mode,
             default_filter: CompiledDefaultFilter::for_default_config(),
-            status_levels: StatusLevels {
-                status_level: self.status_level,
-                final_status_level: self.final_status_level,
-            },
+            display_config: DisplayConfig::with_overrides(
+                self.show_progress,
+                false, // Replay never uses no-capture.
+                self.status_level,
+                self.final_status_level,
+            ),
             test_count,
             success_output: self.success_output,
             failure_output: self.failure_output,
             should_colorize: self.should_colorize,
-            no_capture: false,
             verbose: self.verbose,
-            show_progress: self.show_progress,
             no_output_indent: self.no_output_indent,
             max_progress_running: self.max_progress_running,
             // For replay, we don't show terminal progress (OSC 9;4 codes) since

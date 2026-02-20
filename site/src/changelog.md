@@ -9,6 +9,12 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## Unreleased
+
+### Changed
+
+- `--show-progress=only` now behaves like the default `auto` in non-interactive mode, showing successful tests with a counter. `only` is primarily intended for interactive scenarios.
+
 ## [0.9.128] - 2026-02-19
 
 ### Fixed

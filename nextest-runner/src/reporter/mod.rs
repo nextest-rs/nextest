@@ -15,7 +15,7 @@ pub mod structured;
 #[cfg(test)]
 pub(crate) mod test_helpers;
 
-pub(crate) use displayer::{DisplayReporter, DisplayReporterBuilder, DisplayerKind, StatusLevels};
+pub(crate) use displayer::{DisplayConfig, DisplayReporter, DisplayReporterBuilder, DisplayerKind};
 pub use displayer::{
     FinalStatusLevel, MaxProgressRunning, ShowProgress, ShowTerminalProgress, StatusLevel,
     TestOutputDisplay,

@@ -83,7 +83,7 @@ max-progress-running = 4
     let stderr = output.stderr_as_str();
     // Verify show_progress was set from user config.
     assert!(
-        stderr.contains("ui_show_progress = Counter"),
+        stderr.contains("show_progress = Counter"),
         "show_progress should be Counter from user config\n{output}"
     );
     // Verify max_progress_running was set from user config.
@@ -130,8 +130,8 @@ max-progress-running = 4
     let stderr = output.stderr_as_str();
     // CLI values should override user config.
     assert!(
-        stderr.contains("ui_show_progress = Bar"),
-        "ui_show_progress should be Bar from CLI (bar)\n{output}"
+        stderr.contains("show_progress = Running"),
+        "show_progress should be Running from CLI (bar)\n{output}"
     );
     assert!(
         stderr.contains("max_progress_running = Count(12)"),
@@ -174,7 +174,7 @@ max-progress-running = 4
     let stderr = output.stderr_as_str();
     // Environment variable values should override user config.
     assert!(
-        stderr.contains("ui_show_progress = Counter"),
+        stderr.contains("show_progress = Counter"),
         "show_progress should be Counter from env var\n{output}"
     );
     assert!(
@@ -209,7 +209,7 @@ fn test_user_config_missing_uses_defaults() {
     let stderr = output.stderr_as_str();
     // Should use default values.
     assert!(
-        stderr.contains("ui_show_progress = Auto"),
+        stderr.contains("show_progress = Auto"),
         "show_progress should be Auto (default)\n{output}"
     );
     assert!(
@@ -396,8 +396,8 @@ some-key = "some-value"
     let stderr = output.stderr_as_str();
     // Should still apply the known settings.
     assert!(
-        stderr.contains("ui_show_progress = Bar"),
-        "ui_show_progress should be Bar despite unknown section\n{output}"
+        stderr.contains("show_progress = Running"),
+        "show_progress should be Running despite unknown section\n{output}"
     );
 }
 

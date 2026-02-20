@@ -35,8 +35,7 @@ use nextest_runner::{
         RunStore, STORE_FORMAT_VERSION, Styles as RecordStyles, records_state_dir,
     },
     reporter::{
-        FinalStatusLevel, MaxProgressRunning, ReporterBuilder, ShowTerminalProgress, StatusLevel,
-        TestOutputDisplay,
+        MaxProgressRunning, ReporterBuilder, ShowProgress, ShowTerminalProgress, TestOutputDisplay,
         events::{FinalRunStats, RunStats},
         structured,
     },
@@ -696,15 +695,14 @@ impl ReporterOpts {
         }
 
         // Determine show_progress with precedence: CLI/env > resolved config.
-        // Use UiShowProgress to preserve the "only" variant's special behavior.
-        let ui_show_progress = match (self.show_progress, self.hide_progress_bar) {
+        let show_progress = match (self.show_progress, self.hide_progress_bar) {
             (Some(show_progress), true) => {
                 warn!("ignoring --hide-progress-bar because --show-progress is specified");
                 show_progress.into()
             }
             (Some(show_progress), false) => show_progress.into(),
-            (None, true) => nextest_runner::user_config::elements::UiShowProgress::None,
-            (None, false) => resolved_ui.show_progress,
+            (None, true) => ShowProgress::None,
+            (None, false) => resolved_ui.show_progress.into(),
         };
 
         // Determine max_progress_running with precedence: CLI/env > resolved config.
@@ -717,7 +715,7 @@ impl ReporterOpts {
         let no_output_indent = self.common.no_output_indent || !resolved_ui.output_indent;
 
         debug!(
-            ?ui_show_progress,
+            ?show_progress,
             ?max_progress_running,
             ?no_output_indent,
             "resolved reporter UI settings"
@@ -729,19 +727,11 @@ impl ReporterOpts {
         builder.set_no_capture(no_capture);
         builder.set_colorize(should_colorize);
 
-        if ui_show_progress == nextest_runner::user_config::elements::UiShowProgress::Only {
-            // "only" implies --status-level=slow and --final-status-level=none.
-            // But we allow overriding these options explicitly as well.
-            builder.set_status_level(StatusLevel::Slow);
-            builder.set_final_status_level(FinalStatusLevel::None);
-        }
-
         // Apply the common display options (failure_output, success_output,
-        // status_level, final_status_level, no_output_indent). These can
-        // override the "only" defaults set above.
+        // status_level, final_status_level, no_output_indent).
         self.common.apply_to_builder(&mut builder, resolved_ui);
 
-        builder.set_show_progress(ui_show_progress.into());
+        builder.set_show_progress(show_progress);
         builder.set_max_progress_running(max_progress_running);
         builder
     }
@@ -779,16 +769,11 @@ impl BenchReporterOpts {
         builder.set_no_capture(true);
         builder.set_colorize(should_colorize);
         // Determine show_progress with precedence: CLI/env > resolved config.
-        let ui_show_progress = self
+        let show_progress = self
             .show_progress
-            .map(nextest_runner::user_config::elements::UiShowProgress::from)
-            .unwrap_or(resolved_ui.show_progress);
-        if ui_show_progress == nextest_runner::user_config::elements::UiShowProgress::Only {
-            // "only" implies --status-level=slow and --final-status-level=none.
-            builder.set_status_level(StatusLevel::Slow);
-            builder.set_final_status_level(FinalStatusLevel::None);
-        }
-        builder.set_show_progress(ui_show_progress.into());
+            .map(ShowProgress::from)
+            .unwrap_or(resolved_ui.show_progress.into());
+        builder.set_show_progress(show_progress);
         builder
     }
 }
