@@ -93,8 +93,8 @@ jobs:
           - ubuntu-24.04-arm
           - macos-latest
           - windows-latest
-        # 1.89 is the MSRV
-        rust-version: ["1.89", stable]
+        # 1.91 is the MSRV
+        rust-version: ["1.91", stable]
       fail-fast: false
     steps:
       - name: Set temp directory on Windows

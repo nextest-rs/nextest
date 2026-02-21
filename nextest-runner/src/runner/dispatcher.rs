@@ -267,16 +267,6 @@ where
 
                     self.broadcast_request(RunUnitRequest::Signal(SignalRequest::Continue));
                 }
-                #[cfg(not(unix))]
-                HandleEventResponse::JobControl(e) => {
-                    // On platforms other than Unix this enum is expected to be
-                    // empty; we can check this assumption at compile time like
-                    // so.
-                    //
-                    // Rust 1.82 handles empty enums better, and this won't be
-                    // required after we bump the MSRV to that.
-                    match e {}
-                }
                 HandleEventResponse::Info(_) => {
                     // In reality, this is bounded by the number of
                     // tests running at the same time.

@@ -54,33 +54,6 @@ impl Styles {
     }
 }
 
-// Port of std::str::floor_char_boundary to Rust < 1.91.0. Remove after MSRV
-// has been bumped to 1.91 or above.
-pub(crate) const fn floor_char_boundary(s: &str, index: usize) -> usize {
-    if index >= s.len() {
-        s.len()
-    } else {
-        let mut i = index;
-        while i > 0 {
-            if is_utf8_char_boundary(s.as_bytes()[i]) {
-                break;
-            }
-            i -= 1;
-        }
-
-        //  The character boundary will be within four bytes of the index
-        debug_assert!(i >= index.saturating_sub(3));
-
-        i
-    }
-}
-
-#[inline]
-const fn is_utf8_char_boundary(b: u8) -> bool {
-    // This is bit magic equivalent to: b < 128 || b >= 192
-    (b as i8) >= -0x40
-}
-
 /// Calls the provided callback with chunks of text, breaking at newline
 /// boundaries when possible.
 ///
@@ -103,7 +76,7 @@ pub(crate) fn print_lines_in_chunks(
     while !remaining.is_empty() {
         // Find the maximum index to search for the last newline, respecting
         // UTF-8 character boundaries.
-        let max = floor_char_boundary(remaining, max_chunk_bytes);
+        let max = remaining.floor_char_boundary(max_chunk_bytes);
 
         // Search backwards for the last \n within the chunk.
         let last_newline = remaining[..max].rfind('\n');
