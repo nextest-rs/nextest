@@ -7,6 +7,8 @@
 //! reporter. The root structure for all events is [`TestEvent`].
 
 use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
+#[cfg(test)]
+use crate::output_spec::ArbitraryOutputSpec;
 use crate::{
     config::{
         elements::{LeakTimeoutResult, SlowTimeoutResult},
@@ -14,7 +16,7 @@ use crate::{
     },
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
     list::{OwnedTestInstanceId, TestInstanceId, TestList},
-    output_spec::{LiveSpec, OutputSpec},
+    output_spec::{LiveSpec, OutputSpec, SerializableOutputSpec},
     runner::{StressCondition, StressCount},
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
@@ -874,12 +876,12 @@ pub enum RunStatsFailureKind {
 #[derive(Serialize)]
 #[serde(
     rename_all = "kebab-case",
-    bound(serialize = "S::ChildOutputDesc: Serialize")
+    bound(serialize = "S: SerializableOutputSpec")
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+    arbitrary(bound(S: ArbitraryOutputSpec))
 )]
 pub struct ExecutionStatuses<S: OutputSpec> {
     /// This is guaranteed to be non-empty.
@@ -887,17 +889,14 @@ pub struct ExecutionStatuses<S: OutputSpec> {
     statuses: Vec<ExecuteStatus<S>>,
 }
 
-impl<'de, S: OutputSpec> Deserialize<'de> for ExecutionStatuses<S>
-where
-    S::ChildOutputDesc: serde::de::DeserializeOwned,
-{
+impl<'de, S: SerializableOutputSpec> Deserialize<'de> for ExecutionStatuses<S> {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         // Deserialize as the wrapper struct that matches the Serialize output.
-        // S is already bound as OutputSpec on this impl.
+        // S is already bound as SerializableOutputSpec on this impl.
         #[derive(Deserialize)]
         #[serde(
             rename_all = "kebab-case",
-            bound(deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned")
+            bound(deserialize = "S: SerializableOutputSpec")
         )]
         struct Helper<S: OutputSpec> {
             statuses: Vec<ExecuteStatus<S>>,
@@ -1134,14 +1133,14 @@ pub struct OutputErrorSlice {
 #[serde(
     rename_all = "kebab-case",
     bound(
-        serialize = "S::ChildOutputDesc: Serialize",
-        deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned"
+        serialize = "S: SerializableOutputSpec",
+        deserialize = "S: SerializableOutputSpec"
     )
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+    arbitrary(bound(S: ArbitraryOutputSpec))
 )]
 pub struct ExecuteStatus<S: OutputSpec> {
     /// Retry-related data.
@@ -1189,14 +1188,14 @@ pub struct ExecuteStatus<S: OutputSpec> {
 #[serde(
     rename_all = "kebab-case",
     bound(
-        serialize = "S::ChildOutputDesc: Serialize",
-        deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned"
+        serialize = "S: SerializableOutputSpec",
+        deserialize = "S: SerializableOutputSpec"
     )
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+    arbitrary(bound(S: ArbitraryOutputSpec))
 )]
 pub struct SetupScriptExecuteStatus<S: OutputSpec> {
     /// Output for this setup script.
@@ -1257,14 +1256,14 @@ pub struct SetupScriptEnvMap {
     tag = "type",
     rename_all = "kebab-case",
     bound(
-        serialize = "S::ChildOutputDesc: Serialize",
-        deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned"
+        serialize = "S: SerializableOutputSpec",
+        deserialize = "S: SerializableOutputSpec"
     )
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+    arbitrary(bound(S: ArbitraryOutputSpec))
 )]
 pub enum ChildExecutionOutputDescription<S: OutputSpec> {
     /// The process was run and the output was captured.

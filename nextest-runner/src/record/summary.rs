@@ -14,10 +14,12 @@
 //! - [`RecordingSpec`](crate::output_spec::RecordingSpec): reference to a file stored
 //!   in the zip archive.
 
+#[cfg(test)]
+use crate::output_spec::ArbitraryOutputSpec;
 use crate::{
     config::scripts::ScriptId,
     list::OwnedTestInstanceId,
-    output_spec::{LiveSpec, OutputSpec},
+    output_spec::{LiveSpec, OutputSpec, SerializableOutputSpec},
     reporter::{
         TestOutputDisplay,
         events::{
@@ -71,14 +73,14 @@ impl RecordOpts {
 #[serde(
     rename_all = "kebab-case",
     bound(
-        serialize = "S::ChildOutputDesc: Serialize",
-        deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned"
+        serialize = "S: SerializableOutputSpec",
+        deserialize = "S: SerializableOutputSpec"
     )
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + PartialEq + 'static))
+    arbitrary(bound(S: ArbitraryOutputSpec))
 )]
 pub struct TestEventSummary<S: OutputSpec> {
     /// The timestamp of the event.
@@ -126,14 +128,14 @@ impl TestEventSummary<LiveSpec> {
     tag = "type",
     rename_all = "kebab-case",
     bound(
-        serialize = "S::ChildOutputDesc: Serialize",
-        deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned"
+        serialize = "S: SerializableOutputSpec",
+        deserialize = "S: SerializableOutputSpec"
     )
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + PartialEq + 'static))
+    arbitrary(bound(S: ArbitraryOutputSpec))
 )]
 pub enum TestEventKindSummary<S: OutputSpec> {
     /// An event that doesn't carry output.
@@ -352,14 +354,14 @@ pub struct TestsNotSeenSummary {
     tag = "kind",
     rename_all = "kebab-case",
     bound(
-        serialize = "S::ChildOutputDesc: Serialize",
-        deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned"
+        serialize = "S: SerializableOutputSpec",
+        deserialize = "S: SerializableOutputSpec"
     )
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + PartialEq + 'static))
+    arbitrary(bound(S: ArbitraryOutputSpec))
 )]
 pub enum OutputEventKind<S: OutputSpec> {
     /// A setup script finished.

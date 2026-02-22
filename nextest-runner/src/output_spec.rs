@@ -15,6 +15,7 @@
 //! future without changing every generic type's parameter list.
 
 use crate::{record::ZipStoreOutputDescription, reporter::events::ChildOutputDescription};
+use serde::{Serialize, de::DeserializeOwned};
 
 /// Specifies how test output is represented.
 ///
@@ -45,4 +46,33 @@ pub struct RecordingSpec;
 
 impl OutputSpec for RecordingSpec {
     type ChildOutputDesc = ZipStoreOutputDescription;
+}
+
+/// An [`OutputSpec`] that supports serialization and deserialization.
+pub trait SerializableOutputSpec:
+    OutputSpec<ChildOutputDesc: Serialize + DeserializeOwned>
+{
+}
+
+impl<S> SerializableOutputSpec for S
+where
+    S: OutputSpec,
+    S::ChildOutputDesc: Serialize + DeserializeOwned,
+{
+}
+
+/// An [`OutputSpec`] that supports generation via
+/// [`proptest::arbitrary::Arbitrary`].
+#[cfg(test)]
+pub(crate) trait ArbitraryOutputSpec:
+    OutputSpec<ChildOutputDesc: proptest::arbitrary::Arbitrary + PartialEq + 'static> + 'static
+{
+}
+
+#[cfg(test)]
+impl<S> ArbitraryOutputSpec for S
+where
+    S: OutputSpec + 'static,
+    S::ChildOutputDesc: proptest::arbitrary::Arbitrary + PartialEq + 'static,
+{
 }
