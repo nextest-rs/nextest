@@ -66,19 +66,19 @@ impl RecordOpts {
 ///
 /// The `S` parameter specifies how test outputs are stored (see
 /// [`OutputSpec`]).
-#[derive_where::derive_where(Debug, PartialEq; S::ChildOutput)]
+#[derive_where::derive_where(Debug, PartialEq; S::ChildOutputDesc)]
 #[derive(Deserialize, Serialize)]
 #[serde(
     rename_all = "kebab-case",
     bound(
-        serialize = "S::ChildOutput: Serialize",
-        deserialize = "S::ChildOutput: serde::de::DeserializeOwned"
+        serialize = "S::ChildOutputDesc: Serialize",
+        deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned"
     )
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutput: proptest::arbitrary::Arbitrary + PartialEq + 'static))
+    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + PartialEq + 'static))
 )]
 pub struct TestEventSummary<S: OutputSpec> {
     /// The timestamp of the event.
@@ -120,20 +120,20 @@ impl TestEventSummary<LiveSpec> {
 ///
 /// The type parameter `S` specifies how test output is stored (see
 /// [`OutputSpec`]).
-#[derive_where::derive_where(Debug, PartialEq; S::ChildOutput)]
+#[derive_where::derive_where(Debug, PartialEq; S::ChildOutputDesc)]
 #[derive(Deserialize, Serialize)]
 #[serde(
     tag = "type",
     rename_all = "kebab-case",
     bound(
-        serialize = "S::ChildOutput: Serialize",
-        deserialize = "S::ChildOutput: serde::de::DeserializeOwned"
+        serialize = "S::ChildOutputDesc: Serialize",
+        deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned"
     )
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutput: proptest::arbitrary::Arbitrary + PartialEq + 'static))
+    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + PartialEq + 'static))
 )]
 pub enum TestEventKindSummary<S: OutputSpec> {
     /// An event that doesn't carry output.
@@ -346,20 +346,20 @@ pub struct TestsNotSeenSummary {
 ///
 /// The type parameter `S` specifies how test output is stored (see
 /// [`OutputSpec`]).
-#[derive_where::derive_where(Debug, PartialEq; S::ChildOutput)]
+#[derive_where::derive_where(Debug, PartialEq; S::ChildOutputDesc)]
 #[derive(Deserialize, Serialize)]
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
     bound(
-        serialize = "S::ChildOutput: Serialize",
-        deserialize = "S::ChildOutput: serde::de::DeserializeOwned"
+        serialize = "S::ChildOutputDesc: Serialize",
+        deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned"
     )
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutput: proptest::arbitrary::Arbitrary + PartialEq + 'static))
+    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + PartialEq + 'static))
 )]
 pub enum OutputEventKind<S: OutputSpec> {
     /// A setup script finished.
@@ -842,6 +842,32 @@ impl ZipStoreOutput {
             }
         }
     }
+}
+
+/// A description of child process output stored in a recording.
+///
+/// This is the recording-side counterpart to [`ChildOutputDescription`]. Unlike
+/// `ChildOutputDescription`, this type does not have a `NotLoaded` variant,
+/// because recorded output is always present in the archive.
+///
+/// [`ChildOutputDescription`]: crate::reporter::events::ChildOutputDescription
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
+pub enum ZipStoreOutputDescription {
+    /// The output was split into stdout and stderr.
+    Split {
+        /// Standard output, or `None` if not captured.
+        stdout: Option<ZipStoreOutput>,
+        /// Standard error, or `None` if not captured.
+        stderr: Option<ZipStoreOutput>,
+    },
+
+    /// The output was combined into a single stream.
+    Combined {
+        /// The combined output.
+        output: ZipStoreOutput,
+    },
 }
 
 #[cfg(test)]

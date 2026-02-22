@@ -58,6 +58,13 @@ impl<'a> UnitErrorDescription<'a> {
                                     Some(output.buf.as_ref()),
                                 );
                             }
+                            ChildOutputDescription::NotLoaded => {
+                                unreachable!(
+                                    "attempted to extract errors from output that was not loaded \
+                                     (the OutputLoadDecider should have returned Load for this \
+                                     event)"
+                                );
+                            }
                         }
                     }
 

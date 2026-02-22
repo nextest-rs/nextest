@@ -16,7 +16,7 @@ use super::{
     },
     summary::{
         OutputEventKind, OutputFileName, OutputKind, RecordOpts, TestEventKindSummary,
-        TestEventSummary, ZipStoreOutput,
+        TestEventSummary, ZipStoreOutput, ZipStoreOutputDescription,
     },
 };
 use crate::{
@@ -628,23 +628,33 @@ impl SerializeTestEventContext<'_> {
 
     fn convert_child_output(
         &mut self,
-        output: &ChildOutputDescription<LiveSpec>,
-    ) -> Result<ChildOutputDescription<RecordingSpec>, StoreWriterError> {
+        output: &ChildOutputDescription,
+    ) -> Result<ZipStoreOutputDescription, StoreWriterError> {
         match output {
-            ChildOutputDescription::Split { stdout, stderr } => Ok(ChildOutputDescription::Split {
-                // Preserve None (not captured) vs Some (captured, possibly empty).
-                stdout: stdout
-                    .as_ref()
-                    .map(|o| self.write_single_output(Some(o), OutputKind::Stdout))
-                    .transpose()?,
-                stderr: stderr
-                    .as_ref()
-                    .map(|o| self.write_single_output(Some(o), OutputKind::Stderr))
-                    .transpose()?,
-            }),
-            ChildOutputDescription::Combined { output } => Ok(ChildOutputDescription::Combined {
-                output: self.write_single_output(Some(output), OutputKind::Combined)?,
-            }),
+            ChildOutputDescription::Split { stdout, stderr } => {
+                Ok(ZipStoreOutputDescription::Split {
+                    // Preserve None (not captured) vs Some (captured, possibly empty).
+                    stdout: stdout
+                        .as_ref()
+                        .map(|o| self.write_single_output(Some(o), OutputKind::Stdout))
+                        .transpose()?,
+                    stderr: stderr
+                        .as_ref()
+                        .map(|o| self.write_single_output(Some(o), OutputKind::Stderr))
+                        .transpose()?,
+                })
+            }
+            ChildOutputDescription::Combined { output } => {
+                Ok(ZipStoreOutputDescription::Combined {
+                    output: self.write_single_output(Some(output), OutputKind::Combined)?,
+                })
+            }
+            ChildOutputDescription::NotLoaded => {
+                unreachable!(
+                    "NotLoaded output should never be present during recording \
+                     (NotLoaded is only produced during replay conversion)"
+                );
+            }
         }
     }
 

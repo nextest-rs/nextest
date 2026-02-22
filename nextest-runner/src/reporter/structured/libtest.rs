@@ -628,6 +628,13 @@ fn strip_human_output_from_failed_test(
                         writeln!(out, "\\n(stderr not captured)").map_err(fmt_err)?;
                     }
                 }
+                ChildOutputDescription::NotLoaded => {
+                    unreachable!(
+                        "attempted to strip output from output that was not loaded \
+                         (the libtest reporter is not used during replay, where NotLoaded \
+                         is produced)"
+                    );
+                }
             }
 
             if let Some(errors) = errors {

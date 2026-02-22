@@ -12,6 +12,7 @@ mod unit_output;
 
 pub(crate) use config::*;
 pub(crate) use formatters::DisplayUnitKind;
+pub use imp::OutputLoadDecider;
 pub(crate) use imp::*;
 pub use progress::{MaxProgressRunning, ShowProgress, ShowTerminalProgress};
 pub use status_level::*;

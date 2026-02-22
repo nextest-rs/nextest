@@ -194,7 +194,15 @@ pub(super) enum OutputStoreFinal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use test_strategy::proptest;
+    use crate::{
+        output_spec::RecordingSpec,
+        record::{LoadOutput, OutputEventKind},
+        reporter::{
+            displayer::{OutputLoadDecider, unit_output::OutputDisplayOverrides},
+            events::ExecutionStatuses,
+        },
+    };
+    use test_strategy::{Arbitrary, proptest};
 
     // ---
     // The proptests here are probabilistically exhaustive, and it's just easier to express them
@@ -586,5 +594,342 @@ mod tests {
                 "should store but not display final"
             );
         }
+    }
+
+    // --- OutputLoadDecider safety invariant tests ---
+    //
+    // If OutputLoadDecider returns Skip, we ensure that the reporter's display
+    // logic will never show output. (This is a one-directional invariant -- the
+    // decider errs towards loading more than strictly necessary.)
+    //
+    // The invariants established below are:
+    //
+    // 1. OutputLoadDecider conservatively returns Load whenever output
+    //    might be shown.
+    // 2. The cancellation_only_hides_output test verifies that
+    //    cancellation never causes output to appear that wouldn't appear
+    //    without cancellation. This justifies the decider ignoring
+    //    cancel_status.
+    // 3. The test-finished tests verify that if the decider says Skip,
+    //    compute_output_on_test_finished (the displayer's oracle) with
+    //    cancel_status=None produces no output.
+    //
+    // Together, they imply that if we skip loading, then there's no output.
+
+    /// Cancellation can only hide output, never show more than the baseline
+    /// (cancel_status = None).
+    ///
+    /// The `OutputLoadDecider` relies on this property.
+    #[proptest(cases = 512)]
+    fn cancellation_only_hides_output(
+        display: TestOutputDisplay,
+        cancel_status: Option<CancelReason>,
+        test_status_level: StatusLevel,
+        test_final_status_level: FinalStatusLevel,
+        execution_result: ExecutionResultDescription,
+        status_level: StatusLevel,
+        final_status_level: FinalStatusLevel,
+    ) {
+        let status_levels = StatusLevels {
+            status_level,
+            final_status_level,
+        };
+
+        let baseline = status_levels.compute_output_on_test_finished(
+            display,
+            None,
+            test_status_level,
+            test_final_status_level,
+            &execution_result,
+        );
+
+        let with_cancel = status_levels.compute_output_on_test_finished(
+            display,
+            cancel_status,
+            test_status_level,
+            test_final_status_level,
+            &execution_result,
+        );
+
+        // Cancellation must never show MORE output than the baseline.
+        if !baseline.show_immediate {
+            assert!(
+                !with_cancel.show_immediate,
+                "cancel_status={cancel_status:?} caused immediate output that \
+                 wouldn't appear without cancellation"
+            );
+        }
+
+        // For store_final, monotonicity has two dimensions:
+        // 1. An entry stored (No -> Yes is an escalation).
+        // 2. Output bytes displayed (display_output: false -> true is an
+        //    escalation).
+        //
+        // All 9 combinations are enumerated so that adding a new
+        // OutputStoreFinal variant forces an update here.
+        match (&baseline.store_final, &with_cancel.store_final) {
+            // Cancellation caused storage that wouldn't happen without it.
+            (OutputStoreFinal::No, OutputStoreFinal::Yes { display_output }) => {
+                panic!(
+                    "cancel_status={cancel_status:?} caused final output storage \
+                     (display_output={display_output}) that wouldn't happen \
+                     without cancellation"
+                );
+            }
+            // Cancellation caused output bytes to be displayed when they
+            // wouldn't be without it.
+            (
+                OutputStoreFinal::Yes {
+                    display_output: false,
+                },
+                OutputStoreFinal::Yes {
+                    display_output: true,
+                },
+            ) => {
+                panic!(
+                    "cancel_status={cancel_status:?} caused final output display \
+                     that wouldn't happen without cancellation"
+                );
+            }
+
+            // Same or reduced visibility is all right.
+            (OutputStoreFinal::No, OutputStoreFinal::No)
+            | (
+                OutputStoreFinal::Yes {
+                    display_output: false,
+                },
+                OutputStoreFinal::No,
+            )
+            | (
+                OutputStoreFinal::Yes {
+                    display_output: false,
+                },
+                OutputStoreFinal::Yes {
+                    display_output: false,
+                },
+            )
+            | (
+                OutputStoreFinal::Yes {
+                    display_output: true,
+                },
+                _,
+            ) => {}
+        }
+    }
+
+    // --- should_load_for_test_finished with real ExecutionStatuses ---
+    //
+    // These tests use ExecutionStatuses<RecordingSpec> which naturally
+    // covers flaky runs (multi-attempt with last passing), is_slow
+    // interactions (is_slow changes final_status_level), and multi-attempt
+    // scenarios.
+
+    #[derive(Debug, Arbitrary)]
+    struct TestFinishedLoadDeciderInput {
+        status_level: StatusLevel,
+        final_status_level: FinalStatusLevel,
+        success_output: TestOutputDisplay,
+        failure_output: TestOutputDisplay,
+        force_success_output: Option<TestOutputDisplay>,
+        force_failure_output: Option<TestOutputDisplay>,
+        force_exec_fail_output: Option<TestOutputDisplay>,
+        run_statuses: ExecutionStatuses<RecordingSpec>,
+    }
+
+    /// If the decider returns Skip for a TestFinished event, the displayer's
+    /// `compute_output_on_test_finished` must never access output bytes. The
+    /// cancellation_only_hides test above ensures this extends to all
+    /// cancel_status values.
+    ///
+    /// The invariant is one-directional: Skip implies no output byte access.
+    /// The displayer may still store a final entry for the status line, which
+    /// is fine if display_output is false.
+    ///
+    /// This test exercises the full `should_load_for_test_finished` path
+    /// with real `ExecutionStatuses`.
+    #[proptest(cases = 512)]
+    fn load_decider_test_finished_skip_implies_no_output(input: TestFinishedLoadDeciderInput) {
+        let TestFinishedLoadDeciderInput {
+            status_level,
+            final_status_level,
+            success_output,
+            failure_output,
+            force_success_output,
+            force_failure_output,
+            force_exec_fail_output,
+            run_statuses,
+        } = input;
+
+        let decider = OutputLoadDecider {
+            status_level,
+            overrides: OutputDisplayOverrides {
+                force_success_output,
+                force_failure_output,
+                force_exec_fail_output,
+            },
+        };
+
+        let load_decision =
+            decider.should_load_for_test_finished(success_output, failure_output, &run_statuses);
+
+        if load_decision == LoadOutput::Skip {
+            // Derive the same inputs the displayer would compute.
+            let describe = run_statuses.describe();
+            let last_status = describe.last_status();
+
+            let display = decider.overrides.resolve_test_output_display(
+                success_output,
+                failure_output,
+                &last_status.result,
+            );
+
+            let test_status_level = describe.status_level();
+            let test_final_status_level = describe.final_status_level();
+
+            let status_levels = StatusLevels {
+                status_level,
+                final_status_level,
+            };
+
+            let output = status_levels.compute_output_on_test_finished(
+                display,
+                None, // cancel status
+                test_status_level,
+                test_final_status_level,
+                &last_status.result,
+            );
+
+            assert!(
+                !output.show_immediate,
+                "load decider returned Skip but displayer would show immediate output \
+                 (display={display:?}, test_status_level={test_status_level:?}, \
+                 test_final_status_level={test_final_status_level:?})"
+            );
+            // The displayer may still store an entry for the status line,
+            // but it must not display output bytes (display_output: false).
+            if let OutputStoreFinal::Yes {
+                display_output: true,
+            } = output.store_final
+            {
+                panic!(
+                    "load decider returned Skip but displayer would display final output \
+                     (display={display:?}, test_status_level={test_status_level:?}, \
+                     test_final_status_level={test_final_status_level:?})"
+                );
+            }
+        }
+    }
+
+    /// For TestAttemptFailedWillRetry, the decider's Load/Skip decision
+    /// must exactly match whether the displayer would show retry output.
+    ///
+    /// The displayer shows retry output iff both conditions hold:
+    ///
+    /// 1. `status_level >= Retry` (the retry line is printed at all)
+    /// 2. `resolved_failure_output.is_immediate()` (output is shown inline)
+    ///
+    /// The decider must return Load for exactly these cases and Skip
+    /// otherwise.
+    ///
+    /// ```text
+    /// status_level >= Retry   resolved.is_immediate()   displayer shows   decider
+    ///       false                    false                   no             Skip
+    ///       false                    true                    no             Skip
+    ///       true                     false                   no             Skip
+    ///       true                     true                    yes            Load
+    /// ```
+    #[proptest(cases = 64)]
+    fn load_decider_matches_retry_output(
+        status_level: StatusLevel,
+        failure_output: TestOutputDisplay,
+        force_failure_output: Option<TestOutputDisplay>,
+    ) {
+        let decider = OutputLoadDecider {
+            status_level,
+            overrides: OutputDisplayOverrides {
+                force_success_output: None,
+                force_failure_output,
+                force_exec_fail_output: None,
+            },
+        };
+
+        let resolved = decider.overrides.failure_output(failure_output);
+        let displayer_would_show = resolved.is_immediate() && status_level >= StatusLevel::Retry;
+
+        let expected = if displayer_would_show {
+            LoadOutput::Load
+        } else {
+            LoadOutput::Skip
+        };
+
+        let actual = OutputLoadDecider::should_load_for_retry(resolved, status_level);
+        assert_eq!(actual, expected);
+    }
+
+    /// For SetupScriptFinished: the decider returns Load iff the result
+    /// is not a success (the displayer always shows output for failures).
+    #[proptest(cases = 64)]
+    fn load_decider_matches_setup_script_output(execution_result: ExecutionResultDescription) {
+        let expected = if execution_result.is_success() {
+            LoadOutput::Skip
+        } else {
+            LoadOutput::Load
+        };
+        let actual = OutputLoadDecider::should_load_for_setup_script(&execution_result);
+        assert_eq!(actual, expected);
+    }
+
+    // --- Wiring test for should_load_output ---
+    //
+    // The public entry point should_load_output dispatches to the
+    // individual helper methods. This test verifies the dispatch is
+    // correct: a wiring error (e.g. passing success_output where
+    // failure_output is intended) would be caught.
+
+    /// `should_load_output` must produce the same result as calling the
+    /// corresponding helper method for each `OutputEventKind` variant.
+    #[proptest(cases = 256)]
+    fn should_load_output_consistent_with_helpers(
+        status_level: StatusLevel,
+        force_success_output: Option<TestOutputDisplay>,
+        force_failure_output: Option<TestOutputDisplay>,
+        force_exec_fail_output: Option<TestOutputDisplay>,
+        event_kind: OutputEventKind<RecordingSpec>,
+    ) {
+        let decider = OutputLoadDecider {
+            status_level,
+            overrides: OutputDisplayOverrides {
+                force_success_output,
+                force_failure_output,
+                force_exec_fail_output,
+            },
+        };
+
+        let actual = decider.should_load_output(&event_kind);
+
+        let expected = match &event_kind {
+            OutputEventKind::SetupScriptFinished { run_status, .. } => {
+                OutputLoadDecider::should_load_for_setup_script(&run_status.result)
+            }
+            OutputEventKind::TestAttemptFailedWillRetry { failure_output, .. } => {
+                let display = decider.overrides.failure_output(*failure_output);
+                OutputLoadDecider::should_load_for_retry(display, status_level)
+            }
+            OutputEventKind::TestFinished {
+                success_output,
+                failure_output,
+                run_statuses,
+                ..
+            } => decider.should_load_for_test_finished(
+                *success_output,
+                *failure_output,
+                run_statuses,
+            ),
+        };
+
+        assert_eq!(
+            actual, expected,
+            "should_load_output disagrees with individual helper for event kind"
+        );
     }
 }

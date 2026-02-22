@@ -17,8 +17,8 @@ pub(crate) mod test_helpers;
 
 pub(crate) use displayer::{DisplayConfig, DisplayReporter, DisplayReporterBuilder, DisplayerKind};
 pub use displayer::{
-    FinalStatusLevel, MaxProgressRunning, ShowProgress, ShowTerminalProgress, StatusLevel,
-    TestOutputDisplay,
+    FinalStatusLevel, MaxProgressRunning, OutputLoadDecider, ShowProgress, ShowTerminalProgress,
+    StatusLevel, TestOutputDisplay,
 };
 pub use error_description::*;
 pub use helpers::highlight_end;

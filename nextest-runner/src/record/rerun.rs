@@ -478,13 +478,14 @@ mod tests {
     use super::*;
     use crate::{
         output_spec::RecordingSpec,
-        record::{OutputEventKind, StressIndexSummary, TestEventKindSummary},
+        record::{
+            OutputEventKind, StressIndexSummary, TestEventKindSummary, ZipStoreOutputDescription,
+        },
         reporter::{
             TestOutputDisplay,
             events::{
-                ChildExecutionOutputDescription, ChildOutputDescription, ExecuteStatus,
-                ExecutionResultDescription, ExecutionStatuses, FailureDescription, RetryData,
-                RunStats,
+                ChildExecutionOutputDescription, ExecuteStatus, ExecutionResultDescription,
+                ExecutionStatuses, FailureDescription, RetryData, RunStats,
             },
         },
     };
@@ -1468,7 +1469,7 @@ mod tests {
             },
             output: ChildExecutionOutputDescription::Output {
                 result: Some(result.clone()),
-                output: ChildOutputDescription::Split {
+                output: ZipStoreOutputDescription::Split {
                     stdout: None,
                     stderr: None,
                 },

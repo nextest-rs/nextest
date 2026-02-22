@@ -61,7 +61,8 @@ pub use portable::{
 pub use reader::{RecordEventIter, RecordReader, StoreReader};
 pub use recorder::{RunRecorder, StoreSizes};
 pub use replay::{
-    ReplayContext, ReplayConversionError, ReplayHeader, ReplayReporter, ReplayReporterBuilder,
+    LoadOutput, ReplayContext, ReplayConversionError, ReplayHeader, ReplayReporter,
+    ReplayReporterBuilder,
 };
 pub use rerun::ComputedRerunInfo;
 pub use retention::{PruneKind, PrunePlan, PruneResult, RecordRetentionPolicy};
@@ -80,4 +81,5 @@ pub use store::{
 pub use summary::{
     CoreEventKind, OutputEventKind, OutputFileName, RecordOpts, StressConditionSummary,
     StressIndexSummary, TestEventKindSummary, TestEventSummary, ZipStoreOutput,
+    ZipStoreOutputDescription,
 };

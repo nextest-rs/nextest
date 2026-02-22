@@ -6,15 +6,15 @@
 //! The [`OutputSpec`] trait abstracts over two modes of output storage:
 //!
 //! - [`LiveSpec`]: output stored in memory during live execution, using
-//!   [`ChildSingleOutput`].
+//!   [`ChildOutputDescription`].
 //! - [`RecordingSpec`]: output stored in recordings,
-//!   using [`ZipStoreOutput`].
+//!   using [`ZipStoreOutputDescription`].
 //!
-//! Types generic over `S: OutputSpec` use `S::ChildOutput` for their output
-//! fields. This enables adding additional associated types in the future
-//! without changing every generic type's parameter list.
+//! Types generic over `S: OutputSpec` use `S::ChildOutputDesc` for their output
+//! description fields. This enables adding additional associated types in the
+//! future without changing every generic type's parameter list.
 
-use crate::{record::ZipStoreOutput, test_output::ChildSingleOutput};
+use crate::{record::ZipStoreOutputDescription, reporter::events::ChildOutputDescription};
 
 /// Specifies how test output is represented.
 ///
@@ -23,26 +23,26 @@ use crate::{record::ZipStoreOutput, test_output::ChildSingleOutput};
 /// - [`LiveSpec`]: output stored in memory during live execution.
 /// - [`RecordingSpec`]: output stored in recordings.
 pub trait OutputSpec {
-    /// The type used to represent a single child output stream.
-    type ChildOutput;
+    /// The type used to describe child output.
+    type ChildOutputDesc;
 }
 
 /// Output spec for live test execution.
 ///
-/// Uses [`ChildSingleOutput`] for in-memory byte buffers with lazy UTF-8 string
-/// conversion.
+/// Uses [`ChildOutputDescription`] for in-memory byte buffers with lazy UTF-8
+/// string conversion.
 pub struct LiveSpec;
 
 impl OutputSpec for LiveSpec {
-    type ChildOutput = ChildSingleOutput;
+    type ChildOutputDesc = ChildOutputDescription;
 }
 
 /// Output spec for recorded/replayed test runs.
 ///
-/// Uses [`ZipStoreOutput`] for content-addressed file references in zip
-/// archives.
+/// Uses [`ZipStoreOutputDescription`] for content-addressed file references in
+/// zip archives.
 pub struct RecordingSpec;
 
 impl OutputSpec for RecordingSpec {
-    type ChildOutput = ZipStoreOutput;
+    type ChildOutputDesc = ZipStoreOutputDescription;
 }

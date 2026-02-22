@@ -16,7 +16,7 @@ use crate::{
     list::{OwnedTestInstanceId, TestInstanceId, TestList},
     output_spec::{LiveSpec, OutputSpec},
     runner::{StressCondition, StressCount},
-    test_output::{ChildExecutionOutput, ChildOutput},
+    test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
 use chrono::{DateTime, FixedOffset};
 use nextest_metadata::MismatchReason;
@@ -870,16 +870,16 @@ pub enum RunStatsFailureKind {
 ///
 /// The type parameter `S` specifies how test output is stored (see
 /// [`OutputSpec`]).
-#[derive_where::derive_where(Clone, Debug, PartialEq, Eq; S::ChildOutput)]
+#[derive_where::derive_where(Clone, Debug, PartialEq, Eq; S::ChildOutputDesc)]
 #[derive(Serialize)]
 #[serde(
     rename_all = "kebab-case",
-    bound(serialize = "S::ChildOutput: Serialize")
+    bound(serialize = "S::ChildOutputDesc: Serialize")
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutput: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
 )]
 pub struct ExecutionStatuses<S: OutputSpec> {
     /// This is guaranteed to be non-empty.
@@ -889,7 +889,7 @@ pub struct ExecutionStatuses<S: OutputSpec> {
 
 impl<'de, S: OutputSpec> Deserialize<'de> for ExecutionStatuses<S>
 where
-    S::ChildOutput: serde::de::DeserializeOwned,
+    S::ChildOutputDesc: serde::de::DeserializeOwned,
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         // Deserialize as the wrapper struct that matches the Serialize output.
@@ -897,7 +897,7 @@ where
         #[derive(Deserialize)]
         #[serde(
             rename_all = "kebab-case",
-            bound(deserialize = "S::ChildOutput: serde::de::DeserializeOwned")
+            bound(deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned")
         )]
         struct Helper<S: OutputSpec> {
             statuses: Vec<ExecuteStatus<S>>,
@@ -977,16 +977,13 @@ impl<S: OutputSpec> IntoIterator for ExecutionStatuses<S> {
     }
 }
 
-// TODO: Add Arbitrary impl for ExecutionStatuses when generic type support is added.
-// This requires ExecuteStatus<S> to implement Arbitrary with proper bounds.
-
 /// A description of test executions obtained from `ExecuteStatuses`.
 ///
 /// This can be used to quickly determine whether a test passed, failed or was flaky.
 ///
 /// The type parameter `S` specifies how test output is stored (see
 /// [`OutputSpec`]).
-#[derive_where::derive_where(Debug; S::ChildOutput)]
+#[derive_where::derive_where(Debug; S::ChildOutputDesc)]
 pub enum ExecutionDescription<'a, S: OutputSpec> {
     /// The test was run once and was successful.
     Success {
@@ -1018,7 +1015,7 @@ pub enum ExecutionDescription<'a, S: OutputSpec> {
     },
 }
 
-// Manual Copy and Clone implementations to avoid requiring S::ChildOutput:
+// Manual Copy and Clone implementations to avoid requiring S::ChildOutputDesc:
 // Copy/Clone, since ExecutionDescription only stores references.
 impl<S: OutputSpec> Clone for ExecutionDescription<'_, S> {
     fn clone(&self) -> Self {
@@ -1132,19 +1129,19 @@ pub struct OutputErrorSlice {
 ///
 /// The type parameter `S` specifies how test output is stored (see
 /// [`OutputSpec`]).
-#[derive_where::derive_where(Clone, Debug, PartialEq, Eq; S::ChildOutput)]
+#[derive_where::derive_where(Clone, Debug, PartialEq, Eq; S::ChildOutputDesc)]
 #[derive(Serialize, Deserialize)]
 #[serde(
     rename_all = "kebab-case",
     bound(
-        serialize = "S::ChildOutput: Serialize",
-        deserialize = "S::ChildOutput: serde::de::DeserializeOwned"
+        serialize = "S::ChildOutputDesc: Serialize",
+        deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned"
     )
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutput: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
 )]
 pub struct ExecuteStatus<S: OutputSpec> {
     /// Retry-related data.
@@ -1187,19 +1184,19 @@ pub struct ExecuteStatus<S: OutputSpec> {
 ///
 /// The type parameter `S` specifies how test output is stored (see
 /// [`OutputSpec`]).
-#[derive_where::derive_where(Clone, Debug, PartialEq, Eq; S::ChildOutput)]
+#[derive_where::derive_where(Clone, Debug, PartialEq, Eq; S::ChildOutputDesc)]
 #[derive(Serialize, Deserialize)]
 #[serde(
     rename_all = "kebab-case",
     bound(
-        serialize = "S::ChildOutput: Serialize",
-        deserialize = "S::ChildOutput: serde::de::DeserializeOwned"
+        serialize = "S::ChildOutputDesc: Serialize",
+        deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned"
     )
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutput: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
 )]
 pub struct SetupScriptExecuteStatus<S: OutputSpec> {
     /// Output for this setup script.
@@ -1254,20 +1251,20 @@ pub struct SetupScriptEnvMap {
 ///
 /// This is the external-facing counterpart to [`ChildExecutionOutput`]. The
 /// type parameter `S` specifies how output is stored (see [`OutputSpec`]).
-#[derive_where::derive_where(Clone, Debug, PartialEq, Eq; S::ChildOutput)]
+#[derive_where::derive_where(Clone, Debug, PartialEq, Eq; S::ChildOutputDesc)]
 #[derive(Serialize, Deserialize)]
 #[serde(
     tag = "type",
     rename_all = "kebab-case",
     bound(
-        serialize = "S::ChildOutput: Serialize",
-        deserialize = "S::ChildOutput: serde::de::DeserializeOwned"
+        serialize = "S::ChildOutputDesc: Serialize",
+        deserialize = "S::ChildOutputDesc: serde::de::DeserializeOwned"
     )
 )]
 #[cfg_attr(
     test,
     derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutput: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
+    arbitrary(bound(S: 'static, S::ChildOutputDesc: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
 )]
 pub enum ChildExecutionOutputDescription<S: OutputSpec> {
     /// The process was run and the output was captured.
@@ -1278,7 +1275,7 @@ pub enum ChildExecutionOutputDescription<S: OutputSpec> {
         result: Option<ExecutionResultDescription>,
 
         /// The captured output.
-        output: ChildOutputDescription<S>,
+        output: S::ChildOutputDesc,
 
         /// Errors that occurred while waiting on the child process or parsing
         /// its output.
@@ -1307,46 +1304,42 @@ impl<S: OutputSpec> ChildExecutionOutputDescription<S> {
     }
 }
 
-/// The output of a child process, generic over output storage.
+/// The output of a child process during live execution.
 ///
 /// This represents either split stdout/stderr or combined output. The `Option`
 /// wrappers distinguish between "not captured" (`None`) and "captured but
 /// empty" (`Some` with empty content).
 ///
-/// The type parameter `S` specifies how test output is stored (see
-/// [`OutputSpec`]).
-#[derive_where::derive_where(Clone, Debug, PartialEq, Eq; S::ChildOutput)]
-#[derive(Serialize, Deserialize)]
-#[serde(
-    tag = "kind",
-    rename_all = "kebab-case",
-    bound(
-        serialize = "S::ChildOutput: Serialize",
-        deserialize = "S::ChildOutput: serde::de::DeserializeOwned"
-    )
-)]
-#[cfg_attr(
-    test,
-    derive(test_strategy::Arbitrary),
-    arbitrary(bound(S: 'static, S::ChildOutput: proptest::arbitrary::Arbitrary + std::fmt::Debug + 'static))
-)]
-pub enum ChildOutputDescription<S: OutputSpec> {
+/// The `NotLoaded` variant is used during replay when the display
+/// configuration indicates that output won't be shown.
+///
+/// For the recording counterpart, see
+/// [`ZipStoreOutputDescription`](crate::record::ZipStoreOutputDescription).
+#[derive(Clone, Debug)]
+pub enum ChildOutputDescription {
     /// The output was split into stdout and stderr.
     Split {
         /// Standard output, or `None` if not captured.
-        stdout: Option<S::ChildOutput>,
+        stdout: Option<ChildSingleOutput>,
         /// Standard error, or `None` if not captured.
-        stderr: Option<S::ChildOutput>,
+        stderr: Option<ChildSingleOutput>,
     },
 
     /// The output was combined into a single stream.
     Combined {
         /// The combined output.
-        output: S::ChildOutput,
+        output: ChildSingleOutput,
     },
+
+    /// Output exists but was not loaded.
+    ///
+    /// This variant is used during replay when the display configuration
+    /// indicates that output won't be shown. Code that accesses output
+    /// bytes must never be reached with this variant.
+    NotLoaded,
 }
 
-impl ChildOutputDescription<LiveSpec> {
+impl ChildOutputDescription {
     /// Returns the lengths of stdout and stderr in bytes.
     ///
     /// Returns `None` for each stream that wasn't captured.
@@ -1357,6 +1350,13 @@ impl ChildOutputDescription<LiveSpec> {
                 stderr.as_ref().map(|s| s.buf.len() as u64),
             ),
             Self::Combined { output } => (Some(output.buf.len() as u64), None),
+            Self::NotLoaded => {
+                unreachable!(
+                    "attempted to get output lengths from output that was not loaded \
+                     (this method is only called from the live runner, where NotLoaded \
+                     is never produced)"
+                );
+            }
         }
     }
 }
@@ -1504,7 +1504,7 @@ impl From<ChildExecutionOutput> for ChildExecutionOutputDescription<LiveSpec> {
     }
 }
 
-impl From<ChildOutput> for ChildOutputDescription<LiveSpec> {
+impl From<ChildOutput> for ChildOutputDescription {
     fn from(output: ChildOutput) -> Self {
         match output {
             ChildOutput::Split(split) => Self::Split {

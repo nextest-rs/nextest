@@ -5,6 +5,7 @@
 
 use super::DisplayerKind;
 use crate::{
+    config::elements::{LeakTimeoutResult, SlowTimeoutResult},
     errors::DisplayErrorChain,
     indenter::indented,
     output_spec::LiveSpec,
@@ -58,6 +59,66 @@ impl TestOutputDisplay {
     }
 }
 
+/// Overrides for how test output is displayed, shared between the
+/// [`UnitOutputReporter`] and [`super::OutputLoadDecider`].
+///
+/// Each field, when `Some`, overrides the per-test setting for the
+/// corresponding output category. When `None`, the per-test setting from the
+/// profile is used as-is.
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
+pub(super) struct OutputDisplayOverrides {
+    pub(super) force_success_output: Option<TestOutputDisplay>,
+    pub(super) force_failure_output: Option<TestOutputDisplay>,
+    pub(super) force_exec_fail_output: Option<TestOutputDisplay>,
+}
+
+impl OutputDisplayOverrides {
+    /// Returns the resolved output display for a successful test.
+    pub(super) fn success_output(&self, event_setting: TestOutputDisplay) -> TestOutputDisplay {
+        self.force_success_output.unwrap_or(event_setting)
+    }
+
+    /// Returns the resolved output display for a failing test.
+    pub(super) fn failure_output(&self, event_setting: TestOutputDisplay) -> TestOutputDisplay {
+        self.force_failure_output.unwrap_or(event_setting)
+    }
+
+    /// Returns the resolved output display for an exec-fail test.
+    pub(super) fn exec_fail_output(&self, event_setting: TestOutputDisplay) -> TestOutputDisplay {
+        self.force_exec_fail_output.unwrap_or(event_setting)
+    }
+
+    /// Resolves the output display setting for a test based on the execution
+    /// result, applying any forced overrides.
+    pub(super) fn resolve_test_output_display(
+        &self,
+        success_output: TestOutputDisplay,
+        failure_output: TestOutputDisplay,
+        result: &ExecutionResultDescription,
+    ) -> TestOutputDisplay {
+        match result {
+            ExecutionResultDescription::Pass
+            | ExecutionResultDescription::Timeout {
+                result: SlowTimeoutResult::Pass,
+            }
+            | ExecutionResultDescription::Leak {
+                result: LeakTimeoutResult::Pass,
+            } => self.success_output(success_output),
+
+            ExecutionResultDescription::Leak {
+                result: LeakTimeoutResult::Fail,
+            }
+            | ExecutionResultDescription::Timeout {
+                result: SlowTimeoutResult::Fail,
+            }
+            | ExecutionResultDescription::Fail { .. } => self.failure_output(failure_output),
+
+            ExecutionResultDescription::ExecFail => self.exec_fail_output(failure_output),
+        }
+    }
+}
+
 /// Formatting options for writing out child process output.
 ///
 /// TODO: should these be lazily generated? Can't imagine this ever being
@@ -73,20 +134,13 @@ pub(super) struct ChildOutputSpec {
 }
 
 pub(super) struct UnitOutputReporter {
-    force_success_output: Option<TestOutputDisplay>,
-    force_failure_output: Option<TestOutputDisplay>,
-    force_exec_fail_output: Option<TestOutputDisplay>,
+    overrides: OutputDisplayOverrides,
     display_empty_outputs: bool,
     displayer_kind: DisplayerKind,
 }
 
 impl UnitOutputReporter {
-    pub(super) fn new(
-        force_success_output: Option<TestOutputDisplay>,
-        force_failure_output: Option<TestOutputDisplay>,
-        force_exec_fail_output: Option<TestOutputDisplay>,
-        displayer_kind: DisplayerKind,
-    ) -> Self {
+    pub(super) fn new(overrides: OutputDisplayOverrides, displayer_kind: DisplayerKind) -> Self {
         // Ordinarily, empty stdout and stderr are not displayed. This
         // environment variable is set in integration tests to ensure that they
         // are.
@@ -94,36 +148,27 @@ impl UnitOutputReporter {
             std::env::var_os("__NEXTEST_DISPLAY_EMPTY_OUTPUTS").is_some_and(|v| v == "1");
 
         Self {
-            force_success_output,
-            force_failure_output,
-            force_exec_fail_output,
+            overrides,
             display_empty_outputs,
             displayer_kind,
         }
     }
 
-    pub(super) fn success_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
-        self.force_success_output.unwrap_or(test_setting)
+    /// Returns the output display overrides.
+    pub(super) fn overrides(&self) -> OutputDisplayOverrides {
+        self.overrides
     }
 
-    pub(super) fn failure_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
-        self.force_failure_output.unwrap_or(test_setting)
-    }
-
-    pub(super) fn exec_fail_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
-        self.force_exec_fail_output.unwrap_or(test_setting)
-    }
-
-    // These are currently only used by tests, but there's no principled
-    // objection to using these functions elsewhere in the displayer.
-    #[cfg(test)]
-    pub(super) fn force_success_output(&self) -> Option<TestOutputDisplay> {
-        self.force_success_output
-    }
-
-    #[cfg(test)]
-    pub(super) fn force_failure_output(&self) -> Option<TestOutputDisplay> {
-        self.force_failure_output
+    /// Resolves the output display setting for a test based on the execution
+    /// result, applying any forced overrides.
+    pub(super) fn resolve_test_output_display(
+        &self,
+        success_output: TestOutputDisplay,
+        failure_output: TestOutputDisplay,
+        result: &ExecutionResultDescription,
+    ) -> TestOutputDisplay {
+        self.overrides
+            .resolve_test_output_display(success_output, failure_output, result)
     }
 
     pub(super) fn write_child_execution_output(
@@ -182,7 +227,7 @@ impl UnitOutputReporter {
         &self,
         styles: &Styles,
         spec: &ChildOutputSpec,
-        output: &ChildOutputDescription<LiveSpec>,
+        output: &ChildOutputDescription,
         highlight_slice: Option<TestOutputErrorSlice<'_>>,
         mut writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
@@ -258,6 +303,12 @@ impl UnitOutputReporter {
                     )?;
                     indent_writer.write_str_flush()?;
                 }
+            }
+            ChildOutputDescription::NotLoaded => {
+                unreachable!(
+                    "attempted to display output that was not loaded \
+                     (the OutputLoadDecider should have returned Load for this event)"
+                );
             }
         }
 
@@ -388,7 +439,14 @@ mod tests {
     }
 
     fn make_unit_output_reporter(displayer_kind: DisplayerKind) -> UnitOutputReporter {
-        UnitOutputReporter::new(None, None, None, displayer_kind)
+        UnitOutputReporter::new(
+            OutputDisplayOverrides {
+                force_success_output: None,
+                force_failure_output: None,
+                force_exec_fail_output: None,
+            },
+            displayer_kind,
+        )
     }
 
     #[test]

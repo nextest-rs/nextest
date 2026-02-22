@@ -490,6 +490,16 @@ fn set_execute_status_props(
                 out.set_system_out(output.as_str_lossy())
                     .set_system_err(STDOUT_STDERR_COMBINED);
             }
+            ChildExecutionOutputDescription::Output {
+                output: ChildOutputDescription::NotLoaded,
+                ..
+            } => {
+                unreachable!(
+                    "attempted to store stdout/stderr from output that was not loaded \
+                     (the JUnit reporter is not used during replay, where NotLoaded \
+                     is produced)"
+                );
+            }
             ChildExecutionOutputDescription::StartError(_) => {
                 out.set_system_out(PROCESS_FAILED_TO_START)
                     .set_system_err(PROCESS_FAILED_TO_START);

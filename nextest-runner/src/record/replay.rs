@@ -14,6 +14,7 @@ use crate::{
     record::{
         CoreEventKind, OutputEventKind, OutputFileName, StoreReader, StressConditionSummary,
         StressIndexSummary, TestEventKindSummary, TestEventSummary, ZipStoreOutput,
+        ZipStoreOutputDescription,
     },
     reporter::events::{
         ChildExecutionOutputDescription, ChildOutputDescription, ExecuteStatus, ExecutionStatuses,
@@ -26,6 +27,15 @@ use crate::{
 use bytes::Bytes;
 use nextest_metadata::{RustBinaryId, TestCaseName};
 use std::{collections::HashSet, num::NonZero};
+
+/// Whether to load output from the archive during replay conversion.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum LoadOutput {
+    /// Load output from the archive.
+    Load,
+    /// Skip loading output.
+    Skip,
+}
 
 /// Context for replaying recorded test events.
 ///
@@ -90,8 +100,9 @@ impl<'a> ReplayContext<'a> {
         &'cx self,
         summary: &TestEventSummary<RecordingSpec>,
         reader: &mut dyn StoreReader,
+        load_output: LoadOutput,
     ) -> Result<TestEvent<'cx>, ReplayConversionError> {
-        let kind = self.convert_event_kind(&summary.kind, reader)?;
+        let kind = self.convert_event_kind(&summary.kind, reader, load_output)?;
         Ok(TestEvent {
             timestamp: summary.timestamp,
             elapsed: summary.elapsed,
@@ -103,10 +114,13 @@ impl<'a> ReplayContext<'a> {
         &'cx self,
         kind: &TestEventKindSummary<RecordingSpec>,
         reader: &mut dyn StoreReader,
+        load_output: LoadOutput,
     ) -> Result<TestEventKind<'cx>, ReplayConversionError> {
         match kind {
             TestEventKindSummary::Core(core) => self.convert_core_event(core),
-            TestEventKindSummary::Output(output) => self.convert_output_event(output, reader),
+            TestEventKindSummary::Output(output) => {
+                self.convert_output_event(output, reader, load_output)
+            }
         }
     }
 
@@ -323,6 +337,7 @@ impl<'a> ReplayContext<'a> {
         &'cx self,
         kind: &OutputEventKind<RecordingSpec>,
         reader: &mut dyn StoreReader,
+        load_output: LoadOutput,
     ) -> Result<TestEventKind<'cx>, ReplayConversionError> {
         match kind {
             OutputEventKind::SetupScriptFinished {
@@ -344,7 +359,7 @@ impl<'a> ReplayContext<'a> {
                 junit_store_success_output: false,
                 junit_store_failure_output: false,
                 no_capture: *no_capture,
-                run_status: convert_setup_script_status(run_status, reader)?,
+                run_status: convert_setup_script_status(run_status, reader, load_output)?,
             }),
 
             OutputEventKind::TestAttemptFailedWillRetry {
@@ -364,7 +379,7 @@ impl<'a> ReplayContext<'a> {
                 Ok(TestEventKind::TestAttemptFailedWillRetry {
                     stress_index: stress_index.as_ref().map(convert_stress_index),
                     test_instance: instance_id,
-                    run_status: convert_execute_status(run_status, reader)?,
+                    run_status: convert_execute_status(run_status, reader, load_output)?,
                     delay_before_next_attempt: *delay_before_next_attempt,
                     failure_output: *failure_output,
                     running: *running,
@@ -395,7 +410,7 @@ impl<'a> ReplayContext<'a> {
                     failure_output: *failure_output,
                     junit_store_success_output: *junit_store_success_output,
                     junit_store_failure_output: *junit_store_failure_output,
-                    run_statuses: convert_execution_statuses(run_statuses, reader)?,
+                    run_statuses: convert_execution_statuses(run_statuses, reader, load_output)?,
                     current_stats: *current_stats,
                     running: *running,
                 })
@@ -457,8 +472,9 @@ fn convert_stress_index(summary: &StressIndexSummary) -> StressIndex {
 fn convert_execute_status(
     status: &ExecuteStatus<RecordingSpec>,
     reader: &mut dyn StoreReader,
+    load_output: LoadOutput,
 ) -> Result<ExecuteStatus<LiveSpec>, ReplayConversionError> {
-    let output = convert_child_execution_output(&status.output, reader)?;
+    let output = convert_child_execution_output(&status.output, reader, load_output)?;
     Ok(ExecuteStatus {
         retry_data: status.retry_data,
         output,
@@ -475,10 +491,11 @@ fn convert_execute_status(
 fn convert_execution_statuses(
     statuses: &ExecutionStatuses<RecordingSpec>,
     reader: &mut dyn StoreReader,
+    load_output: LoadOutput,
 ) -> Result<ExecutionStatuses<LiveSpec>, ReplayConversionError> {
     let statuses: Vec<ExecuteStatus<LiveSpec>> = statuses
         .iter()
-        .map(|s| convert_execute_status(s, reader))
+        .map(|s| convert_execute_status(s, reader, load_output))
         .collect::<Result<_, _>>()?;
 
     Ok(ExecutionStatuses::new(statuses))
@@ -487,8 +504,9 @@ fn convert_execution_statuses(
 fn convert_setup_script_status(
     status: &SetupScriptExecuteStatus<RecordingSpec>,
     reader: &mut dyn StoreReader,
+    load_output: LoadOutput,
 ) -> Result<SetupScriptExecuteStatus<LiveSpec>, ReplayConversionError> {
-    let output = convert_child_execution_output(&status.output, reader)?;
+    let output = convert_child_execution_output(&status.output, reader, load_output)?;
     Ok(SetupScriptExecuteStatus {
         output,
         result: status.result.clone(),
@@ -503,6 +521,7 @@ fn convert_setup_script_status(
 fn convert_child_execution_output(
     output: &ChildExecutionOutputDescription<RecordingSpec>,
     reader: &mut dyn StoreReader,
+    load_output: LoadOutput,
 ) -> Result<ChildExecutionOutputDescription<LiveSpec>, ReplayConversionError> {
     match output {
         ChildExecutionOutputDescription::Output {
@@ -510,7 +529,7 @@ fn convert_child_execution_output(
             output,
             errors,
         } => {
-            let output = convert_child_output(output, reader)?;
+            let output = convert_child_output(output, reader, load_output)?;
             Ok(ChildExecutionOutputDescription::Output {
                 result: result.clone(),
                 output,
@@ -524,11 +543,16 @@ fn convert_child_execution_output(
 }
 
 fn convert_child_output(
-    output: &ChildOutputDescription<RecordingSpec>,
+    output: &ZipStoreOutputDescription,
     reader: &mut dyn StoreReader,
-) -> Result<ChildOutputDescription<LiveSpec>, ReplayConversionError> {
+    load_output: LoadOutput,
+) -> Result<ChildOutputDescription, ReplayConversionError> {
+    if load_output == LoadOutput::Skip {
+        return Ok(ChildOutputDescription::NotLoaded);
+    }
+
     match output {
-        ChildOutputDescription::Split { stdout, stderr } => {
+        ZipStoreOutputDescription::Split { stdout, stderr } => {
             let stdout = stdout
                 .as_ref()
                 .map(|o| read_output_as_child_single(reader, o))
@@ -539,7 +563,7 @@ fn convert_child_output(
                 .transpose()?;
             Ok(ChildOutputDescription::Split { stdout, stderr })
         }
-        ChildOutputDescription::Combined { output } => {
+        ZipStoreOutputDescription::Combined { output } => {
             let output = read_output_as_child_single(reader, output)?;
             Ok(ChildOutputDescription::Combined { output })
         }
@@ -578,8 +602,8 @@ use crate::{
     },
     reporter::{
         DisplayConfig, DisplayReporter, DisplayReporterBuilder, DisplayerKind, FinalStatusLevel,
-        MaxProgressRunning, ReporterOutput, ShowProgress, ShowTerminalProgress, StatusLevel,
-        TestOutputDisplay,
+        MaxProgressRunning, OutputLoadDecider, ReporterOutput, ShowProgress, ShowTerminalProgress,
+        StatusLevel, TestOutputDisplay,
     },
 };
 use chrono::{DateTime, FixedOffset};
@@ -766,6 +790,15 @@ pub struct ReplayReporter<'a> {
 }
 
 impl<'a> ReplayReporter<'a> {
+    /// Returns an [`OutputLoadDecider`] for this reporter.
+    ///
+    /// The decider examines event metadata and the reporter's display
+    /// configuration to decide whether output should be loaded from the
+    /// archive during replay.
+    pub fn output_load_decider(&self) -> OutputLoadDecider {
+        self.display_reporter.output_load_decider()
+    }
+
     /// Writes the replay header to the output.
     ///
     /// This should be called before processing any recorded events to display

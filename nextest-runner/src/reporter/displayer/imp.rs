@@ -16,7 +16,7 @@ use super::{
     progress::{
         MaxProgressRunning, ProgressBarState, progress_bar_msg, progress_str, write_summary_str,
     },
-    unit_output::TestOutputDisplay,
+    unit_output::{OutputDisplayOverrides, TestOutputDisplay},
 };
 use crate::{
     config::{
@@ -31,8 +31,8 @@ use crate::{
     },
     indenter::indented,
     list::TestInstanceId,
-    output_spec::LiveSpec,
-    record::{ReplayHeader, ShortestRunIdPrefix},
+    output_spec::{LiveSpec, RecordingSpec},
+    record::{LoadOutput, OutputEventKind, ReplayHeader, ShortestRunIdPrefix},
     reporter::{
         displayer::{
             formatters::DisplayHhMmSs,
@@ -136,17 +136,19 @@ impl DisplayReporterBuilder {
         // success_output is meaningless if the runner isn't capturing any
         // output. However, failure output is still meaningful for exec fail
         // events.
-        let force_success_output = match no_capture {
-            true => Some(TestOutputDisplay::Never),
-            false => self.success_output,
-        };
-        let force_failure_output = match no_capture {
-            true => Some(TestOutputDisplay::Never),
-            false => self.failure_output,
-        };
-        let force_exec_fail_output = match no_capture {
-            true => Some(TestOutputDisplay::Immediate),
-            false => self.failure_output,
+        let overrides = OutputDisplayOverrides {
+            force_success_output: match no_capture {
+                true => Some(TestOutputDisplay::Never),
+                false => self.success_output,
+            },
+            force_failure_output: match no_capture {
+                true => Some(TestOutputDisplay::Never),
+                false => self.failure_output,
+            },
+            force_exec_fail_output: match no_capture {
+                true => Some(TestOutputDisplay::Immediate),
+                false => self.failure_output,
+            },
         };
 
         let counter_width = matches!(resolved.progress_display, ProgressDisplay::Counter)
@@ -164,12 +166,7 @@ impl DisplayReporterBuilder {
                 styles,
                 theme_characters,
                 cancel_status: None,
-                unit_output: UnitOutputReporter::new(
-                    force_success_output,
-                    force_failure_output,
-                    force_exec_fail_output,
-                    self.displayer_kind,
-                ),
+                unit_output: UnitOutputReporter::new(overrides, self.displayer_kind),
                 final_outputs: DebugIgnore(Vec::new()),
                 run_id_unique_prefix: None,
             },
@@ -278,6 +275,18 @@ impl<'a> DisplayReporter<'a> {
         })
     }
 
+    /// Returns an [`OutputLoadDecider`] for this reporter.
+    ///
+    /// The decider examines event metadata and the reporter's display
+    /// configuration to decide whether output should be loaded from the
+    /// archive during replay.
+    pub(crate) fn output_load_decider(&self) -> OutputLoadDecider {
+        OutputLoadDecider {
+            status_level: self.inner.status_levels.status_level,
+            overrides: self.inner.unit_output.overrides(),
+        }
+    }
+
     /// Internal helper for writing through the output with access to styles.
     fn write_impl<F>(&mut self, f: F) -> Result<(), WriteEventError>
     where
@@ -309,6 +318,112 @@ impl<'a> DisplayReporter<'a> {
                     .map_err(WriteEventError::Io)?;
                 writer.write_str_flush().map_err(WriteEventError::Io)
             }
+        }
+    }
+}
+
+/// Configuration needed to decide whether to load output during replay.
+///
+/// This captures the reporter's display configuration so the replay loop can
+/// skip decompressing output from the archive when it will never be shown. The
+/// decision is conservative: `LoadOutput::Load` is returned whenever there is
+/// any chance the output will be displayed, either immediately or at the end of
+/// the run.
+///
+/// Currently, replays only use a display reporter, and do not use JUnit or
+/// libtest reporters. If and when support for those is added to replay, this
+/// decider must be updated to account for their output requirements as well.
+#[derive(Debug)]
+pub struct OutputLoadDecider {
+    pub(super) status_level: StatusLevel,
+    pub(super) overrides: OutputDisplayOverrides,
+}
+
+impl OutputLoadDecider {
+    /// Decides whether output should be loaded for a given output event.
+    pub fn should_load_output(&self, kind: &OutputEventKind<RecordingSpec>) -> LoadOutput {
+        match kind {
+            OutputEventKind::SetupScriptFinished { run_status, .. } => {
+                Self::should_load_for_setup_script(&run_status.result)
+            }
+            OutputEventKind::TestAttemptFailedWillRetry { failure_output, .. } => {
+                let display = self.overrides.failure_output(*failure_output);
+                Self::should_load_for_retry(display, self.status_level)
+            }
+            OutputEventKind::TestFinished {
+                success_output,
+                failure_output,
+                run_statuses,
+                ..
+            } => self.should_load_for_test_finished(*success_output, *failure_output, run_statuses),
+        }
+    }
+
+    pub(super) fn should_load_for_test_finished(
+        &self,
+        success_output: TestOutputDisplay,
+        failure_output: TestOutputDisplay,
+        run_statuses: &ExecutionStatuses<RecordingSpec>,
+    ) -> LoadOutput {
+        let describe = run_statuses.describe();
+        let last_status = describe.last_status();
+
+        // Determine which display setting applies based on the result.
+        let display = self.overrides.resolve_test_output_display(
+            success_output,
+            failure_output,
+            &last_status.result,
+        );
+
+        Self::should_load_for_display(display)
+    }
+
+    /// Core decision logic for whether to load output for a setup script.
+    ///
+    /// The displayer always shows output for failing setup scripts and
+    /// never for successful ones.
+    ///
+    /// This method is factored out for testing.
+    pub(super) fn should_load_for_setup_script(result: &ExecutionResultDescription) -> LoadOutput {
+        // The displayer always shows output for failing setup scripts.
+        if result.is_success() {
+            LoadOutput::Skip
+        } else {
+            LoadOutput::Load
+        }
+    }
+
+    /// Core decision logic for whether to load output for a retry attempt.
+    ///
+    /// The displayer shows retry output iff `status_level >= Retry` and
+    /// the resolved failure output is immediate.
+    ///
+    /// This method is factored out for testing.
+    pub(super) fn should_load_for_retry(
+        display: TestOutputDisplay,
+        status_level: StatusLevel,
+    ) -> LoadOutput {
+        if display.is_immediate() && status_level >= StatusLevel::Retry {
+            LoadOutput::Load
+        } else {
+            LoadOutput::Skip
+        }
+    }
+
+    /// Core decision logic for whether to load output for a finished test.
+    ///
+    /// This method is factored out for testing.
+    pub(super) fn should_load_for_display(display: TestOutputDisplay) -> LoadOutput {
+        let is_immediate = display.is_immediate();
+        let is_final = display.is_final();
+
+        // We ignore cancel_status because we cannot know it without tracking it
+        // ourselves, and cancellation only hides output, never shows more.
+        // (This is verified by the cancellation_only_hides_output test).
+        if is_immediate || is_final {
+            LoadOutput::Load
+        } else {
+            LoadOutput::Skip
         }
     }
 }
@@ -802,6 +917,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     );
                     if self
                         .unit_output
+                        .overrides()
                         .failure_output(*failure_output)
                         .is_immediate()
                     {
@@ -875,27 +991,11 @@ impl<'a> DisplayReporterImpl<'a> {
             } => {
                 let describe = run_statuses.describe();
                 let last_status = run_statuses.last_status();
-                let test_output_display = match last_status.result {
-                    ExecutionResultDescription::Pass
-                    | ExecutionResultDescription::Timeout {
-                        result: SlowTimeoutResult::Pass,
-                    }
-                    | ExecutionResultDescription::Leak {
-                        result: LeakTimeoutResult::Pass,
-                    } => self.unit_output.success_output(*success_output),
-                    ExecutionResultDescription::Leak {
-                        result: LeakTimeoutResult::Fail,
-                    }
-                    | ExecutionResultDescription::Timeout {
-                        result: SlowTimeoutResult::Fail,
-                    }
-                    | ExecutionResultDescription::Fail { .. } => {
-                        self.unit_output.failure_output(*failure_output)
-                    }
-                    ExecutionResultDescription::ExecFail => {
-                        self.unit_output.exec_fail_output(*failure_output)
-                    }
-                };
+                let test_output_display = self.unit_output.resolve_test_output_display(
+                    *success_output,
+                    *failure_output,
+                    &last_status.result,
+                );
 
                 let output_on_test_finished = self.status_levels.compute_output_on_test_finished(
                     test_output_display,
@@ -4046,13 +4146,14 @@ mod tests {
         with_reporter(
             |reporter| {
                 assert!(reporter.inner.no_capture, "no_capture is true");
+                let overrides = reporter.inner.unit_output.overrides();
                 assert_eq!(
-                    reporter.inner.unit_output.force_failure_output(),
+                    overrides.force_failure_output,
                     Some(TestOutputDisplay::Never),
                     "failure output is never, overriding other settings"
                 );
                 assert_eq!(
-                    reporter.inner.unit_output.force_success_output(),
+                    overrides.force_success_output,
                     Some(TestOutputDisplay::Never),
                     "success output is never, overriding other settings"
                 );

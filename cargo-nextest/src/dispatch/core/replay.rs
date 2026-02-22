@@ -20,9 +20,10 @@ use nextest_runner::{
     output_spec::RecordingSpec,
     pager::PagedOutput,
     record::{
-        PortableRecording, RecordReader, RecordedRunInfo, ReplayContext, ReplayHeader,
+        LoadOutput, PortableRecording, RecordReader, RecordedRunInfo, ReplayContext, ReplayHeader,
         ReplayReporterBuilder, RunIdIndex, RunIdOrRecordingSelector, RunStore,
-        STORE_FORMAT_VERSION, StoreReader, TestEventSummary, records_state_dir,
+        STORE_FORMAT_VERSION, StoreReader, TestEventKindSummary, TestEventSummary,
+        records_state_dir,
     },
     reporter::ReporterOutput,
     user_config::{UserConfig, UserConfigExperimental},
@@ -307,10 +308,20 @@ fn run_replay_common(
     let header = ReplayHeader::new(run_id, run_info, run_id_index);
     reporter.write_header(&header)?;
 
+    let output_load_decider = reporter.output_load_decider();
+
     for event_result in events {
         let event_summary = event_result.map_err(|err| ExpectedError::RecordReadError { err })?;
 
-        match replay_cx.convert_event(&event_summary, store_reader) {
+        let load_output = match &event_summary.kind {
+            TestEventKindSummary::Output(output_kind) => {
+                output_load_decider.should_load_output(output_kind)
+            }
+            // Core events have no output to load.
+            TestEventKindSummary::Core(_) => LoadOutput::Skip,
+        };
+
+        match replay_cx.convert_event(&event_summary, store_reader, load_output) {
             Ok(event) => {
                 reporter.write_event(&event)?;
             }
