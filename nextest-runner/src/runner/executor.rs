@@ -626,18 +626,20 @@ impl<'a> ExecutorContext<'a> {
             create_execution_result(exit_status, &child_acc.errors, leaked, leak_timeout.result)
         });
 
-        // Read from the environment map. If there's an error here, add it to the list of child errors.
+        // Read from the environment map. If there's an error here, add it to
+        // the list of child errors and treat the setup script as failed.
         let mut errors: Vec<_> = child_acc.errors.into_iter().map(ChildError::from).collect();
-        let env_map = if exec_result.is_success() {
+        let (env_map, exec_result) = if exec_result.is_success() {
             match parse_env_file(&env_path).await {
-                Ok(env_map) => Some(env_map),
+                Ok(env_map) => (Some(env_map), exec_result),
                 Err(error) => {
                     errors.push(ChildError::SetupScriptOutput(error));
-                    None
+                    // ExecFail isn't *quite* right but it's close enough.
+                    (None, ExecutionResult::ExecFail)
                 }
             }
         } else {
-            None
+            (None, exec_result)
         };
 
         Ok(InternalSetupScriptExecuteStatus {

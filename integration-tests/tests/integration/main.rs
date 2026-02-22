@@ -2091,6 +2091,24 @@ fn test_setup_script_error() {
 }
 
 #[test]
+fn test_setup_script_reserved_env() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args(["run", "--manifest-path", p.manifest_path().as_str()])
+        .env("__NEXTEST_SETUP_SCRIPT_RESERVED_ENV", "1")
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::SETUP_SCRIPT_FAILED),
+        "expected exit code to be SETUP_SCRIPT_FAILED\noutput: {output}",
+    );
+}
+
+#[test]
 fn test_target_arg() {
     let env_info = set_env_vars_for_test();
     let p = TempProject::new(&env_info).unwrap();

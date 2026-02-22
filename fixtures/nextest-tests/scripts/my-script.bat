@@ -6,3 +6,7 @@ if not defined NEXTEST_PROFILE exit 2
 
 ECHO MY_ENV_VAR=my-env-var>> %NEXTEST_ENV%
 ECHO SCRIPT_NEXTEST_PROFILE=%NEXTEST_PROFILE%>> %NEXTEST_ENV%
+
+REM If this environment variable is set, write a NEXTEST-prefixed env var.
+REM This is banned and should produce an error.
+if defined __NEXTEST_SETUP_SCRIPT_RESERVED_ENV ECHO NEXTEST_BAD_VAR=bad-value>> %NEXTEST_ENV%

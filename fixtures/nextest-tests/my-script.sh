@@ -23,3 +23,9 @@ fi
 
 echo MY_ENV_VAR=my-env-var >> "$NEXTEST_ENV"
 echo SCRIPT_NEXTEST_PROFILE="$NEXTEST_PROFILE" >> "$NEXTEST_ENV"
+
+# If this environment variable is set, write a NEXTEST-prefixed env var to
+# NEXTEST_ENV. This is banned and should produce an error.
+if [ -n "$__NEXTEST_SETUP_SCRIPT_RESERVED_ENV" ]; then
+    echo "NEXTEST_BAD_VAR=bad-value" >> "$NEXTEST_ENV"
+fi
