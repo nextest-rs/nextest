@@ -51,7 +51,7 @@ use nextest_metadata::MismatchReason;
 use owo_colors::OwoColorize;
 use std::{
     borrow::Cow,
-    cmp::Reverse,
+    cmp::{Ordering, Reverse},
     io::{self, BufWriter, IsTerminal, Write},
     time::Duration,
 };
@@ -519,37 +519,35 @@ struct FinalOutputEntry<'a> {
     output: FinalOutput,
 }
 
-impl<'a> PartialEq for FinalOutputEntry<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == std::cmp::Ordering::Equal
-    }
-}
-
-impl<'a> Eq for FinalOutputEntry<'a> {}
-
-impl<'a> PartialOrd for FinalOutputEntry<'a> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<'a> Ord for FinalOutputEntry<'a> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // Use the final status level, reversed (i.e.
-        // failing tests are printed at the very end).
-        (
-            Reverse(self.output.final_status_level()),
-            self.stress_index,
-            self.counter,
-            self.instance,
-        )
-            .cmp(&(
-                Reverse(other.output.final_status_level()),
-                other.stress_index,
-                other.counter,
-                other.instance,
-            ))
-    }
+/// Sort final output entries for display.
+///
+/// The sort key is:
+///
+/// 1. Final status level (reversed, so that failing tests are printed last).
+/// 2. Stress index.
+/// 3. Counter, but only when the counter is displayed.
+/// 4. Test instance.
+///
+/// Note that the counter comparison only matters between entries with the same
+/// status level. In practice, `TestInstanceCounter::Padded` is only used for
+/// `FinalOutput::Skipped` entries (which have `FinalStatusLevel::Skip`), while
+/// `TestInstanceCounter::Counter` is only used for `FinalOutput::Executed`
+/// entries (which never have `FinalStatusLevel::Skip`). So `Padded` and
+/// `Counter` are never compared with each other.
+fn sort_final_outputs(entries: &mut [FinalOutputEntry<'_>], include_counter: bool) {
+    entries.sort_unstable_by(|a, b| {
+        Reverse(a.output.final_status_level())
+            .cmp(&Reverse(b.output.final_status_level()))
+            .then_with(|| a.stress_index.cmp(&b.stress_index))
+            .then_with(|| {
+                if include_counter {
+                    a.counter.cmp(&b.counter)
+                } else {
+                    Ordering::Equal
+                }
+            })
+            .then_with(|| a.instance.cmp(&b.instance))
+    });
 }
 
 struct DisplayReporterImpl<'a> {
@@ -1459,7 +1457,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 // SIGHUP since those tend to be automated tasks performing kills.
                 if self.cancel_status < Some(CancelReason::Interrupt) {
                     // Sort the final outputs for a friendlier experience.
-                    self.final_outputs.sort_unstable();
+                    sort_final_outputs(&mut self.final_outputs, self.counter_width.is_some());
 
                     for entry in &*self.final_outputs {
                         match &entry.output {
@@ -2739,6 +2737,115 @@ mod tests {
         f(reporter);
     }
 
+    fn make_split_output(
+        result: Option<ExecutionResult>,
+        stdout: &str,
+        stderr: &str,
+    ) -> ChildExecutionOutputDescription<LiveSpec> {
+        ChildExecutionOutput::Output {
+            result,
+            output: ChildOutput::Split(ChildSplitOutput {
+                stdout: Some(Bytes::from(stdout.to_owned()).into()),
+                stderr: Some(Bytes::from(stderr.to_owned()).into()),
+            }),
+            errors: None,
+        }
+        .into()
+    }
+
+    fn make_split_output_with_errors(
+        result: Option<ExecutionResult>,
+        stdout: &str,
+        stderr: &str,
+        errors: Vec<ChildError>,
+    ) -> ChildExecutionOutputDescription<LiveSpec> {
+        ChildExecutionOutput::Output {
+            result,
+            output: ChildOutput::Split(ChildSplitOutput {
+                stdout: Some(Bytes::from(stdout.to_owned()).into()),
+                stderr: Some(Bytes::from(stderr.to_owned()).into()),
+            }),
+            errors: ErrorList::new("testing split output", errors),
+        }
+        .into()
+    }
+
+    fn make_combined_output_with_errors(
+        result: Option<ExecutionResult>,
+        output: &str,
+        errors: Vec<ChildError>,
+    ) -> ChildExecutionOutputDescription<LiveSpec> {
+        ChildExecutionOutput::Output {
+            result,
+            output: ChildOutput::Combined {
+                output: Bytes::from(output.to_owned()).into(),
+            },
+            errors: ErrorList::new("testing split output", errors),
+        }
+        .into()
+    }
+
+    /// Helper to build a passing `FinalOutput`.
+    fn make_pass_output() -> FinalOutput {
+        let status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(ExecutionResult::Pass), "", ""),
+            result: ExecutionResultDescription::Pass,
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+        FinalOutput::Executed {
+            run_statuses: ExecutionStatuses::new(vec![status]),
+            display_output: false,
+        }
+    }
+
+    /// Helper to build a failing `FinalOutput`.
+    fn make_fail_output() -> FinalOutput {
+        let result = ExecutionResult::Fail {
+            failure_status: FailureStatus::ExitCode(1),
+            leaked: false,
+        };
+        let status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(result), "", ""),
+            result: ExecutionResultDescription::from(result),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+        FinalOutput::Executed {
+            run_statuses: ExecutionStatuses::new(vec![status]),
+            display_output: false,
+        }
+    }
+
+    /// Helper to build a skipped `FinalOutput`.
+    fn make_skip_output() -> FinalOutput {
+        FinalOutput::Skipped(MismatchReason::Ignored)
+    }
+
+    /// Extract `(binary_id, test_name)` pairs from sorted entries for assertion.
+    fn extract_ids<'a>(entries: &[FinalOutputEntry<'a>]) -> Vec<(&'a str, &'a str)> {
+        entries
+            .iter()
+            .map(|e| (e.instance.binary_id.as_str(), e.instance.test_name.as_str()))
+            .collect()
+    }
+
     #[test]
     fn final_status_line() {
         let binary_id = RustBinaryId::new("my-binary-id");
@@ -3950,54 +4057,6 @@ mod tests {
         insta::assert_snapshot!("info_response_output", out,);
     }
 
-    fn make_split_output(
-        result: Option<ExecutionResult>,
-        stdout: &str,
-        stderr: &str,
-    ) -> ChildExecutionOutputDescription<LiveSpec> {
-        ChildExecutionOutput::Output {
-            result,
-            output: ChildOutput::Split(ChildSplitOutput {
-                stdout: Some(Bytes::from(stdout.to_owned()).into()),
-                stderr: Some(Bytes::from(stderr.to_owned()).into()),
-            }),
-            errors: None,
-        }
-        .into()
-    }
-
-    fn make_split_output_with_errors(
-        result: Option<ExecutionResult>,
-        stdout: &str,
-        stderr: &str,
-        errors: Vec<ChildError>,
-    ) -> ChildExecutionOutputDescription<LiveSpec> {
-        ChildExecutionOutput::Output {
-            result,
-            output: ChildOutput::Split(ChildSplitOutput {
-                stdout: Some(Bytes::from(stdout.to_owned()).into()),
-                stderr: Some(Bytes::from(stderr.to_owned()).into()),
-            }),
-            errors: ErrorList::new("testing split output", errors),
-        }
-        .into()
-    }
-
-    fn make_combined_output_with_errors(
-        result: Option<ExecutionResult>,
-        output: &str,
-        errors: Vec<ChildError>,
-    ) -> ChildExecutionOutputDescription<LiveSpec> {
-        ChildExecutionOutput::Output {
-            result,
-            output: ChildOutput::Combined {
-                output: Bytes::from(output.to_owned()).into(),
-            },
-            errors: ErrorList::new("testing split output", errors),
-        }
-        .into()
-    }
-
     #[test]
     fn verbose_command_line() {
         let binary_id = RustBinaryId::new("my-binary-id");
@@ -4164,6 +4223,237 @@ mod tests {
                 );
             },
             &mut out,
+        );
+    }
+
+    #[test]
+    fn sort_final_outputs_counter_flag() {
+        // Sorting the same entries with and without the counter flag should
+        // produce different orders when counter order and instance order
+        // diverge. The fourth entry shares a counter value with the third,
+        // exercising the instance tiebreaker within the same counter.
+        let binary_a = RustBinaryId::new("aaa");
+        let binary_b = RustBinaryId::new("bbb");
+        let test_x = TestCaseName::new("test_x");
+        let test_y = TestCaseName::new("test_y");
+
+        let mut entries = vec![
+            FinalOutputEntry {
+                stress_index: None,
+                counter: TestInstanceCounter::Counter {
+                    current: 99,
+                    total: 100,
+                },
+                instance: TestInstanceId {
+                    binary_id: &binary_b,
+                    test_name: &test_y,
+                },
+                output: make_pass_output(),
+            },
+            FinalOutputEntry {
+                stress_index: None,
+                counter: TestInstanceCounter::Counter {
+                    current: 1,
+                    total: 100,
+                },
+                instance: TestInstanceId {
+                    binary_id: &binary_a,
+                    test_name: &test_y,
+                },
+                output: make_pass_output(),
+            },
+            FinalOutputEntry {
+                stress_index: None,
+                counter: TestInstanceCounter::Counter {
+                    current: 50,
+                    total: 100,
+                },
+                instance: TestInstanceId {
+                    binary_id: &binary_a,
+                    test_name: &test_x,
+                },
+                output: make_pass_output(),
+            },
+            FinalOutputEntry {
+                stress_index: None,
+                counter: TestInstanceCounter::Counter {
+                    current: 50,
+                    total: 100,
+                },
+                instance: TestInstanceId {
+                    binary_id: &binary_b,
+                    test_name: &test_x,
+                },
+                output: make_pass_output(),
+            },
+        ];
+
+        // Without the counter being shown, sort purely by instance.
+        sort_final_outputs(&mut entries, false);
+        assert_eq!(
+            extract_ids(&entries),
+            vec![
+                ("aaa", "test_x"),
+                ("aaa", "test_y"),
+                ("bbb", "test_x"),
+                ("bbb", "test_y"),
+            ],
+            "without counter, sort is purely by instance"
+        );
+
+        // With the counter being shown, sort by counter first (1, 50, 50, 99),
+        // then by instance within the same counter value.
+        sort_final_outputs(&mut entries, true);
+        assert_eq!(
+            extract_ids(&entries),
+            vec![
+                ("aaa", "test_y"),
+                ("aaa", "test_x"),
+                ("bbb", "test_x"),
+                ("bbb", "test_y"),
+            ],
+            "with counter, sort by counter first, then by instance as tiebreaker"
+        );
+    }
+
+    #[test]
+    fn sort_final_outputs_mixed_status_levels() {
+        // Status level is the primary sort key regardless of counter setting.
+        // Reverse ordering: skip (highest level) first, pass, fail (lowest
+        // level) last.
+        let binary_a = RustBinaryId::new("aaa");
+        let binary_b = RustBinaryId::new("bbb");
+        let binary_c = RustBinaryId::new("ccc");
+        let test_1 = TestCaseName::new("test_1");
+
+        let mut entries = vec![
+            FinalOutputEntry {
+                stress_index: None,
+                counter: TestInstanceCounter::Counter {
+                    current: 1,
+                    total: 100,
+                },
+                instance: TestInstanceId {
+                    binary_id: &binary_a,
+                    test_name: &test_1,
+                },
+                output: make_fail_output(),
+            },
+            FinalOutputEntry {
+                stress_index: None,
+                counter: TestInstanceCounter::Counter {
+                    current: 2,
+                    total: 100,
+                },
+                instance: TestInstanceId {
+                    binary_id: &binary_b,
+                    test_name: &test_1,
+                },
+                output: make_skip_output(),
+            },
+            FinalOutputEntry {
+                stress_index: None,
+                counter: TestInstanceCounter::Counter {
+                    current: 3,
+                    total: 100,
+                },
+                instance: TestInstanceId {
+                    binary_id: &binary_c,
+                    test_name: &test_1,
+                },
+                output: make_pass_output(),
+            },
+        ];
+
+        // Pass first, then Skip, then Fail last.
+        sort_final_outputs(&mut entries, false);
+        assert_eq!(
+            extract_ids(&entries),
+            vec![("ccc", "test_1"), ("bbb", "test_1"), ("aaa", "test_1")],
+            "pass first, then skip, then fail (reversed status level)"
+        );
+
+        // Shuffle and re-sort with the counter. This results in the same order
+        // since the status level is more important than the counter.
+        entries.swap(0, 2);
+        sort_final_outputs(&mut entries, true);
+        assert_eq!(
+            extract_ids(&entries),
+            vec![("ccc", "test_1"), ("bbb", "test_1"), ("aaa", "test_1")],
+            "with counter, status level still dominates"
+        );
+    }
+
+    #[test]
+    fn sort_final_outputs_stress_indexes() {
+        // Stress index is the secondary sort key after status level.
+        let binary_a = RustBinaryId::new("aaa");
+        let test_1 = TestCaseName::new("test_1");
+        let test_2 = TestCaseName::new("test_2");
+
+        let mut entries = vec![
+            FinalOutputEntry {
+                stress_index: Some(StressIndex {
+                    current: 2,
+                    total: None,
+                }),
+                counter: TestInstanceCounter::Counter {
+                    current: 1,
+                    total: 100,
+                },
+                instance: TestInstanceId {
+                    binary_id: &binary_a,
+                    test_name: &test_1,
+                },
+                output: make_pass_output(),
+            },
+            FinalOutputEntry {
+                stress_index: Some(StressIndex {
+                    current: 0,
+                    total: None,
+                }),
+                counter: TestInstanceCounter::Counter {
+                    current: 3,
+                    total: 100,
+                },
+                instance: TestInstanceId {
+                    binary_id: &binary_a,
+                    test_name: &test_2,
+                },
+                output: make_pass_output(),
+            },
+            FinalOutputEntry {
+                stress_index: Some(StressIndex {
+                    current: 0,
+                    total: None,
+                }),
+                counter: TestInstanceCounter::Counter {
+                    current: 2,
+                    total: 100,
+                },
+                instance: TestInstanceId {
+                    binary_id: &binary_a,
+                    test_name: &test_1,
+                },
+                output: make_pass_output(),
+            },
+        ];
+
+        sort_final_outputs(&mut entries, false);
+        assert_eq!(
+            extract_ids(&entries),
+            vec![("aaa", "test_1"), ("aaa", "test_2"), ("aaa", "test_1")],
+            "stress index 0 entries come before stress index 2"
+        );
+        // Verify the stress indexes are in order.
+        let stress_indexes: Vec<_> = entries
+            .iter()
+            .map(|e| e.stress_index.unwrap().current)
+            .collect();
+        assert_eq!(
+            stress_indexes,
+            vec![0, 0, 2],
+            "stress indexes are sorted correctly"
         );
     }
 }
