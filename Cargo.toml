@@ -42,7 +42,7 @@ cargo-nextest = { path = "cargo-nextest", default-features = false, features = [
 ] }
 cargo_metadata = "0.23.1"
 cfg-if = "1.0.4"
-chrono = { version = "0.4.43", features = ["serde"] }
+chrono = { version = "0.4.44", features = ["serde"] }
 clap = { version = "4.5.60", features = ["derive", "unstable-markdown"] }
 color-eyre = "0.6.5"
 # config's "preserve_order" feature is needed for preserving the order of
