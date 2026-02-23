@@ -69,11 +69,6 @@ impl<'a> ReplayContext<'a> {
         self.test_list.mode()
     }
 
-    /// Returns the total number of tests in the archived run.
-    pub fn test_count(&self) -> usize {
-        self.test_list.test_count()
-    }
-
     /// Registers a test instance.
     ///
     /// This is required for lifetime reasons. This must be called before
@@ -746,7 +741,7 @@ impl ReplayReporterBuilder {
     pub fn build<'a>(
         self,
         mode: NextestRunMode,
-        test_count: usize,
+        run_count: usize,
         output: ReporterOutput<'a>,
     ) -> ReplayReporter<'a> {
         let display_reporter = DisplayReporterBuilder {
@@ -758,7 +753,7 @@ impl ReplayReporterBuilder {
                 self.status_level,
                 self.final_status_level,
             ),
-            test_count,
+            run_count,
             success_output: self.success_output,
             failure_output: self.failure_output,
             should_colorize: self.should_colorize,

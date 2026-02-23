@@ -209,19 +209,19 @@ pub(super) struct ProgressBarState {
 impl ProgressBarState {
     pub(super) fn new(
         mode: NextestRunMode,
-        test_count: usize,
+        run_count: usize,
         progress_chars: &str,
         max_progress_running: MaxProgressRunning,
     ) -> Self {
-        let bar = ProgressBar::new(test_count as u64);
-        let test_count_width = format!("{test_count}").len();
+        let bar = ProgressBar::new(run_count as u64);
+        let run_count_width = format!("{run_count}").len();
         // Create the template using the width as input. This is a
         // little confusing -- {{foo}} is what's passed into the
         // ProgressBar, while {bar} is inserted by the format!()
         // statement.
         let template = format!(
             "{{prefix:>12}} [{{elapsed_precise:>9}}] {{wide_bar}} \
-            {{pos:>{test_count_width}}}/{{len:{test_count_width}}}: {{msg}}"
+            {{pos:>{run_count_width}}}/{{len:{run_count_width}}}: {{msg}}"
         );
         bar.set_style(
             ProgressStyle::default_bar()
@@ -368,8 +368,6 @@ impl ProgressBarState {
                     current_stats.cancel_reason,
                     styles,
                 ));
-                // If there are skipped tests, the initial run count will be lower than when constructed
-                // in ProgressBar::new.
                 self.bar.set_length(current_stats.initial_run_count as u64);
                 self.bar.set_position(current_stats.finished_count as u64);
 
@@ -398,8 +396,6 @@ impl ProgressBarState {
                     current_stats.cancel_reason,
                     styles,
                 ));
-                // If there are skipped tests, the initial run count will be lower than when constructed
-                // in ProgressBar::new.
                 self.bar.set_length(current_stats.initial_run_count as u64);
                 self.bar.set_position(current_stats.finished_count as u64);
             }

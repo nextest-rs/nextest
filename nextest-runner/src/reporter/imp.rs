@@ -185,7 +185,7 @@ impl ReporterBuilder {
                 profile_status_level: profile.status_level(),
                 profile_final_status_level: profile.final_status_level(),
             },
-            test_count: test_list.test_count(),
+            run_count: test_list.run_count(),
             success_output: self.success_output,
             failure_output: self.failure_output,
             should_colorize: self.should_colorize,

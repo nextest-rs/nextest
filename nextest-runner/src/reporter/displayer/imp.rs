@@ -73,7 +73,7 @@ pub(crate) struct DisplayReporterBuilder {
     pub(crate) mode: NextestRunMode,
     pub(crate) default_filter: CompiledDefaultFilter,
     pub(crate) display_config: DisplayConfig,
-    pub(crate) test_count: usize,
+    pub(crate) run_count: usize,
     pub(crate) success_output: Option<TestOutputDisplay>,
     pub(crate) failure_output: Option<TestOutputDisplay>,
     pub(crate) should_colorize: bool,
@@ -115,7 +115,7 @@ impl DisplayReporterBuilder {
                 let progress_bar = if resolved.progress_display == ProgressDisplay::Bar {
                     Some(ProgressBarState::new(
                         self.mode,
-                        self.test_count,
+                        self.run_count,
                         theme_characters.progress_chars(),
                         self.max_progress_running,
                     ))
@@ -152,7 +152,7 @@ impl DisplayReporterBuilder {
         };
 
         let counter_width = matches!(resolved.progress_display, ProgressDisplay::Counter)
-            .then_some(usize_decimal_char_width(self.test_count));
+            .then_some(usize_decimal_char_width(self.run_count));
 
         DisplayReporter {
             inner: DisplayReporterImpl {
@@ -2718,7 +2718,7 @@ mod tests {
                 profile_status_level: StatusLevel::Fail,
                 profile_final_status_level: FinalStatusLevel::Fail,
             },
-            test_count: 5000,
+            run_count: 5000,
             success_output: Some(TestOutputDisplay::Immediate),
             failure_output: Some(TestOutputDisplay::Immediate),
             should_colorize: false,

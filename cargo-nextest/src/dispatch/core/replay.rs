@@ -297,7 +297,7 @@ fn run_replay_common(
     );
     let mut reporter = reporter_builder.build(
         record_opts.run_mode,
-        test_list.test_count(),
+        test_list.run_count(),
         ReporterOutput::Writer {
             writer: &mut paged_output,
             use_unicode,
