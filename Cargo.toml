@@ -100,7 +100,7 @@ nix = { version = "0.31.1", default-features = false, features = ["signal"] }
 num_threads = "0.1.7"
 # Note: we don't use owo-colors' if_supports_color support for now, instead preferring to use our
 # own supports-color + stylesheets everywhere.
-owo-colors = "4.2.3"
+owo-colors = "4.3.0"
 pathdiff = { version = "0.2.3", features = ["camino"] }
 petgraph = "0.8.3"
 pin-project-lite = "0.2.16"
