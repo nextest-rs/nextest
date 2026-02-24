@@ -599,22 +599,21 @@ impl PortableRecording {
                 file_name: Cow::Borrowed(STORE_ZIP_FILE_NAME),
             })?;
 
-        let metadata = file.metadata();
-        if metadata.compression_method != CompressionMethod::STORE {
+        let compression = file.metadata().compression_method;
+        if compression != CompressionMethod::STORE {
             return Err(PortableRecordingReadError::CompressedInnerArchive {
                 archive_path: self.archive_path.clone(),
-                compression: metadata.compression_method,
+                compression,
             });
         }
 
-        let reader = file.into_reader();
-        let raw =
-            metadata
-                .read_raw(reader)
-                .map_err(|error| PortableRecordingReadError::ReadArchive {
-                    path: self.archive_path.clone(),
-                    error,
-                })?;
+        // read_stored() provides a Take-bounded reader for stored files.
+        let raw = file
+            .read_stored()
+            .map_err(|error| PortableRecordingReadError::ReadArchive {
+                path: self.archive_path.clone(),
+                error,
+            })?;
 
         let store_archive =
             Archive::new(raw).map_err(|error| PortableRecordingReadError::ReadArchive {
