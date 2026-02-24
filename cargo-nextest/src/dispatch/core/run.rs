@@ -42,7 +42,7 @@ use nextest_runner::{
     run_mode::NextestRunMode,
     runner::{
         DebuggerCommand, Interceptor, StressCondition, StressCount, TestRunnerBuilder,
-        TracerCommand, configure_handle_inheritance,
+        TracerCommand, VersionEnvVars, configure_handle_inheritance,
     },
     signal::SignalHandlerKind,
     test_filter::TestFilter,
@@ -1043,6 +1043,13 @@ impl App {
             runner_builder.set_expected_outstanding(expected);
         }
 
+        let nextest_version_config = version_only_config.nextest_version();
+        runner_builder.set_version_env_vars(VersionEnvVars {
+            current_version: self.base.current_version.clone(),
+            required_version: nextest_version_config.required.version().cloned(),
+            recommended_version: nextest_version_config.recommended.version().cloned(),
+        });
+
         // Save cli_args for recording before moving them to the runner.
         let cli_args_for_recording = cli_args.clone();
         let runner = runner_builder.build(
@@ -1289,9 +1296,17 @@ impl App {
                 InputHandlerKind::Noop
             };
 
-        let Some(runner_builder) = runner_builder else {
+        let Some(mut runner_builder) = runner_builder else {
             return Ok(());
         };
+
+        let nextest_version_config = version_only_config.nextest_version();
+        runner_builder.set_version_env_vars(VersionEnvVars {
+            current_version: self.base.current_version.clone(),
+            required_version: nextest_version_config.required.version().cloned(),
+            recommended_version: nextest_version_config.recommended.version().cloned(),
+        });
+
         // Save cli_args for recording before moving them to the runner.
         let cli_args_for_recording = cli_args.clone();
         let runner = runner_builder.build(

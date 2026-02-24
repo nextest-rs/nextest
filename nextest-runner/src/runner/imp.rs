@@ -27,6 +27,7 @@ use future_queue::{FutureQueueContext, StreamExt};
 use futures::{future::Fuse, prelude::*};
 use nextest_metadata::FilterMatch;
 use quick_junit::ReportUuid;
+use semver::Version;
 use std::{
     collections::BTreeSet, convert::Infallible, fmt, num::NonZero, pin::Pin, str::FromStr,
     sync::Arc, time::Duration,
@@ -191,6 +192,43 @@ impl Interceptor {
     }
 }
 
+/// Version-related environment variables set for tests and setup scripts.
+///
+/// These expose the current nextest version and any version constraints from
+/// the repository's configuration.
+#[derive(Clone, Debug)]
+pub struct VersionEnvVars {
+    /// The current nextest version.
+    pub current_version: Version,
+
+    /// The required nextest version from configuration, if any.
+    pub required_version: Option<Version>,
+
+    /// The recommended nextest version from configuration, if any.
+    pub recommended_version: Option<Version>,
+}
+
+impl VersionEnvVars {
+    /// Applies the version environment variables to a command.
+    pub(super) fn apply_env(&self, cmd: &mut std::process::Command) {
+        cmd.env("NEXTEST_VERSION", self.current_version.to_string());
+        cmd.env(
+            "NEXTEST_REQUIRED_VERSION",
+            match &self.required_version {
+                Some(v) => v.to_string(),
+                None => "none".to_owned(),
+            },
+        );
+        cmd.env(
+            "NEXTEST_RECOMMENDED_VERSION",
+            match &self.recommended_version {
+                Some(v) => v.to_string(),
+                None => "none".to_owned(),
+            },
+        );
+    }
+}
+
 /// A child process identifier: either a single process or a process group.
 #[derive(Copy, Clone, Debug)]
 pub(super) enum ChildPid {
@@ -228,6 +266,7 @@ pub struct TestRunnerBuilder {
     stress_condition: Option<StressCondition>,
     interceptor: Interceptor,
     expected_outstanding: Option<BTreeSet<OwnedTestInstanceId>>,
+    version_env_vars: Option<VersionEnvVars>,
 }
 
 impl TestRunnerBuilder {
@@ -289,6 +328,12 @@ impl TestRunnerBuilder {
         self
     }
 
+    /// Sets version-related environment variables for tests and setup scripts.
+    pub fn set_version_env_vars(&mut self, version_env_vars: VersionEnvVars) -> &mut Self {
+        self.version_env_vars = Some(version_env_vars);
+        self
+    }
+
     /// Creates a new test runner.
     #[expect(clippy::too_many_arguments)]
     pub fn build<'a>(
@@ -338,6 +383,7 @@ impl TestRunnerBuilder {
                 stress_condition: self.stress_condition,
                 interceptor: self.interceptor,
                 expected_outstanding: self.expected_outstanding,
+                version_env_vars: self.version_env_vars,
                 runtime,
             },
             signal_handler,
@@ -507,6 +553,7 @@ struct TestRunnerInner<'a> {
     stress_condition: Option<StressCondition>,
     interceptor: Interceptor,
     expected_outstanding: Option<BTreeSet<OwnedTestInstanceId>>,
+    version_env_vars: Option<VersionEnvVars>,
     runtime: Runtime,
 }
 
@@ -546,11 +593,13 @@ impl<'a> TestRunnerInner<'a> {
             self.run_id,
             self.profile,
             self.test_list,
+            self.test_threads,
             self.double_spawn.clone(),
             self.target_runner.clone(),
             self.capture_strategy,
             self.force_retries,
             self.interceptor.clone(),
+            self.version_env_vars.clone(),
         );
 
         // Send the initial event.

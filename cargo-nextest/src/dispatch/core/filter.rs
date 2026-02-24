@@ -97,6 +97,14 @@ impl TestBuildFilter {
             &binary_list.rust_build_meta.target_directory,
         )?;
 
+        // Use the canonicalized workspace root from PathMapper if a remap
+        // was specified. This ensures NEXTEST_WORKSPACE_ROOT is an absolute,
+        // normalized path consistent with CARGO_MANIFEST_DIR.
+        let workspace_root = match path_mapper.new_workspace_root() {
+            Some(canonical) => canonical.to_owned(),
+            None => workspace_root,
+        };
+
         let rust_build_meta = binary_list.rust_build_meta.map_paths(&path_mapper);
         let test_artifacts = RustTestArtifact::from_binary_list(
             graph,

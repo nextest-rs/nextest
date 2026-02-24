@@ -330,6 +330,45 @@ fn test_cargo_env_vars() {
         std::env::var("SCRIPT_NEXTEST_PROFILE").expect("SCRIPT_NEXTEST_PROFILE is set by script"),
         std::env::var("NEXTEST_PROFILE").expect("NEXTEST_PROFILE is set by nextest"),
     );
+
+    // Version environment variables.
+    let nextest_version = check_env("NEXTEST_VERSION");
+    // Verify it looks like a semver string (at least two dots for major.minor.patch).
+    assert!(
+        nextest_version.matches('.').count() >= 2,
+        "NEXTEST_VERSION ({}) looks like a semver string",
+        nextest_version,
+    );
+
+    // These values come from the fixture's .config/nextest.toml:
+    //   nextest-version = { required = "0.9.54", recommended = "0.9.56" }
+    assert_eq!(
+        check_env("NEXTEST_REQUIRED_VERSION"),
+        "0.9.54",
+        "NEXTEST_REQUIRED_VERSION matches fixture config"
+    );
+    assert_eq!(
+        check_env("NEXTEST_RECOMMENDED_VERSION"),
+        "0.9.56",
+        "NEXTEST_RECOMMENDED_VERSION matches fixture config"
+    );
+
+    // Test threads and workspace root.
+    let test_threads = check_env("NEXTEST_TEST_THREADS")
+        .parse::<usize>()
+        .expect("NEXTEST_TEST_THREADS is a valid usize");
+    assert!(
+        test_threads >= 1,
+        "NEXTEST_TEST_THREADS ({}) is at least 1",
+        test_threads,
+    );
+
+    // The nextest-tests package is at the workspace root, so these should match.
+    assert_eq!(
+        check_env("NEXTEST_WORKSPACE_ROOT"),
+        check_env("CARGO_MANIFEST_DIR"),
+        "NEXTEST_WORKSPACE_ROOT matches CARGO_MANIFEST_DIR for a root package"
+    );
 }
 
 #[test]

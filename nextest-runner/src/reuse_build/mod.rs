@@ -326,6 +326,12 @@ impl PathMapper {
         Ok(os_imp::strip_verbatim(canonicalized_path))
     }
 
+    /// Returns the canonicalized workspace root, if a workspace remap was
+    /// specified.
+    pub fn new_workspace_root(&self) -> Option<&Utf8Path> {
+        self.workspace.as_ref().map(|(_, new)| new.as_path())
+    }
+
     pub(super) fn new_target_dir(&self) -> Option<&Utf8Path> {
         self.target_dir.as_ref().map(|(_, new)| new.as_path())
     }
@@ -333,7 +339,8 @@ impl PathMapper {
     pub(crate) fn map_cwd(&self, path: Utf8PathBuf) -> Utf8PathBuf {
         match &self.workspace {
             Some((from, to)) => match path.strip_prefix(from) {
-                Ok(p) => to.join(p),
+                Ok(p) if !p.as_str().is_empty() => to.join(p),
+                Ok(_) => to.clone(),
                 Err(_) => path,
             },
             None => path,
@@ -343,7 +350,8 @@ impl PathMapper {
     pub(crate) fn map_binary(&self, path: Utf8PathBuf) -> Utf8PathBuf {
         match &self.target_dir {
             Some((from, to)) => match path.strip_prefix(from) {
-                Ok(p) => to.join(p),
+                Ok(p) if !p.as_str().is_empty() => to.join(p),
+                Ok(_) => to.clone(),
                 Err(_) => path,
             },
             None => path,

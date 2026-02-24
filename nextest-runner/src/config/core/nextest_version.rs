@@ -485,6 +485,14 @@ pub enum NextestVersionReq {
 }
 
 impl NextestVersionReq {
+    /// Returns the version, if one was specified.
+    pub fn version(&self) -> Option<&Version> {
+        match self {
+            NextestVersionReq::Version { version, .. } => Some(version),
+            NextestVersionReq::None => None,
+        }
+    }
+
     fn accumulate(&mut self, v: Version, v_tool: Option<ToolName>) {
         match self {
             NextestVersionReq::Version { version, tool } => {

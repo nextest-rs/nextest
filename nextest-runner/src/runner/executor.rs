@@ -11,7 +11,7 @@
 //! just a better abstraction, it also provides a better user experience (less
 //! inconsistent state).
 
-use super::{ChildPid, HandleSignalResult, Interceptor};
+use super::{ChildPid, HandleSignalResult, Interceptor, VersionEnvVars};
 use crate::{
     config::{
         core::EvaluatableProfile,
@@ -62,12 +62,14 @@ pub(super) struct ExecutorContext<'a> {
     run_id: ReportUuid,
     profile: &'a EvaluatableProfile<'a>,
     test_list: &'a TestList<'a>,
+    test_threads: usize,
     double_spawn: DoubleSpawnInfo,
     target_runner: TargetRunner,
     capture_strategy: CaptureStrategy,
     // This is Some if the user specifies a retry policy over the command-line.
     force_retries: Option<RetryPolicy>,
     interceptor: Interceptor,
+    version_env_vars: Option<VersionEnvVars>,
 }
 
 impl<'a> ExecutorContext<'a> {
@@ -76,21 +78,25 @@ impl<'a> ExecutorContext<'a> {
         run_id: ReportUuid,
         profile: &'a EvaluatableProfile<'a>,
         test_list: &'a TestList<'a>,
+        test_threads: usize,
         double_spawn: DoubleSpawnInfo,
         target_runner: TargetRunner,
         capture_strategy: CaptureStrategy,
         force_retries: Option<RetryPolicy>,
         interceptor: Interceptor,
+        version_env_vars: Option<VersionEnvVars>,
     ) -> Self {
         Self {
             run_id,
             profile,
             test_list,
+            test_threads,
             double_spawn,
             target_runner,
             capture_strategy,
             force_retries,
             interceptor,
+            version_env_vars,
         }
     }
 
@@ -389,6 +395,14 @@ impl<'a> ExecutorContext<'a> {
 
         command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
         command_mut.env("NEXTEST_RUN_MODE", self.test_list.mode().to_string());
+        command_mut.env("NEXTEST_TEST_THREADS", self.test_threads.to_string());
+        command_mut.env(
+            "NEXTEST_WORKSPACE_ROOT",
+            self.test_list.workspace_root().as_str(),
+        );
+        if let Some(version_env_vars) = &self.version_env_vars {
+            version_env_vars.apply_env(command_mut);
+        }
         command_mut.stdin(Stdio::null());
         super::os::set_process_group(command_mut);
 
@@ -758,6 +772,15 @@ impl<'a> ExecutorContext<'a> {
             command_mut.env("NEXTEST_TEST_GROUP_SLOT", group_slot.to_string());
         } else {
             command_mut.env("NEXTEST_TEST_GROUP_SLOT", "none");
+        }
+
+        command_mut.env("NEXTEST_TEST_THREADS", self.test_threads.to_string());
+        command_mut.env(
+            "NEXTEST_WORKSPACE_ROOT",
+            self.test_list.workspace_root().as_str(),
+        );
+        if let Some(version_env_vars) = &self.version_env_vars {
+            version_env_vars.apply_env(command_mut);
         }
 
         test.setup_script_data.apply(

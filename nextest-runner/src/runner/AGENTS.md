@@ -311,13 +311,18 @@ Effects:
 Tests receive these environment variables:
 - `NEXTEST_RUN_ID`: UUID for the run.
 - `NEXTEST_RUN_MODE`: "normal", "stress", etc.
+- `NEXTEST_TEST_THREADS`: Number of test threads for this run.
+- `NEXTEST_WORKSPACE_ROOT`: Absolute path to the workspace root.
+- `NEXTEST_VERSION`: Current nextest version (semver string).
+- `NEXTEST_REQUIRED_VERSION`: Required nextest version from config, or "none".
+- `NEXTEST_RECOMMENDED_VERSION`: Recommended nextest version from config, or "none".
 - `NEXTEST_BINARY_ID`: Binary being run.
 - `NEXTEST_TEST_NAME`: Test name.
 - `NEXTEST_ATTEMPT`, `NEXTEST_TOTAL_ATTEMPTS`, `NEXTEST_ATTEMPT_ID`: Retry tracking.
 - `NEXTEST_STRESS_CURRENT`, `NEXTEST_STRESS_TOTAL`: Stress run tracking.
 - `NEXTEST_TEST_GLOBAL_SLOT`, `NEXTEST_TEST_GROUP`, `NEXTEST_TEST_GROUP_SLOT`: Scheduling info.
 
-Setup scripts also receive `NEXTEST_RUN_ID` and `NEXTEST_RUN_MODE`.
+Setup scripts also receive `NEXTEST_RUN_ID`, `NEXTEST_RUN_MODE`, `NEXTEST_TEST_THREADS`, `NEXTEST_WORKSPACE_ROOT`, and the version env vars (`NEXTEST_VERSION`, `NEXTEST_REQUIRED_VERSION`, `NEXTEST_RECOMMENDED_VERSION`).
 
 ## USDT probes
 
