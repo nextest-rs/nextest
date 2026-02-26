@@ -1769,7 +1769,7 @@ mod tests {
     use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext};
     use nextest_metadata::{FilterMatch, MismatchReason, PlatformLibdirUnavailable, RustTestKind};
     use pretty_assertions::assert_eq;
-    use std::hash::DefaultHasher;
+    use std::{collections::BTreeMap, hash::DefaultHasher};
     use target_spec::Platform;
     use test_strategy::proptest;
 
@@ -2192,6 +2192,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "wrapper".into(),
                     args: Vec::new(),
+                    env: BTreeMap::new(),
                     relative_to: ScriptCommandRelativeTo::None,
                 },
                 target_runner: WrapperScriptTargetRunner::Ignore,
@@ -2221,6 +2222,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "wrapper".into(),
                     args: Vec::new(),
+                    env: BTreeMap::new(),
                     relative_to: ScriptCommandRelativeTo::None,
                 },
                 target_runner: WrapperScriptTargetRunner::AroundWrapper,
@@ -2250,6 +2252,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "wrapper".into(),
                     args: Vec::new(),
+                    env: BTreeMap::new(),
                     relative_to: ScriptCommandRelativeTo::None,
                 },
                 target_runner: WrapperScriptTargetRunner::WithinWrapper,
@@ -2279,6 +2282,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "wrapper".into(),
                     args: Vec::new(),
+                    env: BTreeMap::new(),
                     relative_to: ScriptCommandRelativeTo::None,
                 },
                 target_runner: WrapperScriptTargetRunner::OverridesWrapper,
@@ -2303,6 +2307,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "wrapper".into(),
                     args: vec!["--flag".to_string(), "value".to_string()],
+                    env: BTreeMap::new(),
                     relative_to: ScriptCommandRelativeTo::None,
                 },
                 target_runner: WrapperScriptTargetRunner::Ignore,
@@ -2348,6 +2353,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "abc/def/my-wrapper".into(),
                     args: vec!["--verbose".to_string()],
+                    env: BTreeMap::new(),
                     relative_to: ScriptCommandRelativeTo::WorkspaceRoot,
                 },
                 target_runner: WrapperScriptTargetRunner::Ignore,
@@ -2380,6 +2386,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "abc/def/my-wrapper".into(),
                     args: vec!["--verbose".to_string()],
+                    env: BTreeMap::new(),
                     relative_to: ScriptCommandRelativeTo::Target,
                 },
                 target_runner: WrapperScriptTargetRunner::Ignore,

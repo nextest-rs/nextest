@@ -177,13 +177,24 @@ max-threads = 1
 # Setup scripts are already relative to the workspace root. But using
 # `my-script.sh` rather than `./my-script.sh` means that we test that the path
 # is *joined* to the workspace root.
-command = { command-line = "my-script.sh", relative-to = "workspace-root" }
+command = {
+    command-line = "my-script.sh",
+    relative-to = "workspace-root",
+    env = {
+        CMD_ENV_VAR = "set-in-conf",
+    },
+}
 
 [scripts.setup.my-script-windows]
 # On Windows, we test the command not being joined to the workspace root. In
 # this case we also want to check that the cwd is the workspace root. Passing in
 # "scripts\\my-script.bat" ensures this.
-command = 'cmd /c "scripts\\my-script.bat"'
+command = {
+    command-line = 'cmd /c "scripts\\my-script.bat"',
+    env = {
+        CMD_ENV_VAR = "set-in-conf",
+    },
+}
 
 [scripts.wrapper.wrapper1-unix]
 command = { command-line = "./debug/wrapper within", relative-to = "target" }

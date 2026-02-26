@@ -2091,6 +2091,30 @@ fn test_setup_script_error() {
 }
 
 #[test]
+fn test_setup_script_defined_env() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args(["run", "-E", "test(test_cargo_env_vars)"])
+        // Changing the current dir to where the manifest resides to ensure the `.cargo/config`
+        // over there is picked up rather than the config for the main nextest project.
+        .current_dir(
+            p.manifest_path()
+                .parent()
+                .expect("manifest_path's parent should be a dir"),
+        )
+        .env("CMD_ENV_VAR", "not-set-in-conf")
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::OK),
+        "env var should not override the value defined in the conf file\n{output}"
+    );
+}
+
+#[test]
 fn test_setup_script_reserved_env() {
     let env_info = set_env_vars_for_test();
     let p = TempProject::new(&env_info).unwrap();
