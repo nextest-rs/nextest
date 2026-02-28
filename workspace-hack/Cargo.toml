@@ -69,7 +69,7 @@ dof = { version = "0.4.0", default-features = false, features = ["des"] }
 futures-channel = { version = "0.3.32", features = ["sink"] }
 futures-core = { version = "0.3.32" }
 futures-sink = { version = "0.3.32" }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
@@ -85,7 +85,7 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = { version = "1.0.149", features = ["unbounded_depth"] }
@@ -97,7 +97,7 @@ bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
 futures-channel = { version = "0.3.32", features = ["sink"] }
 futures-core = { version = "0.3.32" }
 futures-sink = { version = "0.3.32" }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
@@ -107,7 +107,7 @@ tokio = { version = "1.49.0", default-features = false, features = ["net"] }
 
 [target.aarch64-unknown-linux-gnu.build-dependencies]
 bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 
 [target.x86_64-unknown-linux-musl.dependencies]
 bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
@@ -115,7 +115,7 @@ dof = { version = "0.4.0", default-features = false, features = ["des"] }
 futures-channel = { version = "0.3.32", features = ["sink"] }
 futures-core = { version = "0.3.32" }
 futures-sink = { version = "0.3.32" }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
@@ -131,7 +131,7 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 [target.x86_64-unknown-linux-musl.build-dependencies]
 bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = { version = "1.0.149", features = ["unbounded_depth"] }
@@ -143,7 +143,7 @@ bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
 futures-channel = { version = "0.3.32", features = ["sink"] }
 futures-core = { version = "0.3.32" }
 futures-sink = { version = "0.3.32" }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
@@ -153,7 +153,7 @@ tokio = { version = "1.49.0", default-features = false, features = ["net"] }
 
 [target.aarch64-unknown-linux-musl.build-dependencies]
 bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 
 [target.x86_64-unknown-illumos.dependencies]
 bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
@@ -161,7 +161,7 @@ dof = { version = "0.4.0", default-features = false, features = ["des"] }
 futures-channel = { version = "0.3.32", features = ["sink"] }
 futures-core = { version = "0.3.32" }
 futures-sink = { version = "0.3.32" }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
@@ -177,7 +177,7 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 [target.x86_64-unknown-illumos.build-dependencies]
 bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = { version = "1.0.149", features = ["unbounded_depth"] }
@@ -190,7 +190,7 @@ dof = { version = "0.4.0", default-features = false, features = ["des"] }
 futures-channel = { version = "0.3.32", features = ["sink"] }
 futures-core = { version = "0.3.32" }
 futures-sink = { version = "0.3.32" }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
@@ -206,7 +206,7 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 [target.x86_64-unknown-freebsd.build-dependencies]
 bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = { version = "1.0.149", features = ["unbounded_depth"] }
@@ -219,7 +219,7 @@ dof = { version = "0.4.0", default-features = false, features = ["des"] }
 futures-channel = { version = "0.3.32", features = ["sink"] }
 futures-core = { version = "0.3.32" }
 futures-sink = { version = "0.3.32" }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
@@ -235,7 +235,7 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 [target.aarch64-unknown-freebsd.build-dependencies]
 bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = { version = "1.0.149", features = ["unbounded_depth"] }
@@ -247,7 +247,7 @@ bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
 futures-channel = { version = "0.3.32", features = ["sink"] }
 futures-core = { version = "0.3.32" }
 futures-sink = { version = "0.3.32" }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
@@ -262,7 +262,7 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 
 [target.aarch64-apple-darwin.build-dependencies]
 bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
-libc = { version = "0.2.180", features = ["extra_traits"] }
+libc = { version = "0.2.182", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = { version = "1.0.149", features = ["unbounded_depth"] }
