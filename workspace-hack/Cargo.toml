@@ -46,7 +46,7 @@ serde_json = { version = "1.0.149", features = ["unbounded_depth"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
 target-spec = { version = "3.5.7", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.5", default-features = false, features = ["fixtures"] }
-tokio = { version = "1.49.0", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
+tokio = { version = "1.50.0", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 tracing-core = { version = "0.1.36" }
 tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt", "tracing-log"] }
 ucd-trie = { version = "0.1.7" }
@@ -78,7 +78,7 @@ rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
-tokio = { version = "1.49.0", default-features = false, features = ["net"] }
+tokio = { version = "1.50.0", default-features = false, features = ["net"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -103,7 +103,7 @@ mio = { version = "1.0.4", features = ["net", "os-ext"] }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-tokio = { version = "1.49.0", default-features = false, features = ["net"] }
+tokio = { version = "1.50.0", default-features = false, features = ["net"] }
 
 [target.aarch64-unknown-linux-gnu.build-dependencies]
 bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
@@ -124,7 +124,7 @@ rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
-tokio = { version = "1.49.0", default-features = false, features = ["net"] }
+tokio = { version = "1.50.0", default-features = false, features = ["net"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -149,7 +149,7 @@ mio = { version = "1.0.4", features = ["net", "os-ext"] }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-tokio = { version = "1.49.0", default-features = false, features = ["net"] }
+tokio = { version = "1.50.0", default-features = false, features = ["net"] }
 
 [target.aarch64-unknown-linux-musl.build-dependencies]
 bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
@@ -170,7 +170,7 @@ rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
-tokio = { version = "1.49.0", default-features = false, features = ["net"] }
+tokio = { version = "1.50.0", default-features = false, features = ["net"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -199,7 +199,7 @@ rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
-tokio = { version = "1.49.0", default-features = false, features = ["net"] }
+tokio = { version = "1.50.0", default-features = false, features = ["net"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -228,7 +228,7 @@ rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
-tokio = { version = "1.49.0", default-features = false, features = ["net"] }
+tokio = { version = "1.50.0", default-features = false, features = ["net"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -256,7 +256,7 @@ rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
 syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
-tokio = { version = "1.49.0", default-features = false, features = ["net"] }
+tokio = { version = "1.50.0", default-features = false, features = ["net"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -275,7 +275,7 @@ futures-core = { version = "0.3.32" }
 futures-sink = { version = "0.3.32" }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-tokio = { version = "1.49.0", default-features = false, features = ["net"] }
+tokio = { version = "1.50.0", default-features = false, features = ["net"] }
 windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59.0", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
 windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52.0", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Environment", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
 windows-sys-d4189bed749088b6 = { package = "windows-sys", version = "0.61.2", features = ["Win32_Globalization", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell"] }
@@ -289,7 +289,7 @@ futures-core = { version = "0.3.32" }
 futures-sink = { version = "0.3.32" }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-tokio = { version = "1.49.0", default-features = false, features = ["net"] }
+tokio = { version = "1.50.0", default-features = false, features = ["net"] }
 windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59.0", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
 windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52.0", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Environment", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
 windows-sys-d4189bed749088b6 = { package = "windows-sys", version = "0.61.2", features = ["Win32_Globalization", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell"] }
