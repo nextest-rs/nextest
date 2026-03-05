@@ -138,7 +138,7 @@ thiserror = "2.0.18"
 tokio = "1.50.0"
 tokio-stream = "0.1.18"
 toml = "0.9.12"
-toml_edit = "0.25.3"
+toml_edit = "0.25.4"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", default-features = false, features = ["std", "tracing-log", "fmt"] }
 unicode-ident = "1.0.24"
