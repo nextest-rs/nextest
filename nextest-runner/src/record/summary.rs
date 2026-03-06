@@ -25,6 +25,7 @@ use crate::{
         events::{
             CancelReason, ExecuteStatus, ExecutionStatuses, RetryData, RunFinishedStats, RunStats,
             SetupScriptExecuteStatus, StressIndex, StressProgress, TestEvent, TestEventKind,
+            TestSlotAssignment,
         },
     },
     run_mode::NextestRunMode,
@@ -217,6 +218,8 @@ pub enum CoreEventKind {
         stress_index: Option<StressIndexSummary>,
         /// The test instance.
         test_instance: OwnedTestInstanceId,
+        /// Scheduling information (slot and group assignment).
+        slot_assignment: TestSlotAssignment,
         /// The current run statistics.
         current_stats: RunStats,
         /// The number of tests currently running.
@@ -248,6 +251,8 @@ pub enum CoreEventKind {
         stress_index: Option<StressIndexSummary>,
         /// The test instance.
         test_instance: OwnedTestInstanceId,
+        /// Scheduling information (slot and group assignment).
+        slot_assignment: TestSlotAssignment,
         /// Retry data.
         retry_data: RetryData,
         /// The number of tests currently running.
@@ -480,12 +485,14 @@ impl TestEventKindSummary<LiveSpec> {
             TestEventKind::TestStarted {
                 stress_index,
                 test_instance,
+                slot_assignment,
                 current_stats,
                 running,
                 command_line,
             } => Self::Core(CoreEventKind::TestStarted {
                 stress_index: stress_index.map(StressIndexSummary::from),
                 test_instance: test_instance.to_owned(),
+                slot_assignment,
                 current_stats,
                 running,
                 command_line,
@@ -506,12 +513,14 @@ impl TestEventKindSummary<LiveSpec> {
             TestEventKind::TestRetryStarted {
                 stress_index,
                 test_instance,
+                slot_assignment,
                 retry_data,
                 running,
                 command_line,
             } => Self::Core(CoreEventKind::TestRetryStarted {
                 stress_index: stress_index.map(StressIndexSummary::from),
                 test_instance: test_instance.to_owned(),
+                slot_assignment,
                 retry_data,
                 running,
                 command_line,

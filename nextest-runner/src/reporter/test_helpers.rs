@@ -3,7 +3,14 @@
 
 //! Test helpers for proptest support in reporter types.
 
-use crate::config::{core::ConfigIdentifier, scripts::ScriptId};
+use crate::{
+    config::{
+        core::ConfigIdentifier,
+        elements::{CustomTestGroup, TestGroup},
+        scripts::ScriptId,
+    },
+    reporter::events::TestSlotAssignment,
+};
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use proptest::prelude::*;
 use smol_str::SmolStr;
@@ -61,5 +68,43 @@ impl Arbitrary for ScriptId {
 
     fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
         any::<ConfigIdentifier>().prop_map(ScriptId).boxed()
+    }
+}
+
+/// Creates a `TestSlotAssignment` for the global group with the given slot.
+pub fn global_slot_assignment(global_slot: u64) -> TestSlotAssignment {
+    TestSlotAssignment {
+        global_slot,
+        group_slot: None,
+        test_group: TestGroup::Global,
+    }
+}
+
+impl Arbitrary for TestGroup {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        prop_oneof![
+            1 => Just(TestGroup::Global),
+            3 => any::<ConfigIdentifier>()
+                .prop_map(|id| TestGroup::Custom(CustomTestGroup::from_identifier(id))),
+        ]
+        .boxed()
+    }
+}
+
+impl Arbitrary for TestSlotAssignment {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        (any::<u64>(), any::<Option<u64>>(), any::<TestGroup>())
+            .prop_map(|(global_slot, group_slot, test_group)| TestSlotAssignment {
+                global_slot,
+                group_slot,
+                test_group,
+            })
+            .boxed()
     }
 }

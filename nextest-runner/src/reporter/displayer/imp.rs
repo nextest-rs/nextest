@@ -948,6 +948,7 @@ impl<'a> DisplayReporterImpl<'a> {
             TestEventKind::TestRetryStarted {
                 stress_index,
                 test_instance,
+                slot_assignment: _,
                 retry_data: RetryData { attempt, .. },
                 running: _,
                 command_line,
@@ -2710,6 +2711,7 @@ mod tests {
                 ChildExecutionOutputDescription, ExecutionResult, FailureStatus,
                 UnitTerminateReason,
             },
+            test_helpers::global_slot_assignment,
         },
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     };
@@ -4128,6 +4130,7 @@ mod tests {
                                 binary_id: &binary_id,
                                 test_name: &test_name,
                             },
+                            slot_assignment: global_slot_assignment(0),
                             current_stats,
                             running: 1,
                             command_line: vec![
@@ -4150,6 +4153,7 @@ mod tests {
                                 binary_id: &binary_id,
                                 test_name: &test_with_spaces,
                             },
+                            slot_assignment: global_slot_assignment(1),
                             current_stats,
                             running: 2,
                             command_line: vec![
@@ -4173,6 +4177,7 @@ mod tests {
                                 binary_id: &binary_id,
                                 test_name: &test_special_chars,
                             },
+                            slot_assignment: global_slot_assignment(2),
                             current_stats,
                             running: 3,
                             command_line: vec![
@@ -4195,6 +4200,7 @@ mod tests {
                                 binary_id: &binary_id,
                                 test_name: &test_retry,
                             },
+                            slot_assignment: global_slot_assignment(0),
                             retry_data: RetryData {
                                 attempt: 2,
                                 total_attempts: 3,
@@ -4220,6 +4226,7 @@ mod tests {
                                 binary_id: &binary_id,
                                 test_name: &test_retry,
                             },
+                            slot_assignment: global_slot_assignment(0),
                             retry_data: RetryData {
                                 attempt: 3,
                                 total_attempts: 3,
