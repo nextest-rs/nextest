@@ -326,6 +326,14 @@ fn test_cargo_env_vars() {
     );
 
     assert_eq!(std::env::var("MY_ENV_VAR").as_deref(), Ok("my-env-var"));
+    // The command for the script has received the value
+    assert_eq!(std::env::var("SCRIPT_CMD_ENV_VAR").as_deref(), Ok("set-in-conf"));
+    // While the command may be started with or without a dummy value, which is also checked
+    // here for completeness.
+    assert!(matches!(
+        std::env::var("CMD_ENV_VAR").as_deref(),
+        Err(&std::env::VarError::NotPresent) | Ok("not-set-in-conf"),
+    ));
     assert_eq!(
         std::env::var("SCRIPT_NEXTEST_PROFILE").expect("SCRIPT_NEXTEST_PROFILE is set by script"),
         std::env::var("NEXTEST_PROFILE").expect("NEXTEST_PROFILE is set by nextest"),
