@@ -9,11 +9,13 @@ use crate::{
     dispatch::{
         EarlyArgs,
         common::ConfigOpts,
-        helpers::{acquire_graph_data, detect_build_platforms, runner_for_target},
+        helpers::{
+            acquire_graph_data, detect_build_platforms, locate_workspace_root, runner_for_target,
+        },
     },
     output::{OutputContext, OutputWriter},
 };
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use guppy::graph::PackageGraph;
 use nextest_filtering::ParseContext;
 use nextest_runner::{
@@ -43,10 +45,8 @@ pub(crate) struct BaseApp {
     pub(crate) early_args: EarlyArgs,
     // TODO: support multiple --target options.
     pub(crate) build_platforms: BuildPlatforms,
-    pub(crate) cargo_metadata_json: Arc<String>,
-    package_graph: Arc<PackageGraph>,
-    // Potentially remapped workspace root (might not be the same as the graph).
-    pub(crate) workspace_root: Utf8PathBuf,
+    graph_data: OnceLock<GraphData>,
+    workspace_root: OnceLock<Utf8PathBuf>,
     manifest_path: Option<Utf8PathBuf>,
     pub(crate) reuse_build: ReuseBuildInfo,
     pub(crate) cargo_opts: CargoOptions,
@@ -56,6 +56,12 @@ pub(crate) struct BaseApp {
     pub(crate) cargo_configs: CargoConfigs,
     double_spawn: OnceLock<DoubleSpawnInfo>,
     target_runner: OnceLock<TargetRunner>,
+}
+
+#[derive(Debug)]
+struct GraphData {
+    cargo_metadata_json: Arc<String>,
+    package_graph: Arc<PackageGraph>,
 }
 
 impl BaseApp {
@@ -79,60 +85,23 @@ impl BaseApp {
             None => detect_build_platforms(&cargo_configs, cargo_opts.target.as_deref())?,
         };
 
-        let (cargo_metadata_json, package_graph) = match reuse_build.cargo_metadata() {
-            Some(m) => (m.json.clone(), m.graph.clone()),
-            None => {
-                let json = acquire_graph_data(
-                    manifest_path.as_deref(),
-                    cargo_opts.target_dir.as_deref(),
-                    &cargo_opts,
-                    &build_platforms,
-                    output,
-                )?;
-                let graph = PackageGraph::from_json(&json)
-                    .map_err(|err| ExpectedError::cargo_metadata_parse_error(None, err))?;
-                (Arc::new(json), Arc::new(graph))
-            }
-        };
-
-        let manifest_path = if reuse_build.cargo_metadata.is_some() {
-            Some(package_graph.workspace().root().join("Cargo.toml"))
-        } else {
-            manifest_path
-        };
-
-        let workspace_root = match reuse_build.workspace_remap() {
-            Some(path) => path.to_owned(),
-            _ => package_graph.workspace().root().to_owned(),
-        };
-
-        let root_manifest_path = workspace_root.join("Cargo.toml");
-        if !root_manifest_path.exists() {
-            // This doesn't happen in normal use, but is a common situation if the build is being
-            // reused.
-            let reuse_build_kind = if reuse_build.workspace_remap().is_some() {
-                ReuseBuildKind::ReuseWithWorkspaceRemap { workspace_root }
-            } else if reuse_build.is_active() {
-                ReuseBuildKind::Reuse
-            } else {
-                ReuseBuildKind::Normal
-            };
-
-            return Err(ExpectedError::RootManifestNotFound {
-                path: root_manifest_path,
-                reuse_build_kind,
-            });
-        }
-
         let current_version = current_version();
+        let graph_data = OnceLock::new();
+        if let Some(m) = reuse_build.cargo_metadata() {
+            graph_data
+                .set(GraphData {
+                    cargo_metadata_json: m.json.clone(),
+                    package_graph: m.graph.clone(),
+                })
+                .expect("graph data should only be initialized once");
+        }
 
         Ok(Self {
             output,
             early_args,
             build_platforms,
-            cargo_metadata_json,
-            package_graph,
-            workspace_root,
+            graph_data,
+            workspace_root: OnceLock::new(),
             reuse_build,
             manifest_path,
             cargo_opts,
@@ -150,17 +119,33 @@ impl BaseApp {
         pcx: &ParseContext<'_>,
         required_experimental: &BTreeSet<ConfigExperimental>,
     ) -> Result<(VersionOnlyConfig, NextestConfig)> {
+        let workspace_root = self.workspace_root()?;
+        let version_only_config = self.load_version_only_config(required_experimental)?;
+
+        let config = self.config_opts.make_config(
+            workspace_root,
+            pcx,
+            version_only_config.experimental().known(),
+        )?;
+
+        Ok((version_only_config, config))
+    }
+
+    pub(crate) fn load_version_only_config(
+        &self,
+        required_experimental: &BTreeSet<ConfigExperimental>,
+    ) -> Result<VersionOnlyConfig> {
+        let workspace_root = self.workspace_root()?;
+
         // Load the version-only config first to avoid incompatibilities with parsing the rest of
         // the config.
-        let version_only_config = self
-            .config_opts
-            .make_version_only_config(&self.workspace_root)?;
+        let version_only_config = self.config_opts.make_version_only_config(workspace_root)?;
         self.check_version_config_initial(version_only_config.nextest_version())?;
 
         // Check for unknown experimental features after the version check. This ensures that if
         // the required nextest version is higher than the current version, the version error takes
         // precedence (a future version may have new experimental features).
-        self.check_experimental_config_initial(version_only_config.experimental())?;
+        self.check_experimental_config_initial(workspace_root, version_only_config.experimental())?;
 
         let mut experimental = ConfigExperimental::from_env();
         experimental.extend(version_only_config.experimental().known());
@@ -194,13 +179,7 @@ impl BaseApp {
             );
         }
 
-        let config = self.config_opts.make_config(
-            &self.workspace_root,
-            pcx,
-            version_only_config.experimental().known(),
-        )?;
-
-        Ok((version_only_config, config))
+        Ok(version_only_config)
     }
 
     fn check_version_config_initial(&self, version_cfg: &NextestVersionConfig) -> Result<()> {
@@ -283,13 +262,14 @@ impl BaseApp {
 
     fn check_experimental_config_initial(
         &self,
+        workspace_root: &Utf8Path,
         experimental_cfg: &ExperimentalConfig,
     ) -> Result<()> {
         let config_file = self
             .config_opts
             .config_file
             .clone()
-            .unwrap_or_else(|| self.workspace_root.join(NextestConfig::CONFIG_PATH));
+            .unwrap_or_else(|| workspace_root.join(NextestConfig::CONFIG_PATH));
         if let Some(err) = experimental_cfg.eval().into_error(config_file) {
             Err(err.into())
         } else {
@@ -391,13 +371,16 @@ impl BaseApp {
     pub(crate) fn build_binary_list(&self, cargo_command: &str) -> Result<Arc<BinaryList>> {
         let binary_list = match self.reuse_build.binaries_metadata() {
             Some(m) => m.binary_list.clone(),
-            None => Arc::new(self.cargo_opts.compute_binary_list(
-                cargo_command,
-                self.graph(),
-                self.manifest_path.as_deref(),
-                self.output,
-                self.build_platforms.clone(),
-            )?),
+            None => {
+                let manifest_path = self.manifest_path_for_build()?;
+                Arc::new(self.cargo_opts.compute_binary_list(
+                    cargo_command,
+                    self.graph()?,
+                    manifest_path.as_deref(),
+                    self.output,
+                    self.build_platforms.clone(),
+                )?)
+            }
         };
         Ok(binary_list)
     }
@@ -440,19 +423,21 @@ impl BaseApp {
         };
 
         let binary_list = if let Some(scope) = inherited_scope {
+            let manifest_path = self.manifest_path_for_build()?;
             self.cargo_opts.compute_binary_list_with_inherited(
                 cargo_command,
                 scope,
-                self.graph(),
-                self.manifest_path.as_deref(),
+                self.graph()?,
+                manifest_path.as_deref(),
                 self.output,
                 self.build_platforms.clone(),
             )?
         } else {
+            let manifest_path = self.manifest_path_for_build()?;
             self.cargo_opts.compute_binary_list(
                 cargo_command,
-                self.graph(),
-                self.manifest_path.as_deref(),
+                self.graph()?,
+                manifest_path.as_deref(),
                 self.output,
                 self.build_platforms.clone(),
             )?
@@ -462,8 +447,37 @@ impl BaseApp {
     }
 
     #[inline]
-    pub(crate) fn graph(&self) -> &PackageGraph {
-        &self.package_graph
+    pub(crate) fn graph(&self) -> Result<&PackageGraph> {
+        Ok(&self.graph_data()?.package_graph)
+    }
+
+    #[inline]
+    pub(crate) fn cargo_metadata_json(&self) -> Result<Arc<String>> {
+        Ok(self.graph_data()?.cargo_metadata_json.clone())
+    }
+
+    pub(crate) fn workspace_root(&self) -> Result<&Utf8PathBuf> {
+        if let Some(workspace_root) = self.workspace_root.get() {
+            return Ok(workspace_root);
+        }
+
+        let workspace_root = match self.reuse_build.workspace_remap() {
+            Some(path) => path.to_owned(),
+            None => match self.graph_data.get() {
+                Some(graph_data) => graph_data.package_graph.workspace().root().to_owned(),
+                None if self.reuse_build.binaries_metadata().is_some() => {
+                    locate_workspace_root(self.manifest_path.as_deref(), self.output)?
+                }
+                None => self.graph()?.workspace().root().to_owned(),
+            },
+        };
+
+        self.check_root_manifest_path(&workspace_root)?;
+        let _ = self.workspace_root.set(workspace_root);
+        Ok(self
+            .workspace_root
+            .get()
+            .expect("workspace root should be initialized"))
     }
 
     pub(crate) fn load_profile<'cfg>(
@@ -492,6 +506,74 @@ impl BaseApp {
             })?;
         }
         Ok(profile)
+    }
+
+    fn graph_data(&self) -> Result<&GraphData> {
+        if let Some(graph_data) = self.graph_data.get() {
+            return Ok(graph_data);
+        }
+
+        let json = acquire_graph_data(
+            self.manifest_path.as_deref(),
+            self.cargo_opts.target_dir.as_deref(),
+            &self.cargo_opts,
+            &self.build_platforms,
+            self.output,
+        )?;
+        let graph = PackageGraph::from_json(&json)
+            .map_err(|err| ExpectedError::cargo_metadata_parse_error(None, err))?;
+        let _ = self.graph_data.set(GraphData {
+            cargo_metadata_json: Arc::new(json),
+            package_graph: Arc::new(graph),
+        });
+        Ok(self
+            .graph_data
+            .get()
+            .expect("graph data should be initialized"))
+    }
+
+    fn manifest_path_for_build(&self) -> Result<Option<Utf8PathBuf>> {
+        if let Some(graph_data) = self.graph_data.get() {
+            if self.reuse_build.cargo_metadata().is_some() {
+                return Ok(Some(
+                    graph_data
+                        .package_graph
+                        .workspace()
+                        .root()
+                        .join("Cargo.toml"),
+                ));
+            }
+        }
+
+        if let Some(cargo_metadata) = self.reuse_build.cargo_metadata() {
+            Ok(Some(
+                cargo_metadata.graph.workspace().root().join("Cargo.toml"),
+            ))
+        } else {
+            Ok(self.manifest_path.clone())
+        }
+    }
+
+    fn check_root_manifest_path(&self, workspace_root: &Utf8Path) -> Result<()> {
+        let root_manifest_path = workspace_root.join("Cargo.toml");
+        if !root_manifest_path.exists() {
+            let reuse_build_kind = if self.reuse_build.workspace_remap().is_some() {
+                ReuseBuildKind::ReuseWithWorkspaceRemap {
+                    workspace_root: workspace_root.to_owned(),
+                }
+            } else if self.reuse_build.is_active() {
+                ReuseBuildKind::Reuse
+            } else {
+                ReuseBuildKind::Normal
+            };
+
+            return Err(ExpectedError::RootManifestNotFound {
+                path: root_manifest_path,
+                reuse_build_kind,
+            });
+        }
+
+        Ok(())
     }
 }
 

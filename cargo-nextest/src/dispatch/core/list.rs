@@ -62,12 +62,85 @@ pub(crate) struct ListOpts {
 }
 
 impl App {
+    fn can_skip_full_config_for_binaries_only(&self) -> bool {
+        self.base.config_opts.profile.is_none()
+            && self.base.config_opts.config_file.is_none()
+            && self.base.config_opts.tool_config_files.is_empty()
+    }
+
+    fn create_paged_output(&self, message_format: MessageFormatOpts) -> Result<PagedOutput> {
+        if !message_format.is_human_readable() {
+            return Ok(PagedOutput::terminal());
+        }
+
+        let resolved_user_config = resolve_user_config(
+            &self.base.build_platforms.host.platform,
+            self.base.early_args.user_config_location(),
+        )?;
+        let (pager_setting, paginate) =
+            self.base.early_args.resolve_pager(&resolved_user_config.ui);
+
+        let should_page = !matches!(paginate, PaginateSetting::Never);
+
+        Ok(if should_page {
+            PagedOutput::request_pager(
+                &pager_setting,
+                paginate,
+                &resolved_user_config.ui.streampager,
+            )
+        } else {
+            PagedOutput::terminal()
+        })
+    }
+
     pub(crate) fn exec_list(
         &self,
         message_format: MessageFormatOpts,
         list_type: ListType,
     ) -> Result<()> {
-        let pcx = ParseContext::new(self.base.graph());
+        if matches!(list_type, ListType::BinariesOnly)
+            && self.can_skip_full_config_for_binaries_only()
+        {
+            // Binaries-only output doesn't depend on profiles or the compiled test list. Only
+            // validate the version-related config and the CLI filter syntax needed for current
+            // diagnostics.
+            let version_only_config = self.base.load_version_only_config(&BTreeSet::new())?;
+            let filter_exprs = if self.build_filter.filterset.is_empty() {
+                Vec::new()
+            } else {
+                let pcx = ParseContext::new(self.base.graph()?);
+                build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?
+            };
+            let _test_filter = self
+                .build_filter
+                .make_test_filter(NextestRunMode::Test, filter_exprs)?;
+
+            let binary_list = self.base.build_binary_list("test")?;
+            let mut paged_output = self.create_paged_output(message_format)?;
+            let is_interactive = paged_output.is_interactive();
+            let should_colorize = self
+                .base
+                .output
+                .color
+                .should_colorize(supports_color::Stream::Stdout);
+
+            binary_list.write(
+                message_format.to_output_format(self.base.output.verbose, is_interactive),
+                &mut paged_output,
+                should_colorize,
+            )?;
+
+            paged_output
+                .write_str_flush()
+                .map_err(WriteTestListError::Io)?;
+            paged_output.finalize();
+
+            self.base
+                .check_version_config_final(version_only_config.nextest_version())?;
+            return Ok(());
+        }
+
+        let pcx = ParseContext::new(self.base.graph()?);
 
         let (version_only_config, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
         let profile = self.base.load_profile(&config)?;
@@ -79,25 +152,7 @@ impl App {
 
         let binary_list = self.base.build_binary_list("test")?;
 
-        let resolved_user_config = resolve_user_config(
-            &self.base.build_platforms.host.platform,
-            self.base.early_args.user_config_location(),
-        )?;
-        let (pager_setting, paginate) =
-            self.base.early_args.resolve_pager(&resolved_user_config.ui);
-
-        let should_page =
-            !matches!(paginate, PaginateSetting::Never) && message_format.is_human_readable();
-
-        let mut paged_output = if should_page {
-            PagedOutput::request_pager(
-                &pager_setting,
-                paginate,
-                &resolved_user_config.ui.streampager,
-            )
-        } else {
-            PagedOutput::terminal()
-        };
+        let mut paged_output = self.create_paged_output(message_format)?;
 
         let is_interactive = paged_output.is_interactive();
         let should_colorize = self
@@ -152,7 +207,7 @@ impl App {
         show_default: bool,
         groups: Vec<nextest_runner::config::elements::TestGroup>,
     ) -> Result<()> {
-        let pcx = ParseContext::new(self.base.graph());
+        let pcx = ParseContext::new(self.base.graph()?);
         let (_, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
         let profile = self.base.load_profile(&config)?;
 
