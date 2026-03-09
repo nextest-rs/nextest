@@ -221,6 +221,7 @@ impl<'g> BinaryListBuilder<'g> {
     }
 }
 
+// Adapted from cargo_metadata::MessageIter::next (cargo_metadata 0.23.1).
 fn parse_message_line(line: &str) -> Message {
     let mut deserializer = serde_json::Deserializer::from_str(line);
     deserializer.disable_recursion_limit();
