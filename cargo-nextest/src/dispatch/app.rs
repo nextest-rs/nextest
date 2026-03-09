@@ -114,6 +114,16 @@ impl AppOpts {
     ) -> Result<i32> {
         match self.command {
             Command::List(list_opts) => {
+                if list_opts.try_exec_binaries_only_fast(
+                    &early_args,
+                    self.common.manifest_path.as_deref(),
+                    &self.common.config_opts,
+                    output,
+                    output_writer,
+                )? {
+                    return Ok(0);
+                }
+
                 let base = BaseApp::new(
                     output,
                     early_args,

@@ -345,6 +345,30 @@ fn test_list_full_after_build() {
 }
 
 #[test]
+fn test_list_binaries_only_after_build() {
+    let env_info = set_env_vars_for_test();
+
+    let p = TempProject::new(&env_info).unwrap();
+    save_binaries_metadata(&env_info, &p);
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--binaries-metadata",
+            p.binaries_metadata_path().as_str(),
+            "--message-format",
+            "json",
+            "--list-type",
+            "binaries-only",
+        ])
+        .output();
+
+    check_list_binaries_output(&output.stdout);
+}
+
+#[test]
 fn test_list_host_after_build() {
     let env_info = set_env_vars_for_test();
 

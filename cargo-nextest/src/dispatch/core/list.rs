@@ -4,6 +4,7 @@
 //! List command options and execution.
 
 use super::{
+    current_version,
     filter::TestBuildFilter,
     run::App,
     value_enums::{ListType, MessageFormatOpts},
@@ -11,15 +12,25 @@ use super::{
 use crate::{
     Result,
     cargo_cli::CargoOptions,
-    dispatch::helpers::{build_filtersets, resolve_user_config},
+    dispatch::{
+        EarlyArgs,
+        common::ConfigOpts,
+        helpers::{
+            build_filtersets, check_experimental_filtering, check_version_config_final,
+            load_version_only_config, locate_workspace_root, resolve_user_config,
+        },
+    },
+    output::{OutputContext, OutputWriter},
     reuse_build::ReuseBuildOpts,
 };
+use camino::Utf8Path;
 use clap::Args;
 use nextest_filtering::{FiltersetKind, ParseContext};
 use nextest_runner::{
     errors::WriteTestListError,
     list::TestExecuteContext,
     pager::PagedOutput,
+    platform::Platform,
     run_mode::NextestRunMode,
     show_config::{ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     user_config::elements::PaginateSetting,
@@ -61,6 +72,111 @@ pub(crate) struct ListOpts {
     pub(crate) reuse_build: ReuseBuildOpts,
 }
 
+impl ListOpts {
+    pub(crate) fn try_exec_binaries_only_fast(
+        &self,
+        early_args: &EarlyArgs,
+        manifest_path: Option<&Utf8Path>,
+        config_opts: &ConfigOpts,
+        output: OutputContext,
+        output_writer: &mut OutputWriter,
+    ) -> Result<bool> {
+        if !self.supports_binaries_only_fast_path(config_opts) {
+            return Ok(false);
+        }
+
+        check_experimental_filtering(output);
+        self.reuse_build.check_experimental(output);
+
+        let reuse_build = self.reuse_build.process(output, output_writer)?;
+        let binary_list = reuse_build
+            .binaries_metadata()
+            .expect("binaries metadata must be present on the fast path")
+            .binary_list
+            .clone();
+        let workspace_root = locate_workspace_root(manifest_path, output)?;
+        let version_only_config = load_version_only_config(
+            output,
+            config_opts,
+            &workspace_root,
+            &current_version(),
+            &BTreeSet::new(),
+        )?;
+
+        // Even though binaries-only doesn't enumerate tests, keep validating test-binary args
+        // to preserve the current CLI diagnostics for those flags.
+        let _test_filter = self
+            .build_filter
+            .make_test_filter(NextestRunMode::Test, Vec::new())?;
+
+        let mut paged_output = create_paged_output(
+            early_args,
+            &binary_list.rust_build_meta.build_platforms.host.platform,
+            self.message_format,
+        )?;
+        let is_interactive = paged_output.is_interactive();
+        let should_colorize = output.color.should_colorize(supports_color::Stream::Stdout);
+
+        binary_list.write(
+            self.message_format
+                .to_output_format(output.verbose, is_interactive),
+            &mut paged_output,
+            should_colorize,
+        )?;
+
+        paged_output
+            .write_str_flush()
+            .map_err(WriteTestListError::Io)?;
+        paged_output.finalize();
+
+        check_version_config_final(
+            output,
+            config_opts,
+            &current_version(),
+            version_only_config.nextest_version(),
+        )?;
+
+        Ok(true)
+    }
+
+    fn supports_binaries_only_fast_path(&self, config_opts: &ConfigOpts) -> bool {
+        matches!(self.list_type, ListType::BinariesOnly)
+            && self.reuse_build.binaries_metadata.is_some()
+            && self.reuse_build.cargo_metadata.is_none()
+            && self.reuse_build.archive_file.is_none()
+            && self.build_filter.filterset.is_empty()
+            && config_opts.profile.is_none()
+            && config_opts.config_file.is_none()
+            && config_opts.tool_config_files.is_empty()
+    }
+}
+
+fn create_paged_output(
+    early_args: &EarlyArgs,
+    host_platform: &Platform,
+    message_format: MessageFormatOpts,
+) -> Result<PagedOutput> {
+    if !message_format.is_human_readable() {
+        return Ok(PagedOutput::terminal());
+    }
+
+    let resolved_user_config =
+        resolve_user_config(host_platform, early_args.user_config_location())?;
+    let (pager_setting, paginate) = early_args.resolve_pager(&resolved_user_config.ui);
+
+    let should_page = !matches!(paginate, PaginateSetting::Never);
+
+    Ok(if should_page {
+        PagedOutput::request_pager(
+            &pager_setting,
+            paginate,
+            &resolved_user_config.ui.streampager,
+        )
+    } else {
+        PagedOutput::terminal()
+    })
+}
+
 impl App {
     pub(crate) fn exec_list(
         &self,
@@ -79,25 +195,11 @@ impl App {
 
         let binary_list = self.base.build_binary_list("test")?;
 
-        let resolved_user_config = resolve_user_config(
+        let mut paged_output = create_paged_output(
+            &self.base.early_args,
             &self.base.build_platforms.host.platform,
-            self.base.early_args.user_config_location(),
+            message_format,
         )?;
-        let (pager_setting, paginate) =
-            self.base.early_args.resolve_pager(&resolved_user_config.ui);
-
-        let should_page =
-            !matches!(paginate, PaginateSetting::Never) && message_format.is_human_readable();
-
-        let mut paged_output = if should_page {
-            PagedOutput::request_pager(
-                &pager_setting,
-                paginate,
-                &resolved_user_config.ui.streampager,
-            )
-        } else {
-            PagedOutput::terminal()
-        };
 
         let is_interactive = paged_output.is_interactive();
         let should_colorize = self

@@ -6,14 +6,19 @@
 use crate::{
     ExpectedError, ExtractOutputFormat, Result,
     cargo_cli::{CargoCli, CargoOptions},
+    dispatch::common::ConfigOpts,
     output::{OutputContext, StderrStyles},
 };
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use itertools::Itertools;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_runner::{
     RustcCli,
     cargo_config::{CargoConfigs, TargetTriple},
+    config::core::{
+        ConfigExperimental, ExperimentalConfig, NextestConfig, NextestVersionConfig,
+        NextestVersionEval, VersionOnlyConfig,
+    },
     errors::TargetTripleError,
     platform::{BuildPlatforms, HostPlatform, Platform, PlatformLibdir, TargetPlatform},
     reporter::{
@@ -25,9 +30,10 @@ use nextest_runner::{
     user_config::{UserConfig, UserConfigLocation},
 };
 use owo_colors::OwoColorize;
-use std::io::Write;
+use semver::Version;
+use std::{collections::BTreeSet, io::Write};
 use swrite::{SWrite, swrite};
-use tracing::{debug, warn};
+use tracing::{Level, debug, info, warn};
 
 pub(super) fn acquire_graph_data(
     manifest_path: Option<&Utf8Path>,
@@ -96,6 +102,154 @@ pub(super) fn resolve_user_config(
 ) -> Result<UserConfig, ExpectedError> {
     UserConfig::for_host_platform(host_platform, location)
         .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })
+}
+
+pub(super) fn locate_workspace_root(
+    manifest_path: Option<&Utf8Path>,
+    output: OutputContext,
+) -> Result<Utf8PathBuf> {
+    let mut cargo_cli = CargoCli::new("locate-project", manifest_path, output);
+    cargo_cli.add_args(["--workspace", "--message-format=plain"]);
+    let locate_project_output = cargo_cli
+        .to_expression()
+        .stdout_capture()
+        .unchecked()
+        .run()
+        .map_err(|error| {
+            ExpectedError::cargo_locate_project_exec_failed(cargo_cli.all_args(), error)
+        })?;
+    if !locate_project_output.status.success() {
+        return Err(ExpectedError::cargo_locate_project_failed(
+            cargo_cli.all_args(),
+            locate_project_output.status,
+        ));
+    }
+
+    let workspace_root = String::from_utf8(locate_project_output.stdout)
+        .map_err(|err| ExpectedError::WorkspaceRootInvalidUtf8 { err })?;
+    let workspace_root = Utf8Path::new(workspace_root.trim_end());
+    let workspace_root =
+        workspace_root
+            .parent()
+            .ok_or_else(|| ExpectedError::WorkspaceRootInvalid {
+                workspace_root: workspace_root.to_owned(),
+            })?;
+
+    Ok(workspace_root.to_owned())
+}
+
+pub(super) fn load_version_only_config(
+    output: OutputContext,
+    config_opts: &ConfigOpts,
+    workspace_root: &Utf8Path,
+    current_version: &Version,
+    required_experimental: &BTreeSet<ConfigExperimental>,
+) -> Result<VersionOnlyConfig> {
+    // Load the version-only config first to avoid incompatibilities with parsing the rest of
+    // the config.
+    let version_only_config = config_opts.make_version_only_config(workspace_root)?;
+    check_version_config_initial(
+        output,
+        config_opts,
+        current_version,
+        version_only_config.nextest_version(),
+    )?;
+
+    // Check for unknown experimental features after the version check. This ensures that if
+    // the required nextest version is higher than the current version, the version error takes
+    // precedence (a future version may have new experimental features).
+    check_experimental_config_initial(
+        config_opts,
+        workspace_root,
+        version_only_config.experimental(),
+    )?;
+
+    let mut experimental = ConfigExperimental::from_env();
+    experimental.extend(version_only_config.experimental().known());
+
+    // Check that all required experimental features are enabled.
+    let missing = required_experimental
+        .difference(&experimental)
+        .copied()
+        .collect::<Vec<_>>();
+
+    if !missing.is_empty() {
+        let config_file = config_opts
+            .config_file
+            .clone()
+            .unwrap_or_else(|| Utf8PathBuf::from(".config/nextest.toml"));
+        return Err(ExpectedError::ConfigExperimentalFeaturesNotEnabled {
+            config_file,
+            missing,
+        });
+    }
+
+    if !experimental.is_empty() {
+        info!(
+            "experimental features enabled: {}",
+            experimental
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    Ok(version_only_config)
+}
+
+pub(super) fn check_version_config_final(
+    output: OutputContext,
+    config_opts: &ConfigOpts,
+    current_version: &Version,
+    version_cfg: &NextestVersionConfig,
+) -> Result<()> {
+    let styles = output.stderr_styles();
+
+    match version_cfg.eval(current_version, config_opts.override_version_check) {
+        NextestVersionEval::Satisfied => Ok(()),
+        NextestVersionEval::Error {
+            required,
+            current,
+            tool,
+        } => Err(ExpectedError::RequiredVersionNotMet {
+            required,
+            current,
+            tool,
+        }),
+        NextestVersionEval::Warn {
+            recommended: required,
+            current,
+            tool,
+        } => {
+            warn!(
+                "this repository recommends nextest version {}, but the current version is {}",
+                required.style(styles.bold),
+                current.style(styles.bold),
+            );
+            if let Some(tool) = tool {
+                info!(
+                    target: "cargo_nextest::no_heading",
+                    "(recommended version specified by tool `{}`)",
+                    tool,
+                );
+            }
+
+            // Don't need to print extra text here -- this is a warning, not an error.
+            crate::helpers::log_needs_update(
+                Level::INFO,
+                crate::helpers::BYPASS_VERSION_TEXT,
+                &styles,
+            );
+
+            Ok(())
+        }
+        NextestVersionEval::ErrorOverride { .. } | NextestVersionEval::WarnOverride { .. } => {
+            // Don't print overrides at the end since users have already opted into overrides --
+            // just be ok with the one at the beginning.
+            Ok(())
+        }
+    }
 }
 
 pub(super) fn discover_target_triple(
@@ -182,6 +336,113 @@ pub(super) fn build_filtersets(
         Err(ExpectedError::filter_expression_parse_error(all_errors))
     } else {
         Ok(exprs)
+    }
+}
+
+// (_output is not used, but must be passed in to ensure that the output is properly initialized
+// before calling this method)
+pub(super) fn check_experimental_filtering(_output: OutputContext) {
+    const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_FILTER_EXPR";
+    if std::env::var(EXPERIMENTAL_ENV).is_ok() {
+        warn!(
+            "filtersets are no longer experimental: NEXTEST_EXPERIMENTAL_FILTER_EXPR does not need to be set"
+        );
+    }
+}
+
+fn check_version_config_initial(
+    output: OutputContext,
+    config_opts: &ConfigOpts,
+    current_version: &Version,
+    version_cfg: &NextestVersionConfig,
+) -> Result<()> {
+    let styles = output.stderr_styles();
+
+    match version_cfg.eval(current_version, config_opts.override_version_check) {
+        NextestVersionEval::Satisfied => Ok(()),
+        NextestVersionEval::Error {
+            required,
+            current,
+            tool,
+        } => Err(ExpectedError::RequiredVersionNotMet {
+            required,
+            current,
+            tool,
+        }),
+        NextestVersionEval::Warn {
+            recommended: required,
+            current,
+            tool,
+        } => {
+            warn!(
+                "this repository recommends nextest version {}, but the current version is {}",
+                required.style(styles.bold),
+                current.style(styles.bold),
+            );
+            if let Some(tool) = tool {
+                info!(
+                    target: "cargo_nextest::no_heading",
+                    "(recommended version specified by tool `{}`)",
+                    tool,
+                );
+            }
+
+            Ok(())
+        }
+        NextestVersionEval::ErrorOverride {
+            required,
+            current,
+            tool,
+        } => {
+            info!(
+                "overriding version check (required: {}, current: {})",
+                required, current
+            );
+            if let Some(tool) = tool {
+                info!(
+                    target: "cargo_nextest::no_heading",
+                    "(required version specified by tool `{}`)",
+                    tool,
+                );
+            }
+
+            Ok(())
+        }
+        NextestVersionEval::WarnOverride {
+            recommended,
+            current,
+            tool,
+        } => {
+            info!(
+                "overriding version check (recommended: {}, current: {})",
+                recommended, current,
+            );
+            if let Some(tool) = tool {
+                info!(
+                    target: "cargo_nextest::no_heading",
+                    "(recommended version specified by tool `{}`)",
+                    tool,
+                );
+            }
+
+            Ok(())
+        }
+    }
+}
+
+fn check_experimental_config_initial(
+    config_opts: &ConfigOpts,
+    workspace_root: &Utf8Path,
+    experimental_cfg: &ExperimentalConfig,
+) -> Result<()> {
+    let config_file = config_opts
+        .config_file
+        .clone()
+        .unwrap_or_else(|| workspace_root.join(NextestConfig::CONFIG_PATH));
+    if let Some(err) = experimental_cfg.eval().into_error(config_file) {
+        Err(err.into())
+    } else {
+        Ok(())
     }
 }
 

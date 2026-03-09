@@ -13,7 +13,9 @@ use super::{
 };
 use crate::{
     ExpectedError, Result,
-    dispatch::helpers::{build_filtersets, final_stats_to_error, resolve_user_config},
+    dispatch::helpers::{
+        build_filtersets, check_experimental_filtering, final_stats_to_error, resolve_user_config,
+    },
     output::OutputWriter,
     reuse_build::ReuseBuildOpts,
 };
@@ -775,17 +777,6 @@ impl BenchReporterOpts {
             .unwrap_or(resolved_ui.show_progress.into());
         builder.set_show_progress(show_progress);
         builder
-    }
-}
-
-// (_output is not used, but must be passed in to ensure that the output is properly initialized
-// before calling this method)
-fn check_experimental_filtering(_output: crate::output::OutputContext) {
-    const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_FILTER_EXPR";
-    if std::env::var(EXPERIMENTAL_ENV).is_ok() {
-        warn!(
-            "filtersets are no longer experimental: NEXTEST_EXPERIMENTAL_FILTER_EXPR does not need to be set"
-        );
     }
 }
 

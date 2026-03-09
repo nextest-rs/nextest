@@ -9,7 +9,11 @@ use crate::{
     dispatch::{
         EarlyArgs,
         common::ConfigOpts,
-        helpers::{acquire_graph_data, detect_build_platforms, runner_for_target},
+        helpers::{
+            acquire_graph_data, check_version_config_final as check_version_config_final_impl,
+            detect_build_platforms, load_version_only_config as load_version_only_config_impl,
+            runner_for_target,
+        },
     },
     output::{OutputContext, OutputWriter},
 };
@@ -19,8 +23,7 @@ use nextest_filtering::ParseContext;
 use nextest_runner::{
     cargo_config::CargoConfigs,
     config::core::{
-        ConfigExperimental, EarlyProfile, ExperimentalConfig, NextestConfig, NextestVersionConfig,
-        NextestVersionEval, VersionOnlyConfig,
+        ConfigExperimental, EarlyProfile, NextestConfig, NextestVersionConfig, VersionOnlyConfig,
     },
     double_spawn::DoubleSpawnInfo,
     list::BinaryList,
@@ -28,14 +31,13 @@ use nextest_runner::{
     reuse_build::ReuseBuildInfo,
     target_runner::TargetRunner,
 };
-use owo_colors::OwoColorize;
 use semver::Version;
 use std::{
     collections::BTreeSet,
     env::VarError,
     sync::{Arc, OnceLock},
 };
-use tracing::{Level, info, warn};
+use tracing::{info, warn};
 
 /// Base application state shared by core commands (run, list, bench, archive).
 pub(crate) struct BaseApp {
@@ -150,49 +152,7 @@ impl BaseApp {
         pcx: &ParseContext<'_>,
         required_experimental: &BTreeSet<ConfigExperimental>,
     ) -> Result<(VersionOnlyConfig, NextestConfig)> {
-        // Load the version-only config first to avoid incompatibilities with parsing the rest of
-        // the config.
-        let version_only_config = self
-            .config_opts
-            .make_version_only_config(&self.workspace_root)?;
-        self.check_version_config_initial(version_only_config.nextest_version())?;
-
-        // Check for unknown experimental features after the version check. This ensures that if
-        // the required nextest version is higher than the current version, the version error takes
-        // precedence (a future version may have new experimental features).
-        self.check_experimental_config_initial(version_only_config.experimental())?;
-
-        let mut experimental = ConfigExperimental::from_env();
-        experimental.extend(version_only_config.experimental().known());
-
-        // Check that all required experimental features are enabled.
-        let missing = required_experimental
-            .difference(&experimental)
-            .copied()
-            .collect::<Vec<_>>();
-
-        if !missing.is_empty() {
-            let config_file = self
-                .config_opts
-                .config_file
-                .clone()
-                .unwrap_or_else(|| Utf8PathBuf::from(".config/nextest.toml"));
-            return Err(ExpectedError::ConfigExperimentalFeaturesNotEnabled {
-                config_file,
-                missing,
-            });
-        }
-
-        if !experimental.is_empty() {
-            info!(
-                "experimental features enabled: {}",
-                experimental
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-        }
+        let version_only_config = self.load_version_only_config(required_experimental)?;
 
         let config = self.config_opts.make_config(
             &self.workspace_root,
@@ -203,153 +163,29 @@ impl BaseApp {
         Ok((version_only_config, config))
     }
 
-    fn check_version_config_initial(&self, version_cfg: &NextestVersionConfig) -> Result<()> {
-        let styles = self.output.stderr_styles();
-
-        match version_cfg.eval(
-            &self.current_version,
-            self.config_opts.override_version_check,
-        ) {
-            NextestVersionEval::Satisfied => Ok(()),
-            NextestVersionEval::Error {
-                required,
-                current,
-                tool,
-            } => Err(ExpectedError::RequiredVersionNotMet {
-                required,
-                current,
-                tool,
-            }),
-            NextestVersionEval::Warn {
-                recommended: required,
-                current,
-                tool,
-            } => {
-                warn!(
-                    "this repository recommends nextest version {}, but the current version is {}",
-                    required.style(styles.bold),
-                    current.style(styles.bold),
-                );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(recommended version specified by tool `{}`)",
-                        tool,
-                    );
-                }
-
-                Ok(())
-            }
-            NextestVersionEval::ErrorOverride {
-                required,
-                current,
-                tool,
-            } => {
-                info!(
-                    "overriding version check (required: {}, current: {})",
-                    required, current
-                );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(required version specified by tool `{}`)",
-                        tool,
-                    );
-                }
-
-                Ok(())
-            }
-            NextestVersionEval::WarnOverride {
-                recommended,
-                current,
-                tool,
-            } => {
-                info!(
-                    "overriding version check (recommended: {}, current: {})",
-                    recommended, current,
-                );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(recommended version specified by tool `{}`)",
-                        tool,
-                    );
-                }
-
-                Ok(())
-            }
-        }
-    }
-
-    fn check_experimental_config_initial(
+    pub(crate) fn load_version_only_config(
         &self,
-        experimental_cfg: &ExperimentalConfig,
-    ) -> Result<()> {
-        let config_file = self
-            .config_opts
-            .config_file
-            .clone()
-            .unwrap_or_else(|| self.workspace_root.join(NextestConfig::CONFIG_PATH));
-        if let Some(err) = experimental_cfg.eval().into_error(config_file) {
-            Err(err.into())
-        } else {
-            Ok(())
-        }
+        required_experimental: &BTreeSet<ConfigExperimental>,
+    ) -> Result<VersionOnlyConfig> {
+        load_version_only_config_impl(
+            self.output,
+            &self.config_opts,
+            &self.workspace_root,
+            &self.current_version,
+            required_experimental,
+        )
     }
 
     pub(crate) fn check_version_config_final(
         &self,
         version_cfg: &NextestVersionConfig,
     ) -> Result<()> {
-        let styles = self.output.stderr_styles();
-
-        match version_cfg.eval(
+        check_version_config_final_impl(
+            self.output,
+            &self.config_opts,
             &self.current_version,
-            self.config_opts.override_version_check,
-        ) {
-            NextestVersionEval::Satisfied => Ok(()),
-            NextestVersionEval::Error {
-                required,
-                current,
-                tool,
-            } => Err(ExpectedError::RequiredVersionNotMet {
-                required,
-                current,
-                tool,
-            }),
-            NextestVersionEval::Warn {
-                recommended: required,
-                current,
-                tool,
-            } => {
-                warn!(
-                    "this repository recommends nextest version {}, but the current version is {}",
-                    required.style(styles.bold),
-                    current.style(styles.bold),
-                );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(recommended version specified by tool `{}`)",
-                        tool,
-                    );
-                }
-
-                // Don't need to print extra text here -- this is a warning, not an error.
-                crate::helpers::log_needs_update(
-                    Level::INFO,
-                    crate::helpers::BYPASS_VERSION_TEXT,
-                    &styles,
-                );
-
-                Ok(())
-            }
-            NextestVersionEval::ErrorOverride { .. } | NextestVersionEval::WarnOverride { .. } => {
-                // Don't print overrides at the end since users have already opted into overrides --
-                // just be ok with the one at the beginning.
-                Ok(())
-            }
-        }
+            version_cfg,
+        )
     }
 
     pub(crate) fn load_double_spawn(&self) -> &DoubleSpawnInfo {
