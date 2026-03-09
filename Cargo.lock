@@ -323,15 +323,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "buf-list"
-version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6b175f9cf8fffedd4c4b18bcfef092356e952b81f596e148f18e98280994593"
-dependencies = [
- "bytes",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -398,8 +389,6 @@ dependencies = [
 name = "cargo-nextest"
 version = "0.9.129"
 dependencies = [
- "buf-list",
- "bytes",
  "camino",
  "camino-tempfile",
  "cfg-if",

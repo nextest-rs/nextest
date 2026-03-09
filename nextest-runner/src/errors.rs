@@ -1095,7 +1095,8 @@ pub enum FormatVersionErrorInner {
     },
 }
 
-/// An error that occurs in [`BinaryList::from_messages`](crate::list::BinaryList::from_messages) or
+/// An error that occurs in [`BinaryList::from_messages`](crate::list::BinaryList::from_messages),
+/// [`BinaryListBuilder`](crate::list::BinaryListBuilder), or
 /// [`RustTestArtifact::from_binary_list`](crate::list::RustTestArtifact::from_binary_list).
 #[derive(Debug, Error)]
 #[non_exhaustive]
