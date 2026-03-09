@@ -533,16 +533,16 @@ impl BaseApp {
     }
 
     fn manifest_path_for_build(&self) -> Result<Option<Utf8PathBuf>> {
-        if let Some(graph_data) = self.graph_data.get() {
-            if self.reuse_build.cargo_metadata().is_some() {
-                return Ok(Some(
-                    graph_data
-                        .package_graph
-                        .workspace()
-                        .root()
-                        .join("Cargo.toml"),
-                ));
-            }
+        if let Some(graph_data) = self.graph_data.get()
+            && self.reuse_build.cargo_metadata().is_some()
+        {
+            return Ok(Some(
+                graph_data
+                    .package_graph
+                    .workspace()
+                    .root()
+                    .join("Cargo.toml"),
+            ));
         }
 
         if let Some(cargo_metadata) = self.reuse_build.cargo_metadata() {
