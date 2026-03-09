@@ -2104,7 +2104,9 @@ fn test_setup_script_defined_env() {
                 .parent()
                 .expect("manifest_path's parent should be a dir"),
         )
-        .env("CMD_ENV_VAR", "not-set-in-conf")
+        .env("__NEXTEST_SETUP_SCRIPT_DEFINED_ENV", "1")
+        .env("CMD_ENV_VAR", "test-value-set-by-environment")
+        .env("CMD_ENV_VAR_CARGO", "test-value-set-by-environment")
         .output();
 
     assert_eq!(

@@ -181,7 +181,8 @@ command = {
     command-line = "my-script.sh",
     relative-to = "workspace-root",
     env = {
-        CMD_ENV_VAR = "set-in-conf",
+        CMD_ENV_VAR = "test-value-set-in-conf",
+        CMD_ENV_VAR_CARGO = "test-value-set-in-conf",
     },
 }
 
@@ -192,7 +193,8 @@ command = {
 command = {
     command-line = 'cmd /c "scripts\\my-script.bat"',
     env = {
-        CMD_ENV_VAR = "set-in-conf",
+        CMD_ENV_VAR = "test-value-set-in-conf",
+        CMD_ENV_VAR_CARGO = "test-value-set-in-conf",
     },
 }
 

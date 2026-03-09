@@ -310,14 +310,16 @@ impl SetupScriptCommand {
             double_spawn,
         );
 
+        // Set the additional user-provided environment variables assigned to the setup
+        // script's `command.env`,  This is done before applying the `cargo_env` below
+        // as that will only override values specified in this step if `force = true` is
+        // specified on the value in the Cargo config, which is not the case with ordinary
+        // environment variables.
+        cmd.envs(config.command.env.iter());
+
         // NB: we will always override user-provided environment variables with the
         // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
         test_list.cargo_env().apply_env(&mut cmd);
-
-        // Set the additional user-provided environment variables assigned to the setup
-        // script configuration after the global values assigned above but before the
-        // test runner controlled ones which are assigned below, as per above note.
-        cmd.envs(config.command.env.iter());
 
         let env_path = camino_tempfile::Builder::new()
             .prefix("nextest-env")
