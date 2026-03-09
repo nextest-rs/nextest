@@ -1041,7 +1041,7 @@ impl<'de> serde::de::DeserializeSeed<'de> for EnvMapSeed {
             }
         }
 
-        deserializer.deserialize_any(EnvMapVisitor)
+        deserializer.deserialize_map(EnvMapVisitor)
     }
 }
 
