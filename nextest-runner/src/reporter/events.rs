@@ -1345,10 +1345,10 @@ impl ChildOutputDescription {
     pub fn stdout_stderr_len(&self) -> (Option<u64>, Option<u64>) {
         match self {
             Self::Split { stdout, stderr } => (
-                stdout.as_ref().map(|s| s.buf.len() as u64),
-                stderr.as_ref().map(|s| s.buf.len() as u64),
+                stdout.as_ref().map(|s| s.buf().len() as u64),
+                stderr.as_ref().map(|s| s.buf().len() as u64),
             ),
-            Self::Combined { output } => (Some(output.buf.len() as u64), None),
+            Self::Combined { output } => (Some(output.buf().len() as u64), None),
             Self::NotLoaded => {
                 unreachable!(
                     "attempted to get output lengths from output that was not loaded \

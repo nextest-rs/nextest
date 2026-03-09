@@ -48,14 +48,14 @@ impl<'a> UnitErrorDescription<'a> {
                             // only makes sense for completed tests.
                             ChildOutputDescription::Split { stdout, stderr } => {
                                 output_slice = TestOutputErrorSlice::heuristic_extract(
-                                    stdout.as_ref().map(|x| x.buf.as_ref()),
-                                    stderr.as_ref().map(|x| x.buf.as_ref()),
+                                    stdout.as_ref().map(|x| x.buf().as_ref()),
+                                    stderr.as_ref().map(|x| x.buf().as_ref()),
                                 );
                             }
                             ChildOutputDescription::Combined { output } => {
                                 output_slice = TestOutputErrorSlice::heuristic_extract(
-                                    Some(output.buf.as_ref()),
-                                    Some(output.buf.as_ref()),
+                                    Some(output.buf().as_ref()),
+                                    Some(output.buf().as_ref()),
                                 );
                             }
                             ChildOutputDescription::NotLoaded => {
