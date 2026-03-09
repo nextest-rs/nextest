@@ -54,8 +54,8 @@ impl CargoNextestCli {
 
     /// Creates a new CargoNextestCli instance for use in a setup script.
     ///
-    /// Scripts don't have access to the `NEXTEST_BIN_EXE_cargo_nextest_dup` environment variable,
-    /// so we run `cargo run --bin cargo-nextest-dup nextest debug current-exe` instead.
+    /// Scripts don't have access to `CARGO_BIN_EXE_*` or `NEXTEST_BIN_EXE_*` environment
+    /// variables, so we run `cargo run --bin cargo-nextest-dup nextest debug current-exe` instead.
     pub fn for_script() -> Result<Self> {
         let cargo_bin = cargo_bin();
         let mut command = std::process::Command::new(&cargo_bin);

@@ -21,8 +21,8 @@ pub struct TestEnvInfo {
 
 /// Sets up environment variables for a setup script.
 ///
-/// Setup scripts don't have access to `NEXTEST_BIN_EXE_*` variables, so this
-/// only performs sanitization without capturing binary paths.
+/// Setup scripts don't have access to `CARGO_BIN_EXE_*` or `NEXTEST_BIN_EXE_*`
+/// variables, so this only performs sanitization without capturing binary paths.
 pub fn set_env_vars_for_script() {
     // SAFETY:
     // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests

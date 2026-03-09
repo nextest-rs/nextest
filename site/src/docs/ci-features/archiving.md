@@ -201,11 +201,13 @@ Some tests may need to be modified to handle changes in the workspace and target
 
   If the workspace is remapped, nextest automatically sets `CARGO_MANIFEST_DIR` to the new location.
 
-- To obtain the path to a crate's executables, Cargo provides the [`CARGO_BIN_EXE_<name>`] option to integration tests at build time. To handle target directory remapping, use the value of `NEXTEST_BIN_EXE_<name>` at runtime.
+- To obtain the path to a crate's executables, Cargo provides the [`CARGO_BIN_EXE_<name>`] option to integration tests and benchmarks at build time. To make tests relocatable, use one of the below environment variables _at runtime_:
 
-  <!-- md:version 0.9.113 --> Because some shells and [debuggers](../integrations/debuggers-tracers.md) drop [environment variables with hyphens in their names](https://unix.stackexchange.com/a/23714), nextest also sets `NEXTEST_BIN_EXE_<name>`, where hyphens in the name are replaced with underscores. This form is now recommended.
-
-  To retain compatibility with `cargo test`, you can fall back to the value of `CARGO_BIN_EXE_<name>` at build time.
+  - <!-- md:version 0.9.113 --> `NEXTEST_BIN_EXE_<name>`, with hyphens in the name replaced with underscores. (For example, to get the path to a binary named `my-program`, use `NEXTEST_BIN_EXE_my_program`.)
+  
+    Because some shells and [debuggers](../integrations/debuggers-tracers.md) drop [environment variables with hyphens in their names](https://unix.stackexchange.com/a/23714), the underscore form is recommended when possible.
+  - `NEXTEST_BIN_EXE_<name>`, where hyphens in the name are preserved as-is.
+  - <!-- md:version 0.9.130 --> `CARGO_BIN_EXE_<name>`, where hyphens in the name are preserved as-is. This matches `cargo test` in Rust 1.94 and above (though nextest sets this variable on all Rust versions).
 
 [`CARGO_BIN_EXE_<name>`]: https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
 

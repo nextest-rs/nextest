@@ -93,10 +93,10 @@ Nextest exposes these environment variables to your tests _at runtime only_. The
 : The current nextest version as a semver string (e.g. `"0.9.120"`). Set for both tests and [setup scripts](setup-scripts.md).
 
 `NEXTEST_REQUIRED_VERSION` <!-- md:version 0.9.130 -->
-: The minimum required nextest version from the repository's [`nextest-version`](index.md#minimum-nextest-version) configuration, as a semver string. If no required version is configured, this is `"none"`. Set for both tests and [setup scripts](setup-scripts.md).
+: The minimum required nextest version from the repository's [`nextest-version` configuration](minimum-versions.md), as a semver string. If no required version is configured, this is `"none"`. Set for both tests and [setup scripts](setup-scripts.md).
 
 `NEXTEST_RECOMMENDED_VERSION` <!-- md:version 0.9.130 -->
-: The minimum recommended nextest version from the repository's [`nextest-version`](index.md#minimum-nextest-version) configuration, as a semver string. If no recommended version is configured, this is `"none"`. Set for both tests and [setup scripts](setup-scripts.md).
+: The minimum recommended nextest version from the repository's [`nextest-version` configuration](minimum-versions.md), as a semver string. If no recommended version is configured, this is `"none"`. Set for both tests and [setup scripts](setup-scripts.md).
 
 `NEXTEST_EXECUTION_MODE`
 : Currently, always `process-per-test`. More options may be added in the future if nextest gains the ability to run multiple tests within the same process ([#27]).
@@ -138,7 +138,7 @@ Nextest exposes these environment variables to your tests _at runtime only_. The
     If the test is not in any groups, this is `"none"`.
 
 `NEXTEST_TEST_THREADS` <!-- md:version 0.9.130 -->
-: The number of [test threads](../features/test-threads.md) configured for this run. This is the computed value after considering the profile, command-line overrides, and capture strategy. Set for both tests and [setup scripts](setup-scripts.md).
+: The number of test threads configured for this run. This is the computed value after considering the profile, command-line overrides, and capture strategy. Set for both tests and [setup scripts](setup-scripts.md).
 
 `NEXTEST_WORKSPACE_ROOT` <!-- md:version 0.9.130 -->
 : The absolute path to the workspace root. Set for both tests and [setup scripts](setup-scripts.md).
@@ -146,7 +146,7 @@ Nextest exposes these environment variables to your tests _at runtime only_. The
     When [`--workspace-remap`](../ci-features/archiving.md#specifying-a-new-location-for-the-source-code) is passed in, this is set to the remapped workspace root.
 
 `NEXTEST_BIN_EXE_<name>`
-: The absolute path to a binary target's executable. This is only set when running an [integration test] or benchmark. The `<name>` is the name of the binary target, exactly as-is. For example, `NEXTEST_BIN_EXE_my-program` for a binary named `my-program`.
+: The absolute path to a binary target's executable. (See also, `CARGO_BIN_EXE_<name>` below.) This is only set when running an [integration test] or benchmark. The `<name>` is the name of the binary target, exactly as-is. For example, `NEXTEST_BIN_EXE_my-program` for a binary named `my-program`.
 
     Binaries are automatically built when the test is built, unless the binary has required features that are not enabled.
 
@@ -215,6 +215,13 @@ Nextest also sets these environment variables at runtime, matching the behavior 
 
 `CARGO_PKG_LICENSE_FILE`
 : The license file from the manifest of the test's package.
+
+`CARGO_BIN_EXE_<name>` <!-- md:version 0.9.130 -->
+: The absolute path to a binary target's executable, matching `cargo test` in Rust 1.94 and above (though nextest sets this variable on all Rust versions). This is only set when running an [integration test] or benchmark. The `<name>` is the name of the binary target, exactly as-is. For example, `CARGO_BIN_EXE_my-program` for a binary named `my-program`.
+
+    When [reusing builds](../ci-features/archiving.md) from an archive, this is set to the remapped path within the target directory.
+    
+    See also, `NEXTEST_BIN_EXE_<name>` above.
 
 `OUT_DIR`
 : The path to the test's build script output directory.
