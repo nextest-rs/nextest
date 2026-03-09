@@ -519,11 +519,12 @@ mod helpers {
         dispatch::core::value_enums::CargoMessageFormatOpt,
         output::OutputContext,
     };
-    use buf_list::{BufList, Cursor};
-    use bytes::Bytes;
     use camino::Utf8Path;
     use guppy::graph::PackageGraph;
-    use nextest_runner::{list::BinaryList, platform::BuildPlatforms};
+    use nextest_runner::{
+        list::{BinaryList, BinaryListBuilder},
+        platform::BuildPlatforms,
+    };
     use std::io::{BufRead, BufReader};
 
     impl CargoOptions {
@@ -600,18 +601,16 @@ mod helpers {
                 .reader()
                 .map_err(|err| ExpectedError::build_exec_failed(cargo_cli.all_args(), err))?;
 
-            // Read lines as they arrive, forwarding JSON to stdout if requested.
-            // XXX should lines be Vec<u8>?
-            let mut stdout_buf = BufList::new();
+            // Read lines as they arrive, forwarding JSON to stdout if requested and building the
+            // binary list incrementally.
+            let mut binary_list_builder = BinaryListBuilder::new(graph, build_platforms);
             for line in BufReader::new(&reader_handle).lines() {
                 let line = line
                     .map_err(|err| ExpectedError::build_exec_failed(cargo_cli.all_args(), err))?;
                 if forward_json {
                     println!("{}", line);
                 }
-                let mut line = Vec::from(line);
-                line.push(b'\n');
-                stdout_buf.push_chunk(Bytes::from(line));
+                binary_list_builder.process_message_line(&line)?;
             }
 
             // After reading completes (EOF), the handle is internally waited on.
@@ -627,9 +626,7 @@ mod helpers {
                 ));
             }
 
-            let test_binaries =
-                BinaryList::from_messages(Cursor::new(&stdout_buf), graph, build_platforms)?;
-            Ok(test_binaries)
+            Ok(binary_list_builder.finish())
         }
     }
 }

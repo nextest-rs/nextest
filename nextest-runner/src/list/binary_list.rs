@@ -16,6 +16,7 @@ use nextest_metadata::{
     RustNonTestBinarySummary, RustTestBinaryKind, RustTestBinarySummary,
 };
 use owo_colors::OwoColorize;
+use serde::Deserialize;
 use std::{collections::HashSet, io};
 use tracing::warn;
 
@@ -54,14 +55,14 @@ impl BinaryList {
         graph: &PackageGraph,
         build_platforms: BuildPlatforms,
     ) -> Result<Self, FromMessagesError> {
-        let mut state = BinaryListBuildState::new(graph, build_platforms);
+        let mut builder = BinaryListBuilder::new(graph, build_platforms);
 
         for message in Message::parse_stream(reader) {
             let message = message.map_err(FromMessagesError::ReadMessages)?;
-            state.process_message(message)?;
+            builder.process_message(message)?;
         }
 
-        Ok(state.finish())
+        Ok(builder.finish())
     }
 
     /// Constructs the list from its summary format
@@ -185,6 +186,45 @@ impl BinaryList {
         self.write(output_format, &mut s, false)?;
         Ok(s)
     }
+}
+
+/// Incrementally builds a [`BinaryList`] from Cargo messages.
+#[derive(Debug)]
+pub struct BinaryListBuilder<'g> {
+    state: BinaryListBuildState<'g>,
+}
+
+impl<'g> BinaryListBuilder<'g> {
+    /// Creates a new builder for Cargo messages.
+    pub fn new(graph: &'g PackageGraph, build_platforms: BuildPlatforms) -> Self {
+        Self {
+            state: BinaryListBuildState::new(graph, build_platforms),
+        }
+    }
+
+    /// Processes a single Cargo message.
+    pub fn process_message(&mut self, message: Message) -> Result<(), FromMessagesError> {
+        self.state.process_message(message)
+    }
+
+    /// Processes a single line of Cargo output.
+    ///
+    /// This uses the same single-line parsing behavior as
+    /// [`cargo_metadata::Message::parse_stream`].
+    pub fn process_message_line(&mut self, line: &str) -> Result<(), FromMessagesError> {
+        self.process_message(parse_message_line(line))
+    }
+
+    /// Finishes building the binary list.
+    pub fn finish(self) -> BinaryList {
+        self.state.finish()
+    }
+}
+
+fn parse_message_line(line: &str) -> Message {
+    let mut deserializer = serde_json::Deserializer::from_str(line);
+    deserializer.disable_recursion_limit();
+    Message::deserialize(&mut deserializer).unwrap_or_else(|_| Message::TextLine(line.to_owned()))
 }
 
 #[derive(Debug)]
@@ -467,13 +507,17 @@ mod tests {
     use super::*;
     use crate::{
         cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
-        list::SerializableFormat,
+        list::{
+            SerializableFormat,
+            test_helpers::{PACKAGE_GRAPH_FIXTURE, PACKAGE_METADATA_ID, package_metadata},
+        },
         platform::{HostPlatform, PlatformLibdir, TargetPlatform},
     };
     use indoc::indoc;
     use maplit::btreeset;
     use nextest_metadata::PlatformLibdirUnavailable;
     use pretty_assertions::assert_eq;
+    use serde_json::json;
     use target_spec::{Platform, TargetFeatures};
 
     #[test]
@@ -676,6 +720,80 @@ mod tests {
                 .to_string(OutputFormat::Oneline { verbose: true })
                 .expect("oneline verbose succeeded"),
             EXPECTED_ONELINE_VERBOSE
+        );
+    }
+
+    #[test]
+    fn test_parse_binary_list_from_message_lines() {
+        let build_platforms = BuildPlatforms {
+            host: HostPlatform {
+                platform: TargetTriple::x86_64_unknown_linux_gnu().platform,
+                libdir: PlatformLibdir::Available("/fake/libdir".into()),
+            },
+            target: None,
+        };
+        let package = package_metadata();
+        let artifact_path = PACKAGE_GRAPH_FIXTURE
+            .workspace()
+            .target_directory()
+            .join("debug/deps/metadata_helper-test");
+        let src_path = package
+            .manifest_path()
+            .parent()
+            .expect("manifest path has a parent")
+            .join("src/lib.rs");
+
+        let compiler_artifact = json!({
+            "reason": "compiler-artifact",
+            "package_id": PACKAGE_METADATA_ID,
+            "manifest_path": package.manifest_path(),
+            "target": {
+                "name": package.name(),
+                "kind": ["lib"],
+                "crate_types": ["lib"],
+                "required-features": [],
+                "src_path": src_path,
+                "edition": "2021",
+                "doctest": true,
+                "test": true,
+                "doc": true
+            },
+            "profile": {
+                "opt_level": "0",
+                "debuginfo": 0,
+                "debug_assertions": true,
+                "overflow_checks": true,
+                "test": true
+            },
+            "features": [],
+            "filenames": [artifact_path],
+            "executable": artifact_path,
+            "fresh": false
+        });
+        let input = format!("this is not JSON\n{}\n\n", compiler_artifact);
+
+        let from_messages = BinaryList::from_messages(
+            input.as_bytes(),
+            &PACKAGE_GRAPH_FIXTURE,
+            build_platforms.clone(),
+        )
+        .expect("parsing from messages succeeds");
+
+        let mut builder = BinaryListBuilder::new(&PACKAGE_GRAPH_FIXTURE, build_platforms);
+        for line in input.lines() {
+            builder
+                .process_message_line(line)
+                .expect("processing line succeeds");
+        }
+        let from_lines = builder.finish();
+
+        assert_eq!(
+            from_lines
+                .to_string(OutputFormat::Serializable(SerializableFormat::JsonPretty))
+                .expect("json-pretty succeeds"),
+            from_messages
+                .to_string(OutputFormat::Serializable(SerializableFormat::JsonPretty))
+                .expect("json-pretty succeeds")
         );
     }
 }

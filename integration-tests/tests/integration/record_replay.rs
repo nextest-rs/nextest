@@ -212,6 +212,7 @@ fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
             // order.
             if line.contains("only one of `license` or `license-file` is necessary")
                 || line.contains("no edition set: defaulting to the 2015 edition")
+                || line.contains("`package.edition` is unspecified")
                 || line.contains("`license` should be used if the package license")
                 || line.contains("`license-file` should be used if the package uses")
                 || line.contains("See https://doc.rust-lang.org/cargo/reference/manifest.html")
@@ -279,6 +280,27 @@ fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
 }
 
 // --- Tests ---
+
+#[test]
+fn test_redact_dynamic_fields_filters_package_edition_warning() {
+    let temp_dir = camino_tempfile::Builder::new()
+        .prefix("nextest-record-redact-")
+        .tempdir()
+        .expect("created temp dir for redaction test");
+
+    let output = [
+        "info: rerun: inheriting build scope from original run: (default scope)",
+        "warning: [TEMP_DIR]/src/derive/Cargo.toml: no edition set: defaulting to the 2015 edition while the latest is 2024",
+        "warning: [TEMP_DIR]/src/derive/Cargo.toml: `package.edition` is unspecified, defaulting to `2015` while the latest is `2024`",
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s",
+    ]
+    .join("\n");
+
+    assert_eq!(
+        redact_dynamic_fields(&output, temp_dir.path()),
+        "info: rerun: inheriting build scope from original run: (default scope)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in [ELAPSED]"
+    );
+}
 
 /// Full record-replay cycle.
 ///
