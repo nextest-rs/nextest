@@ -661,15 +661,15 @@ impl SerializeTestEventContext<'_> {
             return Ok(ZipStoreOutput::Empty);
         };
 
-        if output.buf.is_empty() {
+        if output.buf().is_empty() {
             return Ok(ZipStoreOutput::Empty);
         }
 
-        let original_len = output.buf.len();
+        let original_len = output.buf().len();
         let (data, truncated): (Cow<'_, [u8]>, bool) = if original_len <= self.max_output_size {
-            (Cow::Borrowed(&output.buf), false)
+            (Cow::Borrowed(output.buf()), false)
         } else {
-            (truncate_output(&output.buf, self.max_output_size), true)
+            (truncate_output(output.buf(), self.max_output_size), true)
         };
 
         let file_name = OutputFileName::from_content(&data, kind);

@@ -35,8 +35,8 @@ pub enum CaptureStrategy {
 /// This is a wrapper around a [`Bytes`] that provides some convenience methods.
 #[derive(Clone, Debug)]
 pub struct ChildSingleOutput {
-    /// The raw output buffer
-    pub buf: Bytes,
+    /// The raw output buffer.
+    buf: Bytes,
 
     /// A string representation of the output, computed on first access.
     ///
@@ -55,6 +55,12 @@ impl From<Bytes> for ChildSingleOutput {
 }
 
 impl ChildSingleOutput {
+    /// Returns the raw output buffer.
+    #[inline]
+    pub fn buf(&self) -> &Bytes {
+        &self.buf
+    }
+
     /// Gets this output as a lossy UTF-8 string.
     #[inline]
     pub fn as_str_lossy(&self) -> &str {
@@ -134,10 +140,10 @@ impl ChildOutput {
     pub fn stdout_stderr_len(&self) -> (Option<u64>, Option<u64>) {
         match self {
             Self::Split(split) => (
-                split.stdout.as_ref().map(|s| s.buf.len() as u64),
-                split.stderr.as_ref().map(|s| s.buf.len() as u64),
+                split.stdout.as_ref().map(|s| s.buf().len() as u64),
+                split.stderr.as_ref().map(|s| s.buf().len() as u64),
             ),
-            Self::Combined { output } => (Some(output.buf.len() as u64), None),
+            Self::Combined { output } => (Some(output.buf().len() as u64), None),
         }
     }
 }

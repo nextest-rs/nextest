@@ -665,7 +665,7 @@ fn strip_human_stdout_or_combined(
     out: &mut bytes::BytesMut,
     test_name: &TestCaseName,
 ) -> Result<(), WriteEventError> {
-    if output.buf.contains_str("running 1 test\n") {
+    if output.buf().contains_str("running 1 test\n") {
         // This is most likely the default test harness.
         let lines = output
             .lines()
