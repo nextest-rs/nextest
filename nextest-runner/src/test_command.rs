@@ -115,17 +115,23 @@ impl TestCommand {
         apply_ld_dyld_env(&mut cmd, lctx.dylib_path);
 
         // Expose paths to non-test binaries at runtime so that relocated paths
-        // work. These paths aren't exposed by Cargo at runtime, so use a
-        // NEXTEST_BIN_EXE prefix.
+        // work.
+        //
+        // CARGO_BIN_EXE_<name> is set by Cargo at build time, and as of Rust
+        // 1.94, also at runtime. Set it here (with the hyphen version) to match
+        // Cargo's behavior.
+        //
+        // NEXTEST_BIN_EXE_<name> is additionally set for both the hyphen and
+        // underscore variants. Some shells and debuggers drop environment
+        // variables with hyphens in their names, so the underscore variant is
+        // provided as a workaround.
+        //
+        // See
+        // https://unix.stackexchange.com/questions/23659/can-shell-variable-name-include-a-hyphen-or-dash.
         for (name, path) in non_test_binaries {
-            // Some shells and debuggers have been known to drop environment
-            // variables with hyphens in their names. Provide an alternative
-            // name with underscores instead.
-            //
-            // See
-            // https://unix.stackexchange.com/questions/23659/can-shell-variable-name-include-a-hyphen-or-dash.
-            let with_underscores = name.replace('-', "_");
+            cmd.env(format!("CARGO_BIN_EXE_{name}"), path);
             cmd.env(format!("NEXTEST_BIN_EXE_{name}"), path);
+            let with_underscores = name.replace('-', "_");
             if &with_underscores != name {
                 cmd.env(format!("NEXTEST_BIN_EXE_{with_underscores}"), path);
             }

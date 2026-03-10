@@ -230,8 +230,13 @@ fn test_cargo_env_vars() {
     assert_env!("CARGO_PKG_LICENSE_FILE");
     assert_env!("CARGO_PKG_RUST_VERSION");
 
+    // CARGO_BIN_EXE_<name> is set at runtime by nextest, matching Rust 1.94+.
+    // We don't use assert_env! here because the compile-time and runtime paths
+    // may differ when running from archives with path remapping. The value is
+    // validated by test_execute_bin instead.
+    check_env("CARGO_BIN_EXE_nextest-tests");
+
     // CARGO_CRATE_NAME is missing at runtime
-    // CARGO_BIN_EXE_<name> is missing at runtime
     // CARGO_PRIMARY_PACKAGE is missing at runtime
     // CARGO_TARGET_TMPDIR is missing at runtime
     // Dynamic library paths are tested by actually executing the tests -- they depend on the dynamic library.
