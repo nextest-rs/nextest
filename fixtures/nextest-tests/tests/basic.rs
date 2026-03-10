@@ -358,6 +358,16 @@ fn test_cargo_env_vars() {
         );
         assert_eq!(std::env::var("CMD_ENV_VAR"), Err(std::env::VarError::NotPresent));
     }
+    // this is passed here simply because the wrapper being used doesn't filter out any environment
+    // variables that it received.
+    assert_eq!(
+        std::env::var("WRAPPER_CMD_ENV_VAR").as_deref(),
+        Ok("value-set-in-wrapper"),
+    );
+    assert_eq!(
+        std::env::var("SCRIPT_WRAPPER_CMD_ENV_VAR").as_deref(),
+        Ok("value-set-in-setup"),
+    );
 
     assert_eq!(
         std::env::var("SCRIPT_NEXTEST_PROFILE").expect("SCRIPT_NEXTEST_PROFILE is set by script"),
