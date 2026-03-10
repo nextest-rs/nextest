@@ -1347,6 +1347,18 @@ mod tests {
     #[test_case(
         indoc! {r#"
             [scripts.setup.foo]
+            command = {
+                command_line = "hi",
+                command_line = ["hi"],
+            }
+        "#},
+        r#"duplicate key"#
+
+        ; "command line is duplicate"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
             command = { relative-to = "target" }
         "#},
         r#"missing configuration field "scripts.setup.foo.command.command-line""#
@@ -1361,6 +1373,18 @@ mod tests {
         r#"unknown variant `invalid`, expected `none` or `target`"#
 
         ; "invalid relative-to value"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = {
+                relative-to = "none",
+                relative-to = "target",
+            }
+        "#},
+        r#"duplicate key"#
+
+        ; "relative to is duplicate"
     )]
     #[test_case(
         indoc! {r#"
@@ -1418,6 +1442,18 @@ mod tests {
         r#"invalid type: sequence, expected a string"#
 
         ; "target-runner is not a string"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = {
+                env = {},
+                env = {},
+            }
+        "#},
+        r#"duplicate key"#
+
+        ; "env is duplicate"
     )]
     #[test_case(
         indoc! {r#"
