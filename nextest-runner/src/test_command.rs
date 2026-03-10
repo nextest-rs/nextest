@@ -13,7 +13,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use guppy::graph::PackageMetadata;
 use std::{
     borrow::Cow,
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     ffi::{OsStr, OsString},
     fs::File,
     io::{BufRead, BufReader},
@@ -56,10 +56,12 @@ pub(crate) struct TestCommand {
 
 impl TestCommand {
     /// Creates a new test command.
+    #[expect(clippy::too_many_arguments)]
     pub(crate) fn new(
         lctx: &LocalExecuteContext<'_>,
         program: String,
         args: &[Cow<'_, str>],
+        env: Option<&BTreeMap<String, String>>,
         cwd: &Utf8Path,
         package: &PackageMetadata<'_>,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
@@ -70,6 +72,15 @@ impl TestCommand {
         } else {
             create_command(program.clone(), args, lctx.double_spawn)
         };
+
+        if let Some(env) = env {
+            // Set the additional user-provided environment variables assigned to the setup
+            // script's `command.env`,  This is done before applying the `cargo_env` below
+            // as that will only override values specified in this step if `force = true` is
+            // specified on the value in the Cargo config, which is not the case with ordinary
+            // environment variables.
+            cmd.envs(env.iter());
+        }
 
         // NB: we will always override user-provided environment variables with the
         // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.

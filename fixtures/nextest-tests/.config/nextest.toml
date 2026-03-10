@@ -199,11 +199,23 @@ command = {
 }
 
 [scripts.wrapper.wrapper1-unix]
-command = { command-line = "./debug/wrapper within", relative-to = "target" }
+command = {
+    command-line = "./debug/wrapper within",
+    relative-to = "target",
+    env = {
+        WRAPPER_CMD_ENV_VAR = "1",
+    },
+}
 target-runner = "within-wrapper"
 
 [scripts.wrapper.wrapper1-windows]
-command = { command-line = "debug/wrapper.exe within", relative-to = "target" }
+command = {
+    command-line = "debug/wrapper.exe within",
+    relative-to = "target",
+    env = {
+        WRAPPER_CMD_ENV_VAR = "1",
+    },
+}
 target-runner = "within-wrapper"
 
 # TODO: tests for around/override/ignore target runner
