@@ -9,7 +9,7 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## Unreleased
+## [0.9.130] - 2026-03-09
 
 ### Added
 
@@ -18,6 +18,9 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
   - `NEXTEST_REQUIRED_VERSION` and `NEXTEST_RECOMMENDED_VERSION`: the minimum required and recommended nextest versions from the repository's [`nextest-version`](https://nexte.st/docs/configuration/#minimum-nextest-version) configuration. If not configured, the value is `"none"`.
   - `NEXTEST_TEST_THREADS`: the computed number of test threads for this run.
   - `NEXTEST_WORKSPACE_ROOT`: the absolute path to the workspace root (respects `--workspace-remap`).
+- Nextest now sets `CARGO_BIN_EXE_<name>` at runtime for integration tests and benchmarks, matching `cargo test` in Rust 1.94 and above. Nextest sets this variable on all Rust versions. ([#3137])
+
+  Previously, nextest only set [`NEXTEST_BIN_EXE_<name>`](https://nexte.st/docs/configuration/env-vars/), which remains available (and, with underscores, continues to be the recommended form). The `CARGO_BIN_EXE_<name>` form improves compatibility with tests written for `cargo test`.
 
 ### Changed
 
@@ -30,10 +33,16 @@ A couple of displayer fixes:
 - Better sorting for the final summary when counters aren't displayed. ([#3100])
 - Fixed counter width padding in progress output to use the run count rather than the total test count. ([#3102])
 
+### Internal improvements
+
+- Cargo JSON output is now streamed directly into the binary list, making binary listing around 6% faster on large workspaces. ([#3131]) Thanks [cornmander](https://github.com/cornmander) for your first contribution!
+
 [#3100]: https://github.com/nextest-rs/nextest/pull/3100
 [#3101]: https://github.com/nextest-rs/nextest/pull/3101
 [#3102]: https://github.com/nextest-rs/nextest/pull/3102
 [#3103]: https://github.com/nextest-rs/nextest/pull/3103
+[#3131]: https://github.com/nextest-rs/nextest/pull/3131
+[#3137]: https://github.com/nextest-rs/nextest/pull/3137
 
 ## [0.9.129] - 2026-02-22
 
