@@ -192,7 +192,7 @@ jobs:
         run: |
           brew install b2sum
 
-      - uses: taiki-e/upload-rust-binary-action@f391289bcff6a7f36b6301c0a74199657bbb4561 # v1.28.0
+      - uses: taiki-e/upload-rust-binary-action@381995c84a8e242b8736ec80211c563d7bd07ce7 # v1.28.1
         with:
           bin: cargo-nextest
           # The tag name contains the binary name so just use that.
