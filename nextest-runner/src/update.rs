@@ -3,19 +3,27 @@
 
 //! Self-updates for nextest.
 
-use crate::errors::{UpdateError, UpdateVersionParseError};
+use crate::{
+    errors::{UpdateError, UpdateVersionParseError},
+    helpers::ThemeCharacters,
+};
 use camino::{Utf8Path, Utf8PathBuf};
+use indicatif::{ProgressBar, ProgressStyle};
 use mukti_metadata::{
     DigestAlgorithm, MuktiProject, MuktiReleasesJson, ReleaseLocation, ReleaseStatus,
 };
-use self_update::{ArchiveKind, Compression, Download, Extract};
+use owo_colors::{OwoColorize, Style};
+use self_update::{ArchiveKind, Compression, Extract};
 use semver::{Version, VersionReq};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+#[cfg(not(any(target_arch = "riscv32", target_arch = "riscv64")))]
+use std::sync::OnceLock;
 use std::{
     fs,
-    io::{self, BufWriter},
+    io::{self, BufRead, BufReader, BufWriter, Write as _},
     str::FromStr,
+    time::Duration,
 };
 use target_spec::Platform;
 use tracing::{debug, info, warn};
@@ -42,11 +50,19 @@ impl MuktiBackend {
                 error,
             })?
         } else {
-            let mut releases_buf: Vec<u8> = Vec::new();
-            Download::from_url(&self.url)
-                .download_to(&mut releases_buf)
-                .map_err(UpdateError::SelfUpdate)?;
-            releases_buf
+            let agent = ureq_agent();
+            agent
+                .get(&self.url)
+                .call()
+                .map_err(UpdateError::Http)?
+                .into_body()
+                // The default read_to_vec() limit is 10 MiB, which the
+                // releases JSON could plausibly exceed as releases
+                // accumulate. Use a 64 MiB limit instead.
+                .into_with_config()
+                .limit(64 * 1024 * 1024)
+                .read_to_vec()
+                .map_err(UpdateError::Http)?
         };
 
         let mut releases_json: MuktiReleasesJson =
@@ -316,6 +332,24 @@ pub enum CheckStatus<'a> {
     /// All checks were performed successfully and we are ready to update.
     Success(MuktiUpdateContext<'a>),
 }
+
+/// Display styles for update progress output.
+#[derive(Clone, Debug, Default)]
+pub struct UpdateDisplayStyles {
+    /// Style for the progress bar prefix (e.g. "Downloading").
+    pub progress_prefix: Style,
+
+    /// Theme characters for the progress bar (ASCII or Unicode).
+    pub theme_characters: ThemeCharacters,
+}
+
+impl UpdateDisplayStyles {
+    /// Creates colorized styles.
+    pub fn colorize(&mut self) {
+        self.progress_prefix = Style::new().green().bold();
+    }
+}
+
 /// Context for an update.
 ///
 /// Returned as part of the `Success` variant of [`CheckStatus`].
@@ -340,7 +374,7 @@ pub struct MuktiUpdateContext<'a> {
 
 impl MuktiUpdateContext<'_> {
     /// Performs the update.
-    pub fn do_update(&self) -> Result<(), UpdateError> {
+    pub fn do_update(&self, styles: &UpdateDisplayStyles) -> Result<(), UpdateError> {
         // This method is adapted from self_update's update_extended.
 
         let tmp_dir_parent = self.context.bin_install_path.parent().ok_or_else(|| {
@@ -386,19 +420,93 @@ impl MuktiUpdateContext<'_> {
         })?;
         let mut tmp_archive_buf = BufWriter::new(tmp_archive);
 
-        let mut download = Download::from_url(&self.location.url);
-        let mut headers = http::header::HeaderMap::new();
-        headers.insert(
-            http::header::ACCEPT,
-            "application/octet-stream".parse().unwrap(),
-        );
-        download.set_headers(headers);
-        download.show_progress(true);
-        // TODO: set progress style
+        let agent = ureq_agent();
+        let resp = agent
+            .get(&self.location.url)
+            .header(http::header::ACCEPT.as_str(), "application/octet-stream")
+            .call()
+            .map_err(UpdateError::Http)?;
 
-        download
-            .download_to(&mut tmp_archive_buf)
-            .map_err(UpdateError::SelfUpdate)?;
+        let content_length: Option<u64> =
+            match resp.headers().get(http::header::CONTENT_LENGTH.as_str()) {
+                Some(v) => {
+                    let s = v.to_str().map_err(|_| UpdateError::ContentLengthInvalid {
+                        value: format!("{v:?}"),
+                    })?;
+                    let len = s
+                        .parse::<u64>()
+                        .map_err(|_| UpdateError::ContentLengthInvalid {
+                            value: s.to_owned(),
+                        })?;
+                    Some(len)
+                }
+                None => None,
+            };
+
+        // Stream the response body to the archive file with a progress bar.
+        // into_reader() has no size limit, unlike read_to_vec(). This is
+        // intentional: release archives are ~10 MiB as of March 2026 and
+        // are streamed to a temporary file via tmp_archive_buf above,
+        // not buffered entirely in memory. The SHA-256 checksum verified
+        // later guards against corruption or truncation.
+        let mut src = BufReader::new(resp.into_body().into_reader());
+        let prefix = format!("{}", "Downloading".style(styles.progress_prefix));
+        let progress_bar = match content_length {
+            Some(size) => {
+                let pb = ProgressBar::new(size);
+                pb.set_style(
+                    ProgressStyle::default_bar()
+                        .template(
+                            "  {prefix:>10} [{elapsed_precise:>9}] {wide_bar} \
+                             {bytes:>9}/{total_bytes:>9}",
+                        )
+                        .expect("valid progress bar template")
+                        .progress_chars(styles.theme_characters.progress_chars()),
+                );
+                pb
+            }
+            None => {
+                let pb = ProgressBar::new_spinner();
+                pb.set_style(
+                    ProgressStyle::default_spinner()
+                        .template("  {prefix:>10} [{elapsed_precise:>9}] {bytes}")
+                        .expect("valid progress spinner template"),
+                );
+                pb
+            }
+        };
+        progress_bar.set_prefix(prefix);
+
+        let mut downloaded: u64 = 0;
+        loop {
+            let n = {
+                let buf = src.fill_buf().map_err(UpdateError::HttpBody)?;
+                tmp_archive_buf
+                    .write_all(buf)
+                    .map_err(|error| UpdateError::TempArchiveWrite {
+                        archive_path: tmp_archive_path.clone(),
+                        error,
+                    })?;
+                buf.len()
+            };
+            if n == 0 {
+                break;
+            }
+            src.consume(n);
+            downloaded += n as u64;
+            progress_bar.set_position(downloaded);
+        }
+        progress_bar.finish();
+
+        // Verify that we received the expected number of bytes.
+        if let Some(expected) = content_length
+            && downloaded != expected
+        {
+            return Err(UpdateError::ContentLengthMismatch {
+                expected,
+                actual: downloaded,
+            });
+        }
 
         debug!(target: "nextest-runner::update", "downloaded to {tmp_archive_path}");
 
@@ -603,6 +711,69 @@ fn cleanup_backup_temp_directories(
     }
     Ok(())
 }
+
+/// Returns a ureq agent configured with rustls and the aws-lc-rs crypto
+/// provider.
+///
+/// On RISC-V, rustls/aws-lc-rs aren't available; see the RISC-V variant
+/// below.
+#[cfg(not(any(target_arch = "riscv32", target_arch = "riscv64")))]
+fn ureq_agent() -> ureq::Agent {
+    // Install aws-lc-rs as the default rustls crypto provider. The OnceLock
+    // ensures we only attempt this once; if it's already set (by us or someone
+    // else), we log and move on.
+    static PROVIDER_INSTALLED: OnceLock<()> = OnceLock::new();
+    PROVIDER_INSTALLED.get_or_init(|| {
+        if rustls::crypto::CryptoProvider::install_default(
+            rustls::crypto::aws_lc_rs::default_provider(),
+        )
+        .is_err()
+        {
+            warn!(
+                target: "nextest-runner::update",
+                "a rustls crypto provider was already installed; \
+                 using the existing provider",
+            );
+        }
+    });
+
+    ureq::Agent::new_with_config(
+        ureq::Agent::config_builder()
+            // Set a connect timeout to avoid hanging on unreachable hosts.
+            // No global timeout: binary downloads can be large on slow
+            // connections, and the progress bar keeps the user informed.
+            .timeout_connect(Some(CONNECT_TIMEOUT))
+            .tls_config(
+                ureq::tls::TlsConfig::builder()
+                    .provider(ureq::tls::TlsProvider::Rustls)
+                    .build(),
+            )
+            .build(),
+    )
+}
+
+/// Returns a ureq agent configured with native-tls.
+///
+/// On RISC-V, rustls/aws-lc-rs aren't available (see
+/// <https://github.com/nextest-rs/nextest/issues/820>), so native-tls is used
+/// instead.
+#[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))]
+fn ureq_agent() -> ureq::Agent {
+    ureq::Agent::new_with_config(
+        ureq::Agent::config_builder()
+            .timeout_connect(Some(CONNECT_TIMEOUT))
+            .tls_config(
+                ureq::tls::TlsConfig::builder()
+                    .provider(ureq::tls::TlsProvider::NativeTls)
+                    .build(),
+            )
+            .build(),
+    )
+}
+
+/// Connect timeout for HTTP requests. Matches reqwest's old default of 30
+/// seconds, which self_update 0.42.0 relied on implicitly.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 const TAR_GZ_SUFFIX: &str = "tar.gz";
 

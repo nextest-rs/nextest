@@ -2890,6 +2890,32 @@ mod self_update_errors {
         #[error("self-update failed")]
         SelfUpdate(#[source] self_update::errors::Error),
 
+        /// An HTTP error occurred while performing a request.
+        #[error("error performing HTTP request")]
+        Http(#[source] ureq::Error),
+
+        /// An error occurred while reading an HTTP response body.
+        #[error("error reading HTTP response body")]
+        HttpBody(#[source] std::io::Error),
+
+        /// The server's Content-Length header was present but could not be
+        /// parsed.
+        #[error("Content-Length header present but could not be parsed as an integer: {value:?}")]
+        ContentLengthInvalid {
+            /// The raw header value.
+            value: String,
+        },
+
+        /// The server's Content-Length header didn't match the number of bytes
+        /// received.
+        #[error("content length mismatch: expected {expected} bytes, received {actual} bytes")]
+        ContentLengthMismatch {
+            /// The expected number of bytes (from the Content-Length header).
+            expected: u64,
+            /// The actual number of bytes received.
+            actual: u64,
+        },
+
         /// Deserializing release metadata failed.
         #[error("deserializing release metadata failed")]
         ReleaseMetadataDe(#[source] serde_json::Error),

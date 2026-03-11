@@ -91,19 +91,16 @@ impl DisplayReporterBuilder {
             styles.colorize();
         }
 
-        let mut theme_characters = ThemeCharacters::default();
-        match &output {
-            ReporterOutput::Terminal => {
-                if supports_unicode::on(supports_unicode::Stream::Stderr) {
-                    theme_characters.use_unicode();
-                }
-            }
+        let theme_characters = match &output {
+            ReporterOutput::Terminal => ThemeCharacters::detect(supports_unicode::Stream::Stderr),
             ReporterOutput::Writer { use_unicode, .. } => {
+                let mut tc = ThemeCharacters::default();
                 if *use_unicode {
-                    theme_characters.use_unicode();
+                    tc.use_unicode();
                 }
+                tc
             }
-        }
+        };
 
         let is_terminal = matches!(&output, ReporterOutput::Terminal) && io::stderr().is_terminal();
         let is_ci = is_ci::uncached();

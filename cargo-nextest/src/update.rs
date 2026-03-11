@@ -4,7 +4,10 @@
 use crate::{ExpectedError, Result, output::OutputContext};
 use camino::Utf8PathBuf;
 use nextest_metadata::NextestExitCode;
-use nextest_runner::update::{CheckStatus, MuktiBackend, UpdateVersionReq};
+use nextest_runner::{
+    helpers::ThemeCharacters,
+    update::{CheckStatus, MuktiBackend, UpdateDisplayStyles, UpdateVersionReq},
+};
 use owo_colors::OwoColorize;
 use semver::Version;
 use std::cmp::Ordering;
@@ -111,8 +114,16 @@ pub(crate) fn perform_update(
             };
 
             if should_apply {
+                let mut update_styles = UpdateDisplayStyles {
+                    theme_characters: ThemeCharacters::detect(supports_unicode::Stream::Stderr),
+                    ..Default::default()
+                };
+                if output.color.should_colorize(supports_color::Stream::Stderr) {
+                    update_styles.colorize();
+                }
+
                 debug!(url = ctx.location.url, "updating cargo nextest");
-                ctx.do_update()
+                ctx.do_update(&update_styles)
                     .map_err(|err| ExpectedError::UpdateError { err })?;
                 info!(
                     "cargo-nextest updated to {}",
