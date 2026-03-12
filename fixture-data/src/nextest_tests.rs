@@ -56,7 +56,7 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
                     .with_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING),
                 TestCaseFixture::new(
                     "test_flaky_slow_timeout_mod_3",
-                    TestCaseFixtureStatus::IgnoredFail,
+                    TestCaseFixtureStatus::IgnoredFlaky { pass_attempt: 3 },
                 )
                     .with_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING)
                     .with_property(TestCaseFixtureProperties::FLAKY_SLOW_TIMEOUT_SUBSTRING),

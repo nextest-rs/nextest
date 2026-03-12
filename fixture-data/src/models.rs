@@ -6,7 +6,17 @@
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_metadata::{BuildPlatform, FilterMatch, RustBinaryId, TestCaseName};
 
-/// The expected result for a test execution.
+/// The expected result for a test execution, including both the outcome and the
+/// expected rerun behavior.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExpectedTestResult {
+    /// The expected outcome.
+    pub result: CheckResult,
+    /// The expected rerun behavior.
+    pub expected_reruns: ExpectedReruns,
+}
+
+/// The expected outcome of a test execution.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CheckResult {
     Pass,
@@ -16,6 +26,37 @@ pub enum CheckResult {
     FailLeak,
     Abort,
     Timeout,
+}
+
+impl CheckResult {
+    /// Returns true if this result represents a test failure of any kind.
+    ///
+    /// `Leak` is not a failure: the test passed but leaked subprocess handles.
+    /// `LeakFail` is a failure: the test was marked as failed due to leaked
+    /// handles.
+    pub fn is_failure(self) -> bool {
+        match self {
+            CheckResult::Pass | CheckResult::Leak => false,
+            CheckResult::LeakFail
+            | CheckResult::Fail
+            | CheckResult::FailLeak
+            | CheckResult::Abort
+            | CheckResult::Timeout => true,
+        }
+    }
+}
+
+/// What rerun behavior to expect for a test case.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExpectedReruns {
+    /// No reruns expected (no retries configured, or test doesn't retry).
+    None,
+    /// Exactly N flaky runs expected (test passed on attempt N+1).
+    FlakyRunCount(usize),
+    /// Some reruns expected but the exact count is unknown (failing test with
+    /// retries, where the count depends on per-test profile overrides that the
+    /// fixture data model doesn't track).
+    SomeReruns,
 }
 
 bitflags::bitflags! {
@@ -284,8 +325,20 @@ impl TestCaseFixture {
         false
     }
 
-    /// Determines the expected test result based on test status and run properties.
-    pub fn expected_result(&self, properties: RunProperties) -> CheckResult {
+    /// Determines the expected test result based on test status and run
+    /// properties.
+    ///
+    /// Returns both the expected outcome and the expected rerun behavior.
+    pub fn expected_result(&self, properties: RunProperties) -> ExpectedTestResult {
+        let result = self.expected_check_result(properties);
+        let expected_reruns = self.expected_reruns(result, properties);
+        ExpectedTestResult {
+            result,
+            expected_reruns,
+        }
+    }
+
+    fn expected_check_result(&self, properties: RunProperties) -> CheckResult {
         // BenchOverrideTimeout - the benchmark times out due to override.
         if self.has_property(TestCaseFixtureProperties::BENCH_OVERRIDE_TIMEOUT)
             && properties.contains(RunProperties::BENCH_OVERRIDE_TIMEOUT)
@@ -312,14 +365,6 @@ impl TestCaseFixture {
         // The output shows PASS, not TIMEOUT.
         if self.has_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING)
             && properties.contains(RunProperties::TIMEOUT_RETRIES_PASS)
-        {
-            return CheckResult::Pass;
-        }
-
-        // TIMEOUT_RETRIES_FLAKY - test is flaky (fails twice, then times out and passes).
-        // The output shows PASS, not TIMEOUT.
-        if self.has_property(TestCaseFixtureProperties::FLAKY_SLOW_TIMEOUT_SUBSTRING)
-            && properties.contains(RunProperties::TIMEOUT_RETRIES_FLAKY)
         {
             return CheckResult::Pass;
         }
@@ -392,7 +437,42 @@ impl TestCaseFixture {
                     unreachable!("ignored tests should be filtered out")
                 }
             }
+            TestCaseFixtureStatus::IgnoredFlaky { .. } => {
+                // TIMEOUT_RETRIES_FLAKY: the test fails several times, then
+                // times out and passes due to on-timeout=pass.
+                if properties.contains(RunProperties::TIMEOUT_RETRIES_FLAKY) {
+                    CheckResult::Pass
+                } else if properties.contains(RunProperties::RUN_IGNORED_ONLY) {
+                    CheckResult::Fail
+                } else {
+                    unreachable!("ignored tests should be filtered out")
+                }
+            }
         }
+    }
+
+    /// Computes the expected rerun behavior for a test case based on its
+    /// fixture status, the check result, and the run properties.
+    fn expected_reruns(&self, result: CheckResult, properties: RunProperties) -> ExpectedReruns {
+        if let TestCaseFixtureStatus::Flaky { pass_attempt }
+        | TestCaseFixtureStatus::IgnoredFlaky { pass_attempt } = self.status
+            && result == CheckResult::Pass
+        {
+            debug_assert!(
+                pass_attempt >= 2,
+                "pass_attempt must be >= 2 for a flaky test"
+            );
+            return ExpectedReruns::FlakyRunCount((pass_attempt - 1) as usize);
+        }
+
+        // Failing tests with retries configured will have reruns, but the exact
+        // count depends on per-test profile overrides which the fixture data
+        // model doesn't track.
+        if properties.contains(RunProperties::WITH_RETRIES) && result.is_failure() {
+            return ExpectedReruns::SomeReruns;
+        }
+
+        ExpectedReruns::None
     }
 }
 
@@ -425,21 +505,36 @@ impl PartialEq<TestNameAndFilterMatch<'_>> for TestCaseFixture {
 pub enum TestCaseFixtureStatus {
     Pass,
     Fail,
-    Flaky { pass_attempt: u32 },
+    Flaky {
+        pass_attempt: u32,
+    },
     Leak,
     LeakFail,
     FailLeak,
     Segfault,
     IgnoredPass,
     IgnoredFail,
+    /// An ignored test that is flaky: it fails `pass_attempt - 1` times, then
+    /// passes on attempt `pass_attempt`.
+    IgnoredFlaky {
+        pass_attempt: u32,
+    },
 }
 
 impl TestCaseFixtureStatus {
     pub fn is_ignored(self) -> bool {
-        matches!(
-            self,
-            TestCaseFixtureStatus::IgnoredPass | TestCaseFixtureStatus::IgnoredFail
-        )
+        match self {
+            TestCaseFixtureStatus::IgnoredPass
+            | TestCaseFixtureStatus::IgnoredFail
+            | TestCaseFixtureStatus::IgnoredFlaky { .. } => true,
+            TestCaseFixtureStatus::Pass
+            | TestCaseFixtureStatus::Fail
+            | TestCaseFixtureStatus::Flaky { .. }
+            | TestCaseFixtureStatus::Leak
+            | TestCaseFixtureStatus::LeakFail
+            | TestCaseFixtureStatus::FailLeak
+            | TestCaseFixtureStatus::Segfault => false,
+        }
     }
 }
 

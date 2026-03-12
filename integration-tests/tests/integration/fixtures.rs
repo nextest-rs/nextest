@@ -4,7 +4,10 @@
 use super::temp_project::TempProject;
 use camino::Utf8Path;
 use fixture_data::{
-    models::{CheckResult, RunProperties, TestCaseFixtureProperties, TestSuiteFixtureProperties},
+    models::{
+        CheckResult, ExpectedReruns, ExpectedTestResult, RunProperties, TestCaseFixtureProperties,
+        TestSuiteFixtureProperties,
+    },
     nextest_tests::EXPECTED_TEST_SUITES,
 };
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
@@ -306,11 +309,11 @@ impl ExpectedTestResults {
                 }
 
                 // Determine the expected result for this test.
-                let result = test.expected_result(properties);
+                let expected = test.expected_result(properties);
 
-                summary.update(result);
+                summary.update(expected.result);
                 should_run
-                    .insert_unique(ExpectedOutcome { id, result })
+                    .insert_unique(ExpectedOutcome { id, expected })
                     .expect("duplicate ids should not be seen");
             }
         }
@@ -348,11 +351,11 @@ impl ExpectedTestResults {
                     continue;
                 }
 
-                let result = test.expected_result(properties);
+                let expected = test.expected_result(properties);
 
-                summary.update(result);
+                summary.update(expected.result);
                 should_run
-                    .insert_unique(ExpectedOutcome { id, result })
+                    .insert_unique(ExpectedOutcome { id, expected })
                     .expect("duplicate ids should not be seen");
             }
         }
@@ -369,7 +372,7 @@ impl ExpectedTestResults {
 #[derive(Clone, Debug)]
 struct ExpectedOutcome {
     id: TestInstanceId,
-    result: CheckResult,
+    expected: ExpectedTestResult,
 }
 
 impl IdOrdItem for ExpectedOutcome {
@@ -682,23 +685,64 @@ fn verify_expected_in_actual(
                 // With retries, a test may have multiple attempts - we check the last one.
                 let actual_result = actual.final_result();
                 assert_eq!(
-                    expected_outcome.result,
+                    expected_outcome.expected.result,
                     actual_result,
                     "{}: expected result {:?} but got {:?} (attempts: {:?})\n\n\
                      --- output ---\n{}\n--- end output ---",
                     expected_outcome.id.full_name(),
-                    expected_outcome.result,
+                    expected_outcome.expected.result,
                     actual_result,
                     actual.attempts,
                     output
                 );
+
+                // Verify the number of retry attempts matches expectations.
+                // The number of non-final attempts (retries) is attempts.len() - 1.
+                let actual_rerun_count = actual.attempts.len() - 1;
+                match expected_outcome.expected.expected_reruns {
+                    ExpectedReruns::None => {
+                        assert_eq!(
+                            actual_rerun_count,
+                            0,
+                            "{}: expected no reruns but found {} (properties: {})\n\n\
+                             --- output ---\n{}\n--- end output ---",
+                            expected_outcome.id.full_name(),
+                            actual_rerun_count,
+                            debug_run_properties(properties),
+                            output
+                        );
+                    }
+                    ExpectedReruns::FlakyRunCount(expected_count) => {
+                        assert_eq!(
+                            actual_rerun_count,
+                            expected_count,
+                            "{}: expected {} reruns but found {} (properties: {})\n\n\
+                             --- output ---\n{}\n--- end output ---",
+                            expected_outcome.id.full_name(),
+                            expected_count,
+                            actual_rerun_count,
+                            debug_run_properties(properties),
+                            output
+                        );
+                    }
+                    ExpectedReruns::SomeReruns => {
+                        assert!(
+                            actual_rerun_count > 0,
+                            "{}: expected reruns but found none (properties: {})\n\n\
+                             --- output ---\n{}\n--- end output ---",
+                            expected_outcome.id.full_name(),
+                            debug_run_properties(properties),
+                            output
+                        );
+                    }
+                }
             }
             None => {
                 panic!(
                     "{}: expected to run with result {:?} but was not found in output\n\n\
                      --- output ---\n{}\n--- end output ---",
                     expected_outcome.id.full_name(),
-                    expected_outcome.result,
+                    expected_outcome.expected.result,
                     output
                 );
             }
@@ -946,7 +990,7 @@ pub fn check_rerun_expanded_output(
             .should_run
             .insert_unique(outcome.clone())
             .expect("expanded tests should not overlap with initial run tests");
-        rerun_expected.summary.update(outcome.result);
+        rerun_expected.summary.update(outcome.expected.result);
     }
 
     // The fixture model includes tests (like benchmarks) that the actual run
@@ -984,7 +1028,7 @@ fn filter_for_rerun(expected: &ExpectedTestResults) -> ExpectedTestResults {
     };
 
     for outcome in &expected.should_run {
-        match outcome.result {
+        match outcome.expected.result {
             // Failed tests are still outstanding and should run.
             CheckResult::Fail
             | CheckResult::Abort
@@ -994,10 +1038,10 @@ fn filter_for_rerun(expected: &ExpectedTestResults) -> ExpectedTestResults {
                 rerun_should_run
                     .insert_unique(ExpectedOutcome {
                         id: outcome.id.clone(),
-                        result: outcome.result,
+                        expected: outcome.expected,
                     })
                     .expect("no duplicates");
-                rerun_summary.update(outcome.result);
+                rerun_summary.update(outcome.expected.result);
             }
             // Passed tests become skipped in the rerun.
             CheckResult::Pass | CheckResult::Leak => {
@@ -1053,6 +1097,9 @@ struct JunitOutcome {
     id: TestInstanceId,
     /// The NonSuccessKind and type string, or None for success.
     non_success: Option<(quick_junit::NonSuccessKind, String)>,
+    /// The number of rerun elements (flaky_runs for Success, reruns for
+    /// NonSuccess).
+    rerun_count: usize,
 }
 
 impl IdOrdItem for JunitOutcome {
@@ -1086,12 +1133,17 @@ impl ActualJunitResults {
                 let test_name = TestCaseName::new(test_case.name.as_str());
                 let id = TestInstanceId::new(binary_id, &test_name);
 
-                let non_success = match &test_case.status {
-                    quick_junit::TestCaseStatus::Success { .. } => None,
-                    quick_junit::TestCaseStatus::NonSuccess { kind, ty, .. } => Some((
-                        *kind,
-                        ty.as_ref().map(|s| s.to_string()).unwrap_or_default(),
-                    )),
+                let (non_success, rerun_count) = match &test_case.status {
+                    quick_junit::TestCaseStatus::Success { flaky_runs } => (None, flaky_runs.len()),
+                    quick_junit::TestCaseStatus::NonSuccess {
+                        kind, ty, reruns, ..
+                    } => (
+                        Some((
+                            *kind,
+                            ty.as_ref().map(|s| s.to_string()).unwrap_or_default(),
+                        )),
+                        reruns.len(),
+                    ),
                     quick_junit::TestCaseStatus::Skipped { .. } => {
                         // Skipped tests are filtered out during test execution and don't appear
                         // in our fixture data's expected results, so we skip them here to
@@ -1103,6 +1155,7 @@ impl ActualJunitResults {
                 let outcome = JunitOutcome {
                     id: id.clone(),
                     non_success,
+                    rerun_count,
                 };
                 tests
                     .insert_unique(outcome)
@@ -1153,7 +1206,7 @@ fn verify_expected_in_junit(
                 // - LeakFail:                  "test exited with code 0, but leaked handles so was marked failed"
                 // - Timeout:                   "test timeout" or "benchmark timeout"
                 let expected_junit: Option<(quick_junit::NonSuccessKind, &str)> =
-                    match expected_outcome.result {
+                    match expected_outcome.expected.result {
                         CheckResult::Pass | CheckResult::Leak => None,
                         CheckResult::LeakFail => Some((
                             quick_junit::NonSuccessKind::Error,
@@ -1193,7 +1246,7 @@ fn verify_expected_in_junit(
                                 actual_kind,
                                 debug_run_properties(properties),
                                 junit_path,
-                                expected_outcome.result,
+                                expected_outcome.expected.result,
                                 actual_type,
                             );
                         }
@@ -1212,7 +1265,7 @@ fn verify_expected_in_junit(
                                 actual_type,
                                 debug_run_properties(properties),
                                 junit_path,
-                                expected_outcome.result,
+                                expected_outcome.expected.result,
                             );
                         }
                     }
@@ -1227,7 +1280,7 @@ fn verify_expected_in_junit(
                             ty,
                             debug_run_properties(properties),
                             junit_path,
-                            expected_outcome.result,
+                            expected_outcome.expected.result,
                         );
                     }
                     (Some((kind, _)), None) => {
@@ -1239,7 +1292,46 @@ fn verify_expected_in_junit(
                             kind,
                             debug_run_properties(properties),
                             junit_path,
-                            expected_outcome.result,
+                            expected_outcome.expected.result,
+                        );
+                    }
+                }
+
+                // Verify that the rerun count matches the expected value.
+                match expected_outcome.expected.expected_reruns {
+                    ExpectedReruns::None => {
+                        assert_eq!(
+                            actual.rerun_count,
+                            0,
+                            "{}: expected no reruns but found {} (properties: {})\n\
+                             JUnit path: {}",
+                            expected_outcome.id.full_name(),
+                            actual.rerun_count,
+                            debug_run_properties(properties),
+                            junit_path,
+                        );
+                    }
+                    ExpectedReruns::FlakyRunCount(expected_count) => {
+                        assert_eq!(
+                            actual.rerun_count,
+                            expected_count,
+                            "{}: expected {} flaky runs but found {} (properties: {})\n\
+                             JUnit path: {}",
+                            expected_outcome.id.full_name(),
+                            expected_count,
+                            actual.rerun_count,
+                            debug_run_properties(properties),
+                            junit_path,
+                        );
+                    }
+                    ExpectedReruns::SomeReruns => {
+                        assert!(
+                            actual.rerun_count > 0,
+                            "{}: expected reruns but found none (properties: {})\n\
+                             JUnit path: {}",
+                            expected_outcome.id.full_name(),
+                            debug_run_properties(properties),
+                            junit_path,
                         );
                     }
                 }
@@ -1250,7 +1342,7 @@ fn verify_expected_in_junit(
                      (properties: {})\n\
                      JUnit path: {}",
                     expected_outcome.id.full_name(),
-                    expected_outcome.result,
+                    expected_outcome.expected.result,
                     debug_run_properties(properties),
                     junit_path,
                 );
