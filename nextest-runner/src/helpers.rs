@@ -735,6 +735,16 @@ impl Default for ThemeCharacters {
 }
 
 impl ThemeCharacters {
+    /// Creates a `ThemeCharacters` with Unicode auto-detected for the given
+    /// stream.
+    pub fn detect(stream: supports_unicode::Stream) -> Self {
+        let mut this = Self::default();
+        if supports_unicode::on(stream) {
+            this.use_unicode();
+        }
+        this
+    }
+
     /// Switches to Unicode characters for richer terminal output.
     pub fn use_unicode(&mut self) {
         self.hbar = '─';

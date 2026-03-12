@@ -111,9 +111,15 @@ recursion = "0.5.4"
 regex = "1.12.3"
 regex-syntax = "0.8.10"
 sapling-streampager = "0.12.0"
-self_update = { version = "0.42.0", default-features = false, features = [
+rustls = { version = "0.23.37", default-features = false }
+self_update = { version = "0.43.1", default-features = false, features = [
     "archive-tar",
     "compression-flate2",
+    # nextest only uses self_update for archive extraction (ArchiveKind,
+    # Compression, Extract), not its HTTP client. But self_update's Download
+    # struct unconditionally calls http_client::get, so at least one HTTP
+    # backend must be enabled for it to compile.
+    "ureq",
 ] }
 semver = "1.0.27"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -142,6 +148,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", default-features = false, features = ["std", "tracing-log", "fmt"] }
 unicode-ident = "1.0.24"
 unicode-normalization = "0.1.25"
+ureq = { version = "3.2.0", default-features = false }
 usdt = "0.6.0"
 walkdir = "2.5.0"
 whoami = "2.1.1"
