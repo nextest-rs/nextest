@@ -323,6 +323,10 @@ pub enum ChildStartError {
     /// An error occurred while spawning the child process.
     #[error("error spawning child process")]
     Spawn(#[source] Arc<std::io::Error>),
+
+    /// An error occurred while setting up the command.
+    #[error("error setting up command")]
+    CommandSetup(#[source] Arc<CommandSetupError>),
 }
 
 /// An error that occurred while reading the output of a setup script.
@@ -1161,6 +1165,14 @@ pub enum FromMessagesError {
     },
 }
 
+/// An error that occurs during the set up of a command.
+#[derive(Debug, Error)]
+pub enum CommandSetupError {
+    /// An error occurred while assigning environment variables to the command.
+    #[error("error assigning environment variables to command: {0}")]
+    EnvVar(#[from] ErrorList<EnvVarError>),
+}
+
 /// An error that occurs while parsing test list output.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -1268,6 +1280,10 @@ pub enum CreateTestListError {
         #[source]
         error: JoinPathsError,
     },
+
+    /// An error occurred while setting up the command.
+    #[error("error setting up command")]
+    CommandSetup(#[source] CommandSetupError),
 
     /// Creating a Tokio runtime failed.
     #[error("error creating Tokio runtime")]

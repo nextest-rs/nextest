@@ -316,8 +316,11 @@ impl SetupScriptCommand {
         // as that will only override values specified in this step if `force = true` is
         // specified on the value in the Cargo config, which is not the case with ordinary
         // environment variables.
-        // TODO: handle the validation results.
-        let _ = config.command.env.apply_env(&mut cmd);
+        config
+            .command
+            .env
+            .apply_env(&mut cmd)
+            .map_err(|error| ChildStartError::CommandSetup(Arc::new(error.into())))?;
 
         // NB: we will always override user-provided environment variables with the
         // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.

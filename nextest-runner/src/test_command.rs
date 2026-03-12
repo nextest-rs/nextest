@@ -5,6 +5,7 @@ use crate::{
     cargo_config::EnvironmentMap,
     config::scripts::ScriptCommandEnvMap,
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
+    errors::CommandSetupError,
     helpers::dylib_path_envvar,
     list::{RustBuildMeta, TestListState},
     runner::Interceptor,
@@ -67,7 +68,7 @@ impl TestCommand {
         package: &PackageMetadata<'_>,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
         interceptor: &Interceptor,
-    ) -> Self {
+    ) -> Result<Self, CommandSetupError> {
         let mut cmd = if interceptor.should_show_wrapper_command() {
             create_command_with_interceptor(program.clone(), args, interceptor)
         } else {
@@ -80,8 +81,7 @@ impl TestCommand {
             // as that will only override values specified in this step if `force = true` is
             // specified on the value in the Cargo config, which is not the case with ordinary
             // environment variables.
-            // TODO: handle the validation results.
-            let _ = env.apply_env(&mut cmd);
+            env.apply_env(&mut cmd)?;
         }
 
         // NB: we will always override user-provided environment variables with the
@@ -152,12 +152,12 @@ impl TestCommand {
 
         let double_spawn = lctx.double_spawn.spawn_context();
 
-        Self {
+        Ok(Self {
             program,
             args: args.iter().map(|arg| arg.to_string()).collect(),
             command: cmd,
             double_spawn,
-        }
+        })
     }
 
     pub(crate) fn program(&self) -> &str {

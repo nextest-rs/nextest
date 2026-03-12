@@ -11,7 +11,8 @@ use crate::{
     },
     double_spawn::DoubleSpawnInfo,
     errors::{
-        CreateTestListError, FromMessagesError, TestListFromSummaryError, WriteTestListError,
+        CommandSetupError, CreateTestListError, FromMessagesError, TestListFromSummaryError,
+        WriteTestListError,
     },
     helpers::{convert_build_platform, dylib_path, dylib_path_envvar, write_test_name},
     indenter::indented,
@@ -1271,7 +1272,8 @@ impl RustTestArtifact<'_> {
             &self.package,
             &self.non_test_binaries,
             &Interceptor::None, // Interceptors are not used during the test list phase.
-        );
+        )
+        .map_err(CreateTestListError::CommandSetup)?;
 
         let output =
             cmd.wait_with_output()
@@ -1451,7 +1453,7 @@ impl<'a> TestInstance<'a> {
         wrapper_script: Option<&WrapperScriptConfig>,
         extra_args: &[String],
         interceptor: &Interceptor,
-    ) -> TestCommand {
+    ) -> Result<TestCommand, CommandSetupError> {
         // TODO: non-rust tests
         let cli = self.compute_cli(ctx, test_list, wrapper_script, extra_args);
 
