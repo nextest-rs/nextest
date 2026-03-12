@@ -7,7 +7,8 @@ use crate::{
             EvaluatableProfile, FinalConfig, NextestConfig, NextestConfigImpl, PreBuildPlatform,
         },
         elements::{
-            LeakTimeout, RetryPolicy, SlowTimeout, TestGroup, TestPriority, ThreadsRequired,
+            DeserializedRetryPolicy, FlakyResult, LeakTimeout, RetryPolicy, SlowTimeout, TestGroup,
+            TestPriority, ThreadsRequired,
         },
         scripts::{
             CompiledProfileScripts, DeserializedProfileScriptConfig, ScriptId, WrapperScriptConfig,
@@ -105,6 +106,7 @@ pub struct TestSettings<'p, Source = ()> {
     run_wrapper: Option<(&'p WrapperScriptConfig, Source)>,
     run_extra_args: (&'p [String], Source),
     retries: (RetryPolicy, Source),
+    flaky_result: (FlakyResult, Source),
     slow_timeout: (SlowTimeout, Source),
     leak_timeout: (LeakTimeout, Source),
     test_group: (TestGroup, Source),
@@ -200,6 +202,11 @@ impl<'p> TestSettings<'p> {
         self.retries.0
     }
 
+    /// Returns the flaky result behavior for this test.
+    pub fn flaky_result(&self) -> FlakyResult {
+        self.flaky_result.0
+    }
+
     /// Returns the slow timeout for this test.
     pub fn slow_timeout(&self) -> SlowTimeout {
         self.slow_timeout.0
@@ -253,6 +260,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
         let mut run_wrapper = None;
         let mut run_extra_args = None;
         let mut retries = None;
+        let mut flaky_result = None;
         let mut slow_timeout = None;
         let mut leak_timeout = None;
         let mut test_group = None;
@@ -300,6 +308,11 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
                 && let Some(r) = override_.data.retries
             {
                 retries = Some(Source::track_override(r, override_));
+            }
+            if flaky_result.is_none()
+                && let Some(fr) = override_.data.flaky_result
+            {
+                flaky_result = Some(Source::track_override(fr, override_));
             }
             if slow_timeout.is_none() {
                 // Use the appropriate slow timeout based on run mode. Note that
@@ -364,6 +377,8 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
         let run_extra_args =
             run_extra_args.unwrap_or_else(|| Source::track_profile(profile.run_extra_args()));
         let retries = retries.unwrap_or_else(|| Source::track_profile(profile.retries()));
+        let flaky_result =
+            flaky_result.unwrap_or_else(|| Source::track_profile(profile.flaky_result()));
         let slow_timeout =
             slow_timeout.unwrap_or_else(|| Source::track_profile(profile.slow_timeout(run_mode)));
         let leak_timeout =
@@ -387,6 +402,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             run_extra_args,
             run_wrapper,
             retries,
+            flaky_result,
             priority,
             slow_timeout,
             leak_timeout,
@@ -710,6 +726,7 @@ pub(in crate::config) struct ProfileOverrideData {
     threads_required: Option<ThreadsRequired>,
     run_extra_args: Option<Vec<String>>,
     retries: Option<RetryPolicy>,
+    flaky_result: Option<FlakyResult>,
     slow_timeout: Option<SlowTimeout>,
     bench_slow_timeout: Option<SlowTimeout>,
     leak_timeout: Option<LeakTimeout>,
@@ -792,7 +809,8 @@ impl CompiledOverride<PreBuildPlatform> {
                         priority: source.priority,
                         threads_required: source.threads_required,
                         run_extra_args: source.run_extra_args.clone(),
-                        retries: source.retries,
+                        retries: source.retries.map(|drp| drp.policy),
+                        flaky_result: source.retries.and_then(|drp| drp.flaky_result),
                         slow_timeout: source.slow_timeout,
                         bench_slow_timeout: source.bench.slow_timeout,
                         leak_timeout: source.leak_timeout,
@@ -944,7 +962,7 @@ pub(in crate::config) struct DeserializedOverride {
         default,
         deserialize_with = "crate::config::elements::deserialize_retry_policy"
     )]
-    retries: Option<RetryPolicy>,
+    retries: Option<DeserializedRetryPolicy>,
     #[serde(
         default,
         deserialize_with = "crate::config::elements::deserialize_slow_timeout"

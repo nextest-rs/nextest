@@ -20,7 +20,7 @@ use super::{
 };
 use crate::{
     config::{
-        elements::{LeakTimeoutResult, SlowTimeoutResult},
+        elements::{FlakyResult, LeakTimeoutResult, SlowTimeoutResult},
         overrides::CompiledDefaultFilter,
         scripts::ScriptId,
     },
@@ -1733,7 +1733,10 @@ impl<'a> DisplayReporterImpl<'a> {
                     }
                 }
             }
-            ExecutionDescription::Flaky { .. } => {
+            ExecutionDescription::Flaky {
+                result: FlakyResult::Pass,
+                ..
+            } => {
                 // Use the skip color to also represent a flaky test.
                 let status = match kind {
                     StatusLineKind::Intermediate => {
@@ -2306,6 +2309,10 @@ impl<'a> DisplayReporterImpl<'a> {
         is_retry: bool,
         writer: &mut dyn WriteStr,
     ) -> io::Result<()> {
+        // Styling is based on run_status.result, which is the individual
+        // attempt's result. For flaky-failed tests, this is called on the
+        // last (successful) attempt, so pass styling (green headers, no
+        // error extraction) is correct — the output content has no panics.
         let spec = self.output_spec_for_finished(&run_status.result, is_retry);
         self.unit_output.write_child_execution_output(
             &self.styles,
@@ -2799,7 +2806,7 @@ mod tests {
             output_error_slice: None,
         };
         FinalOutput::Executed {
-            run_statuses: ExecutionStatuses::new(vec![status]),
+            run_statuses: ExecutionStatuses::new(vec![status], FlakyResult::default()),
             display_output: false,
         }
     }
@@ -2825,7 +2832,7 @@ mod tests {
             output_error_slice: None,
         };
         FinalOutput::Executed {
-            run_statuses: ExecutionStatuses::new(vec![status]),
+            run_statuses: ExecutionStatuses::new(vec![status], FlakyResult::default()),
             display_output: false,
         }
     }
@@ -2896,7 +2903,8 @@ mod tests {
         };
 
         // Make an `ExecutionStatuses` with a failure and a success, indicating flakiness.
-        let statuses = ExecutionStatuses::new(vec![fail_status.clone(), flaky_status]);
+        let statuses =
+            ExecutionStatuses::new(vec![fail_status.clone(), flaky_status], FlakyResult::Pass);
         let flaky_describe = statuses.describe();
 
         let mut out = String::new();
@@ -3333,6 +3341,7 @@ mod tests {
         let flaky_describe = ExecutionDescription::Flaky {
             last_status: &flaky_last_status,
             prior_statuses: std::slice::from_ref(&flaky_first_status),
+            result: FlakyResult::Pass,
         };
         let fail_describe = ExecutionDescription::Failure {
             first_status: &fail_status,
@@ -3401,7 +3410,7 @@ mod tests {
             ("pass slow", pass_slow_describe),
             ("leak pass slow", leak_pass_slow_describe),
             ("timeout pass slow", timeout_pass_slow_describe),
-            // Flaky variant.
+            // Flaky variants.
             ("flaky", flaky_describe),
             // First-attempt failure variants.
             ("fail", fail_describe),

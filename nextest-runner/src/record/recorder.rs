@@ -567,11 +567,12 @@ impl SerializeTestEventContext<'_> {
         &mut self,
         statuses: ExecutionStatuses<LiveSpec>,
     ) -> Result<ExecutionStatuses<RecordingSpec>, StoreWriterError> {
+        let flaky_result = statuses.flaky_result();
         let statuses = statuses
             .into_iter()
             .map(|status| self.convert_execute_status(status))
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(ExecutionStatuses::new(statuses))
+        Ok(ExecutionStatuses::new(statuses, flaky_result))
     }
 
     fn convert_execute_status(

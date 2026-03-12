@@ -10,7 +10,7 @@
 use super::{RunUnitRequest, RunnerTaskState, ShutdownRequest};
 use crate::{
     config::{
-        elements::{MaxFail, TerminateMode},
+        elements::{FlakyResult, MaxFail, TerminateMode},
         scripts::{ScriptId, SetupScriptConfig},
     },
     input::{InputEvent, InputHandler},
@@ -659,6 +659,7 @@ where
                 test_instance,
                 command_line,
                 req_rx_tx,
+                flaky_result,
             }) => {
                 if self.run_stats.cancel_reason.is_some() {
                     // The run has been cancelled: don't start any new units.
@@ -674,7 +675,7 @@ where
                         return HandleEventResponse::None;
                     }
                 }
-                self.new_test(test_instance, req_tx);
+                self.new_test(test_instance, req_tx, flaky_result);
                 self.callback_none_response(TestEventKind::TestStarted {
                     stress_index,
                     test_instance: test_instance.id(),
@@ -888,6 +889,7 @@ where
         &mut self,
         instance: TestInstance<'a>,
         req_tx: UnboundedSender<RunUnitRequest<'a>>,
+        flaky_result: FlakyResult,
     ) {
         // Track this test as seen for rerun tracking.
         self.rerun_cx.mark_seen(instance.id());
@@ -898,6 +900,7 @@ where
                 instance,
                 past_attempts: Vec::new(),
                 req_tx,
+                flaky_result,
             },
         );
         if let Some(prev) = prev {
@@ -1389,6 +1392,7 @@ struct ContextTestInstance<'a> {
     instance: TestInstance<'a>,
     past_attempts: Vec<ExecuteStatus<LiveSpec>>,
     req_tx: UnboundedSender<RunUnitRequest<'a>>,
+    flaky_result: FlakyResult,
 }
 
 impl ContextTestInstance<'_> {
@@ -1399,7 +1403,7 @@ impl ContextTestInstance<'_> {
     fn finish(self, last_run_status: ExecuteStatus<LiveSpec>) -> ExecutionStatuses<LiveSpec> {
         let mut attempts = self.past_attempts;
         attempts.push(last_run_status);
-        ExecutionStatuses::new(attempts)
+        ExecutionStatuses::new(attempts, self.flaky_result)
     }
 }
 
