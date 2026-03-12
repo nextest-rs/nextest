@@ -1095,11 +1095,19 @@ struct ActualJunitResults {
 #[derive(Clone, Debug)]
 struct JunitOutcome {
     id: TestInstanceId,
-    /// The NonSuccessKind and type string, or None for success.
-    non_success: Option<(quick_junit::NonSuccessKind, String)>,
+    /// Non-success information, or None for success.
+    non_success: Option<JunitNonSuccess>,
     /// The number of rerun elements (flaky_runs for Success, reruns for
     /// NonSuccess).
     rerun_count: usize,
+}
+
+/// Non-success information extracted from JUnit XML.
+#[derive(Clone, Debug)]
+struct JunitNonSuccess {
+    kind: quick_junit::NonSuccessKind,
+    ty: String,
+    message: Option<String>,
 }
 
 impl IdOrdItem for JunitOutcome {
@@ -1136,12 +1144,17 @@ impl ActualJunitResults {
                 let (non_success, rerun_count) = match &test_case.status {
                     quick_junit::TestCaseStatus::Success { flaky_runs } => (None, flaky_runs.len()),
                     quick_junit::TestCaseStatus::NonSuccess {
-                        kind, ty, reruns, ..
+                        kind,
+                        ty,
+                        message,
+                        reruns,
+                        ..
                     } => (
-                        Some((
-                            *kind,
-                            ty.as_ref().map(|s| s.to_string()).unwrap_or_default(),
-                        )),
+                        Some(JunitNonSuccess {
+                            kind: *kind,
+                            ty: ty.as_ref().map(|s| s.to_string()).unwrap_or_default(),
+                            message: message.as_ref().map(|s| s.to_string()),
+                        }),
                         reruns.len(),
                     ),
                     quick_junit::TestCaseStatus::Skipped { .. } => {
@@ -1183,6 +1196,134 @@ const JUNIT_FAIL: &str = "test failure with exit code 101";
 const JUNIT_FAIL_LEAK: &str = "test failure with exit code 101, and leaked handles";
 const JUNIT_ABORT: &str = "test abort";
 
+/// Expected JUnit properties for a non-success test case.
+#[derive(Clone, Debug)]
+struct ExpectedJunit<'a> {
+    kind: quick_junit::NonSuccessKind,
+    ty: &'a str,
+    message: JunitExpectedMessage<'a>,
+}
+
+// Known JUnit message prefixes for failure types. These correspond to the
+// heuristic error extraction in error_description.rs:
+//
+// - "thread '" — panic messages (thread 'name' panicked at ...)
+// - "Error:" — Result-based errors since Rust 1.66 (Error: message)
+// - "note: test did not panic as expected" — should_panic mismatches
+const FAIL_MESSAGE_PREFIXES: &[&str] =
+    &["thread '", "Error:", "note: test did not panic as expected"];
+
+// Abort messages from UnitAbortDescription display.
+const ABORT_MESSAGE_PREFIXES: &[&str] = &["process was terminated"];
+
+/// How to verify the JUnit message field for a non-success test case.
+#[derive(Clone, Debug)]
+enum JunitExpectedMessage<'a> {
+    /// Don't verify the message.
+    None,
+    /// The message must be present and start with one of the given prefixes.
+    /// This is used for failure types where the message format is known but
+    /// the exact content is test-specific.
+    StartsWithOneOf(&'a [&'a str]),
+}
+
+impl JunitExpectedMessage<'_> {
+    /// Verifies the actual message against this check. Panics with a
+    /// diagnostic error on mismatch.
+    #[track_caller]
+    fn verify(
+        &self,
+        actual_message: Option<&str>,
+        test_name: &str,
+        junit_path: &Utf8Path,
+        properties: RunProperties,
+    ) {
+        match self {
+            JunitExpectedMessage::None => {}
+            JunitExpectedMessage::StartsWithOneOf(prefixes) => {
+                let message = actual_message.unwrap_or_else(|| {
+                    panic!(
+                        "{test_name}: expected a JUnit message starting with one of \
+                         {prefixes:?}, but no message was present \
+                         (properties: {})\n\
+                         JUnit path: {junit_path}",
+                        debug_run_properties(properties),
+                    );
+                });
+                // When multiple errors are present, ErrorList formats as
+                // "N errors occurred executing test:" and short_message()
+                // strips the trailing colon. Accept this as a valid format
+                // alongside type-specific prefixes.
+                let matches_prefix = prefixes.iter().any(|p| message.starts_with(p));
+                let matches_multi_error = message.ends_with("errors occurred executing test");
+                assert!(
+                    matches_prefix || matches_multi_error,
+                    "{test_name}: expected JUnit message starting with one of \
+                     {prefixes:?} (or multi-error summary), but got {message:?} \
+                     (properties: {})\n\
+                     JUnit path: {junit_path}",
+                    debug_run_properties(properties),
+                );
+            }
+        }
+    }
+}
+
+/// Returns the expected JUnit properties for a `CheckResult`, or `None` for
+/// success cases (Pass, Leak).
+///
+/// Expected formats from nextest-runner/src/reporter/aggregator/junit.rs:
+/// - Fail (exit code, no leak): "test failure with exit code 101"
+/// - Fail (exit code, leaked):  "test failure with exit code 101, and leaked handles"
+/// - Abort (no leak):           "test abort"
+/// - LeakFail:                  "test exited with code 0, but leaked handles so was marked failed"
+/// - Timeout:                   "test timeout" or "benchmark timeout"
+fn expected_junit_for_result(
+    result: CheckResult,
+    properties: RunProperties,
+) -> Option<ExpectedJunit<'static>> {
+    match result {
+        CheckResult::Pass | CheckResult::Leak => None,
+        CheckResult::LeakFail => Some(ExpectedJunit {
+            kind: quick_junit::NonSuccessKind::Error,
+            ty: "test exited with code 0, but leaked handles so was marked failed",
+            // LeakFail tests exit with code 0 (no panic), so there's no error
+            // output to extract a message from.
+            message: JunitExpectedMessage::None,
+        }),
+        CheckResult::Fail => Some(ExpectedJunit {
+            kind: quick_junit::NonSuccessKind::Failure,
+            ty: JUNIT_FAIL,
+            message: JunitExpectedMessage::StartsWithOneOf(FAIL_MESSAGE_PREFIXES),
+        }),
+        CheckResult::FailLeak => Some(ExpectedJunit {
+            kind: quick_junit::NonSuccessKind::Failure,
+            ty: JUNIT_FAIL_LEAK,
+            message: JunitExpectedMessage::StartsWithOneOf(FAIL_MESSAGE_PREFIXES),
+        }),
+        CheckResult::Abort => Some(ExpectedJunit {
+            kind: quick_junit::NonSuccessKind::Failure,
+            ty: JUNIT_ABORT,
+            message: JunitExpectedMessage::StartsWithOneOf(ABORT_MESSAGE_PREFIXES),
+        }),
+        CheckResult::Timeout => {
+            let timeout_kind = if properties.contains(RunProperties::BENCHMARKS) {
+                "benchmark timeout"
+            } else {
+                "test timeout"
+            };
+            Some(ExpectedJunit {
+                kind: quick_junit::NonSuccessKind::Failure,
+                ty: timeout_kind,
+                // Timed-out tests are killed without producing panic output,
+                // and FailureDescription::Timeout doesn't generate an abort
+                // description, so there's no error to extract a message from.
+                message: JunitExpectedMessage::None,
+            })
+        }
+    }
+}
+
 /// Verifies that all expected tests appear in the JUnit output with the correct
 /// status.
 #[track_caller]
@@ -1198,98 +1339,72 @@ fn verify_expected_in_junit(
         match actual_outcome {
             Some(actual) => {
                 // Verify the JUnit status matches our expected CheckResult.
-                // Expected formats from nextest-runner/src/reporter/aggregator/junit.rs:
-                // - Fail (exit code, no leak): "test failure with exit code 101"
-                // - Fail (exit code, leaked):  "test failure with exit code 101, and leaked handles"
-                // - Abort (no leak):           "test abort"
-                // - Abort (leaked):            "test abort with leaked handles"
-                // - LeakFail:                  "test exited with code 0, but leaked handles so was marked failed"
-                // - Timeout:                   "test timeout" or "benchmark timeout"
-                let expected_junit: Option<(quick_junit::NonSuccessKind, &str)> =
-                    match expected_outcome.expected.result {
-                        CheckResult::Pass | CheckResult::Leak => None,
-                        CheckResult::LeakFail => Some((
-                            quick_junit::NonSuccessKind::Error,
-                            "test exited with code 0, but leaked handles so was marked failed",
-                        )),
-                        CheckResult::Fail => {
-                            Some((quick_junit::NonSuccessKind::Failure, JUNIT_FAIL))
-                        }
-                        CheckResult::FailLeak => {
-                            Some((quick_junit::NonSuccessKind::Failure, JUNIT_FAIL_LEAK))
-                        }
-                        CheckResult::Abort => {
-                            Some((quick_junit::NonSuccessKind::Failure, JUNIT_ABORT))
-                        }
-                        CheckResult::Timeout => {
-                            let timeout_kind = if properties.contains(RunProperties::BENCHMARKS) {
-                                "benchmark timeout"
-                            } else {
-                                "test timeout"
-                            };
-                            Some((quick_junit::NonSuccessKind::Failure, timeout_kind))
-                        }
-                    };
+                let expected_junit =
+                    expected_junit_for_result(expected_outcome.expected.result, properties);
 
-                match (expected_junit, &actual.non_success) {
+                match (&expected_junit, &actual.non_success) {
                     (None, None) => {
                         // Both expected and actual were successful.
                     }
-                    (Some((expected_kind, expected_type)), Some((actual_kind, actual_type))) => {
-                        if expected_kind != *actual_kind {
+                    (Some(expected), Some(actual_ns)) => {
+                        if expected.kind != actual_ns.kind {
                             panic!(
                                 "{}: expected JUnit kind {:?} but got {:?} (properties: {})\n\
                                  JUnit path: {}\n\
                                  Expected result: {:?}, actual type: {:?}",
                                 expected_outcome.id.full_name(),
-                                expected_kind,
-                                actual_kind,
+                                expected.kind,
+                                actual_ns.kind,
                                 debug_run_properties(properties),
                                 junit_path,
                                 expected_outcome.expected.result,
-                                actual_type,
+                                actual_ns.ty,
                             );
                         }
 
-                        // Check if the actual type matches the expected string.
-                        let type_matches = expected_type == actual_type;
-
-                        if !type_matches {
+                        if expected.ty != actual_ns.ty {
                             panic!(
                                 "{}: expected JUnit type {:?} but got {:?} \
                                  (properties: {})\n\
                                  JUnit path: {}\n\
                                  Expected result: {:?}",
                                 expected_outcome.id.full_name(),
-                                expected_type,
-                                actual_type,
+                                expected.ty,
+                                actual_ns.ty,
                                 debug_run_properties(properties),
                                 junit_path,
                                 expected_outcome.expected.result,
                             );
                         }
+
+                        expected.message.verify(
+                            actual_ns.message.as_deref(),
+                            &expected_outcome.id.full_name(),
+                            junit_path,
+                            properties,
+                        );
                     }
-                    (None, Some((kind, ty))) => {
+                    (None, Some(actual_ns)) => {
                         panic!(
                             "{}: expected success, but JUnit shows {:?} with type {:?} \
                              (properties: {})\n\
                              JUnit path: {}\n\
                              Expected result: {:?}",
                             expected_outcome.id.full_name(),
-                            kind,
-                            ty,
+                            actual_ns.kind,
+                            actual_ns.ty,
                             debug_run_properties(properties),
                             junit_path,
                             expected_outcome.expected.result,
                         );
                     }
-                    (Some((kind, _)), None) => {
+                    (Some(expected), None) => {
                         panic!(
                             "{}: expected JUnit {:?} but got success (properties: {})\n\
                              JUnit path: {}\n\
                              Expected result: {:?}",
                             expected_outcome.id.full_name(),
-                            kind,
+                            expected.kind,
                             debug_run_properties(properties),
                             junit_path,
                             expected_outcome.expected.result,
