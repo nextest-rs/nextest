@@ -3,6 +3,7 @@
 
 use crate::{
     cargo_config::EnvironmentMap,
+    config::scripts::ScriptCommandEnvMap,
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     helpers::dylib_path_envvar,
     list::{RustBuildMeta, TestListState},
@@ -13,7 +14,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use guppy::graph::PackageMetadata;
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap},
     ffi::{OsStr, OsString},
     fs::File,
     io::{BufRead, BufReader},
@@ -61,7 +62,7 @@ impl TestCommand {
         lctx: &LocalExecuteContext<'_>,
         program: String,
         args: &[Cow<'_, str>],
-        env: Option<&BTreeMap<String, String>>,
+        env: Option<&ScriptCommandEnvMap>,
         cwd: &Utf8Path,
         package: &PackageMetadata<'_>,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
@@ -79,7 +80,8 @@ impl TestCommand {
             // as that will only override values specified in this step if `force = true` is
             // specified on the value in the Cargo config, which is not the case with ordinary
             // environment variables.
-            cmd.envs(env.iter());
+            // TODO: handle the validation results.
+            let _ = env.apply_env(&mut cmd);
         }
 
         // NB: we will always override user-provided environment variables with the
