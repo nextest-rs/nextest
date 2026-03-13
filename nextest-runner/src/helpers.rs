@@ -205,10 +205,7 @@ impl fmt::Display for DisplayTestInstance<'_> {
             String::new()
         };
         let binary_id_str = format!("{} ", self.instance.binary_id.style(self.styles.binary_id));
-        let test_name_str = format!(
-            "{}",
-            DisplayTestName::new(self.instance.test_name, self.styles)
-        );
+        let test_name_str = DisplayTestName::new(self.instance.test_name, self.styles).to_string();
 
         // If a max width is defined, trim strings until they fit into it.
         if let Some(max_width) = self.max_width {

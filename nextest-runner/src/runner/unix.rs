@@ -92,7 +92,7 @@ pub(super) async fn terminate_child<'a>(
     let (term_reason, term_method) = to_terminate_reason_and_method(&reason, grace_period);
 
     // This is infallible in regular mode and fallible with cfg(test).
-    #[allow(clippy::infallible_destructuring_match)]
+    #[cfg_attr(not(test), expect(clippy::infallible_destructuring_match))]
     let term_signal = match term_method {
         UnitTerminateMethod::Signal(term_signal) => term_signal,
         #[cfg(test)]

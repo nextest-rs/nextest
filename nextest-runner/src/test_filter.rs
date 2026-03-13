@@ -594,24 +594,14 @@ impl TestFilter {
     }
 
     fn filter_ignored_mismatch(&self, ignored: bool) -> Option<FilterMatch> {
-        match self.run_ignored {
-            RunIgnored::Only => {
-                if !ignored {
-                    return Some(FilterMatch::Mismatch {
-                        reason: MismatchReason::Ignored,
-                    });
-                }
-            }
-            RunIgnored::Default => {
-                if ignored {
-                    return Some(FilterMatch::Mismatch {
-                        reason: MismatchReason::Ignored,
-                    });
-                }
-            }
-            RunIgnored::All => {}
-        }
-        None
+        let dominated = match self.run_ignored {
+            RunIgnored::Only => !ignored,
+            RunIgnored::Default => ignored,
+            RunIgnored::All => false,
+        };
+        dominated.then_some(FilterMatch::Mismatch {
+            reason: MismatchReason::Ignored,
+        })
     }
 
     fn filter_name_match(&self, test_name: &TestCaseName) -> FilterNameMatch {

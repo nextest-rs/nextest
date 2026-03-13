@@ -186,23 +186,15 @@ impl<'a> Unarchiver<'a> {
             }
         }
 
-        let binary_list = match binary_list {
-            Some(binary_list) => binary_list,
-            None => {
-                return Err(ArchiveExtractError::Read(
-                    ArchiveReadError::MetadataFileNotFound(binaries_metadata_path),
-                ));
-            }
-        };
+        let binary_list = binary_list.ok_or_else(|| {
+            ArchiveExtractError::Read(ArchiveReadError::MetadataFileNotFound(
+                binaries_metadata_path,
+            ))
+        })?;
 
-        let (cargo_metadata_json, graph) = match graph_data {
-            Some(x) => x,
-            None => {
-                return Err(ArchiveExtractError::Read(
-                    ArchiveReadError::MetadataFileNotFound(cargo_metadata_path),
-                ));
-            }
-        };
+        let (cargo_metadata_json, graph) = graph_data.ok_or_else(|| {
+            ArchiveExtractError::Read(ArchiveReadError::MetadataFileNotFound(cargo_metadata_path))
+        })?;
 
         let elapsed = start_time.elapsed();
         // Report end extraction.

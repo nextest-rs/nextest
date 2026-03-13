@@ -42,7 +42,6 @@ mod tests {
 
     /// Settings checked for inheritance below.
     #[derive(Default)]
-    #[allow(dead_code)]
     pub struct InheritSettings {
         name: String,
         inherits: Option<String>,

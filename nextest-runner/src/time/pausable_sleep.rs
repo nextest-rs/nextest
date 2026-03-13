@@ -29,7 +29,7 @@ impl PausableSleep {
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg_attr(not(unix), expect(dead_code))]
     pub(crate) fn is_paused(&self) -> bool {
         matches!(self.pause_state, SleepPauseState::Paused { .. })
     }

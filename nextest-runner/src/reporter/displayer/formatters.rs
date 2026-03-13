@@ -300,7 +300,7 @@ fn write_final_warnings_for_failure(
                 Some(reason) => {
                     format!(" due to {}", reason.to_static_str().style(styles.skip))
                 }
-                None => "".to_string(),
+                None => String::new(),
             };
             writeln!(
                 writer,
