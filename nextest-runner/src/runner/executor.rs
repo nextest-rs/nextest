@@ -15,7 +15,9 @@ use super::{ChildPid, HandleSignalResult, Interceptor, VersionEnvVars};
 use crate::{
     config::{
         core::EvaluatableProfile,
-        elements::{LeakTimeout, LeakTimeoutResult, RetryPolicy, SlowTimeout, TestGroup},
+        elements::{
+            FlakyResult, LeakTimeout, LeakTimeoutResult, RetryPolicy, SlowTimeout, TestGroup,
+        },
         overrides::TestSettings,
         scripts::{ScriptId, SetupScriptCommand, SetupScriptConfig, SetupScriptExecuteData},
     },
@@ -68,6 +70,9 @@ pub(super) struct ExecutorContext<'a> {
     capture_strategy: CaptureStrategy,
     // This is Some if the user specifies a retry policy over the command-line.
     force_retries: Option<RetryPolicy>,
+    // This is Some if the user specifies flaky result behavior over the
+    // command-line.
+    force_flaky_result: Option<FlakyResult>,
     interceptor: Interceptor,
     version_env_vars: Option<VersionEnvVars>,
 }
@@ -83,6 +88,7 @@ impl<'a> ExecutorContext<'a> {
         target_runner: TargetRunner,
         capture_strategy: CaptureStrategy,
         force_retries: Option<RetryPolicy>,
+        force_flaky_result: Option<FlakyResult>,
         interceptor: Interceptor,
         version_env_vars: Option<VersionEnvVars>,
     ) -> Self {
@@ -95,6 +101,7 @@ impl<'a> ExecutorContext<'a> {
             target_runner,
             capture_strategy,
             force_retries,
+            force_flaky_result,
             interceptor,
             version_env_vars,
         }
@@ -205,7 +212,9 @@ impl<'a> ExecutorContext<'a> {
         let settings = Arc::new(test.settings);
 
         let retry_policy = self.force_retries.unwrap_or_else(|| settings.retries());
-        let flaky_result = settings.flaky_result();
+        let flaky_result = self
+            .force_flaky_result
+            .unwrap_or_else(|| settings.flaky_result());
         let total_attempts = retry_policy.count() + 1;
         let mut backoff_iter = BackoffIter::new(retry_policy);
 

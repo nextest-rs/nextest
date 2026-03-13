@@ -8,7 +8,7 @@ use crate::{
     config::elements::{LeakTimeoutResult, SlowTimeoutResult},
     errors::DisplayErrorChain,
     indenter::indented,
-    output_spec::LiveSpec,
+    output_spec::{LiveSpec, OutputSpec},
     reporter::{
         ByteSubslice, TestOutputErrorSlice, UnitErrorDescription,
         events::*,
@@ -89,9 +89,32 @@ impl OutputDisplayOverrides {
         self.force_exec_fail_output.unwrap_or(event_setting)
     }
 
+    /// Resolves the output display for a finished test based on its
+    /// [`ExecutionDescription`].
+    ///
+    /// For tests whose last attempt succeeded (including flaky-fail), uses
+    /// `success_output`. For failures, dispatches on the execution result to
+    /// distinguish regular failures from exec-fail.
+    pub(super) fn resolve_for_describe<S: OutputSpec>(
+        &self,
+        success_output: TestOutputDisplay,
+        failure_output: TestOutputDisplay,
+        describe: &ExecutionDescription<'_, S>,
+    ) -> TestOutputDisplay {
+        if describe.is_success_for_output() {
+            self.success_output(success_output)
+        } else {
+            self.resolve_test_output_display(
+                success_output,
+                failure_output,
+                &describe.last_status().result,
+            )
+        }
+    }
+
     /// Resolves the output display setting for a test based on the execution
     /// result, applying any forced overrides.
-    pub(super) fn resolve_test_output_display(
+    fn resolve_test_output_display(
         &self,
         success_output: TestOutputDisplay,
         failure_output: TestOutputDisplay,
@@ -157,18 +180,6 @@ impl UnitOutputReporter {
     /// Returns the output display overrides.
     pub(super) fn overrides(&self) -> OutputDisplayOverrides {
         self.overrides
-    }
-
-    /// Resolves the output display setting for a test based on the execution
-    /// result, applying any forced overrides.
-    pub(super) fn resolve_test_output_display(
-        &self,
-        success_output: TestOutputDisplay,
-        failure_output: TestOutputDisplay,
-        result: &ExecutionResultDescription,
-    ) -> TestOutputDisplay {
-        self.overrides
-            .resolve_test_output_display(success_output, failure_output, result)
     }
 
     pub(super) fn write_child_execution_output(
