@@ -23,13 +23,13 @@
 //! using before
 
 use crate::{
-    config::elements::{LeakTimeoutResult, SlowTimeoutResult},
+    config::elements::{FlakyResult, SlowTimeoutResult},
     errors::{DisplayErrorChain, FormatVersionError, FormatVersionErrorInner, WriteEventError},
     list::{RustTestSuite, TestList},
-    output_spec::LiveSpec,
+    output_spec::{LiveSpec, OutputSpec},
     reporter::events::{
-        ChildExecutionOutputDescription, ChildOutputDescription, ExecutionResultDescription,
-        StressIndex, TestEvent, TestEventKind,
+        ChildExecutionOutputDescription, ChildOutputDescription, ExecutionDescription,
+        ExecutionResultDescription, ExecutionStatuses, StressIndex, TestEvent, TestEventKind,
     },
     test_output::ChildSingleOutput,
 };
@@ -273,23 +273,7 @@ impl<'cfg> LibtestReporter<'cfg> {
 
                 (
                     KIND_TEST,
-                    match &run_statuses.last_status().result {
-                        ExecutionResultDescription::Pass
-                        | ExecutionResultDescription::Timeout {
-                            result: SlowTimeoutResult::Pass,
-                        }
-                        | ExecutionResultDescription::Leak {
-                            result: LeakTimeoutResult::Pass,
-                        } => EVENT_OK,
-                        ExecutionResultDescription::Leak {
-                            result: LeakTimeoutResult::Fail,
-                        }
-                        | ExecutionResultDescription::Fail { .. }
-                        | ExecutionResultDescription::ExecFail
-                        | ExecutionResultDescription::Timeout {
-                            result: SlowTimeoutResult::Fail,
-                        } => EVENT_FAILED,
-                    },
+                    event_for_finished_test(run_statuses),
                     stress_index,
                     test_instance,
                 )
@@ -580,6 +564,20 @@ impl<'cfg> LibtestReporter<'cfg> {
     }
 }
 
+/// Returns the libtest JSON event string for a finished test.
+///
+/// Uses `ExecutionDescription` to determine the overall outcome.
+fn event_for_finished_test<S: OutputSpec>(run_statuses: &ExecutionStatuses<S>) -> &'static str {
+    match run_statuses.describe() {
+        ExecutionDescription::Success { .. }
+        | ExecutionDescription::Flaky {
+            result: FlakyResult::Pass,
+            ..
+        } => EVENT_OK,
+        ExecutionDescription::Failure { .. } => EVENT_FAILED,
+    }
+}
+
 /// Unfortunately, to replicate the libtest json output, we need to do our own
 /// filtering of the output to strip out the data emitted by libtest in the
 /// human format.
@@ -769,17 +767,27 @@ impl std::fmt::Display for EscapedString<'_> {
 #[cfg(test)]
 mod test {
     use crate::{
+        config::elements::{FlakyResult, LeakTimeoutResult, SlowTimeoutResult},
         errors::ChildStartError,
+        output_spec::LiveSpec,
         reporter::{
-            events::ChildExecutionOutputDescription,
-            structured::libtest::strip_human_output_from_failed_test,
+            events::{
+                ChildExecutionOutputDescription, ExecuteStatus, ExecutionResult,
+                ExecutionResultDescription, ExecutionStatuses, FailureDescription, FailureStatus,
+                RetryData,
+            },
+            structured::libtest::{
+                EVENT_FAILED, EVENT_OK, event_for_finished_test,
+                strip_human_output_from_failed_test,
+            },
         },
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     };
-    use bytes::BytesMut;
+    use bytes::{Bytes, BytesMut};
+    use chrono::Local;
     use color_eyre::eyre::eyre;
     use nextest_metadata::TestCaseName;
-    use std::{io, sync::Arc};
+    use std::{io, sync::Arc, time::Duration};
 
     /// Validates that the human output portion from a failed test is stripped
     /// out when writing a JSON string, as it is not part of the output when
@@ -914,5 +922,154 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
         .unwrap();
 
         insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
+    }
+
+    fn make_test_output(result: ExecutionResult) -> ChildExecutionOutputDescription<LiveSpec> {
+        ChildExecutionOutput::Output {
+            result: Some(result),
+            output: ChildOutput::Split(ChildSplitOutput {
+                stdout: Some(Bytes::new().into()),
+                stderr: Some(Bytes::new().into()),
+            }),
+            errors: None,
+        }
+        .into()
+    }
+
+    fn make_passing_status(attempt: u32, total_attempts: u32) -> ExecuteStatus<LiveSpec> {
+        ExecuteStatus {
+            retry_data: RetryData {
+                attempt,
+                total_attempts,
+            },
+            output: make_test_output(ExecutionResult::Pass),
+            result: ExecutionResultDescription::Pass,
+            start_time: Local::now().fixed_offset(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        }
+    }
+
+    fn make_failing_status(attempt: u32, total_attempts: u32) -> ExecuteStatus<LiveSpec> {
+        ExecuteStatus {
+            retry_data: RetryData {
+                attempt,
+                total_attempts,
+            },
+            output: make_test_output(ExecutionResult::Fail {
+                failure_status: FailureStatus::ExitCode(1),
+                leaked: false,
+            }),
+            result: ExecutionResultDescription::Fail {
+                failure: FailureDescription::ExitCode { code: 1 },
+                leaked: false,
+            },
+            start_time: Local::now().fixed_offset(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        }
+    }
+
+    #[test]
+    fn event_for_finished_test_variants() {
+        // Single pass.
+        let statuses =
+            ExecutionStatuses::new(vec![make_passing_status(1, 1)], FlakyResult::default());
+        assert_eq!(event_for_finished_test(&statuses), EVENT_OK, "single pass");
+
+        // Single failure.
+        let statuses =
+            ExecutionStatuses::new(vec![make_failing_status(1, 1)], FlakyResult::default());
+        assert_eq!(
+            event_for_finished_test(&statuses),
+            EVENT_FAILED,
+            "single failure"
+        );
+
+        // Flaky pass: fail then pass, default result (pass).
+        let statuses = ExecutionStatuses::new(
+            vec![make_failing_status(1, 2), make_passing_status(2, 2)],
+            FlakyResult::Pass,
+        );
+        assert_eq!(
+            event_for_finished_test(&statuses),
+            EVENT_OK,
+            "flaky with result = pass"
+        );
+
+        // All retries failed.
+        let statuses = ExecutionStatuses::new(
+            vec![make_failing_status(1, 2), make_failing_status(2, 2)],
+            FlakyResult::Pass,
+        );
+        assert_eq!(
+            event_for_finished_test(&statuses),
+            EVENT_FAILED,
+            "all retries failed"
+        );
+
+        // Leak { Pass } → success.
+        let mut leak_pass = make_passing_status(1, 1);
+        leak_pass.result = ExecutionResultDescription::Leak {
+            result: LeakTimeoutResult::Pass,
+        };
+        let statuses = ExecutionStatuses::new(vec![leak_pass], FlakyResult::default());
+        assert_eq!(
+            event_for_finished_test(&statuses),
+            EVENT_OK,
+            "leak with result = pass"
+        );
+
+        // Leak { Fail } → failure.
+        let mut leak_fail = make_passing_status(1, 1);
+        leak_fail.result = ExecutionResultDescription::Leak {
+            result: LeakTimeoutResult::Fail,
+        };
+        let statuses = ExecutionStatuses::new(vec![leak_fail], FlakyResult::default());
+        assert_eq!(
+            event_for_finished_test(&statuses),
+            EVENT_FAILED,
+            "leak with result = fail"
+        );
+
+        // Timeout { Pass } → success.
+        let mut timeout_pass = make_passing_status(1, 1);
+        timeout_pass.result = ExecutionResultDescription::Timeout {
+            result: SlowTimeoutResult::Pass,
+        };
+        let statuses = ExecutionStatuses::new(vec![timeout_pass], FlakyResult::default());
+        assert_eq!(
+            event_for_finished_test(&statuses),
+            EVENT_OK,
+            "timeout with result = pass"
+        );
+
+        // Timeout { Fail } → failure.
+        let mut timeout_fail = make_passing_status(1, 1);
+        timeout_fail.result = ExecutionResultDescription::Timeout {
+            result: SlowTimeoutResult::Fail,
+        };
+        let statuses = ExecutionStatuses::new(vec![timeout_fail], FlakyResult::default());
+        assert_eq!(
+            event_for_finished_test(&statuses),
+            EVENT_FAILED,
+            "timeout with result = fail"
+        );
+
+        // ExecFail → failure.
+        let mut exec_fail = make_passing_status(1, 1);
+        exec_fail.result = ExecutionResultDescription::ExecFail;
+        let statuses = ExecutionStatuses::new(vec![exec_fail], FlakyResult::default());
+        assert_eq!(
+            event_for_finished_test(&statuses),
+            EVENT_FAILED,
+            "exec fail"
+        );
     }
 }

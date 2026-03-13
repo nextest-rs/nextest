@@ -488,12 +488,13 @@ fn convert_execution_statuses(
     reader: &mut dyn StoreReader,
     load_output: LoadOutput,
 ) -> Result<ExecutionStatuses<LiveSpec>, ReplayConversionError> {
+    let flaky_result = statuses.flaky_result();
     let statuses: Vec<ExecuteStatus<LiveSpec>> = statuses
         .iter()
         .map(|s| convert_execute_status(s, reader, load_output))
         .collect::<Result<_, _>>()?;
 
-    Ok(ExecutionStatuses::new(statuses))
+    Ok(ExecutionStatuses::new(statuses, flaky_result))
 }
 
 fn convert_setup_script_status(

@@ -5,7 +5,7 @@
 
 use crate::{
     config::{
-        elements::{JunitConfig, LeakTimeoutResult, SlowTimeoutResult},
+        elements::{FlakyResult, JunitConfig, LeakTimeoutResult, SlowTimeoutResult},
         scripts::ScriptId,
     },
     errors::{DisplayErrorChain, WriteEventError},
@@ -147,6 +147,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                     ExecutionDescription::Flaky {
                         last_status,
                         prior_statuses,
+                        result: FlakyResult::Pass,
                     } => (TestCaseStatus::success(), last_status, prior_statuses),
                     ExecutionDescription::Failure {
                         first_status,

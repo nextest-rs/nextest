@@ -9,7 +9,10 @@
 
 use super::{SetupScriptPacket, TestPacket};
 use crate::{
-    config::scripts::{ScriptId, SetupScriptConfig},
+    config::{
+        elements::FlakyResult,
+        scripts::{ScriptId, SetupScriptConfig},
+    },
     errors::DisplayErrorChain,
     list::TestInstance,
     output_spec::LiveSpec,
@@ -84,6 +87,8 @@ pub(super) enum ExecutorEvent<'a> {
         // Why do we use unbounded channels? Mostly to make life simpler --
         // these are low-traffic channels that we don't expect to be backed up.
         req_rx_tx: oneshot::Sender<UnboundedReceiver<RunUnitRequest<'a>>>,
+        // The configured result for flaky tests.
+        flaky_result: FlakyResult,
     },
     Slow {
         stress_index: Option<StressIndex>,

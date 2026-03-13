@@ -11,7 +11,7 @@ use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 use crate::output_spec::ArbitraryOutputSpec;
 use crate::{
     config::{
-        elements::{LeakTimeoutResult, SlowTimeoutResult},
+        elements::{FlakyResult, LeakTimeoutResult, SlowTimeoutResult},
         scripts::ScriptId,
     },
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
@@ -571,7 +571,8 @@ pub struct RunStats {
     /// The number of setup scripts that timed out.
     pub setup_scripts_timed_out: usize,
 
-    /// The number of tests that passed. Includes `passed_slow`, `passed_timed_out`, `flaky` and `leaky`.
+    /// The number of tests that passed. Includes `passed_slow`, `passed_timed_out`, `flaky`, and
+    /// `leaky`.
     pub passed: usize,
 
     /// The number of slow tests that passed.
@@ -597,6 +598,8 @@ pub struct RunStats {
 
     /// The number of tests that otherwise passed, but leaked handles and were
     /// treated as failed as a result.
+    ///
+    /// Included in `failed`.
     pub leaky_failed: usize,
 
     /// The number of tests that encountered an execution failure.
@@ -722,7 +725,14 @@ impl RunStats {
                     self.passed_slow += 1;
                 }
                 if run_statuses.len() > 1 {
-                    self.flaky += 1;
+                    // The test is flaky. How it's counted depends on
+                    // flaky_result — match exhaustively so the compiler
+                    // catches new variants.
+                    match run_statuses.flaky_result() {
+                        FlakyResult::Pass => {
+                            self.flaky += 1;
+                        }
+                    }
                 }
             }
             ExecutionResultDescription::Leak {
@@ -734,7 +744,11 @@ impl RunStats {
                     self.passed_slow += 1;
                 }
                 if run_statuses.len() > 1 {
-                    self.flaky += 1;
+                    match run_statuses.flaky_result() {
+                        FlakyResult::Pass => {
+                            self.flaky += 1;
+                        }
+                    }
                 }
             }
             ExecutionResultDescription::Leak {
@@ -758,7 +772,11 @@ impl RunStats {
                 self.passed += 1;
                 self.passed_timed_out += 1;
                 if run_statuses.len() > 1 {
-                    self.flaky += 1;
+                    match run_statuses.flaky_result() {
+                        FlakyResult::Pass => {
+                            self.flaky += 1;
+                        }
+                    }
                 }
             }
             ExecutionResultDescription::Timeout {
@@ -887,6 +905,10 @@ pub struct ExecutionStatuses<S: OutputSpec> {
     /// This is guaranteed to be non-empty.
     #[cfg_attr(test, strategy(proptest::collection::vec(proptest::arbitrary::any::<ExecuteStatus<S>>(), 1..=3)))]
     statuses: Vec<ExecuteStatus<S>>,
+
+    /// Controls whether a flaky test is treated as a pass or a failure.
+    #[serde(default)]
+    flaky_result: FlakyResult,
 }
 
 impl<'de, S: SerializableOutputSpec> Deserialize<'de> for ExecutionStatuses<S> {
@@ -900,6 +922,8 @@ impl<'de, S: SerializableOutputSpec> Deserialize<'de> for ExecutionStatuses<S> {
         )]
         struct Helper<S: OutputSpec> {
             statuses: Vec<ExecuteStatus<S>>,
+            #[serde(default)]
+            flaky_result: FlakyResult,
         }
 
         let helper = Helper::<S>::deserialize(deserializer)?;
@@ -908,15 +932,24 @@ impl<'de, S: SerializableOutputSpec> Deserialize<'de> for ExecutionStatuses<S> {
         }
         Ok(Self {
             statuses: helper.statuses,
+            flaky_result: helper.flaky_result,
         })
     }
 }
 
 #[expect(clippy::len_without_is_empty)] // RunStatuses is never empty
 impl<S: OutputSpec> ExecutionStatuses<S> {
-    pub(crate) fn new(statuses: Vec<ExecuteStatus<S>>) -> Self {
+    pub(crate) fn new(statuses: Vec<ExecuteStatus<S>>, flaky_result: FlakyResult) -> Self {
         debug_assert!(!statuses.is_empty(), "ExecutionStatuses must be non-empty");
-        Self { statuses }
+        Self {
+            statuses,
+            flaky_result,
+        }
+    }
+
+    /// Returns the configured flaky result for this test.
+    pub fn flaky_result(&self) -> FlakyResult {
+        self.flaky_result
     }
 
     /// Returns the last execution status.
@@ -946,6 +979,7 @@ impl<S: OutputSpec> ExecutionStatuses<S> {
                 ExecutionDescription::Flaky {
                     last_status,
                     prior_statuses: &self.statuses[..self.statuses.len() - 1],
+                    result: self.flaky_result,
                 }
             } else {
                 ExecutionDescription::Success {
@@ -997,6 +1031,9 @@ pub enum ExecutionDescription<'a, S: OutputSpec> {
 
         /// Previous statuses, none of which are successes.
         prior_statuses: &'a [ExecuteStatus<S>],
+
+        /// Controls whether this flaky test is treated as a pass or a failure.
+        result: FlakyResult,
     },
 
     /// The test was run once, or possibly multiple times. All runs failed.
@@ -1041,7 +1078,10 @@ impl<'a, S: OutputSpec> ExecutionDescription<'a, S> {
                 ),
             },
             // A flaky test implies that we print out retry information for it.
-            ExecutionDescription::Flaky { .. } => StatusLevel::Retry,
+            ExecutionDescription::Flaky {
+                result: FlakyResult::Pass,
+                ..
+            } => StatusLevel::Retry,
             ExecutionDescription::Failure { .. } => StatusLevel::Fail,
         }
     }
@@ -1071,9 +1111,37 @@ impl<'a, S: OutputSpec> ExecutionDescription<'a, S> {
                     }
                 }
             }
-            // A flaky test implies that we print out retry information for it.
-            ExecutionDescription::Flaky { .. } => FinalStatusLevel::Flaky,
+            // A flaky test implies that we print out retry information.
+            ExecutionDescription::Flaky {
+                result: FlakyResult::Pass,
+                ..
+            } => FinalStatusLevel::Flaky,
             ExecutionDescription::Failure { .. } => FinalStatusLevel::Fail,
+        }
+    }
+
+    /// Returns whether this test's output should be treated as success output
+    /// for display and storage purposes.
+    ///
+    /// For flaky tests, the last attempt succeeded, so its output is success
+    /// output: it contains no panics or errors, and is generally not
+    /// interesting. The failure information comes from the status line and from
+    /// prior retry attempts' output (shown via `TestAttemptFailedWillRetry`
+    /// events, controlled by `failure-output`).
+    ///
+    /// This means:
+    /// - The _visibility_ is controlled by `success-output`.
+    /// - The _styling_ is pass/green headers, no error extraction.
+    /// - _JUnit storage_ is controlled by `store-success-output` (default:
+    ///   `false`).
+    pub fn is_success_for_output(&self) -> bool {
+        match self {
+            ExecutionDescription::Success { .. } => true,
+            // All flaky tests have a successful last attempt — the output
+            // from that attempt is success output regardless of the overall
+            // test outcome.
+            ExecutionDescription::Flaky { .. } => true,
+            ExecutionDescription::Failure { .. } => false,
         }
     }
 
@@ -2482,6 +2550,127 @@ mod tests {
             .summarize_final(),
             FinalRunStats::NoTestsRun,
             "setup scripts passed => success, but no tests run"
+        );
+    }
+
+    /// Helper to build a minimal `ExecuteStatus<LiveSpec>` for tests.
+    fn make_execute_status(
+        result: ExecutionResultDescription,
+        attempt: u32,
+        total_attempts: u32,
+    ) -> ExecuteStatus<LiveSpec> {
+        ExecuteStatus {
+            retry_data: RetryData {
+                attempt,
+                total_attempts,
+            },
+            output: ChildExecutionOutputDescription::Output {
+                result: Some(result.clone()),
+                output: ChildOutputDescription::Split {
+                    stdout: None,
+                    stderr: None,
+                },
+                errors: None,
+            },
+            result,
+            start_time: chrono::Utc::now().into(),
+            time_taken: Duration::from_millis(100),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        }
+    }
+
+    #[test]
+    fn is_success_for_output_by_variant() {
+        // Success: single passing run → true.
+        let pass_status = make_execute_status(ExecutionResultDescription::Pass, 1, 1);
+        let success_statuses = ExecutionStatuses::new(vec![pass_status], FlakyResult::Pass);
+        let describe = success_statuses.describe();
+        assert!(
+            matches!(describe, ExecutionDescription::Success { .. }),
+            "single pass is Success"
+        );
+        assert!(
+            describe.is_success_for_output(),
+            "Success: output is success output"
+        );
+
+        // Flaky pass: fail then pass → true.
+        let fail_status = make_execute_status(
+            ExecutionResultDescription::Fail {
+                failure: FailureDescription::ExitCode { code: 1 },
+                leaked: false,
+            },
+            1,
+            2,
+        );
+        let pass_status = make_execute_status(ExecutionResultDescription::Pass, 2, 2);
+        let flaky_pass_statuses =
+            ExecutionStatuses::new(vec![fail_status, pass_status], FlakyResult::Pass);
+        let describe = flaky_pass_statuses.describe();
+        assert!(
+            matches!(
+                describe,
+                ExecutionDescription::Flaky {
+                    result: FlakyResult::Pass,
+                    ..
+                }
+            ),
+            "fail then pass with FlakyResult::Pass is Flaky Pass"
+        );
+        assert!(
+            describe.is_success_for_output(),
+            "Flaky pass: output is success output"
+        );
+
+        // Failure: single fail → false.
+        let fail_status = make_execute_status(
+            ExecutionResultDescription::Fail {
+                failure: FailureDescription::ExitCode { code: 1 },
+                leaked: false,
+            },
+            1,
+            1,
+        );
+        let failure_statuses = ExecutionStatuses::new(vec![fail_status], FlakyResult::Pass);
+        let describe = failure_statuses.describe();
+        assert!(
+            matches!(describe, ExecutionDescription::Failure { .. }),
+            "single fail is Failure"
+        );
+        assert!(
+            !describe.is_success_for_output(),
+            "Failure: output is not success output"
+        );
+
+        // Failure with retries: all fail → false.
+        let fail1 = make_execute_status(
+            ExecutionResultDescription::Fail {
+                failure: FailureDescription::ExitCode { code: 1 },
+                leaked: false,
+            },
+            1,
+            2,
+        );
+        let fail2 = make_execute_status(
+            ExecutionResultDescription::Fail {
+                failure: FailureDescription::ExitCode { code: 1 },
+                leaked: false,
+            },
+            2,
+            2,
+        );
+        let failure_retry_statuses = ExecutionStatuses::new(vec![fail1, fail2], FlakyResult::Pass);
+        let describe = failure_retry_statuses.describe();
+        assert!(
+            matches!(describe, ExecutionDescription::Failure { .. }),
+            "all-fail with retries is Failure"
+        );
+        assert!(
+            !describe.is_success_for_output(),
+            "Failure with retries: output is not success output"
         );
     }
 

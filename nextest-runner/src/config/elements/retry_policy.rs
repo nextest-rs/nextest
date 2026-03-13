@@ -1,44 +1,36 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt, time::Duration};
 
 /// Type for the retry config key.
-#[derive(Debug, Copy, Clone, Deserialize, PartialEq, Eq)]
-#[serde(tag = "backoff", rename_all = "kebab-case", deny_unknown_fields)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RetryPolicy {
     /// Fixed backoff.
-    #[serde(rename_all = "kebab-case")]
     Fixed {
         /// Maximum retry count.
         count: u32,
 
         /// Delay between retries.
-        #[serde(default, with = "humantime_serde")]
         delay: Duration,
 
         /// If set to true, randomness will be added to the delay on each retry attempt.
-        #[serde(default)]
         jitter: bool,
     },
 
     /// Exponential backoff.
-    #[serde(rename_all = "kebab-case")]
     Exponential {
         /// Maximum retry count.
         count: u32,
 
         /// Delay between retries. Not optional for exponential backoff.
-        #[serde(with = "humantime_serde")]
         delay: Duration,
 
         /// If set to true, randomness will be added to the delay on each retry attempt.
-        #[serde(default)]
         jitter: bool,
 
         /// If set, limits the delay between retries.
-        #[serde(default, with = "humantime_serde")]
         max_delay: Option<Duration>,
     },
 }
@@ -68,16 +60,96 @@ impl RetryPolicy {
     }
 }
 
+/// Controls whether a flaky test is treated as a pass or a failure.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
+pub enum FlakyResult {
+    /// The test is marked as passed.
+    #[default]
+    Pass,
+}
+
+/// Intermediate type for deserializing retry policy from TOML. The
+/// `flaky-result` field is extracted separately from the backoff policy.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub(in crate::config) struct DeserializedRetryPolicy {
+    /// The retry backoff policy.
+    pub(in crate::config) policy: RetryPolicy,
+
+    /// The flaky result behavior, if explicitly set.
+    pub(in crate::config) flaky_result: Option<FlakyResult>,
+}
+
+/// Serde-compatible intermediate type that includes the `flaky-result` field
+/// alongside backoff parameters. After deserialization, the `flaky-result` is
+/// split out into `DeserializedRetryPolicy`.
+#[derive(Debug, Copy, Clone, Deserialize)]
+#[serde(tag = "backoff", rename_all = "kebab-case", deny_unknown_fields)]
+enum RetryPolicySerde {
+    #[serde(rename_all = "kebab-case")]
+    Fixed {
+        count: u32,
+        #[serde(default, with = "humantime_serde")]
+        delay: Duration,
+        #[serde(default)]
+        jitter: bool,
+    },
+    #[serde(rename_all = "kebab-case")]
+    Exponential {
+        count: u32,
+        #[serde(with = "humantime_serde")]
+        delay: Duration,
+        #[serde(default)]
+        jitter: bool,
+        #[serde(default, with = "humantime_serde")]
+        max_delay: Option<Duration>,
+    },
+}
+
+impl RetryPolicySerde {
+    fn into_deserialized(self) -> DeserializedRetryPolicy {
+        match self {
+            RetryPolicySerde::Fixed {
+                count,
+                delay,
+                jitter,
+            } => DeserializedRetryPolicy {
+                policy: RetryPolicy::Fixed {
+                    count,
+                    delay,
+                    jitter,
+                },
+                flaky_result: None,
+            },
+            RetryPolicySerde::Exponential {
+                count,
+                delay,
+                jitter,
+                max_delay,
+            } => DeserializedRetryPolicy {
+                policy: RetryPolicy::Exponential {
+                    count,
+                    delay,
+                    jitter,
+                    max_delay,
+                },
+                flaky_result: None,
+            },
+        }
+    }
+}
+
 pub(in crate::config) fn deserialize_retry_policy<'de, D>(
     deserializer: D,
-) -> Result<Option<RetryPolicy>, D::Error>
+) -> Result<Option<DeserializedRetryPolicy>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     struct V;
 
     impl<'de2> serde::de::Visitor<'de2> for V {
-        type Value = Option<RetryPolicy>;
+        type Value = Option<DeserializedRetryPolicy>;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             write!(
@@ -99,7 +171,10 @@ where
                             &"a positive u32",
                         )
                     })?;
-                    Ok(Some(RetryPolicy::new_without_delay(v)))
+                    Ok(Some(DeserializedRetryPolicy {
+                        policy: RetryPolicy::new_without_delay(v),
+                        flaky_result: None,
+                    }))
                 }
                 Ordering::Less => Err(serde::de::Error::invalid_value(
                     serde::de::Unexpected::Signed(v),
@@ -112,13 +187,14 @@ where
         where
             A: serde::de::MapAccess<'de2>,
         {
-            RetryPolicy::deserialize(serde::de::value::MapAccessDeserializer::new(map)).map(Some)
+            RetryPolicySerde::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+                .map(|s| Some(s.into_deserialized()))
         }
     }
 
     // Post-deserialize validation of retry policy.
-    let retry_policy = deserializer.deserialize_any(V)?;
-    match &retry_policy {
+    let deserialized = deserializer.deserialize_any(V)?;
+    match deserialized.as_ref().map(|d| &d.policy) {
         Some(RetryPolicy::Fixed {
             count: _,
             delay,
@@ -165,7 +241,7 @@ where
         None => {}
     }
 
-    Ok(retry_policy)
+    Ok(deserialized)
 }
 
 #[cfg(test)]
@@ -219,18 +295,24 @@ mod tests {
             &Default::default(),
         )
         .expect("config is valid");
+
+        let default_profile = config
+            .profile("default")
+            .expect("default profile exists")
+            .apply_build_platforms(&build_platforms());
         assert_eq!(
-            config
-                .profile("default")
-                .expect("default profile exists")
-                .apply_build_platforms(&build_platforms())
-                .retries(),
+            default_profile.retries(),
             RetryPolicy::Fixed {
                 count: 3,
                 delay: Duration::ZERO,
                 jitter: false,
             },
             "default retries matches"
+        );
+        assert_eq!(
+            default_profile.flaky_result(),
+            FlakyResult::Pass,
+            "default flaky_result matches"
         );
 
         assert_eq!(

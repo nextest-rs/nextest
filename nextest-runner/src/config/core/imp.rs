@@ -7,10 +7,10 @@ use crate::{
         core::ConfigExperimental,
         elements::{
             ArchiveConfig, BenchConfig, CustomTestGroup, DefaultBenchConfig, DefaultJunitImpl,
-            GlobalTimeout, Inherits, JunitConfig, JunitImpl, JunitSettings, LeakTimeout, MaxFail,
-            RetryPolicy, SlowTimeout, TestGroup, TestGroupConfig, TestThreads, ThreadsRequired,
-            deserialize_fail_fast, deserialize_leak_timeout, deserialize_retry_policy,
-            deserialize_slow_timeout,
+            DeserializedRetryPolicy, FlakyResult, GlobalTimeout, Inherits, JunitConfig, JunitImpl,
+            JunitSettings, LeakTimeout, MaxFail, RetryPolicy, SlowTimeout, TestGroup,
+            TestGroupConfig, TestThreads, ThreadsRequired, deserialize_fail_fast,
+            deserialize_leak_timeout, deserialize_retry_policy, deserialize_slow_timeout,
         },
         overrides::{
             CompiledByProfile, CompiledData, CompiledDefaultFilter, DeserializedOverride,
@@ -1080,9 +1080,22 @@ impl<'cfg> EvaluatableProfile<'cfg> {
         self.scripts
     }
 
-    /// Returns the retry count for this profile.
+    /// Returns the retry policy for this profile.
     pub fn retries(&self) -> RetryPolicy {
-        profile_field!(self.retries)
+        self.custom_profile
+            .iter()
+            .chain(self.inheritance_chain.iter())
+            .find_map(|p| p.retries.as_ref().map(|drp| drp.policy))
+            .unwrap_or(self.default_profile.retries)
+    }
+
+    /// Returns the flaky result behavior for this profile.
+    pub fn flaky_result(&self) -> FlakyResult {
+        self.custom_profile
+            .iter()
+            .chain(self.inheritance_chain.iter())
+            .find_map(|p| p.retries.as_ref().and_then(|drp| drp.flaky_result))
+            .unwrap_or(self.default_profile.flaky_result)
     }
 
     /// Returns the number of threads to run against for this profile.
@@ -1501,6 +1514,7 @@ pub(in crate::config) struct DefaultProfileImpl {
     threads_required: ThreadsRequired,
     run_extra_args: Vec<String>,
     retries: RetryPolicy,
+    flaky_result: FlakyResult,
     status_level: StatusLevel,
     final_status_level: FinalStatusLevel,
     failure_output: TestOutputDisplay,
@@ -1519,6 +1533,7 @@ pub(in crate::config) struct DefaultProfileImpl {
 
 impl DefaultProfileImpl {
     fn new(p: CustomProfileImpl) -> Self {
+        let deserialized_retries = p.retries.expect("retries present in default profile");
         Self {
             default_filter: p
                 .default_filter
@@ -1532,7 +1547,8 @@ impl DefaultProfileImpl {
             run_extra_args: p
                 .run_extra_args
                 .expect("run-extra-args present in default profile"),
-            retries: p.retries.expect("retries present in default profile"),
+            retries: deserialized_retries.policy,
+            flaky_result: deserialized_retries.flaky_result.unwrap_or_default(),
             status_level: p
                 .status_level
                 .expect("status-level present in default profile"),
@@ -1604,7 +1620,7 @@ pub(in crate::config) struct CustomProfileImpl {
     #[serde(default)]
     default_filter: Option<String>,
     #[serde(default, deserialize_with = "deserialize_retry_policy")]
-    retries: Option<RetryPolicy>,
+    retries: Option<DeserializedRetryPolicy>,
     #[serde(default)]
     test_threads: Option<TestThreads>,
     #[serde(default)]

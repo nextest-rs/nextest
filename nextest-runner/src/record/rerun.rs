@@ -477,6 +477,7 @@ where
 mod tests {
     use super::*;
     use crate::{
+        config::elements::FlakyResult,
         output_spec::RecordingSpec,
         record::{
             OutputEventKind, StressIndexSummary, TestEventKindSummary, ZipStoreOutputDescription,
@@ -1494,7 +1495,7 @@ mod tests {
             failure_output: TestOutputDisplay::Never,
             junit_store_success_output: false,
             junit_store_failure_output: false,
-            run_statuses: ExecutionStatuses::new(vec![execute_status]),
+            run_statuses: ExecutionStatuses::new(vec![execute_status], FlakyResult::default()),
             current_stats: RunStats::default(),
             running: 0,
         })

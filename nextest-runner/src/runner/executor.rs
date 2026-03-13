@@ -205,6 +205,7 @@ impl<'a> ExecutorContext<'a> {
         let settings = Arc::new(test.settings);
 
         let retry_policy = self.force_retries.unwrap_or_else(|| settings.retries());
+        let flaky_result = settings.flaky_result();
         let total_attempts = retry_policy.count() + 1;
         let mut backoff_iter = BackoffIter::new(retry_policy);
 
@@ -239,6 +240,7 @@ impl<'a> ExecutorContext<'a> {
             test_instance: test.instance,
             command_line: command_line.clone(),
             req_rx_tx,
+            flaky_result,
         });
         let mut req_rx = match req_rx_rx.await {
             Ok(rx) => rx,
