@@ -832,8 +832,8 @@ impl App {
         let env = EnvironmentMap::new(&self.base.cargo_configs);
         self.build_filter.compute_test_list(
             ctx,
-            self.base.graph(),
-            self.base.workspace_root.clone(),
+            self.base.graph()?,
+            self.base.workspace_root()?.clone(),
             binary_list,
             test_filter,
             env,
@@ -851,7 +851,7 @@ impl App {
         cli_args: Vec<String>,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
-        let pcx = ParseContext::new(self.base.graph());
+        let pcx = ParseContext::new(self.base.graph()?);
         let (version_only_config, config) = self
             .base
             .load_config(&pcx, &std::collections::BTreeSet::new())?;
@@ -1080,7 +1080,7 @@ impl App {
             };
 
             let config = RecordSessionConfig {
-                workspace_root: &self.base.workspace_root,
+                workspace_root: self.base.workspace_root()?,
                 run_id: runner.run_id(),
                 nextest_version: self.base.current_version.clone(),
                 started_at: runner.started_at().fixed_offset(),
@@ -1095,7 +1095,7 @@ impl App {
                     let record = structured::RecordReporter::new(setup.recorder);
                     let opts = RecordOpts::new(test_list.mode());
                     record.write_meta(
-                        self.base.cargo_metadata_json.clone(),
+                        self.base.cargo_metadata_json()?,
                         test_list.to_summary(),
                         opts,
                     );
@@ -1179,7 +1179,7 @@ impl App {
         cli_args: Vec<String>,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
-        let pcx = ParseContext::new(self.base.graph());
+        let pcx = ParseContext::new(self.base.graph()?);
         let (version_only_config, config) = self.base.load_config(
             &pcx,
             &[ConfigExperimental::Benchmarks].into_iter().collect(),
@@ -1327,7 +1327,7 @@ impl App {
         {
             let env_vars_for_recording = capture_env_vars_for_recording();
             let config = RecordSessionConfig {
-                workspace_root: &self.base.workspace_root,
+                workspace_root: self.base.workspace_root()?,
                 run_id: runner.run_id(),
                 nextest_version: self.base.current_version.clone(),
                 started_at: runner.started_at().fixed_offset(),
@@ -1343,7 +1343,7 @@ impl App {
                     let record = structured::RecordReporter::new(setup.recorder);
                     let opts = RecordOpts::new(test_list.mode());
                     record.write_meta(
-                        self.base.cargo_metadata_json.clone(),
+                        self.base.cargo_metadata_json()?,
                         test_list.to_summary(),
                         opts,
                     );
@@ -1425,7 +1425,7 @@ impl App {
         &self,
         run_id_selector: &RunIdSelector,
     ) -> Result<(RerunState, ComputedRerunInfo), ExpectedError> {
-        let state_dir = records_state_dir(&self.base.workspace_root)
+        let state_dir = records_state_dir(self.base.workspace_root()?)
             .map_err(|err| ExpectedError::RecordStateDirNotFound { err })?;
 
         let store =
