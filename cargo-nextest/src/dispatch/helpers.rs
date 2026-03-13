@@ -8,7 +8,7 @@ use crate::{
     cargo_cli::{CargoCli, CargoOptions},
     output::{OutputContext, StderrStyles},
 };
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use itertools::Itertools;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_runner::{
@@ -234,6 +234,38 @@ pub(super) fn display_output_slice(
 
     eprintln!("(no description found)");
     Ok(())
+}
+
+/// Locates the workspace root by running `cargo locate-project --workspace`.
+pub(super) fn locate_workspace_root(
+    manifest_path: Option<&Utf8Path>,
+    output: OutputContext,
+) -> Result<Utf8PathBuf> {
+    let mut cargo_cli = CargoCli::new("locate-project", manifest_path, output);
+    cargo_cli.add_args(["--workspace", "--message-format=plain"]);
+    let locate_project_output = cargo_cli
+        .to_expression()
+        .stdout_capture()
+        .unchecked()
+        .run()
+        .map_err(|error| {
+            ExpectedError::cargo_locate_project_exec_failed(cargo_cli.all_args(), error)
+        })?;
+    if !locate_project_output.status.success() {
+        return Err(ExpectedError::cargo_locate_project_failed(
+            cargo_cli.all_args(),
+            locate_project_output.status,
+        ));
+    }
+    let workspace_root = String::from_utf8(locate_project_output.stdout)
+        .map_err(|err| ExpectedError::WorkspaceRootInvalidUtf8 { err })?;
+    let workspace_root = Utf8Path::new(workspace_root.trim_end());
+    workspace_root
+        .parent()
+        .map(|p| p.to_owned())
+        .ok_or_else(|| ExpectedError::WorkspaceRootInvalid {
+            workspace_root: workspace_root.to_owned(),
+        })
 }
 
 /// Converts final run statistics to an error, if the run failed.

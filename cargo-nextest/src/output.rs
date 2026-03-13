@@ -398,5 +398,5 @@ impl WriteStr for StderrWriter<'_> {
 }
 
 pub(crate) fn should_redact() -> bool {
-    std::env::var("__NEXTEST_REDACT") == Ok("1".to_string())
+    std::env::var("__NEXTEST_REDACT").as_deref() == Ok("1")
 }

@@ -1600,7 +1600,7 @@ impl<'a> TestCommandCli<'a> {
         if let Some(program) = &self.program {
             owned_cli.push(program.to_string());
         }
-        owned_cli.extend(self.args.iter().map(|arg| arg.clone().into_owned()));
+        owned_cli.extend(self.args.iter().map(|arg| arg.to_string()));
         owned_cli
     }
 }

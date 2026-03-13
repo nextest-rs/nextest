@@ -6,8 +6,7 @@
 use super::run::ReporterCommonOpts;
 use crate::{
     ExpectedError, Result,
-    cargo_cli::CargoCli,
-    dispatch::{EarlyArgs, common::CommonOpts},
+    dispatch::{EarlyArgs, common::CommonOpts, helpers::locate_workspace_root},
     output::OutputContext,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -115,33 +114,9 @@ pub(crate) fn exec_replay(
     };
 
     // Workspace-based replay requires locating the workspace.
-    let mut cargo_cli = CargoCli::new("locate-project", manifest_path.as_deref(), output);
-    cargo_cli.add_args(["--workspace", "--message-format=plain"]);
-    let locate_project_output = cargo_cli
-        .to_expression()
-        .stdout_capture()
-        .unchecked()
-        .run()
-        .map_err(|error| {
-            ExpectedError::cargo_locate_project_exec_failed(cargo_cli.all_args(), error)
-        })?;
-    if !locate_project_output.status.success() {
-        return Err(ExpectedError::cargo_locate_project_failed(
-            cargo_cli.all_args(),
-            locate_project_output.status,
-        ));
-    }
-    let workspace_root = String::from_utf8(locate_project_output.stdout)
-        .map_err(|err| ExpectedError::WorkspaceRootInvalidUtf8 { err })?;
-    let workspace_root = Utf8Path::new(workspace_root.trim_end());
-    let workspace_root =
-        workspace_root
-            .parent()
-            .ok_or_else(|| ExpectedError::WorkspaceRootInvalid {
-                workspace_root: workspace_root.to_owned(),
-            })?;
+    let workspace_root = locate_workspace_root(manifest_path.as_deref(), output)?;
 
-    let state_dir = records_state_dir(workspace_root)
+    let state_dir = records_state_dir(&workspace_root)
         .map_err(|err| ExpectedError::RecordStateDirNotFound { err })?;
 
     let store = RunStore::new(&state_dir).map_err(|err| ExpectedError::RecordSetupError { err })?;

@@ -141,7 +141,7 @@ impl TestCommand {
 
         Self {
             program,
-            args: args.iter().map(|arg| arg.clone().into_owned()).collect(),
+            args: args.iter().map(|arg| arg.to_string()).collect(),
             command: cmd,
             double_spawn,
         }
@@ -238,23 +238,20 @@ where
 fn apply_package_env(cmd: &mut std::process::Command, package: &PackageMetadata<'_>) {
     // These environment variables are set at runtime by cargo test:
     // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
-    cmd.env("CARGO_PKG_VERSION", format!("{}", package.version()))
+    cmd.env("CARGO_PKG_VERSION", package.version().to_string())
         .env(
             "CARGO_PKG_VERSION_MAJOR",
-            format!("{}", package.version().major),
+            package.version().major.to_string(),
         )
         .env(
             "CARGO_PKG_VERSION_MINOR",
-            format!("{}", package.version().minor),
+            package.version().minor.to_string(),
         )
         .env(
             "CARGO_PKG_VERSION_PATCH",
-            format!("{}", package.version().patch),
+            package.version().patch.to_string(),
         )
-        .env(
-            "CARGO_PKG_VERSION_PRE",
-            format!("{}", package.version().pre),
-        )
+        .env("CARGO_PKG_VERSION_PRE", package.version().pre.to_string())
         .env("CARGO_PKG_AUTHORS", package.authors().join(":"))
         .env("CARGO_PKG_NAME", package.name())
         .env(
@@ -365,12 +362,12 @@ pub(crate) fn apply_ld_dyld_env(cmd: &mut std::process::Command, dylib_path: &Os
     // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
     for (k, v) in &*LD_DYLD_ENV_VARS {
         if k != dylib_path_envvar() {
-            cmd.env("NEXTEST_".to_owned() + k, v);
+            cmd.env(format!("NEXTEST_{k}"), v);
         }
     }
     // Also add the dylib path envvar under the NEXTEST_ prefix.
     if is_sip_sanitized(dylib_path_envvar()) {
-        cmd.env("NEXTEST_".to_owned() + dylib_path_envvar(), dylib_path);
+        cmd.env(format!("NEXTEST_{}", dylib_path_envvar()), dylib_path);
     }
 }
 

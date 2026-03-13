@@ -574,7 +574,7 @@ where
                     elapsed_nanos: elapsed.as_nanos() as u64,
                     will_terminate: will_terminate.is_some(),
                     stress_current: stress_index.map(|s| s.current),
-                    stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
+                    stress_total: stress_index.and_then(|s| s.total_get()),
                 });
 
                 self.callback_none_response(TestEventKind::SetupScriptSlow {
@@ -626,7 +626,7 @@ where
                     exit_code,
                     duration_nanos: status.time_taken.as_nanos() as u64,
                     stress_current: stress_index.map(|s| s.current),
-                    stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
+                    stress_total: stress_index.and_then(|s| s.total_get()),
                     stdout_len,
                     stderr_len,
                 });
@@ -706,7 +706,7 @@ where
                     elapsed_nanos: elapsed.as_nanos() as u64,
                     will_terminate: will_terminate.is_some(),
                     stress_current: stress_index.map(|s| s.current),
-                    stress_total: stress_index.and_then(|s| s.total.map(|t| t.get())),
+                    stress_total: stress_index.and_then(|s| s.total_get()),
                 });
 
                 self.callback_none_response(TestEventKind::TestSlow {

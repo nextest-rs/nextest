@@ -198,7 +198,7 @@ pub fn make_seed_archive(workspace_dir: &Utf8Path, file_name: &Utf8Path) -> colo
         ])
         .output();
 
-    if std::env::var("INTEGRATION_TESTS_DEBUG") == Ok("1".to_string()) {
+    if std::env::var("INTEGRATION_TESTS_DEBUG").as_deref() == Ok("1") {
         eprintln!("make_seed_archive output: {output}");
     }
 
