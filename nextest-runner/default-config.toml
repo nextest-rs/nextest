@@ -21,6 +21,9 @@ default-filter = "all()"
 # * retries = { backoff = "exponential", count = 10, delay = "1s", jitter = true, max-delay = "10s" }
 retries = 0
 
+# Controls whether a flaky test is treated as passing or failing.
+flaky-result = "pass"
+
 # The number of threads to run tests with. Supported values are either an integer or
 # the string "num-cpus". Can be overridden through the `--test-threads` option.
 test-threads = "num-cpus"
