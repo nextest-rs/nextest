@@ -46,7 +46,7 @@ target-spec = { version = "3.5.7", default-features = false, features = ["custom
 target-spec-miette = { version = "0.4.5", default-features = false, features = ["fixtures"] }
 tokio = { version = "1.50.0", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 tracing-core = { version = "0.1.36" }
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt", "tracing-log"] }
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "tracing-log"] }
 ucd-trie = { version = "0.1.7" }
 uuid = { version = "1.18.1", features = ["serde", "v1", "v4"] }
 
