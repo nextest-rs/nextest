@@ -992,7 +992,7 @@ impl ExpectedError {
             Self::CargoMetadataParseError { file_name, err } => {
                 let metadata_source = match file_name {
                     Some(path) => format!(" from file `{}`", path.style(styles.bold)),
-                    None => "".to_owned(),
+                    None => String::new(),
                 };
                 error!("error parsing Cargo metadata{}", metadata_source);
                 Some(err as &dyn Error)
@@ -1014,7 +1014,7 @@ impl ExpectedError {
                     Some(code) => {
                         format!(" with code {}", code.style(styles.bold))
                     }
-                    None => "".to_owned(),
+                    None => String::new(),
                 };
 
                 error!(

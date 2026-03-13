@@ -85,7 +85,6 @@ pub(crate) struct StopwatchSnapshot {
     pub(crate) active: Duration,
 
     /// The amount of time spent while the stopwatch was paused.
-    #[allow(unused)]
     pub(crate) paused: Duration,
 }
 

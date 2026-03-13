@@ -246,27 +246,16 @@ fn detect_host_platform() -> Result<Platform, HostPlatformDetectError> {
     // value, or to error out.
     const FORCE_BUILD_TARGET_VAR: &str = "__NEXTEST_FORCE_BUILD_TARGET";
 
-    enum ForceBuildTarget {
-        Triple(String),
-        Error,
-    }
-
-    let force_build_target = match std::env::var(FORCE_BUILD_TARGET_VAR).as_deref() {
-        Ok("error") => Some(ForceBuildTarget::Error),
-        Ok(triple) => Some(ForceBuildTarget::Triple(triple.to_owned())),
-        Err(_) => None,
-    };
-
-    let build_target = match force_build_target {
-        Some(ForceBuildTarget::Triple(triple)) => Platform::new(triple, TargetFeatures::Unknown),
-        Some(ForceBuildTarget::Error) => Err(target_spec::Error::RustcVersionVerboseParse(
+    let build_target = match std::env::var(FORCE_BUILD_TARGET_VAR).as_deref() {
+        Ok("error") => Err(target_spec::Error::RustcVersionVerboseParse(
             RustcVersionVerboseParseError::MissingHostLine {
                 output: format!(
                     "({FORCE_BUILD_TARGET_VAR} set to \"error\", forcibly failing build target detection)\n"
                 ),
             },
         )),
-        None => Platform::build_target(),
+        Ok(triple) => Platform::new(triple.to_owned(), TargetFeatures::Unknown),
+        Err(_) => Platform::build_target(),
     };
 
     let rustc_vv = RustcCli::version_verbose()

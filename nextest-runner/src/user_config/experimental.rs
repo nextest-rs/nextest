@@ -76,11 +76,7 @@ impl UserConfigExperimental {
     pub fn from_env() -> BTreeSet<Self> {
         Self::all()
             .iter()
-            .filter(|feature| {
-                env::var(feature.env_var())
-                    .map(|v| v == "1")
-                    .unwrap_or(false)
-            })
+            .filter(|feature| env::var(feature.env_var()).is_ok_and(|v| v == "1"))
             .copied()
             .collect()
     }

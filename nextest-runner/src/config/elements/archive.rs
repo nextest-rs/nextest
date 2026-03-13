@@ -70,7 +70,7 @@ fn default_on_missing() -> ArchiveIncludeOnMissing {
 fn join_rel_path(a: &Utf8Path, rel: &Utf8Path) -> Utf8PathBuf {
     // This joins the subset of components that deserialize_relative_path
     // allows. We also always use "/" to ensure consistency across platforms.
-    let mut out = String::from(a.to_owned());
+    let mut out = a.as_str().to_owned();
 
     for component in rel.components() {
         match component {
