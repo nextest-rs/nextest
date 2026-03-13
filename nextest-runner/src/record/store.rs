@@ -23,7 +23,7 @@ use super::{
 };
 use crate::{
     errors::{RunIdResolutionError, RunStoreError},
-    helpers::{ThemeCharacters, u32_decimal_char_width, usize_decimal_char_width},
+    helpers::{ThemeCharacters, decimal_char_width},
     redact::Redactor,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -691,12 +691,9 @@ impl RecordedRunStatus {
     pub fn passed_count_width(&self) -> usize {
         match self {
             Self::Incomplete | Self::Unknown => 0,
-            Self::Completed(stats) | Self::Cancelled(stats) => {
-                usize_decimal_char_width(stats.passed)
-            }
+            Self::Completed(stats) | Self::Cancelled(stats) => decimal_char_width(stats.passed),
             Self::StressCompleted(stats) | Self::StressCancelled(stats) => {
-                // Stress tests use u32, convert to usize for width calculation.
-                u32_decimal_char_width(stats.success_count)
+                decimal_char_width(stats.success_count)
             }
         }
     }

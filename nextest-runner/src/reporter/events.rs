@@ -515,6 +515,13 @@ pub struct StressIndex {
     pub total: Option<NonZero<u32>>,
 }
 
+impl StressIndex {
+    /// Returns the total as a plain `u32`, if available.
+    pub fn total_get(&self) -> Option<u32> {
+        self.total.map(|t| t.get())
+    }
+}
+
 /// Statistics for a completed test run or stress run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]

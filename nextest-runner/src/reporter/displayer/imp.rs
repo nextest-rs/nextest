@@ -26,8 +26,8 @@ use crate::{
     },
     errors::WriteEventError,
     helpers::{
-        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, ThemeCharacters, plural,
-        usize_decimal_char_width,
+        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, ThemeCharacters,
+        decimal_char_width, plural,
     },
     indenter::indented,
     list::TestInstanceId,
@@ -149,7 +149,7 @@ impl DisplayReporterBuilder {
         };
 
         let counter_width = matches!(resolved.progress_display, ProgressDisplay::Counter)
-            .then_some(usize_decimal_char_width(self.run_count));
+            .then_some(decimal_char_width(self.run_count));
 
         DisplayReporter {
             inner: DisplayReporterImpl {
@@ -1845,7 +1845,7 @@ impl<'a> DisplayReporterImpl<'a> {
         //
         // The width to be printed out is index width + total width + 1 for '/'
         // + 1 for ':' + 1 for the space after that.
-        let count_width = usize_decimal_char_width(index + 1) + usize_decimal_char_width(total) + 3;
+        let count_width = decimal_char_width(index + 1) + decimal_char_width(total) + 3;
         let padding = 8usize.saturating_sub(count_width);
 
         write!(

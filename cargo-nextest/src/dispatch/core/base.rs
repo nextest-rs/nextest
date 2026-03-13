@@ -360,7 +360,7 @@ impl BaseApp {
                      NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN does not need to be set"
                 );
             }
-            if std::env::var("NEXTEST_DOUBLE_SPAWN") == Ok("0".to_owned()) {
+            if std::env::var("NEXTEST_DOUBLE_SPAWN").as_deref() == Ok("0") {
                 info!("NEXTEST_DOUBLE_SPAWN=0 set, disabling double-spawn for test processes");
                 DoubleSpawnInfo::disabled()
             } else {

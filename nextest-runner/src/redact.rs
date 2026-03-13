@@ -8,7 +8,7 @@
 use crate::{
     helpers::{
         FormattedDuration, FormattedRelativeDuration, convert_rel_path_to_forward_slash,
-        u64_decimal_char_width,
+        decimal_char_width,
     },
     list::RustBuildMeta,
 };
@@ -343,18 +343,18 @@ impl SizeDisplay {
         if bytes >= 1024 * 1024 * 1024 {
             // Format: "{:.1} GB" - integer part + "." + 1 decimal + " GB".
             let gb_val = bytes as f64 / (1024.0 * 1024.0 * 1024.0);
-            u64_decimal_char_width(rounded_1dp_integer_part(gb_val)) + 2 + 3
+            decimal_char_width(rounded_1dp_integer_part(gb_val)) + 2 + 3
         } else if bytes >= 1024 * 1024 {
             // Format: "{:.1} MB" - integer part + "." + 1 decimal + " MB".
             let mb_val = bytes as f64 / (1024.0 * 1024.0);
-            u64_decimal_char_width(rounded_1dp_integer_part(mb_val)) + 2 + 3
+            decimal_char_width(rounded_1dp_integer_part(mb_val)) + 2 + 3
         } else if bytes >= 1024 {
             // Format: "{} KB" - integer + " KB".
             let kb = bytes / 1024;
-            u64_decimal_char_width(kb) + 3
+            decimal_char_width(kb) + 3
         } else {
             // Format: "{} B" - integer + " B".
-            u64_decimal_char_width(bytes) + 2
+            decimal_char_width(bytes) + 2
         }
     }
 }

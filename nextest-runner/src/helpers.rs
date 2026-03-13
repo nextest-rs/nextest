@@ -413,7 +413,7 @@ impl fmt::Display for DisplayStressIndex {
                     "{:>width$}/{}",
                     (self.stress_index.current + 1).style(self.count_style),
                     total.style(self.count_style),
-                    width = u32_decimal_char_width(total.get()),
+                    width = decimal_char_width(total.get()),
                 )
             }
             None => {
@@ -466,7 +466,7 @@ impl fmt::Display for DisplayCounterIndex {
                     "({:>width$}/{})",
                     current,
                     total,
-                    width = usize_decimal_char_width(*total)
+                    width = decimal_char_width(*total)
                 )
             }
             Self::Padded { character, width } => {
@@ -481,25 +481,18 @@ impl fmt::Display for DisplayCounterIndex {
     }
 }
 
-pub(crate) fn usize_decimal_char_width(n: usize) -> usize {
+/// Returns the number of decimal digits needed to display `n`.
+///
+/// Works for any unsigned integer type that supports `checked_ilog10`.
+pub(crate) fn decimal_char_width<T>(n: T) -> usize
+where
+    T: TryInto<u128> + Copy,
+{
     // checked_ilog10 returns 0 for 1-9, 1 for 10-99, 2 for 100-999, etc. (And
     // None for 0 which we unwrap to the same as 1). Add 1 to it to get the
     // actual number of digits.
-    (n.checked_ilog10().unwrap_or(0) + 1).try_into().unwrap()
-}
-
-pub(crate) fn u32_decimal_char_width(n: u32) -> usize {
-    // checked_ilog10 returns 0 for 1-9, 1 for 10-99, 2 for 100-999, etc. (And
-    // None for 0 which we unwrap to the same as 1). Add 1 to it to get the
-    // actual number of digits.
-    (n.checked_ilog10().unwrap_or(0) + 1).try_into().unwrap()
-}
-
-pub(crate) fn u64_decimal_char_width(n: u64) -> usize {
-    // checked_ilog10 returns 0 for 1-9, 1 for 10-99, 2 for 100-999, etc. (And
-    // None for 0 which we unwrap to the same as 1). Add 1 to it to get the
-    // actual number of digits.
-    (n.checked_ilog10().unwrap_or(0) + 1).try_into().unwrap()
+    let n: u128 = n.try_into().ok().expect("converted to u128");
+    (n.checked_ilog10().unwrap_or(0) + 1) as usize
 }
 
 /// Write out a test name.
@@ -948,29 +941,32 @@ mod test {
 
     #[test]
     fn test_decimal_char_width() {
-        assert_eq!(1, usize_decimal_char_width(0));
-        assert_eq!(1, usize_decimal_char_width(1));
-        assert_eq!(1, usize_decimal_char_width(5));
-        assert_eq!(1, usize_decimal_char_width(9));
-        assert_eq!(2, usize_decimal_char_width(10));
-        assert_eq!(2, usize_decimal_char_width(11));
-        assert_eq!(2, usize_decimal_char_width(99));
-        assert_eq!(3, usize_decimal_char_width(100));
-        assert_eq!(3, usize_decimal_char_width(999));
-    }
+        // Test with usize values.
+        assert_eq!(1, decimal_char_width(0_usize));
+        assert_eq!(1, decimal_char_width(1_usize));
+        assert_eq!(1, decimal_char_width(5_usize));
+        assert_eq!(1, decimal_char_width(9_usize));
+        assert_eq!(2, decimal_char_width(10_usize));
+        assert_eq!(2, decimal_char_width(11_usize));
+        assert_eq!(2, decimal_char_width(99_usize));
+        assert_eq!(3, decimal_char_width(100_usize));
+        assert_eq!(3, decimal_char_width(999_usize));
 
-    #[test]
-    fn test_u64_decimal_char_width() {
-        assert_eq!(1, u64_decimal_char_width(0));
-        assert_eq!(1, u64_decimal_char_width(1));
-        assert_eq!(1, u64_decimal_char_width(9));
-        assert_eq!(2, u64_decimal_char_width(10));
-        assert_eq!(2, u64_decimal_char_width(99));
-        assert_eq!(3, u64_decimal_char_width(100));
-        assert_eq!(3, u64_decimal_char_width(999));
-        assert_eq!(6, u64_decimal_char_width(999_999));
-        assert_eq!(7, u64_decimal_char_width(1_000_000));
-        assert_eq!(8, u64_decimal_char_width(10_000_000));
-        assert_eq!(8, u64_decimal_char_width(11_000_000));
+        // Test with u32 values.
+        assert_eq!(1, decimal_char_width(0_u32));
+        assert_eq!(3, decimal_char_width(100_u32));
+
+        // Test with u64 values.
+        assert_eq!(1, decimal_char_width(0_u64));
+        assert_eq!(1, decimal_char_width(1_u64));
+        assert_eq!(1, decimal_char_width(9_u64));
+        assert_eq!(2, decimal_char_width(10_u64));
+        assert_eq!(2, decimal_char_width(99_u64));
+        assert_eq!(3, decimal_char_width(100_u64));
+        assert_eq!(3, decimal_char_width(999_u64));
+        assert_eq!(6, decimal_char_width(999_999_u64));
+        assert_eq!(7, decimal_char_width(1_000_000_u64));
+        assert_eq!(8, decimal_char_width(10_000_000_u64));
+        assert_eq!(8, decimal_char_width(11_000_000_u64));
     }
 }

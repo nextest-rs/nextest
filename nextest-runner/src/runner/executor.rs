@@ -395,7 +395,7 @@ impl<'a> ExecutorContext<'a> {
             script.make_command(self.profile.name(), &self.double_spawn, self.test_list)?;
         let command_mut = cmd.command_mut();
 
-        command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
+        command_mut.env("NEXTEST_RUN_ID", self.run_id.to_string());
         command_mut.env("NEXTEST_RUN_MODE", self.test_list.mode().to_string());
         command_mut.env("NEXTEST_TEST_THREADS", self.test_threads.to_string());
         command_mut.env(
@@ -447,7 +447,7 @@ impl<'a> ExecutorContext<'a> {
             program: script.program.clone(),
             args: script.config.command.args.clone(),
             stress_current: script.stress_index.map(|s| s.current),
-            stress_total: script.stress_index.and_then(|s| s.total.map(|t| t.get())),
+            stress_total: script.stress_index.and_then(|s| s.total_get()),
         });
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
@@ -722,7 +722,7 @@ impl<'a> ExecutorContext<'a> {
         let command_mut = cmd.command_mut();
 
         // Test-related environment variables.
-        command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
+        command_mut.env("NEXTEST_RUN_ID", self.run_id.to_string());
         command_mut.env("NEXTEST_RUN_MODE", self.test_list.mode().to_string());
         command_mut.env(
             "NEXTEST_BINARY_ID",
@@ -866,7 +866,7 @@ impl<'a> ExecutorContext<'a> {
             attempt: test.retry_data.attempt,
             total_attempts: test.retry_data.total_attempts,
             stress_current: test.stress_index.map(|s| s.current),
-            stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
+            stress_total: test.stress_index.and_then(|s| s.total_get()),
             global_slot: test.cx.global_slot(),
             group_slot: test.cx.group_slot(),
             test_group: test
@@ -1095,7 +1095,7 @@ impl<'a> ExecutorContext<'a> {
             leaked,
             time_to_close_fds_nanos: time_to_close.map(|d| d.as_nanos() as u64),
             stress_current: test.stress_index.map(|s| s.current),
-            stress_total: test.stress_index.and_then(|s| s.total.map(|t| t.get())),
+            stress_total: test.stress_index.and_then(|s| s.total_get()),
             stdout_len,
             stderr_len,
         });
