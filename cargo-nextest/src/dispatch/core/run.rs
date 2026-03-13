@@ -7,8 +7,8 @@ use super::{
     base::BaseApp,
     filter::TestBuildFilter,
     value_enums::{
-        FinalStatusLevelOpt, MessageFormat, NoTestsBehaviorOpt, ShowProgressOpt, StatusLevelOpt,
-        TestOutputDisplayOpt,
+        FinalStatusLevelOpt, FlakyResultOpt, MessageFormat, NoTestsBehaviorOpt, ShowProgressOpt,
+        StatusLevelOpt, TestOutputDisplayOpt,
     },
 };
 use crate::{
@@ -153,6 +153,13 @@ pub struct TestRunnerOpts {
     #[arg(long, env = "NEXTEST_RETRIES", value_name = "N")]
     retries: Option<u32>,
 
+    /// Flaky test result behavior [default: from profile].
+    ///
+    /// Controls whether tests that pass on retry are treated as passing or
+    /// failing.
+    #[arg(long, env = "NEXTEST_FLAKY_RESULT", value_name = "RESULT", value_enum)]
+    flaky_result: Option<FlakyResultOpt>,
+
     /// Cancel test run on the first failure.
     #[arg(
         long,
@@ -220,6 +227,9 @@ impl TestRunnerOpts {
         if self.retries.is_some() && self.no_run {
             warn!("ignoring --retries because --no-run is specified");
         }
+        if self.flaky_result.is_some() && self.no_run {
+            warn!("ignoring --flaky-result because --no-run is specified");
+        }
         if self.no_tests.is_some() && self.no_run {
             warn!("ignoring --no-tests because --no-run is specified");
         }
@@ -234,6 +244,9 @@ impl TestRunnerOpts {
         builder.set_capture_strategy(cap_strat);
         if let Some(retries) = self.retries {
             builder.set_retries(RetryPolicy::new_without_delay(retries));
+        }
+        if let Some(flaky_result) = self.flaky_result {
+            builder.set_flaky_result(flaky_result.into());
         }
 
         if let Some(max_fail) = self.max_fail {

@@ -198,9 +198,13 @@ pub(super) const RUNS_JSON_FORMAT_VERSION: RunsJsonFormatVersion = RunsJsonForma
 /// This combines a major version (for breaking changes) and a minor version
 /// (for additive changes). Readers check compatibility via
 /// [`StoreFormatVersion::check_readable_by`].
+///
+/// Changelog:
+///
+/// - 1.1: Addition of the `flaky_result` field to `ExecutionStatuses`.
 pub const STORE_FORMAT_VERSION: StoreFormatVersion = StoreFormatVersion::new(
     StoreFormatMajorVersion::new(1),
-    StoreFormatMinorVersion::new(0),
+    StoreFormatMinorVersion::new(1),
 );
 
 /// Whether a runs.json.zst file can be written to.

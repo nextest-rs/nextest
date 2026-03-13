@@ -23,6 +23,7 @@ pub enum CheckResult {
     Leak,
     LeakFail,
     Fail,
+    FlakyFail,
     FailLeak,
     Abort,
     Timeout,
@@ -39,6 +40,7 @@ impl CheckResult {
             CheckResult::Pass | CheckResult::Leak => false,
             CheckResult::LeakFail
             | CheckResult::Fail
+            | CheckResult::FlakyFail
             | CheckResult::FailLeak
             | CheckResult::Abort
             | CheckResult::Timeout => true,
@@ -100,6 +102,15 @@ bitflags::bitflags! {
         /// Allow skipped test names to appear in output (e.g., for replay which shows SKIP lines).
         /// Without this flag, verification fails if any skipped test name appears in the output.
         const ALLOW_SKIPPED_NAMES_IN_OUTPUT = 0x40000;
+        /// Run with the with-retries-flaky-fail profile. Flaky tests with
+        /// `flaky-result = "fail"` should count as failures.
+        const WITH_RETRIES_FLAKY_FAIL = 0x80000;
+        /// Run with `--flaky-result fail` CLI flag. All flaky tests should
+        /// count as failures, regardless of per-test config.
+        const WITH_CLI_FLAKY_RESULT_FAIL = 0x100000;
+        /// Run with `--flaky-result pass` CLI flag. No flaky tests should
+        /// count as failures, even if config has `flaky-result = "fail"`.
+        const WITH_CLI_FLAKY_RESULT_PASS = 0x200000;
     }
 }
 
@@ -404,6 +415,22 @@ impl TestCaseFixture {
             TestCaseFixtureStatus::LeakFail => CheckResult::LeakFail,
             TestCaseFixtureStatus::Fail => CheckResult::Fail,
             TestCaseFixtureStatus::Flaky { .. } => {
+                // CLI --flaky-result overrides all config-level settings.
+                if properties.contains(RunProperties::WITH_CLI_FLAKY_RESULT_FAIL) {
+                    return CheckResult::FlakyFail;
+                }
+                if properties.contains(RunProperties::WITH_CLI_FLAKY_RESULT_PASS) {
+                    return CheckResult::Pass;
+                }
+                // With retries and flaky-result = "fail", flaky tests that eventually
+                // pass are still counted as failures.
+                if properties.contains(RunProperties::WITH_RETRIES_FLAKY_FAIL) {
+                    if self.has_property(TestCaseFixtureProperties::FLAKY_RESULT_FAIL) {
+                        return CheckResult::FlakyFail;
+                    } else {
+                        return CheckResult::Pass;
+                    }
+                }
                 // With retries, flaky tests eventually pass. (Retries are
                 // configured in a way which ensures that all tests eventually
                 // pass.)
@@ -454,9 +481,13 @@ impl TestCaseFixture {
     /// Computes the expected rerun behavior for a test case based on its
     /// fixture status, the check result, and the run properties.
     fn expected_reruns(&self, result: CheckResult, properties: RunProperties) -> ExpectedReruns {
+        // Flaky tests that eventually pass have a known rerun count.
+        // This applies both to flaky-pass (CheckResult::Pass) and
+        // flaky-fail (CheckResult::FlakyFail) — either way, the test ran
+        // pass_attempt - 1 failing attempts before the passing one.
         if let TestCaseFixtureStatus::Flaky { pass_attempt }
         | TestCaseFixtureStatus::IgnoredFlaky { pass_attempt } = self.status
-            && result == CheckResult::Pass
+            && (result == CheckResult::Pass || result == CheckResult::FlakyFail)
         {
             debug_assert!(
                 pass_attempt >= 2,
@@ -468,7 +499,13 @@ impl TestCaseFixture {
         // Failing tests with retries configured will have reruns, but the exact
         // count depends on per-test profile overrides which the fixture data
         // model doesn't track.
-        if properties.contains(RunProperties::WITH_RETRIES) && result.is_failure() {
+        let has_retries = properties.intersects(
+            RunProperties::WITH_RETRIES
+                | RunProperties::WITH_RETRIES_FLAKY_FAIL
+                | RunProperties::WITH_CLI_FLAKY_RESULT_FAIL
+                | RunProperties::WITH_CLI_FLAKY_RESULT_PASS,
+        );
+        if has_retries && result.is_failure() {
             return ExpectedReruns::SomeReruns;
         }
 
@@ -561,5 +598,7 @@ bitflags::bitflags! {
         const FLAKY_SLOW_TIMEOUT_SUBSTRING = 0x800;
         /// Exactly test_slow_timeout (not test_slow_timeout_2 or test_slow_timeout_subprocess).
         const EXACT_TEST_SLOW_TIMEOUT = 0x1000;
+        /// Flaky test configured with `flaky-result = "fail"`.
+        const FLAKY_RESULT_FAIL = 0x2000;
     }
 }

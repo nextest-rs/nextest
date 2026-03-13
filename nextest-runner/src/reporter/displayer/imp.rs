@@ -363,14 +363,10 @@ impl OutputLoadDecider {
         run_statuses: &ExecutionStatuses<RecordingSpec>,
     ) -> LoadOutput {
         let describe = run_statuses.describe();
-        let last_status = describe.last_status();
 
-        // Determine which display setting applies based on the result.
-        let display = self.overrides.resolve_test_output_display(
-            success_output,
-            failure_output,
-            &last_status.result,
-        );
+        let display =
+            self.overrides
+                .resolve_for_describe(success_output, failure_output, &describe);
 
         Self::should_load_for_display(display)
     }
@@ -986,10 +982,10 @@ impl<'a> DisplayReporterImpl<'a> {
             } => {
                 let describe = run_statuses.describe();
                 let last_status = run_statuses.last_status();
-                let test_output_display = self.unit_output.resolve_test_output_display(
+                let test_output_display = self.unit_output.overrides().resolve_for_describe(
                     *success_output,
                     *failure_output,
-                    &last_status.result,
+                    &describe,
                 );
 
                 let output_on_test_finished = self.status_levels.compute_output_on_test_finished(
@@ -1649,6 +1645,23 @@ impl<'a> DisplayReporterImpl<'a> {
             write_windows_abort_line(abort, &self.styles, writer)?;
         }
 
+        // For flaky tests configured with flaky-result = "fail", print a
+        // supplementary line in intermediate output explaining why the passing
+        // test is actually a failure.
+        if kind == StatusLineKind::Intermediate
+            && let ExecutionDescription::Flaky {
+                result: FlakyResult::Fail,
+                ..
+            } = describe
+        {
+            writeln!(
+                writer,
+                "{:>12} test configured to {} if flaky",
+                "-",
+                "fail".style(self.styles.fail),
+            )?;
+        }
+
         Ok(())
     }
 
@@ -1750,6 +1763,24 @@ impl<'a> DisplayReporterImpl<'a> {
                     }
                 };
                 write!(writer, "{:>12} ", status.style(self.styles.skip))?;
+            }
+            ExecutionDescription::Flaky {
+                result: FlakyResult::Fail,
+                ..
+            } => {
+                // Use the fail color for flaky tests configured as failures.
+                let status = match kind {
+                    StatusLineKind::Intermediate => {
+                        format!("TRY {} PASS", last_status.retry_data.attempt)
+                    }
+                    StatusLineKind::Final => {
+                        format!(
+                            "FLKY-FL {}/{}",
+                            last_status.retry_data.attempt, last_status.retry_data.total_attempts
+                        )
+                    }
+                };
+                write!(writer, "{:>12} ", status.style(self.styles.fail))?;
             }
             ExecutionDescription::Failure { .. } => {
                 if last_status.retry_data.attempt == 1 {
@@ -3343,6 +3374,11 @@ mod tests {
             prior_statuses: std::slice::from_ref(&flaky_first_status),
             result: FlakyResult::Pass,
         };
+        let flaky_fail_describe = ExecutionDescription::Flaky {
+            last_status: &flaky_last_status,
+            prior_statuses: std::slice::from_ref(&flaky_first_status),
+            result: FlakyResult::Fail,
+        };
         let fail_describe = ExecutionDescription::Failure {
             first_status: &fail_status,
             last_status: &fail_status,
@@ -3412,6 +3448,7 @@ mod tests {
             ("timeout pass slow", timeout_pass_slow_describe),
             // Flaky variants.
             ("flaky", flaky_describe),
+            ("flaky fail", flaky_fail_describe),
             // First-attempt failure variants.
             ("fail", fail_describe),
             ("fail leak", fail_leak_describe),

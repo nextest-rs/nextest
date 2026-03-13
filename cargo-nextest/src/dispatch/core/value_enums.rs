@@ -247,6 +247,25 @@ impl From<ShowProgressOpt> for ShowProgress {
     }
 }
 
+/// Flaky test result behavior.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub(crate) enum FlakyResultOpt {
+    /// Flaky tests are treated as passing.
+    Pass,
+
+    /// Flaky tests are treated as failing.
+    Fail,
+}
+
+impl From<FlakyResultOpt> for nextest_runner::config::elements::FlakyResult {
+    fn from(opt: FlakyResultOpt) -> Self {
+        match opt {
+            FlakyResultOpt::Pass => Self::Pass,
+            FlakyResultOpt::Fail => Self::Fail,
+        }
+    }
+}
+
 /// Ignore overrides options.
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub(crate) enum IgnoreOverridesOpt {

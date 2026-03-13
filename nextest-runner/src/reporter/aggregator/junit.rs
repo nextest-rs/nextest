@@ -26,7 +26,7 @@ use debug_ignore::DebugIgnore;
 use indexmap::IndexMap;
 use nextest_metadata::RustBinaryId;
 use quick_junit::{
-    NonSuccessKind, Report, TestCase, TestCaseStatus, TestRerun, TestSuite, XmlString,
+    FlakyOrRerun, NonSuccessKind, Report, TestCase, TestCaseStatus, TestRerun, TestSuite, XmlString,
 };
 use std::{fmt, fs::File};
 
@@ -140,7 +140,10 @@ impl<'cfg> MetadataJunit<'cfg> {
             } => {
                 let testsuite = self.testsuite_for_test(stress_index, test_instance);
 
-                let (mut testcase_status, main_status, reruns) = match run_statuses.describe() {
+                let describe = run_statuses.describe();
+                let is_success_for_output = describe.is_success_for_output();
+
+                let (mut testcase_status, main_status, reruns) = match describe {
                     ExecutionDescription::Success { single_status } => {
                         (TestCaseStatus::success(), single_status, &[][..])
                     }
@@ -149,6 +152,23 @@ impl<'cfg> MetadataJunit<'cfg> {
                         prior_statuses,
                         result: FlakyResult::Pass,
                     } => (TestCaseStatus::success(), last_status, prior_statuses),
+                    ExecutionDescription::Flaky {
+                        last_status,
+                        prior_statuses,
+                        result: FlakyResult::Fail,
+                    } => {
+                        let mut testcase_status =
+                            TestCaseStatus::non_success(NonSuccessKind::Failure);
+                        testcase_status.set_type("flaky failure");
+                        testcase_status.set_message(format!(
+                            "test passed on attempt {}/{} but is configured to fail when flaky",
+                            last_status.retry_data.attempt, last_status.retry_data.total_attempts,
+                        ));
+                        // The test exhibited flakiness (eventually passed), so
+                        // prior runs should serialize as <flakyFailure>.
+                        testcase_status.set_rerun_kind(FlakyOrRerun::Flaky);
+                        (testcase_status, last_status, prior_statuses)
+                    }
                     ExecutionDescription::Failure {
                         first_status,
                         retries,
@@ -186,13 +206,18 @@ impl<'cfg> MetadataJunit<'cfg> {
                     .set_timestamp(main_status.start_time)
                     .set_time(main_status.time_taken);
 
+                // For flaky tests (both pass and fail), the last attempt
+                // succeeded, so its output is success output: governed by
+                // store-success-output. For flaky-failed tests this is
+                // intentional — the successful run's output is not
+                // interesting.
+                //
                 // TODO: allure seems to want the output to be in a format where text files are
                 // written out to disk:
                 // https://github.com/allure-framework/allure2/blob/master/plugins/junit-xml-plugin/src/main/java/io/qameta/allure/junitxml/JunitXmlPlugin.java#L192-L196
                 // we may have to update this format to handle that.
-                let is_success = main_status.result.is_success();
-                let store_stdout_stderr = (junit_store_success_output && is_success)
-                    || (junit_store_failure_output && !is_success);
+                let store_stdout_stderr = (junit_store_success_output && is_success_for_output)
+                    || (junit_store_failure_output && !is_success_for_output);
 
                 set_execute_status_props(
                     &main_status.output,

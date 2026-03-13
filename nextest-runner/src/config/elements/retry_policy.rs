@@ -65,6 +65,9 @@ impl RetryPolicy {
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum FlakyResult {
+    /// The test is marked as failed.
+    Fail,
+
     /// The test is marked as passed.
     #[default]
     Pass,
@@ -260,12 +263,20 @@ mod tests {
             [profile.exp-with-max-delay-and-jitter]
             retries = { backoff = "exponential", count = 6, delay = "4s", max-delay = "1m", jitter = true }
 
+            [profile.with-flaky-result-fail]
+            retries = { backoff = "fixed", count = 2 }
+            flaky-result = "fail"
+
             [profile.with-flaky-result-pass]
             retries = { backoff = "fixed", count = 2 }
             flaky-result = "pass"
 
+            [profile.exp-with-flaky-result-fail]
+            retries = { backoff = "exponential", count = 3, delay = "1s" }
+            flaky-result = "fail"
+
             [profile.flaky-result-only]
-            flaky-result = "pass"
+            flaky-result = "fail"
         "#};
 
         let workspace_dir = tempdir().unwrap();
@@ -370,6 +381,21 @@ mod tests {
             "exp-with-max-delay-and-jitter retries matches"
         );
 
+        let with_flaky_result_fail = config
+            .profile("with-flaky-result-fail")
+            .expect("profile exists")
+            .apply_build_platforms(&build_platforms());
+        assert_eq!(
+            with_flaky_result_fail.retries(),
+            RetryPolicy::new_without_delay(2),
+            "with-flaky-result-fail retries matches"
+        );
+        assert_eq!(
+            with_flaky_result_fail.flaky_result(),
+            FlakyResult::Fail,
+            "with-flaky-result-fail flaky_result matches"
+        );
+
         let with_flaky_result_pass = config
             .profile("with-flaky-result-pass")
             .expect("profile exists")
@@ -385,8 +411,28 @@ mod tests {
             "with-flaky-result-pass flaky_result matches"
         );
 
+        let exp_with_flaky_result_fail = config
+            .profile("exp-with-flaky-result-fail")
+            .expect("profile exists")
+            .apply_build_platforms(&build_platforms());
+        assert_eq!(
+            exp_with_flaky_result_fail.retries(),
+            RetryPolicy::Exponential {
+                count: 3,
+                delay: Duration::from_secs(1),
+                jitter: false,
+                max_delay: None,
+            },
+            "exp-with-flaky-result-fail retries matches"
+        );
+        assert_eq!(
+            exp_with_flaky_result_fail.flaky_result(),
+            FlakyResult::Fail,
+            "exp-with-flaky-result-fail flaky_result matches"
+        );
+
         // flaky-result-only: retries inherited from default (count=3), flaky
-        // result set to pass.
+        // result set to fail.
         let flaky_result_only = config
             .profile("flaky-result-only")
             .expect("profile exists")
@@ -402,7 +448,7 @@ mod tests {
         );
         assert_eq!(
             flaky_result_only.flaky_result(),
-            FlakyResult::Pass,
+            FlakyResult::Fail,
             "flaky-result-only flaky_result matches"
         );
     }
@@ -495,6 +541,14 @@ mod tests {
         ConfigErrorKind::Message,
         "`max-delay` cannot be less than delay"
         ; "max-delay greater than delay")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            flaky-result = "unknown"
+        "#},
+        ConfigErrorKind::Message,
+        "enum FlakyResult does not have variant constructor unknown"
+        ; "invalid flaky-result value")]
     fn parse_retries_invalid(
         config_contents: &str,
         expected_kind: ConfigErrorKind,
@@ -780,7 +834,7 @@ mod tests {
             [[profile.default.overrides]]
             filter = "test(=my_test)"
             retries = { backoff = "fixed", count = 3 }
-            flaky-result = "pass"
+            flaky-result = "fail"
 
             [[profile.default.overrides]]
             filter = "test(=other_test)"
@@ -808,7 +862,7 @@ mod tests {
             .expect("ci profile is defined")
             .apply_build_platforms(&build_platforms());
 
-        // my_test has flaky-result = "pass" set explicitly.
+        // my_test has flaky-result = "fail" set explicitly.
         let binary_query = binary_query(
             &graph,
             package_id,
@@ -824,8 +878,8 @@ mod tests {
         let settings = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(
             settings.flaky_result(),
-            FlakyResult::Pass,
-            "my_test flaky_result is pass"
+            FlakyResult::Fail,
+            "my_test flaky_result is fail"
         );
 
         // other_test uses shorthand retries = 2, which does not set
@@ -854,11 +908,11 @@ mod tests {
             filter = "test(=my_test)"
             retries = 5
 
-            # Override 2: sets retries with flaky-result = "pass".
+            # Override 2: sets retries with flaky-result = "fail".
             [[profile.default.overrides]]
             filter = "all()"
             retries = { backoff = "fixed", count = 2 }
-            flaky-result = "pass"
+            flaky-result = "fail"
 
             [profile.ci]
         "#};
@@ -905,12 +959,12 @@ mod tests {
         // Flaky result comes from override 2 (first override didn't set it).
         assert_eq!(
             settings.flaky_result(),
-            FlakyResult::Pass,
+            FlakyResult::Fail,
             "flaky_result from second override"
         );
     }
 
-    /// Test that `flaky-result = "pass"` (without retries) sets only the flaky
+    /// Test that `flaky-result = "fail"` (without retries) sets only the flaky
     /// result, with the retry policy inherited from a lower-priority override.
     #[test]
     fn overrides_flaky_result_only() {
@@ -918,7 +972,7 @@ mod tests {
             # Override 1: sets only flaky-result, no retry policy.
             [[profile.default.overrides]]
             filter = "test(=my_test)"
-            flaky-result = "pass"
+            flaky-result = "fail"
 
             # Override 2: sets retries count for all tests.
             [[profile.default.overrides]]
@@ -970,7 +1024,7 @@ mod tests {
         // Flaky result comes from override 1.
         assert_eq!(
             settings.flaky_result(),
-            FlakyResult::Pass,
+            FlakyResult::Fail,
             "flaky_result from first override"
         );
 
