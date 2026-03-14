@@ -26,7 +26,7 @@ use crate::{
     list::{TestExecuteContext, TestInstance, TestInstanceWithSettings, TestList},
     reporter::events::{
         ExecutionResult, FailureStatus, InfoResponse, RetryData, SetupScriptInfoResponse,
-        StressIndex, TestInfoResponse, UnitKind, UnitState,
+        StressIndex, TestInfoResponse, TestSlotAssignment, UnitKind, UnitState,
     },
     runner::{
         ExecutorEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus,
@@ -234,6 +234,12 @@ impl<'a> ExecutorContext<'a> {
 
         let (req_rx_tx, req_rx_rx) = oneshot::channel();
 
+        let slot_assignment = TestSlotAssignment {
+            global_slot: cx.global_slot(),
+            group_slot: cx.group_slot(),
+            test_group: settings.test_group().clone(),
+        };
+
         let ctx = self.test_execute_context();
         let command_line = test.instance.command_line(
             &ctx,
@@ -247,6 +253,7 @@ impl<'a> ExecutorContext<'a> {
         _ = resp_tx.send(ExecutorEvent::Started {
             stress_index,
             test_instance: test.instance,
+            slot_assignment: slot_assignment.clone(),
             command_line: command_line.clone(),
             req_rx_tx,
             flaky_result,
@@ -278,6 +285,7 @@ impl<'a> ExecutorContext<'a> {
                 _ = resp_tx.send(ExecutorEvent::RetryStarted {
                     stress_index,
                     test_instance: test.instance,
+                    slot_assignment: slot_assignment.clone(),
                     retry_data,
                     command_line: command_line.clone(),
                     tx,

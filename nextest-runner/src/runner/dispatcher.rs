@@ -657,6 +657,7 @@ where
             InternalEvent::Executor(ExecutorEvent::Started {
                 stress_index,
                 test_instance,
+                slot_assignment,
                 command_line,
                 req_rx_tx,
                 flaky_result,
@@ -679,6 +680,7 @@ where
                 self.callback_none_response(TestEventKind::TestStarted {
                     stress_index,
                     test_instance: test_instance.id(),
+                    slot_assignment,
                     current_stats: self.run_stats,
                     running: self.running_tests.len(),
                     command_line,
@@ -738,6 +740,7 @@ where
             InternalEvent::Executor(ExecutorEvent::RetryStarted {
                 stress_index,
                 test_instance,
+                slot_assignment,
                 retry_data,
                 command_line,
                 tx,
@@ -760,6 +763,7 @@ where
                 self.callback_none_response(TestEventKind::TestRetryStarted {
                     stress_index,
                     test_instance: test_instance.id(),
+                    slot_assignment,
                     retry_data,
                     running: self.running_tests.len(),
                     command_line,

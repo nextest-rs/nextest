@@ -5,7 +5,7 @@ use crate::{
     config::{core::ConfigIdentifier, elements::TestThreads},
     errors::InvalidCustomTestGroupName,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use std::{fmt, str::FromStr};
 
@@ -41,13 +41,25 @@ impl TestGroup {
     }
 }
 
+impl Serialize for TestGroup {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            TestGroup::Global => serializer.serialize_str("@global"),
+            TestGroup::Custom(group) => serializer.serialize_str(group.as_str()),
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for TestGroup {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         // Try and deserialize the group as a string. (Note: we don't deserialize a
-        // `CustomTestGroup` directly because that errors out on None.
+        // `CustomTestGroup` directly because that errors out on None.)
         let group = SmolStr::deserialize(deserializer)?;
         if group == Self::GLOBAL_STR {
             Ok(TestGroup::Global)

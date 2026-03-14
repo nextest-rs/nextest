@@ -11,7 +11,7 @@ use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 use crate::output_spec::ArbitraryOutputSpec;
 use crate::{
     config::{
-        elements::{FlakyResult, LeakTimeoutResult, SlowTimeoutResult},
+        elements::{FlakyResult, LeakTimeoutResult, SlowTimeoutResult, TestGroup},
         scripts::ScriptId,
     },
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
@@ -58,6 +58,25 @@ pub struct TestEvent<'a> {
 
     /// The kind of test event this is.
     pub kind: TestEventKind<'a>,
+}
+
+/// Scheduling information about a test's slot and group assignment.
+///
+/// This information is assigned by the `future_queue` scheduler and remains
+/// constant across all retry attempts of the same test.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct TestSlotAssignment {
+    /// The global slot number assigned to this test. Compact: starts from 0
+    /// and is always the smallest available number at assignment time.
+    pub global_slot: u64,
+
+    /// The slot number within this test's group, if the test is in a custom
+    /// group. `None` for tests in the global group.
+    pub group_slot: Option<u64>,
+
+    /// The test group this test belongs to.
+    pub test_group: TestGroup,
 }
 
 /// The kind of test event this is.
@@ -180,6 +199,9 @@ pub enum TestEventKind<'a> {
         /// The test instance that was started.
         test_instance: TestInstanceId<'a>,
 
+        /// Scheduling information (slot and group assignment).
+        slot_assignment: TestSlotAssignment,
+
         /// Current run statistics so far.
         current_stats: RunStats,
 
@@ -238,6 +260,10 @@ pub enum TestEventKind<'a> {
 
         /// The test instance that is being retried.
         test_instance: TestInstanceId<'a>,
+
+        /// Scheduling information (slot and group assignment). Same as the
+        /// initial `TestStarted` event for this test.
+        slot_assignment: TestSlotAssignment,
 
         /// Data related to retries.
         retry_data: RetryData,

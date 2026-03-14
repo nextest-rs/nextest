@@ -2255,11 +2255,11 @@ mod tests {
             .to_string()
         );
 
-        // Test: store format incompatible (major mismatch).
+        // Test: store format incompatible (archive too new).
         let format_too_new = ReplayabilityStatus::NotReplayable(vec![
             NonReplayableReason::StoreVersionIncompatible {
-                incompatibility: StoreVersionIncompatibility::MajorMismatch {
-                    archive_major: StoreFormatMajorVersion::new(5),
+                incompatibility: StoreVersionIncompatibility::RecordingTooNew {
+                    recording_major: StoreFormatMajorVersion::new(5),
                     supported_major: StoreFormatMajorVersion::new(1),
                 },
             },
