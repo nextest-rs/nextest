@@ -9,9 +9,9 @@ use nextest_metadata::NextestExitCode;
 use nextest_runner::{
     config::core::{ConfigExperimental, ToolName},
     errors::{
-        PortableRecordingError, PortableRecordingReadError, RecordReadError, RecordSetupError,
-        RunIdResolutionError, RunStoreError, StateDirError, TestListFromSummaryError,
-        UserConfigError, *,
+        ChromeTraceError, PortableRecordingError, PortableRecordingReadError, RecordReadError,
+        RecordSetupError, RunIdResolutionError, RunStoreError, StateDirError,
+        TestListFromSummaryError, UserConfigError, *,
     },
     helpers::{format_interceptor_too_many_tests, plural},
     indenter::DisplayIndented,
@@ -449,6 +449,11 @@ pub enum ExpectedError {
         #[source]
         err: TestListFromSummaryError,
     },
+    #[error("error exporting Chrome trace")]
+    ChromeTraceExportError {
+        #[source]
+        err: ChromeTraceError,
+    },
     #[error("write error")]
     WriteError {
         #[source]
@@ -650,6 +655,16 @@ impl ExpectedError {
             | Self::TestListFromSummaryError { .. } => NextestExitCode::SETUP_ERROR,
             Self::PortableRecordingError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
             Self::PortableRecordingReadError { .. } => NextestExitCode::SETUP_ERROR,
+            Self::ChromeTraceExportError {
+                err:
+                    ChromeTraceError::ReadError(_)
+                    | ChromeTraceError::MissingTestStart { .. }
+                    | ChromeTraceError::MissingScriptStart { .. }
+                    | ChromeTraceError::MissingStressSubRunStart,
+            } => NextestExitCode::SETUP_ERROR,
+            Self::ChromeTraceExportError {
+                err: ChromeTraceError::SerializeError(_),
+            } => NextestExitCode::WRITE_OUTPUT_ERROR,
             Self::WriteError { .. } => NextestExitCode::WRITE_OUTPUT_ERROR,
             Self::FiltersetParseError { .. } => NextestExitCode::INVALID_FILTERSET,
         }
@@ -1359,6 +1374,10 @@ impl ExpectedError {
             }
             Self::TestListFromSummaryError { err } => {
                 error!("error reconstructing test list from archived summary");
+                Some(err as &dyn Error)
+            }
+            Self::ChromeTraceExportError { err } => {
+                error!("error exporting Chrome trace");
                 Some(err as &dyn Error)
             }
             Self::WriteError { err } => {
