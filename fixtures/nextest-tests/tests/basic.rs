@@ -331,6 +331,44 @@ fn test_cargo_env_vars() {
     );
 
     assert_eq!(std::env::var("MY_ENV_VAR").as_deref(), Ok("my-env-var"));
+
+    if std::env::var("__NEXTEST_SETUP_SCRIPT_DEFINED_ENV").is_ok() {
+        // The command for the script has received the value from `command.env`.
+        assert_eq!(
+            std::env::var("SCRIPT_CMD_ENV_VAR").as_deref(),
+            Ok("test-value-set-in-conf"),
+        );
+        // The command for the script has received the value from Cargo's config, overriding
+        // `command.env` due to `force = true`.
+        assert_eq!(
+            std::env::var("SCRIPT_CMD_ENV_VAR_CARGO").as_deref(),
+            Ok("test-value-set-by-main-config"),
+        );
+        // The command was started with this dummy value; it is a bit redundant given how this
+        // test was set up similarly with an env.
+        assert_eq!(std::env::var("CMD_ENV_VAR").as_deref(), Ok("test-value-set-by-environment"));
+    } else {
+        assert_eq!(
+            std::env::var("SCRIPT_CMD_ENV_VAR").as_deref(),
+            Ok("test-value-set-in-conf"),
+        );
+        assert_eq!(
+            std::env::var("SCRIPT_CMD_ENV_VAR_CARGO").as_deref(),
+            Ok("test-value-set-in-conf"),
+        );
+        assert_eq!(std::env::var("CMD_ENV_VAR"), Err(std::env::VarError::NotPresent));
+    }
+    // this is passed here simply because the wrapper being used doesn't filter out any environment
+    // variables that it received.
+    assert_eq!(
+        std::env::var("WRAPPER_CMD_ENV_VAR").as_deref(),
+        Ok("value-set-in-wrapper"),
+    );
+    assert_eq!(
+        std::env::var("SCRIPT_WRAPPER_CMD_ENV_VAR").as_deref(),
+        Ok("value-set-in-setup"),
+    );
+
     assert_eq!(
         std::env::var("SCRIPT_NEXTEST_PROFILE").expect("SCRIPT_NEXTEST_PROFILE is set by script"),
         std::env::var("NEXTEST_PROFILE").expect("NEXTEST_PROFILE is set by nextest"),

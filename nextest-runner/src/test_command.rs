@@ -3,7 +3,9 @@
 
 use crate::{
     cargo_config::EnvironmentMap,
+    config::scripts::ScriptCommandEnvMap,
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
+    errors::CommandSetupError,
     helpers::dylib_path_envvar,
     list::{RustBuildMeta, TestListState},
     runner::Interceptor,
@@ -56,20 +58,31 @@ pub(crate) struct TestCommand {
 
 impl TestCommand {
     /// Creates a new test command.
+    #[expect(clippy::too_many_arguments)]
     pub(crate) fn new(
         lctx: &LocalExecuteContext<'_>,
         program: String,
         args: &[Cow<'_, str>],
+        env: Option<&ScriptCommandEnvMap>,
         cwd: &Utf8Path,
         package: &PackageMetadata<'_>,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
         interceptor: &Interceptor,
-    ) -> Self {
+    ) -> Result<Self, CommandSetupError> {
         let mut cmd = if interceptor.should_show_wrapper_command() {
             create_command_with_interceptor(program.clone(), args, interceptor)
         } else {
             create_command(program.clone(), args, lctx.double_spawn)
         };
+
+        if let Some(env) = env {
+            // Set the additional user-provided environment variables assigned to the setup
+            // script's `command.env`,  This is done before applying the `cargo_env` below
+            // as that will only override values specified in this step if `force = true` is
+            // specified on the value in the Cargo config, which is not the case with ordinary
+            // environment variables.
+            env.apply_env(&mut cmd)?;
+        }
 
         // NB: we will always override user-provided environment variables with the
         // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
@@ -139,12 +152,12 @@ impl TestCommand {
 
         let double_spawn = lctx.double_spawn.spawn_context();
 
-        Self {
+        Ok(Self {
             program,
             args: args.iter().map(|arg| arg.to_string()).collect(),
             command: cmd,
             double_spawn,
-        }
+        })
     }
 
     pub(crate) fn program(&self) -> &str {

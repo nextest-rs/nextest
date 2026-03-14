@@ -1505,6 +1505,13 @@ pub enum ChildStartErrorDescription {
         /// The source error.
         source: IoErrorDescription,
     },
+
+    /// An error occurred while setting up the command.
+    CommandSetup {
+        // Simply leveraging the existing `IoErrorDescription` as the description for now.
+        /// The source error.
+        source: IoErrorDescription,
+    },
 }
 
 impl fmt::Display for ChildStartErrorDescription {
@@ -1514,6 +1521,9 @@ impl fmt::Display for ChildStartErrorDescription {
                 write!(f, "error creating temporary path for setup script")
             }
             Self::Spawn { .. } => write!(f, "error spawning child process"),
+            Self::CommandSetup { .. } => {
+                write!(f, "error setting up command")
+            }
         }
     }
 }
@@ -1521,7 +1531,9 @@ impl fmt::Display for ChildStartErrorDescription {
 impl std::error::Error for ChildStartErrorDescription {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::TempPath { source } | Self::Spawn { source } => Some(source),
+            Self::TempPath { source } | Self::Spawn { source } | Self::CommandSetup { source } => {
+                Some(source)
+            }
         }
     }
 }
@@ -1651,6 +1663,11 @@ impl From<ChildStartError> for ChildStartErrorDescription {
                 },
             },
             ChildStartError::Spawn(e) => Self::Spawn {
+                source: IoErrorDescription {
+                    message: e.to_string(),
+                },
+            },
+            ChildStartError::CommandSetup(e) => Self::CommandSetup {
                 source: IoErrorDescription {
                     message: e.to_string(),
                 },

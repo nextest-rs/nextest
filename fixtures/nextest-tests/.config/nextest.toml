@@ -192,20 +192,47 @@ max-threads = 1
 # Setup scripts are already relative to the workspace root. But using
 # `my-script.sh` rather than `./my-script.sh` means that we test that the path
 # is *joined* to the workspace root.
-command = { command-line = "my-script.sh", relative-to = "workspace-root" }
+command = {
+    command-line = "my-script.sh",
+    relative-to = "workspace-root",
+    env = {
+        CMD_ENV_VAR = "test-value-set-in-conf",
+        CMD_ENV_VAR_CARGO = "test-value-set-in-conf",
+        WRAPPER_CMD_ENV_VAR = "value-set-in-setup",
+    },
+}
 
 [scripts.setup.my-script-windows]
 # On Windows, we test the command not being joined to the workspace root. In
 # this case we also want to check that the cwd is the workspace root. Passing in
 # "scripts\\my-script.bat" ensures this.
-command = 'cmd /c "scripts\\my-script.bat"'
+command = {
+    command-line = 'cmd /c "scripts\\my-script.bat"',
+    env = {
+        CMD_ENV_VAR = "test-value-set-in-conf",
+        CMD_ENV_VAR_CARGO = "test-value-set-in-conf",
+        WRAPPER_CMD_ENV_VAR = "value-set-in-setup",
+    },
+}
 
 [scripts.wrapper.wrapper1-unix]
-command = { command-line = "./debug/wrapper within", relative-to = "target" }
+command = {
+    command-line = "./debug/wrapper within",
+    relative-to = "target",
+    env = {
+        WRAPPER_CMD_ENV_VAR = "value-set-in-wrapper",
+    },
+}
 target-runner = "within-wrapper"
 
 [scripts.wrapper.wrapper1-windows]
-command = { command-line = "debug/wrapper.exe within", relative-to = "target" }
+command = {
+    command-line = "debug/wrapper.exe within",
+    relative-to = "target",
+    env = {
+        WRAPPER_CMD_ENV_VAR = "value-set-in-wrapper",
+    },
+}
 target-runner = "within-wrapper"
 
 # TODO: tests for around/override/ignore target runner

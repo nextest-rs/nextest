@@ -323,6 +323,10 @@ pub enum ChildStartError {
     /// An error occurred while spawning the child process.
     #[error("error spawning child process")]
     Spawn(#[source] Arc<std::io::Error>),
+
+    /// An error occurred while setting up the command.
+    #[error("error setting up command")]
+    CommandSetup(#[source] Arc<CommandSetupError>),
 }
 
 /// An error that occurred while reading the output of a setup script.
@@ -359,12 +363,54 @@ pub enum SetupScriptOutputError {
         line: String,
     },
 
+    /// An error occurred while processing an environment variable.
+    #[error(transparent)]
+    EnvVarError(#[from] EnvVarError),
+}
+
+/// An error that describes an invalid/reserved key or value in an environment variable.
+#[derive(Clone, Debug, Error)]
+pub enum EnvVarError {
     /// An environment variable key was reserved.
     #[error("key `{key}` begins with `NEXTEST`, which is reserved for internal use")]
-    EnvFileReservedKey {
+    ReservedKey {
         /// The environment variable name.
         key: String,
     },
+
+    // See: https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap08.html
+    /// An environment variable key is invalid.
+    #[error("key `{key}` does not consist solely of underscores, digits, and alphabetics")]
+    InvalidKey {
+        /// The environment variable name.
+        key: String,
+    },
+
+    /// An environment variable key is invalid.
+    #[error("key `{key}` does not start with a underscore or an alphabetic")]
+    InvalidKeyStartChar {
+        /// The environment variable name.
+        key: String,
+    },
+}
+
+// The messages provided by the error message as written above doesn't match the grammatic structure
+// that `Expected` should provide when the validation of the incoming key during deserialization need
+// to pass this error back into serde, which this impl addresses.
+impl serde::de::Expected for EnvVarError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::ReservedKey { .. } => {
+                "a key that does not begin with `NEXTEST`, which is reserved for internal use"
+            }
+            Self::InvalidKey { .. } => {
+                "a key that consists solely of underscores, digits, and alphabetics"
+            }
+            Self::InvalidKeyStartChar { .. } => {
+                "a key that starts with a underscore or an alphabetic"
+            }
+        })
+    }
 }
 
 /// A list of errors that implements `Error`.
@@ -1119,6 +1165,14 @@ pub enum FromMessagesError {
     },
 }
 
+/// An error that occurs during the set up of a command.
+#[derive(Debug, Error)]
+pub enum CommandSetupError {
+    /// An error occurred while assigning environment variables to the command.
+    #[error("error assigning environment variables to command: {0}")]
+    EnvVar(#[from] ErrorList<EnvVarError>),
+}
+
 /// An error that occurs while parsing test list output.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -1226,6 +1280,10 @@ pub enum CreateTestListError {
         #[source]
         error: JoinPathsError,
     },
+
+    /// An error occurred while setting up the command.
+    #[error("error setting up command")]
+    CommandSetup(#[source] CommandSetupError),
 
     /// Creating a Tokio runtime failed.
     #[error("error creating Tokio runtime")]

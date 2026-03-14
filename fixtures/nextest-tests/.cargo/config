@@ -10,6 +10,9 @@ runner = ["passthrough", "--ensure-this-arg-is-sent"]
 [env]
 CONFIG_WORKSPACE_DIR = { value = "", relative = true }
 
+CMD_ENV_VAR = { value = "test-value-set-by-main-config" }
+CMD_ENV_VAR_CARGO = { value = "test-value-set-by-main-config", force = true }
+
 __NEXTEST_ENV_VAR_FOR_TESTING_NOT_IN_PARENT_ENV = "test-PASSED-value-set-by-main-config"
 __NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_NO_OVERRIDE = "test-FAILED-value-set-by-main-config"
 __NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_OVERRIDDEN = { value = "test-PASSED-value-set-by-main-config", force = true }

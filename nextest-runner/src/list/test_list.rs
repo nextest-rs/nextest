@@ -7,11 +7,12 @@ use crate::{
     config::{
         core::EvaluatableProfile,
         overrides::{ListSettings, TestSettings},
-        scripts::{WrapperScriptConfig, WrapperScriptTargetRunner},
+        scripts::{ScriptCommandEnvMap, WrapperScriptConfig, WrapperScriptTargetRunner},
     },
     double_spawn::DoubleSpawnInfo,
     errors::{
-        CreateTestListError, FromMessagesError, TestListFromSummaryError, WriteTestListError,
+        CommandSetupError, CreateTestListError, FromMessagesError, TestListFromSummaryError,
+        WriteTestListError,
     },
     helpers::{convert_build_platform, dylib_path, dylib_path_envvar, write_test_name},
     indenter::indented,
@@ -1266,11 +1267,13 @@ impl RustTestArtifact<'_> {
                 .expect("at least one argument passed in")
                 .into_owned(),
             &cli.args,
+            cli.env,
             &self.cwd,
             &self.package,
             &self.non_test_binaries,
             &Interceptor::None, // Interceptors are not used during the test list phase.
-        );
+        )
+        .map_err(CreateTestListError::CommandSetup)?;
 
         let output =
             cmd.wait_with_output()
@@ -1450,7 +1453,7 @@ impl<'a> TestInstance<'a> {
         wrapper_script: Option<&WrapperScriptConfig>,
         extra_args: &[String],
         interceptor: &Interceptor,
-    ) -> TestCommand {
+    ) -> Result<TestCommand, CommandSetupError> {
         // TODO: non-rust tests
         let cli = self.compute_cli(ctx, test_list, wrapper_script, extra_args);
 
@@ -1470,6 +1473,7 @@ impl<'a> TestInstance<'a> {
                 .expect("at least one argument is guaranteed")
                 .into_owned(),
             &cli.args,
+            cli.env,
             &self.suite_info.cwd,
             &self.suite_info.package,
             &self.suite_info.non_test_binaries,
@@ -1528,6 +1532,7 @@ impl<'a> TestInstance<'a> {
 struct TestCommandCli<'a> {
     program: Option<Cow<'a, str>>,
     args: Vec<Cow<'a, str>>,
+    env: Option<&'a ScriptCommandEnvMap>,
 }
 
 impl<'a> TestCommandCli<'a> {
@@ -1540,6 +1545,7 @@ impl<'a> TestCommandCli<'a> {
     ) {
         // Apply the wrapper script if it's enabled.
         if let Some(wrapper) = wrapper_script {
+            self.env = Some(&wrapper.command.env);
             match wrapper.target_runner {
                 WrapperScriptTargetRunner::Ignore => {
                     // Ignore the platform runner.
@@ -1755,7 +1761,7 @@ mod tests {
     use super::*;
     use crate::{
         cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
-        config::scripts::{ScriptCommand, ScriptCommandRelativeTo},
+        config::scripts::{ScriptCommand, ScriptCommandEnvMap, ScriptCommandRelativeTo},
         list::{
             SerializableFormat,
             test_helpers::{PACKAGE_GRAPH_FIXTURE, package_metadata},
@@ -1769,7 +1775,7 @@ mod tests {
     use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext};
     use nextest_metadata::{FilterMatch, MismatchReason, PlatformLibdirUnavailable, RustTestKind};
     use pretty_assertions::assert_eq;
-    use std::hash::DefaultHasher;
+    use std::{collections::BTreeMap, hash::DefaultHasher};
     use target_spec::Platform;
     use test_strategy::proptest;
 
@@ -2162,6 +2168,7 @@ mod tests {
             let mut cli_no_wrappers = TestCommandCli::default();
             cli_no_wrappers.apply_wrappers(None, None, workspace_root, target_dir);
             cli_no_wrappers.extend(["binary", "arg"]);
+            assert!(cli_no_wrappers.env.is_none());
             assert_eq!(cli_no_wrappers.to_owned_cli(), vec!["binary", "arg"]);
         }
 
@@ -2175,6 +2182,7 @@ mod tests {
             let mut cli_runner_only = TestCommandCli::default();
             cli_runner_only.apply_wrappers(None, Some(&runner), workspace_root, target_dir);
             cli_runner_only.extend(["binary", "arg"]);
+            assert!(cli_runner_only.env.is_none());
             assert_eq!(
                 cli_runner_only.to_owned_cli(),
                 vec!["runner", "binary", "arg"],
@@ -2192,6 +2200,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "wrapper".into(),
                     args: Vec::new(),
+                    env: ScriptCommandEnvMap::default(),
                     relative_to: ScriptCommandRelativeTo::None,
                 },
                 target_runner: WrapperScriptTargetRunner::Ignore,
@@ -2205,6 +2214,10 @@ mod tests {
             );
             cli_wrapper_ignore.extend(["binary", "arg"]);
             assert_eq!(
+                cli_wrapper_ignore.env,
+                Some(&ScriptCommandEnvMap::default())
+            );
+            assert_eq!(
                 cli_wrapper_ignore.to_owned_cli(),
                 vec!["wrapper", "binary", "arg"],
             );
@@ -2217,10 +2230,15 @@ mod tests {
                 Vec::new(),
                 PlatformRunnerSource::Env("fake".to_owned()),
             );
+            let env = ScriptCommandEnvMap::from(BTreeMap::from([(
+                String::from("MSG"),
+                String::from("hello world"),
+            )]));
             let wrapper_around = WrapperScriptConfig {
                 command: ScriptCommand {
                     program: "wrapper".into(),
                     args: Vec::new(),
+                    env: env.clone(),
                     relative_to: ScriptCommandRelativeTo::None,
                 },
                 target_runner: WrapperScriptTargetRunner::AroundWrapper,
@@ -2233,6 +2251,7 @@ mod tests {
                 target_dir,
             );
             cli_wrapper_around.extend(["binary", "arg"]);
+            assert_eq!(cli_wrapper_around.env, Some(&env));
             assert_eq!(
                 cli_wrapper_around.to_owned_cli(),
                 vec!["runner", "wrapper", "binary", "arg"],
@@ -2250,6 +2269,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "wrapper".into(),
                     args: Vec::new(),
+                    env: ScriptCommandEnvMap::default(),
                     relative_to: ScriptCommandRelativeTo::None,
                 },
                 target_runner: WrapperScriptTargetRunner::WithinWrapper,
@@ -2262,6 +2282,10 @@ mod tests {
                 target_dir,
             );
             cli_wrapper_within.extend(["binary", "arg"]);
+            assert_eq!(
+                cli_wrapper_within.env,
+                Some(&ScriptCommandEnvMap::default())
+            );
             assert_eq!(
                 cli_wrapper_within.to_owned_cli(),
                 vec!["wrapper", "runner", "binary", "arg"],
@@ -2279,6 +2303,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "wrapper".into(),
                     args: Vec::new(),
+                    env: ScriptCommandEnvMap::default(),
                     relative_to: ScriptCommandRelativeTo::None,
                 },
                 target_runner: WrapperScriptTargetRunner::OverridesWrapper,
@@ -2292,6 +2317,10 @@ mod tests {
             );
             cli_wrapper_overrides.extend(["binary", "arg"]);
             assert_eq!(
+                cli_wrapper_overrides.env,
+                Some(&ScriptCommandEnvMap::default())
+            );
+            assert_eq!(
                 cli_wrapper_overrides.to_owned_cli(),
                 vec!["runner", "binary", "arg"],
             );
@@ -2303,6 +2332,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "wrapper".into(),
                     args: vec!["--flag".to_string(), "value".to_string()],
+                    env: ScriptCommandEnvMap::default(),
                     relative_to: ScriptCommandRelativeTo::None,
                 },
                 target_runner: WrapperScriptTargetRunner::Ignore,
@@ -2315,6 +2345,7 @@ mod tests {
                 target_dir,
             );
             cli_wrapper_args.extend(["binary", "arg"]);
+            assert_eq!(cli_wrapper_args.env, Some(&ScriptCommandEnvMap::default()));
             assert_eq!(
                 cli_wrapper_args.to_owned_cli(),
                 vec!["wrapper", "--flag", "value", "binary", "arg"],
@@ -2336,6 +2367,7 @@ mod tests {
                 target_dir,
             );
             cli_runner_args.extend(["binary", "arg"]);
+            assert!(cli_runner_args.env.is_none());
             assert_eq!(
                 cli_runner_args.to_owned_cli(),
                 vec!["runner", "--runner-flag", "value", "binary", "arg"],
@@ -2348,6 +2380,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "abc/def/my-wrapper".into(),
                     args: vec!["--verbose".to_string()],
+                    env: ScriptCommandEnvMap::default(),
                     relative_to: ScriptCommandRelativeTo::WorkspaceRoot,
                 },
                 target_runner: WrapperScriptTargetRunner::Ignore,
@@ -2369,6 +2402,10 @@ mod tests {
                 }
             }
             assert_eq!(
+                cli_wrapper_relative.env,
+                Some(&ScriptCommandEnvMap::default())
+            );
+            assert_eq!(
                 cli_wrapper_relative.to_owned_cli(),
                 vec![wrapper_path, "--verbose", "binary", "arg"],
             );
@@ -2380,6 +2417,7 @@ mod tests {
                 command: ScriptCommand {
                     program: "abc/def/my-wrapper".into(),
                     args: vec!["--verbose".to_string()],
+                    env: ScriptCommandEnvMap::default(),
                     relative_to: ScriptCommandRelativeTo::Target,
                 },
                 target_runner: WrapperScriptTargetRunner::Ignore,
@@ -2399,6 +2437,10 @@ mod tests {
                     let wrapper_path = "/foo/bar/abc/def/my-wrapper";
                 }
             }
+            assert_eq!(
+                cli_wrapper_relative.env,
+                Some(&ScriptCommandEnvMap::default())
+            );
             assert_eq!(
                 cli_wrapper_relative.to_owned_cli(),
                 vec![wrapper_path, "--verbose", "binary", "arg"],
