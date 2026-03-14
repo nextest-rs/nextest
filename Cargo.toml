@@ -56,7 +56,7 @@ cp_r = "0.5.2"
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 datatest-stable = { version = "0.3.3", features = ["include-dir"] }
 debug-ignore = "1.0.5"
-derive-where = "1.6.0"
+derive-where = "1.6.1"
 dialoguer = "0.12.0"
 duct = "1.1.1"
 dunce = "1.0.5"
