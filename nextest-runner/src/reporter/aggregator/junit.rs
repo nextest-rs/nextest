@@ -515,9 +515,7 @@ mod tests {
     #[cfg(unix)]
     use crate::reporter::events::{AbortStatus, SIGTERM};
     use crate::{
-        errors::{
-            ChildError, ChildFdError, ChildStartError, CommandSetupError, EnvVarError, ErrorList,
-        },
+        errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
         reporter::events::{ChildExecutionOutputDescription, ExecutionResult, FailureStatus},
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     };
@@ -744,42 +742,6 @@ mod tests {
                       caused by:
                       - start error"
                 }),
-                system_out: Some(PROCESS_FAILED_TO_START),
-                system_err: Some(PROCESS_FAILED_TO_START),
-            },
-            ExecuteStatusPropsCase {
-                comment: "exec failed to start command",
-                status: TestCaseStatus::non_success(NonSuccessKind::Error),
-                output: ChildExecutionOutput::StartError(ChildStartError::CommandSetup(Arc::new(
-                    CommandSetupError::EnvVar(
-                        ErrorList::new(
-                            "unsupported environment variables",
-                            vec![
-                                EnvVarError::ReservedKey {
-                                    key: String::from("NEXTEST_DEMO"),
-                                },
-                                EnvVarError::InvalidKey {
-                                    key: String::from("TEST=TEST"),
-                                },
-                                EnvVarError::InvalidKeyStartChar {
-                                    key: String::from("42"),
-                                },
-                            ],
-                        )
-                        .expect("error list was supplied"),
-                    ),
-                )))
-                .into(),
-                store_stdout_stderr: true,
-                message: Some("error setting up command"),
-                description: Some(indoc::indoc! {"
-                    error setting up command
-                      caused by:
-                      - error assigning environment variables to command: 3 errors occurred unsupported environment variables:
-                        * key `NEXTEST_DEMO` begins with `NEXTEST`, which is reserved for internal use
-                        * key `TEST=TEST` does not consist solely of underscores, digits, and alphabetics
-                        * key `42` does not start with a underscore or an alphabetic
-                "}),
                 system_out: Some(PROCESS_FAILED_TO_START),
                 system_err: Some(PROCESS_FAILED_TO_START),
             },

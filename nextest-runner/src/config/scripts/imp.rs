@@ -3,6 +3,7 @@
 
 //! Setup scripts.
 
+use super::ScriptCommandEnvMap;
 use crate::{
     config::{
         core::{ConfigIdentifier, EvaluatableProfile, FinalConfig, PreBuildPlatform},
@@ -12,13 +13,12 @@ use crate::{
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     errors::{
         ChildStartError, ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection,
-        EnvVarError, ErrorList, InvalidConfigScriptName,
+        InvalidConfigScriptName,
     },
     helpers::convert_rel_path_to_main_sep,
     list::TestList,
     platform::BuildPlatforms,
     reporter::events::SetupScriptEnvMap,
-    runner::script_helpers::validate_env_var_key,
     test_command::{apply_ld_dyld_env, create_command},
 };
 use camino::Utf8Path;
@@ -33,7 +33,7 @@ use quick_junit::ReportUuid;
 use serde::{Deserialize, de::Error};
 use smol_str::SmolStr;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fmt,
     process::Command,
     sync::Arc,
@@ -316,11 +316,7 @@ impl SetupScriptCommand {
         // as that will only override values specified in this step if `force = true` is
         // specified on the value in the Cargo config, which is not the case with ordinary
         // environment variables.
-        config
-            .command
-            .env
-            .apply_env(&mut cmd)
-            .map_err(|error| ChildStartError::CommandSetup(Arc::new(error.into())))?;
+        config.command.env.apply_env(&mut cmd);
 
         // NB: we will always override user-provided environment variables with the
         // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
@@ -802,72 +798,6 @@ where
     deserializer.deserialize_any(ScriptIdVisitor)
 }
 
-/// A map of environment variables associated with a [`ScriptCommand`].
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct ScriptCommandEnvMap(BTreeMap<String, String>);
-
-impl ScriptCommandEnvMap {
-    /// Applies all environment variables present onto the command, with validation done against every key
-    /// such that any errors found are captured and returned.
-    pub(crate) fn apply_env(&self, cmd: &mut Command) -> Result<(), ErrorList<EnvVarError>> {
-        let mut errors = Vec::new();
-        for (key, value) in self.0.iter() {
-            if let Err(err) = validate_env_var_key(key) {
-                errors.push(err);
-                continue;
-            }
-            cmd.env(key, value);
-        }
-        if let Some(err) = ErrorList::new("unsupported environment variables", errors) {
-            Err(err)
-        } else {
-            Ok(())
-        }
-    }
-}
-
-impl From<BTreeMap<String, String>> for ScriptCommandEnvMap {
-    fn from(value: BTreeMap<String, String>) -> Self {
-        Self(value)
-    }
-}
-
-impl<'de> Deserialize<'de> for ScriptCommandEnvMap {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct EnvMapVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for EnvMapVisitor {
-            type Value = ScriptCommandEnvMap;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a map")
-            }
-
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::MapAccess<'de>,
-            {
-                let mut env = BTreeMap::new();
-                while let Some((key, value)) = map.next_entry::<String, String>()? {
-                    if let Err(err) = validate_env_var_key(&key) {
-                        return Err(A::Error::invalid_value(
-                            serde::de::Unexpected::Str(&key),
-                            &err,
-                        ));
-                    }
-                    env.insert(key, value);
-                }
-                Ok(ScriptCommandEnvMap(env))
-            }
-        }
-
-        deserializer.deserialize_map(EnvMapVisitor)
-    }
-}
-
 /// The script command to run.
 #[derive(Clone, Debug)]
 pub struct ScriptCommand {
@@ -1322,9 +1252,7 @@ mod tests {
                 .config
                 .command
                 .env
-                .0
-                .get("MODE")
-                .map(String::as_str),
+                .get("MODE"),
             Some("qux_mode"),
             "first script should be passed environment variable MODE with value qux_mode",
         );
@@ -2138,25 +2066,5 @@ mod tests {
                 panic!("Config should be valid but got error: {e:?}");
             }
         }
-    }
-
-    #[test]
-    fn script_command_env_map_apply_env() {
-        let mut cmd = std::process::Command::new("demo");
-        cmd.env_clear();
-        let env = ScriptCommandEnvMap::from(BTreeMap::from([
-            (String::from("VALID"), String::new()),
-            (String::from("INVALID "), String::new()),
-        ]));
-
-        let err = env.apply_env(&mut cmd).unwrap_err();
-        let err_items: Vec<_> = err.iter().collect();
-        let applied: BTreeMap<_, _> = cmd.get_envs().collect();
-        assert_eq!(applied.len(), 1);
-        assert_eq!(err_items.len(), 1);
-        assert_eq!(
-            err.to_string(),
-            "key `INVALID ` does not consist solely of underscores, digits, and alphabetics"
-        );
     }
 }

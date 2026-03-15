@@ -705,16 +705,13 @@ impl<'a> ExecutorContext<'a> {
         req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     ) -> Result<InternalExecuteStatus<'a>, ChildStartError> {
         let ctx = self.test_execute_context();
-        let mut cmd = test
-            .test_instance
-            .make_command(
-                &ctx,
-                self.test_list,
-                test.settings.run_wrapper(),
-                test.settings.run_extra_args(),
-                &self.interceptor,
-            )
-            .map_err(|err| ChildStartError::CommandSetup(Arc::new(err)))?;
+        let mut cmd = test.test_instance.make_command(
+            &ctx,
+            self.test_list,
+            test.settings.run_wrapper(),
+            test.settings.run_extra_args(),
+            &self.interceptor,
+        );
 
         let attempt_id = test.test_instance.id().attempt_id(
             self.run_id,

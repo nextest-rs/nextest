@@ -11,8 +11,7 @@ use crate::{
     },
     double_spawn::DoubleSpawnInfo,
     errors::{
-        CommandSetupError, CreateTestListError, FromMessagesError, TestListFromSummaryError,
-        WriteTestListError,
+        CreateTestListError, FromMessagesError, TestListFromSummaryError, WriteTestListError,
     },
     helpers::{convert_build_platform, dylib_path, dylib_path_envvar, write_test_name},
     indenter::indented,
@@ -1272,8 +1271,7 @@ impl RustTestArtifact<'_> {
             &self.package,
             &self.non_test_binaries,
             &Interceptor::None, // Interceptors are not used during the test list phase.
-        )
-        .map_err(CreateTestListError::CommandSetup)?;
+        );
 
         let output =
             cmd.wait_with_output()
@@ -1453,7 +1451,7 @@ impl<'a> TestInstance<'a> {
         wrapper_script: Option<&WrapperScriptConfig>,
         extra_args: &[String],
         interceptor: &Interceptor,
-    ) -> Result<TestCommand, CommandSetupError> {
+    ) -> TestCommand {
         // TODO: non-rust tests
         let cli = self.compute_cli(ctx, test_list, wrapper_script, extra_args);
 
@@ -2230,10 +2228,11 @@ mod tests {
                 Vec::new(),
                 PlatformRunnerSource::Env("fake".to_owned()),
             );
-            let env = ScriptCommandEnvMap::from(BTreeMap::from([(
+            let env = ScriptCommandEnvMap::new(BTreeMap::from([(
                 String::from("MSG"),
                 String::from("hello world"),
-            )]));
+            )]))
+            .expect("valid env var keys");
             let wrapper_around = WrapperScriptConfig {
                 command: ScriptCommand {
                     program: "wrapper".into(),

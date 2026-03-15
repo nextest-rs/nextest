@@ -3,6 +3,8 @@
 
 //! Support for scripts.
 
+mod env_map;
 mod imp;
 
+pub use env_map::*;
 pub use imp::*;
