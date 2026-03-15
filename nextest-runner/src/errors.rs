@@ -383,7 +383,7 @@ pub enum EnvVarError {
     },
 
     /// An environment variable key is invalid.
-    #[error("key `{key}` does not start with a underscore or an alphabetic")]
+    #[error("key `{key}` does not start with a letter or underscore")]
     InvalidKeyStartChar {
         /// The environment variable name.
         key: String,
@@ -402,9 +402,7 @@ impl serde::de::Expected for EnvVarError {
             Self::InvalidKey { .. } => {
                 "a key that consists solely of underscores, digits, and alphabetics"
             }
-            Self::InvalidKeyStartChar { .. } => {
-                "a key that starts with a underscore or an alphabetic"
-            }
+            Self::InvalidKeyStartChar { .. } => "a key that starts with a letter or underscore",
         })
     }
 }

@@ -141,37 +141,37 @@ mod tests {
 
     #[test_case(
         "",
-        "key `` does not start with a underscore or an alphabetic"
+        "key `` does not start with a letter or underscore"
 
         ; "empty key"
     )]
     #[test_case(
         " ",
-        "key ` ` does not start with a underscore or an alphabetic"
+        "key ` ` does not start with a letter or underscore"
 
         ; "single space"
     )]
     #[test_case(
         "=",
-        "key `=` does not start with a underscore or an alphabetic"
+        "key `=` does not start with a letter or underscore"
 
         ; "single equal sign"
     )]
     #[test_case(
         "0",
-        "key `0` does not start with a underscore or an alphabetic"
+        "key `0` does not start with a letter or underscore"
 
         ; "single digit"
     )]
     #[test_case(
         "0TEST ",
-        "key `0TEST ` does not start with a underscore or an alphabetic"
+        "key `0TEST ` does not start with a letter or underscore"
 
         ; "key started with a digit"
     )]
     #[test_case(
         "=TEST=",
-        "key `=TEST=` does not start with a underscore or an alphabetic"
+        "key `=TEST=` does not start with a letter or underscore"
 
         ; "key started with an equal sign"
     )]

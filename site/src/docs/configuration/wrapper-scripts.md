@@ -95,7 +95,7 @@ command = {
 }
 ```
 
-Note that keys cannot begin with `NEXTEST` as that is reserved for internal use. and values defined in this map will override values set by the environment.  It may also override values defined in Cargo's `config.toml` unless it has `force = true` set.  It is also up to the wrapper script to block or pass through the environment variables it receives through to the test binary it will execute.
+Note that keys cannot begin with `NEXTEST`, as that is reserved for internal use, and values defined in this map will override values set by the environment. They may also override values defined in Cargo's `config.toml` unless it has `force = true` set. It is also up to the wrapper script to block or pass through the environment variables it receives to the test binary it will execute.
 
 ### Wrapper script configuration
 

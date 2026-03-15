@@ -312,7 +312,7 @@ impl SetupScriptCommand {
         );
 
         // Set the additional user-provided environment variables assigned to the setup
-        // script's `command.env`,  This is done before applying the `cargo_env` below
+        // script's `command.env`. This is done before applying the `cargo_env` below
         // as that will only override values specified in this step if `force = true` is
         // specified on the value in the Cargo config, which is not the case with ordinary
         // environment variables.
@@ -1451,7 +1451,7 @@ mod tests {
                 },
             }
         "#},
-        r#"scripts.setup.foo.command.env: invalid value: string "42", expected a key that starts with a underscore or an alphabetic"#
+        r#"scripts.setup.foo.command.env: invalid value: string "42", expected a key that starts with a letter or underscore"#
 
         ; "env containing key first character a digit"
     )]
@@ -1465,7 +1465,7 @@ mod tests {
                 },
             }
         "#},
-        r#"scripts.setup.foo.command.env: invalid value: string " ", expected a key that starts with a underscore or an alphabetic"#
+        r#"scripts.setup.foo.command.env: invalid value: string " ", expected a key that starts with a letter or underscore"#
 
         ; "env containing key started with an unsupported characters"
     )]

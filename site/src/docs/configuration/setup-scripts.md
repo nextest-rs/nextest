@@ -84,7 +84,7 @@ command = {
 }
 ```
 
-Note that keys cannot begin with `NEXTEST` as that is reserved for internal use. and values defined in this map will override values set by the environment.  It may also override values defined in Cargo's `config.toml` unless it has `force = true` set.
+Note that keys cannot begin with `NEXTEST`, as that is reserved for internal use, and values defined in this map will override values set by the environment. They may also override values defined in Cargo's `config.toml` unless it has `force = true` set.
 
 ### Setup script configuration
 
