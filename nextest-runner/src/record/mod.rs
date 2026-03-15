@@ -24,6 +24,7 @@
 //! - `store.zip`: A zstd-compressed archive containing metadata and test outputs.
 //! - `run.log.zst`: A zstd-compressed JSON Lines file of test events.
 
+mod chrome_trace;
 pub mod dicts;
 mod display;
 mod format;
@@ -42,6 +43,7 @@ mod summary;
 mod test_helpers;
 mod tree;
 
+pub use chrome_trace::{ChromeTraceGroupBy, ChromeTraceMessageFormat, convert_to_chrome_trace};
 pub use display::{
     DisplayPrunePlan, DisplayPruneResult, DisplayRecordedRunInfo, DisplayRecordedRunInfoDetailed,
     DisplayRunList, RunListAlignment, Styles,

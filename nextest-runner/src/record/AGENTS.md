@@ -21,6 +21,7 @@ Supporting modules:
 - `rerun.rs`: Computes outstanding tests from a recorded run for rerun workflows.
 - `session.rs`: High-level session management (setup/finalize lifecycle).
 - `portable.rs`: Portable archive creation and reading for sharing runs across machines.
+- `chrome_trace.rs`: Converts recorded events to Chrome Trace Event Format JSON for visualization in Perfetto UI or `chrome://tracing`.
 - `dicts/`: Pre-trained zstd dictionaries for output compression.
 
 ## Archive format
@@ -201,6 +202,66 @@ The `compute_outstanding_pure` function is designed for property-based testing v
 
 `ReplayReporter` wraps `DisplayReporter` with replay-specific header output.
 
+## Chrome trace export
+
+`chrome_trace.rs` converts recorded events to [Chrome Trace Event Format](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU) JSON, viewable in [Perfetto UI](https://ui.perfetto.dev) or Chrome's `chrome://tracing`. Invoked via `cargo nextest store export-chrome-trace`.
+
+### Public API
+
+- `convert_to_chrome_trace(nextest_version, events, group_by, message_format) -> Result<Vec<u8>, ChromeTraceError>`: Converts an iterator of `TestEventSummary<RecordingSpec>` to JSON bytes. Operates directly on the storage format; no replay infrastructure needed.
+- `ChromeTraceGroupBy`: Controls how tests are grouped in the output (`Binary` or `Slot`).
+- `ChromeTraceMessageFormat`: Controls JSON serialization (`Json` or `JsonPretty`).
+- `ChromeTraceError`: Read errors, missing start events, or JSON serialization errors.
+
+### Dimension mapping
+
+- **pid**: Depends on the grouping mode. In `Binary` mode, a numeric ID per `RustBinaryId` (groups tests by binary); in `Slot` mode, all tests share a single pid (`ALL_TESTS_PID = 2`). In both modes, pid 0 is reserved for run lifecycle events and pid 1 for setup scripts. Test binary pids start at 2.
+- **tid**: `global_slot` from `TestSlotAssignment` (shows parallelism). A `TID_OFFSET` of 10,000 is added to ensure test and script tids never collide with process pids. Setup scripts use their script index + offset. Stress sub-runs use a dedicated tid.
+- **name**: In `Binary` mode, the test name alone (binary is encoded in the pid). In `Slot` mode, prefixed with the binary ID for disambiguation. Script IDs and `"test run"` / `"sub-run"` are used for other event types.
+- **cat**: `"test"`, `"setup-script"`, `"stress"`, or `"run"`.
+
+### B/E events instead of X events
+
+The converter uses B (begin) / E (end) duration event pairs instead of X (complete) events. This design choice enables splitting spans around pause/resume boundaries: when `RunPaused` is seen, E events close every open span, and when `RunContinued` is seen, matching B events reopen them. The result is a visible gap in the timeline during pauses.
+
+### State tracking
+
+`ChromeTraceConverter` tracks open spans to support pause/resume:
+- `slot_assignments: HashMap<OwnedTestInstanceId, TestSlotAssignment>`: An entry means the test has an open B event.
+- `running_scripts: BTreeMap<usize, String>`: An entry means the script has an open B event. BTreeMap ensures deterministic iteration order.
+- `stress_subrun_open: bool`: Whether a stress sub-run span is currently open.
+- `run_bar_state: RunBarState`: `Open`, `Paused`, or `Closed` for the run lifecycle bar.
+
+On pause, `close_all_open_spans` emits E events for the run bar, stress sub-run, all tests, and all scripts. On resume, `reopen_all_spans` emits corresponding B events.
+
+### Missing start event handling
+
+Events that reference a test, script, or stress sub-run without a prior start event produce a hard error:
+- `TestSlow`, `TestAttemptFailedWillRetry`, or `TestFinished` without a prior `TestStarted` returns `ChromeTraceError::MissingTestStart`.
+- `SetupScriptSlow` without a prior `SetupScriptStarted` returns `ChromeTraceError::MissingScriptStart`.
+- `StressSubRunFinished` without a prior `StressSubRunStarted` returns `ChromeTraceError::MissingStressSubRunStart`.
+
+This means corrupt logs where start events are missing in the middle will fail the entire conversion rather than producing a partial trace. (Truncated logs, where events at the end are missing, are handled gracefully.)
+
+### Additional trace features
+
+- **Counter events** (`"C"` phase): Track `running_tests` and `running_scripts` counts, emitted at test start/finish and script start/finish.
+- **Flow events** (`"s"`/`"f"` phases): Connect failed test attempts to their retries with arrows.
+- **Metadata events** (`"M"` phase): Set `process_name`, `process_sort_index`, `thread_name`, and `thread_sort_index` for deterministic ordering in Perfetto.
+- **`otherData`**: Session-level metadata (nextest version, run ID, profile, CLI args, stress condition).
+
+### Error types
+
+- `ChromeTraceError::ReadError`: Wraps `RecordReadError` from the event iterator.
+- `ChromeTraceError::MissingTestStart`: An event referenced a test with no prior `TestStarted` (corrupt or truncated log).
+- `ChromeTraceError::MissingScriptStart`: A `SetupScriptSlow` referenced a script with no prior `SetupScriptStarted`.
+- `ChromeTraceError::MissingStressSubRunStart`: A `StressSubRunFinished` arrived with no prior `StressSubRunStarted`.
+- `ChromeTraceError::SerializeError`: Wraps `serde_json::Error` from final serialization.
+
+### Serde note
+
+`ChromeTraceArgs` uses `#[serde(untagged)]` for serialization only (the type is never deserialized), so the AGENTS.md guideline about untagged deserializers does not apply.
+
 ## Testing patterns
 
 ### Property-based tests for rerun logic
@@ -230,6 +291,7 @@ Errors are split into:
 - `RecordReadError`: Reading errors (missing files, decompression, parsing).
 - `RecordPruneError`: Pruning errors (collected but don't stop operation).
 - `ReplayConversionError`: Replay errors (test not found, invalid data).
+- `ChromeTraceError`: Chrome trace conversion errors (read errors or serialization).
 
 Finalization errors (`RecordFinalizeWarning`) are non-fatal—the recording itself completed.
 
