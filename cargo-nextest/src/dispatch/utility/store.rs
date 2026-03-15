@@ -328,27 +328,17 @@ impl StoreCommand {
             Redactor::noop()
         };
 
-        // Check if this is an archive-based info command first (no workspace needed).
-        if let Self::Info(ref opts) = self
-            && let RunIdOrRecordingSelector::RecordingPath(path) = opts.resolved_selector()
-        {
-            return opts.exec_from_archive(
-                path,
-                &styles,
-                &theme_characters,
-                &mut paged_output,
-                &redactor,
-            );
-        }
-
-        // All other commands require a workspace.
-        let workspace_root = locate_workspace_root(manifest_path.as_deref(), output)?;
-
-        let state_dir = records_state_dir(&workspace_root)
-            .map_err(|err| ExpectedError::RecordStateDirNotFound { err })?;
+        // Resolve the workspace state directory lazily, since archive-based
+        // commands don't need a workspace.
+        let resolve_state_dir = || -> Result<Utf8PathBuf> {
+            let workspace_root = locate_workspace_root(manifest_path.as_deref(), output)?;
+            records_state_dir(&workspace_root)
+                .map_err(|err| ExpectedError::RecordStateDirNotFound { err })
+        };
 
         match self {
             Self::List {} => {
+                let state_dir = resolve_state_dir()?;
                 let store = RunStore::new(&state_dir)
                     .map_err(|err| ExpectedError::RecordSetupError { err })?;
 
@@ -379,30 +369,40 @@ impl StoreCommand {
 
                 Ok(0)
             }
-            Self::Info(opts) => {
-                // Archive path was already handled above, so this must be a run ID.
-                match opts.resolved_selector() {
-                    RunIdOrRecordingSelector::RunId(run_id_selector) => opts.exec_from_store(
+            Self::Info(opts) => match opts.resolved_selector() {
+                RunIdOrRecordingSelector::RecordingPath(path) => opts.exec_from_archive(
+                    path,
+                    &styles,
+                    &theme_characters,
+                    &mut paged_output,
+                    &redactor,
+                ),
+                RunIdOrRecordingSelector::RunId(run_id_selector) => {
+                    let state_dir = resolve_state_dir()?;
+                    opts.exec_from_store(
                         run_id_selector,
                         &state_dir,
                         &styles,
                         &theme_characters,
                         &mut paged_output,
                         &redactor,
-                    ),
-                    RunIdOrRecordingSelector::RecordingPath(_) => {
-                        unreachable!("recording path was handled above")
-                    }
+                    )
                 }
+            },
+            Self::Prune(opts) => {
+                let state_dir = resolve_state_dir()?;
+                opts.exec(
+                    &state_dir,
+                    &user_config.record,
+                    &styles,
+                    &mut paged_output,
+                    &redactor,
+                )
             }
-            Self::Prune(opts) => opts.exec(
-                &state_dir,
-                &user_config.record,
-                &styles,
-                &mut paged_output,
-                &redactor,
-            ),
-            Self::Export(opts) => opts.exec(&state_dir, &styles),
+            Self::Export(opts) => {
+                let state_dir = resolve_state_dir()?;
+                opts.exec(&state_dir, &styles)
+            }
         }
     }
 }
