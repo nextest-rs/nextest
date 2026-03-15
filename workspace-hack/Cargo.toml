@@ -20,8 +20,8 @@ aho-corasick = { version = "1.1.4" }
 bit-set = { version = "0.8.0" }
 bit-vec = { version = "0.8.0" }
 camino = { version = "1.2.2", default-features = false, features = ["serde1"] }
-clap = { version = "4.5.60", features = ["derive", "env", "unicode", "unstable-markdown", "wrap_help"] }
-clap_builder = { version = "4.5.60", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
+clap = { version = "4.6.0", features = ["derive", "env", "unicode", "unstable-markdown", "wrap_help"] }
+clap_builder = { version = "4.6.0", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
 either = { version = "1.15.0", features = ["use_std"] }
 getrandom = { version = "0.3.3", default-features = false, features = ["std"] }
 hashbrown = { version = "0.16.1", default-features = false, features = ["allocator-api2", "inline-more"] }
@@ -56,9 +56,9 @@ memchr = { version = "2.7.6" }
 once_cell = { version = "1.21.3" }
 phf_shared = { version = "0.11.3" }
 proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.44" }
+quote = { version = "1.0.45" }
 serde_core = { version = "1.0.228", features = ["alloc", "rc"] }
-syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
 ucd-trie = { version = "0.1.7" }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
@@ -68,9 +68,9 @@ libc = { version = "0.2.183", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.44" }
+quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -102,9 +102,9 @@ libc = { version = "0.2.183", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.44" }
+quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -136,9 +136,9 @@ libc = { version = "0.2.183", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.44" }
+quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -159,9 +159,9 @@ libc = { version = "0.2.183", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.44" }
+quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -182,9 +182,9 @@ libc = { version = "0.2.183", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.44" }
+quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -204,9 +204,9 @@ libc = { version = "0.2.183", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.0.4", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.44" }
+quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-syn = { version = "2.0.114", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -220,6 +220,7 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
+windows-sys-4db8c43aad08e7ae = { package = "windows-sys", version = "0.60.2", features = ["Win32_System_Console", "Win32_System_Threading"] }
 windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59.0", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_WindowsProgramming"] }
 windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52.0", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Environment", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Threading", "Win32_UI_Shell"] }
 windows-sys-d4189bed749088b6 = { package = "windows-sys", version = "0.61.2", features = ["Win32_Globalization", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell"] }
@@ -228,6 +229,7 @@ windows-sys-d4189bed749088b6 = { package = "windows-sys", version = "0.61.2", fe
 getrandom = { version = "0.3.3", default-features = false, features = ["std"] }
 
 [target.aarch64-pc-windows-msvc.dependencies]
+windows-sys-4db8c43aad08e7ae = { package = "windows-sys", version = "0.60.2", features = ["Win32_System_Console", "Win32_System_Threading"] }
 windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59.0", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_WindowsProgramming"] }
 windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52.0", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Environment", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Threading", "Win32_UI_Shell"] }
 windows-sys-d4189bed749088b6 = { package = "windows-sys", version = "0.61.2", features = ["Win32_Globalization", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell"] }
