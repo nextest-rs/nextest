@@ -414,6 +414,30 @@ fn test_cargo_env_vars() {
     );
 }
 
+/// When `overrides-wrapper` is configured with a target runner, the runner
+/// replaces the wrapper entirely: the wrapper's command and env are not used.
+/// Without a target runner, the wrapper is used as a fallback.
+#[test]
+fn test_overrides_wrapper_env() {
+    if std::env::var("__NEXTEST_OVERRIDES_WRAPPER_WITH_RUNNER").is_ok() {
+        // A target runner is set: overrides-wrapper means the wrapper is not
+        // used, so its env should not be present.
+        assert_eq!(
+            std::env::var("WRAPPER_CMD_ENV_VAR"),
+            Err(std::env::VarError::NotPresent),
+            "WRAPPER_CMD_ENV_VAR should not be set when runner overrides wrapper",
+        );
+    } else {
+        // No target runner: the wrapper is used as a fallback, so its env
+        // should be present.
+        assert_eq!(
+            std::env::var("WRAPPER_CMD_ENV_VAR").as_deref(),
+            Ok("value-from-overridden-wrapper"),
+            "WRAPPER_CMD_ENV_VAR should be set when wrapper is used as fallback",
+        );
+    }
+}
+
 #[test]
 #[ignore]
 fn test_slow_timeout() {

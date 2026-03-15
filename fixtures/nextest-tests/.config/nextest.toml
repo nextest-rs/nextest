@@ -28,6 +28,16 @@ run-wrapper = "wrapper1-windows"
 
 [[profile.default.scripts]]
 platform = { host = "cfg(unix)" }
+filter = "test(=test_overrides_wrapper_env)"
+run-wrapper = "wrapper-overrides-unix"
+
+[[profile.default.scripts]]
+platform = { host = "cfg(windows)" }
+filter = "test(=test_overrides_wrapper_env)"
+run-wrapper = "wrapper-overrides-windows"
+
+[[profile.default.scripts]]
+platform = { host = "cfg(unix)" }
 filter = "binary(nextest-tests)"
 setup = "my-script-unix"
 list-wrapper = "wrapper1-unix"
@@ -220,4 +230,24 @@ command = {
 }
 target-runner = "within-wrapper"
 
-# TODO: tests for around/override/ignore target runner
+[scripts.wrapper.wrapper-overrides-unix]
+command = {
+    command-line = "./debug/wrapper overrides",
+    relative-to = "target",
+    env = {
+        WRAPPER_CMD_ENV_VAR = "value-from-overridden-wrapper",
+    },
+}
+target-runner = "overrides-wrapper"
+
+[scripts.wrapper.wrapper-overrides-windows]
+command = {
+    command-line = "debug/wrapper.exe overrides",
+    relative-to = "target",
+    env = {
+        WRAPPER_CMD_ENV_VAR = "value-from-overridden-wrapper",
+    },
+}
+target-runner = "overrides-wrapper"
+
+# TODO: tests for around/ignore target runner

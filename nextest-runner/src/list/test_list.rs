@@ -1543,15 +1543,16 @@ impl<'a> TestCommandCli<'a> {
     ) {
         // Apply the wrapper script if it's enabled.
         if let Some(wrapper) = wrapper_script {
-            self.env = Some(&wrapper.command.env);
             match wrapper.target_runner {
                 WrapperScriptTargetRunner::Ignore => {
                     // Ignore the platform runner.
+                    self.env = Some(&wrapper.command.env);
                     self.push(wrapper.command.program(workspace_root, target_dir));
                     self.extend(wrapper.command.args.iter().map(String::as_str));
                 }
                 WrapperScriptTargetRunner::AroundWrapper => {
                     // Platform runner goes first.
+                    self.env = Some(&wrapper.command.env);
                     if let Some(runner) = platform_runner {
                         self.push(runner.binary());
                         self.extend(runner.args());
@@ -1561,6 +1562,7 @@ impl<'a> TestCommandCli<'a> {
                 }
                 WrapperScriptTargetRunner::WithinWrapper => {
                     // Wrapper script goes first.
+                    self.env = Some(&wrapper.command.env);
                     self.push(wrapper.command.program(workspace_root, target_dir));
                     self.extend(wrapper.command.args.iter().map(String::as_str));
                     if let Some(runner) = platform_runner {
@@ -1569,10 +1571,16 @@ impl<'a> TestCommandCli<'a> {
                     }
                 }
                 WrapperScriptTargetRunner::OverridesWrapper => {
-                    // Target runner overrides wrapper.
                     if let Some(runner) = platform_runner {
+                        // Target runner overrides wrapper: wrapper's command
+                        // and env are not used.
                         self.push(runner.binary());
                         self.extend(runner.args());
+                    } else {
+                        // No target runner: fall back to wrapper.
+                        self.env = Some(&wrapper.command.env);
+                        self.push(wrapper.command.program(workspace_root, target_dir));
+                        self.extend(wrapper.command.args.iter().map(String::as_str));
                     }
                 }
             }
@@ -2291,7 +2299,8 @@ mod tests {
             );
         }
 
-        // Test wrapper with overrides wrapper (runner only)
+        // Test wrapper with overrides-wrapper + runner present: runner wins,
+        // wrapper env is not applied.
         {
             let runner = PlatformRunner::debug_new(
                 "runner".into(),
@@ -2315,13 +2324,44 @@ mod tests {
                 target_dir,
             );
             cli_wrapper_overrides.extend(["binary", "arg"]);
-            assert_eq!(
-                cli_wrapper_overrides.env,
-                Some(&ScriptCommandEnvMap::default())
+            assert!(
+                cli_wrapper_overrides.env.is_none(),
+                "overrides-wrapper with runner should not apply wrapper env"
             );
             assert_eq!(
                 cli_wrapper_overrides.to_owned_cli(),
                 vec!["runner", "binary", "arg"],
+            );
+        }
+
+        // Test wrapper with overrides-wrapper + no runner: wrapper is used as
+        // fallback, env is applied.
+        {
+            let wrapper_overrides = WrapperScriptConfig {
+                command: ScriptCommand {
+                    program: "wrapper".into(),
+                    args: Vec::new(),
+                    env: ScriptCommandEnvMap::default(),
+                    relative_to: ScriptCommandRelativeTo::None,
+                },
+                target_runner: WrapperScriptTargetRunner::OverridesWrapper,
+            };
+            let mut cli_wrapper_overrides_no_runner = TestCommandCli::default();
+            cli_wrapper_overrides_no_runner.apply_wrappers(
+                Some(&wrapper_overrides),
+                None,
+                workspace_root,
+                target_dir,
+            );
+            cli_wrapper_overrides_no_runner.extend(["binary", "arg"]);
+            assert_eq!(
+                cli_wrapper_overrides_no_runner.env,
+                Some(&ScriptCommandEnvMap::default()),
+                "overrides-wrapper without runner should apply wrapper env"
+            );
+            assert_eq!(
+                cli_wrapper_overrides_no_runner.to_owned_cli(),
+                vec!["wrapper", "binary", "arg"],
             );
         }
 

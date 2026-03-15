@@ -15,6 +15,7 @@ nextest-tests::basic test_failure_error
 nextest-tests::basic test_failure_should_panic
 nextest-tests::basic test_flaky_mod_4
 nextest-tests::basic test_flaky_mod_6
+nextest-tests::basic test_overrides_wrapper_env
 nextest-tests::basic test_result_failure
 nextest-tests::basic test_stdin_closed
 nextest-tests::basic test_subprocess_doesnt_exit
