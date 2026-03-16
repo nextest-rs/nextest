@@ -777,11 +777,10 @@ mod tests {
             let describe = run_statuses.describe();
             let last_status = describe.last_status();
 
-            let display = decider.overrides.resolve_test_output_display(
-                success_output,
-                failure_output,
-                &last_status.result,
-            );
+            let display =
+                decider
+                    .overrides
+                    .resolve_for_describe(success_output, failure_output, &describe);
 
             let test_status_level = describe.status_level();
             let test_final_status_level = describe.final_status_level();

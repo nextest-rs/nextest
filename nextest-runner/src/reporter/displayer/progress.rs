@@ -916,7 +916,7 @@ mod tests {
     use crate::{
         config::elements::FlakyResult,
         output_spec::LiveSpec,
-        reporter::TestOutputDisplay,
+        reporter::{TestOutputDisplay, test_helpers::global_slot_assignment},
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     };
     use bytes::Bytes;
@@ -1197,6 +1197,7 @@ mod tests {
                     binary_id: &binary_id,
                     test_name: &test_name,
                 },
+                slot_assignment: global_slot_assignment(0),
                 current_stats: started_stats,
                 running: 3,
                 command_line: vec![],

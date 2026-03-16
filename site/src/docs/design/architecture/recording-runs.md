@@ -9,7 +9,7 @@ description: Design document describing how and why nextest records and replays 
 
     This is a design document intended for nextest contributors and curious readers.
 
-When recording is enabled, nextest persists the full event stream, captured test outputs, and workspace metadata for every test run. This information can be used to [replay and analyze](../../features/record-replay-rerun.md) test runs, and also as the basis for iterative reruns. Getting this right is a challenging problem. Here's how nextest does it.
+When recording is enabled, nextest persists the full event stream, captured test outputs, and workspace metadata for every test run. This information can be used to [replay and analyze](../../features/record-replay-rerun/index.md) test runs, and also as the basis for iterative reruns. Getting this right is a challenging problem. Here's how nextest does it.
 
 ## Design principles
 
@@ -214,7 +214,7 @@ Bumps to the store format version are currently done manually. We have plans to 
 
 With any kind of caching comes the need for eviction. Nextest defines a set of cache limits for recorded runs, and prunes runs when those limits are hit.
 
-The default nextest limits are specified in [the user-facing documentation](../../features/record-replay-rerun.md). These limits are chosen to be relatively generous and should cover most reasonable use cases. Users who need different values can adjust their limits in user configuration.
+The default nextest limits are specified in [the user-facing documentation](../../features/record-replay-rerun/managing-runs.md#record-retention). These limits are chosen to be relatively generous and should cover most reasonable use cases. Users who need different values can adjust their limits in user configuration.
 
 Nextest automatically prunes the cache once a day, or if the number or size limits are exceeded by a factor of 1.5 or more. This 1.5x buffer exists to avoid pruning on every nextest invocation (particularly when the limit on the number of runs is exceeded).
 

@@ -1,0 +1,308 @@
+---
+source: nextest-runner/src/record/chrome_trace.rs
+expression: json_str
+---
+{
+  "traceEvents": [
+    {
+      "name": "process_name",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "name": "nextest run (default)"
+      }
+    },
+    {
+      "name": "process_sort_index",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "sort_index": 0
+      }
+    },
+    {
+      "name": "thread_name",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 0,
+      "tid": 1,
+      "args": {
+        "name": "run"
+      }
+    },
+    {
+      "name": "thread_sort_index",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 0,
+      "tid": 1,
+      "args": {
+        "sort_index": 1
+      }
+    },
+    {
+      "name": "test run",
+      "cat": "run",
+      "ph": "B",
+      "ts": 1000000000.0,
+      "pid": 0,
+      "tid": 1,
+      "args": {
+        "nextest_version": "0.9.9999",
+        "run_id": "00000000-0000-0000-0000-000000000000",
+        "profile": "default",
+        "cli_args": []
+      }
+    },
+    {
+      "name": "process_name",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 0,
+      "args": {
+        "name": "tests"
+      }
+    },
+    {
+      "name": "process_sort_index",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 0,
+      "args": {
+        "sort_index": 2
+      }
+    },
+    {
+      "name": "thread_name",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "name": "slot-0"
+      }
+    },
+    {
+      "name": "thread_sort_index",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "sort_index": 10000
+      }
+    },
+    {
+      "name": "crate-a::bin/test-a test_alpha",
+      "cat": "test",
+      "ph": "B",
+      "ts": 1000000000.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "binary_id": "crate-a::bin/test-a"
+      }
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1000000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 1,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "thread_name",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 10001,
+      "args": {
+        "name": "slot-1"
+      }
+    },
+    {
+      "name": "thread_sort_index",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 10001,
+      "args": {
+        "sort_index": 10001
+      }
+    },
+    {
+      "name": "crate-b::bin/test-b test_beta",
+      "cat": "test",
+      "ph": "B",
+      "ts": 1000000000.0,
+      "pid": 2,
+      "tid": 10001,
+      "args": {
+        "binary_id": "crate-b::bin/test-b"
+      }
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1000000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 2,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "crate-a::bin/test-a test_alpha",
+      "cat": "test",
+      "ph": "E",
+      "ts": 1002000000.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "binary_id": "crate-a::bin/test-a",
+        "time_taken_ms": 500.0,
+        "result": {
+          "status": "pass"
+        },
+        "attempt": 1,
+        "total_attempts": 1,
+        "is_slow": false,
+        "test_group": "@global"
+      }
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1002000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 1,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "test results",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1002000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "passed": 0,
+        "flaky": 0,
+        "failed": 0
+      }
+    },
+    {
+      "name": "crate-b::bin/test-b test_beta",
+      "cat": "test",
+      "ph": "E",
+      "ts": 1003000000.0,
+      "pid": 2,
+      "tid": 10001,
+      "args": {
+        "binary_id": "crate-b::bin/test-b",
+        "time_taken_ms": 800.0,
+        "result": {
+          "status": "pass"
+        },
+        "attempt": 1,
+        "total_attempts": 1,
+        "is_slow": false,
+        "test_group": "@global"
+      }
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1003000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 0,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "test results",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1003000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "passed": 0,
+        "flaky": 0,
+        "failed": 0
+      }
+    },
+    {
+      "name": "test run",
+      "cat": "run",
+      "ph": "E",
+      "ts": 1004000000.0,
+      "pid": 0,
+      "tid": 1,
+      "args": {
+        "nextest_version": "0.9.9999",
+        "time_taken_ms": 4000.0,
+        "profile": "default",
+        "run_stats": {
+          "type": "single",
+          "initial-run-count": 0,
+          "finished-count": 0,
+          "setup-scripts-initial-count": 0,
+          "setup-scripts-finished-count": 0,
+          "setup-scripts-passed": 0,
+          "setup-scripts-failed": 0,
+          "setup-scripts-exec-failed": 0,
+          "setup-scripts-timed-out": 0,
+          "passed": 0,
+          "passed-slow": 0,
+          "passed-timed-out": 0,
+          "flaky": 0,
+          "failed": 0,
+          "failed-slow": 0,
+          "failed-timed-out": 0,
+          "leaky": 0,
+          "leaky-failed": 0,
+          "exec-failed": 0,
+          "skipped": 0,
+          "cancel-reason": null
+        }
+      }
+    }
+  ],
+  "displayTimeUnit": "ms",
+  "otherData": {
+    "nextest_version": "0.9.9999",
+    "run_id": "00000000-0000-0000-0000-000000000000",
+    "profile_name": "default"
+  }
+}

@@ -7,6 +7,7 @@
 //! didn't complete in a previous recorded run.
 
 use crate::{
+    config::elements::FlakyResult,
     errors::RecordReadError,
     list::OwnedTestInstanceId,
     record::{
@@ -14,6 +15,7 @@ use crate::{
         TestEventKindSummary,
         format::{RerunInfo, RerunRootInfo, RerunTestSuiteInfo},
     },
+    reporter::events::ExecutionDescription,
 };
 use iddqd::IdOrdMap;
 use nextest_metadata::{
@@ -437,10 +439,20 @@ where
                 ..
             }) => {
                 // Determine outcome for this iteration/finish event.
-                let outcome = if run_statuses.last_status().result.is_success() {
-                    TestOutcome::Passed
-                } else {
-                    TestOutcome::Failed
+                // Use describe() to account for flaky-fail tests: the last
+                // attempt may have succeeded, but the overall test result is
+                // a failure if flaky_result is Fail.
+                let outcome = match run_statuses.describe() {
+                    ExecutionDescription::Success { .. } => TestOutcome::Passed,
+                    ExecutionDescription::Flaky {
+                        result: FlakyResult::Pass,
+                        ..
+                    } => TestOutcome::Passed,
+                    ExecutionDescription::Flaky {
+                        result: FlakyResult::Fail,
+                        ..
+                    } => TestOutcome::Failed,
+                    ExecutionDescription::Failure { .. } => TestOutcome::Failed,
                 };
 
                 // For stress runs: multiple TestFinished events occur for the
@@ -477,7 +489,6 @@ where
 mod tests {
     use super::*;
     use crate::{
-        config::elements::FlakyResult,
         output_spec::RecordingSpec,
         record::{
             OutputEventKind, StressIndexSummary, TestEventKindSummary, ZipStoreOutputDescription,
@@ -1499,6 +1510,111 @@ mod tests {
             current_stats: RunStats::default(),
             running: 0,
         })
+    }
+
+    /// Creates a flaky `TestFinished` event: one failed attempt followed by a
+    /// passing attempt, with the given `FlakyResult`.
+    fn make_flaky_test_finished(
+        test_instance: OwnedTestInstanceId,
+        flaky_result: FlakyResult,
+    ) -> TestEventKindSummary<RecordingSpec> {
+        let fail_result = ExecutionResultDescription::Fail {
+            failure: FailureDescription::ExitCode { code: 1 },
+            leaked: false,
+        };
+        let pass_result = ExecutionResultDescription::Pass;
+
+        let fail_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 2,
+            },
+            output: ChildExecutionOutputDescription::Output {
+                result: Some(fail_result.clone()),
+                output: ZipStoreOutputDescription::Split {
+                    stdout: None,
+                    stderr: None,
+                },
+                errors: None,
+            },
+            result: fail_result,
+            start_time: Utc::now().into(),
+            time_taken: Duration::from_millis(100),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        let pass_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 2,
+                total_attempts: 2,
+            },
+            output: ChildExecutionOutputDescription::Output {
+                result: Some(pass_result.clone()),
+                output: ZipStoreOutputDescription::Split {
+                    stdout: None,
+                    stderr: None,
+                },
+                errors: None,
+            },
+            result: pass_result,
+            start_time: Utc::now().into(),
+            time_taken: Duration::from_millis(100),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+
+        TestEventKindSummary::Output(OutputEventKind::TestFinished {
+            stress_index: None,
+            test_instance,
+            success_output: TestOutputDisplay::Never,
+            failure_output: TestOutputDisplay::Never,
+            junit_store_success_output: false,
+            junit_store_failure_output: false,
+            run_statuses: ExecutionStatuses::new(vec![fail_status, pass_status], flaky_result),
+            current_stats: RunStats::default(),
+            running: 0,
+        })
+    }
+
+    /// Test that flaky-fail tests are treated as Failed for rerun purposes.
+    ///
+    /// A flaky test is one that fails on the first attempt but passes on
+    /// retry. With `FlakyResult::Fail`, the overall outcome should be Failed
+    /// so that the test is rerun. With `FlakyResult::Pass`, it should be
+    /// Passed.
+    #[test]
+    fn flaky_result_affects_rerun_outcome() {
+        let test_flaky_fail = OwnedTestInstanceId {
+            binary_id: RustBinaryId::new("test-binary"),
+            test_name: TestCaseName::new("flaky_fail"),
+        };
+        let test_flaky_pass = OwnedTestInstanceId {
+            binary_id: RustBinaryId::new("test-binary"),
+            test_name: TestCaseName::new("flaky_pass"),
+        };
+
+        let events = [
+            make_flaky_test_finished(test_flaky_fail.clone(), FlakyResult::Fail),
+            make_flaky_test_finished(test_flaky_pass.clone(), FlakyResult::Pass),
+        ];
+
+        let outcomes = collect_from_events(events.iter().map(Ok::<_, Infallible>)).unwrap();
+
+        assert_eq!(
+            outcomes.get(&test_flaky_fail),
+            Some(&TestOutcome::Failed),
+            "flaky test with FlakyResult::Fail should be Failed for rerun"
+        );
+        assert_eq!(
+            outcomes.get(&test_flaky_pass),
+            Some(&TestOutcome::Passed),
+            "flaky test with FlakyResult::Pass should be Passed for rerun"
+        );
     }
 
     /// Test stress run accumulation: if any iteration fails, the test is Failed.

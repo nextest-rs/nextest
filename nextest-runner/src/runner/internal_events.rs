@@ -21,7 +21,7 @@ use crate::{
         events::{
             ChildExecutionOutputDescription, ErrorSummary, ExecuteStatus, ExecutionResult,
             InfoResponse, OutputErrorSlice, RetryData, SetupScriptEnvMap, SetupScriptExecuteStatus,
-            StressIndex, UnitKind, UnitState,
+            StressIndex, TestSlotAssignment, UnitKind, UnitState,
         },
     },
     signal::ShutdownEvent,
@@ -75,6 +75,7 @@ pub(super) enum ExecutorEvent<'a> {
     Started {
         stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
+        slot_assignment: TestSlotAssignment,
         command_line: Vec<String>,
         // The channel over which to return the unit request.
         //
@@ -107,6 +108,7 @@ pub(super) enum ExecutorEvent<'a> {
     RetryStarted {
         stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
+        slot_assignment: TestSlotAssignment,
         retry_data: RetryData,
         command_line: Vec<String>,
         // This is used to indicate that the dispatcher still wants to run the test.

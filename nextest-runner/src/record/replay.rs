@@ -186,6 +186,7 @@ impl<'a> ReplayContext<'a> {
             CoreEventKind::TestStarted {
                 stress_index,
                 test_instance,
+                slot_assignment,
                 current_stats,
                 running,
                 command_line,
@@ -199,6 +200,7 @@ impl<'a> ReplayContext<'a> {
                 Ok(TestEventKind::TestStarted {
                     stress_index: stress_index.as_ref().map(convert_stress_index),
                     test_instance: instance_id,
+                    slot_assignment: slot_assignment.clone(),
                     current_stats: *current_stats,
                     running: *running,
                     command_line: command_line.clone(),
@@ -230,6 +232,7 @@ impl<'a> ReplayContext<'a> {
             CoreEventKind::TestRetryStarted {
                 stress_index,
                 test_instance,
+                slot_assignment,
                 retry_data,
                 running,
                 command_line,
@@ -243,6 +246,7 @@ impl<'a> ReplayContext<'a> {
                 Ok(TestEventKind::TestRetryStarted {
                     stress_index: stress_index.as_ref().map(convert_stress_index),
                     test_instance: instance_id,
+                    slot_assignment: slot_assignment.clone(),
                     retry_data: *retry_data,
                     running: *running,
                     command_line: command_line.clone(),

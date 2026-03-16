@@ -15,7 +15,9 @@ use super::{ChildPid, HandleSignalResult, Interceptor, VersionEnvVars};
 use crate::{
     config::{
         core::EvaluatableProfile,
-        elements::{LeakTimeout, LeakTimeoutResult, RetryPolicy, SlowTimeout, TestGroup},
+        elements::{
+            FlakyResult, LeakTimeout, LeakTimeoutResult, RetryPolicy, SlowTimeout, TestGroup,
+        },
         overrides::TestSettings,
         scripts::{ScriptId, SetupScriptCommand, SetupScriptConfig, SetupScriptExecuteData},
     },
@@ -24,7 +26,7 @@ use crate::{
     list::{TestExecuteContext, TestInstance, TestInstanceWithSettings, TestList},
     reporter::events::{
         ExecutionResult, FailureStatus, InfoResponse, RetryData, SetupScriptInfoResponse,
-        StressIndex, TestInfoResponse, UnitKind, UnitState,
+        StressIndex, TestInfoResponse, TestSlotAssignment, UnitKind, UnitState,
     },
     runner::{
         ExecutorEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus,
@@ -68,6 +70,9 @@ pub(super) struct ExecutorContext<'a> {
     capture_strategy: CaptureStrategy,
     // This is Some if the user specifies a retry policy over the command-line.
     force_retries: Option<RetryPolicy>,
+    // This is Some if the user specifies flaky result behavior over the
+    // command-line.
+    force_flaky_result: Option<FlakyResult>,
     interceptor: Interceptor,
     version_env_vars: Option<VersionEnvVars>,
 }
@@ -83,6 +88,7 @@ impl<'a> ExecutorContext<'a> {
         target_runner: TargetRunner,
         capture_strategy: CaptureStrategy,
         force_retries: Option<RetryPolicy>,
+        force_flaky_result: Option<FlakyResult>,
         interceptor: Interceptor,
         version_env_vars: Option<VersionEnvVars>,
     ) -> Self {
@@ -95,6 +101,7 @@ impl<'a> ExecutorContext<'a> {
             target_runner,
             capture_strategy,
             force_retries,
+            force_flaky_result,
             interceptor,
             version_env_vars,
         }
@@ -205,7 +212,9 @@ impl<'a> ExecutorContext<'a> {
         let settings = Arc::new(test.settings);
 
         let retry_policy = self.force_retries.unwrap_or_else(|| settings.retries());
-        let flaky_result = settings.flaky_result();
+        let flaky_result = self
+            .force_flaky_result
+            .unwrap_or_else(|| settings.flaky_result());
         let total_attempts = retry_policy.count() + 1;
         let mut backoff_iter = BackoffIter::new(retry_policy);
 
@@ -225,6 +234,12 @@ impl<'a> ExecutorContext<'a> {
 
         let (req_rx_tx, req_rx_rx) = oneshot::channel();
 
+        let slot_assignment = TestSlotAssignment {
+            global_slot: cx.global_slot(),
+            group_slot: cx.group_slot(),
+            test_group: settings.test_group().clone(),
+        };
+
         let ctx = self.test_execute_context();
         let command_line = test.instance.command_line(
             &ctx,
@@ -238,6 +253,7 @@ impl<'a> ExecutorContext<'a> {
         _ = resp_tx.send(ExecutorEvent::Started {
             stress_index,
             test_instance: test.instance,
+            slot_assignment: slot_assignment.clone(),
             command_line: command_line.clone(),
             req_rx_tx,
             flaky_result,
@@ -269,6 +285,7 @@ impl<'a> ExecutorContext<'a> {
                 _ = resp_tx.send(ExecutorEvent::RetryStarted {
                     stress_index,
                     test_instance: test.instance,
+                    slot_assignment: slot_assignment.clone(),
                     retry_data,
                     command_line: command_line.clone(),
                     tx,

@@ -2643,6 +2643,173 @@ fn test_retries() {
     );
 }
 
+/// Test that `flaky-result = "fail"` works correctly for flaky tests.
+///
+/// The `with-retries-flaky-fail` profile has:
+/// - `retries = 2` (default for the profile)
+/// - Override for test_flaky_mod_4: `retries = { backoff = "fixed", count = 4, flaky-result = "fail" }`
+/// - Override for test_flaky_mod_6: `retries = 5`
+///
+/// test_flaky_mod_4 passes on attempt 4 of 5, but `flaky-result = "fail"` means it
+/// counts as a failure. test_flaky_mod_6 passes on attempt 6 of 6 and is not
+/// configured to fail, so it counts as passed (FLAKY 6/6).
+#[test]
+fn test_retries_flaky_fail() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--profile",
+            "with-retries-flaky-fail",
+        ])
+        .unchecked(true)
+        .output();
+
+    // Should fail because test_flaky_mod_4 has flaky-result = "fail" and other
+    // tests also fail normally.
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "flaky test with flaky-result = \"fail\" should cause failure\n{output}"
+    );
+    check_run_output_with_junit(
+        &output.stderr,
+        &p.junit_path("with-retries-flaky-fail"),
+        RunProperties::WITH_RETRIES_FLAKY_FAIL | RunProperties::SKIP_SUMMARY_CHECK,
+    );
+}
+
+/// Test that `--retries` CLI flag preserves config-level `flaky-result = "fail"`.
+///
+/// This is the key scenario for independent resolution: `--retries 5` overrides
+/// the retry count, but the `flaky-result = "fail"` from the config override for
+/// test_flaky_mod_4 should be preserved. Before the split of `FlakyResult`
+/// from `RetryPolicy`, `--retries` would replace the entire policy including
+/// the result.
+#[test]
+fn test_retries_cli_preserves_flaky_fail() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--profile",
+            "with-retries-flaky-fail",
+            "--retries",
+            "5",
+            "-E",
+            "test(=test_flaky_mod_4) | test(=test_flaky_mod_6)",
+        ])
+        .unchecked(true)
+        .output();
+
+    // test_flaky_mod_4 has flaky-result = "fail" in config, so it should be a
+    // failure even though --retries overrides the count.
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "--retries should preserve config flaky-result = \"fail\"\n{output}"
+    );
+    check_run_output_for_test_names(
+        &output.stderr,
+        &["test_flaky_mod_4", "test_flaky_mod_6"],
+        RunProperties::WITH_RETRIES_FLAKY_FAIL,
+    );
+}
+
+/// Test that `--flaky-result fail` CLI flag makes all flaky tests fail.
+///
+/// With `--flaky-result fail`, every test that passes on retry should be
+/// counted as a failure, regardless of per-test config. This is useful for
+/// CI pipelines that want to treat all flakiness as failures.
+#[test]
+fn test_flaky_result_fail_cli() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--profile",
+            "with-retries-flaky-fail",
+            "--flaky-result",
+            "fail",
+            "-E",
+            "test(=test_flaky_mod_4) | test(=test_flaky_mod_6)",
+        ])
+        .unchecked(true)
+        .output();
+
+    // Both flaky tests should be failures: test_flaky_mod_4 has
+    // flaky-result = "fail" in config (would fail anyway), and test_flaky_mod_6
+    // now also fails due to the CLI flag.
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "--flaky-result fail should make all flaky tests fail\n{output}"
+    );
+    check_run_output_for_test_names(
+        &output.stderr,
+        &["test_flaky_mod_4", "test_flaky_mod_6"],
+        RunProperties::WITH_CLI_FLAKY_RESULT_FAIL,
+    );
+}
+
+/// Test that `--flaky-result pass` CLI flag overrides config `flaky-result = "fail"`.
+///
+/// With `--flaky-result pass`, even tests configured with `flaky-result = "fail"` in
+/// the profile should be treated as passing when they eventually succeed.
+#[test]
+fn test_flaky_result_pass_cli() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--profile",
+            "with-retries-flaky-fail",
+            "--flaky-result",
+            "pass",
+            "-E",
+            "test(=test_flaky_mod_4) | test(=test_flaky_mod_6)",
+        ])
+        .unchecked(true)
+        .output();
+
+    // Both flaky tests should pass: --flaky-result pass overrides the config's
+    // flaky-result = "fail" for test_flaky_mod_4.
+    assert_eq!(
+        output.exit_status.code(),
+        Some(0),
+        "--flaky-result pass should override config flaky-result = \"fail\"\n{output}"
+    );
+    check_run_output_for_test_names(
+        &output.stderr,
+        &["test_flaky_mod_4", "test_flaky_mod_6"],
+        RunProperties::WITH_CLI_FLAKY_RESULT_PASS,
+    );
+}
+
 /// Test that tests time out correctly with the with-termination profile.
 ///
 /// The `with-termination` profile has slow-timeout configured such that tests

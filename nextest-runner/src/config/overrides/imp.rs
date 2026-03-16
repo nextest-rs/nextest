@@ -7,8 +7,8 @@ use crate::{
             EvaluatableProfile, FinalConfig, NextestConfig, NextestConfigImpl, PreBuildPlatform,
         },
         elements::{
-            DeserializedRetryPolicy, FlakyResult, LeakTimeout, RetryPolicy, SlowTimeout, TestGroup,
-            TestPriority, ThreadsRequired,
+            FlakyResult, LeakTimeout, RetryPolicy, SlowTimeout, TestGroup, TestPriority,
+            ThreadsRequired,
         },
         scripts::{
             CompiledProfileScripts, DeserializedProfileScriptConfig, ScriptId, WrapperScriptConfig,
@@ -809,8 +809,8 @@ impl CompiledOverride<PreBuildPlatform> {
                         priority: source.priority,
                         threads_required: source.threads_required,
                         run_extra_args: source.run_extra_args.clone(),
-                        retries: source.retries.map(|drp| drp.policy),
-                        flaky_result: source.retries.and_then(|drp| drp.flaky_result),
+                        retries: source.retries,
+                        flaky_result: source.flaky_result,
                         slow_timeout: source.slow_timeout,
                         bench_slow_timeout: source.bench.slow_timeout,
                         leak_timeout: source.leak_timeout,
@@ -962,7 +962,9 @@ pub(in crate::config) struct DeserializedOverride {
         default,
         deserialize_with = "crate::config::elements::deserialize_retry_policy"
     )]
-    retries: Option<DeserializedRetryPolicy>,
+    retries: Option<RetryPolicy>,
+    #[serde(default)]
+    flaky_result: Option<FlakyResult>,
     #[serde(
         default,
         deserialize_with = "crate::config::elements::deserialize_slow_timeout"

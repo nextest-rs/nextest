@@ -5,7 +5,7 @@ use super::{DispatcherContext, ExecutorContext, RunnerTaskState};
 use crate::{
     config::{
         core::EvaluatableProfile,
-        elements::{MaxFail, RetryPolicy, TestGroup, TestThreads},
+        elements::{FlakyResult, MaxFail, RetryPolicy, TestGroup, TestThreads},
         scripts::SetupScriptExecuteData,
     },
     double_spawn::DoubleSpawnInfo,
@@ -261,6 +261,7 @@ impl ChildPid {
 pub struct TestRunnerBuilder {
     capture_strategy: CaptureStrategy,
     retries: Option<RetryPolicy>,
+    flaky_result: Option<FlakyResult>,
     max_fail: Option<MaxFail>,
     test_threads: Option<TestThreads>,
     stress_condition: Option<StressCondition>,
@@ -288,6 +289,12 @@ impl TestRunnerBuilder {
     /// Sets the number of retries for this test runner.
     pub fn set_retries(&mut self, retries: RetryPolicy) -> &mut Self {
         self.retries = Some(retries);
+        self
+    }
+
+    /// Sets the flaky result behavior for this test runner.
+    pub fn set_flaky_result(&mut self, flaky_result: FlakyResult) -> &mut Self {
+        self.flaky_result = Some(flaky_result);
         self
     }
 
@@ -378,6 +385,7 @@ impl TestRunnerBuilder {
                 target_runner,
                 capture_strategy: self.capture_strategy,
                 force_retries: self.retries,
+                force_flaky_result: self.flaky_result,
                 cli_args,
                 max_fail,
                 stress_condition: self.stress_condition,
@@ -548,6 +556,7 @@ struct TestRunnerInner<'a> {
     target_runner: TargetRunner,
     capture_strategy: CaptureStrategy,
     force_retries: Option<RetryPolicy>,
+    force_flaky_result: Option<FlakyResult>,
     cli_args: Vec<String>,
     max_fail: MaxFail,
     stress_condition: Option<StressCondition>,
@@ -598,6 +607,7 @@ impl<'a> TestRunnerInner<'a> {
             self.target_runner.clone(),
             self.capture_strategy,
             self.force_retries,
+            self.force_flaky_result,
             self.interceptor.clone(),
             self.version_env_vars.clone(),
         );

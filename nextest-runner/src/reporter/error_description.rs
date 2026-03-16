@@ -42,10 +42,10 @@ impl<'a> UnitErrorDescription<'a> {
             } => {
                 output_errors = errors.as_ref();
                 if let Some(result) = result {
-                    if kind == UnitKind::Test {
+                    if kind == UnitKind::Test && !result.is_success() {
                         match output {
                             // Scanning the output for the most relevant slice
-                            // only makes sense for completed tests.
+                            // only makes sense for failed tests.
                             ChildOutputDescription::Split { stdout, stderr } => {
                                 output_slice = TestOutputErrorSlice::heuristic_extract(
                                     stdout.as_ref().map(|x| x.buf().as_ref()),
@@ -363,6 +363,89 @@ static ERROR_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        reporter::events::ExecutionResult,
+        test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
+    };
+    use bytes::Bytes;
+
+    /// Tests that `UnitErrorDescription` does not extract error descriptions
+    /// from the output of successful tests, even if their stderr contains
+    /// error-like patterns (e.g., "Error:" or "panicked at").
+    #[test]
+    fn test_no_error_extraction_for_successful_tests() {
+        // A passing test that prints "Error:" to stderr (e.g., testing
+        // error-handling code).
+        let error_str_output: ChildExecutionOutputDescription<LiveSpec> =
+            ChildExecutionOutput::Output {
+                result: Some(ExecutionResult::Pass),
+                output: ChildOutput::Split(ChildSplitOutput {
+                    stdout: Some(Bytes::from("test output").into()),
+                    stderr: Some(Bytes::from("Error: simulated error for testing\n").into()),
+                }),
+                errors: None,
+            }
+            .into();
+
+        let desc = UnitErrorDescription::new(UnitKind::Test, &error_str_output);
+        assert!(
+            desc.output_slice().is_none(),
+            "output_slice should be None for a passing test with 'Error:' in stderr"
+        );
+        assert!(
+            desc.all_error_list().is_none(),
+            "all_error_list should be None for a passing test with 'Error:' in stderr"
+        );
+
+        // A passing test that prints a panic-like message to stderr.
+        let panic_output: ChildExecutionOutputDescription<LiveSpec> =
+            ChildExecutionOutput::Output {
+                result: Some(ExecutionResult::Pass),
+                output: ChildOutput::Split(ChildSplitOutput {
+                    stdout: None,
+                    stderr: Some(
+                        Bytes::from(
+                            "thread 'other' panicked at src/lib.rs:10:\n\
+                             expected panic for testing\n",
+                        )
+                        .into(),
+                    ),
+                }),
+                errors: None,
+            }
+            .into();
+
+        let desc = UnitErrorDescription::new(UnitKind::Test, &panic_output);
+        assert!(
+            desc.output_slice().is_none(),
+            "output_slice should be None for a passing test with panic-like stderr"
+        );
+        assert!(
+            desc.all_error_list().is_none(),
+            "all_error_list should be None for a passing test with panic-like stderr"
+        );
+
+        // A passing test with combined output containing "Error:".
+        let combined_output: ChildExecutionOutputDescription<LiveSpec> =
+            ChildExecutionOutput::Output {
+                result: Some(ExecutionResult::Pass),
+                output: ChildOutput::Combined {
+                    output: Bytes::from("some output\nError: not a real error\n").into(),
+                },
+                errors: None,
+            }
+            .into();
+
+        let desc = UnitErrorDescription::new(UnitKind::Test, &combined_output);
+        assert!(
+            desc.output_slice().is_none(),
+            "output_slice should be None for a passing test with 'Error:' in combined output"
+        );
+        assert!(
+            desc.all_error_list().is_none(),
+            "all_error_list should be None for a passing test with 'Error:' in combined output"
+        );
+    }
 
     #[test]
     fn test_heuristic_should_panic() {

@@ -11,7 +11,7 @@ use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 use crate::output_spec::ArbitraryOutputSpec;
 use crate::{
     config::{
-        elements::{FlakyResult, LeakTimeoutResult, SlowTimeoutResult},
+        elements::{FlakyResult, LeakTimeoutResult, SlowTimeoutResult, TestGroup},
         scripts::ScriptId,
     },
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
@@ -58,6 +58,25 @@ pub struct TestEvent<'a> {
 
     /// The kind of test event this is.
     pub kind: TestEventKind<'a>,
+}
+
+/// Scheduling information about a test's slot and group assignment.
+///
+/// This information is assigned by the `future_queue` scheduler and remains
+/// constant across all retry attempts of the same test.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct TestSlotAssignment {
+    /// The global slot number assigned to this test. Compact: starts from 0
+    /// and is always the smallest available number at assignment time.
+    pub global_slot: u64,
+
+    /// The slot number within this test's group, if the test is in a custom
+    /// group. `None` for tests in the global group.
+    pub group_slot: Option<u64>,
+
+    /// The test group this test belongs to.
+    pub test_group: TestGroup,
 }
 
 /// The kind of test event this is.
@@ -180,6 +199,9 @@ pub enum TestEventKind<'a> {
         /// The test instance that was started.
         test_instance: TestInstanceId<'a>,
 
+        /// Scheduling information (slot and group assignment).
+        slot_assignment: TestSlotAssignment,
+
         /// Current run statistics so far.
         current_stats: RunStats,
 
@@ -238,6 +260,10 @@ pub enum TestEventKind<'a> {
 
         /// The test instance that is being retried.
         test_instance: TestInstanceId<'a>,
+
+        /// Scheduling information (slot and group assignment). Same as the
+        /// initial `TestStarted` event for this test.
+        slot_assignment: TestSlotAssignment,
 
         /// Data related to retries.
         retry_data: RetryData,
@@ -591,7 +617,8 @@ pub struct RunStats {
     /// The number of tests that passed on retry.
     pub flaky: usize,
 
-    /// The number of tests that failed. Includes `leaky_failed`.
+    /// The number of tests that failed. Includes `leaky_failed` and tests that
+    /// were flaky but treated as failed due to `flaky-result = "fail"` configuration.
     pub failed: usize,
 
     /// The number of failed tests that were slow.
@@ -727,34 +754,61 @@ impl RunStats {
         let last_status = run_statuses.last_status();
         match last_status.result {
             ExecutionResultDescription::Pass => {
-                self.passed += 1;
-                if last_status.is_slow {
-                    self.passed_slow += 1;
-                }
-                if run_statuses.len() > 1 {
-                    // The test is flaky. How it's counted depends on
-                    // flaky_result — match exhaustively so the compiler
-                    // catches new variants.
+                // The test is flaky if there were multiple attempts. How
+                // it's counted depends on flaky_result — match
+                // exhaustively so the compiler catches new variants.
+                let is_flaky = run_statuses.len() > 1;
+                if is_flaky {
                     match run_statuses.flaky_result() {
+                        FlakyResult::Fail => {
+                            self.failed += 1;
+                            if last_status.is_slow {
+                                self.failed_slow += 1;
+                            }
+                        }
                         FlakyResult::Pass => {
+                            self.passed += 1;
+                            if last_status.is_slow {
+                                self.passed_slow += 1;
+                            }
                             self.flaky += 1;
                         }
+                    }
+                } else {
+                    self.passed += 1;
+                    if last_status.is_slow {
+                        self.passed_slow += 1;
                     }
                 }
             }
             ExecutionResultDescription::Leak {
                 result: LeakTimeoutResult::Pass,
             } => {
-                self.passed += 1;
-                self.leaky += 1;
-                if last_status.is_slow {
-                    self.passed_slow += 1;
-                }
-                if run_statuses.len() > 1 {
+                let is_flaky = run_statuses.len() > 1;
+                if is_flaky {
                     match run_statuses.flaky_result() {
+                        FlakyResult::Fail => {
+                            self.failed += 1;
+                            if last_status.is_slow {
+                                self.failed_slow += 1;
+                            }
+                            // Still count as leaky since the leak was detected.
+                            self.leaky += 1;
+                        }
                         FlakyResult::Pass => {
+                            self.passed += 1;
+                            self.leaky += 1;
+                            if last_status.is_slow {
+                                self.passed_slow += 1;
+                            }
                             self.flaky += 1;
                         }
+                    }
+                } else {
+                    self.passed += 1;
+                    self.leaky += 1;
+                    if last_status.is_slow {
+                        self.passed_slow += 1;
                     }
                 }
             }
@@ -776,14 +830,26 @@ impl RunStats {
             ExecutionResultDescription::Timeout {
                 result: SlowTimeoutResult::Pass,
             } => {
-                self.passed += 1;
-                self.passed_timed_out += 1;
-                if run_statuses.len() > 1 {
+                let is_flaky = run_statuses.len() > 1;
+                if is_flaky {
                     match run_statuses.flaky_result() {
+                        FlakyResult::Fail => {
+                            self.failed += 1;
+                            // Track as failed_slow since the overall result
+                            // is failure.
+                            if last_status.is_slow {
+                                self.failed_slow += 1;
+                            }
+                        }
                         FlakyResult::Pass => {
+                            self.passed += 1;
+                            self.passed_timed_out += 1;
                             self.flaky += 1;
                         }
                     }
+                } else {
+                    self.passed += 1;
+                    self.passed_timed_out += 1;
                 }
             }
             ExecutionResultDescription::Timeout {
@@ -1089,6 +1155,10 @@ impl<'a, S: OutputSpec> ExecutionDescription<'a, S> {
                 result: FlakyResult::Pass,
                 ..
             } => StatusLevel::Retry,
+            ExecutionDescription::Flaky {
+                result: FlakyResult::Fail,
+                ..
+            } => StatusLevel::Fail,
             ExecutionDescription::Failure { .. } => StatusLevel::Fail,
         }
     }
@@ -1118,11 +1188,16 @@ impl<'a, S: OutputSpec> ExecutionDescription<'a, S> {
                     }
                 }
             }
-            // A flaky test implies that we print out retry information.
+            // A flaky-pass test implies that we print out retry information.
             ExecutionDescription::Flaky {
                 result: FlakyResult::Pass,
                 ..
             } => FinalStatusLevel::Flaky,
+            // A flaky-fail test is treated as a failure.
+            ExecutionDescription::Flaky {
+                result: FlakyResult::Fail,
+                ..
+            } => FinalStatusLevel::Fail,
             ExecutionDescription::Failure { .. } => FinalStatusLevel::Fail,
         }
     }
@@ -1130,17 +1205,20 @@ impl<'a, S: OutputSpec> ExecutionDescription<'a, S> {
     /// Returns whether this test's output should be treated as success output
     /// for display and storage purposes.
     ///
-    /// For flaky tests, the last attempt succeeded, so its output is success
-    /// output: it contains no panics or errors, and is generally not
-    /// interesting. The failure information comes from the status line and from
-    /// prior retry attempts' output (shown via `TestAttemptFailedWillRetry`
-    /// events, controlled by `failure-output`).
+    /// For flaky tests (both pass and fail variants), the last attempt
+    /// succeeded, so its output is success output: it contains no panics or
+    /// errors, and is generally not interesting. The failure information comes
+    /// from the status line and from prior retry attempts' output (shown via
+    /// `TestAttemptFailedWillRetry` events, controlled by `failure-output`).
     ///
     /// This means:
     /// - The _visibility_ is controlled by `success-output`.
     /// - The _styling_ is pass/green headers, no error extraction.
     /// - _JUnit storage_ is controlled by `store-success-output` (default:
     ///   `false`).
+    ///
+    /// The status line uses failure semantics independently (e.g. `FLKY-FL` in
+    /// red for flaky-fail tests).
     pub fn is_success_for_output(&self) -> bool {
         match self {
             ExecutionDescription::Success { .. } => true,
@@ -1445,13 +1523,13 @@ pub enum ChildStartErrorDescription {
     /// An error occurred while creating a temporary path for a setup script.
     TempPath {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 
     /// An error occurred while spawning the child process.
     Spawn {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 }
 
@@ -1484,31 +1562,31 @@ pub enum ChildErrorDescription {
     /// An error occurred while reading standard output.
     ReadStdout {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 
     /// An error occurred while reading standard error.
     ReadStderr {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 
     /// An error occurred while reading combined output.
     ReadCombined {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 
     /// An error occurred while waiting for the child process to exit.
     Wait {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 
     /// An error occurred while reading the output of a setup script.
     SetupScriptOutput {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 }
 
@@ -1542,41 +1620,154 @@ impl std::error::Error for ChildErrorDescription {
     }
 }
 
-/// A serializable description of an I/O error.
+/// A serializable representation of an error chain.
 ///
-/// This captures the full error chain from the source error, flattened into a
-/// single string. For errors without a source, this is equivalent to
-/// `error.to_string()`. For errors with a source chain, the messages are joined
-/// with `: ` (e.g., `"top-level: cause1: cause2"`).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(test, derive(test_strategy::Arbitrary))]
-pub struct IoErrorDescription {
+/// This captures the error message and the chain of source errors from
+/// any [`std::error::Error`] implementation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SerializableError {
     message: String,
+    source: Option<Box<SerializableError>>,
 }
 
-impl IoErrorDescription {
-    /// Creates an `IoErrorDescription` from an error, capturing the full error
-    /// chain.
-    fn from_error(error: &dyn std::error::Error) -> Self {
-        use std::fmt::Write;
-
-        let mut message = error.to_string();
+impl SerializableError {
+    /// Creates a new `SerializableError` from an error, walking the
+    /// full source chain.
+    pub fn new(error: &dyn std::error::Error) -> Self {
+        let message = error.to_string();
+        let mut causes = Vec::new();
         let mut source = error.source();
-        while let Some(cause) = source {
-            write!(&mut message, ": {cause}").expect("wrote to String");
-            source = cause.source();
+        while let Some(err) = source {
+            causes.push(err.to_string());
+            source = err.source();
         }
-        Self { message }
+        Self::from_message_and_causes(message, causes)
+    }
+
+    /// Creates a new `SerializableError` from a message and a list of
+    /// causes.
+    pub fn from_message_and_causes(message: String, causes: Vec<String>) -> Self {
+        // This builds a singly-linked list from the causes. You rarely
+        // see them in Rust, but they're required to implement
+        // Error::source.
+        let mut next = None;
+        for cause in causes.into_iter().rev() {
+            let error = Self {
+                message: cause,
+                source: next.map(Box::new),
+            };
+            next = Some(error);
+        }
+        Self {
+            message,
+            source: next.map(Box::new),
+        }
+    }
+
+    /// Returns the message associated with this error.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    /// Returns the causes of this error as an iterator.
+    pub fn sources(&self) -> SerializableErrorSources<'_> {
+        SerializableErrorSources {
+            current: self.source.as_deref(),
+        }
     }
 }
 
-impl fmt::Display for IoErrorDescription {
+impl fmt::Display for SerializableError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message)
+        f.write_str(&self.message)
     }
 }
 
-impl std::error::Error for IoErrorDescription {}
+impl std::error::Error for SerializableError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source
+            .as_deref()
+            .map(|s| s as &(dyn std::error::Error + 'static))
+    }
+}
+
+/// The sources of a [`SerializableError`] as an iterator.
+#[derive(Debug)]
+pub struct SerializableErrorSources<'a> {
+    current: Option<&'a SerializableError>,
+}
+
+impl<'a> Iterator for SerializableErrorSources<'a> {
+    type Item = &'a SerializableError;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = self.current?;
+        self.current = current.source.as_deref();
+        Some(current)
+    }
+}
+
+mod serializable_error_serde {
+    use super::*;
+
+    #[derive(Serialize, Deserialize)]
+    struct Ser {
+        message: String,
+        // For backwards compatibility with IoErrorDescription, which
+        // didn't have a causes field.
+        #[serde(default)]
+        causes: Vec<String>,
+    }
+
+    impl Serialize for SerializableError {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            let mut causes = Vec::new();
+            let mut cause = self.source.as_ref();
+            while let Some(c) = cause {
+                causes.push(c.message.clone());
+                cause = c.source.as_ref();
+            }
+
+            let ser = Ser {
+                message: self.message.clone(),
+                causes,
+            };
+            ser.serialize(serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for SerializableError {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let ser = Ser::deserialize(deserializer)?;
+            Ok(SerializableError::from_message_and_causes(
+                ser.message,
+                ser.causes,
+            ))
+        }
+    }
+}
+
+#[cfg(test)]
+mod serializable_error_arbitrary {
+    use super::*;
+    use proptest::prelude::*;
+
+    impl Arbitrary for SerializableError {
+        type Parameters = ();
+        type Strategy = BoxedStrategy<Self>;
+
+        fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+            (
+                any::<String>(),
+                proptest::collection::vec(any::<String>(), 0..3),
+            )
+                .prop_map(|(message, causes)| {
+                    SerializableError::from_message_and_causes(message, causes)
+                })
+                .boxed()
+        }
+    }
+}
 
 impl From<ChildExecutionOutput> for ChildExecutionOutputDescription<LiveSpec> {
     fn from(output: ChildExecutionOutput) -> Self {
@@ -1613,10 +1804,10 @@ impl From<ChildStartError> for ChildStartErrorDescription {
     fn from(error: ChildStartError) -> Self {
         match error {
             ChildStartError::TempPath(e) => Self::TempPath {
-                source: IoErrorDescription::from_error(&*e),
+                source: SerializableError::new(&*e),
             },
             ChildStartError::Spawn(e) => Self::Spawn {
-                source: IoErrorDescription::from_error(&*e),
+                source: SerializableError::new(&*e),
             },
         }
     }
@@ -1626,19 +1817,19 @@ impl From<ChildError> for ChildErrorDescription {
     fn from(error: ChildError) -> Self {
         match error {
             ChildError::Fd(ChildFdError::ReadStdout(e)) => Self::ReadStdout {
-                source: IoErrorDescription::from_error(&*e),
+                source: SerializableError::new(&*e),
             },
             ChildError::Fd(ChildFdError::ReadStderr(e)) => Self::ReadStderr {
-                source: IoErrorDescription::from_error(&*e),
+                source: SerializableError::new(&*e),
             },
             ChildError::Fd(ChildFdError::ReadCombined(e)) => Self::ReadCombined {
-                source: IoErrorDescription::from_error(&*e),
+                source: SerializableError::new(&*e),
             },
             ChildError::Fd(ChildFdError::Wait(e)) => Self::Wait {
-                source: IoErrorDescription::from_error(&*e),
+                source: SerializableError::new(&*e),
             },
             ChildError::SetupScriptOutput(e) => Self::SetupScriptOutput {
-                source: IoErrorDescription::from_error(&e),
+                source: SerializableError::new(&e),
             },
         }
     }
@@ -2563,6 +2754,9 @@ mod tests {
             FinalRunStats::NoTestsRun,
             "setup scripts passed => success, but no tests run"
         );
+
+        // Flaky tests with flaky-result = "fail" are included in `failed`, so this
+        // is covered by the general failure tests above.
     }
 
     /// Helper to build a minimal `ExecuteStatus<LiveSpec>` for tests.
@@ -2570,6 +2764,17 @@ mod tests {
         result: ExecutionResultDescription,
         attempt: u32,
         total_attempts: u32,
+    ) -> ExecuteStatus<LiveSpec> {
+        make_execute_status_slow(result, attempt, total_attempts, false)
+    }
+
+    /// Helper to build a minimal `ExecuteStatus<LiveSpec>` for tests, with
+    /// the `is_slow` flag set.
+    fn make_execute_status_slow(
+        result: ExecutionResultDescription,
+        attempt: u32,
+        total_attempts: u32,
+        is_slow: bool,
     ) -> ExecuteStatus<LiveSpec> {
         ExecuteStatus {
             retry_data: RetryData {
@@ -2587,7 +2792,7 @@ mod tests {
             result,
             start_time: chrono::Utc::now().into(),
             time_taken: Duration::from_millis(100),
-            is_slow: false,
+            is_slow,
             delay_before_start: Duration::ZERO,
             error_summary: None,
             output_error_slice: None,
@@ -2635,6 +2840,34 @@ mod tests {
         assert!(
             describe.is_success_for_output(),
             "Flaky pass: output is success output"
+        );
+
+        // Flaky fail: fail then pass with result=fail → true.
+        let fail_status = make_execute_status(
+            ExecutionResultDescription::Fail {
+                failure: FailureDescription::ExitCode { code: 1 },
+                leaked: false,
+            },
+            1,
+            2,
+        );
+        let pass_status = make_execute_status(ExecutionResultDescription::Pass, 2, 2);
+        let flaky_fail_statuses =
+            ExecutionStatuses::new(vec![fail_status, pass_status], FlakyResult::Fail);
+        let describe = flaky_fail_statuses.describe();
+        assert!(
+            matches!(
+                describe,
+                ExecutionDescription::Flaky {
+                    result: FlakyResult::Fail,
+                    ..
+                }
+            ),
+            "fail then pass with FlakyResult::Fail is Flaky Fail"
+        );
+        assert!(
+            describe.is_success_for_output(),
+            "Flaky fail: output is still success output (last attempt passed)"
         );
 
         // Failure: single fail → false.
@@ -2975,5 +3208,176 @@ mod tests {
         insta::assert_snapshot!("timeout_fail", json);
         let roundtrip: ExecutionResultDescription = serde_json::from_str(&json).unwrap();
         assert_eq!(timeout_fail, roundtrip);
+    }
+
+    // --- on_test_finished tests ---
+
+    /// Helper to create a fail-then-pass `ExecutionStatuses` for flaky
+    /// test scenarios.
+    fn make_flaky_statuses(
+        pass_result: ExecutionResultDescription,
+        flaky_result: FlakyResult,
+        is_slow: bool,
+    ) -> ExecutionStatuses<LiveSpec> {
+        let fail = make_execute_status(
+            ExecutionResultDescription::Fail {
+                failure: FailureDescription::ExitCode { code: 1 },
+                leaked: false,
+            },
+            1,
+            2,
+        );
+        let pass = make_execute_status_slow(pass_result, 2, 2, is_slow);
+        ExecutionStatuses::new(vec![fail, pass], flaky_result)
+    }
+
+    /// Helper to run `on_test_finished` on a fresh `RunStats` and return it.
+    fn run_on_test_finished(statuses: &ExecutionStatuses<LiveSpec>) -> RunStats {
+        let mut stats = RunStats {
+            initial_run_count: 1,
+            ..RunStats::default()
+        };
+        stats.on_test_finished(statuses);
+        stats
+    }
+
+    #[test]
+    fn on_test_finished_pass_flaky() {
+        // FlakyResult::Fail (not slow): counts as failed.
+        let stats = run_on_test_finished(&make_flaky_statuses(
+            ExecutionResultDescription::Pass,
+            FlakyResult::Fail,
+            false,
+        ));
+        assert_eq!(stats.finished_count, 1);
+        assert_eq!(stats.failed, 1);
+        assert_eq!(stats.failed_slow, 0, "not slow");
+        assert_eq!(stats.passed, 0);
+        assert_eq!(stats.flaky, 0);
+
+        // FlakyResult::Fail (slow): counts as failed and failed_slow.
+        let stats = run_on_test_finished(&make_flaky_statuses(
+            ExecutionResultDescription::Pass,
+            FlakyResult::Fail,
+            true,
+        ));
+        assert_eq!(stats.failed, 1);
+        assert_eq!(stats.failed_slow, 1);
+        assert_eq!(stats.passed, 0);
+        assert_eq!(stats.flaky, 0);
+
+        // FlakyResult::Pass: counts as passed and flaky.
+        let stats = run_on_test_finished(&make_flaky_statuses(
+            ExecutionResultDescription::Pass,
+            FlakyResult::Pass,
+            true,
+        ));
+        assert_eq!(stats.passed, 1);
+        assert_eq!(stats.passed_slow, 1);
+        assert_eq!(stats.flaky, 1);
+        assert_eq!(stats.failed, 0);
+    }
+
+    #[test]
+    fn on_test_finished_leak_pass_flaky() {
+        // FlakyResult::Fail (not slow): counts as failed and leaky.
+        let stats = run_on_test_finished(&make_flaky_statuses(
+            ExecutionResultDescription::Leak {
+                result: LeakTimeoutResult::Pass,
+            },
+            FlakyResult::Fail,
+            false,
+        ));
+        assert_eq!(stats.failed, 1);
+        assert_eq!(stats.failed_slow, 0, "not slow");
+        assert_eq!(stats.leaky, 1, "leak still tracked");
+        assert_eq!(stats.passed, 0);
+        assert_eq!(stats.flaky, 0);
+
+        // FlakyResult::Fail (slow): also tracks failed_slow.
+        let stats = run_on_test_finished(&make_flaky_statuses(
+            ExecutionResultDescription::Leak {
+                result: LeakTimeoutResult::Pass,
+            },
+            FlakyResult::Fail,
+            true,
+        ));
+        assert_eq!(stats.failed, 1);
+        assert_eq!(stats.failed_slow, 1);
+        assert_eq!(stats.leaky, 1);
+        assert_eq!(stats.passed, 0);
+        assert_eq!(stats.flaky, 0);
+
+        // FlakyResult::Pass: counts as passed, leaky, and flaky.
+        let stats = run_on_test_finished(&make_flaky_statuses(
+            ExecutionResultDescription::Leak {
+                result: LeakTimeoutResult::Pass,
+            },
+            FlakyResult::Pass,
+            true,
+        ));
+        assert_eq!(stats.passed, 1);
+        assert_eq!(stats.passed_slow, 1);
+        assert_eq!(stats.leaky, 1);
+        assert_eq!(stats.flaky, 1);
+        assert_eq!(stats.failed, 0);
+    }
+
+    #[test]
+    fn on_test_finished_timeout_pass_flaky() {
+        // FlakyResult::Fail (slow): counts as failed and failed_slow,
+        // not passed_timed_out.
+        let stats = run_on_test_finished(&make_flaky_statuses(
+            ExecutionResultDescription::Timeout {
+                result: SlowTimeoutResult::Pass,
+            },
+            FlakyResult::Fail,
+            true,
+        ));
+        assert_eq!(stats.failed, 1);
+        assert_eq!(stats.failed_slow, 1);
+        assert_eq!(stats.passed, 0);
+        assert_eq!(stats.passed_timed_out, 0);
+        assert_eq!(stats.flaky, 0);
+
+        // FlakyResult::Pass: counts as passed, passed_timed_out, and flaky.
+        let stats = run_on_test_finished(&make_flaky_statuses(
+            ExecutionResultDescription::Timeout {
+                result: SlowTimeoutResult::Pass,
+            },
+            FlakyResult::Pass,
+            false,
+        ));
+        assert_eq!(stats.passed, 1);
+        assert_eq!(stats.passed_timed_out, 1);
+        assert_eq!(stats.flaky, 1);
+        assert_eq!(stats.failed, 0);
+    }
+
+    #[test]
+    fn on_test_finished_non_flaky() {
+        // Single-attempt pass (slow): counts as passed, not flaky.
+        let pass = make_execute_status_slow(ExecutionResultDescription::Pass, 1, 1, true);
+        let stats = run_on_test_finished(&ExecutionStatuses::new(vec![pass], FlakyResult::Pass));
+        assert_eq!(stats.passed, 1);
+        assert_eq!(stats.passed_slow, 1);
+        assert_eq!(stats.flaky, 0);
+        assert_eq!(stats.failed, 0);
+
+        // Single-attempt failure (slow): counts as failed and failed_slow.
+        let fail = make_execute_status_slow(
+            ExecutionResultDescription::Fail {
+                failure: FailureDescription::ExitCode { code: 1 },
+                leaked: false,
+            },
+            1,
+            1,
+            true,
+        );
+        let stats = run_on_test_finished(&ExecutionStatuses::new(vec![fail], FlakyResult::Pass));
+        assert_eq!(stats.failed, 1);
+        assert_eq!(stats.failed_slow, 1);
+        assert_eq!(stats.passed, 0);
+        assert_eq!(stats.flaky, 0);
     }
 }

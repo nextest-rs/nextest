@@ -49,6 +49,7 @@ theme:
 
 plugins:
     - git-revision-date-localized:
+          enabled: !ENV [GIT_REVISION_DATE_ENABLED, true]
           enable_creation_date: true
     - macros
     - markdown-exec
@@ -89,7 +90,11 @@ nav:
     - "Features":
           - docs/features/retries.md
           - docs/features/slow-tests.md
-          - docs/features/record-replay-rerun.md
+          - "Record, replay, and rerun":
+                - docs/features/record-replay-rerun/index.md
+                - "Rerunning failed tests": docs/features/record-replay-rerun/rerun.md
+                - "Replaying test runs": docs/features/record-replay-rerun/replay.md
+                - "Managing recorded runs": docs/features/record-replay-rerun/managing-runs.md
           - "More features":
                 - docs/features/leaky-tests.md
                 - docs/features/stress-tests.md

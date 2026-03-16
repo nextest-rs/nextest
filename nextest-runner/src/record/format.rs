@@ -117,15 +117,22 @@ impl StoreFormatVersion {
     /// Checks if an archive with version `self` can be read by a reader that
     /// supports `supported`.
     pub fn check_readable_by(self, supported: Self) -> Result<(), StoreVersionIncompatibility> {
-        if self.major != supported.major {
-            return Err(StoreVersionIncompatibility::MajorMismatch {
-                archive_major: self.major,
+        if self.major < supported.major {
+            return Err(StoreVersionIncompatibility::RecordingTooOld {
+                recording_major: self.major,
+                supported_major: supported.major,
+                last_nextest_version: self.major.last_nextest_version(),
+            });
+        }
+        if self.major > supported.major {
+            return Err(StoreVersionIncompatibility::RecordingTooNew {
+                recording_major: self.major,
                 supported_major: supported.major,
             });
         }
         if self.minor > supported.minor {
             return Err(StoreVersionIncompatibility::MinorTooNew {
-                archive_minor: self.minor,
+                recording_minor: self.minor,
                 supported_minor: supported.minor,
             });
         }
@@ -139,21 +146,45 @@ impl fmt::Display for StoreFormatVersion {
     }
 }
 
-/// An incompatibility between an archive's store format version and what the
+impl StoreFormatMajorVersion {
+    /// Returns the last nextest version that supported this store format major
+    /// version, if known.
+    ///
+    /// This is used to provide actionable guidance when an archive is too old
+    /// for the current nextest.
+    pub fn last_nextest_version(self) -> Option<&'static str> {
+        match self.0 {
+            1 => Some("0.9.130"),
+            _ => None,
+        }
+    }
+}
+
+/// An incompatibility between a recording's store format version and what the
 /// reader supports.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StoreVersionIncompatibility {
-    /// The archive's major version differs from the supported major version.
-    MajorMismatch {
-        /// The major version in the archive.
-        archive_major: StoreFormatMajorVersion,
+    /// The recording's major version is older than the supported major version.
+    RecordingTooOld {
+        /// The major version in the recording.
+        recording_major: StoreFormatMajorVersion,
+        /// The major version this nextest supports.
+        supported_major: StoreFormatMajorVersion,
+        /// The last nextest version that supported the recording's major version,
+        /// if known.
+        last_nextest_version: Option<&'static str>,
+    },
+    /// The recording's major version is newer than the supported major version.
+    RecordingTooNew {
+        /// The major version in the recording.
+        recording_major: StoreFormatMajorVersion,
         /// The major version this nextest supports.
         supported_major: StoreFormatMajorVersion,
     },
-    /// The archive's minor version is newer than the supported minor version.
+    /// The recording's minor version is newer than the supported minor version.
     MinorTooNew {
-        /// The minor version in the archive.
-        archive_minor: StoreFormatMinorVersion,
+        /// The minor version in the recording.
+        recording_minor: StoreFormatMinorVersion,
         /// The maximum minor version this nextest supports.
         supported_minor: StoreFormatMinorVersion,
     },
@@ -162,24 +193,40 @@ pub enum StoreVersionIncompatibility {
 impl fmt::Display for StoreVersionIncompatibility {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MajorMismatch {
-                archive_major,
+            Self::RecordingTooOld {
+                recording_major,
+                supported_major,
+                last_nextest_version,
+            } => {
+                write!(
+                    f,
+                    "recording has major version {recording_major}, \
+                     but this nextest requires version {supported_major}"
+                )?;
+                if let Some(version) = last_nextest_version {
+                    write!(f, " (use nextest <= {version} to replay this recording)")?;
+                }
+                Ok(())
+            }
+            Self::RecordingTooNew {
+                recording_major,
                 supported_major,
             } => {
                 write!(
                     f,
-                    "major version {} differs from supported version {}",
-                    archive_major, supported_major
+                    "recording has major version {recording_major}, \
+                     but this nextest only supports version {supported_major} \
+                     (upgrade nextest to replay this recording)"
                 )
             }
             Self::MinorTooNew {
-                archive_minor,
+                recording_minor,
                 supported_minor,
             } => {
                 write!(
                     f,
                     "minor version {} is newer than supported version {}",
-                    archive_minor, supported_minor
+                    recording_minor, supported_minor
                 )
             }
         }
@@ -198,8 +245,14 @@ pub(super) const RUNS_JSON_FORMAT_VERSION: RunsJsonFormatVersion = RunsJsonForma
 /// This combines a major version (for breaking changes) and a minor version
 /// (for additive changes). Readers check compatibility via
 /// [`StoreFormatVersion::check_readable_by`].
+///
+/// Changelog:
+///
+/// - 1.1: Addition of the `flaky_result` field to `ExecutionStatuses`.
+/// - 2.0: `slot_assignment` is now mandatory in `TestStarted` and
+///   `TestRetryStarted` events.
 pub const STORE_FORMAT_VERSION: StoreFormatVersion = StoreFormatVersion::new(
-    StoreFormatMajorVersion::new(1),
+    StoreFormatMajorVersion::new(2),
     StoreFormatMinorVersion::new(0),
 );
 
@@ -741,13 +794,13 @@ impl PortableRecordingFormatVersion {
     ) -> Result<(), PortableRecordingVersionIncompatibility> {
         if self.major != supported.major {
             return Err(PortableRecordingVersionIncompatibility::MajorMismatch {
-                archive_major: self.major,
+                recording_major: self.major,
                 supported_major: supported.major,
             });
         }
         if self.minor > supported.minor {
             return Err(PortableRecordingVersionIncompatibility::MinorTooNew {
-                archive_minor: self.minor,
+                recording_minor: self.minor,
                 supported_minor: supported.minor,
             });
         }
@@ -768,14 +821,14 @@ pub enum PortableRecordingVersionIncompatibility {
     /// The archive's major version differs from the supported major version.
     MajorMismatch {
         /// The major version in the archive.
-        archive_major: PortableRecordingFormatMajorVersion,
+        recording_major: PortableRecordingFormatMajorVersion,
         /// The major version this nextest supports.
         supported_major: PortableRecordingFormatMajorVersion,
     },
     /// The archive's minor version is newer than the supported minor version.
     MinorTooNew {
         /// The minor version in the archive.
-        archive_minor: PortableRecordingFormatMinorVersion,
+        recording_minor: PortableRecordingFormatMinorVersion,
         /// The maximum minor version this nextest supports.
         supported_minor: PortableRecordingFormatMinorVersion,
     },
@@ -785,23 +838,23 @@ impl fmt::Display for PortableRecordingVersionIncompatibility {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::MajorMismatch {
-                archive_major,
+                recording_major,
                 supported_major,
             } => {
                 write!(
                     f,
                     "major version {} differs from supported version {}",
-                    archive_major, supported_major
+                    recording_major, supported_major
                 )
             }
             Self::MinorTooNew {
-                archive_minor,
+                recording_minor,
                 supported_minor,
             } => {
                 write!(
                     f,
                     "minor version {} is newer than supported version {}",
-                    archive_minor, supported_minor
+                    recording_minor, supported_minor
                 )
             }
         }
@@ -1252,23 +1305,56 @@ mod tests {
         assert_eq!(
             error,
             StoreVersionIncompatibility::MinorTooNew {
-                archive_minor: StoreFormatMinorVersion::new(3),
+                recording_minor: StoreFormatMinorVersion::new(3),
                 supported_minor: StoreFormatMinorVersion::new(2),
             },
             "newer minor version should be incompatible"
         );
         insta::assert_snapshot!(error.to_string(), @"minor version 3 is newer than supported version 2");
 
+        // Archive newer than supported → RecordingTooNew.
         let error = version(2, 0).check_readable_by(version(1, 5)).unwrap_err();
         assert_eq!(
             error,
-            StoreVersionIncompatibility::MajorMismatch {
-                archive_major: StoreFormatMajorVersion::new(2),
+            StoreVersionIncompatibility::RecordingTooNew {
+                recording_major: StoreFormatMajorVersion::new(2),
                 supported_major: StoreFormatMajorVersion::new(1),
             },
-            "different major version should be incompatible"
         );
-        insta::assert_snapshot!(error.to_string(), @"major version 2 differs from supported version 1");
+        insta::assert_snapshot!(
+            error.to_string(),
+            @"recording has major version 2, but this nextest only supports version 1 (upgrade nextest to replay this recording)"
+        );
+
+        // Archive older than supported → ArchiveTooOld (with known version).
+        let error = version(1, 0).check_readable_by(version(2, 0)).unwrap_err();
+        assert_eq!(
+            error,
+            StoreVersionIncompatibility::RecordingTooOld {
+                recording_major: StoreFormatMajorVersion::new(1),
+                supported_major: StoreFormatMajorVersion::new(2),
+                last_nextest_version: Some("0.9.130"),
+            },
+        );
+        insta::assert_snapshot!(
+            error.to_string(),
+            @"recording has major version 1, but this nextest requires version 2 (use nextest <= 0.9.130 to replay this recording)"
+        );
+
+        // Archive older than supported → ArchiveTooOld (unknown version).
+        let error = version(3, 0).check_readable_by(version(5, 0)).unwrap_err();
+        assert_eq!(
+            error,
+            StoreVersionIncompatibility::RecordingTooOld {
+                recording_major: StoreFormatMajorVersion::new(3),
+                supported_major: StoreFormatMajorVersion::new(5),
+                last_nextest_version: None,
+            },
+        );
+        insta::assert_snapshot!(
+            error.to_string(),
+            @"recording has major version 3, but this nextest requires version 5"
+        );
 
         insta::assert_snapshot!(version(1, 2).to_string(), @"1.2");
     }
@@ -1345,7 +1431,7 @@ mod tests {
         assert_eq!(
             error,
             PortableRecordingVersionIncompatibility::MinorTooNew {
-                archive_minor: PortableRecordingFormatMinorVersion::new(3),
+                recording_minor: PortableRecordingFormatMinorVersion::new(3),
                 supported_minor: PortableRecordingFormatMinorVersion::new(2),
             },
             "newer minor version should be incompatible"
@@ -1358,7 +1444,7 @@ mod tests {
         assert_eq!(
             error,
             PortableRecordingVersionIncompatibility::MajorMismatch {
-                archive_major: PortableRecordingFormatMajorVersion::new(2),
+                recording_major: PortableRecordingFormatMajorVersion::new(2),
                 supported_major: PortableRecordingFormatMajorVersion::new(1),
             },
             "different major version should be incompatible"

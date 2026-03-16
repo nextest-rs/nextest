@@ -66,6 +66,53 @@ impl Styles {
         self.label = Style::new().bold();
         self.section = Style::new().bold();
     }
+
+    /// Formats a full run ID with jj-style prefix highlighting.
+    ///
+    /// When the index is available and contains the run ID, the unique prefix
+    /// is highlighted with `run_id_prefix` and the rest with `run_id_rest`.
+    /// Otherwise, the entire ID is shown in bold (`label` style).
+    pub fn format_run_id(&self, run_id: ReportUuid, run_id_index: Option<&RunIdIndex>) -> String {
+        let run_id_str = run_id.to_string();
+        if let Some(index) = run_id_index
+            && let Some(prefix_info) = index.shortest_unique_prefix(run_id)
+        {
+            let prefix_len = prefix_info.prefix.len().min(run_id_str.len());
+            let (prefix_part, rest_part) = run_id_str.split_at(prefix_len);
+            format!(
+                "{}{}",
+                prefix_part.style(self.run_id_prefix),
+                rest_part.style(self.run_id_rest),
+            )
+        } else {
+            run_id_str.style(self.label).to_string()
+        }
+    }
+
+    /// Formats a short (8-character) run ID with jj-style prefix highlighting.
+    ///
+    /// When the index contains the run ID, the unique prefix portion (up to
+    /// 8 characters) is highlighted. Otherwise, the short ID is shown in bold.
+    pub fn format_run_id_short(
+        &self,
+        run_id: ReportUuid,
+        run_id_index: Option<&RunIdIndex>,
+    ) -> String {
+        let full_short: String = run_id.to_string().chars().take(8).collect();
+        if let Some(index) = run_id_index
+            && let Some(prefix_info) = index.shortest_unique_prefix(run_id)
+        {
+            let prefix_len = prefix_info.prefix.len().min(8);
+            let (prefix_part, rest_part) = full_short.split_at(prefix_len);
+            format!(
+                "{}{}",
+                prefix_part.style(self.run_id_prefix),
+                rest_part.style(self.run_id_rest),
+            )
+        } else {
+            full_short.style(self.label).to_string()
+        }
+    }
 }
 
 /// Alignment information for displaying a list of runs.
@@ -303,24 +350,9 @@ impl fmt::Display for DisplayRecordedRunInfo<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let run = self.run;
 
-        // Get the shortest unique prefix for jj-style highlighting.
-        let run_id_display =
-            if let Some(prefix_info) = self.run_id_index.shortest_unique_prefix(run.run_id) {
-                // Show the first 8 characters of the UUID with the unique
-                // prefix highlighted.
-                let full_short: String = run.run_id.to_string().chars().take(8).collect();
-                let prefix_len = prefix_info.prefix.len().min(8);
-                let (prefix_part, rest_part) = full_short.split_at(prefix_len);
-                format!(
-                    "{}{}",
-                    prefix_part.style(self.styles.run_id_prefix),
-                    rest_part.style(self.styles.run_id_rest),
-                )
-            } else {
-                // Fallback if run ID not in index.
-                let short_id: String = run.run_id.to_string().chars().take(8).collect();
-                short_id.style(self.styles.run_id_rest).to_string()
-            };
+        let run_id_display = self
+            .styles
+            .format_run_id_short(run.run_id, Some(self.run_id_index));
 
         let status_display = self.format_status();
 
@@ -558,18 +590,7 @@ impl<'a> DisplayRecordedRunInfoDetailed<'a> {
 
     /// Formats a run ID with jj-style prefix highlighting.
     fn format_run_id_with_prefix(&self, run_id: ReportUuid) -> String {
-        let run_id_str = run_id.to_string();
-        if let Some(prefix_info) = self.run_id_index.shortest_unique_prefix(run_id) {
-            let prefix_len = prefix_info.prefix.len().min(run_id_str.len());
-            let (prefix_part, rest_part) = run_id_str.split_at(prefix_len);
-            format!(
-                "{}{}",
-                prefix_part.style(self.styles.run_id_prefix),
-                rest_part.style(self.styles.run_id_rest),
-            )
-        } else {
-            run_id_str.style(self.styles.run_id_rest).to_string()
-        }
+        self.styles.format_run_id(run_id, Some(self.run_id_index))
     }
 
     /// Writes a labeled field.
@@ -2255,11 +2276,11 @@ mod tests {
             .to_string()
         );
 
-        // Test: store format incompatible (major mismatch).
+        // Test: store format incompatible (archive too new).
         let format_too_new = ReplayabilityStatus::NotReplayable(vec![
             NonReplayableReason::StoreVersionIncompatible {
-                incompatibility: StoreVersionIncompatibility::MajorMismatch {
-                    archive_major: StoreFormatMajorVersion::new(5),
+                incompatibility: StoreVersionIncompatibility::RecordingTooNew {
+                    recording_major: StoreFormatMajorVersion::new(5),
                     supported_major: StoreFormatMajorVersion::new(1),
                 },
             },

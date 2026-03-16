@@ -89,6 +89,21 @@ filter = """
 retries = 4
 test-group = 'flaky'
 
+[profile.with-retries-flaky-fail]
+retries = 2
+
+# test_flaky_mod_4 passes on attempt 4 of 5, but flaky-result = "fail" means it
+# counts as a failure despite eventually passing.
+[[profile.with-retries-flaky-fail.overrides]]
+filter = "test(=test_flaky_mod_4)"
+retries = { backoff = "fixed", count = 4 }
+flaky-result = "fail"
+
+# test_flaky_mod_6 passes on attempt 6 of 6, with default result (= "pass").
+[[profile.with-retries-flaky-fail.overrides]]
+filter = "test(=test_flaky_mod_6)"
+retries = 5
+
 [profile.with-termination]
 slow-timeout = { period = "1s", terminate-after = 2 }
 

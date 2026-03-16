@@ -416,30 +416,45 @@ impl<'cfg> LibtestReporter<'cfg> {
                 )
                 .map_err(fmt_err)?;
 
-                match &last_status.result {
-                    ExecutionResultDescription::Fail { .. }
-                    | ExecutionResultDescription::ExecFail => {
-                        test_suite_mut.failed += 1;
-
-                        // Write the output from the test into the `stdout` (even
-                        // though it could contain stderr output as well).
-                        write!(out, r#","stdout":""#).map_err(fmt_err)?;
-
-                        strip_human_output_from_failed_test(
-                            &last_status.output,
-                            out,
-                            test_instance.test_name,
-                        )?;
-                        out.extend_from_slice(b"\"");
+                // Check for flaky-fail: a test that passed on retry but is
+                // configured to be treated as a failure.
+                let is_flaky_fail = matches!(
+                    run_statuses.describe(),
+                    ExecutionDescription::Flaky {
+                        result: FlakyResult::Fail,
+                        ..
                     }
-                    ExecutionResultDescription::Timeout {
-                        result: SlowTimeoutResult::Fail,
-                    } => {
-                        test_suite_mut.failed += 1;
-                        out.extend_from_slice(br#","reason":"time limit exceeded""#);
-                    }
-                    _ => {
-                        test_suite_mut.succeeded += 1;
+                );
+
+                if is_flaky_fail {
+                    test_suite_mut.failed += 1;
+                    out.extend_from_slice(br#","reason":"flaky test treated as failure""#);
+                } else {
+                    match &last_status.result {
+                        ExecutionResultDescription::Fail { .. }
+                        | ExecutionResultDescription::ExecFail => {
+                            test_suite_mut.failed += 1;
+
+                            // Write the output from the test into the `stdout` (even
+                            // though it could contain stderr output as well).
+                            write!(out, r#","stdout":""#).map_err(fmt_err)?;
+
+                            strip_human_output_from_failed_test(
+                                &last_status.output,
+                                out,
+                                test_instance.test_name,
+                            )?;
+                            out.extend_from_slice(b"\"");
+                        }
+                        ExecutionResultDescription::Timeout {
+                            result: SlowTimeoutResult::Fail,
+                        } => {
+                            test_suite_mut.failed += 1;
+                            out.extend_from_slice(br#","reason":"time limit exceeded""#);
+                        }
+                        _ => {
+                            test_suite_mut.succeeded += 1;
+                        }
                     }
                 }
             }
@@ -566,7 +581,8 @@ impl<'cfg> LibtestReporter<'cfg> {
 
 /// Returns the libtest JSON event string for a finished test.
 ///
-/// Uses `ExecutionDescription` to determine the overall outcome.
+/// Uses `ExecutionDescription` to determine the overall outcome, which
+/// correctly accounts for flaky tests configured with `flaky-result = "fail"`.
 fn event_for_finished_test<S: OutputSpec>(run_statuses: &ExecutionStatuses<S>) -> &'static str {
     match run_statuses.describe() {
         ExecutionDescription::Success { .. }
@@ -574,7 +590,11 @@ fn event_for_finished_test<S: OutputSpec>(run_statuses: &ExecutionStatuses<S>) -
             result: FlakyResult::Pass,
             ..
         } => EVENT_OK,
-        ExecutionDescription::Failure { .. } => EVENT_FAILED,
+        ExecutionDescription::Flaky {
+            result: FlakyResult::Fail,
+            ..
+        }
+        | ExecutionDescription::Failure { .. } => EVENT_FAILED,
     }
 }
 
@@ -1001,6 +1021,17 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
             event_for_finished_test(&statuses),
             EVENT_OK,
             "flaky with result = pass"
+        );
+
+        // Flaky fail: fail then pass, result = fail.
+        let statuses = ExecutionStatuses::new(
+            vec![make_failing_status(1, 2), make_passing_status(2, 2)],
+            FlakyResult::Fail,
+        );
+        assert_eq!(
+            event_for_finished_test(&statuses),
+            EVENT_FAILED,
+            "flaky with result = fail"
         );
 
         // All retries failed.

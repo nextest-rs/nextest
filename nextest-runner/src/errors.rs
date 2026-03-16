@@ -27,7 +27,7 @@ use eazip::CompressionMethod;
 use etcetera::HomeDirError;
 use itertools::{Either, Itertools};
 use nextest_filtering::errors::FiltersetParseErrors;
-use nextest_metadata::RustBinaryId;
+use nextest_metadata::{RustBinaryId, TestCaseName};
 use quick_junit::ReportUuid;
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
@@ -2887,6 +2887,49 @@ pub enum PortableRecordingReadError {
         /// The size limit.
         limit: ByteSize,
     },
+}
+
+/// Errors that can occur during Chrome trace conversion.
+#[derive(Debug, Error)]
+pub enum ChromeTraceError {
+    /// An error occurred while reading recorded events.
+    #[error("error reading recorded events")]
+    ReadError(#[source] RecordReadError),
+
+    /// An event referenced a test that was never started.
+    #[error(
+        "event for test `{test_name}` in binary `{binary_id}` \
+         has no prior TestStarted event (corrupt or truncated log?)"
+    )]
+    MissingTestStart {
+        /// The test name.
+        test_name: TestCaseName,
+
+        /// The binary ID.
+        binary_id: RustBinaryId,
+    },
+
+    /// A SetupScriptSlow event referenced a script that is not running.
+    #[error(
+        "SetupScriptSlow for script `{script_id}` \
+         has no prior SetupScriptStarted event (corrupt or truncated log?)"
+    )]
+    MissingScriptStart {
+        /// The script ID.
+        script_id: ScriptId,
+    },
+
+    /// A StressSubRunFinished event arrived without a prior
+    /// StressSubRunStarted.
+    #[error(
+        "StressSubRunFinished has no prior StressSubRunStarted event \
+         (corrupt or truncated log?)"
+    )]
+    MissingStressSubRunStart,
+
+    /// An error occurred while serializing the trace to JSON.
+    #[error("error serializing Chrome trace JSON")]
+    SerializeError(#[source] serde_json::Error),
 }
 
 /// An error that occurred while reconstructing a TestList from a summary.

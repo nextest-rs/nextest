@@ -1,0 +1,123 @@
+---
+source: nextest-runner/src/record/chrome_trace.rs
+expression: json_str
+---
+{
+  "traceEvents": [
+    {
+      "name": "process_name",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 0,
+      "args": {
+        "name": "my-crate::bin/my-test"
+      }
+    },
+    {
+      "name": "process_sort_index",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 0,
+      "args": {
+        "sort_index": 2
+      }
+    },
+    {
+      "name": "thread_name",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "name": "slot-0"
+      }
+    },
+    {
+      "name": "thread_sort_index",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "sort_index": 10000
+      }
+    },
+    {
+      "name": "tests::it_works",
+      "cat": "test",
+      "ph": "B",
+      "ts": 1000000000.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "binary_id": "my-crate::bin/my-test"
+      }
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1000000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 1,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "tests::it_works",
+      "cat": "test",
+      "ph": "E",
+      "ts": 1002000000.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "binary_id": "my-crate::bin/my-test",
+        "time_taken_ms": 500.0,
+        "result": {
+          "status": "pass"
+        },
+        "attempt": 1,
+        "total_attempts": 1,
+        "is_slow": false,
+        "test_group": "@global"
+      }
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1002000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 0,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "test results",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1002000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "passed": 0,
+        "flaky": 0,
+        "failed": 0
+      }
+    }
+  ],
+  "displayTimeUnit": "ms",
+  "otherData": {
+    "nextest_version": "0.9.9999"
+  }
+}

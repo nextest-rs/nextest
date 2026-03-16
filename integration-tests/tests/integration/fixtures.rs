@@ -19,7 +19,7 @@ use nextest_metadata::{
     BinaryListSummary, BuildPlatform, RustBinaryId, RustTestSuiteStatusSummary, TestCaseName,
     TestListSummary,
 };
-use quick_junit::Report;
+use quick_junit::{FlakyOrRerun, Report};
 use regex::Regex;
 use std::{collections::BTreeSet, process::Command, sync::LazyLock};
 
@@ -410,7 +410,7 @@ impl ExpectedSummary {
                 self.fail_count += 1;
                 self.leak_fail_count += 1;
             }
-            CheckResult::Fail => {
+            CheckResult::Fail | CheckResult::FlakyFail => {
                 self.fail_count += 1;
             }
             CheckResult::FailLeak => {
@@ -533,6 +533,12 @@ static TIMEOUT_RE: LazyLock<Regex> = LazyLock::new(|| {
 static TIMEOUT_PASS_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^\s*(?:TRY (\d+) )?(?:TIMEOUT-PASS|TMPASS|SLOW\+TMPASS) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
 });
+// FLKY-FL is shown for tests that eventually passed but have flaky-result = "fail".
+// Format: "FLKY-FL 4/5 [duration] (count/total) binary_id test_name"
+// Must be checked before FLAKY_RE since both start with "FL".
+static FLAKY_FAIL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*FLKY-FL (\d+)/(\d+) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
+});
 // FLAKY is shown in the summary section for tests that eventually passed.
 // Format: "FLAKY 4/5 [duration] (count/total) binary_id test_name"
 static FLAKY_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -540,7 +546,10 @@ static FLAKY_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 static SUMMARY_RE: LazyLock<Regex> = LazyLock::new(|| {
     // Note: "failed" can also be "timed out" for timeout failures.
-    Regex::new(r"Summary \[.*\] +(\d+) (?:tests?|benchmarks?) run: (\d+) passed(?: \((\d+) leaky\))?,?(?: (\d+) (?:failed|timed out)(?: \((\d+) due to being leaky\))?,?)? (\d+) skipped").unwrap()
+    // The "passed" parenthetical may contain "N flaky" and/or "N leaky"
+    // (e.g., "22 passed (1 flaky, 1 leaky)"). We capture only the leaky
+    // count; flaky count is not tracked in ExpectedSummary.
+    Regex::new(r"Summary \[.*\] +(\d+) (?:tests?|benchmarks?) run: (\d+) passed(?: \((?:\d+ flaky(?:, )?)?(?:(\d+) leaky)?\))?,?(?: (\d+) (?:failed|timed out)(?: \((\d+) due to being leaky\))?,?)? (\d+) skipped").unwrap()
 });
 
 impl ActualTestResults {
@@ -581,9 +590,91 @@ impl ActualTestResults {
             }
         }
 
+        /// Handle a FLKY-FL line. These appear both during the run and in the
+        /// post-summary footer. They override the final PASS attempt with
+        /// FlakyFail.
+        fn handle_flaky_fail(tests: &mut IdOrdMap<ActualOutcome>, caps: &regex::Captures) {
+            // Groups: 1=pass_attempt, 2=total_attempts, 3=binary_id, 4=test_name
+            let test_name = TestCaseName::new(&caps[4]);
+            let id = TestInstanceId::new(&caps[3], &test_name);
+            let attempt_record = TestAttempt {
+                attempt: caps[1].parse().expect("parsed attempt number"),
+                result: CheckResult::FlakyFail,
+            };
+
+            match tests.entry(&id) {
+                iddqd::id_ord_map::Entry::Occupied(mut entry) => {
+                    // FLKY-FL appears after the individual attempts,
+                    // including a TRY N PASS for the passing attempt.
+                    // Replace that final PASS with FlakyFail to reflect
+                    // the overall result.
+                    let attempts = &mut entry.get_mut().attempts;
+                    if let Some(last) = attempts.last_mut() {
+                        last.result = CheckResult::FlakyFail;
+                    } else {
+                        attempts.push(attempt_record);
+                    }
+                }
+                iddqd::id_ord_map::Entry::Vacant(entry) => {
+                    entry.insert(ActualOutcome {
+                        id,
+                        attempts: vec![attempt_record],
+                    });
+                }
+            }
+        }
+
+        /// Handle a FLAKY line. These appear in the post-summary footer for
+        /// tests that eventually passed. They confirm the final PASS result
+        /// (no-op if already recorded).
+        fn handle_flaky_pass(tests: &mut IdOrdMap<ActualOutcome>, caps: &regex::Captures) {
+            // Groups: 1=pass_attempt, 2=total_attempts, 3=binary_id, 4=test_name
+            let test_name = TestCaseName::new(&caps[4]);
+            let id = TestInstanceId::new(&caps[3], &test_name);
+            let attempt_record = TestAttempt {
+                attempt: caps[1].parse().expect("parsed attempt number"),
+                result: CheckResult::Pass,
+            };
+
+            match tests.entry(&id) {
+                iddqd::id_ord_map::Entry::Occupied(mut entry) => {
+                    // FLAKY line appears after individual attempts, so it may
+                    // duplicate the final PASS. Only add if not already a PASS.
+                    let attempts = &mut entry.get_mut().attempts;
+                    if attempts.last().map(|a| a.result) != Some(CheckResult::Pass) {
+                        attempts.push(attempt_record);
+                    }
+                }
+                iddqd::id_ord_map::Entry::Vacant(entry) => {
+                    entry.insert(ActualOutcome {
+                        id,
+                        attempts: vec![attempt_record],
+                    });
+                }
+            }
+        }
+
         // Parse each line for test results. Check more specific patterns first
         // (e.g., "FAIL + LEAK" before "FAIL" or "LEAK").
+        //
+        // After the summary line, nextest repeats failure and flaky status
+        // lines. We must continue parsing past the summary to pick up FLKY-FL
+        // and FLAKY lines (which update the final result for flaky tests), but
+        // we skip the duplicate TRY/status lines that would inflate attempt
+        // counts.
+        let mut past_summary = false;
         for line in output.lines() {
+            if past_summary {
+                // After the summary, only parse FLKY-FL and FLAKY lines.
+                // Other status lines are duplicates of earlier output.
+                if let Some(caps) = FLAKY_FAIL_RE.captures(line) {
+                    handle_flaky_fail(&mut tests, &caps);
+                } else if let Some(caps) = FLAKY_RE.captures(line) {
+                    handle_flaky_pass(&mut tests, &caps);
+                }
+                continue;
+            }
+
             // Track all attempts for each test to analyze retry behavior.
             if let Some(caps) = FAIL_LEAK_RE.captures(line) {
                 add_attempt(&mut tests, &caps, CheckResult::FailLeak);
@@ -603,34 +694,6 @@ impl ActualTestResults {
                 add_attempt(&mut tests, &caps, CheckResult::Fail);
             } else if let Some(caps) = PASS_RE.captures(line) {
                 add_attempt(&mut tests, &caps, CheckResult::Pass);
-            } else if let Some(caps) = FLAKY_RE.captures(line) {
-                // FLAKY appears in summary section for tests that eventually passed.
-                // It's in a different format: "FLAKY 4/5 [duration] (count/total) binary_id test_name"
-                // Groups: 1=pass_attempt, 2=total_attempts, 3=binary_id, 4=test_name
-                // We record this as a PASS since the test eventually passed.
-                let test_name = TestCaseName::new(&caps[4]);
-                let id = TestInstanceId::new(&caps[3], &test_name);
-                let attempt_record = TestAttempt {
-                    attempt: caps[1].parse().expect("parsed attempt number"),
-                    result: CheckResult::Pass,
-                };
-
-                match tests.entry(&id) {
-                    iddqd::id_ord_map::Entry::Occupied(mut entry) => {
-                        // FLAKY line appears after individual attempts, so it may
-                        // duplicate the final PASS. Only add if not already a PASS.
-                        let attempts = &mut entry.get_mut().attempts;
-                        if attempts.last().map(|a| a.result) != Some(CheckResult::Pass) {
-                            attempts.push(attempt_record);
-                        }
-                    }
-                    iddqd::id_ord_map::Entry::Vacant(entry) => {
-                        entry.insert(ActualOutcome {
-                            id,
-                            attempts: vec![attempt_record],
-                        });
-                    }
-                }
             } else if let Some(caps) = SUMMARY_RE.captures(line) {
                 let run_count = caps[1].parse().unwrap();
                 let pass_count = caps[2].parse().unwrap();
@@ -657,9 +720,7 @@ impl ActualTestResults {
                     skip_count,
                 });
 
-                // Failures are shown after the summary line, as part of the
-                // final status. Skip over them by breaking out of the loop.
-                break;
+                past_summary = true;
             }
         }
 
@@ -1031,6 +1092,7 @@ fn filter_for_rerun(expected: &ExpectedTestResults) -> ExpectedTestResults {
         match outcome.expected.result {
             // Failed tests are still outstanding and should run.
             CheckResult::Fail
+            | CheckResult::FlakyFail
             | CheckResult::Abort
             | CheckResult::Timeout
             | CheckResult::LeakFail
@@ -1097,9 +1159,7 @@ struct JunitOutcome {
     id: TestInstanceId,
     /// Non-success information, or None for success.
     non_success: Option<JunitNonSuccess>,
-    /// The number of rerun elements (flaky_runs for Success, reruns for
-    /// NonSuccess).
-    rerun_count: usize,
+    rerun_info: JunitRerunInfo,
 }
 
 /// Non-success information extracted from JUnit XML.
@@ -1108,6 +1168,18 @@ struct JunitNonSuccess {
     kind: quick_junit::NonSuccessKind,
     ty: String,
     message: Option<String>,
+}
+
+/// Rerun information extracted from JUnit XML.
+#[derive(Clone, Debug)]
+enum JunitRerunInfo {
+    /// The test passed.
+    Success { rerun_count: usize },
+    /// The test failed.
+    NonSuccess {
+        rerun_kind: FlakyOrRerun,
+        rerun_count: usize,
+    },
 }
 
 impl IdOrdItem for JunitOutcome {
@@ -1141,8 +1213,13 @@ impl ActualJunitResults {
                 let test_name = TestCaseName::new(test_case.name.as_str());
                 let id = TestInstanceId::new(binary_id, &test_name);
 
-                let (non_success, rerun_count) = match &test_case.status {
-                    quick_junit::TestCaseStatus::Success { flaky_runs } => (None, flaky_runs.len()),
+                let (non_success, rerun_info) = match &test_case.status {
+                    quick_junit::TestCaseStatus::Success { flaky_runs } => (
+                        None,
+                        JunitRerunInfo::Success {
+                            rerun_count: flaky_runs.len(),
+                        },
+                    ),
                     quick_junit::TestCaseStatus::NonSuccess {
                         kind,
                         ty,
@@ -1155,7 +1232,10 @@ impl ActualJunitResults {
                             ty: ty.as_ref().map(|s| s.to_string()).unwrap_or_default(),
                             message: message.as_ref().map(|s| s.to_string()),
                         }),
-                        reruns.len(),
+                        JunitRerunInfo::NonSuccess {
+                            rerun_kind: reruns.kind,
+                            rerun_count: reruns.runs.len(),
+                        },
                     ),
                     quick_junit::TestCaseStatus::Skipped { .. } => {
                         // Skipped tests are filtered out during test execution and don't appear
@@ -1168,7 +1248,7 @@ impl ActualJunitResults {
                 let outcome = JunitOutcome {
                     id: id.clone(),
                     non_success,
-                    rerun_count,
+                    rerun_info,
                 };
                 tests
                     .insert_unique(outcome)
@@ -1194,6 +1274,7 @@ fn verify_junit(expected: &ExpectedTestResults, junit_path: &Utf8Path, propertie
 // junit.rs. The Rust test harness always uses exit code 101 for test failures.
 const JUNIT_FAIL: &str = "test failure with exit code 101";
 const JUNIT_FAIL_LEAK: &str = "test failure with exit code 101, and leaked handles";
+const JUNIT_FLAKY_FAIL: &str = "flaky failure";
 const JUNIT_ABORT: &str = "test abort";
 
 /// Expected JUnit properties for a non-success test case.
@@ -1225,6 +1306,10 @@ enum JunitExpectedMessage<'a> {
     /// This is used for failure types where the message format is known but
     /// the exact content is test-specific.
     StartsWithOneOf(&'a [&'a str]),
+    /// The message must start with the given prefix and end with the given
+    /// suffix. Useful for messages with variable content in the middle (e.g.
+    /// attempt numbers).
+    StartsAndEndsWith(&'a str, &'a str),
 }
 
 impl JunitExpectedMessage<'_> {
@@ -1265,6 +1350,25 @@ impl JunitExpectedMessage<'_> {
                     debug_run_properties(properties),
                 );
             }
+            JunitExpectedMessage::StartsAndEndsWith(prefix, suffix) => {
+                let message = actual_message.unwrap_or_else(|| {
+                    panic!(
+                        "{test_name}: expected a JUnit message starting with {prefix:?} \
+                         and ending with {suffix:?}, but no message was present \
+                         (properties: {})\n\
+                         JUnit path: {junit_path}",
+                        debug_run_properties(properties),
+                    );
+                });
+                assert!(
+                    message.starts_with(prefix) && message.ends_with(suffix),
+                    "{test_name}: expected JUnit message starting with {prefix:?} \
+                     and ending with {suffix:?}, but got {message:?} \
+                     (properties: {})\n\
+                     JUnit path: {junit_path}",
+                    debug_run_properties(properties),
+                );
+            }
         }
     }
 }
@@ -1296,6 +1400,14 @@ fn expected_junit_for_result(
             ty: JUNIT_FAIL,
             message: JunitExpectedMessage::StartsWithOneOf(FAIL_MESSAGE_PREFIXES),
         }),
+        CheckResult::FlakyFail => Some(ExpectedJunit {
+            kind: quick_junit::NonSuccessKind::Failure,
+            ty: JUNIT_FLAKY_FAIL,
+            message: JunitExpectedMessage::StartsAndEndsWith(
+                "test passed on attempt ",
+                " but is configured to fail when flaky",
+            ),
+        }),
         CheckResult::FailLeak => Some(ExpectedJunit {
             kind: quick_junit::NonSuccessKind::Failure,
             ty: JUNIT_FAIL_LEAK,
@@ -1321,6 +1433,21 @@ fn expected_junit_for_result(
                 message: JunitExpectedMessage::None,
             })
         }
+    }
+}
+
+/// Returns the expected rerun kind for a `CheckResult`, or `None` for success
+/// cases. `FlakyFail` expects `Flaky` (reruns serialize as `<flakyFailure>`);
+/// other failures expect `Rerun` (reruns serialize as `<rerunFailure>`).
+fn expected_rerun_kind_for_result(result: CheckResult) -> Option<FlakyOrRerun> {
+    match result {
+        CheckResult::Pass | CheckResult::Leak => None,
+        CheckResult::FlakyFail => Some(FlakyOrRerun::Flaky),
+        CheckResult::LeakFail
+        | CheckResult::Fail
+        | CheckResult::FailLeak
+        | CheckResult::Abort
+        | CheckResult::Timeout => Some(FlakyOrRerun::Rerun),
     }
 }
 
@@ -1412,39 +1539,97 @@ fn verify_expected_in_junit(
                     }
                 }
 
-                // Verify that the rerun count matches the expected value.
+                // Verify rerun information: count and kind.
+                let actual_rerun_count = match &actual.rerun_info {
+                    JunitRerunInfo::Success { rerun_count }
+                    | JunitRerunInfo::NonSuccess { rerun_count, .. } => *rerun_count,
+                };
                 match expected_outcome.expected.expected_reruns {
                     ExpectedReruns::None => {
                         assert_eq!(
-                            actual.rerun_count,
+                            actual_rerun_count,
                             0,
                             "{}: expected no reruns but found {} (properties: {})\n\
                              JUnit path: {}",
                             expected_outcome.id.full_name(),
-                            actual.rerun_count,
+                            actual_rerun_count,
                             debug_run_properties(properties),
                             junit_path,
                         );
                     }
                     ExpectedReruns::FlakyRunCount(expected_count) => {
                         assert_eq!(
-                            actual.rerun_count,
+                            actual_rerun_count,
                             expected_count,
                             "{}: expected {} flaky runs but found {} (properties: {})\n\
                              JUnit path: {}",
                             expected_outcome.id.full_name(),
                             expected_count,
-                            actual.rerun_count,
+                            actual_rerun_count,
                             debug_run_properties(properties),
                             junit_path,
                         );
                     }
                     ExpectedReruns::SomeReruns => {
                         assert!(
-                            actual.rerun_count > 0,
+                            actual_rerun_count > 0,
                             "{}: expected reruns but found none (properties: {})\n\
                              JUnit path: {}",
                             expected_outcome.id.full_name(),
+                            debug_run_properties(properties),
+                            junit_path,
+                        );
+                    }
+                }
+
+                // Verify rerun kind matches expectations derived from the
+                // check result.
+                match (
+                    expected_rerun_kind_for_result(expected_outcome.expected.result),
+                    &actual.rerun_info,
+                ) {
+                    (
+                        Some(expected_rerun_kind),
+                        JunitRerunInfo::NonSuccess {
+                            rerun_kind,
+                            rerun_count,
+                        },
+                    ) => {
+                        assert_eq!(
+                            *rerun_kind,
+                            expected_rerun_kind,
+                            "{}: expected rerun kind {:?} but got {:?} \
+                             (rerun_count: {}, properties: {})\n\
+                             JUnit path: {}",
+                            expected_outcome.id.full_name(),
+                            expected_rerun_kind,
+                            rerun_kind,
+                            rerun_count,
+                            debug_run_properties(properties),
+                            junit_path,
+                        );
+                    }
+                    (Some(expected_rerun_kind), JunitRerunInfo::Success { .. }) => {
+                        panic!(
+                            "{}: expected NonSuccess rerun info (rerun kind {:?}) \
+                             but got Success (properties: {})\n\
+                             JUnit path: {}",
+                            expected_outcome.id.full_name(),
+                            expected_rerun_kind,
+                            debug_run_properties(properties),
+                            junit_path,
+                        );
+                    }
+                    (None, JunitRerunInfo::Success { .. }) => {
+                        // Success result with Success rerun info — expected.
+                    }
+                    (None, JunitRerunInfo::NonSuccess { rerun_kind, .. }) => {
+                        panic!(
+                            "{}: expected Success rerun info but got NonSuccess \
+                             (rerun kind {:?}, properties: {})\n\
+                             JUnit path: {}",
+                            expected_outcome.id.full_name(),
+                            rerun_kind,
                             debug_run_properties(properties),
                             junit_path,
                         );

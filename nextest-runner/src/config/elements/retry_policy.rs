@@ -65,25 +65,16 @@ impl RetryPolicy {
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum FlakyResult {
+    /// The test is marked as failed.
+    Fail,
+
     /// The test is marked as passed.
     #[default]
     Pass,
 }
 
-/// Intermediate type for deserializing retry policy from TOML. The
-/// `flaky-result` field is extracted separately from the backoff policy.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub(in crate::config) struct DeserializedRetryPolicy {
-    /// The retry backoff policy.
-    pub(in crate::config) policy: RetryPolicy,
-
-    /// The flaky result behavior, if explicitly set.
-    pub(in crate::config) flaky_result: Option<FlakyResult>,
-}
-
-/// Serde-compatible intermediate type that includes the `flaky-result` field
-/// alongside backoff parameters. After deserialization, the `flaky-result` is
-/// split out into `DeserializedRetryPolicy`.
+/// Serde-compatible intermediate type for the `retries` config field. After
+/// deserialization, this is converted into a `RetryPolicy`.
 #[derive(Debug, Copy, Clone, Deserialize)]
 #[serde(tag = "backoff", rename_all = "kebab-case", deny_unknown_fields)]
 enum RetryPolicySerde {
@@ -108,33 +99,27 @@ enum RetryPolicySerde {
 }
 
 impl RetryPolicySerde {
-    fn into_deserialized(self) -> DeserializedRetryPolicy {
+    fn into_policy(self) -> RetryPolicy {
         match self {
             RetryPolicySerde::Fixed {
                 count,
                 delay,
                 jitter,
-            } => DeserializedRetryPolicy {
-                policy: RetryPolicy::Fixed {
-                    count,
-                    delay,
-                    jitter,
-                },
-                flaky_result: None,
+            } => RetryPolicy::Fixed {
+                count,
+                delay,
+                jitter,
             },
             RetryPolicySerde::Exponential {
                 count,
                 delay,
                 jitter,
                 max_delay,
-            } => DeserializedRetryPolicy {
-                policy: RetryPolicy::Exponential {
-                    count,
-                    delay,
-                    jitter,
-                    max_delay,
-                },
-                flaky_result: None,
+            } => RetryPolicy::Exponential {
+                count,
+                delay,
+                jitter,
+                max_delay,
             },
         }
     }
@@ -142,19 +127,19 @@ impl RetryPolicySerde {
 
 pub(in crate::config) fn deserialize_retry_policy<'de, D>(
     deserializer: D,
-) -> Result<Option<DeserializedRetryPolicy>, D::Error>
+) -> Result<Option<RetryPolicy>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     struct V;
 
     impl<'de2> serde::de::Visitor<'de2> for V {
-        type Value = Option<DeserializedRetryPolicy>;
+        type Value = Option<RetryPolicy>;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             write!(
                 formatter,
-                "a table ({{ count = 5, backoff = \"exponential\", delay = \"1s\", max-delay = \"10s\", jitter = true }}) or a number (5)"
+                "a table ({{ backoff = \"fixed\", count = 5 }}) or a number (5)"
             )
         }
 
@@ -171,10 +156,7 @@ where
                             &"a positive u32",
                         )
                     })?;
-                    Ok(Some(DeserializedRetryPolicy {
-                        policy: RetryPolicy::new_without_delay(v),
-                        flaky_result: None,
-                    }))
+                    Ok(Some(RetryPolicy::new_without_delay(v)))
                 }
                 Ordering::Less => Err(serde::de::Error::invalid_value(
                     serde::de::Unexpected::Signed(v),
@@ -188,13 +170,13 @@ where
             A: serde::de::MapAccess<'de2>,
         {
             RetryPolicySerde::deserialize(serde::de::value::MapAccessDeserializer::new(map))
-                .map(|s| Some(s.into_deserialized()))
+                .map(|s| Some(s.into_policy()))
         }
     }
 
     // Post-deserialize validation of retry policy.
-    let deserialized = deserializer.deserialize_any(V)?;
-    match deserialized.as_ref().map(|d| &d.policy) {
+    let policy = deserializer.deserialize_any(V)?;
+    match &policy {
         Some(RetryPolicy::Fixed {
             count: _,
             delay,
@@ -241,7 +223,7 @@ where
         None => {}
     }
 
-    Ok(deserialized)
+    Ok(policy)
 }
 
 #[cfg(test)]
@@ -280,6 +262,21 @@ mod tests {
 
             [profile.exp-with-max-delay-and-jitter]
             retries = { backoff = "exponential", count = 6, delay = "4s", max-delay = "1m", jitter = true }
+
+            [profile.with-flaky-result-fail]
+            retries = { backoff = "fixed", count = 2 }
+            flaky-result = "fail"
+
+            [profile.with-flaky-result-pass]
+            retries = { backoff = "fixed", count = 2 }
+            flaky-result = "pass"
+
+            [profile.exp-with-flaky-result-fail]
+            retries = { backoff = "exponential", count = 3, delay = "1s" }
+            flaky-result = "fail"
+
+            [profile.flaky-result-only]
+            flaky-result = "fail"
         "#};
 
         let workspace_dir = tempdir().unwrap();
@@ -383,6 +380,77 @@ mod tests {
             },
             "exp-with-max-delay-and-jitter retries matches"
         );
+
+        let with_flaky_result_fail = config
+            .profile("with-flaky-result-fail")
+            .expect("profile exists")
+            .apply_build_platforms(&build_platforms());
+        assert_eq!(
+            with_flaky_result_fail.retries(),
+            RetryPolicy::new_without_delay(2),
+            "with-flaky-result-fail retries matches"
+        );
+        assert_eq!(
+            with_flaky_result_fail.flaky_result(),
+            FlakyResult::Fail,
+            "with-flaky-result-fail flaky_result matches"
+        );
+
+        let with_flaky_result_pass = config
+            .profile("with-flaky-result-pass")
+            .expect("profile exists")
+            .apply_build_platforms(&build_platforms());
+        assert_eq!(
+            with_flaky_result_pass.retries(),
+            RetryPolicy::new_without_delay(2),
+            "with-flaky-result-pass retries matches"
+        );
+        assert_eq!(
+            with_flaky_result_pass.flaky_result(),
+            FlakyResult::Pass,
+            "with-flaky-result-pass flaky_result matches"
+        );
+
+        let exp_with_flaky_result_fail = config
+            .profile("exp-with-flaky-result-fail")
+            .expect("profile exists")
+            .apply_build_platforms(&build_platforms());
+        assert_eq!(
+            exp_with_flaky_result_fail.retries(),
+            RetryPolicy::Exponential {
+                count: 3,
+                delay: Duration::from_secs(1),
+                jitter: false,
+                max_delay: None,
+            },
+            "exp-with-flaky-result-fail retries matches"
+        );
+        assert_eq!(
+            exp_with_flaky_result_fail.flaky_result(),
+            FlakyResult::Fail,
+            "exp-with-flaky-result-fail flaky_result matches"
+        );
+
+        // flaky-result-only: retries inherited from default (count=3), flaky
+        // result set to fail.
+        let flaky_result_only = config
+            .profile("flaky-result-only")
+            .expect("profile exists")
+            .apply_build_platforms(&build_platforms());
+        assert_eq!(
+            flaky_result_only.retries(),
+            RetryPolicy::Fixed {
+                count: 3,
+                delay: Duration::ZERO,
+                jitter: false,
+            },
+            "flaky-result-only retries inherited from default"
+        );
+        assert_eq!(
+            flaky_result_only.flaky_result(),
+            FlakyResult::Fail,
+            "flaky-result-only flaky_result matches"
+        );
     }
 
     #[test_case(
@@ -473,6 +541,14 @@ mod tests {
         ConfigErrorKind::Message,
         "`max-delay` cannot be less than delay"
         ; "max-delay greater than delay")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            flaky-result = "unknown"
+        "#},
+        ConfigErrorKind::Message,
+        "enum FlakyResult does not have variant constructor unknown"
+        ; "invalid flaky-result value")]
     fn parse_retries_invalid(
         config_contents: &str,
         expected_kind: ConfigErrorKind,
@@ -749,6 +825,226 @@ mod tests {
             settings_for.retries(),
             retries,
             "actual retries don't match expected retries"
+        );
+    }
+
+    #[test]
+    fn overrides_flaky_result() {
+        let config_contents = indoc! {r#"
+            [[profile.default.overrides]]
+            filter = "test(=my_test)"
+            retries = { backoff = "fixed", count = 3 }
+            flaky-result = "fail"
+
+            [[profile.default.overrides]]
+            filter = "test(=other_test)"
+            retries = 2
+
+            [profile.ci]
+        "#};
+        let workspace_dir = tempdir().unwrap();
+
+        let graph = temp_workspace(&workspace_dir, config_contents);
+        let package_id = graph.workspace().iter().next().unwrap().id();
+        let pcx = ParseContext::new(&graph);
+
+        let config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &[][..],
+            &Default::default(),
+        )
+        .unwrap();
+
+        let profile = config
+            .profile("ci")
+            .expect("ci profile is defined")
+            .apply_build_platforms(&build_platforms());
+
+        // my_test has flaky-result = "fail" set explicitly.
+        let binary_query = binary_query(
+            &graph,
+            package_id,
+            "lib",
+            "my-binary",
+            BuildPlatform::Target,
+        );
+        let test_name = TestCaseName::new("my_test");
+        let query = TestQuery {
+            binary_query: binary_query.to_query(),
+            test_name: &test_name,
+        };
+        let settings = profile.settings_for(NextestRunMode::Test, &query);
+        assert_eq!(
+            settings.flaky_result(),
+            FlakyResult::Fail,
+            "my_test flaky_result is fail"
+        );
+
+        // other_test uses shorthand retries = 2, which does not set
+        // flaky-result.
+        let test_name = TestCaseName::new("other_test");
+        let query = TestQuery {
+            binary_query: binary_query.to_query(),
+            test_name: &test_name,
+        };
+        let settings = profile.settings_for(NextestRunMode::Test, &query);
+        assert_eq!(
+            settings.flaky_result(),
+            FlakyResult::Pass,
+            "other_test flaky_result defaults to pass"
+        );
+    }
+
+    /// Test that retries and flaky_result resolve independently through the
+    /// override chain. An override that sets only retries should not override
+    /// a flaky_result set by a later (lower-priority) override.
+    #[test]
+    fn overrides_flaky_result_independent_resolution() {
+        let config_contents = indoc! {r#"
+            # Override 1: sets retries count only.
+            [[profile.default.overrides]]
+            filter = "test(=my_test)"
+            retries = 5
+
+            # Override 2: sets retries with flaky-result = "fail".
+            [[profile.default.overrides]]
+            filter = "all()"
+            retries = { backoff = "fixed", count = 2 }
+            flaky-result = "fail"
+
+            [profile.ci]
+        "#};
+        let workspace_dir = tempdir().unwrap();
+
+        let graph = temp_workspace(&workspace_dir, config_contents);
+        let package_id = graph.workspace().iter().next().unwrap().id();
+        let pcx = ParseContext::new(&graph);
+
+        let config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &[][..],
+            &Default::default(),
+        )
+        .unwrap();
+
+        let profile = config
+            .profile("ci")
+            .expect("ci profile is defined")
+            .apply_build_platforms(&build_platforms());
+
+        let binary_query = binary_query(
+            &graph,
+            package_id,
+            "lib",
+            "my-binary",
+            BuildPlatform::Target,
+        );
+        let test_name = TestCaseName::new("my_test");
+        let query = TestQuery {
+            binary_query: binary_query.to_query(),
+            test_name: &test_name,
+        };
+        let settings = profile.settings_for(NextestRunMode::Test, &query);
+
+        // Retries count comes from override 1 (higher priority).
+        assert_eq!(
+            settings.retries(),
+            RetryPolicy::new_without_delay(5),
+            "retries count from first override"
+        );
+        // Flaky result comes from override 2 (first override didn't set it).
+        assert_eq!(
+            settings.flaky_result(),
+            FlakyResult::Fail,
+            "flaky_result from second override"
+        );
+    }
+
+    /// Test that `flaky-result = "fail"` (without retries) sets only the flaky
+    /// result, with the retry policy inherited from a lower-priority override.
+    #[test]
+    fn overrides_flaky_result_only() {
+        let config_contents = indoc! {r#"
+            # Override 1: sets only flaky-result, no retry policy.
+            [[profile.default.overrides]]
+            filter = "test(=my_test)"
+            flaky-result = "fail"
+
+            # Override 2: sets retries count for all tests.
+            [[profile.default.overrides]]
+            filter = "all()"
+            retries = 3
+
+            [profile.ci]
+        "#};
+        let workspace_dir = tempdir().unwrap();
+
+        let graph = temp_workspace(&workspace_dir, config_contents);
+        let package_id = graph.workspace().iter().next().unwrap().id();
+        let pcx = ParseContext::new(&graph);
+
+        let config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &[][..],
+            &Default::default(),
+        )
+        .unwrap();
+
+        let profile = config
+            .profile("ci")
+            .expect("ci profile is defined")
+            .apply_build_platforms(&build_platforms());
+
+        let binary_query = binary_query(
+            &graph,
+            package_id,
+            "lib",
+            "my-binary",
+            BuildPlatform::Target,
+        );
+        let test_name = TestCaseName::new("my_test");
+        let query = TestQuery {
+            binary_query: binary_query.to_query(),
+            test_name: &test_name,
+        };
+        let settings = profile.settings_for(NextestRunMode::Test, &query);
+
+        // Retries come from override 2 (override 1 didn't set a policy).
+        assert_eq!(
+            settings.retries(),
+            RetryPolicy::new_without_delay(3),
+            "retries from second override"
+        );
+        // Flaky result comes from override 1.
+        assert_eq!(
+            settings.flaky_result(),
+            FlakyResult::Fail,
+            "flaky_result from first override"
+        );
+
+        // For a test that doesn't match override 1, flaky_result defaults to
+        // pass.
+        let test_name = TestCaseName::new("other_test");
+        let query = TestQuery {
+            binary_query: binary_query.to_query(),
+            test_name: &test_name,
+        };
+        let settings = profile.settings_for(NextestRunMode::Test, &query);
+        assert_eq!(
+            settings.retries(),
+            RetryPolicy::new_without_delay(3),
+            "other_test retries from second override"
+        );
+        assert_eq!(
+            settings.flaky_result(),
+            FlakyResult::Pass,
+            "other_test flaky_result defaults to pass"
         );
     }
 }
