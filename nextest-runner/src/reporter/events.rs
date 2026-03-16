@@ -1523,13 +1523,13 @@ pub enum ChildStartErrorDescription {
     /// An error occurred while creating a temporary path for a setup script.
     TempPath {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 
     /// An error occurred while spawning the child process.
     Spawn {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 }
 
@@ -1562,31 +1562,31 @@ pub enum ChildErrorDescription {
     /// An error occurred while reading standard output.
     ReadStdout {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 
     /// An error occurred while reading standard error.
     ReadStderr {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 
     /// An error occurred while reading combined output.
     ReadCombined {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 
     /// An error occurred while waiting for the child process to exit.
     Wait {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 
     /// An error occurred while reading the output of a setup script.
     SetupScriptOutput {
         /// The source error.
-        source: IoErrorDescription,
+        source: SerializableError,
     },
 }
 
@@ -1620,22 +1620,154 @@ impl std::error::Error for ChildErrorDescription {
     }
 }
 
-/// A serializable description of an I/O error.
+/// A serializable representation of an error chain.
 ///
-/// This captures the error message from an [`std::io::Error`].
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(test, derive(test_strategy::Arbitrary))]
-pub struct IoErrorDescription {
+/// This captures the error message and the chain of source errors from
+/// any [`std::error::Error`] implementation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SerializableError {
     message: String,
+    source: Option<Box<SerializableError>>,
 }
 
-impl fmt::Display for IoErrorDescription {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message)
+impl SerializableError {
+    /// Creates a new `SerializableError` from an error, walking the
+    /// full source chain.
+    pub fn new(error: &dyn std::error::Error) -> Self {
+        let message = error.to_string();
+        let mut causes = Vec::new();
+        let mut source = error.source();
+        while let Some(err) = source {
+            causes.push(err.to_string());
+            source = err.source();
+        }
+        Self::from_message_and_causes(message, causes)
+    }
+
+    /// Creates a new `SerializableError` from a message and a list of
+    /// causes.
+    pub fn from_message_and_causes(message: String, causes: Vec<String>) -> Self {
+        // This builds a singly-linked list from the causes. You rarely
+        // see them in Rust, but they're required to implement
+        // Error::source.
+        let mut next = None;
+        for cause in causes.into_iter().rev() {
+            let error = Self {
+                message: cause,
+                source: next.map(Box::new),
+            };
+            next = Some(error);
+        }
+        Self {
+            message,
+            source: next.map(Box::new),
+        }
+    }
+
+    /// Returns the message associated with this error.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    /// Returns the causes of this error as an iterator.
+    pub fn sources(&self) -> SerializableErrorSources<'_> {
+        SerializableErrorSources {
+            current: self.source.as_deref(),
+        }
     }
 }
 
-impl std::error::Error for IoErrorDescription {}
+impl fmt::Display for SerializableError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for SerializableError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source
+            .as_deref()
+            .map(|s| s as &(dyn std::error::Error + 'static))
+    }
+}
+
+/// The sources of a [`SerializableError`] as an iterator.
+#[derive(Debug)]
+pub struct SerializableErrorSources<'a> {
+    current: Option<&'a SerializableError>,
+}
+
+impl<'a> Iterator for SerializableErrorSources<'a> {
+    type Item = &'a SerializableError;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = self.current?;
+        self.current = current.source.as_deref();
+        Some(current)
+    }
+}
+
+mod serializable_error_serde {
+    use super::*;
+
+    #[derive(Serialize, Deserialize)]
+    struct Ser {
+        message: String,
+        // For backwards compatibility with IoErrorDescription, which
+        // didn't have a causes field.
+        #[serde(default)]
+        causes: Vec<String>,
+    }
+
+    impl Serialize for SerializableError {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            let mut causes = Vec::new();
+            let mut cause = self.source.as_ref();
+            while let Some(c) = cause {
+                causes.push(c.message.clone());
+                cause = c.source.as_ref();
+            }
+
+            let ser = Ser {
+                message: self.message.clone(),
+                causes,
+            };
+            ser.serialize(serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for SerializableError {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let ser = Ser::deserialize(deserializer)?;
+            Ok(SerializableError::from_message_and_causes(
+                ser.message,
+                ser.causes,
+            ))
+        }
+    }
+}
+
+#[cfg(test)]
+mod serializable_error_arbitrary {
+    use super::*;
+    use proptest::prelude::*;
+
+    impl Arbitrary for SerializableError {
+        type Parameters = ();
+        type Strategy = BoxedStrategy<Self>;
+
+        fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+            (
+                any::<String>(),
+                proptest::collection::vec(any::<String>(), 0..3),
+            )
+                .prop_map(|(message, causes)| {
+                    SerializableError::from_message_and_causes(message, causes)
+                })
+                .boxed()
+        }
+    }
+}
 
 impl From<ChildExecutionOutput> for ChildExecutionOutputDescription<LiveSpec> {
     fn from(output: ChildExecutionOutput) -> Self {
@@ -1672,14 +1804,10 @@ impl From<ChildStartError> for ChildStartErrorDescription {
     fn from(error: ChildStartError) -> Self {
         match error {
             ChildStartError::TempPath(e) => Self::TempPath {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: SerializableError::new(&*e),
             },
             ChildStartError::Spawn(e) => Self::Spawn {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: SerializableError::new(&*e),
             },
         }
     }
@@ -1689,29 +1817,19 @@ impl From<ChildError> for ChildErrorDescription {
     fn from(error: ChildError) -> Self {
         match error {
             ChildError::Fd(ChildFdError::ReadStdout(e)) => Self::ReadStdout {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: SerializableError::new(&*e),
             },
             ChildError::Fd(ChildFdError::ReadStderr(e)) => Self::ReadStderr {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: SerializableError::new(&*e),
             },
             ChildError::Fd(ChildFdError::ReadCombined(e)) => Self::ReadCombined {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: SerializableError::new(&*e),
             },
             ChildError::Fd(ChildFdError::Wait(e)) => Self::Wait {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: SerializableError::new(&*e),
             },
             ChildError::SetupScriptOutput(e) => Self::SetupScriptOutput {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: SerializableError::new(&e),
             },
         }
     }
