@@ -79,6 +79,24 @@ A wrapper script will be invoked with the test binary as the first argument, and
 
     Make sure your wrapper script runs the test binary and arguments passed into it! If you do not do so, your test will succeed even though it isn't being executed.
 
+### Specifying `env`
+
+<!-- md:version 0.9.131 -->
+
+A map of environment variables may be passed to a command by specifying the `env` parameter.
+
+```toml
+[scripts.wrapper.script1]
+command = {
+    command-line = "debug/my-wrapper-bin",
+    env = {
+        DEBUG_LEVEL = "9001",
+    },
+}
+```
+
+Note that keys cannot begin with `NEXTEST`, as that is reserved for internal use. Values defined in this map will override values set by the environment and by Cargo's `config.toml` (including those with `force = true`). It is also up to the wrapper script to block or pass through the environment variables it receives to the test binary it will execute.
+
 ### Wrapper script configuration
 
 Wrapper scripts can have the following configuration options attached to them:

@@ -10,6 +10,9 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     eprintln!("[wrapper] args: {args:?}");
 
+    // Expects the command line environment variable to be set.
+    let _ = std::env::var("WRAPPER_CMD_ENV_VAR").expect("WRAPPER_CMD_ENV_VAR set by command.env");
+
     // If this is the list phase, also produce a fake test name.
     let phase = std::env::var("NEXTEST_TEST_PHASE").expect("NEXTEST_TEST_PHASE must be set");
     if phase == "list" {

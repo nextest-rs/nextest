@@ -2090,6 +2090,90 @@ fn test_setup_script_error() {
     );
 }
 
+/// Tests command.env interaction with .cargo/config env and parent process env.
+///
+/// .cargo/config is only picked up when the nextest process's cwd is within the
+/// fixture workspace (i.e. when .current_dir() is set). Tests that only use
+/// --manifest-path don't pick it up. This test uses .current_dir() to exercise
+/// the cargo config path.
+///
+/// Two sub-cases:
+/// 1. CMD_ENV_VAR in parent env: cargo config (no force) skips it, test binary
+///    inherits the parent's value.
+/// 2. CMD_ENV_VAR not in parent env: cargo config sets it on the test binary.
+///
+/// In both cases, the setup script's command.env takes priority over cargo
+/// config for variables it sets (CMD_ENV_VAR, CMD_ENV_VAR_CARGO).
+#[test]
+fn test_setup_script_defined_env() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    let manifest_path = p.manifest_path();
+    let workspace_dir = manifest_path
+        .parent()
+        .expect("manifest_path's parent should be a dir");
+
+    // Case 1: CMD_ENV_VAR in parent env.
+    let output = CargoNextestCli::for_test(&env_info)
+        .args(["run", "-E", "test(test_cargo_env_vars)"])
+        .current_dir(workspace_dir)
+        .env("__NEXTEST_SETUP_SCRIPT_WITH_CARGO_CONFIG", "1")
+        .env("CMD_ENV_VAR", "test-value-set-by-environment")
+        .env("CMD_ENV_VAR_CARGO", "test-value-set-by-environment")
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::OK),
+        "command.env should take priority over cargo config and parent env\n{output}"
+    );
+
+    // Case 2: CMD_ENV_VAR not in parent env, cargo config sets it on the
+    // test binary.
+    let output = CargoNextestCli::for_test(&env_info)
+        .args(["run", "-E", "test(test_cargo_env_vars)"])
+        .current_dir(workspace_dir)
+        .env("__NEXTEST_SETUP_SCRIPT_WITH_CARGO_CONFIG_NO_PARENT", "1")
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::OK),
+        "command.env should take priority over cargo config\n{output}"
+    );
+}
+
+#[test]
+fn test_overrides_wrapper_env() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    // Set a target runner so that overrides-wrapper has something to override
+    // with.
+    let runner_env = current_runner_env_var();
+    let passthrough = env_info.passthrough_bin.as_str();
+    let runner_value = format!("{passthrough} --ensure-this-arg-is-sent");
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "-E",
+            "test(=test_overrides_wrapper_env)",
+        ])
+        .env(&runner_env, &runner_value)
+        .env("__NEXTEST_OVERRIDES_WRAPPER_WITH_RUNNER", "1")
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::OK),
+        "overrides-wrapper env should not be applied when runner is present\n{output}"
+    );
+}
+
 #[test]
 fn test_setup_script_reserved_env() {
     let env_info = set_env_vars_for_test();
@@ -2898,6 +2982,9 @@ fn test_run_with_target_runner() {
             "--all-targets",
         ])
         .env(&runner_env, &runner_value)
+        // Signal to test_overrides_wrapper_env that a target runner is active,
+        // so the overrides-wrapper config means the wrapper env is not applied.
+        .env("__NEXTEST_OVERRIDES_WRAPPER_WITH_RUNNER", "1")
         .unchecked(true)
         .output();
 

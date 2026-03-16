@@ -359,12 +359,59 @@ pub enum SetupScriptOutputError {
         line: String,
     },
 
+    /// An environment variable key in the environment file was invalid.
+    #[error("error in environment file `{path}`")]
+    EnvFileInvalidKey {
+        /// The path to the environment file.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: EnvVarError,
+    },
+}
+
+/// An error that describes an invalid/reserved key or value in an environment variable.
+#[derive(Clone, Debug, Error)]
+pub enum EnvVarError {
     /// An environment variable key was reserved.
     #[error("key `{key}` begins with `NEXTEST`, which is reserved for internal use")]
-    EnvFileReservedKey {
+    ReservedKey {
         /// The environment variable name.
         key: String,
     },
+
+    // See: https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap08.html
+    /// An environment variable key is invalid.
+    #[error("key `{key}` does not consist solely of letters, digits, and underscores")]
+    InvalidKey {
+        /// The environment variable name.
+        key: String,
+    },
+
+    /// An environment variable key is invalid.
+    #[error("key `{key}` does not start with a letter or underscore")]
+    InvalidKeyStartChar {
+        /// The environment variable name.
+        key: String,
+    },
+}
+
+// `Display` messages are phrased as statements ("key X does not..."), but
+// `serde::de::Expected` needs them as expectations ("a key that..."). This impl
+// provides the expected-form messages for use with `invalid_value`.
+impl serde::de::Expected for EnvVarError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::ReservedKey { .. } => {
+                "a key that does not begin with `NEXTEST`, which is reserved for internal use"
+            }
+            Self::InvalidKey { .. } => {
+                "a key that consists solely of letters, digits, and underscores"
+            }
+            Self::InvalidKeyStartChar { .. } => "a key that starts with a letter or underscore",
+        })
+    }
 }
 
 /// A list of errors that implements `Error`.

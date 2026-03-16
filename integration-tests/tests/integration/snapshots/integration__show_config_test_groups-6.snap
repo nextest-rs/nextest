@@ -30,6 +30,7 @@ group: @global
           test_failure_should_panic
           test_flaky_mod_4
           test_flaky_mod_6
+          test_overrides_wrapper_env
           test_result_failure
           test_stdin_closed
           test_subprocess_doesnt_exit

@@ -3,6 +3,7 @@
 
 //! Setup scripts.
 
+use super::ScriptCommandEnvMap;
 use crate::{
     config::{
         core::{ConfigIdentifier, EvaluatableProfile, FinalConfig, PreBuildPlatform},
@@ -310,9 +311,11 @@ impl SetupScriptCommand {
             double_spawn,
         );
 
-        // NB: we will always override user-provided environment variables with the
-        // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
+        // Apply Cargo's config.toml env first (workspace-wide), then the
+        // script's command.env (per-script). This way command.env takes
+        // priority as the more specific configuration.
         test_list.cargo_env().apply_env(&mut cmd);
+        config.command.env.apply_env(&mut cmd);
 
         let env_path = camino_tempfile::Builder::new()
             .prefix("nextest-env")
@@ -799,6 +802,9 @@ pub struct ScriptCommand {
     /// The arguments to pass to the program.
     pub args: Vec<String>,
 
+    /// A map of environment variables to pass to the program.
+    pub env: ScriptCommandEnvMap,
+
     /// Which directory to interpret the program as relative to.
     ///
     /// This controls just how `program` is interpreted, in case it is a
@@ -848,7 +854,7 @@ impl<'de> Deserialize<'de> for ScriptCommand {
             type Value = ScriptCommand;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a Unix shell command, a list of arguments, or a table with command-line and relative-to")
+                formatter.write_str("a Unix shell command, a list of arguments, or a table with command-line, env, and relative-to")
             }
 
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
@@ -863,6 +869,7 @@ impl<'de> Deserialize<'de> for ScriptCommand {
                 Ok(ScriptCommand {
                     program,
                     args,
+                    env: ScriptCommandEnvMap::default(),
                     relative_to: ScriptCommandRelativeTo::None,
                 })
             }
@@ -881,6 +888,7 @@ impl<'de> Deserialize<'de> for ScriptCommand {
                 Ok(ScriptCommand {
                     program,
                     args,
+                    env: ScriptCommandEnvMap::default(),
                     relative_to: ScriptCommandRelativeTo::None,
                 })
             }
@@ -891,6 +899,7 @@ impl<'de> Deserialize<'de> for ScriptCommand {
             {
                 let mut command_line = None;
                 let mut relative_to = None;
+                let mut env = None;
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
@@ -906,10 +915,16 @@ impl<'de> Deserialize<'de> for ScriptCommand {
                             }
                             relative_to = Some(map.next_value::<ScriptCommandRelativeTo>()?);
                         }
+                        "env" => {
+                            if env.is_some() {
+                                return Err(A::Error::duplicate_field("env"));
+                            }
+                            env = Some(map.next_value::<ScriptCommandEnvMap>()?);
+                        }
                         _ => {
                             return Err(A::Error::unknown_field(
                                 &key,
-                                &["command-line", "relative-to"],
+                                &["command-line", "env", "relative-to"],
                             ));
                         }
                     }
@@ -917,11 +932,13 @@ impl<'de> Deserialize<'de> for ScriptCommand {
 
                 let (program, arguments) =
                     command_line.ok_or_else(|| A::Error::missing_field("command-line"))?;
+                let env = env.unwrap_or_default();
                 let relative_to = relative_to.unwrap_or(ScriptCommandRelativeTo::None);
 
                 Ok(ScriptCommand {
                     program,
                     args: arguments,
+                    env,
                     relative_to,
                 })
             }
@@ -1059,6 +1076,10 @@ mod tests {
             # order defined below.
             setup = ["baz", "foo", "@tool:my-tool:toolscript"]
 
+            [[profile.default.scripts]]
+            filter = "test(script4)"
+            setup = "qux"
+
             [scripts.setup.foo]
             command = "command foo"
 
@@ -1072,6 +1093,14 @@ mod tests {
             leak-timeout = "1s"
             capture-stdout = true
             capture-stderr = true
+
+            [scripts.setup.qux]
+            command = {
+                command-line = "qux",
+                env = {
+                    MODE = "qux_mode",
+                },
+            }
         "#
         };
 
@@ -1195,6 +1224,33 @@ mod tests {
             "baz",
             "third script should be baz"
         );
+
+        // This query matches the qux script.
+        let test_name = TestCaseName::new("script4");
+        let query = TestQuery {
+            binary_query: target_binary_query.to_query(),
+            test_name: &test_name,
+        };
+        let scripts = SetupScripts::new_with_queries(&profile, std::iter::once(query));
+        assert_eq!(scripts.len(), 1, "one script should be enabled");
+        assert_eq!(
+            scripts.enabled_scripts.get_index(0).unwrap().0.as_str(),
+            "qux",
+            "first script should be qux"
+        );
+        assert_eq!(
+            scripts
+                .enabled_scripts
+                .get_index(0)
+                .unwrap()
+                .1
+                .config
+                .command
+                .env
+                .get("MODE"),
+            Some("qux_mode"),
+            "first script should be passed environment variable MODE with value qux_mode",
+        );
     }
 
     #[test_case(
@@ -1203,7 +1259,7 @@ mod tests {
             command = ""
         "#},
         "invalid value: string \"\", expected a Unix shell command, a list of arguments, \
-         or a table with command-line and relative-to"
+         or a table with command-line, env, and relative-to"
 
         ; "empty command"
     )]
@@ -1213,7 +1269,7 @@ mod tests {
             command = []
         "#},
         "invalid length 0, expected a Unix shell command, a list of arguments, \
-         or a table with command-line and relative-to"
+         or a table with command-line, env, and relative-to"
 
         ; "empty command list"
     )]
@@ -1246,6 +1302,18 @@ mod tests {
     #[test_case(
         indoc! {r#"
             [scripts.setup.foo]
+            command = {
+                command_line = "hi",
+                command_line = ["hi"],
+            }
+        "#},
+        r#"duplicate key"#
+
+        ; "command line is duplicate"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
             command = { relative-to = "target" }
         "#},
         r#"missing configuration field "scripts.setup.foo.command.command-line""#
@@ -1264,9 +1332,21 @@ mod tests {
     #[test_case(
         indoc! {r#"
             [scripts.setup.foo]
+            command = {
+                relative-to = "none",
+                relative-to = "target",
+            }
+        "#},
+        r#"duplicate key"#
+
+        ; "relative to is duplicate"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
             command = { command-line = "my-command", unknown-field = "value" }
         "#},
-        r#"unknown field `unknown-field`, expected `command-line` or `relative-to`"#
+        r#"unknown field `unknown-field`, expected one of `command-line`, `env`, `relative-to`"#
 
         ; "unknown field in command table"
     )]
@@ -1317,6 +1397,86 @@ mod tests {
         r#"invalid type: sequence, expected a string"#
 
         ; "target-runner is not a string"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = {
+                env = {},
+                env = {},
+            }
+        "#},
+        r#"duplicate key"#
+
+        ; "env is duplicate"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = {
+                command-line = "my-command",
+                env = "not a map"
+            }
+        "#},
+        r#"scripts.setup.foo.command.env: invalid type: string "not a map", expected a map of environment variable names to values"#
+
+        ; "env is not a map"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = {
+                command-line = "my-command",
+                env = {
+                    NEXTEST_RESERVED = "reserved",
+                },
+            }
+        "#},
+        r#"scripts.setup.foo.command.env: invalid value: string "NEXTEST_RESERVED", expected a key that does not begin with `NEXTEST`, which is reserved for internal use"#
+
+        ; "env containing key reserved for internal use"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = {
+                command-line = "my-command",
+                env = {
+                    42 = "answer",
+                },
+            }
+        "#},
+        r#"scripts.setup.foo.command.env: invalid value: string "42", expected a key that starts with a letter or underscore"#
+
+        ; "env containing key first character a digit"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = {
+                command-line = "my-command",
+                env = {
+                    " " = "some value",
+                },
+            }
+        "#},
+        r#"scripts.setup.foo.command.env: invalid value: string " ", expected a key that starts with a letter or underscore"#
+
+        ; "env containing key started with an unsupported characters"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = {
+                command-line = "my-command",
+                env = {
+                    "test=test" = "some value",
+                },
+            }
+        "#},
+        r#"scripts.setup.foo.command.env: invalid value: string "test=test", expected a key that consists solely of letters, digits, and underscores"#
+
+        ; "env containing key with unsupported characters"
     )]
     fn parse_scripts_invalid_deserialize(config_contents: &str, message: &str) {
         let workspace_dir = tempdir().unwrap();

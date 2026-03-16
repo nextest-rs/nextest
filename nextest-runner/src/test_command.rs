@@ -3,6 +3,7 @@
 
 use crate::{
     cargo_config::EnvironmentMap,
+    config::scripts::ScriptCommandEnvMap,
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     helpers::dylib_path_envvar,
     list::{RustBuildMeta, TestListState},
@@ -56,10 +57,12 @@ pub(crate) struct TestCommand {
 
 impl TestCommand {
     /// Creates a new test command.
+    #[expect(clippy::too_many_arguments)]
     pub(crate) fn new(
         lctx: &LocalExecuteContext<'_>,
         program: String,
         args: &[Cow<'_, str>],
+        env: Option<&ScriptCommandEnvMap>,
         cwd: &Utf8Path,
         package: &PackageMetadata<'_>,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
@@ -71,9 +74,13 @@ impl TestCommand {
             create_command(program.clone(), args, lctx.double_spawn)
         };
 
-        // NB: we will always override user-provided environment variables with the
-        // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
+        // Apply Cargo's config.toml env first (workspace-wide), then the
+        // wrapper's command.env (per-script). This way command.env takes
+        // priority as the more specific configuration.
         lctx.env.apply_env(&mut cmd);
+        if let Some(env) = env {
+            env.apply_env(&mut cmd);
+        }
 
         if let Some(out_dir) = lctx
             .rust_build_meta

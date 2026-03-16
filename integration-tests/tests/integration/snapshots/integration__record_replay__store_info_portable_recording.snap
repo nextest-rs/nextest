@@ -1,5 +1,6 @@
 ---
 source: integration-tests/tests/integration/record_replay.rs
+assertion_line: 1336
 expression: "redact_dynamic_fields(&info_str, temp_root)"
 ---
 Run 79000001-0000-0000-0000-000000000001
@@ -17,7 +18,7 @@ Run 79000001-0000-0000-0000-000000000001
     passed:         2
 
   sizes:            compressed  uncompressed  entries
-    log                 <size>        <size>       34
+    log                 <size>        <size>       35
     store               <size>        <size>        7
                     ──────────  ────────────  ───────
-    total               <size>        <size>       41
+    total               <size>        <size>       42

@@ -23,6 +23,7 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
             id_ord_map! {
                 TestCaseFixture::new("test_cargo_env_vars", TestCaseFixtureStatus::Pass)
                     .with_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET_UNIX),
+                TestCaseFixture::new("test_overrides_wrapper_env", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_cwd", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_execute_bin", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_failure_assert", TestCaseFixtureStatus::Fail),

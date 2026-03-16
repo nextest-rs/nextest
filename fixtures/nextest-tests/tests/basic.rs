@@ -331,6 +331,58 @@ fn test_cargo_env_vars() {
     );
 
     assert_eq!(std::env::var("MY_ENV_VAR").as_deref(), Ok("my-env-var"));
+
+    // The setup script's command.env is more specific than .cargo/config, so
+    // command.env always wins regardless of force or parent env.
+    assert_eq!(
+        std::env::var("SCRIPT_CMD_ENV_VAR").as_deref(),
+        Ok("test-value-set-in-conf"),
+    );
+    assert_eq!(
+        std::env::var("SCRIPT_CMD_ENV_VAR_CARGO").as_deref(),
+        Ok("test-value-set-in-conf"),
+    );
+
+    // CMD_ENV_VAR on the test binary itself: the wrapper's command.env doesn't
+    // set this, so it comes from .cargo/config or the parent process.
+    //
+    // .cargo/config is only picked up when the integration test sets its cwd
+    // to the fixture workspace root. Tests that use --manifest-path without
+    // current_dir don't pick it up.
+    if std::env::var("__NEXTEST_SETUP_SCRIPT_WITH_CARGO_CONFIG").is_ok() {
+        // .cargo/config is active and CMD_ENV_VAR is in the parent env. Cargo
+        // config has it without force, so cargo_env skips it, and the test
+        // binary inherits the parent's value.
+        assert_eq!(
+            std::env::var("CMD_ENV_VAR").as_deref(),
+            Ok("test-value-set-by-environment"),
+        );
+    } else if std::env::var("__NEXTEST_SETUP_SCRIPT_WITH_CARGO_CONFIG_NO_PARENT").is_ok() {
+        // .cargo/config is active but CMD_ENV_VAR is not in the parent env,
+        // so cargo_env sets it from .cargo/config.
+        assert_eq!(
+            std::env::var("CMD_ENV_VAR").as_deref(),
+            Ok("test-value-set-by-main-config"),
+        );
+    } else {
+        // .cargo/config is not active (no current_dir set), so CMD_ENV_VAR is
+        // not set by anyone.
+        assert_eq!(
+            std::env::var("CMD_ENV_VAR"),
+            Err(std::env::VarError::NotPresent),
+        );
+    }
+    // this is passed here simply because the wrapper being used doesn't filter out any environment
+    // variables that it received.
+    assert_eq!(
+        std::env::var("WRAPPER_CMD_ENV_VAR").as_deref(),
+        Ok("value-set-in-wrapper"),
+    );
+    assert_eq!(
+        std::env::var("SCRIPT_WRAPPER_CMD_ENV_VAR").as_deref(),
+        Ok("value-set-in-setup"),
+    );
+
     assert_eq!(
         std::env::var("SCRIPT_NEXTEST_PROFILE").expect("SCRIPT_NEXTEST_PROFILE is set by script"),
         std::env::var("NEXTEST_PROFILE").expect("NEXTEST_PROFILE is set by nextest"),
@@ -374,6 +426,30 @@ fn test_cargo_env_vars() {
         check_env("CARGO_MANIFEST_DIR"),
         "NEXTEST_WORKSPACE_ROOT matches CARGO_MANIFEST_DIR for a root package"
     );
+}
+
+/// When `overrides-wrapper` is configured with a target runner, the runner
+/// replaces the wrapper entirely: the wrapper's command and env are not used.
+/// Without a target runner, the wrapper is used as a fallback.
+#[test]
+fn test_overrides_wrapper_env() {
+    if std::env::var("__NEXTEST_OVERRIDES_WRAPPER_WITH_RUNNER").is_ok() {
+        // A target runner is set: overrides-wrapper means the wrapper is not
+        // used, so its env should not be present.
+        assert_eq!(
+            std::env::var("WRAPPER_CMD_ENV_VAR"),
+            Err(std::env::VarError::NotPresent),
+            "WRAPPER_CMD_ENV_VAR should not be set when runner overrides wrapper",
+        );
+    } else {
+        // No target runner: the wrapper is used as a fallback, so its env
+        // should be present.
+        assert_eq!(
+            std::env::var("WRAPPER_CMD_ENV_VAR").as_deref(),
+            Ok("value-from-overridden-wrapper"),
+            "WRAPPER_CMD_ENV_VAR should be set when wrapper is used as fallback",
+        );
+    }
 }
 
 #[test]

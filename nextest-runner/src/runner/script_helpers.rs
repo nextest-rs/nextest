@@ -1,7 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{errors::SetupScriptOutputError, reporter::events::SetupScriptEnvMap};
+use crate::{
+    config::scripts::validate_env_var_key, errors::SetupScriptOutputError,
+    reporter::events::SetupScriptEnvMap,
+};
 use camino::Utf8Path;
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -41,12 +44,11 @@ pub(super) async fn parse_env_file(
             }
         };
 
-        // Ban keys starting with `NEXTEST`.
-        if key.starts_with("NEXTEST") {
-            return Err(SetupScriptOutputError::EnvFileReservedKey {
-                key: key.to_owned(),
-            });
-        }
+        // Ban keys starting with `NEXTEST` and keys with invalid characters.
+        validate_env_var_key(key).map_err(|error| SetupScriptOutputError::EnvFileInvalidKey {
+            path: env_path.to_owned(),
+            error,
+        })?;
 
         env_map.insert(key.to_owned(), value.to_owned());
     }
