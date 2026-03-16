@@ -95,6 +95,7 @@ nav:
                 - "Rerunning failed tests": docs/features/record-replay-rerun/rerun.md
                 - "Replaying test runs": docs/features/record-replay-rerun/replay.md
                 - "Portable recordings": docs/features/record-replay-rerun/portable-recordings.md
+                - "Perfetto traces": docs/features/record-replay-rerun/perfetto-chrome-traces.md
                 - "Managing recorded runs": docs/features/record-replay-rerun/managing-runs.md
           - "More features":
                 - docs/features/leaky-tests.md

@@ -1,0 +1,219 @@
+---
+icon: material/chart-timeline
+description: Exporting traces for viewing in Perfetto and the Chrome tracing view.
+---
+
+# Perfetto traces
+
+<!-- md:version 0.9.131 -->
+
+Nextest supports exporting traces in the [Chrome Trace Event format](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview?tab=t.0#heading=h.yr4qxyxotyw). Chrome traces can be imported into [Perfetto](https://ui.perfetto.dev/) for visualization and analysis. Traces can also be loaded in Chrome's built-in viewer at `chrome://tracing`, though Perfetto is recommended for its richer UI and SQL query support.
+
+Traces cover the test execution phase only; the build phase is not included.
+
+## Use cases
+
+Perfetto traces can be used to observe the timeline of a test run, and to find bottlenecks or long-pole tests that might be affecting test execution speed. For example, Perfetto traces can be used to identify slow tests holding up test runs, in order to [prioritize them first](../../configuration/test-priorities.md).
+
+Perfetto also has a built-in query language called [PerfettoSQL](https://perfetto.dev/docs/analysis/perfetto-sql-getting-started). For example queries, see [_Example queries_](#example-queries) below.
+
+## Exporting traces
+
+To export the latest recording as a Chrome trace:
+
+```bash
+cargo nextest store export-chrome-trace latest
+```
+
+By default, this prints the trace to standard output. To instead write the trace to a file, use the `-o`/`--output` option:
+
+```bash
+cargo nextest store export-chrome-trace latest -o trace.json
+```
+
+Traces can also be exported from a [portable recording](portable-recordings.md), e.g., a recording generated in CI:
+
+```bash
+cargo nextest store export-chrome-trace my-run.zip
+```
+
+By default, data is produced in a compact JSON format. For prettified JSON, use `--message-format json-pretty`:
+
+```bash
+cargo nextest store export-chrome-trace latest --message-format json-pretty
+```
+
+An example of a trace loaded into the Perfetto web UI: [`ui.perfetto.dev`](https://ui.perfetto.dev/?url=https://nexte.st/static/example-chrome-trace.json).
+
+<figure markdown="span">
+  [![Perfetto UI showing a timeline of nextest test executions, with swim lanes for setup scripts and test binaries, and a detail panel for a selected test](../../../static/perfetto-test-view.png){ width="80%" }](../../../static/perfetto-test-view.png)<figcaption markdown="span">Viewing a test in the Perfetto UI ([interactive view](https://ui.perfetto.dev/?url=https://nexte.st/static/example-chrome-trace.json))</figcaption>
+</figure>
+
+### Trace dimension mapping
+
+Each test binary is considered a "process", and each global slot number (see [_Slot numbers_](../../configuration/test-groups.md#slot-numbers)) is considered a "thread". Tests are shown as blocks within each slot.
+
+- `pid` is a synthetic, numerically increasing ID unique to a binary ID.
+- `tid` is the global slot number (starting from 0) plus 10 000.
+- `name` is the name of the test.
+- `cat` is typically `"test"` or `"run"`. For [setup scripts](../../configuration/setup-scripts.md) it is `"setup-script"`. For [stress sub-runs](../../features/stress-tests.md) it is `"stress"`.
+- `ts` is the actual timestamp of each event.
+- `args` contains metadata for each test, such as whether it passed or failed.
+
+There is also a global "nextest run" process with a bar for the overall run, as well as several time-series (counter) plots:
+
+- `concurrency running_scripts` shows the number of setup scripts running at a given time.
+- `concurrency running_tests` shows the number of tests running at a given time.
+- `test results passed`, `test results failed`, and `test results flaky` contain the number of tests passed, failed, and flaky respectively.
+
+### Grouping by slot
+
+By default, each test binary is treated as a separate process. To combine all test binaries into a single process grouped by concurrency slot, use `--group-by slot`:
+
+```
+cargo nextest store export-chrome-trace latest --group-by slot
+```
+
+This is useful when you care about how well concurrency slots are packed rather than which binary a test belongs to; for example, to see if slots are sitting idle between tests.
+
+## PerfettoSQL queries
+
+Perfetto has a powerful query language, [PerfettoSQL](https://perfetto.dev/docs/analysis/perfetto-sql-getting-started), that can be used to analyze test runs. Queries can be run in the "Query (SQL)" view, or via the omnibox at the top of the page.
+
+Try running the example queries below against the [interactive example](https://ui.perfetto.dev/?url=https://nexte.st/static/example-chrome-trace.json).
+
+### Example queries
+
+Print a list of the top 20 slowest tests:
+
+```sql
+INCLUDE PERFETTO MODULE slices.with_context;
+
+SELECT
+  name AS test_name,
+  process_name AS binary,
+  dur / 1e6 AS duration_ms
+FROM thread_or_process_slice
+WHERE category = 'test'
+ORDER BY dur DESC
+LIMIT 20;
+```
+
+Total test time per binary:
+
+```sql
+INCLUDE PERFETTO MODULE slices.with_context;
+
+SELECT
+  process_name AS binary,
+  COUNT(*) AS test_count,
+  SUM(dur) / 1e6 AS total_ms,
+  AVG(dur) / 1e6 AS avg_ms,
+  MAX(dur) / 1e6 AS max_ms,
+  MIN(dur) / 1e6 AS min_ms
+FROM thread_or_process_slice
+WHERE category = 'test'
+GROUP BY process_name
+ORDER BY total_ms DESC;
+```
+
+Duration distribution histogram:
+
+```sql
+SELECT
+  CASE
+    WHEN dur < 1e8 THEN '< 100ms'
+    WHEN dur < 1e9 THEN '100ms - 1s'
+    WHEN dur < 5e9 THEN '1s - 5s'
+    WHEN dur < 10e9 THEN '5s - 10s'
+    WHEN dur < 30e9 THEN '10s - 30s'
+    ELSE '> 30s'
+  END AS bucket,
+  COUNT(*) AS count
+FROM slice
+WHERE category = 'test'
+GROUP BY bucket
+ORDER BY MIN(dur);
+```
+
+Setup script statuses and durations:
+
+```sql
+SELECT
+  name AS script_name,
+  dur / 1e6 AS duration_ms,
+  EXTRACT_ARG(arg_set_id, 'args.result.status') AS status
+FROM slice
+WHERE category = 'setup-script'
+ORDER BY dur DESC;
+```
+
+Tests in a non-default test group:
+
+```sql
+INCLUDE PERFETTO MODULE slices.with_context;
+
+SELECT
+  name AS test_name,
+  process_name AS binary,
+  EXTRACT_ARG(arg_set_id, 'args.test_group') AS test_group,
+  dur / 1e6 AS duration_ms
+FROM thread_or_process_slice
+WHERE category = 'test'
+  AND EXTRACT_ARG(arg_set_id, 'args.test_group') != '@global'
+ORDER BY dur DESC;
+```
+
+Retried tests:
+
+```sql
+SELECT
+  s.name AS test_name,
+  EXTRACT_ARG(s.arg_set_id, 'args.attempt') AS attempt,
+  EXTRACT_ARG(s.arg_set_id, 'args.total_attempts') AS total_attempts,
+  EXTRACT_ARG(s.arg_set_id, 'args.result.status') AS status,
+  s.dur / 1e6 AS duration_ms
+FROM slice s
+WHERE s.category = 'test'
+  AND EXTRACT_ARG(s.arg_set_id, 'args.total_attempts') > 1
+ORDER BY s.name, attempt;
+```
+
+Slot utilization (how busy each concurrency slot was):
+
+```sql
+SELECT
+  t.name AS slot,
+  COUNT(*) AS tests_run,
+  SUM(s.dur) / 1e6 AS busy_ms
+FROM slice s
+JOIN thread_track tt ON s.track_id = tt.id
+JOIN thread t USING (utid)
+WHERE s.category = 'test'
+GROUP BY t.name
+ORDER BY busy_ms DESC;
+```
+
+### Discovering available metadata
+
+Nextest embeds test metadata (binary ID, result status, attempt count, test group, etc.) as args on each trace event. To see all available keys for test events, run:
+
+```sql
+SELECT DISTINCT flat_key
+FROM args
+WHERE arg_set_id IN (
+  SELECT arg_set_id FROM slice WHERE category = 'test' LIMIT 1
+);
+```
+
+These keys can then be accessed with `EXTRACT_ARG(arg_set_id, '<key>')` in queries.
+
+## Learn more
+
+- [_What is Perfetto?_](https://perfetto.dev/docs/)
+- [Perfetto UI documentation](https://perfetto.dev/docs/visualization/perfetto-ui)
+- [_Getting started with PerfettoSQL_](https://perfetto.dev/docs/analysis/perfetto-sql-getting-started)
+
+## Options and arguments
+
+TODO
