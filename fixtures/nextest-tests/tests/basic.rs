@@ -332,31 +332,45 @@ fn test_cargo_env_vars() {
 
     assert_eq!(std::env::var("MY_ENV_VAR").as_deref(), Ok("my-env-var"));
 
-    if std::env::var("__NEXTEST_SETUP_SCRIPT_DEFINED_ENV").is_ok() {
-        // The command for the script has received the value from `command.env`.
+    // The setup script's command.env is more specific than .cargo/config, so
+    // command.env always wins regardless of force or parent env.
+    assert_eq!(
+        std::env::var("SCRIPT_CMD_ENV_VAR").as_deref(),
+        Ok("test-value-set-in-conf"),
+    );
+    assert_eq!(
+        std::env::var("SCRIPT_CMD_ENV_VAR_CARGO").as_deref(),
+        Ok("test-value-set-in-conf"),
+    );
+
+    // CMD_ENV_VAR on the test binary itself: the wrapper's command.env doesn't
+    // set this, so it comes from .cargo/config or the parent process.
+    //
+    // .cargo/config is only picked up when the integration test sets its cwd
+    // to the fixture workspace root. Tests that use --manifest-path without
+    // current_dir don't pick it up.
+    if std::env::var("__NEXTEST_SETUP_SCRIPT_WITH_CARGO_CONFIG").is_ok() {
+        // .cargo/config is active and CMD_ENV_VAR is in the parent env. Cargo
+        // config has it without force, so cargo_env skips it, and the test
+        // binary inherits the parent's value.
         assert_eq!(
-            std::env::var("SCRIPT_CMD_ENV_VAR").as_deref(),
-            Ok("test-value-set-in-conf"),
+            std::env::var("CMD_ENV_VAR").as_deref(),
+            Ok("test-value-set-by-environment"),
         );
-        // The command for the script has received the value from Cargo's config, overriding
-        // `command.env` due to `force = true`.
+    } else if std::env::var("__NEXTEST_SETUP_SCRIPT_WITH_CARGO_CONFIG_NO_PARENT").is_ok() {
+        // .cargo/config is active but CMD_ENV_VAR is not in the parent env,
+        // so cargo_env sets it from .cargo/config.
         assert_eq!(
-            std::env::var("SCRIPT_CMD_ENV_VAR_CARGO").as_deref(),
+            std::env::var("CMD_ENV_VAR").as_deref(),
             Ok("test-value-set-by-main-config"),
         );
-        // The command was started with this dummy value; it is a bit redundant given how this
-        // test was set up similarly with an env.
-        assert_eq!(std::env::var("CMD_ENV_VAR").as_deref(), Ok("test-value-set-by-environment"));
     } else {
+        // .cargo/config is not active (no current_dir set), so CMD_ENV_VAR is
+        // not set by anyone.
         assert_eq!(
-            std::env::var("SCRIPT_CMD_ENV_VAR").as_deref(),
-            Ok("test-value-set-in-conf"),
+            std::env::var("CMD_ENV_VAR"),
+            Err(std::env::VarError::NotPresent),
         );
-        assert_eq!(
-            std::env::var("SCRIPT_CMD_ENV_VAR_CARGO").as_deref(),
-            Ok("test-value-set-in-conf"),
-        );
-        assert_eq!(std::env::var("CMD_ENV_VAR"), Err(std::env::VarError::NotPresent));
     }
     // this is passed here simply because the wrapper being used doesn't filter out any environment
     // variables that it received.

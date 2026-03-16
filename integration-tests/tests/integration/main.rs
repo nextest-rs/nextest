@@ -2090,21 +2090,35 @@ fn test_setup_script_error() {
     );
 }
 
+/// Tests command.env interaction with .cargo/config env and parent process env.
+///
+/// .cargo/config is only picked up when the nextest process's cwd is within the
+/// fixture workspace (i.e. when .current_dir() is set). Tests that only use
+/// --manifest-path don't pick it up. This test uses .current_dir() to exercise
+/// the cargo config path.
+///
+/// Two sub-cases:
+/// 1. CMD_ENV_VAR in parent env: cargo config (no force) skips it, test binary
+///    inherits the parent's value.
+/// 2. CMD_ENV_VAR not in parent env: cargo config sets it on the test binary.
+///
+/// In both cases, the setup script's command.env takes priority over cargo
+/// config for variables it sets (CMD_ENV_VAR, CMD_ENV_VAR_CARGO).
 #[test]
 fn test_setup_script_defined_env() {
     let env_info = set_env_vars_for_test();
     let p = TempProject::new(&env_info).unwrap();
 
+    let manifest_path = p.manifest_path();
+    let workspace_dir = manifest_path
+        .parent()
+        .expect("manifest_path's parent should be a dir");
+
+    // Case 1: CMD_ENV_VAR in parent env.
     let output = CargoNextestCli::for_test(&env_info)
         .args(["run", "-E", "test(test_cargo_env_vars)"])
-        // Changing the current dir to where the manifest resides to ensure the `.cargo/config`
-        // over there is picked up rather than the config for the main nextest project.
-        .current_dir(
-            p.manifest_path()
-                .parent()
-                .expect("manifest_path's parent should be a dir"),
-        )
-        .env("__NEXTEST_SETUP_SCRIPT_DEFINED_ENV", "1")
+        .current_dir(workspace_dir)
+        .env("__NEXTEST_SETUP_SCRIPT_WITH_CARGO_CONFIG", "1")
         .env("CMD_ENV_VAR", "test-value-set-by-environment")
         .env("CMD_ENV_VAR_CARGO", "test-value-set-by-environment")
         .output();
@@ -2112,7 +2126,21 @@ fn test_setup_script_defined_env() {
     assert_eq!(
         output.exit_status.code(),
         Some(NextestExitCode::OK),
-        "env var should not override the value defined in the conf file\n{output}"
+        "command.env should take priority over cargo config and parent env\n{output}"
+    );
+
+    // Case 2: CMD_ENV_VAR not in parent env, cargo config sets it on the
+    // test binary.
+    let output = CargoNextestCli::for_test(&env_info)
+        .args(["run", "-E", "test(test_cargo_env_vars)"])
+        .current_dir(workspace_dir)
+        .env("__NEXTEST_SETUP_SCRIPT_WITH_CARGO_CONFIG_NO_PARENT", "1")
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::OK),
+        "command.env should take priority over cargo config\n{output}"
     );
 }
 

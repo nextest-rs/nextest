@@ -74,18 +74,13 @@ impl TestCommand {
             create_command(program.clone(), args, lctx.double_spawn)
         };
 
+        // Apply Cargo's config.toml env first (workspace-wide), then the
+        // wrapper's command.env (per-script). This way command.env takes
+        // priority as the more specific configuration.
+        lctx.env.apply_env(&mut cmd);
         if let Some(env) = env {
-            // Set the additional user-provided environment variables assigned to the
-            // script's `command.env`. This is done before applying the `cargo_env` below
-            // as that will only override values specified in this step if `force = true` is
-            // specified on the value in the Cargo config, which is not the case with ordinary
-            // environment variables.
             env.apply_env(&mut cmd);
         }
-
-        // NB: we will always override user-provided environment variables with the
-        // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
-        lctx.env.apply_env(&mut cmd);
 
         if let Some(out_dir) = lctx
             .rust_build_meta
