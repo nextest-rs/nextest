@@ -29,6 +29,9 @@ for more information.
 `retries`
 : The number of retries, or a more complex [retry policy](../features/retries.md) for this test.
 
+`flaky-result` <!-- md:version 0.9.131 -->
+: Whether flaky tests are treated as [passing or failing](../features/retries.md#failing-flaky-tests).
+
 `threads-required`
 : Number of [threads required](threads-required.md) for this test.
 

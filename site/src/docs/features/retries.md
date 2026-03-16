@@ -21,7 +21,7 @@ Sometimes, tests fail nondeterministically, which can be quite annoying to devel
 
 `--retries 2` means that the test is retried twice, for a total of three attempts. In this case, the test fails on the first try but succeeds on the second try. The `TRY 2 PASS` text means that the test passed on the second try.
 
-Flaky tests are treated as ultimately successful. If there are no other tests that failed, the exit code for the test run is 0.
+By default, flaky tests are treated as ultimately successful. If there are no other tests that failed, the exit code for the test run is 0. <!-- md:version 0.9.131 --> To configure failure on flaky tests, see [_Failing flaky tests_](#failing-flaky-tests) below.
 
 Retries can also be:
 
@@ -98,8 +98,43 @@ filter = 'test(test_remote_api)'
 retries = { backoff = "exponential", count = 2, delay = "5s", jitter = true }
 ```
 
-> **Note:** The `--retries` command-line option and the `NEXTEST_RETRIES` environment variable both disable overrides.
+!!! note "Command-line options disable overrides"
+
+    The `--retries` command-line option and the `NEXTEST_RETRIES` environment variable both disable per-test overrides.
+
+## Failing flaky tests
+
+<!-- md:version 0.9.131 -->
+
+To fail a test run on flaky tests, pass in `--flaky-result fail` or set `NEXTEST_FLAKY_RESULT=fail` in the environment. In this mode, if retries are configured, tests will be retried if they fail, and will be treated as failing even if they pass during a rerun.
+
+!!! tip "Tip: Also turn on retries"
+
+    The `--flaky-result` command-line option does not turn on retries by itself; you must also pass in `--retries N` or set up retries in configuration.
+
+Failure on flaky tests can be set in repository configuration via `flaky-result = "fail"`, and also through per-test settings:
+
+```toml title="Failing flaky tests in .config/nextest.toml"
+[profile.default]
+retries = 2
+flaky-result = "fail"
+
+# Configure a per-test override for tests with `known_flaky` in the name.
+[[profile.default.overrides]]
+filter = 'test(known_flaky)'
+flaky-result = "pass" 
+```
+
+!!! note "Command-line options disable overrides"
+
+    The `--flaky-result` command-line option and the `NEXTEST_FLAKY_RESULT` environment variable both disable per-test overrides.
 
 ## JUnit support
 
-Flaky test detection is integrated with nextest's JUnit support. For more information, see [*JUnit support*](../machine-readable/junit.md).
+Flaky test detection is integrated with nextest's JUnit support.
+
+* Flaky tests are marked with `<flakyFailure>` or `<flakyError>` tags.
+* Tests that were rerun and continued to fail are marked with `<rerunFailure>` or `<rerunError>` tags.
+* <!-- md:version 0.9.131 --> For tests marked failing on flaky, both `<failure>` and `<flakyFailure>`/`<flakyError>` tags are present.
+
+For more information, see [*JUnit support*](../machine-readable/junit.md).

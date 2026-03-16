@@ -143,6 +143,17 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
   retries = { backoff = "exponential", count = 4, delay = "2s", max-delay = "10s", jitter = true }
   ```
 
+#### `profile.<name>.flaky-result`
+
+<!-- md:version 0.9.131 -->
+
+- **Type**: String
+- **Description**: Controls whether flaky tests are treated as passing or failing
+- **Documentation**: [_Failing flaky tests_](../features/retries.md#failing-flaky-tests)
+- **Valid values**: `"pass"`, `"fail"`
+- **Default**: `"pass"`
+- **Example**: `flaky-result = "fail"`
+
 ### Timeout configuration
 
 #### `profile.<name>.slow-timeout`
@@ -400,6 +411,7 @@ All profile-level settings can be overridden:
 - `threads-required`
 - `run-extra-args`
 - `retries`
+- `flaky-result`
 - `slow-timeout`
 - `bench.slow-timeout`
 - `leak-timeout`

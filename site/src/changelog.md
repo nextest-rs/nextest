@@ -9,6 +9,60 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.131-rc.1] - 2026-03-16
+
+### Added
+
+- [Setup scripts](https://nexte.st/docs/configuration/setup-scripts/) and [wrapper scripts](https://nexte.st/docs/configuration/wrapper-scripts/) can now specify per-command environment variables via the `env` field in the command configuration. ([#3001])
+
+  For example:
+
+  ```toml
+  [scripts.setup.script1]
+  command = {
+      command-line = "cargo run -p setup-test-db",
+      env = {
+          DB_PATH = "sqlite:/path/to/source.db",
+      },
+  }
+  ```
+
+  Keys cannot begin with `NEXTEST`, as that prefix is reserved for internal use. Values defined in `env` override values set by the environment and by Cargo's `config.toml` (including those with `force = true`).
+
+  Thanks [metatoaster](https://github.com/metatoaster) for your first contribution!
+
+- A new `flaky-result` configuration field and `--flaky-result` CLI flag (environment variable `NEXTEST_FLAKY_RESULT`) that controls whether flaky tests are treated as passing or failing. When set to `"fail"`, tests that pass on retry are marked as failures. The default remains `"pass"`. `flaky-result` can be set at the profile level or per-test via overrides. ([#3148])
+
+  For more information, see [_Failing flaky tests_](https://nexte.st/docs/features/retries/#failing-flaky-tests).
+
+  ```toml
+  [profile.ci]
+  retries = 2
+  flaky-result = "fail"
+  ```
+
+- A new `cargo nextest store export-chrome-trace` command that exports test run data in the [Chrome Trace Event format](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview). Traces can be loaded into [Perfetto](https://ui.perfetto.dev/) or Chrome's `chrome://tracing` for a timeline view of test parallelism and execution. ([#3163])
+
+  ```bash
+  cargo nextest store export-chrome-trace latest -o trace.json
+  ```
+
+  Traces support grouping by binary (default) or by slot (`--group-by slot`), and can be exported from both on-disk runs and [portable recordings](https://nexte.st/docs/features/record-replay-rerun/portable-recordings/). For more, see [_Perfetto traces_](https://nexte.st/docs/features/record-replay-rerun/perfetto-chrome-traces/).
+
+### Miscellaneous
+
+- Self-update (`cargo nextest self update`) now uses ureq instead of reqwest and replaces the `ring` dependency with `aws-lc-rs`. This may require you to install CMake if you're on a less-commonly-used platform. ([#3141])
+
+### Internal improvements
+
+- Breaking change to the [recording format](https://nexte.st/docs/features/record-replay-rerun/): recordings now include test group and slot information, enabling Chrome trace export from recordings. ([#3158])
+
+[#3001]: https://github.com/nextest-rs/nextest/pull/3001
+[#3141]: https://github.com/nextest-rs/nextest/pull/3141
+[#3148]: https://github.com/nextest-rs/nextest/pull/3148
+[#3158]: https://github.com/nextest-rs/nextest/pull/3158
+[#3163]: https://github.com/nextest-rs/nextest/pull/3163
+
 ## [0.9.130] - 2026-03-09
 
 ### Added
@@ -2017,6 +2071,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.131-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.131-rc.1
 [0.9.130]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.130
 [0.9.129]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.129
 [0.9.128]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.128

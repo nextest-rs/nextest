@@ -22,6 +22,9 @@ Nextest reads some of its command-line options as environment variables. In all 
 `NEXTEST_RETRIES`
 : Number of times to retry running tests
 
+`NEXTEST_FLAKY_RESULT`
+: <!-- md:version 0.9.131 --> Whether flaky tests are treated as [passing or failing](../features/retries.md#failing-flaky-tests)
+
 `NEXTEST_HIDE_PROGRESS_BAR`
 : If set to `1`, always hide the progress bar
 
