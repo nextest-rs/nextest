@@ -1092,6 +1092,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67daa9630dd24c56e2de19907fdb8ea935c19a76621eb2827cd888373f118d57"
 dependencies = [
  "crc32fast",
+ "flate2",
  "memchr",
  "zstd",
 ]

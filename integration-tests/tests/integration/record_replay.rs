@@ -1756,6 +1756,38 @@ fn test_wrapped_portable_recording_read() {
         "replay from wrapped archive (stored) should succeed: {replay_output}"
     );
 
+    // Wrapped archive with Deflate compression (used by GitHub Actions artifact
+    // downloads).
+    let wrapped_deflate_path = temp_root.join("wrapped-deflate.zip");
+    wrap_archive_in_zip(
+        &archive_path,
+        &wrapped_deflate_path,
+        CompressionMethod::DEFLATE,
+    );
+
+    // Verify store info works on the deflate-compressed wrapper.
+    let info_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info", wrapped_deflate_path.as_str()])
+        .output();
+    assert!(
+        info_output.exit_status.success(),
+        "store info on wrapped archive (deflate) should succeed: {info_output}"
+    );
+    let info_str = info_output.stdout_as_str();
+    assert!(
+        info_str.contains(RUN_ID),
+        "store info should show run ID: {info_str}"
+    );
+
+    // Verify replay works on the deflate-compressed wrapper.
+    let replay_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["replay", "-R", wrapped_deflate_path.as_str()])
+        .output();
+    assert!(
+        replay_output.exit_status.success(),
+        "replay from wrapped archive (deflate) should succeed: {replay_output}"
+    );
+
     // Wrapped archive with Zstd compression.
     let wrapped_zstd_path = temp_root.join("wrapped-zstd.zip");
     wrap_archive_in_zip(&archive_path, &wrapped_zstd_path, CompressionMethod::ZSTD);
