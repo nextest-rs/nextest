@@ -17,7 +17,10 @@ use nextest_metadata::{
 };
 use owo_colors::OwoColorize;
 use serde::Deserialize;
-use std::{collections::HashSet, io};
+use std::{
+    collections::{BTreeMap, HashSet},
+    io,
+};
 use tracing::warn;
 
 /// A Rust test binary built by Cargo.
@@ -438,6 +441,17 @@ impl<'g> BinaryListBuildState<'g> {
                     convert_rel_path_to_forward_slash(rel_out_dir),
                 );
             }
+
+            // Capture build script environment variables from the structured
+            // cargo message, avoiding the need to parse the raw output file.
+            if !build_script.env.is_empty() {
+                self.rust_build_meta
+                    .build_script_info
+                    .get_or_insert_with(BTreeMap::new)
+                    .entry(package_id.repr().to_owned())
+                    .or_default()
+                    .envs = build_script.env.into_iter().collect();
+            }
         }
 
         Ok(())
@@ -495,6 +509,9 @@ impl<'g> BinaryListBuildState<'g> {
         self.rust_build_meta
             .build_script_out_dirs
             .retain(|package_id, _| relevant_package_ids.contains(package_id));
+        if let Some(info) = &mut self.rust_build_meta.build_script_info {
+            info.retain(|package_id, _| relevant_package_ids.contains(package_id));
+        }
 
         BinaryList {
             rust_build_meta: self.rust_build_meta,
@@ -630,6 +647,7 @@ mod tests {
               ]
             },
             "build-script-out-dirs": {},
+            "build-script-info": {},
             "linked-paths": [],
             "platforms": {
               "host": {

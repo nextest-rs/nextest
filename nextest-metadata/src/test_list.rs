@@ -594,6 +594,16 @@ pub struct RustBuildMetaSummary {
     #[serde(default)]
     pub build_script_out_dirs: BTreeMap<String, Utf8PathBuf>,
 
+    /// Extended build script information, keyed by package ID. Only present for workspace
+    /// packages that have build scripts.
+    ///
+    /// `None` means this field was absent (old archive/metadata that predates this field).
+    /// `Some(map)` means the field was present, even if the map is empty.
+    ///
+    /// Added in cargo-nextest 0.9.131.
+    #[serde(default)]
+    pub build_script_info: Option<BTreeMap<String, BuildScriptInfoSummary>>,
+
     /// Linked paths, relative to the target directory.
     pub linked_paths: BTreeSet<Utf8PathBuf>,
 
@@ -615,6 +625,19 @@ pub struct RustBuildMetaSummary {
     /// those if available.
     #[serde(default)]
     pub target_platform: Option<String>,
+}
+
+/// Extended build script information for a single package.
+///
+/// This struct is extensible; new fields may be added in the future. Use
+/// `#[serde(default)]` when deserializing.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct BuildScriptInfoSummary {
+    /// Environment variables set by the build script via `cargo::rustc-env`
+    /// directives.
+    #[serde(default)]
+    pub envs: BTreeMap<String, String>,
 }
 
 /// A non-test Rust binary. Used to set the correct environment
@@ -1028,6 +1051,7 @@ mod tests {
         base_output_directories: BTreeSet::new(),
         non_test_binaries: BTreeMap::new(),
         build_script_out_dirs: BTreeMap::new(),
+        build_script_info: None,
         linked_paths: BTreeSet::new(),
         target_platform: None,
         target_platforms: vec![],
@@ -1044,6 +1068,7 @@ mod tests {
         base_output_directories: BTreeSet::new(),
         non_test_binaries: BTreeMap::new(),
         build_script_out_dirs: BTreeMap::new(),
+        build_script_info: None,
         linked_paths: BTreeSet::new(),
         target_platform: Some("x86_64-unknown-linux-gnu".to_owned()),
         target_platforms: vec![],

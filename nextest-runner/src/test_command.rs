@@ -91,9 +91,26 @@ impl TestCommand {
             let out_dir = lctx.rust_build_meta.target_directory.join(out_dir);
             cmd.env("OUT_DIR", &out_dir);
 
-            // Apply the user-provided environment variables from the build script. This is
+            // Apply build script rustc-env variables. If build_script_info is
+            // present (true for new archives and fresh builds), use the
+            // structured data captured from the Cargo message. If this is None,
+            // this is an old archive that predates the field: fall back to
+            // parsing the raw output file.
+            //
+            // Note that using build script environment variables at runtime is
             // supported by cargo test, but discouraged.
-            apply_build_script_env(&mut cmd, &out_dir);
+            match &lctx.rust_build_meta.build_script_info {
+                Some(info) => {
+                    if let Some(info) = info.get(package.id().repr()) {
+                        for (key, val) in &info.envs {
+                            cmd.env(key, val);
+                        }
+                    }
+                }
+                None => {
+                    apply_build_script_env(&mut cmd, &out_dir);
+                }
+            }
         }
 
         cmd.current_dir(cwd)

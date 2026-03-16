@@ -1997,6 +1997,7 @@ mod tests {
                 "base-output-directories": [],
                 "non-test-binaries": {},
                 "build-script-out-dirs": {},
+                "build-script-info": {},
                 "linked-paths": [],
                 "platforms": {
                   "host": {
