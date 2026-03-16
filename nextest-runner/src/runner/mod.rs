@@ -14,7 +14,7 @@ mod dispatcher;
 mod executor;
 mod imp;
 mod internal_events;
-pub(crate) mod script_helpers;
+mod script_helpers;
 
 #[cfg(unix)]
 #[path = "unix.rs"]

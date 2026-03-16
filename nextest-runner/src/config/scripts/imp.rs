@@ -1418,7 +1418,7 @@ mod tests {
                 env = "not a map"
             }
         "#},
-        r#"scripts.setup.foo.command.env: invalid type: string "not a map", expected a map"#
+        r#"scripts.setup.foo.command.env: invalid type: string "not a map", expected a map of environment variable names to values"#
 
         ; "env is not a map"
     )]

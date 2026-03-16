@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::runner::script_helpers::validate_env_var_key;
+use crate::errors::EnvVarError;
 use serde::{Deserialize, de::Error};
 use std::{collections::BTreeMap, fmt, process::Command};
 
@@ -60,7 +60,7 @@ impl<'de> Deserialize<'de> for ScriptCommandEnvMap {
             type Value = ScriptCommandEnvMap;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a map")
+                formatter.write_str("a map of environment variable names to values")
             }
 
             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
@@ -83,6 +83,49 @@ impl<'de> Deserialize<'de> for ScriptCommandEnvMap {
 
         deserializer.deserialize_map(EnvMapVisitor)
     }
+}
+
+// Validates against the most conservative definition of a valid environment
+// variable key. The definition of "Name" is taken from POSIX.1-2024 [1]:
+//
+// > In the shell command language, a word consisting solely of underscores,
+// > digits, and alphabetics from the portable character set. The first
+// > character of a name is not a digit.
+//
+// This is more conservative than strictly necessary: chapter 8 of
+// POSIX.1-2024 [2] and Microsoft's documentation [3] only prohibit '=' in
+// keys, and POSIX notes that implementations may permit other characters.
+// However, restricting to the portable character set is not wrong and avoids
+// cross-platform surprises (e.g. shells that reject non-POSIX names, or NUL
+// bytes that are not portable).
+//
+// [1]: https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html#tag_03_216
+// [2]: https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap08.html
+// [3]: https://learn.microsoft.com/en-us/windows/win32/procthread/environment-variables
+
+/// Validates a str to see if it is suitable to be a key of an environment
+/// variable.
+pub(crate) fn validate_env_var_key(key: &str) -> Result<(), EnvVarError> {
+    let mut chars = key.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+        _ => {
+            return Err(EnvVarError::InvalidKeyStartChar {
+                key: key.to_owned(),
+            });
+        }
+    }
+    if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(EnvVarError::InvalidKey {
+            key: key.to_owned(),
+        });
+    }
+    if key.starts_with("NEXTEST") {
+        return Err(EnvVarError::ReservedKey {
+            key: key.to_owned(),
+        });
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -114,5 +157,64 @@ mod tests {
             err.to_string(),
             "key `INVALID ` does not consist solely of letters, digits, and underscores",
         );
+    }
+
+    #[test]
+    fn validate_env_var_key_valid() {
+        validate_env_var_key("MY_ENV_VAR").unwrap();
+        validate_env_var_key("MY_ENV_VAR_1").unwrap();
+        validate_env_var_key("__NEXTEST_TEST").unwrap();
+    }
+
+    #[test]
+    fn validate_env_var_key_invalid() {
+        let cases = [
+            ("", "key `` does not start with a letter or underscore"),
+            (" ", "key ` ` does not start with a letter or underscore"),
+            ("=", "key `=` does not start with a letter or underscore"),
+            ("0", "key `0` does not start with a letter or underscore"),
+            (
+                "0TEST ",
+                "key `0TEST ` does not start with a letter or underscore",
+            ),
+            (
+                "=TEST=",
+                "key `=TEST=` does not start with a letter or underscore",
+            ),
+            (
+                "TEST TEST",
+                "key `TEST TEST` does not consist solely of letters, digits, and underscores",
+            ),
+            (
+                "TESTTEST\n",
+                "key `TESTTEST\n` does not consist solely of letters, digits, and underscores",
+            ),
+            (
+                "TEST=TEST",
+                "key `TEST=TEST` does not consist solely of letters, digits, and underscores",
+            ),
+            (
+                "TEST=",
+                "key `TEST=` does not consist solely of letters, digits, and underscores",
+            ),
+            (
+                "NEXTEST",
+                "key `NEXTEST` begins with `NEXTEST`, which is reserved for internal use",
+            ),
+            (
+                "NEXTEST_NEXTEST",
+                "key `NEXTEST_NEXTEST` begins with `NEXTEST`, which is reserved for internal use",
+            ),
+        ];
+
+        for (key, message) in cases {
+            let err = validate_env_var_key(key).unwrap_err();
+            let actual_message = err.to_string();
+
+            assert_eq!(
+                actual_message, *message,
+                "key validation error message equals expected"
+            );
+        }
     }
 }
