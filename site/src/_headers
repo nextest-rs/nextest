@@ -1,0 +1,3 @@
+# Allow Perfetto UI to fetch trace files.
+/static/example-chrome-trace.json
+  Access-Control-Allow-Origin: https://ui.perfetto.dev
