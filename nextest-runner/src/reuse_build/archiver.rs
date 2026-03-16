@@ -26,7 +26,7 @@ use std::{
     sync::Arc,
     time::{Instant, SystemTime},
 };
-use tracing::{debug, trace, warn};
+use tracing::{debug, trace};
 use zstd::Encoder;
 
 /// Applies archive filters to a [`BinaryList`].
@@ -81,11 +81,22 @@ pub fn apply_archive_filters(
     let mut filtered_non_test_binaries = binary_list.rust_build_meta.non_test_binaries.clone();
     filtered_non_test_binaries.retain(|package_id, _| relevant_package_ids.contains(package_id));
 
-    // Also filter out build script out directories.
+    // Also filter out build script out directories and env vars.
     let mut filtered_build_script_out_dirs =
         binary_list.rust_build_meta.build_script_out_dirs.clone();
     filtered_build_script_out_dirs
         .retain(|package_id, _| relevant_package_ids.contains(package_id));
+    let filtered_build_script_info =
+        binary_list
+            .rust_build_meta
+            .build_script_info
+            .as_ref()
+            .map(|info| {
+                info.iter()
+                    .filter(|(package_id, _)| relevant_package_ids.contains(package_id))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect()
+            });
 
     let filtered_out_test_binary_count = binary_list
         .rust_binaries
@@ -105,6 +116,7 @@ pub fn apply_archive_filters(
     let filtered_build_meta = RustBuildMeta {
         non_test_binaries: filtered_non_test_binaries,
         build_script_out_dirs: filtered_build_script_out_dirs,
+        build_script_info: filtered_build_script_info,
         ..binary_list.rust_build_meta.clone()
     };
 
@@ -495,24 +507,9 @@ impl<'a, W: Write> Archiver<'a, W> {
                 callback,
             )?;
 
-            // Archive build script output in order to set environment variables from there
-            let Some(out_dir_parent) = build_script_out_dir.parent() else {
-                warn!(
-                    "could not determine parent directory of output directory {build_script_out_dir}"
-                );
-                continue;
-            };
-            let out_file_path = out_dir_parent.join("output");
-            let src_path = self
-                .binary_list
-                .rust_build_meta
-                .target_directory
-                .join(&out_file_path);
-
-            let rel_path = Utf8Path::new("target").join(out_file_path);
-            let rel_path = convert_rel_path_to_forward_slash(&rel_path);
-
-            self.append_file(ArchiveStep::BuildScriptOutDirs, &src_path, &rel_path)?;
+            // Note: the build script output file is no longer archived. Build
+            // script env vars are captured in build_script_info instead, which
+            // is layout-independent and works with -Zbuild-dir-new-layout.
         }
 
         // Write linked paths to the archive.

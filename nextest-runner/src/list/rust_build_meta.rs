@@ -10,7 +10,9 @@ use crate::{
 };
 use camino::Utf8PathBuf;
 use itertools::Itertools;
-use nextest_metadata::{BuildPlatformsSummary, RustBuildMetaSummary, RustNonTestBinarySummary};
+use nextest_metadata::{
+    BuildPlatformsSummary, BuildScriptInfoSummary, RustBuildMetaSummary, RustNonTestBinarySummary,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     marker::PhantomData,
@@ -33,6 +35,13 @@ pub struct RustBuildMeta<State> {
     /// Build script output directory, relative to the target directory and keyed by package ID.
     /// Only present for workspace packages that have build scripts.
     pub build_script_out_dirs: BTreeMap<String, Utf8PathBuf>,
+
+    /// Extended build script information, keyed by package ID. Only present for workspace
+    /// packages that have build scripts.
+    ///
+    /// `None` means this field was absent (old archive/metadata that predates this field).
+    /// `Some(map)` means the field was present, even if the map is empty.
+    pub build_script_info: Option<BTreeMap<String, BuildScriptInfo>>,
 
     /// A list of linked paths, relative to the target directory. These directories are
     /// added to the dynamic library path.
@@ -58,6 +67,7 @@ impl RustBuildMeta<BinaryListState> {
             base_output_directories: BTreeSet::new(),
             non_test_binaries: BTreeMap::new(),
             build_script_out_dirs: BTreeMap::new(),
+            build_script_info: Some(BTreeMap::new()),
             linked_paths: BTreeMap::new(),
             state: PhantomData,
             build_platforms,
@@ -75,6 +85,7 @@ impl RustBuildMeta<BinaryListState> {
             base_output_directories: self.base_output_directories.clone(),
             non_test_binaries: self.non_test_binaries.clone(),
             build_script_out_dirs: self.build_script_out_dirs.clone(),
+            build_script_info: self.build_script_info.clone(),
             linked_paths: self.linked_paths.clone(),
             state: PhantomData,
             build_platforms: self.build_platforms.map_libdir(path_mapper.libdir_mapper()),
@@ -92,6 +103,7 @@ impl RustBuildMeta<TestListState> {
             base_output_directories: BTreeSet::new(),
             non_test_binaries: BTreeMap::new(),
             build_script_out_dirs: BTreeMap::new(),
+            build_script_info: Some(BTreeMap::new()),
             linked_paths: BTreeMap::new(),
             state: PhantomData,
             build_platforms: BuildPlatforms::new_with_no_target().unwrap(),
@@ -170,6 +182,11 @@ impl<State> RustBuildMeta<State> {
             target_directory: summary.target_directory,
             base_output_directories: summary.base_output_directories,
             build_script_out_dirs: summary.build_script_out_dirs,
+            build_script_info: summary.build_script_info.map(|info| {
+                info.into_iter()
+                    .map(|(k, v)| (k, BuildScriptInfo::from_summary(v)))
+                    .collect()
+            }),
             non_test_binaries: summary.non_test_binaries,
             linked_paths: summary
                 .linked_paths
@@ -188,6 +205,11 @@ impl<State> RustBuildMeta<State> {
             base_output_directories: self.base_output_directories.clone(),
             non_test_binaries: self.non_test_binaries.clone(),
             build_script_out_dirs: self.build_script_out_dirs.clone(),
+            build_script_info: self.build_script_info.as_ref().map(|info| {
+                info.iter()
+                    .map(|(k, v)| (k.clone(), v.to_summary()))
+                    .collect()
+            }),
             linked_paths: self.linked_paths.keys().cloned().collect(),
             target_platform: self.build_platforms.to_summary_str(),
             target_platforms: vec![self.build_platforms.to_target_or_host_summary()],
@@ -202,6 +224,25 @@ impl<State> RustBuildMeta<State> {
                     .map(TargetPlatform::to_summary)
                     .collect(),
             }),
+        }
+    }
+}
+
+/// Extended build script information for a single package.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct BuildScriptInfo {
+    /// Environment variables set by the build script via `cargo::rustc-env` directives.
+    pub envs: BTreeMap<String, String>,
+}
+
+impl BuildScriptInfo {
+    fn from_summary(summary: BuildScriptInfoSummary) -> Self {
+        Self { envs: summary.envs }
+    }
+
+    fn to_summary(&self) -> BuildScriptInfoSummary {
+        BuildScriptInfoSummary {
+            envs: self.envs.clone(),
         }
     }
 }
@@ -295,6 +336,8 @@ mod tests {
             host: host_current(),
             target: None,
         },
+        // Summary has no build_script_info field, so from_summary produces None.
+        build_script_info: None,
         ..Default::default()
     }; "no target platforms")]
     #[test_case(RustBuildMetaSummary {
@@ -305,6 +348,7 @@ mod tests {
             host: host_current(),
             target: Some(target_linux()),
         },
+        build_script_info: None,
         ..Default::default()
     }; "only target platform field")]
     #[test_case(RustBuildMetaSummary {
@@ -317,6 +361,7 @@ mod tests {
             host: host_current(),
             target: Some(target_windows()),
         },
+        build_script_info: None,
         ..Default::default()
     }; "target platform and target platforms field")]
     #[test_case(RustBuildMetaSummary {
@@ -333,6 +378,7 @@ mod tests {
             host: host_not_current_with_libdir("/fake/test/libdir/281"),
             target: Some(target_linux_with_libdir("/fake/test/libdir/837")),
         },
+        build_script_info: None,
         ..Default::default()
     }; "target platform and target platforms and platforms field")]
     #[test_case(RustBuildMetaSummary {
@@ -346,6 +392,7 @@ mod tests {
             host: host_current(),
             target: None,
         },
+        build_script_info: None,
         ..Default::default()
     }; "platforms with zero targets")]
     fn test_from_summary(summary: RustBuildMetaSummary, expected: RustBuildMeta<BinaryListState>) {
@@ -401,6 +448,7 @@ mod tests {
             host: host_current().to_summary(),
             targets: vec![],
         }),
+        build_script_info: Some(BTreeMap::new()),
         ..Default::default()
     }; "build platforms without target")]
     #[test_case(RustBuildMeta::<BinaryListState> {
@@ -422,6 +470,7 @@ mod tests {
             host: host_current_with_libdir("/fake/test/libdir/736").to_summary(),
             targets: vec![target_linux_with_libdir("/fake/test/libdir/873").to_summary()],
         }),
+        build_script_info: Some(BTreeMap::new()),
         ..Default::default()
     }; "build platforms with target")]
     fn test_to_summary(meta: RustBuildMeta<BinaryListState>, expected: RustBuildMetaSummary) {
