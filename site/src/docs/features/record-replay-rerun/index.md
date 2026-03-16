@@ -45,7 +45,8 @@ Now, all future `cargo nextest run` instances will automatically be recorded.
 
 - [Rerunning failed tests](rerun.md) — iteratively converge towards a successful test run.
 - [Replaying test runs](replay.md) — replay recorded runs, including with different reporter options.
-- [Managing recorded runs](managing-runs.md) — list, prune, export, and configure the record store.
+- [Portable recordings](portable-recordings.md) — export and share recordings across machines.
+- [Managing recorded runs](managing-runs.md) — list, prune, and configure the record store.
 
 ## Configuration options
 

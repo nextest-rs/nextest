@@ -1,6 +1,6 @@
 ---
 icon: material/database-cog-outline
-description: Listing, pruning, exporting, and configuring recorded test runs.
+description: Listing, pruning, and configuring recorded test runs.
 ---
 
 # Managing recorded runs

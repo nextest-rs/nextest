@@ -91,6 +91,12 @@ It is possible to rewind the rerun logic to an earlier state by passing in a run
     cat src/outputs/rerun-latest-3.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
     ```
 
+### Reruns and portable recordings
+
+Reruns also work with [portable recordings](portable-recordings.md), which are self-contained archives that can be shared across machines. For example, `cargo nextest run -R my-run.zip`.
+
+This is particularly useful for rerunning tests locally that failed in CI.
+
 ## Rerun heuristics
 
 Picking the set of tests to run is tricky, particularly in the face of tests being removed and new ones being added. We have attempted to pick a strategy that aims to be conservative while covering the most common use cases, but it is always possible that tests are missed. Because of this, and because code changes might include regressions in previously passing tests, it is recommended that you perform a full test run once your iterations are complete.
