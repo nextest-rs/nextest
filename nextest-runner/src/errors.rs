@@ -1070,6 +1070,9 @@ pub enum PathMapperConstructKind {
 
     /// The target directory.
     TargetDir,
+
+    /// The build directory.
+    BuildDir,
 }
 
 impl fmt::Display for PathMapperConstructKind {
@@ -1077,6 +1080,7 @@ impl fmt::Display for PathMapperConstructKind {
         match self {
             Self::WorkspaceRoot => write!(f, "remapped workspace root"),
             Self::TargetDir => write!(f, "remapped target directory"),
+            Self::BuildDir => write!(f, "remapped build directory"),
         }
     }
 }

@@ -90,6 +90,7 @@ fn test_argument_parsing() {
         // ---
         "cargo nextest list --binaries-metadata=foo",
         "cargo nextest run --binaries-metadata=foo --target-dir-remap=bar",
+        "cargo nextest run --binaries-metadata=foo --target-dir-remap=bar --build-dir-remap=baz",
         "cargo nextest list --cargo-metadata path",
         "cargo nextest run --cargo-metadata=path --workspace-remap remapped-path",
         "cargo nextest archive --archive-file my-archive.tar.zst --zstd-level -1",
@@ -299,6 +300,15 @@ fn test_argument_parsing() {
         ),
         (
             "cargo nextest run --archive-file foo --target-dir-remap bar",
+            ArgumentConflict,
+        ),
+        // build-dir-remap requires binaries-metadata (conflicts with archive)
+        (
+            "cargo nextest run --build-dir-remap bar",
+            MissingRequiredArgument,
+        ),
+        (
+            "cargo nextest run --archive-file foo --build-dir-remap bar",
             ArgumentConflict,
         ),
         // Invalid test threads: 0

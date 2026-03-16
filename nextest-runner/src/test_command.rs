@@ -87,8 +87,9 @@ impl TestCommand {
             .build_script_out_dirs
             .get(package.id().repr())
         {
-            // Convert the output directory to an absolute path.
-            let out_dir = lctx.rust_build_meta.target_directory.join(out_dir);
+            // Convert the output directory to an absolute path. Build script
+            // out_dirs are relative to the build directory.
+            let out_dir = lctx.rust_build_meta.build_directory.join(out_dir);
             cmd.env("OUT_DIR", &out_dir);
 
             // Apply build script rustc-env variables. If build_script_info is

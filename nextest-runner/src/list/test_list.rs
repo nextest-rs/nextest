@@ -122,7 +122,8 @@ impl<'g> RustTestArtifact<'g> {
                 })
                 .to_path_buf();
 
-            let binary_path = path_mapper.map_binary(binary.path.clone());
+            // Test binaries live under the build directory (never uplifted).
+            let binary_path = path_mapper.map_build_path(binary.path.clone());
             let cwd = path_mapper.map_cwd(cwd);
 
             // Non-test binaries are only exposed to integration tests and benchmarks.
@@ -1863,7 +1864,7 @@ mod tests {
 
         let fake_env = EnvironmentMap::empty();
         let rust_build_meta =
-            RustBuildMeta::new("/fake", build_platforms).map_paths(&PathMapper::noop());
+            RustBuildMeta::new("/fake", "/fake", build_platforms).map_paths(&PathMapper::noop());
         let ecx = EvalContext {
             default_filter: &CompiledExpr::ALL,
         };
@@ -1994,6 +1995,7 @@ mod tests {
             {
               "rust-build-meta": {
                 "target-directory": "/fake",
+                "build-directory": "/fake",
                 "base-output-directories": [],
                 "non-test-binaries": {},
                 "build-script-out-dirs": {},
