@@ -112,7 +112,7 @@ mod tests {
                 .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "key `INVALID ` does not consist solely of underscores, digits, and alphabetics",
+            "key `INVALID ` does not consist solely of letters, digits, and underscores",
         );
     }
 }

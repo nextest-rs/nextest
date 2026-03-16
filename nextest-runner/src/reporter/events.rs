@@ -1544,11 +1544,30 @@ impl std::error::Error for ChildErrorDescription {
 
 /// A serializable description of an I/O error.
 ///
-/// This captures the error message from an [`std::io::Error`].
+/// This captures the full error chain from the source error, flattened into a
+/// single string. For errors without a source, this is equivalent to
+/// `error.to_string()`. For errors with a source chain, the messages are joined
+/// with `: ` (e.g., `"top-level: cause1: cause2"`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub struct IoErrorDescription {
     message: String,
+}
+
+impl IoErrorDescription {
+    /// Creates an `IoErrorDescription` from an error, capturing the full error
+    /// chain.
+    fn from_error(error: &dyn std::error::Error) -> Self {
+        use std::fmt::Write;
+
+        let mut message = error.to_string();
+        let mut source = error.source();
+        while let Some(cause) = source {
+            write!(&mut message, ": {cause}").expect("wrote to String");
+            source = cause.source();
+        }
+        Self { message }
+    }
 }
 
 impl fmt::Display for IoErrorDescription {
@@ -1594,14 +1613,10 @@ impl From<ChildStartError> for ChildStartErrorDescription {
     fn from(error: ChildStartError) -> Self {
         match error {
             ChildStartError::TempPath(e) => Self::TempPath {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: IoErrorDescription::from_error(&*e),
             },
             ChildStartError::Spawn(e) => Self::Spawn {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: IoErrorDescription::from_error(&*e),
             },
         }
     }
@@ -1611,29 +1626,19 @@ impl From<ChildError> for ChildErrorDescription {
     fn from(error: ChildError) -> Self {
         match error {
             ChildError::Fd(ChildFdError::ReadStdout(e)) => Self::ReadStdout {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: IoErrorDescription::from_error(&*e),
             },
             ChildError::Fd(ChildFdError::ReadStderr(e)) => Self::ReadStderr {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: IoErrorDescription::from_error(&*e),
             },
             ChildError::Fd(ChildFdError::ReadCombined(e)) => Self::ReadCombined {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: IoErrorDescription::from_error(&*e),
             },
             ChildError::Fd(ChildFdError::Wait(e)) => Self::Wait {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: IoErrorDescription::from_error(&*e),
             },
             ChildError::SetupScriptOutput(e) => Self::SetupScriptOutput {
-                source: IoErrorDescription {
-                    message: e.to_string(),
-                },
+                source: IoErrorDescription::from_error(&e),
             },
         }
     }

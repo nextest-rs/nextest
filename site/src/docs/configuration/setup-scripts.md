@@ -70,7 +70,7 @@ command = { command-line = "scripts/setup-script.sh", relative-to = "workspace-r
 
 ### Specifying `env`
 
-<!-- md:version Unreleased -->
+<!-- md:version 0.9.131 -->
 
 A map of environment variables may be passed to a command by specifying the `env` parameter.
 
@@ -84,7 +84,7 @@ command = {
 }
 ```
 
-Note that keys cannot begin with `NEXTEST`, as that is reserved for internal use, and values defined in this map will override values set by the environment. They may also override values defined in Cargo's `config.toml` unless it has `force = true` set.
+Note that keys cannot begin with `NEXTEST`, as that is reserved for internal use. Values defined in this map will override values set by the environment and by Cargo's `config.toml` (including those with `force = true`).
 
 ### Setup script configuration
 

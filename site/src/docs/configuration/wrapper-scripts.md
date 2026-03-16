@@ -81,7 +81,7 @@ A wrapper script will be invoked with the test binary as the first argument, and
 
 ### Specifying `env`
 
-<!-- md:version Unreleased -->
+<!-- md:version 0.9.131 -->
 
 A map of environment variables may be passed to a command by specifying the `env` parameter.
 
@@ -95,7 +95,7 @@ command = {
 }
 ```
 
-Note that keys cannot begin with `NEXTEST`, as that is reserved for internal use, and values defined in this map will override values set by the environment. They may also override values defined in Cargo's `config.toml` unless it has `force = true` set. It is also up to the wrapper script to block or pass through the environment variables it receives to the test binary it will execute.
+Note that keys cannot begin with `NEXTEST`, as that is reserved for internal use. Values defined in this map will override values set by the environment and by Cargo's `config.toml` (including those with `force = true`). It is also up to the wrapper script to block or pass through the environment variables it receives to the test binary it will execute.
 
 ### Wrapper script configuration
 

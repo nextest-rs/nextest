@@ -359,9 +359,16 @@ pub enum SetupScriptOutputError {
         line: String,
     },
 
-    /// An error occurred while processing an environment variable.
-    #[error(transparent)]
-    EnvVarError(#[from] EnvVarError),
+    /// An environment variable key in the environment file was invalid.
+    #[error("error in environment file `{path}`")]
+    EnvFileInvalidKey {
+        /// The path to the environment file.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: EnvVarError,
+    },
 }
 
 /// An error that describes an invalid/reserved key or value in an environment variable.
@@ -376,7 +383,7 @@ pub enum EnvVarError {
 
     // See: https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap08.html
     /// An environment variable key is invalid.
-    #[error("key `{key}` does not consist solely of underscores, digits, and alphabetics")]
+    #[error("key `{key}` does not consist solely of letters, digits, and underscores")]
     InvalidKey {
         /// The environment variable name.
         key: String,
@@ -390,9 +397,9 @@ pub enum EnvVarError {
     },
 }
 
-// The messages provided by the error message as written above doesn't match the grammatic structure
-// that `Expected` should provide when the validation of the incoming key during deserialization need
-// to pass this error back into serde, which this impl addresses.
+// `Display` messages are phrased as statements ("key X does not..."), but
+// `serde::de::Expected` needs them as expectations ("a key that..."). This impl
+// provides the expected-form messages for use with `invalid_value`.
 impl serde::de::Expected for EnvVarError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
@@ -400,7 +407,7 @@ impl serde::de::Expected for EnvVarError {
                 "a key that does not begin with `NEXTEST`, which is reserved for internal use"
             }
             Self::InvalidKey { .. } => {
-                "a key that consists solely of underscores, digits, and alphabetics"
+                "a key that consists solely of letters, digits, and underscores"
             }
             Self::InvalidKeyStartChar { .. } => "a key that starts with a letter or underscore",
         })

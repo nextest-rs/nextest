@@ -1474,7 +1474,7 @@ mod tests {
                 },
             }
         "#},
-        r#"scripts.setup.foo.command.env: invalid value: string "test=test", expected a key that consists solely of underscores, digits, and alphabetics"#
+        r#"scripts.setup.foo.command.env: invalid value: string "test=test", expected a key that consists solely of letters, digits, and underscores"#
 
         ; "env containing key with unsupported characters"
     )]
