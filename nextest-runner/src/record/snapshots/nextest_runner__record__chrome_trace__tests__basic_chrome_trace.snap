@@ -56,7 +56,8 @@ expression: json_str
       "pid": 2,
       "tid": 10000,
       "args": {
-        "binary_id": "my-crate::bin/my-test"
+        "binary_id": "my-crate::bin/my-test",
+        "test_name": "tests::it_works"
       }
     },
     {
@@ -80,6 +81,7 @@ expression: json_str
       "tid": 10000,
       "args": {
         "binary_id": "my-crate::bin/my-test",
+        "test_name": "tests::it_works",
         "time_taken_ms": 500.0,
         "result": {
           "status": "pass"
