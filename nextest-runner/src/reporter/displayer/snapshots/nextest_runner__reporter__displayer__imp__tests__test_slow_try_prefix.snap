@@ -6,5 +6,5 @@ expression: out
         SLOW [> 60.000s] (─────────) my-binary-id test_name
   TRY 2 SLOW [> 60.000s] (─────────) my-binary-id test_name
   TRY 3 SLOW [> 60.000s] (─────────) my-binary-id test_name
- TERMINATING [>120.000s] (─────────) my-binary-id test_name
+TRY 1 TRMNTG [>120.000s] (─────────) my-binary-id test_name
 TRY 2 TRMNTG [>120.000s] (─────────) my-binary-id test_name

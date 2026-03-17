@@ -9,7 +9,7 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.131-rc.2] - 2026-03-16
+## [0.9.131-rc.3] - 2026-03-16
 
 ### Added
 
@@ -31,7 +31,7 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
   Thanks [metatoaster](https://github.com/metatoaster) for your first contribution!
 
-- A new `flaky-result` configuration field and `--flaky-result` CLI flag (environment variable `NEXTEST_FLAKY_RESULT`) that controls whether flaky tests are treated as passing or failing. When set to `"fail"`, tests that pass on retry are marked as failures. The default remains `"pass"`. `flaky-result` can be set at the profile level or per-test via overrides. ([#3148])
+- A new `flaky-result` configuration field and `--flaky-result` CLI flag (environment variable `NEXTEST_FLAKY_RESULT`) controls whether flaky tests are treated as passing or failing. When set to `"fail"`, tests that pass on retry are marked as failures. The default remains `"pass"`. `flaky-result` can be set at the profile level or per-test via overrides. ([#3148])
 
   For more information, see [_Failing flaky tests_](https://nexte.st/docs/features/retries/#failing-flaky-tests).
 
@@ -49,9 +49,15 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
   Traces support grouping by binary (default) or by slot (`--group-by slot`), and can be exported from both on-disk runs and [portable recordings](https://nexte.st/docs/features/record-replay-rerun/portable-recordings/). For more, see [_Perfetto traces_](https://nexte.st/docs/features/record-replay-rerun/perfetto-chrome-traces/).
 
+- Added release binaries for `riscv64gc-unknown-linux-gnu`.
+
 ### Fixed
 
 - Nextest now works with the new build directory layout ([`-Zbuild-dir-new-layout`](https://blog.rust-lang.org/2026/03/13/call-for-testing-build-dir-layout-v2/)), and with the build directory being separate from the target directory ([`build.build-dir`](https://doc.rust-lang.org/cargo/reference/config.html#buildbuild-dir)). ([#3168], [#3169])
+
+### Changed
+
+- When [retries](https://nexte.st/docs/features/retries/) are enabled, nextest no longer shows `TRY 1 SLOW` messages for the first attempt. `TRY N SLOW` is still shown for subsequent attempts.
 
 ### Miscellaneous
 
@@ -2077,7 +2083,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
-[0.9.131-rc.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.131-rc.2
+[0.9.131-rc.3]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.131-rc.3
 [0.9.130]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.130
 [0.9.129]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.129
 [0.9.128]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.128

@@ -827,6 +827,9 @@ impl<'a> DisplayReporterImpl<'a> {
                 will_terminate,
             } => {
                 if !*will_terminate && self.status_levels.status_level >= StatusLevel::Slow {
+                    // Don't show TRY N SLOW for the first attempt -- it isn't
+                    // very relevant in the common case that the test passes
+                    // later.
                     if retry_data.attempt > 1 {
                         write!(
                             writer,
@@ -842,7 +845,9 @@ impl<'a> DisplayReporterImpl<'a> {
                     } else {
                         (StatusLevel::Retry, self.styles.retry)
                     };
-                    if retry_data.attempt > 1
+                    // *Do* show TRY N TRMNTG for the first attempt, since we
+                    // will retry the test later.
+                    if retry_data.total_attempts > 1
                         && self.status_levels.status_level > required_status_level
                     {
                         write!(
