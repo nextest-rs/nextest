@@ -1,0 +1,386 @@
+---
+source: nextest-runner/src/record/chrome_trace.rs
+expression: json_str
+---
+{
+  "traceEvents": [
+    {
+      "name": "process_name",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 0,
+      "args": {
+        "name": "crate::bin/test"
+      }
+    },
+    {
+      "name": "process_sort_index",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 0,
+      "args": {
+        "sort_index": 2
+      }
+    },
+    {
+      "name": "thread_name",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "name": "slot-0"
+      }
+    },
+    {
+      "name": "thread_sort_index",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "sort_index": 10000
+      }
+    },
+    {
+      "name": "flaky_pass",
+      "cat": "test",
+      "ph": "B",
+      "ts": 1000000000.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "binary_id": "crate::bin/test",
+        "test_name": "flaky_pass"
+      }
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1000000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 1,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "flaky_pass",
+      "cat": "test",
+      "ph": "E",
+      "ts": 1001000000.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "binary_id": "crate::bin/test",
+        "test_name": "flaky_pass",
+        "time_taken_ms": 200.0,
+        "result": {
+          "status": "fail",
+          "failure": {
+            "kind": "exit-code",
+            "code": 1
+          },
+          "leaked": false
+        },
+        "attempt": 1,
+        "total_attempts": 3,
+        "is_slow": false,
+        "test_group": "@global"
+      }
+    },
+    {
+      "name": "retry",
+      "cat": "test",
+      "ph": "s",
+      "ts": 1001000000.0,
+      "pid": 2,
+      "tid": 10000,
+      "id": 0
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1001000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 1,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "flaky_pass",
+      "cat": "test",
+      "ph": "B",
+      "ts": 1001000000.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "binary_id": "crate::bin/test",
+        "test_name": "flaky_pass",
+        "attempt": 2,
+        "total_attempts": 3
+      }
+    },
+    {
+      "name": "retry",
+      "cat": "test",
+      "ph": "f",
+      "ts": 1001000000.0,
+      "pid": 2,
+      "tid": 10000,
+      "id": 0,
+      "bp": "e"
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1001000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 1,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "flaky_pass",
+      "cat": "test",
+      "ph": "E",
+      "ts": 1002000000.0,
+      "pid": 2,
+      "tid": 10000,
+      "args": {
+        "binary_id": "crate::bin/test",
+        "test_name": "flaky_pass",
+        "time_taken_ms": 300.0,
+        "result": {
+          "status": "pass"
+        },
+        "attempt": 2,
+        "total_attempts": 3,
+        "is_slow": false,
+        "test_group": "@global",
+        "flaky_result": "pass"
+      }
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1002000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 0,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "test results",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1002000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "passed": 0,
+        "flaky": 0,
+        "failed": 0
+      }
+    },
+    {
+      "name": "thread_name",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 10001,
+      "args": {
+        "name": "slot-1"
+      }
+    },
+    {
+      "name": "thread_sort_index",
+      "cat": "",
+      "ph": "M",
+      "ts": 0.0,
+      "pid": 2,
+      "tid": 10001,
+      "args": {
+        "sort_index": 10001
+      }
+    },
+    {
+      "name": "flaky_fail",
+      "cat": "test",
+      "ph": "B",
+      "ts": 1003000000.0,
+      "pid": 2,
+      "tid": 10001,
+      "args": {
+        "binary_id": "crate::bin/test",
+        "test_name": "flaky_fail"
+      }
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1003000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 1,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "flaky_fail",
+      "cat": "test",
+      "ph": "E",
+      "ts": 1004000000.0,
+      "pid": 2,
+      "tid": 10001,
+      "args": {
+        "binary_id": "crate::bin/test",
+        "test_name": "flaky_fail",
+        "time_taken_ms": 150.0,
+        "result": {
+          "status": "fail",
+          "failure": {
+            "kind": "exit-code",
+            "code": 1
+          },
+          "leaked": false
+        },
+        "attempt": 1,
+        "total_attempts": 2,
+        "is_slow": false,
+        "test_group": "@global"
+      }
+    },
+    {
+      "name": "retry",
+      "cat": "test",
+      "ph": "s",
+      "ts": 1004000000.0,
+      "pid": 2,
+      "tid": 10001,
+      "id": 1
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1004000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 1,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "flaky_fail",
+      "cat": "test",
+      "ph": "B",
+      "ts": 1004000000.0,
+      "pid": 2,
+      "tid": 10001,
+      "args": {
+        "binary_id": "crate::bin/test",
+        "test_name": "flaky_fail",
+        "attempt": 2,
+        "total_attempts": 2
+      }
+    },
+    {
+      "name": "retry",
+      "cat": "test",
+      "ph": "f",
+      "ts": 1004000000.0,
+      "pid": 2,
+      "tid": 10001,
+      "id": 1,
+      "bp": "e"
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1004000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 1,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "flaky_fail",
+      "cat": "test",
+      "ph": "E",
+      "ts": 1005000000.0,
+      "pid": 2,
+      "tid": 10001,
+      "args": {
+        "binary_id": "crate::bin/test",
+        "test_name": "flaky_fail",
+        "time_taken_ms": 250.0,
+        "result": {
+          "status": "pass"
+        },
+        "attempt": 2,
+        "total_attempts": 2,
+        "is_slow": false,
+        "test_group": "@global",
+        "error": {
+          "short_message": "flaky failure",
+          "description": "test passed on attempt 2/2 but is configured to fail when flaky"
+        },
+        "flaky_result": "fail"
+      }
+    },
+    {
+      "name": "concurrency",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1005000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "running_tests": 0,
+        "running_scripts": 0
+      }
+    },
+    {
+      "name": "test results",
+      "cat": "run",
+      "ph": "C",
+      "ts": 1005000000.0,
+      "pid": 0,
+      "tid": 0,
+      "args": {
+        "passed": 0,
+        "flaky": 0,
+        "failed": 0
+      }
+    }
+  ],
+  "displayTimeUnit": "ms",
+  "otherData": {
+    "nextest_version": "0.9.9999"
+  }
+}
