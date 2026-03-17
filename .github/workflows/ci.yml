@@ -331,15 +331,16 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Build cargo-nextest
         run: cargo build --package cargo-nextest
+      # build.build-dir was stabilized in Cargo 1.91. The new layout is
+      # still nightly-only (-Zbuild-dir-new-layout).
       - name: Run fixture tests with build-dir
         env:
           CARGO_NEXTEST: target/debug/cargo-nextest
           RUSTUP_AVAILABLE: 1
-          CARGO_UNSTABLE_BUILD_DIR: true
-          CARGO_UNSTABLE_BUILD_DIR_NEW_LAYOUT: true
           CARGO_BUILD_BUILD_DIR: ${{ github.workspace }}/build-output
         run: |
           ./scripts/nextest-without-rustup.sh run \
+            -Z build-dir-new-layout \
             --manifest-path fixtures/nextest-tests/Cargo.toml \
             --package cdylib-link --package cdylib-example \
             --package with-build-script
@@ -347,11 +348,10 @@ jobs:
         env:
           CARGO_NEXTEST: target/debug/cargo-nextest
           RUSTUP_AVAILABLE: 1
-          CARGO_UNSTABLE_BUILD_DIR: true
-          CARGO_UNSTABLE_BUILD_DIR_NEW_LAYOUT: true
           CARGO_BUILD_BUILD_DIR: ${{ github.workspace }}/build-output
         run: |
           ./scripts/nextest-without-rustup.sh archive \
+            -Z build-dir-new-layout \
             --manifest-path fixtures/nextest-tests/Cargo.toml \
             --archive-file target/build-dir-archive.tar.zst \
             --package cdylib-link --package cdylib-example \
