@@ -827,7 +827,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 will_terminate,
             } => {
                 if !*will_terminate && self.status_levels.status_level >= StatusLevel::Slow {
-                    if retry_data.total_attempts > 1 {
+                    if retry_data.attempt > 1 {
                         write!(
                             writer,
                             "{:>12} ",
@@ -842,7 +842,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     } else {
                         (StatusLevel::Retry, self.styles.retry)
                     };
-                    if retry_data.total_attempts > 1
+                    if retry_data.attempt > 1
                         && self.status_levels.status_level > required_status_level
                     {
                         write!(
@@ -4274,6 +4274,151 @@ mod tests {
             },
             &mut out,
         );
+    }
+
+    #[test]
+    fn test_slow_try_prefix() {
+        // On the first attempt, "SLOW" should be shown without a "TRY 1"
+        // prefix, even when total_attempts > 1. The "TRY N" prefix should
+        // only appear on retries (attempt > 1).
+        let binary_id = RustBinaryId::new("my-binary-id");
+        let test_name = TestCaseName::new("test_name");
+        let mut out = String::new();
+
+        with_reporter(
+            |mut reporter| {
+                // First attempt, single attempt total: should show "SLOW".
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::TestSlow {
+                            stress_index: None,
+                            test_instance: TestInstanceId {
+                                binary_id: &binary_id,
+                                test_name: &test_name,
+                            },
+                            retry_data: RetryData {
+                                attempt: 1,
+                                total_attempts: 1,
+                            },
+                            elapsed: Duration::from_secs(60),
+                            will_terminate: false,
+                        },
+                    })
+                    .unwrap();
+
+                // First attempt, multiple attempts total: should still show
+                // "SLOW" (not "TRY 1 SLOW").
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::TestSlow {
+                            stress_index: None,
+                            test_instance: TestInstanceId {
+                                binary_id: &binary_id,
+                                test_name: &test_name,
+                            },
+                            retry_data: RetryData {
+                                attempt: 1,
+                                total_attempts: 3,
+                            },
+                            elapsed: Duration::from_secs(60),
+                            will_terminate: false,
+                        },
+                    })
+                    .unwrap();
+
+                // Second attempt: should show "TRY 2 SLOW".
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::TestSlow {
+                            stress_index: None,
+                            test_instance: TestInstanceId {
+                                binary_id: &binary_id,
+                                test_name: &test_name,
+                            },
+                            retry_data: RetryData {
+                                attempt: 2,
+                                total_attempts: 3,
+                            },
+                            elapsed: Duration::from_secs(60),
+                            will_terminate: false,
+                        },
+                    })
+                    .unwrap();
+
+                // Third attempt: should show "TRY 3 SLOW".
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::TestSlow {
+                            stress_index: None,
+                            test_instance: TestInstanceId {
+                                binary_id: &binary_id,
+                                test_name: &test_name,
+                            },
+                            retry_data: RetryData {
+                                attempt: 3,
+                                total_attempts: 3,
+                            },
+                            elapsed: Duration::from_secs(60),
+                            will_terminate: false,
+                        },
+                    })
+                    .unwrap();
+
+                // will_terminate on first attempt with retries: should show
+                // "TERMINATING" (not "TRY 1 TRMNTG").
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::TestSlow {
+                            stress_index: None,
+                            test_instance: TestInstanceId {
+                                binary_id: &binary_id,
+                                test_name: &test_name,
+                            },
+                            retry_data: RetryData {
+                                attempt: 1,
+                                total_attempts: 3,
+                            },
+                            elapsed: Duration::from_secs(120),
+                            will_terminate: true,
+                        },
+                    })
+                    .unwrap();
+
+                // will_terminate on retry: should show "TRY 2 TRMNTG".
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::TestSlow {
+                            stress_index: None,
+                            test_instance: TestInstanceId {
+                                binary_id: &binary_id,
+                                test_name: &test_name,
+                            },
+                            retry_data: RetryData {
+                                attempt: 2,
+                                total_attempts: 3,
+                            },
+                            elapsed: Duration::from_secs(120),
+                            will_terminate: true,
+                        },
+                    })
+                    .unwrap();
+            },
+            &mut out,
+        );
+
+        insta::assert_snapshot!("test_slow_try_prefix", out);
     }
 
     #[test]
