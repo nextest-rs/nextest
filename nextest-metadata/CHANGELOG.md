@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.14.0] - 2026-03-16
+
+### Added
+
+- A new `build_directory` field on `RustBuildMetaSummary`. When Cargo's `build.build-dir` is configured, the build directory (for intermediate artifacts) differs from the target directory. This is `None` when parsing metadata from older nextest versions, in which case consumers should treat it as equal to `target_directory`.
+- A new `build_script_info` field on `RustBuildMetaSummary`, keyed by package ID. This is `None` when parsing metadata from older nextest versions.
+  - The values of this map are `BuildScriptInfoSummary` structs, which currently contain an `envs` field consisting of environment variables set by `cargo::rustc-env` directives.
+
+### Changed
+
+- `base_output_directories`, `build_script_out_dirs`, and `linked_paths` are now documented as relative to the build directory rather than the target directory.
+
 ## [0.13.3] - 2026-01-25
 
 ### Added
@@ -289,6 +301,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.14.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.14.0
 [0.13.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.3
 [0.13.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.2
 [0.13.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.1

@@ -49,6 +49,10 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
   Traces support grouping by binary (default) or by slot (`--group-by slot`), and can be exported from both on-disk runs and [portable recordings](https://nexte.st/docs/features/record-replay-rerun/portable-recordings/). For more, see [_Perfetto traces_](https://nexte.st/docs/features/record-replay-rerun/perfetto-chrome-traces/).
 
+### Fixed
+
+- Nextest now works with the new build directory layout ([`-Zbuild-dir-new-layout`](https://blog.rust-lang.org/2026/03/13/call-for-testing-build-dir-layout-v2/)), and with the build directory being separate from the target directory ([`build.build-dir`](https://doc.rust-lang.org/cargo/reference/config.html#buildbuild-dir)). ([#3168], [#3169])
+
 ### Miscellaneous
 
 - Self-update (`cargo nextest self update`) now uses ureq instead of reqwest and replaces the `ring` dependency with `aws-lc-rs`. This may require you to install CMake if you're on a less-commonly-used platform. ([#3141])
@@ -62,6 +66,8 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 [#3148]: https://github.com/nextest-rs/nextest/pull/3148
 [#3158]: https://github.com/nextest-rs/nextest/pull/3158
 [#3163]: https://github.com/nextest-rs/nextest/pull/3163
+[#3168]: https://github.com/nextest-rs/nextest/pull/3168
+[#3169]: https://github.com/nextest-rs/nextest/pull/3169
 
 ## [0.9.130] - 2026-03-09
 
