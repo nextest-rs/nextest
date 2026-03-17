@@ -1186,6 +1186,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
             report_name: profile_field_from_ref!(self.junit.report_name.as_deref()),
             store_success_output: profile_field!(self.junit.store_success_output),
             store_failure_output: profile_field!(self.junit.store_failure_output),
+            flaky_fail_status: profile_field!(self.junit.flaky_fail_status),
         };
         JunitConfig::new(self.store_dir(), settings)
     }

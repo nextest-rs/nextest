@@ -172,5 +172,10 @@ store-success-output = false
 # <description> element.
 store-failure-output = true
 
+# Controls how flaky-fail tests are reported in the JUnit report. "failure" reports
+# them as failures with <failure> and <flakyFailure> elements; "success" reports them
+# as successes, identical to flaky-pass tests.
+flaky-fail-status = "failure"
+
 # This profile is activated if MIRI_SYSROOT is set.
 [profile.default-miri]

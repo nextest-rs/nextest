@@ -366,6 +366,7 @@ impl<'a> ExecutorContext<'a> {
             failure_output: settings.failure_output(),
             junit_store_success_output: settings.junit_store_success_output(),
             junit_store_failure_output: settings.junit_store_failure_output(),
+            junit_flaky_fail_status: settings.junit_flaky_fail_status(),
             last_run_status,
         });
     }

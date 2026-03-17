@@ -30,6 +30,12 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
                 TestCaseFixture::new("test_failure_error", TestCaseFixtureStatus::Fail),
                 TestCaseFixture::new("test_failure_should_panic", TestCaseFixtureStatus::Fail),
                 TestCaseFixture::new(
+                    "test_flaky_mod_3",
+                    TestCaseFixtureStatus::Flaky { pass_attempt: 3 },
+                )
+                .with_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET)
+                .with_property(TestCaseFixtureProperties::FLAKY_RESULT_FAIL_JUNIT_SUCCESS),
+                TestCaseFixture::new(
                     "test_flaky_mod_4",
                     TestCaseFixtureStatus::Flaky { pass_attempt: 4 },
                 )

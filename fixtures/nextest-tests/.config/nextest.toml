@@ -92,6 +92,15 @@ test-group = 'flaky'
 [profile.with-retries-flaky-fail]
 retries = 2
 
+# test_flaky_mod_3 passes on attempt 3 of 4, with flaky-result = "fail" and
+# junit.flaky-fail-status = "success". The run still fails, but the JUnit report
+# shows it as a success.
+[[profile.with-retries-flaky-fail.overrides]]
+filter = "test(=test_flaky_mod_3)"
+retries = { backoff = "fixed", count = 3 }
+flaky-result = "fail"
+junit = { flaky-fail-status = "success" }
+
 # test_flaky_mod_4 passes on attempt 4 of 5, but flaky-result = "fail" means it
 # counts as a failure despite eventually passing.
 [[profile.with-retries-flaky-fail.overrides]]

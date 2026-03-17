@@ -1,16 +1,16 @@
 ---
 source: integration-tests/tests/integration/record_replay.rs
-assertion_line: 2988
+assertion_line: 3020
 expression: "redact_dynamic_fields(&stdout, temp_root)"
 ---
    Replaying recorded run 50000001-0000-0000-0000-000000000001
      Started XXXX-XX-XX XX:XX:XX  status: completed
 ────────────
  Nextest run ID 50000001-0000-0000-0000-000000000001 with nextest profile: default
-    Starting 1 test across 7 binaries (30 tests skipped)
+    Starting 1 test across 7 binaries (31 tests skipped)
         FAIL [ duration] (1/1) nextest-tests::basic test_failure_assert
     (output not captured)
 
 ────────────
-     Summary [ duration] 1 test run: 0 passed, 1 failed, 30 skipped
+     Summary [ duration] 1 test run: 0 passed, 1 failed, 31 skipped
         FAIL [ duration] (1/1) nextest-tests::basic test_failure_assert

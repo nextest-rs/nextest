@@ -17,7 +17,7 @@
 #[cfg(test)]
 use crate::output_spec::ArbitraryOutputSpec;
 use crate::{
-    config::scripts::ScriptId,
+    config::{elements::JunitFlakyFailStatus, scripts::ScriptId},
     list::OwnedTestInstanceId,
     output_spec::{LiveSpec, OutputSpec, SerializableOutputSpec},
     reporter::{
@@ -423,6 +423,9 @@ pub enum OutputEventKind<S: OutputSpec> {
         junit_store_success_output: bool,
         /// Whether to store failure output in JUnit.
         junit_store_failure_output: bool,
+        /// How flaky-fail tests should be reported in JUnit.
+        #[serde(default)]
+        junit_flaky_fail_status: JunitFlakyFailStatus,
         /// The execution statuses.
         run_statuses: ExecutionStatuses<S>,
         /// The current run statistics.
@@ -628,6 +631,7 @@ impl TestEventKindSummary<LiveSpec> {
                 failure_output,
                 junit_store_success_output,
                 junit_store_failure_output,
+                junit_flaky_fail_status,
                 run_statuses,
                 current_stats,
                 running,
@@ -638,6 +642,7 @@ impl TestEventKindSummary<LiveSpec> {
                 failure_output,
                 junit_store_success_output,
                 junit_store_failure_output,
+                junit_flaky_fail_status,
                 run_statuses,
                 current_stats,
                 running,

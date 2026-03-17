@@ -11,7 +11,9 @@ use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 use crate::output_spec::ArbitraryOutputSpec;
 use crate::{
     config::{
-        elements::{FlakyResult, LeakTimeoutResult, SlowTimeoutResult, TestGroup},
+        elements::{
+            FlakyResult, JunitFlakyFailStatus, LeakTimeoutResult, SlowTimeoutResult, TestGroup,
+        },
         scripts::ScriptId,
     },
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
@@ -294,6 +296,9 @@ pub enum TestEventKind<'a> {
 
         /// Whether the JUnit report should store failure output for this test.
         junit_store_failure_output: bool,
+
+        /// How flaky-fail tests should be reported in JUnit.
+        junit_flaky_fail_status: JunitFlakyFailStatus,
 
         /// Information about all the runs for this test.
         run_statuses: ExecutionStatuses<LiveSpec>,
