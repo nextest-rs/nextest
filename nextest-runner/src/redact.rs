@@ -25,6 +25,7 @@ use std::{
 static CRATE_NAME_HASH_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^([a-zA-Z0-9_-]+)-[a-f0-9]{16}$").unwrap());
 static TARGET_DIR_REDACTION: &str = "<target-dir>";
+static BUILD_DIR_REDACTION: &str = "<build-dir>";
 static FILE_COUNT_REDACTION: &str = "<file-count>";
 static DURATION_REDACTION: &str = "<duration>";
 
@@ -71,10 +72,17 @@ impl Redactor {
             build_linked_path_redactions(build_meta.linked_paths.keys().map(|p| p.as_ref()));
 
         // For all linked paths, push both absolute and relative redactions.
+        // Linked paths are relative to the build directory.
+        let linked_path_dir_redaction = if build_meta.build_directory == build_meta.target_directory
+        {
+            TARGET_DIR_REDACTION
+        } else {
+            BUILD_DIR_REDACTION
+        };
         for (source, replacement) in linked_path_redactions {
             redactions.push(Redaction::Path {
-                path: build_meta.target_directory.join(&source),
-                replacement: format!("{TARGET_DIR_REDACTION}/{replacement}"),
+                path: build_meta.build_directory.join(&source),
+                replacement: format!("{linked_path_dir_redaction}/{replacement}"),
             });
             redactions.push(Redaction::Path {
                 path: source,
@@ -82,11 +90,18 @@ impl Redactor {
             });
         }
 
-        // Also add a redaction for the target directory. This goes after the linked paths, so that
-        // absolute linked paths are redacted first.
+        // Also add redactions for the target and build directories. These go
+        // after the linked paths, so that absolute linked paths are redacted
+        // first.
+        if build_meta.build_directory != build_meta.target_directory {
+            redactions.push(Redaction::Path {
+                path: build_meta.build_directory.clone(),
+                replacement: BUILD_DIR_REDACTION.to_string(),
+            });
+        }
         redactions.push(Redaction::Path {
             path: build_meta.target_directory.clone(),
-            replacement: "<target-dir>".to_string(),
+            replacement: TARGET_DIR_REDACTION.to_string(),
         });
 
         RedactorBuilder { redactions }

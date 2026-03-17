@@ -20,6 +20,7 @@ use camino_tempfile::Utf8TempDir;
 use guppy::graph::PackageGraph;
 use nextest_metadata::{BinaryListSummary, PlatformLibdirUnavailable};
 use std::{fmt, fs, io, sync::Arc};
+use tracing::debug;
 
 mod archive_reporter;
 mod archiver;
@@ -47,6 +48,13 @@ pub struct ReuseBuildInfo {
     /// Binaries metadata JSON and remapping for the target directory.
     pub binaries_metadata: Option<MetadataWithRemap<ReusedBinaryList>>,
 
+    /// Remapping for the build directory.
+    ///
+    /// When `build.build-dir` is set, the build directory differs from the
+    /// target directory. This remap handles that case. When not set, the build
+    /// directory remap falls back to the target directory remap.
+    pub build_dir_remap: Option<Utf8PathBuf>,
+
     /// A remapper for libdirs.
     pub libdir_mapper: LibdirMapper,
 
@@ -59,11 +67,13 @@ impl ReuseBuildInfo {
     pub fn new(
         cargo_metadata: Option<MetadataWithRemap<ReusedCargoMetadata>>,
         binaries_metadata: Option<MetadataWithRemap<ReusedBinaryList>>,
+        build_dir_remap: Option<Utf8PathBuf>,
         // TODO: accept libdir_mapper as an argument, as well
     ) -> Self {
         Self {
             cargo_metadata,
             binaries_metadata,
+            build_dir_remap,
             libdir_mapper: LibdirMapper::default(),
             _temp_dir: None,
         }
@@ -105,6 +115,9 @@ impl ReuseBuildInfo {
         Ok(Self {
             cargo_metadata: Some(cargo_metadata),
             binaries_metadata: Some(binaries_metadata),
+            // Archives normalize build_directory == target_directory, so no
+            // separate build dir remap is needed.
+            build_dir_remap: None,
             libdir_mapper,
             _temp_dir: temp_dir,
         })
@@ -138,6 +151,11 @@ impl ReuseBuildInfo {
         self.binaries_metadata
             .as_ref()
             .and_then(|m| m.remap.as_deref())
+    }
+
+    /// Returns the new build directory.
+    pub fn build_dir_remap(&self) -> Option<&Utf8Path> {
+        self.build_dir_remap.as_deref()
     }
 }
 
@@ -255,6 +273,7 @@ impl MetadataKind for ReusedCargoMetadata {
 pub struct PathMapper {
     workspace: Option<(Utf8PathBuf, Utf8PathBuf)>,
     target_dir: Option<(Utf8PathBuf, Utf8PathBuf)>,
+    build_dir: Option<(Utf8PathBuf, Utf8PathBuf)>,
     libdir_mapper: LibdirMapper,
 }
 
@@ -265,6 +284,8 @@ impl PathMapper {
         workspace_remap: Option<&Utf8Path>,
         orig_target_dir: impl Into<Utf8PathBuf>,
         target_dir_remap: Option<&Utf8Path>,
+        orig_build_dir: impl Into<Utf8PathBuf>,
+        build_dir_remap: Option<&Utf8Path>,
         libdir_mapper: LibdirMapper,
     ) -> Result<Self, PathMapperConstructError> {
         let workspace_root = workspace_remap
@@ -273,10 +294,14 @@ impl PathMapper {
         let target_dir = target_dir_remap
             .map(|dir| Self::canonicalize_dir(dir, PathMapperConstructKind::TargetDir))
             .transpose()?;
+        let build_dir = build_dir_remap
+            .map(|dir| Self::canonicalize_dir(dir, PathMapperConstructKind::BuildDir))
+            .transpose()?;
 
         Ok(Self {
             workspace: workspace_root.map(|w| (orig_workspace_root.into(), w)),
             target_dir: target_dir.map(|d| (orig_target_dir.into(), d)),
+            build_dir: build_dir.map(|d| (orig_build_dir.into(), d)),
             libdir_mapper,
         })
     }
@@ -286,6 +311,7 @@ impl PathMapper {
         Self {
             workspace: None,
             target_dir: None,
+            build_dir: None,
             libdir_mapper: LibdirMapper::default(),
         }
     }
@@ -336,23 +362,43 @@ impl PathMapper {
         self.target_dir.as_ref().map(|(_, new)| new.as_path())
     }
 
-    pub(crate) fn map_cwd(&self, path: Utf8PathBuf) -> Utf8PathBuf {
-        match &self.workspace {
-            Some((from, to)) => match path.strip_prefix(from) {
-                Ok(p) if !p.as_str().is_empty() => to.join(p),
-                Ok(_) => to.clone(),
-                Err(_) => path,
-            },
-            None => path,
-        }
+    pub(super) fn new_build_dir(&self) -> Option<&Utf8Path> {
+        self.build_dir.as_ref().map(|(_, new)| new.as_path())
     }
 
-    pub(crate) fn map_binary(&self, path: Utf8PathBuf) -> Utf8PathBuf {
-        match &self.target_dir {
+    pub(crate) fn map_cwd(&self, path: Utf8PathBuf) -> Utf8PathBuf {
+        Self::remap_path(self.workspace.as_ref(), path)
+    }
+
+    /// Remaps a path under the target directory.
+    ///
+    /// Use this for paths that are relative to `target_directory`, such as
+    /// non-test binaries and archive include paths.
+    pub(crate) fn map_target_path(&self, path: Utf8PathBuf) -> Utf8PathBuf {
+        Self::remap_path(self.target_dir.as_ref(), path)
+    }
+
+    /// Remaps a path under the build directory.
+    ///
+    /// Use this for paths that are relative to `build_directory`, such as test
+    /// binaries, build script out dirs, and linked paths.
+    pub(crate) fn map_build_path(&self, path: Utf8PathBuf) -> Utf8PathBuf {
+        Self::remap_path(self.build_dir.as_ref(), path)
+    }
+
+    fn remap_path(mapping: Option<&(Utf8PathBuf, Utf8PathBuf)>, path: Utf8PathBuf) -> Utf8PathBuf {
+        match mapping {
             Some((from, to)) => match path.strip_prefix(from) {
                 Ok(p) if !p.as_str().is_empty() => to.join(p),
                 Ok(_) => to.clone(),
-                Err(_) => path,
+                Err(_) => {
+                    debug!(
+                        target: "nextest-runner::reuse_build",
+                        "path `{path}` does not start with remap prefix `{from}`, \
+                         returning unchanged",
+                    );
+                    path
+                }
             },
             None => path,
         }
@@ -494,6 +540,7 @@ mod os_imp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{list::RustBuildMeta, platform::BuildPlatforms};
 
     /// Ensure that PathMapper turns relative paths into absolute ones.
     #[test]
@@ -528,15 +575,30 @@ mod tests {
         let rel_target_dir = pathdiff::diff_utf8_paths(&target_dir_path, &current_dir)
             .expect("abs to abs diff is non-None");
 
+        let temp_build_dir = Utf8TempDir::new().expect("new temp dir created");
+        let build_dir_path: Utf8PathBuf = os_imp::strip_verbatim(
+            temp_build_dir
+                .path()
+                .canonicalize()
+                .expect("build dir canonicalized correctly")
+                .try_into()
+                .expect("build dir is valid UTF-8"),
+        );
+        let rel_build_dir = pathdiff::diff_utf8_paths(&build_dir_path, &current_dir)
+            .expect("abs to abs diff is non-None");
+
         // These aren't really used other than to do mapping against.
         let orig_workspace_root = Utf8Path::new(env!("CARGO_MANIFEST_DIR"));
         let orig_target_dir = orig_workspace_root.join("target");
+        let orig_build_dir = orig_workspace_root.join("build");
 
         let path_mapper = PathMapper::new(
             orig_workspace_root,
             Some(&rel_workspace_root),
             &orig_target_dir,
             Some(&rel_target_dir),
+            &orig_build_dir,
+            Some(&rel_build_dir),
             LibdirMapper::default(),
         )
         .expect("remapped paths exist");
@@ -546,8 +608,122 @@ mod tests {
             workspace_root_path.join("foobar")
         );
         assert_eq!(
-            path_mapper.map_binary(orig_target_dir.join("foobar")),
+            path_mapper.map_target_path(orig_target_dir.join("foobar")),
             target_dir_path.join("foobar")
+        );
+        assert_eq!(
+            path_mapper.map_build_path(orig_build_dir.join("foobar")),
+            build_dir_path.join("foobar")
+        );
+    }
+
+    /// Test that when build_dir and target_dir are separate, each maps
+    /// independently.
+    #[test]
+    fn test_path_mapper_separate_build_dir() {
+        let temp_target_dir = Utf8TempDir::new().expect("new temp dir created");
+        let target_dir_path: Utf8PathBuf = os_imp::strip_verbatim(
+            temp_target_dir
+                .path()
+                .canonicalize()
+                .expect("target dir canonicalized correctly")
+                .try_into()
+                .expect("target dir is valid UTF-8"),
+        );
+
+        let temp_build_dir = Utf8TempDir::new().expect("new temp dir created");
+        let build_dir_path: Utf8PathBuf = os_imp::strip_verbatim(
+            temp_build_dir
+                .path()
+                .canonicalize()
+                .expect("build dir canonicalized correctly")
+                .try_into()
+                .expect("build dir is valid UTF-8"),
+        );
+
+        let orig_workspace_root = Utf8Path::new(env!("CARGO_MANIFEST_DIR"));
+        let orig_target_dir = orig_workspace_root.join("target");
+        let orig_build_dir = orig_workspace_root.join("build");
+
+        let path_mapper = PathMapper::new(
+            orig_workspace_root,
+            None,
+            &orig_target_dir,
+            Some(target_dir_path.as_path()),
+            &orig_build_dir,
+            Some(build_dir_path.as_path()),
+            LibdirMapper::default(),
+        )
+        .expect("remapped paths exist");
+
+        // Target paths remap under target_dir.
+        assert_eq!(
+            path_mapper.map_target_path(orig_target_dir.join("debug/mybin")),
+            target_dir_path.join("debug/mybin"),
+        );
+
+        // Build paths remap under build_dir.
+        assert_eq!(
+            path_mapper.map_build_path(orig_build_dir.join("debug/deps/test-abc123")),
+            build_dir_path.join("debug/deps/test-abc123"),
+        );
+
+        // Paths not matching either prefix are returned unchanged.
+        let unrelated = Utf8PathBuf::from("/some/other/path");
+        assert_eq!(path_mapper.map_target_path(unrelated.clone()), unrelated,);
+        assert_eq!(path_mapper.map_build_path(unrelated.clone()), unrelated,);
+    }
+
+    /// Test that `map_paths` falls back to target_dir remap when no explicit
+    /// build_dir remap is set.
+    #[test]
+    fn test_map_paths_build_dir_fallback() {
+        let temp_target_dir = Utf8TempDir::new().expect("new temp dir created");
+        let target_dir_path: Utf8PathBuf = os_imp::strip_verbatim(
+            temp_target_dir
+                .path()
+                .canonicalize()
+                .expect("target dir canonicalized correctly")
+                .try_into()
+                .expect("target dir is valid UTF-8"),
+        );
+
+        let orig_workspace_root = Utf8Path::new(env!("CARGO_MANIFEST_DIR"));
+        let orig_target_dir = orig_workspace_root.join("target");
+        let orig_build_dir = orig_workspace_root.join("build");
+
+        // Only target_dir remap is set, no build_dir remap.
+        let path_mapper = PathMapper::new(
+            orig_workspace_root,
+            None,
+            &orig_target_dir,
+            Some(target_dir_path.as_path()),
+            &orig_build_dir,
+            None,
+            LibdirMapper::default(),
+        )
+        .expect("remapped paths exist");
+
+        // new_build_dir() returns None since no explicit build dir remap was
+        // passed.
+        assert_eq!(path_mapper.new_build_dir(), None);
+        assert_eq!(
+            path_mapper.new_target_dir(),
+            Some(target_dir_path.as_path()),
+        );
+
+        // Verify the fallback by actually calling map_paths: since no
+        // build_dir remap is set, map_paths should fall back to the
+        // target_dir remap for build_directory.
+        let build_platforms = BuildPlatforms::new_with_no_target()
+            .expect("creating BuildPlatforms without target triple succeeds");
+        let meta = RustBuildMeta::new(&orig_target_dir, &orig_build_dir, build_platforms);
+        let mapped = meta.map_paths(&path_mapper);
+
+        assert_eq!(mapped.target_directory, target_dir_path);
+        assert_eq!(
+            mapped.build_directory, target_dir_path,
+            "build_directory should fall back to the target_dir remap",
         );
     }
 }

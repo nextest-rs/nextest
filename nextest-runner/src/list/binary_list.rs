@@ -21,7 +21,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     io,
 };
-use tracing::warn;
+use tracing::{debug, warn};
 
 /// A Rust test binary built by Cargo.
 #[derive(Clone, Debug)]
@@ -107,8 +107,54 @@ impl BinaryList {
     }
 
     fn to_summary(&self) -> BinaryListSummary {
+        BinaryListSummary {
+            rust_build_meta: self.rust_build_meta.to_summary(),
+            rust_binaries: self.binary_summaries(),
+        }
+    }
+
+    /// Produces a summary suitable for archive metadata.
+    ///
+    /// * `build_directory` is omitted so it defaults to `target_directory` on
+    ///   extraction.
+    /// * Binary paths under `build_directory` are remapped to `target_directory`
+    ///   so the `PathMapper` can remap them correctly on extraction.
+    pub(crate) fn to_archive_summary(&self) -> BinaryListSummary {
+        let target_dir = &self.rust_build_meta.target_directory;
+        let build_directory = &self.rust_build_meta.build_directory;
+
         let rust_binaries = self
             .rust_binaries
+            .iter()
+            .map(|bin| {
+                // In the archive, test binaries are stored under target/.
+                // Remap paths from build_directory to target_directory so the PathMapper
+                // can relocate them on extraction.
+                let binary_path = target_dir.join(
+                    bin.path
+                        .strip_prefix(build_directory)
+                        .expect("test binary paths must be within the build directory"),
+                );
+                let summary = RustTestBinarySummary {
+                    binary_name: bin.name.clone(),
+                    package_id: bin.package_id.clone(),
+                    kind: bin.kind.clone(),
+                    binary_path,
+                    binary_id: bin.id.clone(),
+                    build_platform: bin.build_platform,
+                };
+                (bin.id.clone(), summary)
+            })
+            .collect();
+
+        BinaryListSummary {
+            rust_build_meta: self.rust_build_meta.to_archive_summary(),
+            rust_binaries,
+        }
+    }
+
+    fn binary_summaries(&self) -> BTreeMap<RustBinaryId, RustTestBinarySummary> {
+        self.rust_binaries
             .iter()
             .map(|bin| {
                 let summary = RustTestBinarySummary {
@@ -121,12 +167,7 @@ impl BinaryList {
                 };
                 (bin.id.clone(), summary)
             })
-            .collect();
-
-        BinaryListSummary {
-            rust_build_meta: self.rust_build_meta.to_summary(),
-            rust_binaries,
-        }
+            .collect()
     }
 
     fn write_human(
@@ -242,6 +283,13 @@ struct BinaryListBuildState<'g> {
 impl<'g> BinaryListBuildState<'g> {
     fn new(graph: &'g PackageGraph, build_platforms: BuildPlatforms) -> Self {
         let rust_target_dir = graph.workspace().target_directory().to_path_buf();
+        // Use the build directory if on Cargo 1.91 or newer. Fall back to
+        // the target directory for older Cargo versions.
+        let build_directory = graph
+            .workspace()
+            .build_directory()
+            .unwrap_or_else(|| graph.workspace().target_directory())
+            .to_path_buf();
         // For testing only, not part of the public API.
         let alt_target_dir = std::env::var("__NEXTEST_ALT_TARGET_DIR")
             .ok()
@@ -250,7 +298,7 @@ impl<'g> BinaryListBuildState<'g> {
         Self {
             graph,
             rust_binaries: vec![],
-            rust_build_meta: RustBuildMeta::new(rust_target_dir, build_platforms),
+            rust_build_meta: RustBuildMeta::new(rust_target_dir, build_directory, build_platforms),
             alt_target_dir,
         }
     }
@@ -395,10 +443,21 @@ impl<'g> BinaryListBuildState<'g> {
     ///
     /// The `Option` in the return value is to let ? work.
     fn detect_base_output_dir(&mut self, artifact_path: &Utf8Path) -> Option<()> {
-        // Artifact paths must be relative to the target directory.
-        let rel_path = artifact_path
-            .strip_prefix(&self.rust_build_meta.target_directory)
-            .ok()?;
+        // Artifact paths must be relative to the build directory (which
+        // equals the target directory unless Cargo's build.build-dir is
+        // configured).
+        let rel_path = match artifact_path.strip_prefix(&self.rust_build_meta.build_directory) {
+            Ok(rel) => rel,
+            Err(_) => {
+                debug!(
+                    target: "nextest-runner::list",
+                    "artifact path `{}` is not within the build directory `{}`, \
+                     skipping base output directory detection",
+                    artifact_path, self.rust_build_meta.build_directory,
+                );
+                return None;
+            }
+        };
         let parent = rel_path.parent()?;
         if parent.file_name() == Some("deps") {
             let base = parent.parent()?;
@@ -431,15 +490,26 @@ impl<'g> BinaryListBuildState<'g> {
             |p| p.in_workspace(),
         );
         if in_workspace {
-            // Ignore this build script if it's not in the target directory.
-            if let Ok(rel_out_dir) = build_script
+            // Build script out_dirs are relative to the build directory.
+            match build_script
                 .out_dir
-                .strip_prefix(&self.rust_build_meta.target_directory)
+                .strip_prefix(&self.rust_build_meta.build_directory)
             {
-                self.rust_build_meta.build_script_out_dirs.insert(
-                    package_id.repr().to_owned(),
-                    convert_rel_path_to_forward_slash(rel_out_dir),
-                );
+                Ok(rel_out_dir) => {
+                    self.rust_build_meta.build_script_out_dirs.insert(
+                        package_id.repr().to_owned(),
+                        convert_rel_path_to_forward_slash(rel_out_dir),
+                    );
+                }
+                Err(_) => {
+                    debug!(
+                        target: "nextest-runner::list",
+                        "build script out_dir `{}` for package `{}` is not within \
+                         the build directory `{}`, skipping",
+                        build_script.out_dir, package_id,
+                        self.rust_build_meta.build_directory,
+                    );
+                }
             }
 
             // Capture build script environment variables from the structured
@@ -465,7 +535,7 @@ impl<'g> BinaryListBuildState<'g> {
             None => path,
         };
 
-        let rel_path = match actual_path.strip_prefix(&self.rust_build_meta.target_directory) {
+        let rel_path = match actual_path.strip_prefix(&self.rust_build_meta.build_directory) {
             Ok(rel) => rel,
             Err(_) => {
                 // For a seeded build (like in our test suite), Cargo will
@@ -577,7 +647,8 @@ mod tests {
             }),
         };
 
-        let mut rust_build_meta = RustBuildMeta::new("/fake/target", build_platforms);
+        let mut rust_build_meta =
+            RustBuildMeta::new("/fake/target", "/fake/target", build_platforms);
         rust_build_meta
             .base_output_directories
             .insert("my-profile".into());
@@ -624,6 +695,7 @@ mod tests {
         {
           "rust-build-meta": {
             "target-directory": "/fake/target",
+            "build-directory": "/fake/target",
             "base-output-directories": [
               "my-profile"
             ],

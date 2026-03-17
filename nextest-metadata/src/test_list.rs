@@ -581,14 +581,27 @@ pub struct RustBuildMetaSummary {
     /// The target directory for Rust artifacts.
     pub target_directory: Utf8PathBuf,
 
-    /// Base output directories, relative to the target directory.
+    /// The build directory for intermediate Cargo artifacts (test binaries,
+    /// build script outputs, etc.). When Cargo's `build.build-dir` is
+    /// configured, this differs from `target_directory`. Otherwise it equals
+    /// `target_directory`.
+    ///
+    /// Absent in archives and metadata from older nextest versions (pre-0.9.131),
+    /// in which case consumers should treat it as equal to `target_directory`.
+    ///
+    /// Added in cargo-nextest 0.9.131.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_directory: Option<Utf8PathBuf>,
+
+    /// Base output directories, relative to the build directory.
     pub base_output_directories: BTreeSet<Utf8PathBuf>,
 
     /// Information about non-test binaries, keyed by package ID.
     pub non_test_binaries: BTreeMap<String, BTreeSet<RustNonTestBinarySummary>>,
 
-    /// Build script output directory, relative to the target directory and keyed by package ID.
-    /// Only present for workspace packages that have build scripts.
+    /// Build script output directory, relative to the build directory and keyed
+    /// by package ID. Only present for workspace packages that have build
+    /// scripts.
     ///
     /// Added in cargo-nextest 0.9.65.
     #[serde(default)]
@@ -604,7 +617,7 @@ pub struct RustBuildMetaSummary {
     #[serde(default)]
     pub build_script_info: Option<BTreeMap<String, BuildScriptInfoSummary>>,
 
-    /// Linked paths, relative to the target directory.
+    /// Linked paths, relative to the build directory.
     pub linked_paths: BTreeSet<Utf8PathBuf>,
 
     /// The build platforms used while compiling the Rust artifacts.
@@ -1048,6 +1061,7 @@ mod tests {
         "linked-paths": []
     }"#, RustBuildMetaSummary {
         target_directory: "/foo".into(),
+        build_directory: None,
         base_output_directories: BTreeSet::new(),
         non_test_binaries: BTreeMap::new(),
         build_script_out_dirs: BTreeMap::new(),
@@ -1065,6 +1079,7 @@ mod tests {
         "target-platform": "x86_64-unknown-linux-gnu"
     }"#, RustBuildMetaSummary {
         target_directory: "/foo".into(),
+        build_directory: None,
         base_output_directories: BTreeSet::new(),
         non_test_binaries: BTreeMap::new(),
         build_script_out_dirs: BTreeMap::new(),

@@ -16,6 +16,10 @@ fn main() {
     let mut command = Command::new(cargo);
     command
         .args(["build", "-p", "cdylib-example"])
+        // Unset CARGO_BUILD_BUILD_DIR so the child cargo doesn't try to
+        // acquire the same build lock as the parent (recursive lock deadlock
+        // with -Zbuild-dir / build.build-dir).
+        .env_remove("CARGO_BUILD_BUILD_DIR")
         .stderr(Stdio::inherit());
 
     let output = command.output().expect("cargo build execution successful");
@@ -26,7 +30,23 @@ fn main() {
     // Rather than trying to parse cargo-metadata which takes a really long time
     // to build, just assume we know where the library path is.
     for (from_name, to_name) in dylib_file_names() {
-        let dylib_path = out_dir.join("target/debug/deps").join(from_name);
+        // This should be in either `target/debug/deps` or `target/debug`.
+        let dylib_path = {
+            // Old layout.
+            let deps_path = out_dir.join("target/debug/deps").join(from_name);
+            if deps_path.exists() {
+                deps_path
+            } else {
+                // New layout.
+                let debug_path = out_dir.join("target/debug").join(from_name);
+                if debug_path.exists() {
+                    debug_path
+                } else {
+                    panic!("library {} not found", from_name)
+                }
+            }
+        };
+
         eprintln!("dylib path: {}", dylib_path.display());
         std::fs::copy(&dylib_path, &out_dir.join(to_name)).unwrap_or_else(|err| {
             panic!(

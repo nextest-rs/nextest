@@ -22,37 +22,49 @@ use tracing::warn;
 /// Rust-related metadata used for builds and test runs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustBuildMeta<State> {
-    /// The target directory for build artifacts.
+    /// The target directory for Rust artifacts. Non-test binaries are uplifted
+    /// here by Cargo.
     pub target_directory: Utf8PathBuf,
 
-    /// A list of base output directories, relative to the target directory. These directories
-    /// and their "deps" subdirectories are added to the dynamic library path.
+    /// The build directory for intermediate Cargo artifacts (test binaries,
+    /// build script outputs, deps, etc.). Equals `target_directory` unless
+    /// Cargo's `build.build-dir` is configured.
+    pub build_directory: Utf8PathBuf,
+
+    /// A list of base output directories, relative to the build directory.
+    /// These directories and their "deps" subdirectories are added to the
+    /// dynamic library path.
     pub base_output_directories: BTreeSet<Utf8PathBuf>,
 
-    /// Information about non-test executables, keyed by package ID.
+    /// Information about non-test executables, keyed by package ID. Paths are
+    /// relative to `target_directory` (non-test binaries are uplifted by Cargo).
     pub non_test_binaries: BTreeMap<String, BTreeSet<RustNonTestBinarySummary>>,
 
-    /// Build script output directory, relative to the target directory and keyed by package ID.
-    /// Only present for workspace packages that have build scripts.
+    /// Build script output directory, relative to the build directory and keyed
+    /// by package ID. Only present for workspace packages that have build
+    /// scripts.
     pub build_script_out_dirs: BTreeMap<String, Utf8PathBuf>,
 
-    /// Extended build script information, keyed by package ID. Only present for workspace
-    /// packages that have build scripts.
+    /// Extended build script information, keyed by package ID. Only present for
+    /// workspace packages that have build scripts.
     ///
-    /// `None` means this field was absent (old archive/metadata that predates this field).
-    /// `Some(map)` means the field was present, even if the map is empty.
+    /// `None` means this field was absent (old archive/metadata that predates
+    /// this field). `Some(map)` means the field was present, even if the map is
+    /// empty.
     pub build_script_info: Option<BTreeMap<String, BuildScriptInfo>>,
 
-    /// A list of linked paths, relative to the target directory. These directories are
-    /// added to the dynamic library path.
+    /// A list of linked paths, relative to the build directory. These
+    /// directories are added to the dynamic library path.
     ///
-    /// The values are the package IDs of the libraries that requested the linked paths.
+    /// The values are the package IDs of the libraries that requested the
+    /// linked paths.
     ///
-    /// Note that the serialized metadata only has the paths for now, not the libraries that
-    /// requested them. We might consider adding a new field with metadata about that.
+    /// Note that the serialized metadata only has the paths for now, not the
+    /// libraries that requested them. We might consider adding a new field with
+    /// metadata about that.
     pub linked_paths: BTreeMap<Utf8PathBuf, BTreeSet<String>>,
 
-    /// The build platforms: host and target triple
+    /// The build platforms: host and target triple.
     pub build_platforms: BuildPlatforms,
 
     /// A type marker for the state.
@@ -61,9 +73,14 @@ pub struct RustBuildMeta<State> {
 
 impl RustBuildMeta<BinaryListState> {
     /// Creates a new [`RustBuildMeta`].
-    pub fn new(target_directory: impl Into<Utf8PathBuf>, build_platforms: BuildPlatforms) -> Self {
+    pub fn new(
+        target_directory: impl Into<Utf8PathBuf>,
+        build_directory: impl Into<Utf8PathBuf>,
+        build_platforms: BuildPlatforms,
+    ) -> Self {
         Self {
             target_directory: target_directory.into(),
+            build_directory: build_directory.into(),
             base_output_directories: BTreeSet::new(),
             non_test_binaries: BTreeMap::new(),
             build_script_out_dirs: BTreeMap::new(),
@@ -76,11 +93,24 @@ impl RustBuildMeta<BinaryListState> {
 
     /// Maps paths using a [`PathMapper`] to convert this to [`TestListState`].
     pub fn map_paths(&self, path_mapper: &PathMapper) -> RustBuildMeta<TestListState> {
+        let new_target_directory = path_mapper
+            .new_target_dir()
+            .unwrap_or(&self.target_directory)
+            .to_path_buf();
+        // Use the build dir remap if set, otherwise fall back to the target
+        // dir remap. This fallback is for programmatic callers that construct
+        // PathMapper directly without the make_path_mapper helper. (The CLI
+        // path goes through make_path_mapper, which already applies this
+        // fallback when constructing the PathMapper.)
+        let new_build_directory = path_mapper
+            .new_build_dir()
+            .or(path_mapper.new_target_dir())
+            .unwrap_or(&self.build_directory)
+            .to_path_buf();
+
         RustBuildMeta {
-            target_directory: path_mapper
-                .new_target_dir()
-                .unwrap_or(&self.target_directory)
-                .to_path_buf(),
+            target_directory: new_target_directory,
+            build_directory: new_build_directory,
             // Since these are relative paths, they don't need to be mapped.
             base_output_directories: self.base_output_directories.clone(),
             non_test_binaries: self.non_test_binaries.clone(),
@@ -100,6 +130,7 @@ impl RustBuildMeta<TestListState> {
     pub fn empty() -> Self {
         Self {
             target_directory: Utf8PathBuf::new(),
+            build_directory: Utf8PathBuf::new(),
             base_output_directories: BTreeSet::new(),
             non_test_binaries: BTreeMap::new(),
             build_script_out_dirs: BTreeMap::new(),
@@ -141,19 +172,21 @@ impl RustBuildMeta<TestListState> {
             warn!("failed to detect the rustc libdir, may fail to list or run tests");
         }
 
-        // Cargo puts linked paths before base output directories.
+        // Cargo puts linked paths before base output directories. Both
+        // linked paths and base output dirs are relative to the build
+        // directory.
         self.linked_paths
             .keys()
             .filter_map(|rel_path| {
                 let join_path = self
-                    .target_directory
+                    .build_directory
                     .join(convert_rel_path_to_main_sep(rel_path));
                 // Only add the directory to the path if it exists on disk.
                 join_path.exists().then_some(join_path)
             })
             .chain(self.base_output_directories.iter().flat_map(|base_output| {
                 let abs_base = self
-                    .target_directory
+                    .build_directory
                     .join(convert_rel_path_to_main_sep(base_output));
                 let with_deps = abs_base.join("deps");
                 // This is the order paths are added in by Cargo.
@@ -178,8 +211,15 @@ impl<State> RustBuildMeta<State> {
             BuildPlatforms::from_summary_str(summary.target_platform.clone())?
         };
 
+        // If build_directory is absent (old archive or metadata), default to
+        // target_directory.
+        let build_directory = summary
+            .build_directory
+            .unwrap_or_else(|| summary.target_directory.clone());
+
         Ok(Self {
             target_directory: summary.target_directory,
+            build_directory,
             base_output_directories: summary.base_output_directories,
             build_script_out_dirs: summary.build_script_out_dirs,
             build_script_info: summary.build_script_info.map(|info| {
@@ -202,6 +242,7 @@ impl<State> RustBuildMeta<State> {
     pub fn to_summary(&self) -> RustBuildMetaSummary {
         RustBuildMetaSummary {
             target_directory: self.target_directory.clone(),
+            build_directory: Some(self.build_directory.clone()),
             base_output_directories: self.base_output_directories.clone(),
             non_test_binaries: self.non_test_binaries.clone(),
             build_script_out_dirs: self.build_script_out_dirs.clone(),
@@ -225,6 +266,18 @@ impl<State> RustBuildMeta<State> {
                     .collect(),
             }),
         }
+    }
+
+    /// Converts self to a serializable form suitable for archive metadata.
+    ///
+    /// Archives are portable, so `build_directory` is omitted (it will default to
+    /// `target_directory` on extraction).
+    pub fn to_archive_summary(&self) -> RustBuildMetaSummary {
+        let mut summary = self.to_summary();
+        // In archives, build artifacts are stored under target/, so build_directory
+        // should not be present (it defaults to target_directory).
+        summary.build_directory = None;
+        summary
     }
 }
 
@@ -264,6 +317,7 @@ mod tests {
     impl Default for RustBuildMeta<BinaryListState> {
         fn default() -> Self {
             RustBuildMeta::<BinaryListState>::new(
+                Utf8PathBuf::default(),
                 Utf8PathBuf::default(),
                 BuildPlatforms::new_with_no_target()
                     .expect("creating BuildPlatforms without target triple should succeed"),
@@ -395,6 +449,43 @@ mod tests {
         build_script_info: None,
         ..Default::default()
     }; "platforms with zero targets")]
+    #[test_case(RustBuildMetaSummary {
+        target_directory: "/fake/target".into(),
+        build_directory: Some("/fake/build".into()),
+        platforms: Some(BuildPlatformsSummary {
+            host: host_current().to_summary(),
+            targets: vec![],
+        }),
+        ..Default::default()
+    }, RustBuildMeta::<BinaryListState> {
+        target_directory: "/fake/target".into(),
+        build_directory: "/fake/build".into(),
+        build_platforms: BuildPlatforms {
+            host: host_current(),
+            target: None,
+        },
+        build_script_info: None,
+        ..Default::default()
+    }; "build directory differs from target directory")]
+    #[test_case(RustBuildMetaSummary {
+        target_directory: "/fake/target".into(),
+        build_directory: None,
+        platforms: Some(BuildPlatformsSummary {
+            host: host_current().to_summary(),
+            targets: vec![],
+        }),
+        ..Default::default()
+    }, RustBuildMeta::<BinaryListState> {
+        target_directory: "/fake/target".into(),
+        // When build_directory is absent, it defaults to target_directory.
+        build_directory: "/fake/target".into(),
+        build_platforms: BuildPlatforms {
+            host: host_current(),
+            target: None,
+        },
+        build_script_info: None,
+        ..Default::default()
+    }; "build directory absent defaults to target directory")]
     fn test_from_summary(summary: RustBuildMetaSummary, expected: RustBuildMeta<BinaryListState>) {
         let actual = RustBuildMeta::<BinaryListState>::from_summary(summary)
             .expect("RustBuildMeta should deserialize from summary with success.");
@@ -449,6 +540,7 @@ mod tests {
             targets: vec![],
         }),
         build_script_info: Some(BTreeMap::new()),
+        build_directory: Some(Utf8PathBuf::new()),
         ..Default::default()
     }; "build platforms without target")]
     #[test_case(RustBuildMeta::<BinaryListState> {
@@ -471,11 +563,87 @@ mod tests {
             targets: vec![target_linux_with_libdir("/fake/test/libdir/873").to_summary()],
         }),
         build_script_info: Some(BTreeMap::new()),
+        build_directory: Some(Utf8PathBuf::new()),
         ..Default::default()
     }; "build platforms with target")]
+    #[test_case(RustBuildMeta::<BinaryListState> {
+        target_directory: "/fake/target".into(),
+        build_directory: "/fake/build".into(),
+        build_platforms: BuildPlatforms {
+            host: host_current(),
+            target: None,
+        },
+        ..Default::default()
+    }, RustBuildMetaSummary {
+        target_directory: "/fake/target".into(),
+        // build_directory is emitted when it differs from target_directory.
+        build_directory: Some("/fake/build".into()),
+        target_platform: None,
+        target_platforms: vec![host_current().to_summary().platform],
+        platforms: Some(BuildPlatformsSummary {
+            host: host_current().to_summary(),
+            targets: vec![],
+        }),
+        build_script_info: Some(BTreeMap::new()),
+        ..Default::default()
+    }; "build directory differs from target directory")]
+    #[test_case(RustBuildMeta::<BinaryListState> {
+        target_directory: "/fake/target".into(),
+        build_directory: "/fake/target".into(),
+        build_platforms: BuildPlatforms {
+            host: host_current(),
+            target: None,
+        },
+        ..Default::default()
+    }, RustBuildMetaSummary {
+        target_directory: "/fake/target".into(),
+        // build_directory is always emitted by to_summary().
+        build_directory: Some("/fake/target".into()),
+        target_platform: None,
+        target_platforms: vec![host_current().to_summary().platform],
+        platforms: Some(BuildPlatformsSummary {
+            host: host_current().to_summary(),
+            targets: vec![],
+        }),
+        build_script_info: Some(BTreeMap::new()),
+        ..Default::default()
+    }; "build directory equals target directory")]
     fn test_to_summary(meta: RustBuildMeta<BinaryListState>, expected: RustBuildMetaSummary) {
         let actual = meta.to_summary();
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_to_archive_summary_omits_build_directory() {
+        let meta = RustBuildMeta::<BinaryListState> {
+            target_directory: "/fake/target".into(),
+            build_directory: "/fake/build".into(),
+            build_platforms: BuildPlatforms {
+                host: host_current(),
+                target: None,
+            },
+            ..Default::default()
+        };
+
+        let archive_summary = meta.to_archive_summary();
+
+        // Archive summaries always omit build_directory so it defaults to
+        // target_directory on extraction.
+        assert_eq!(
+            archive_summary.build_directory, None,
+            "to_archive_summary should always set build_directory to None"
+        );
+        assert_eq!(archive_summary.target_directory, meta.target_directory);
+
+        // Verify round-trip: from_summary with the archive summary should
+        // produce a RustBuildMeta where build_directory == target_directory.
+        let round_tripped = RustBuildMeta::<BinaryListState>::from_summary(archive_summary)
+            .expect("from_summary should succeed");
+        assert_eq!(
+            round_tripped.build_directory, round_tripped.target_directory,
+            "after round-trip through archive summary, \
+             build_directory should equal target_directory"
+        );
     }
 
     #[test]
@@ -521,6 +689,7 @@ mod tests {
 
         let rust_build_meta = RustBuildMeta {
             target_directory: fake_target_dir.to_path_buf(),
+            build_directory: fake_target_dir.to_path_buf(),
             linked_paths: [(Utf8PathBuf::from(tmpdir_dirname), Default::default())].into(),
             base_output_directories: [Utf8PathBuf::from(tmpdir_dirname)].into(),
             build_platforms: BuildPlatforms {
@@ -534,6 +703,14 @@ mod tests {
         };
         let dylib_paths = rust_build_meta.dylib_paths();
 
+        // The linked path resolves to the same directory as the base output
+        // directory (both are tmpdir_dirname relative to the build directory).
+        // Verify the result contains the expected path and has no duplicates.
+        let expected_abs = fake_target_dir.join(tmpdir_dirname);
+        assert!(
+            dylib_paths.contains(&expected_abs),
+            "{dylib_paths:?} should contain {expected_abs}"
+        );
         assert!(
             dylib_paths.clone().into_iter().all_unique(),
             "{dylib_paths:?} should not contain duplicate paths"

@@ -93,6 +93,21 @@ pub(crate) struct ReuseBuildOpts {
         value_name = "PATH"
     )]
     pub(crate) target_dir_remap: Option<Utf8PathBuf>,
+
+    /// Remapping for the build directory
+    ///
+    /// When Cargo's `build.build-dir` is set, test binaries and build script
+    /// outputs live in a separate build directory. Use this option to remap
+    /// those paths. If not provided, falls back to --target-dir-remap.
+    #[arg(
+        long,
+        // Note: --build-dir-remap is incompatible with --archive, hence this
+        // requires binaries_metadata and not binaries-metadata-sources.
+        requires = "binaries_metadata",
+        conflicts_with = "archive_file",
+        value_name = "PATH"
+    )]
+    pub(crate) build_dir_remap: Option<Utf8PathBuf>,
 }
 
 impl ReuseBuildOpts {
@@ -134,6 +149,17 @@ impl ReuseBuildOpts {
             .map(|d| {
                 camino::absolute_utf8(d).map_err(|error| ExpectedError::RemapAbsoluteError {
                     arg_name: "target-dir-remap",
+                    path: d.to_owned(),
+                    error,
+                })
+            })
+            .transpose()?;
+        let build_dir_remap = self
+            .build_dir_remap
+            .as_ref()
+            .map(|d| {
+                camino::absolute_utf8(d).map_err(|error| ExpectedError::RemapAbsoluteError {
+                    arg_name: "build-dir-remap",
                     path: d.to_owned(),
                     error,
                 })
@@ -204,7 +230,11 @@ impl ReuseBuildOpts {
             .transpose()
             .map_err(|err| ExpectedError::metadata_materialize_error("binaries-metadata", err))?;
 
-        Ok(ReuseBuildInfo::new(cargo_metadata, binaries_metadata))
+        Ok(ReuseBuildInfo::new(
+            cargo_metadata,
+            binaries_metadata,
+            build_dir_remap,
+        ))
     }
 }
 
@@ -234,18 +264,28 @@ pub(crate) fn make_path_mapper(
     info: &ReuseBuildInfo,
     graph: &PackageGraph,
     orig_target_dir: &Utf8Path,
+    orig_build_dir: &Utf8Path,
 ) -> Result<PathMapper> {
+    // If no explicit build dir remap is provided, fall back to the target dir
+    // remap. This handles the common case where build_directory ==
+    // target_directory, as well as the case where only --target-dir-remap is
+    // passed.
+    let build_dir_remap = info.build_dir_remap().or(info.target_dir_remap());
+
     PathMapper::new(
         graph.workspace().root(),
         info.workspace_remap(),
         orig_target_dir,
         info.target_dir_remap(),
+        orig_build_dir,
+        build_dir_remap,
         info.libdir_mapper.clone(),
     )
     .map_err(|err| {
         let arg_name = match err.kind() {
             PathMapperConstructKind::WorkspaceRoot => "workspace-remap",
             PathMapperConstructKind::TargetDir => "target-dir-remap",
+            PathMapperConstructKind::BuildDir => "build-dir-remap",
         };
         ExpectedError::PathMapperConstructError { arg_name, err }
     })

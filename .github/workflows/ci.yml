@@ -320,3 +320,52 @@ jobs:
             --archive-file fixture-archive/fixture-archive.tar.zst \
             --workspace-remap $GITHUB_WORKSPACE/fixtures/nextest-tests \
             -E 'platform(target)'
+
+  test-build-dir:
+    name: Test with Cargo build-dir
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - name: Build cargo-nextest
+        run: cargo build --package cargo-nextest
+      - name: Run fixture tests with build-dir
+        env:
+          CARGO_NEXTEST: target/debug/cargo-nextest
+          RUSTUP_AVAILABLE: 1
+          CARGO_UNSTABLE_BUILD_DIR: true
+          CARGO_UNSTABLE_BUILD_DIR_NEW_LAYOUT: true
+          CARGO_BUILD_BUILD_DIR: ${{ github.workspace }}/build-output
+        run: |
+          ./scripts/nextest-without-rustup.sh run \
+            --manifest-path fixtures/nextest-tests/Cargo.toml \
+            --package cdylib-link --package cdylib-example \
+            --package with-build-script
+      - name: Archive fixture tests with build-dir
+        env:
+          CARGO_NEXTEST: target/debug/cargo-nextest
+          RUSTUP_AVAILABLE: 1
+          CARGO_UNSTABLE_BUILD_DIR: true
+          CARGO_UNSTABLE_BUILD_DIR_NEW_LAYOUT: true
+          CARGO_BUILD_BUILD_DIR: ${{ github.workspace }}/build-output
+        run: |
+          ./scripts/nextest-without-rustup.sh archive \
+            --manifest-path fixtures/nextest-tests/Cargo.toml \
+            --archive-file target/build-dir-archive.tar.zst \
+            --package cdylib-link --package cdylib-example \
+            --package with-build-script
+      # Run from the archive without build-dir env to verify archive
+      # portability. (build_directory is normalized to target_directory in the
+      # archive). Wipe both the target and build directories first to ensure
+      # the archive is self-contained.
+      - name: Run from archive without build-dir
+        env:
+          CARGO_NEXTEST: target/debug/cargo-nextest
+          # Do not set RUSTUP_AVAILABLE here, since running tests out of an
+          # archive should not require rustup or Cargo.
+        run: |
+          rm -r fixtures/nextest-tests/target ${{ github.workspace }}/build-output
+          ./scripts/nextest-without-rustup.sh run \
+            --archive-file target/build-dir-archive.tar.zst

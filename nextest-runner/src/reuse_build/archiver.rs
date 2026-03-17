@@ -7,9 +7,9 @@ use crate::{
         core::{EvaluatableProfile, get_num_cpus},
         elements::{ArchiveConfig, ArchiveIncludeOnMissing, RecursionDepth},
     },
-    errors::{ArchiveCreateError, FromMessagesError, UnknownArchiveFormat},
+    errors::{ArchiveCreateError, FromMessagesError, UnknownArchiveFormat, WriteTestListError},
     helpers::{convert_rel_path_to_forward_slash, rel_path_join},
-    list::{BinaryList, OutputFormat, RustBuildMeta, RustTestArtifact, SerializableFormat},
+    list::{BinaryList, RustBuildMeta, RustTestArtifact},
     redact::Redactor,
     reuse_build::{ArchiveFilterCounts, LIBDIRS_BASE_DIR, PathMapper},
     test_filter::{BinaryFilter, FilterBinaryMatch, FilterBound},
@@ -361,17 +361,19 @@ impl<'a, W: Write> Archiver<'a, W> {
     where
         F: for<'b> FnMut(ArchiveEvent<'b>) -> io::Result<()>,
     {
-        // Add the binaries metadata first so that while unarchiving, reports are instant.
-        let binaries_metadata = self
-            .binary_list
-            .to_string(OutputFormat::Serializable(SerializableFormat::JsonPretty))
-            .map_err(ArchiveCreateError::CreateBinaryList)?;
+        // Add the binaries metadata first so that while unarchiving, reports
+        // are instant. Use to_archive_summary() so that build_directory is omitted
+        // (it defaults to target_directory in archive context).
+        let archive_summary = self.binary_list.to_archive_summary();
+        let binaries_metadata = serde_json::to_string_pretty(&archive_summary)
+            .map_err(|e| ArchiveCreateError::CreateBinaryList(WriteTestListError::Json(e)))?;
 
         self.append_from_memory(BINARIES_METADATA_FILE_NAME, &binaries_metadata)?;
 
         self.append_from_memory(CARGO_METADATA_FILE_NAME, self.cargo_metadata)?;
 
         let target_dir = &self.binary_list.rust_build_meta.target_directory;
+        let build_directory = &self.binary_list.rust_build_meta.build_directory;
 
         fn filter_map_err<T>(result: io::Result<()>) -> Option<Result<T, ArchiveCreateError>> {
             match result {
@@ -387,7 +389,8 @@ impl<'a, W: Write> Archiver<'a, W> {
             .iter()
             .filter_map(|include| {
                 let src_path = include.join_path(target_dir);
-                let src_path = self.path_mapper.map_binary(src_path);
+                // Archive include paths are joined with the target directory.
+                let src_path = self.path_mapper.map_target_path(src_path);
 
                 match src_path.symlink_metadata() {
                     Ok(metadata) => {
@@ -445,14 +448,14 @@ impl<'a, W: Write> Archiver<'a, W> {
             })
             .collect::<Result<Vec<_>, ArchiveCreateError>>()?;
 
-        // Write all discovered binaries into the archive.
+        // Write all discovered binaries into the archive. Test binaries
+        // are in the build directory (never uplifted by Cargo).
         for binary in &self.binary_list.rust_binaries {
             let rel_path = binary
                 .path
-                .strip_prefix(target_dir)
-                .expect("binary paths must be within target directory");
-            // The target directory might not be called "target", so strip all of it then add
-            // "target" to the beginning.
+                .strip_prefix(build_directory)
+                .expect("test binary paths must be within the build directory");
+            // Store under "target/" in the archive for portability.
             let rel_path = Utf8Path::new("target").join(rel_path);
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
 
@@ -470,7 +473,8 @@ impl<'a, W: Write> Archiver<'a, W> {
                 .rust_build_meta
                 .target_directory
                 .join(&non_test_binary.path);
-            let src_path = self.path_mapper.map_binary(src_path);
+            // Non-test binaries are uplifted to the target directory.
+            let src_path = self.path_mapper.map_target_path(src_path);
 
             let rel_path = Utf8Path::new("target").join(&non_test_binary.path);
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
@@ -478,19 +482,16 @@ impl<'a, W: Write> Archiver<'a, W> {
             self.append_file(ArchiveStep::NonTestBinaries, &src_path, &rel_path)?;
         }
 
-        // Write build script output directories to the archive.
+        // Write build script output directories to the archive. Build
+        // script out_dirs are relative to the build directory.
         for build_script_out_dir in self
             .binary_list
             .rust_build_meta
             .build_script_out_dirs
             .values()
         {
-            let src_path = self
-                .binary_list
-                .rust_build_meta
-                .target_directory
-                .join(build_script_out_dir);
-            let src_path = self.path_mapper.map_binary(src_path);
+            let src_path = build_directory.join(build_script_out_dir);
+            let src_path = self.path_mapper.map_build_path(src_path);
 
             let rel_path = Utf8Path::new("target").join(build_script_out_dir);
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
@@ -514,14 +515,10 @@ impl<'a, W: Write> Archiver<'a, W> {
 
         // Write linked paths to the archive.
         for (linked_path, requested_by) in &self.binary_list.rust_build_meta.linked_paths {
-            // Linked paths are relative, e.g. debug/foo/bar. We need to prepend the target
-            // directory.
-            let src_path = self
-                .binary_list
-                .rust_build_meta
-                .target_directory
-                .join(linked_path);
-            let src_path = self.path_mapper.map_binary(src_path);
+            // Linked paths are relative to the build directory,
+            // e.g. debug/foo/bar.
+            let src_path = build_directory.join(linked_path);
+            let src_path = self.path_mapper.map_build_path(src_path);
 
             // Some crates produce linked paths that don't exist. This is a bug in those libraries.
             if !src_path.exists() {

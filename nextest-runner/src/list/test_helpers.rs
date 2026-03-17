@@ -58,7 +58,7 @@ pub(super) fn simple_build_meta() -> RustBuildMeta<TestListState> {
         },
         target: None,
     };
-    RustBuildMeta::new("/fake", build_platforms).map_paths(&PathMapper::noop())
+    RustBuildMeta::new("/fake", "/fake", build_platforms).map_paths(&PathMapper::noop())
 }
 
 /// Creates a default eval context using `CompiledExpr::ALL`.

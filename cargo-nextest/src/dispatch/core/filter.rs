@@ -95,6 +95,7 @@ impl TestBuildFilter {
             reuse_build,
             graph,
             &binary_list.rust_build_meta.target_directory,
+            &binary_list.rust_build_meta.build_directory,
         )?;
 
         // Use the canonicalized workspace root from PathMapper if a remap
