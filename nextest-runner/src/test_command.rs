@@ -139,6 +139,8 @@ impl TestCommand {
 
         apply_ld_dyld_env(&mut cmd, lctx.dylib_path);
 
+        apply_miri_env(&mut cmd);
+
         // Expose paths to non-test binaries at runtime so that relocated paths
         // work.
         //
@@ -396,6 +398,26 @@ pub(crate) fn apply_ld_dyld_env(cmd: &mut std::process::Command, dylib_path: &Os
     }
 }
 
+/// Applies Miri-specific environment variables to the test command.
+///
+/// MIRIFLAGS is used to pass flags to miri, and MIRI_LIB_SRC specifies
+/// the directory for standard library sources. These need to be passed
+/// through to the test process when running under miri.
+pub(crate) fn apply_miri_env(cmd: &mut std::process::Command) {
+    static MIRI_ENV_VARS: LazyLock<HashMap<String, OsString>> = LazyLock::new(|| {
+        ["MIRIFLAGS", "MIRI_LIB_SRC"]
+            .into_iter()
+            .filter_map(|key| {
+                std::env::var_os(key).map(|value| (key.to_owned(), value))
+            })
+            .collect()
+    });
+
+    for (k, v) in &*MIRI_ENV_VARS {
+        cmd.env(k, v);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -428,5 +450,45 @@ mod tests {
             ],
             "parsed key-value pairs match"
         );
+    }
+
+    #[test]
+    fn apply_miri_env_passes_through_flags() {
+        // SAFETY: This test relies on setting environment variables.
+        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+        unsafe {
+            std::env::set_var("MIRIFLAGS", "-Zmiri-disable-isolation");
+            std::env::set_var("MIRI_LIB_SRC", "/path/to/lib/src");
+        }
+
+        let mut cmd = std::process::Command::new("/bin/sh");
+        apply_miri_env(&mut cmd);
+
+        // Check that the environment variables are set on the command.
+        let envs: std::collections::HashMap<String, String> = cmd
+            .get_envs()
+            .filter_map(|(k, v)| {
+                k.to_str()
+                    .map(|k| k.to_owned())
+                    .zip(v.and_then(|v| v.to_str().map(|v| v.to_owned())))
+            })
+            .collect();
+
+        assert_eq!(
+            envs.get("MIRIFLAGS"),
+            Some(&"-Zmiri-disable-isolation".to_owned()),
+            "MIRIFLAGS should be passed through"
+        );
+        assert_eq!(
+            envs.get("MIRI_LIB_SRC"),
+            Some(&"/path/to/lib/src".to_owned()),
+            "MIRI_LIB_SRC should be passed through"
+        );
+
+        // Clean up.
+        unsafe {
+            std::env::remove_var("MIRIFLAGS");
+            std::env::remove_var("MIRI_LIB_SRC");
+        }
     }
 }
