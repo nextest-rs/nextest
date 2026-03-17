@@ -160,10 +160,14 @@ impl<'cfg> MetadataJunit<'cfg> {
                         let mut testcase_status =
                             TestCaseStatus::non_success(NonSuccessKind::Failure);
                         testcase_status.set_type("flaky failure");
-                        testcase_status.set_message(format!(
-                            "test passed on attempt {}/{} but is configured to fail when flaky",
-                            last_status.retry_data.attempt, last_status.retry_data.total_attempts,
-                        ));
+                        testcase_status.set_message(
+                            FlakyResult::Fail
+                                .fail_message(
+                                    last_status.retry_data.attempt,
+                                    last_status.retry_data.total_attempts,
+                                )
+                                .expect("Fail variant always returns Some"),
+                        );
                         // The test exhibited flakiness (eventually passed), so
                         // prior runs should serialize as <flakyFailure>.
                         testcase_status.set_rerun_kind(FlakyOrRerun::Flaky);

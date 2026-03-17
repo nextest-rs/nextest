@@ -16,6 +16,7 @@ use super::summary::{
     TestEventKindSummary, TestEventSummary, TestsNotSeenSummary,
 };
 use crate::{
+    config::elements::FlakyResult,
     errors::{ChromeTraceError, RecordReadError},
     list::OwnedTestInstanceId,
     output_spec::RecordingSpec,
@@ -688,6 +689,7 @@ impl ChromeTraceConverter {
                     &run_status,
                     stress_index.as_ref(),
                     Some(delay_before_next_attempt),
+                    None,
                 );
 
                 let event_name = self.group_by.test_event_name(&test_instance);
@@ -730,8 +732,18 @@ impl ChromeTraceConverter {
                 let pid = self.pid_for_test(&test_instance.binary_id);
                 let tid = self.tid_for_test(&test_instance)?;
 
-                let end_args =
-                    self.test_end_args(&test_instance, last, stress_index.as_ref(), None);
+                // Include flaky_result only when the test was actually
+                // flaky (retried and eventually passed).
+                let flaky_result = (run_statuses.len() > 1 && last.result.is_success())
+                    .then(|| run_statuses.flaky_result());
+
+                let end_args = self.test_end_args(
+                    &test_instance,
+                    last,
+                    stress_index.as_ref(),
+                    None,
+                    flaky_result,
+                );
 
                 let event_name = self.group_by.test_event_name(&test_instance);
                 self.emit_end(
@@ -1089,13 +1101,34 @@ impl ChromeTraceConverter {
     }
 
     /// Builds `TestEndArgs` from an `ExecuteStatus` and related context.
+    ///
+    /// `flaky_result` should be `Some` only for the final `TestFinished` event
+    /// when the test was flaky (passed after retries). For
+    /// `TestAttemptFailedWillRetry`, pass `None`.
     fn test_end_args(
         &self,
         test_instance: &OwnedTestInstanceId,
         status: &ExecuteStatus<RecordingSpec>,
         stress_index: Option<&StressIndexSummary>,
         delay_before_next_attempt: Option<Duration>,
+        flaky_result: Option<FlakyResult>,
     ) -> ChromeTraceArgs {
+        // If the test is flaky-fail, synthesize an error message. This
+        // supplements (not replaces) any error from the test itself.
+        let error = match (
+            status.error_summary.as_ref(),
+            flaky_result.and_then(|fr| {
+                fr.fail_message(status.retry_data.attempt, status.retry_data.total_attempts)
+            }),
+        ) {
+            (Some(summary), _) => Some(ErrorSummaryArgs::new(summary)),
+            (None, Some(flaky_msg)) => Some(ErrorSummaryArgs {
+                short_message: "flaky failure".to_string(),
+                description: flaky_msg,
+            }),
+            (None, None) => None,
+        };
+
         ChromeTraceArgs::TestEnd(TestEndArgs {
             binary_id: test_instance.binary_id.clone(),
             test_name: test_instance.test_name.clone(),
@@ -1110,9 +1143,10 @@ impl ChromeTraceConverter {
                 .map(|s| s.test_group.to_string()),
             stress_index: stress_index.map(StressIndexArgs::new),
             delay_before_start_secs: non_zero_duration_secs(status.delay_before_start),
-            error: status.error_summary.as_ref().map(ErrorSummaryArgs::new),
+            error,
             delay_before_next_attempt_secs: delay_before_next_attempt
                 .and_then(non_zero_duration_secs),
+            flaky_result,
         })
     }
 
@@ -1528,6 +1562,8 @@ struct TestEndArgs {
     error: Option<ErrorSummaryArgs>,
     #[serde(skip_serializing_if = "Option::is_none")]
     delay_before_next_attempt_secs: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    flaky_result: Option<FlakyResult>,
 }
 
 /// Args for `TestSlow` instant events.
@@ -2558,15 +2594,17 @@ mod tests {
         }
     }
 
-    /// Verifies retry B/E pairs, attempt tracking, tid consistency, and
-    /// flow events (s/f phases) connecting failed attempts to retries.
+    /// Snapshot test for retry flow events, covering both `FlakyResult::Pass`
+    /// and `FlakyResult::Fail`. Verifies B/E pairs, attempt tracking, flow
+    /// arrows, and the flaky-fail error synthesis.
     #[test]
-    fn retry_flow_events() {
+    fn snapshot_retry_flow_events() {
         let events = vec![
+            // --- Flaky-pass test on slot 0: fails once, passes on retry ---
             Ok(test_started(
                 ts(1000),
                 "crate::bin/test",
-                "flaky_test",
+                "flaky_pass",
                 0,
                 1,
             )),
@@ -2574,7 +2612,7 @@ mod tests {
                 ts(1001),
                 OutputEventKind::TestAttemptFailedWillRetry {
                     stress_index: None,
-                    test_instance: test_id("crate::bin/test", "flaky_test"),
+                    test_instance: test_id("crate::bin/test", "flaky_pass"),
                     run_status: failing_status(ts(1000), Duration::from_millis(200), 1, 3),
                     delay_before_next_attempt: Duration::ZERO,
                     failure_output: TestOutputDisplay::Never,
@@ -2585,7 +2623,7 @@ mod tests {
                 ts(1001),
                 CoreEventKind::TestRetryStarted {
                     stress_index: None,
-                    test_instance: test_id("crate::bin/test", "flaky_test"),
+                    test_instance: test_id("crate::bin/test", "flaky_pass"),
                     slot_assignment: slot(0),
                     retry_data: RetryData {
                         attempt: 2,
@@ -2599,7 +2637,7 @@ mod tests {
                 ts(1002),
                 OutputEventKind::TestFinished {
                     stress_index: None,
-                    test_instance: test_id("crate::bin/test", "flaky_test"),
+                    test_instance: test_id("crate::bin/test", "flaky_pass"),
                     success_output: TestOutputDisplay::Never,
                     failure_output: TestOutputDisplay::Never,
                     junit_store_success_output: false,
@@ -2615,57 +2653,72 @@ mod tests {
                     running: 0,
                 },
             )),
+            // --- Flaky-fail test on slot 1: fails once, passes on retry,
+            //     but configured to treat flaky as failure ---
+            Ok(test_started(
+                ts(1003),
+                "crate::bin/test",
+                "flaky_fail",
+                1,
+                1,
+            )),
+            Ok(output_event(
+                ts(1004),
+                OutputEventKind::TestAttemptFailedWillRetry {
+                    stress_index: None,
+                    test_instance: test_id("crate::bin/test", "flaky_fail"),
+                    run_status: failing_status(ts(1003), Duration::from_millis(150), 1, 2),
+                    delay_before_next_attempt: Duration::ZERO,
+                    failure_output: TestOutputDisplay::Never,
+                    running: 1,
+                },
+            )),
+            Ok(core_event(
+                ts(1004),
+                CoreEventKind::TestRetryStarted {
+                    stress_index: None,
+                    test_instance: test_id("crate::bin/test", "flaky_fail"),
+                    slot_assignment: slot(1),
+                    retry_data: RetryData {
+                        attempt: 2,
+                        total_attempts: 2,
+                    },
+                    running: 1,
+                    command_line: vec![],
+                },
+            )),
+            Ok(output_event(
+                ts(1005),
+                OutputEventKind::TestFinished {
+                    stress_index: None,
+                    test_instance: test_id("crate::bin/test", "flaky_fail"),
+                    success_output: TestOutputDisplay::Never,
+                    failure_output: TestOutputDisplay::Never,
+                    junit_store_success_output: false,
+                    junit_store_failure_output: false,
+                    run_statuses: ExecutionStatuses::new(
+                        vec![
+                            failing_status(ts(1003), Duration::from_millis(150), 1, 2),
+                            passing_status(ts(1004), Duration::from_millis(250), 2, 2),
+                        ],
+                        FlakyResult::Fail,
+                    ),
+                    current_stats: RunStats::default(),
+                    running: 0,
+                },
+            )),
         ];
 
-        let (_parsed, trace_events) = convert_and_parse(events, ChromeTraceGroupBy::Binary);
+        let result = convert_to_chrome_trace(
+            &test_version(),
+            events,
+            ChromeTraceGroupBy::Binary,
+            ChromeTraceMessageFormat::JsonPretty,
+        );
+        let json_bytes = result.expect("conversion succeeded");
+        let json_str = String::from_utf8(json_bytes).expect("valid UTF-8");
 
-        // Flow start (s) should be emitted at TestAttemptFailedWillRetry.
-        let flow_starts: Vec<_> = trace_events
-            .iter()
-            .filter(|e| e["ph"] == "s" && e["name"] == "retry")
-            .collect();
-        assert_eq!(flow_starts.len(), 1, "expected 1 flow start event");
-
-        // Flow finish (f) should be emitted at TestRetryStarted.
-        let flow_finishes: Vec<_> = trace_events
-            .iter()
-            .filter(|e| e["ph"] == "f" && e["name"] == "retry")
-            .collect();
-        assert_eq!(flow_finishes.len(), 1, "expected 1 flow finish event");
-
-        // Both should share the same flow ID.
-        let start_id = flow_starts[0]["id"].as_u64().unwrap();
-        let finish_id = flow_finishes[0]["id"].as_u64().unwrap();
-        assert_eq!(start_id, finish_id, "flow start and finish should share ID");
-
-        // Flow finish should bind to the enclosing slice.
-        assert_eq!(flow_finishes[0]["bp"], "e");
-
-        // Both should be on the same pid/tid.
-        assert_eq!(flow_starts[0]["pid"], flow_finishes[0]["pid"]);
-        assert_eq!(flow_starts[0]["tid"], flow_finishes[0]["tid"]);
-
-        // B/E pairs: 2 attempts x (B+E) = 4 duration events.
-        let b_events: Vec<_> = trace_events
-            .iter()
-            .filter(|e| e["ph"] == "B" && e["cat"] == "test")
-            .collect();
-        let e_events: Vec<_> = trace_events
-            .iter()
-            .filter(|e| e["ph"] == "E" && e["cat"] == "test")
-            .collect();
-        assert_eq!(b_events.len(), 2);
-        assert_eq!(e_events.len(), 2);
-
-        // First attempt E: result args with attempt 1.
-        assert_eq!(e_events[0]["args"]["attempt"], 1);
-        // Second attempt E: result args with attempt 2.
-        assert_eq!(e_events[1]["args"]["attempt"], 2);
-
-        // All should use the same tid (slot 0).
-        for e in b_events.iter().chain(e_events.iter()) {
-            assert_eq!(e["tid"], TID_OFFSET); // Global slot 0 + TID_OFFSET.
-        }
+        insta::assert_snapshot!("retry_flow_chrome_trace", json_str);
     }
 
     /// Verifies that retry flow events work correctly across pause boundaries.

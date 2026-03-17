@@ -73,6 +73,23 @@ pub enum FlakyResult {
     Pass,
 }
 
+impl FlakyResult {
+    /// Returns a message describing a flaky failure, or `None` if the result is
+    /// `Pass`.
+    ///
+    /// Used by both JUnit and Chrome trace output to produce a consistent
+    /// message.
+    pub fn fail_message(self, attempt: u32, total_attempts: u32) -> Option<String> {
+        match self {
+            Self::Fail => Some(format!(
+                "test passed on attempt {attempt}/{total_attempts} \
+                 but is configured to fail when flaky",
+            )),
+            Self::Pass => None,
+        }
+    }
+}
+
 /// Serde-compatible intermediate type for the `retries` config field. After
 /// deserialization, this is converted into a `RetryPolicy`.
 #[derive(Debug, Copy, Clone, Deserialize)]
