@@ -205,6 +205,20 @@ The instructions below are suitable for both end users and CI. These links will 
             curl -LsSf https://get.nexte.st/latest/windows-x86-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
             ```
 
+    === ":material-linux: Linux riscv64"
+
+        !!! info
+
+            The command below assumes that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+
+            If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
+
+        Run in a terminal:
+
+        ```
+        curl -LsSf https://get.nexte.st/latest/linux-riscv64 | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        ```
+
     === ":material-freebsd: FreeBSD x86_64"
 
         ```
@@ -306,6 +320,7 @@ The latest nextest release is available at:
 
     Nextest's CI isn't run on these platforms -- these binaries most likely work but aren't guaranteed to do so.
 
+    - [**get.nexte.st/latest/linux-riscv64**](https://get.nexte.st/latest/linux-riscv64) for Linux riscv64gc
     - [**get.nexte.st/latest/windows-x86**](https://get.nexte.st/latest/windows-x86) for Windows i686
     - [**get.nexte.st/latest/freebsd**](https://get.nexte.st/latest/freebsd) for FreeBSD x86_64
 
