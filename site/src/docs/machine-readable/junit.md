@@ -35,7 +35,10 @@ Configuration options supported for JUnit reports, within the `junit` section:
 `store-failure-output`
 : Whether to store output for failing tests in the `<system-out>` and `<system-err>` elements. Defaults to true.
 
-The `store-success-output` and `store-failure-output` configuration can also be configured on a [per-test basis](../configuration/per-test-overrides.md).
+`flaky-fail-status` <!-- md:version 0.9.131 -->
+: Controls how [flaky-fail](../features/retries.md#failing-flaky-tests) tests are reported. `"failure"` (the default) reports them with `<failure>` and `<flakyFailure>`/`<flakyError>` elements. `"success"` reports them as successes, identical to flaky-pass tests. This setting only affects the JUnit representation; the runner will still mark flaky-fail tests as failed.
+
+All of these settings can also be configured on a [per-test basis](../configuration/per-test-overrides.md).
 
 ### Example configuration
 
@@ -45,13 +48,18 @@ path = "junit.xml"
 # These are the default values, specified for clarity.
 store-success-output = false
 store-failure-output = true
+flaky-fail-status = "failure"
 
 [[profile.default.overrides]]
 filter = 'test(important-test)'
 junit.store-success-output = true
+
+[[profile.default.overrides]]
+filter = 'test(known_flaky)'
+junit.flaky-fail-status = "success"
 ```
 
-In this example, the JUnit report will contain the output for all failing tests, and for successful tests that contain "important-test" in the name.
+In this example, the JUnit report will contain the output for all failing tests, and for successful tests that contain "important-test" in the name. Tests matching "known_flaky" that are configured with `flaky-result = "fail"` will appear as successes in the JUnit report despite being treated as failures by the runner.
 
 ## Post-processing
 

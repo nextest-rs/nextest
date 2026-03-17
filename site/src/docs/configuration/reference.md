@@ -326,6 +326,16 @@ When `max-fail` is exceeded:
 - **Documentation**: [_JUnit support_](../machine-readable/junit.md)
 - **Default**: `true`
 
+#### `profile.<name>.junit.flaky-fail-status`
+
+<!-- md:version 0.9.131 -->
+
+- **Type**: String
+- **Description**: How flaky-fail tests are reported in the JUnit XML report
+- **Documentation**: [_JUnit support_](../machine-readable/junit.md)
+- **Valid values**: `"failure"` or `"success"`
+- **Default**: `"failure"`
+
 ### Archive configuration
 
 <!-- md:version 0.9.70 -->

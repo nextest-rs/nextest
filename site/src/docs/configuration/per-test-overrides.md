@@ -53,6 +53,9 @@ for more information.
 `junit.store-success-output` and `junit.store-failure-output`
 : In [JUnit reports](../machine-readable/junit.md), whether to store output for passing and failing tests, respectively.
 
+`junit.flaky-fail-status` <!-- md:version 0.9.131 -->
+: In [JUnit reports](../machine-readable/junit.md), how [flaky-fail](../features/retries.md#failing-flaky-tests) tests are reported: as `"failure"` (default) or `"success"`.
+
 `default-filter` <!-- md:version 0.9.84 -->
 : The [default filter](../selecting.md#running-a-subset-of-tests-by-default) on this platform. Only supported for overrides that specify `platform` and not `filter`.
 

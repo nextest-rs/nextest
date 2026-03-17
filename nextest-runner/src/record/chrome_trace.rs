@@ -723,6 +723,7 @@ impl ChromeTraceConverter {
                 failure_output: _,
                 junit_store_success_output: _,
                 junit_store_failure_output: _,
+                junit_flaky_fail_status: _,
                 current_stats,
                 running,
             } => {
@@ -1709,7 +1710,7 @@ mod tests {
     use super::*;
     use crate::{
         config::{
-            elements::{FlakyResult, TestGroup},
+            elements::{FlakyResult, JunitFlakyFailStatus, TestGroup},
             scripts::ScriptId,
         },
         list::OwnedTestInstanceId,
@@ -1965,6 +1966,7 @@ mod tests {
                 failure_output: TestOutputDisplay::Never,
                 junit_store_success_output: false,
                 junit_store_failure_output: false,
+                junit_flaky_fail_status: JunitFlakyFailStatus::default(),
                 run_statuses: ExecutionStatuses::new(
                     vec![passing_status(start_time, time_taken, 1, 1)],
                     FlakyResult::Pass,
@@ -2642,6 +2644,7 @@ mod tests {
                     failure_output: TestOutputDisplay::Never,
                     junit_store_success_output: false,
                     junit_store_failure_output: false,
+                    junit_flaky_fail_status: JunitFlakyFailStatus::default(),
                     run_statuses: ExecutionStatuses::new(
                         vec![
                             failing_status(ts(1000), Duration::from_millis(200), 1, 3),
@@ -2696,6 +2699,7 @@ mod tests {
                     failure_output: TestOutputDisplay::Never,
                     junit_store_success_output: false,
                     junit_store_failure_output: false,
+                    junit_flaky_fail_status: JunitFlakyFailStatus::default(),
                     run_statuses: ExecutionStatuses::new(
                         vec![
                             failing_status(ts(1003), Duration::from_millis(150), 1, 2),
@@ -2779,6 +2783,7 @@ mod tests {
                     failure_output: TestOutputDisplay::Never,
                     junit_store_success_output: false,
                     junit_store_failure_output: false,
+                    junit_flaky_fail_status: JunitFlakyFailStatus::default(),
                     run_statuses: ExecutionStatuses::new(
                         vec![
                             failing_status(ts(1000), Duration::from_millis(200), 1, 2),
@@ -3236,6 +3241,7 @@ mod tests {
                     failure_output: TestOutputDisplay::Never,
                     junit_store_success_output: false,
                     junit_store_failure_output: false,
+                    junit_flaky_fail_status: JunitFlakyFailStatus::default(),
                     run_statuses: ExecutionStatuses::new(
                         vec![passing_status(ts(1000), Duration::from_millis(500), 1, 1)],
                         FlakyResult::Pass,

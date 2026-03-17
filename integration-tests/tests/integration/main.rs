@@ -2643,16 +2643,24 @@ fn test_retries() {
     );
 }
 
-/// Test that `flaky-result = "fail"` works correctly for flaky tests.
+/// Test that `flaky-result = "fail"` and `junit.flaky-fail-status` work
+/// correctly for flaky tests.
 ///
 /// The `with-retries-flaky-fail` profile has:
 /// - `retries = 2` (default for the profile)
-/// - Override for test_flaky_mod_4: `retries = { backoff = "fixed", count = 4, flaky-result = "fail" }`
-/// - Override for test_flaky_mod_6: `retries = 5`
+/// - Override for test_flaky_mod_3: `retries = 3, flaky-result = "fail",
+///   junit = { flaky-fail-status = "success" }` — fails as a run, but JUnit
+///   reports it as a success.
+/// - Override for test_flaky_mod_4: `retries = 4, flaky-result = "fail"` —
+///   fails as a run, and JUnit reports it as a `<failure>`.
+/// - Override for test_flaky_mod_6: `retries = 5` — passes (FLAKY 6/6).
 ///
-/// test_flaky_mod_4 passes on attempt 4 of 5, but `flaky-result = "fail"` means it
-/// counts as a failure. test_flaky_mod_6 passes on attempt 6 of 6 and is not
-/// configured to fail, so it counts as passed (FLAKY 6/6).
+/// test_flaky_mod_3 passes on attempt 3 of 4, with `flaky-result = "fail"` so
+/// it counts as a failure in the run, but `junit.flaky-fail-status = "success"`
+/// means the JUnit report shows it as a success. test_flaky_mod_4 passes on
+/// attempt 4 of 5, with `flaky-result = "fail"` so it counts as a failure in
+/// both the run and JUnit. test_flaky_mod_6 passes on attempt 6 of 6 and is
+/// not configured to fail, so it counts as passed (FLAKY 6/6).
 #[test]
 fn test_retries_flaky_fail() {
     let env_info = set_env_vars_for_test();

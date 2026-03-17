@@ -1,5 +1,6 @@
 ---
 source: integration-tests/tests/integration/main.rs
+assertion_line: 1533
 expression: bound_all_output.stdout_as_str()
 ---
 cdylib-example tests::test_multiply_two_cdylib
@@ -13,6 +14,7 @@ nextest-tests::basic test_execute_bin
 nextest-tests::basic test_failure_assert
 nextest-tests::basic test_failure_error
 nextest-tests::basic test_failure_should_panic
+nextest-tests::basic test_flaky_mod_3
 nextest-tests::basic test_flaky_mod_4
 nextest-tests::basic test_flaky_mod_6
 nextest-tests::basic test_overrides_wrapper_env

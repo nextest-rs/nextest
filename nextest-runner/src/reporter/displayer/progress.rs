@@ -914,7 +914,7 @@ pub(super) fn progress_bar_msg(
 mod tests {
     use super::*;
     use crate::{
-        config::elements::FlakyResult,
+        config::elements::{FlakyResult, JunitFlakyFailStatus},
         output_spec::LiveSpec,
         reporter::{TestOutputDisplay, test_helpers::global_slot_assignment},
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
@@ -1237,6 +1237,7 @@ mod tests {
                 failure_output: TestOutputDisplay::Never,
                 junit_store_success_output: false,
                 junit_store_failure_output: false,
+                junit_flaky_fail_status: JunitFlakyFailStatus::default(),
                 run_statuses: ExecutionStatuses::new(
                     vec![ExecuteStatus {
                         retry_data: RetryData {

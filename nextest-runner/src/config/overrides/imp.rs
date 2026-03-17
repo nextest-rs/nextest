@@ -7,8 +7,8 @@ use crate::{
             EvaluatableProfile, FinalConfig, NextestConfig, NextestConfigImpl, PreBuildPlatform,
         },
         elements::{
-            FlakyResult, LeakTimeout, RetryPolicy, SlowTimeout, TestGroup, TestPriority,
-            ThreadsRequired,
+            FlakyResult, JunitFlakyFailStatus, LeakTimeout, RetryPolicy, SlowTimeout, TestGroup,
+            TestPriority, ThreadsRequired,
         },
         scripts::{
             CompiledProfileScripts, DeserializedProfileScriptConfig, ScriptId, WrapperScriptConfig,
@@ -114,6 +114,7 @@ pub struct TestSettings<'p, Source = ()> {
     failure_output: (TestOutputDisplay, Source),
     junit_store_success_output: (bool, Source),
     junit_store_failure_output: (bool, Source),
+    junit_flaky_fail_status: (JunitFlakyFailStatus, Source),
 }
 
 pub(crate) trait TrackSource<'p>: Sized {
@@ -241,6 +242,11 @@ impl<'p> TestSettings<'p> {
     pub fn junit_store_failure_output(&self) -> bool {
         self.junit_store_failure_output.0
     }
+
+    /// Returns the JUnit flaky-fail status for this test.
+    pub fn junit_flaky_fail_status(&self) -> JunitFlakyFailStatus {
+        self.junit_flaky_fail_status.0
+    }
 }
 
 #[expect(dead_code)]
@@ -268,6 +274,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
         let mut failure_output = None;
         let mut junit_store_success_output = None;
         let mut junit_store_failure_output = None;
+        let mut junit_flaky_fail_status = None;
 
         for override_ in &profile.compiled_data.overrides {
             if !override_.state.host_eval {
@@ -355,6 +362,11 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             {
                 junit_store_failure_output = Some(Source::track_override(f, override_));
             }
+            if junit_flaky_fail_status.is_none()
+                && let Some(s) = override_.data.junit.flaky_fail_status
+            {
+                junit_flaky_fail_status = Some(Source::track_override(s, override_));
+            }
         }
 
         for override_ in &profile.compiled_data.scripts {
@@ -396,6 +408,13 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             // If the profile doesn't have JUnit enabled, failure output can just be false.
             Source::track_profile(profile.junit().is_some_and(|j| j.store_failure_output()))
         });
+        let junit_flaky_fail_status = junit_flaky_fail_status.unwrap_or_else(|| {
+            Source::track_profile(
+                profile
+                    .junit()
+                    .map_or(JunitFlakyFailStatus::default(), |j| j.flaky_fail_status()),
+            )
+        });
 
         TestSettings {
             threads_required,
@@ -411,6 +430,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             failure_output,
             junit_store_success_output,
             junit_store_failure_output,
+            junit_flaky_fail_status,
         }
     }
 
@@ -993,6 +1013,7 @@ pub(in crate::config) struct DeserializedOverride {
 pub(in crate::config) struct DeserializedJunitOutput {
     store_success_output: Option<bool>,
     store_failure_output: Option<bool>,
+    flaky_fail_status: Option<JunitFlakyFailStatus>,
 }
 
 /// Deserialized form of benchmark-specific overrides.

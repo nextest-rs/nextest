@@ -135,6 +135,6 @@ Flaky test detection is integrated with nextest's JUnit support.
 
 * Flaky tests are marked with `<flakyFailure>` or `<flakyError>` tags.
 * Tests that were rerun and continued to fail are marked with `<rerunFailure>` or `<rerunError>` tags.
-* <!-- md:version 0.9.131 --> For tests marked failing on flaky, both `<failure>` and `<flakyFailure>`/`<flakyError>` tags are present.
+* <!-- md:version 0.9.131 --> For tests marked failing on flaky, by default, both `<failure>` and `<flakyFailure>`/`<flakyError>` tags are present. To mark tests as passing in the JUnit output, set `junit.flaky-fail-status = "success"` (either globally, or for those tests).
 
 For more information, see [*JUnit support*](../machine-readable/junit.md).

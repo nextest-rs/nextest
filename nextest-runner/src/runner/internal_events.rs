@@ -10,7 +10,7 @@
 use super::{SetupScriptPacket, TestPacket};
 use crate::{
     config::{
-        elements::FlakyResult,
+        elements::{FlakyResult, JunitFlakyFailStatus},
         scripts::{ScriptId, SetupScriptConfig},
     },
     errors::DisplayErrorChain,
@@ -121,6 +121,7 @@ pub(super) enum ExecutorEvent<'a> {
         failure_output: TestOutputDisplay,
         junit_store_success_output: bool,
         junit_store_failure_output: bool,
+        junit_flaky_fail_status: JunitFlakyFailStatus,
         last_run_status: ExecuteStatus<LiveSpec>,
     },
     Skipped {

@@ -24,6 +24,10 @@ pub enum CheckResult {
     LeakFail,
     Fail,
     FlakyFail,
+    /// The test is a flaky-fail (counts as a run failure), but is configured
+    /// with `junit.flaky-fail-status = "success"` so it appears as a success
+    /// in JUnit XML output.
+    FlakyFailJunitSuccess,
     FailLeak,
     Abort,
     Timeout,
@@ -41,11 +45,48 @@ impl CheckResult {
             CheckResult::LeakFail
             | CheckResult::Fail
             | CheckResult::FlakyFail
+            | CheckResult::FlakyFailJunitSuccess
             | CheckResult::FailLeak
             | CheckResult::Abort
             | CheckResult::Timeout => true,
         }
     }
+
+    /// Converts this result to its terminal representation.
+    ///
+    /// Terminal output cannot distinguish between `FlakyFail` and
+    /// `FlakyFailJunitSuccess` — both display as `FLKY-FL`.
+    pub fn to_terminal(self) -> TerminalCheckResult {
+        match self {
+            CheckResult::Pass => TerminalCheckResult::Pass,
+            CheckResult::Leak => TerminalCheckResult::Leak,
+            CheckResult::LeakFail => TerminalCheckResult::LeakFail,
+            CheckResult::Fail => TerminalCheckResult::Fail,
+            CheckResult::FlakyFail | CheckResult::FlakyFailJunitSuccess => {
+                TerminalCheckResult::FlakyFail
+            }
+            CheckResult::FailLeak => TerminalCheckResult::FailLeak,
+            CheckResult::Abort => TerminalCheckResult::Abort,
+            CheckResult::Timeout => TerminalCheckResult::Timeout,
+        }
+    }
+}
+
+/// The result of a test as it appears in terminal output.
+///
+/// This is separate from [`CheckResult`] because some model-level distinctions
+/// (e.g., `FlakyFailJunitSuccess` vs `FlakyFail`) are invisible in terminal
+/// output.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TerminalCheckResult {
+    Pass,
+    Leak,
+    LeakFail,
+    Fail,
+    FlakyFail,
+    FailLeak,
+    Abort,
+    Timeout,
 }
 
 /// What rerun behavior to expect for a test case.
@@ -425,7 +466,10 @@ impl TestCaseFixture {
                 // With retries and flaky-result = "fail", flaky tests that eventually
                 // pass are still counted as failures.
                 if properties.contains(RunProperties::WITH_RETRIES_FLAKY_FAIL) {
-                    if self.has_property(TestCaseFixtureProperties::FLAKY_RESULT_FAIL) {
+                    if self.has_property(TestCaseFixtureProperties::FLAKY_RESULT_FAIL_JUNIT_SUCCESS)
+                    {
+                        return CheckResult::FlakyFailJunitSuccess;
+                    } else if self.has_property(TestCaseFixtureProperties::FLAKY_RESULT_FAIL) {
                         return CheckResult::FlakyFail;
                     } else {
                         return CheckResult::Pass;
@@ -487,7 +531,9 @@ impl TestCaseFixture {
         // pass_attempt - 1 failing attempts before the passing one.
         if let TestCaseFixtureStatus::Flaky { pass_attempt }
         | TestCaseFixtureStatus::IgnoredFlaky { pass_attempt } = self.status
-            && (result == CheckResult::Pass || result == CheckResult::FlakyFail)
+            && (result == CheckResult::Pass
+                || result == CheckResult::FlakyFail
+                || result == CheckResult::FlakyFailJunitSuccess)
         {
             debug_assert!(
                 pass_attempt >= 2,
@@ -600,5 +646,8 @@ bitflags::bitflags! {
         const EXACT_TEST_SLOW_TIMEOUT = 0x1000;
         /// Flaky test configured with `flaky-result = "fail"`.
         const FLAKY_RESULT_FAIL = 0x2000;
+        /// Flaky test configured with `flaky-result = "fail"` and
+        /// `junit.flaky-fail-status = "success"`.
+        const FLAKY_RESULT_FAIL_JUNIT_SUCCESS = 0x4000;
     }
 }

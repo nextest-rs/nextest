@@ -5,7 +5,9 @@
 
 use crate::{
     config::{
-        elements::{FlakyResult, JunitConfig, LeakTimeoutResult, SlowTimeoutResult},
+        elements::{
+            FlakyResult, JunitConfig, JunitFlakyFailStatus, LeakTimeoutResult, SlowTimeoutResult,
+        },
         scripts::ScriptId,
     },
     errors::{DisplayErrorChain, WriteEventError},
@@ -136,6 +138,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 run_statuses,
                 junit_store_success_output,
                 junit_store_failure_output,
+                junit_flaky_fail_status,
                 ..
             } => {
                 let testsuite = self.testsuite_for_test(stress_index, test_instance);
@@ -156,23 +159,30 @@ impl<'cfg> MetadataJunit<'cfg> {
                         last_status,
                         prior_statuses,
                         result: FlakyResult::Fail,
-                    } => {
-                        let mut testcase_status =
-                            TestCaseStatus::non_success(NonSuccessKind::Failure);
-                        testcase_status.set_type("flaky failure");
-                        testcase_status.set_message(
-                            FlakyResult::Fail
-                                .fail_message(
-                                    last_status.retry_data.attempt,
-                                    last_status.retry_data.total_attempts,
-                                )
-                                .expect("Fail variant always returns Some"),
-                        );
-                        // The test exhibited flakiness (eventually passed), so
-                        // prior runs should serialize as <flakyFailure>.
-                        testcase_status.set_rerun_kind(FlakyOrRerun::Flaky);
-                        (testcase_status, last_status, prior_statuses)
-                    }
+                    } => match junit_flaky_fail_status {
+                        JunitFlakyFailStatus::Failure => {
+                            let mut testcase_status =
+                                TestCaseStatus::non_success(NonSuccessKind::Failure);
+                            testcase_status.set_type("flaky failure");
+                            testcase_status.set_message(
+                                FlakyResult::Fail
+                                    .fail_message(
+                                        last_status.retry_data.attempt,
+                                        last_status.retry_data.total_attempts,
+                                    )
+                                    .expect("Fail variant always returns Some"),
+                            );
+                            // The test exhibited flakiness (eventually passed),
+                            // so prior runs should serialize as
+                            // <flakyFailure>.
+                            testcase_status.set_rerun_kind(FlakyOrRerun::Flaky);
+                            (testcase_status, last_status, prior_statuses)
+                        }
+                        JunitFlakyFailStatus::Success => {
+                            // Treat as success in JUnit, same as flaky-pass.
+                            (TestCaseStatus::success(), last_status, prior_statuses)
+                        }
+                    },
                     ExecutionDescription::Failure {
                         first_status,
                         retries,

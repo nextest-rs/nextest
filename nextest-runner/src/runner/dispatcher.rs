@@ -776,6 +776,7 @@ where
                 failure_output,
                 junit_store_success_output,
                 junit_store_failure_output,
+                junit_flaky_fail_status,
                 last_run_status,
             }) => {
                 let run_statuses = self.finish_test(test_instance.id(), last_run_status);
@@ -792,6 +793,7 @@ where
                     failure_output,
                     junit_store_success_output,
                     junit_store_failure_output,
+                    junit_flaky_fail_status,
                     run_statuses,
                     current_stats: self.run_stats,
                     running: self.running(),

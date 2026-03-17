@@ -5,8 +5,8 @@ use super::temp_project::TempProject;
 use camino::Utf8Path;
 use fixture_data::{
     models::{
-        CheckResult, ExpectedReruns, ExpectedTestResult, RunProperties, TestCaseFixtureProperties,
-        TestSuiteFixtureProperties,
+        CheckResult, ExpectedReruns, ExpectedTestResult, RunProperties, TerminalCheckResult,
+        TestCaseFixtureProperties, TestSuiteFixtureProperties,
     },
     nextest_tests::EXPECTED_TEST_SUITES,
 };
@@ -410,7 +410,7 @@ impl ExpectedSummary {
                 self.fail_count += 1;
                 self.leak_fail_count += 1;
             }
-            CheckResult::Fail | CheckResult::FlakyFail => {
+            CheckResult::Fail | CheckResult::FlakyFail | CheckResult::FlakyFailJunitSuccess => {
                 self.fail_count += 1;
             }
             CheckResult::FailLeak => {
@@ -445,7 +445,7 @@ struct TestAttempt {
     /// internally.
     #[expect(dead_code)]
     attempt: u32,
-    result: CheckResult,
+    result: TerminalCheckResult,
 }
 
 /// The actual outcome parsed from test output.
@@ -458,7 +458,7 @@ struct ActualOutcome {
 
 impl ActualOutcome {
     /// Returns the final result (last attempt).
-    fn final_result(&self) -> CheckResult {
+    fn final_result(&self) -> TerminalCheckResult {
         self.attempts
             .last()
             .expect("at least one attempt should exist")
@@ -566,7 +566,7 @@ impl ActualTestResults {
         fn add_attempt(
             tests: &mut IdOrdMap<ActualOutcome>,
             caps: &regex::Captures,
-            result: CheckResult,
+            result: TerminalCheckResult,
         ) {
             // Groups: 1=attempt (optional), 2=binary_id, 3=test_name
             let attempt = match caps.get(1) {
@@ -599,7 +599,7 @@ impl ActualTestResults {
             let id = TestInstanceId::new(&caps[3], &test_name);
             let attempt_record = TestAttempt {
                 attempt: caps[1].parse().expect("parsed attempt number"),
-                result: CheckResult::FlakyFail,
+                result: TerminalCheckResult::FlakyFail,
             };
 
             match tests.entry(&id) {
@@ -610,7 +610,7 @@ impl ActualTestResults {
                     // the overall result.
                     let attempts = &mut entry.get_mut().attempts;
                     if let Some(last) = attempts.last_mut() {
-                        last.result = CheckResult::FlakyFail;
+                        last.result = TerminalCheckResult::FlakyFail;
                     } else {
                         attempts.push(attempt_record);
                     }
@@ -633,7 +633,7 @@ impl ActualTestResults {
             let id = TestInstanceId::new(&caps[3], &test_name);
             let attempt_record = TestAttempt {
                 attempt: caps[1].parse().expect("parsed attempt number"),
-                result: CheckResult::Pass,
+                result: TerminalCheckResult::Pass,
             };
 
             match tests.entry(&id) {
@@ -641,7 +641,7 @@ impl ActualTestResults {
                     // FLAKY line appears after individual attempts, so it may
                     // duplicate the final PASS. Only add if not already a PASS.
                     let attempts = &mut entry.get_mut().attempts;
-                    if attempts.last().map(|a| a.result) != Some(CheckResult::Pass) {
+                    if attempts.last().map(|a| a.result) != Some(TerminalCheckResult::Pass) {
                         attempts.push(attempt_record);
                     }
                 }
@@ -677,23 +677,23 @@ impl ActualTestResults {
 
             // Track all attempts for each test to analyze retry behavior.
             if let Some(caps) = FAIL_LEAK_RE.captures(line) {
-                add_attempt(&mut tests, &caps, CheckResult::FailLeak);
+                add_attempt(&mut tests, &caps, TerminalCheckResult::FailLeak);
             } else if let Some(caps) = LEAK_FAIL_RE.captures(line) {
-                add_attempt(&mut tests, &caps, CheckResult::LeakFail);
+                add_attempt(&mut tests, &caps, TerminalCheckResult::LeakFail);
             } else if let Some(caps) = ABORT_RE.captures(line) {
-                add_attempt(&mut tests, &caps, CheckResult::Abort);
+                add_attempt(&mut tests, &caps, TerminalCheckResult::Abort);
             } else if let Some(caps) = TIMEOUT_PASS_RE.captures(line) {
                 // TIMEOUT-PASS is shown when on-timeout = pass and the test timed out.
                 // We record this as a Pass since the test is configured to pass on timeout.
-                add_attempt(&mut tests, &caps, CheckResult::Pass);
+                add_attempt(&mut tests, &caps, TerminalCheckResult::Pass);
             } else if let Some(caps) = TIMEOUT_RE.captures(line) {
-                add_attempt(&mut tests, &caps, CheckResult::Timeout);
+                add_attempt(&mut tests, &caps, TerminalCheckResult::Timeout);
             } else if let Some(caps) = LEAK_RE.captures(line) {
-                add_attempt(&mut tests, &caps, CheckResult::Leak);
+                add_attempt(&mut tests, &caps, TerminalCheckResult::Leak);
             } else if let Some(caps) = FAIL_RE.captures(line) {
-                add_attempt(&mut tests, &caps, CheckResult::Fail);
+                add_attempt(&mut tests, &caps, TerminalCheckResult::Fail);
             } else if let Some(caps) = PASS_RE.captures(line) {
-                add_attempt(&mut tests, &caps, CheckResult::Pass);
+                add_attempt(&mut tests, &caps, TerminalCheckResult::Pass);
             } else if let Some(caps) = SUMMARY_RE.captures(line) {
                 let run_count = caps[1].parse().unwrap();
                 let pass_count = caps[2].parse().unwrap();
@@ -743,15 +743,19 @@ fn verify_expected_in_actual(
         match actual_outcome {
             Some(actual) => {
                 // Test is present, verify the final result matches.
-                // With retries, a test may have multiple attempts - we check the last one.
+                // With retries, a test may have multiple attempts — we check the last one.
+                // Use to_terminal() because terminal output cannot distinguish
+                // between some CheckResult variants (e.g., FlakyFailJunitSuccess
+                // and FlakyFail both display as FLKY-FL).
                 let actual_result = actual.final_result();
+                let expected_terminal = expected_outcome.expected.result.to_terminal();
                 assert_eq!(
-                    expected_outcome.expected.result,
+                    expected_terminal,
                     actual_result,
                     "{}: expected result {:?} but got {:?} (attempts: {:?})\n\n\
                      --- output ---\n{}\n--- end output ---",
                     expected_outcome.id.full_name(),
-                    expected_outcome.expected.result,
+                    expected_terminal,
                     actual_result,
                     actual.attempts,
                     output
@@ -1093,6 +1097,7 @@ fn filter_for_rerun(expected: &ExpectedTestResults) -> ExpectedTestResults {
             // Failed tests are still outstanding and should run.
             CheckResult::Fail
             | CheckResult::FlakyFail
+            | CheckResult::FlakyFailJunitSuccess
             | CheckResult::Abort
             | CheckResult::Timeout
             | CheckResult::LeakFail
@@ -1387,7 +1392,9 @@ fn expected_junit_for_result(
     properties: RunProperties,
 ) -> Option<ExpectedJunit<'static>> {
     match result {
-        CheckResult::Pass | CheckResult::Leak => None,
+        // FlakyFailJunitSuccess appears as a success in JUnit (the test
+        // is configured with junit.flaky-fail-status = "success").
+        CheckResult::Pass | CheckResult::Leak | CheckResult::FlakyFailJunitSuccess => None,
         CheckResult::LeakFail => Some(ExpectedJunit {
             kind: quick_junit::NonSuccessKind::Error,
             ty: "test exited with code 0, but leaked handles so was marked failed",
@@ -1441,7 +1448,9 @@ fn expected_junit_for_result(
 /// other failures expect `Rerun` (reruns serialize as `<rerunFailure>`).
 fn expected_rerun_kind_for_result(result: CheckResult) -> Option<FlakyOrRerun> {
     match result {
-        CheckResult::Pass | CheckResult::Leak => None,
+        // FlakyFailJunitSuccess is reported as success in JUnit, so reruns
+        // are flaky_runs on a success status (no rerun kind to check).
+        CheckResult::Pass | CheckResult::Leak | CheckResult::FlakyFailJunitSuccess => None,
         CheckResult::FlakyFail => Some(FlakyOrRerun::Flaky),
         CheckResult::LeakFail
         | CheckResult::Fail
