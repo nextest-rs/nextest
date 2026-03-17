@@ -26,7 +26,7 @@ use crate::{
 };
 use chrono::{DateTime, FixedOffset};
 use debug_ignore::DebugIgnore;
-use nextest_metadata::RustBinaryId;
+use nextest_metadata::{RustBinaryId, TestCaseName};
 use quick_junit::ReportUuid;
 use semver::Version;
 use serde::Serialize;
@@ -442,7 +442,8 @@ impl ChromeTraceConverter {
                     Category::Test,
                     ts_us,
                     Some(ChromeTraceArgs::TestBegin(TestBeginArgs {
-                        binary_id: test_instance.binary_id.to_string(),
+                        binary_id: test_instance.binary_id.clone(),
+                        test_name: test_instance.test_name.clone(),
                         command_line,
                     })),
                 );
@@ -485,6 +486,8 @@ impl ChromeTraceConverter {
                     Category::Test,
                     ts_us,
                     Some(ChromeTraceArgs::TestRetryBegin(TestRetryBeginArgs {
+                        binary_id: test_instance.binary_id.clone(),
+                        test_name: test_instance.test_name.clone(),
                         attempt: retry_data.attempt,
                         total_attempts: retry_data.total_attempts,
                         command_line,
@@ -557,6 +560,8 @@ impl ChromeTraceConverter {
                     id: None,
                     bp: None,
                     args: Some(ChromeTraceArgs::TestSlow(TestSlowArgs {
+                        binary_id: test_instance.binary_id.clone(),
+                        test_name: test_instance.test_name.clone(),
                         elapsed_secs: elapsed.as_secs_f64(),
                         will_terminate,
                         attempt: retry_data.attempt,
@@ -1092,7 +1097,8 @@ impl ChromeTraceConverter {
         delay_before_next_attempt: Option<Duration>,
     ) -> ChromeTraceArgs {
         ChromeTraceArgs::TestEnd(TestEndArgs {
-            binary_id: test_instance.binary_id.to_string(),
+            binary_id: test_instance.binary_id.clone(),
+            test_name: test_instance.test_name.clone(),
             time_taken_ms: duration_to_millis(status.time_taken),
             result: status.result.clone(),
             attempt: status.retry_data.attempt,
@@ -1485,7 +1491,8 @@ struct RunInstantArgs {
 /// Args for `TestStarted` B events.
 #[derive(Serialize)]
 struct TestBeginArgs {
-    binary_id: String,
+    binary_id: RustBinaryId,
+    test_name: TestCaseName,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     command_line: Vec<String>,
 }
@@ -1493,6 +1500,8 @@ struct TestBeginArgs {
 /// Args for `TestRetryStarted` B events.
 #[derive(Serialize)]
 struct TestRetryBeginArgs {
+    binary_id: RustBinaryId,
+    test_name: TestCaseName,
     attempt: u32,
     total_attempts: u32,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -1502,7 +1511,8 @@ struct TestRetryBeginArgs {
 /// Args for `TestFinished` and `TestAttemptFailedWillRetry` E events.
 #[derive(Serialize)]
 struct TestEndArgs {
-    binary_id: String,
+    binary_id: RustBinaryId,
+    test_name: TestCaseName,
     time_taken_ms: f64,
     result: ExecutionResultDescription,
     attempt: u32,
@@ -1523,6 +1533,8 @@ struct TestEndArgs {
 /// Args for `TestSlow` instant events.
 #[derive(Serialize)]
 struct TestSlowArgs {
+    binary_id: RustBinaryId,
+    test_name: TestCaseName,
     elapsed_secs: f64,
     will_terminate: bool,
     attempt: u32,

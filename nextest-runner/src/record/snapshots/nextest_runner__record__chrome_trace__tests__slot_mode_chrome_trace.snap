@@ -114,7 +114,8 @@ expression: json_str
       "pid": 2,
       "tid": 10000,
       "args": {
-        "binary_id": "crate-a::bin/test-a"
+        "binary_id": "crate-a::bin/test-a",
+        "test_name": "test_alpha"
       }
     },
     {
@@ -159,7 +160,8 @@ expression: json_str
       "pid": 2,
       "tid": 10001,
       "args": {
-        "binary_id": "crate-b::bin/test-b"
+        "binary_id": "crate-b::bin/test-b",
+        "test_name": "test_beta"
       }
     },
     {
@@ -183,6 +185,7 @@ expression: json_str
       "tid": 10000,
       "args": {
         "binary_id": "crate-a::bin/test-a",
+        "test_name": "test_alpha",
         "time_taken_ms": 500.0,
         "result": {
           "status": "pass"
@@ -227,6 +230,7 @@ expression: json_str
       "tid": 10001,
       "args": {
         "binary_id": "crate-b::bin/test-b",
+        "test_name": "test_beta",
         "time_taken_ms": 800.0,
         "result": {
           "status": "pass"
