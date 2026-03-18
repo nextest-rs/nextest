@@ -9,7 +9,7 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.131-rc.3] - 2026-03-16
+## [0.9.131] - 2026-03-18
 
 ### Added
 
@@ -49,7 +49,7 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
   Traces support grouping by binary (default) or by slot (`--group-by slot`), and can be exported from both on-disk runs and [portable recordings](https://nexte.st/docs/features/record-replay-rerun/portable-recordings/). For more, see [_Perfetto traces_](https://nexte.st/docs/features/record-replay-rerun/perfetto-chrome-traces/).
 
-- Added release binaries for `riscv64gc-unknown-linux-gnu`.
+- Added release binaries for `riscv64gc-unknown-linux-gnu`. These binaries are cross-compiled from x86_64 Linux and are not currently tested.
 
 ### Fixed
 
@@ -2083,7 +2083,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
-[0.9.131-rc.3]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.131-rc.3
+[0.9.131]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.131
 [0.9.130]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.130
 [0.9.129]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.129
 [0.9.128]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.128

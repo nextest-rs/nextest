@@ -207,12 +207,6 @@ The instructions below are suitable for both end users and CI. These links will 
 
     === ":material-linux: Linux riscv64"
 
-        !!! info
-
-            The command below assumes that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
-
-            If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
-
         Run in a terminal:
 
         ```
