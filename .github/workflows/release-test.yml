@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/upload-rust-binary-action@381995c84a8e242b8736ec80211c563d7bd07ce7 # v1.28.1
+      - uses: taiki-e/upload-rust-binary-action@0e34102c043ded9f2ca39f7af5cd99a540c61aff # v1.29.1
         with:
           bin: internal-test
           # The tag name contains the binary name so just use that.
