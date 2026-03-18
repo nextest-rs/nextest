@@ -33,8 +33,7 @@ fn parse_escaped_char(input: &mut Span<'_>) -> PResult<Option<char>> {
             'f'.value('\u{0C}'),
             '\\'.value('\\'),
             '/'.value('/'),
-            ')'.value(')'),
-            ','.value(','),
+            alt((')'.value(')'), ','.value(','))),
         ));
         preceded(
             '\\',

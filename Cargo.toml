@@ -154,7 +154,7 @@ walkdir = "2.5.0"
 whoami = "2.1.1"
 win32job = "2.0.3"
 windows-sys = "0.61.2"
-winnow = "0.7.15"
+winnow = "1.0.0"
 xxhash-rust = { version = "0.8.15", features = ["xxh3", "xxh64"] }
 zstd = { version = "0.13.3", features = ["zstdmt"] }
 

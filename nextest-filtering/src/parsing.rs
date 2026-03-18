@@ -666,9 +666,11 @@ fn parse_set_def(input: &mut Span<'_>) -> PResult<Option<ParsedLeaf>> {
             unary_set_def("binary", DefaultMatcher::Glob, ParsedLeaf::Binary),
             unary_set_def("test", DefaultMatcher::Contains, ParsedLeaf::Test),
             platform_def,
-            nullary_set_def("default", ParsedLeaf::Default),
-            nullary_set_def("all", |_| ParsedLeaf::All),
-            nullary_set_def("none", |_| ParsedLeaf::None),
+            alt((
+                nullary_set_def("default", ParsedLeaf::Default),
+                nullary_set_def("all", |_| ParsedLeaf::All),
+                nullary_set_def("none", |_| ParsedLeaf::None),
+            )),
         ))),
     )
     .parse_next(input)
