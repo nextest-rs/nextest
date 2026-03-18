@@ -2247,7 +2247,7 @@ dependencies = [
  "test-case",
  "test-strategy",
  "thiserror 2.0.18",
- "winnow 0.7.15",
+ "winnow 1.0.0",
  "xxhash-rust",
 ]
 
