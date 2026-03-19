@@ -84,36 +84,40 @@ Try running the example queries below against the [interactive example](https://
 
 ### Example queries
 
+!!! note
+
+    These queries use `args.binary_id` and `args.test_name` embedded in the metadata, as opposed to using the Perfetto thread name (`name`) and process name (`process_name`) fields. This means they work with both the default `--group-by binary` and with `--group-by slot`.
+    
+    These queries also use the embedded `time_taken_ms`, which is generally the same as the duration computed by Perfetto, but works properly in case a test run is paused with Ctrl-Z (SIGTSTP) and resumed later.
+    
+    For maximum compatibility, it is recommended that your queries follow the same patterns.
+
 Print a list of the top 20 slowest tests:
 
 ```sql
-INCLUDE PERFETTO MODULE slices.with_context;
-
 SELECT
-  name AS test_name,
-  process_name AS binary,
-  dur / 1e6 AS duration_ms
-FROM thread_or_process_slice
+  EXTRACT_ARG(arg_set_id, 'args.binary_id') AS binary_id,
+  EXTRACT_ARG(arg_set_id, 'args.test_name') AS test_name,
+  EXTRACT_ARG(arg_set_id, 'args.time_taken_ms') AS time_taken_ms
+FROM slice
 WHERE category = 'test'
-ORDER BY dur DESC
+ORDER BY time_taken_ms DESC
 LIMIT 20;
 ```
 
 Total test time per binary:
 
 ```sql
-INCLUDE PERFETTO MODULE slices.with_context;
-
 SELECT
-  process_name AS binary,
+  EXTRACT_ARG(arg_set_id, 'args.binary_id') AS binary_id,
   COUNT(*) AS test_count,
-  SUM(dur) / 1e6 AS total_ms,
-  AVG(dur) / 1e6 AS avg_ms,
-  MAX(dur) / 1e6 AS max_ms,
-  MIN(dur) / 1e6 AS min_ms
-FROM thread_or_process_slice
+  SUM(EXTRACT_ARG(arg_set_id, 'args.time_taken_ms')) AS total_ms,
+  AVG(EXTRACT_ARG(arg_set_id, 'args.time_taken_ms')) AS avg_ms,
+  MAX(EXTRACT_ARG(arg_set_id, 'args.time_taken_ms')) AS max_ms,
+  MIN(EXTRACT_ARG(arg_set_id, 'args.time_taken_ms')) AS min_ms
+FROM slice
 WHERE category = 'test'
-GROUP BY process_name
+GROUP BY binary_id
 ORDER BY total_ms DESC;
 ```
 
@@ -122,61 +126,63 @@ Duration distribution histogram:
 ```sql
 SELECT
   CASE
-    WHEN dur < 1e8 THEN '< 100ms'
-    WHEN dur < 1e9 THEN '100ms - 1s'
-    WHEN dur < 5e9 THEN '1s - 5s'
-    WHEN dur < 10e9 THEN '5s - 10s'
-    WHEN dur < 30e9 THEN '10s - 30s'
+    WHEN time_taken_ms < 100 THEN '< 100ms'
+    WHEN time_taken_ms < 1000 THEN '100ms - 1s'
+    WHEN time_taken_ms < 5000 THEN '1s - 5s'
+    WHEN time_taken_ms < 10000 THEN '5s - 10s'
+    WHEN time_taken_ms < 30000 THEN '10s - 30s'
     ELSE '> 30s'
   END AS bucket,
   COUNT(*) AS count
-FROM slice
-WHERE category = 'test'
+FROM (
+  SELECT EXTRACT_ARG(arg_set_id, 'args.time_taken_ms') AS time_taken_ms
+  FROM slice
+  WHERE category = 'test'
+)
 GROUP BY bucket
-ORDER BY MIN(dur);
+ORDER BY MIN(time_taken_ms);
 ```
 
 Setup script statuses and durations:
 
 ```sql
 SELECT
-  name AS script_name,
-  dur / 1e6 AS duration_ms,
+  EXTRACT_ARG(arg_set_id, 'args.script_id') AS script_id,
+  EXTRACT_ARG(arg_set_id, 'args.time_taken_ms') AS time_taken_ms,
   EXTRACT_ARG(arg_set_id, 'args.result.status') AS status
 FROM slice
 WHERE category = 'setup-script'
-ORDER BY dur DESC;
+ORDER BY time_taken_ms DESC;
 ```
 
 Tests in a non-default test group:
 
 ```sql
-INCLUDE PERFETTO MODULE slices.with_context;
-
 SELECT
-  name AS test_name,
-  process_name AS binary,
+  EXTRACT_ARG(arg_set_id, 'args.binary_id') AS binary_id,
+  EXTRACT_ARG(arg_set_id, 'args.test_name') AS test_name,
   EXTRACT_ARG(arg_set_id, 'args.test_group') AS test_group,
-  dur / 1e6 AS duration_ms
-FROM thread_or_process_slice
+  EXTRACT_ARG(arg_set_id, 'args.time_taken_ms') AS time_taken_ms
+FROM slice
 WHERE category = 'test'
   AND EXTRACT_ARG(arg_set_id, 'args.test_group') != '@global'
-ORDER BY dur DESC;
+ORDER BY time_taken_ms DESC;
 ```
 
 Retried tests:
 
 ```sql
 SELECT
-  s.name AS test_name,
-  EXTRACT_ARG(s.arg_set_id, 'args.attempt') AS attempt,
-  EXTRACT_ARG(s.arg_set_id, 'args.total_attempts') AS total_attempts,
-  EXTRACT_ARG(s.arg_set_id, 'args.result.status') AS status,
-  s.dur / 1e6 AS duration_ms
-FROM slice s
-WHERE s.category = 'test'
-  AND EXTRACT_ARG(s.arg_set_id, 'args.total_attempts') > 1
-ORDER BY s.name, attempt;
+  EXTRACT_ARG(arg_set_id, 'args.binary_id') AS binary_id,
+  EXTRACT_ARG(arg_set_id, 'args.test_name') AS test_name,
+  EXTRACT_ARG(arg_set_id, 'args.attempt') AS attempt,
+  EXTRACT_ARG(arg_set_id, 'args.total_attempts') AS total_attempts,
+  EXTRACT_ARG(arg_set_id, 'args.result.status') AS status,
+  EXTRACT_ARG(arg_set_id, 'args.time_taken_ms') AS time_taken_ms
+FROM slice
+WHERE category = 'test'
+  AND EXTRACT_ARG(arg_set_id, 'args.total_attempts') > 1
+ORDER BY binary_id, test_name, attempt;
 ```
 
 Slot utilization (how busy each concurrency slot was):
@@ -185,7 +191,7 @@ Slot utilization (how busy each concurrency slot was):
 SELECT
   t.name AS slot,
   COUNT(*) AS tests_run,
-  SUM(s.dur) / 1e6 AS busy_ms
+  SUM(EXTRACT_ARG(s.arg_set_id, 'args.time_taken_ms')) AS busy_ms
 FROM slice s
 JOIN thread_track tt ON s.track_id = tt.id
 JOIN thread t USING (utid)
@@ -216,4 +222,36 @@ These keys can then be accessed with `EXTRACT_ARG(arg_set_id, '<key>')` in queri
 
 ## Options and arguments
 
-TODO
+### `cargo nextest store export-chrome-trace`
+
+=== "Summarized output"
+
+    The output of `cargo nextest store export-chrome-trace -h`:
+
+    === "Colorized"
+
+        ```bash exec="true" result="ansi"
+        CLICOLOR_FORCE=1 cargo nextest store export-chrome-trace -h | ../scripts/strip-hyperlinks.sh
+        ```
+
+    === "Plaintext"
+
+        ```bash exec="true" result="text"
+        cargo nextest store export-chrome-trace -h | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
+        ```
+
+=== "Full output"
+
+    The output of `cargo nextest store export-chrome-trace --help`:
+
+    === "Colorized"
+
+        ```bash exec="true" result="ansi"
+        CLICOLOR_FORCE=1 cargo nextest store export-chrome-trace --help | ../scripts/strip-hyperlinks.sh
+        ```
+
+    === "Plaintext"
+
+        ```bash exec="true" result="text"
+        cargo nextest store export-chrome-trace --help | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
+        ```
