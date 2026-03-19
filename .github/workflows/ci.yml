@@ -95,6 +95,9 @@ jobs:
   build:
     name: Build and test
     runs-on: ${{ matrix.os }}
+    # NOTE: self-hosted riscv64 runners are experimental and may be flaky.
+    # Do not block CI on failures from this platform for now at inital stages of support.
+    continue-on-error: ${{ contains(matrix.os, 'self-hosted') }}
     strategy:
       matrix:
         os:
@@ -102,6 +105,7 @@ jobs:
           - ubuntu-24.04-arm
           - macos-latest
           - windows-latest
+          - [self-hosted, linux, riscv64]
         # 1.91 is the MSRV
         rust-version: ["1.91", stable]
       fail-fast: false
