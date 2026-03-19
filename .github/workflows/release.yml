@@ -8,6 +8,7 @@ on:
 
 jobs:
   nextest-filtering-release:
+    environment: release
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-filtering-')
     runs-on: ubuntu-latest
     steps:
@@ -33,6 +34,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   nextest-metadata-release:
+    environment: release
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-metadata-')
     runs-on: ubuntu-latest
     steps:
@@ -58,6 +60,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   nextest-runner-release:
+    environment: release
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-runner-')
     runs-on: ubuntu-latest
     steps:
@@ -108,6 +111,7 @@ jobs:
 
   build-cargo-nextest-binaries:
     name: Build cargo-nextest binaries for ${{ matrix.target }}
+    environment: release
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'cargo-nextest-')
     needs:
       - cargo-nextest-release
@@ -314,6 +318,7 @@ jobs:
 
   update-release-meta:
     name: Update release-meta branch and publish to crates.io
+    environment: release
     if: github.repository_owner == 'nextest-rs'
     needs:
       - cargo-nextest-release
@@ -356,26 +361,22 @@ jobs:
       - name: Add release metadata
         env:
           REF_NAME: ${{ github.ref_name }}
-        run: |
-          cd release-meta
-          ~/bin/mukti-bin --json releases.json add-release \
-            --version ${{ needs.cargo-nextest-release.outputs.version }} \
-            --release-url "https://github.com/nextest-rs/nextest/releases/${REF_NAME}" \
-            --archive-prefix "https://github.com/nextest-rs/nextest/releases/download/${REF_NAME}" \
-            --archive x86_64-unknown-linux-gnu:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-linux-tar }} \
-            --archive x86_64-unknown-linux-musl:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-linux-musl-tar }} \
-            --archive aarch64-unknown-linux-gnu:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.aarch64-linux-tar }} \
-            --archive aarch64-unknown-linux-musl:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.aarch64-linux-musl-tar }} \
-            --archive riscv64gc-unknown-linux-gnu:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.riscv64gc-linux-tar }} \
-            --archive x86_64-pc-windows-msvc:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-windows-tar }} \
-            --archive x86_64-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-windows-zip }} \
-            --archive i686-pc-windows-msvc:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.i686-windows-tar }} \
-            --archive i686-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.i686-windows-zip }} \
-            --archive aarch64-pc-windows-msvc:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.aarch64-windows-tar }} \
-            --archive aarch64-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.aarch64-windows-zip }} \
-            --archive universal-apple-darwin:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.mac-tar }} \
-            --archive x86_64-unknown-freebsd:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-unknown-freebsd-tar }} \
-            --archive x86_64-unknown-illumos:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-unknown-illumos-tar }} \
+          VERSION: ${{ needs.cargo-nextest-release.outputs.version }}
+          ARCHIVE_X86_64_LINUX_TAR: ${{ needs.build-cargo-nextest-binaries.outputs.x86_64-linux-tar }}
+          ARCHIVE_X86_64_LINUX_MUSL_TAR: ${{ needs.build-cargo-nextest-binaries.outputs.x86_64-linux-musl-tar }}
+          ARCHIVE_AARCH64_LINUX_TAR: ${{ needs.build-cargo-nextest-binaries.outputs.aarch64-linux-tar }}
+          ARCHIVE_AARCH64_LINUX_MUSL_TAR: ${{ needs.build-cargo-nextest-binaries.outputs.aarch64-linux-musl-tar }}
+          ARCHIVE_RISCV64GC_LINUX_TAR: ${{ needs.build-cargo-nextest-binaries.outputs.riscv64gc-linux-tar }}
+          ARCHIVE_X86_64_WINDOWS_TAR: ${{ needs.build-cargo-nextest-binaries.outputs.x86_64-windows-tar }}
+          ARCHIVE_X86_64_WINDOWS_ZIP: ${{ needs.build-cargo-nextest-binaries.outputs.x86_64-windows-zip }}
+          ARCHIVE_I686_WINDOWS_TAR: ${{ needs.build-cargo-nextest-binaries.outputs.i686-windows-tar }}
+          ARCHIVE_I686_WINDOWS_ZIP: ${{ needs.build-cargo-nextest-binaries.outputs.i686-windows-zip }}
+          ARCHIVE_AARCH64_WINDOWS_TAR: ${{ needs.build-cargo-nextest-binaries.outputs.aarch64-windows-tar }}
+          ARCHIVE_AARCH64_WINDOWS_ZIP: ${{ needs.build-cargo-nextest-binaries.outputs.aarch64-windows-zip }}
+          ARCHIVE_MAC_TAR: ${{ needs.build-cargo-nextest-binaries.outputs.mac-tar }}
+          ARCHIVE_X86_64_FREEBSD_TAR: ${{ needs.build-cargo-nextest-binaries.outputs.x86_64-unknown-freebsd-tar }}
+          ARCHIVE_X86_64_ILLUMOS_TAR: ${{ needs.build-cargo-nextest-binaries.outputs.x86_64-unknown-illumos-tar }}
+        run: ./scripts/add-release-metadata.sh
       - name: Generate redirects
         run: |
           cd release-meta

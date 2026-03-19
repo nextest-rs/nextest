@@ -8,6 +8,7 @@ on:
 jobs:
     update:
         name: Update nextest on WinGet
+        environment: winget
         runs-on: ubuntu-latest
 
         steps:
@@ -34,6 +35,7 @@ jobs:
 
     cleanup:
         name: Cleanup branches
+        environment: winget
         needs: update # Not necessarily needed as PRs don't get closed that quick but still nice to have it in order
         runs-on: ubuntu-latest
 
