@@ -588,12 +588,15 @@ mod tests {
             .expect("abs to abs diff is non-None");
 
         // These aren't really used other than to do mapping against.
-        let orig_workspace_root = Utf8Path::new(env!("CARGO_MANIFEST_DIR"));
+        let orig_workspace_root = Utf8PathBuf::from(
+            std::env::var("NEXTEST_WORKSPACE_ROOT")
+                .expect("NEXTEST_WORKSPACE_ROOT is set (running under cargo nextest run)"),
+        );
         let orig_target_dir = orig_workspace_root.join("target");
         let orig_build_dir = orig_workspace_root.join("build");
 
         let path_mapper = PathMapper::new(
-            orig_workspace_root,
+            orig_workspace_root.as_path(),
             Some(&rel_workspace_root),
             &orig_target_dir,
             Some(&rel_target_dir),
@@ -641,12 +644,15 @@ mod tests {
                 .expect("build dir is valid UTF-8"),
         );
 
-        let orig_workspace_root = Utf8Path::new(env!("CARGO_MANIFEST_DIR"));
+        let orig_workspace_root = Utf8PathBuf::from(
+            std::env::var("NEXTEST_WORKSPACE_ROOT")
+                .expect("NEXTEST_WORKSPACE_ROOT is set (running under cargo nextest run)"),
+        );
         let orig_target_dir = orig_workspace_root.join("target");
         let orig_build_dir = orig_workspace_root.join("build");
 
         let path_mapper = PathMapper::new(
-            orig_workspace_root,
+            orig_workspace_root.as_path(),
             None,
             &orig_target_dir,
             Some(target_dir_path.as_path()),
@@ -688,13 +694,16 @@ mod tests {
                 .expect("target dir is valid UTF-8"),
         );
 
-        let orig_workspace_root = Utf8Path::new(env!("CARGO_MANIFEST_DIR"));
+        let orig_workspace_root = Utf8PathBuf::from(
+            std::env::var("NEXTEST_WORKSPACE_ROOT")
+                .expect("NEXTEST_WORKSPACE_ROOT is set (running under cargo nextest run)"),
+        );
         let orig_target_dir = orig_workspace_root.join("target");
         let orig_build_dir = orig_workspace_root.join("build");
 
         // Only target_dir remap is set, no build_dir remap.
         let path_mapper = PathMapper::new(
-            orig_workspace_root,
+            orig_workspace_root.as_path(),
             None,
             &orig_target_dir,
             Some(target_dir_path.as_path()),

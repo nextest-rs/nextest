@@ -77,7 +77,7 @@ impl TempProject {
         // which doesn't match compile time.
         let temp_root: Utf8PathBuf = fixup_macos_path(temp_dir.path());
         let workspace_root = temp_root.join("src");
-        let src_dir = nextest_tests_dir();
+        let src_dir = nextest_tests_dir(&env_info.workspace_root);
 
         copy_dir_all(src_dir, &workspace_root, true)?;
 

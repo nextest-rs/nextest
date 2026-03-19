@@ -126,10 +126,11 @@ pub(in crate::config) fn custom_build_platforms(workspace_dir: &Utf8Path) -> Bui
 
     let host_platform = Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap();
 
-    let mut fixture =
-        Utf8PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("manifest dir is available"));
-    fixture.pop();
-    fixture.push("fixtures/custom-target/my-target.json");
+    let fixture = Utf8PathBuf::from(
+        std::env::var("NEXTEST_WORKSPACE_ROOT")
+            .expect("NEXTEST_WORKSPACE_ROOT is set (running under cargo nextest run)"),
+    )
+    .join("fixtures/custom-target/my-target.json");
 
     let triple = TargetTriple::find(&configs, Some(fixture.as_str()), &host_platform)
         .expect("custom platform parsed")

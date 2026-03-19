@@ -8,11 +8,8 @@ use fs_err as fs;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, time::SystemTime};
 
-pub fn nextest_tests_dir() -> Utf8PathBuf {
-    Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("fixtures/nextest-tests")
+pub fn nextest_tests_dir(workspace_root: &Utf8Path) -> Utf8PathBuf {
+    workspace_root.join("fixtures/nextest-tests")
 }
 
 // We use SHA-256 because other parts of nextest do the same -- this can easily

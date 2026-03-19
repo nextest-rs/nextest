@@ -75,10 +75,11 @@ impl TargetTriple {
     }
 }
 pub(super) fn custom_target_path() -> Utf8PathBuf {
-    Utf8PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-        .parent()
-        .unwrap()
-        .join("fixtures/custom-target/my-target.json")
+    Utf8PathBuf::from(
+        std::env::var("NEXTEST_WORKSPACE_ROOT")
+            .expect("NEXTEST_WORKSPACE_ROOT is set (running under cargo nextest run)"),
+    )
+    .join("fixtures/custom-target/my-target.json")
 }
 
 pub(super) fn custom_platform() -> Platform {

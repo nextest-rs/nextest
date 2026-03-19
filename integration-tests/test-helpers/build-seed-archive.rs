@@ -7,6 +7,7 @@
 //! See the comment on `compute_dir_hash` for more information on caching and
 //! invalidation.
 
+use camino::Utf8PathBuf;
 use color_eyre::eyre::Context;
 use integration_tests::seed::{
     compute_dir_hash, get_seed_archive_name, make_seed_archive, nextest_tests_dir,
@@ -15,7 +16,10 @@ use integration_tests::seed::{
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let tests_dir = nextest_tests_dir();
+    let workspace_root: Utf8PathBuf = std::env::var("NEXTEST_WORKSPACE_ROOT")
+        .wrap_err("NEXTEST_WORKSPACE_ROOT not set -- is this being run as a setup script?")?
+        .into();
+    let tests_dir = nextest_tests_dir(&workspace_root);
     let nextest_env_file = std::env::var("NEXTEST_ENV")
         .wrap_err("unable to find NEXTEST_ENV -- is this being run as a setup script?")?;
 

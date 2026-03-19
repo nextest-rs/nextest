@@ -1,4 +1,4 @@
-nextest-version = "0.9.118"
+nextest-version = "0.9.131"
 experimental = ["setup-scripts"]
 
 [profile.default]
@@ -10,7 +10,7 @@ priority = 20
 
 [[profile.default.overrides]]
 # The sigttou tests leave nextest backgrounded in interactive terminals, which
-# means ctrl-C doesn't work. Run them last. 
+# means ctrl-C doesn't work. Run them last.
 filter = 'package(integration-tests) and test(sigttou)'
 priority = -50
 
