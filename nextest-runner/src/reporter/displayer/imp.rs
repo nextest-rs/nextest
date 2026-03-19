@@ -26,18 +26,16 @@ use crate::{
     },
     errors::WriteEventError,
     helpers::{
-        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, ThemeCharacters,
-        decimal_char_width, plural,
+        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, DurationRounding,
+        ThemeCharacters, decimal_char_width, plural,
     },
     indenter::indented,
     list::TestInstanceId,
     output_spec::{LiveSpec, RecordingSpec},
     record::{LoadOutput, OutputEventKind, ReplayHeader, ShortestRunIdPrefix},
+    redact::Redactor,
     reporter::{
-        displayer::{
-            formatters::DisplayHhMmSs,
-            progress::{ShowTerminalProgress, TerminalProgress},
-        },
+        displayer::progress::{ShowTerminalProgress, TerminalProgress},
         events::*,
         helpers::Styles,
         imp::ReporterOutput,
@@ -82,6 +80,7 @@ pub(crate) struct DisplayReporterBuilder {
     pub(crate) max_progress_running: MaxProgressRunning,
     pub(crate) show_term_progress: ShowTerminalProgress,
     pub(crate) displayer_kind: DisplayerKind,
+    pub(crate) redactor: Redactor,
 }
 
 impl DisplayReporterBuilder {
@@ -166,6 +165,7 @@ impl DisplayReporterBuilder {
                 unit_output: UnitOutputReporter::new(overrides, self.displayer_kind),
                 final_outputs: DebugIgnore(Vec::new()),
                 run_id_unique_prefix: None,
+                redactor: self.redactor,
             },
             output,
         }
@@ -561,6 +561,7 @@ struct DisplayReporterImpl<'a> {
     // The unique prefix for the current run ID, if a recording session is active.
     // Used for highlighting the run ID in RunStarted output.
     run_id_unique_prefix: Option<ShortestRunIdPrefix>,
+    redactor: Redactor,
 }
 
 impl<'a> DisplayReporterImpl<'a> {
@@ -642,11 +643,9 @@ impl<'a> DisplayReporterImpl<'a> {
                             "iteration {}/{} ({} elapsed so far",
                             (completed + 1).style(self.styles.count),
                             count.style(self.styles.count),
-                            DisplayHhMmSs {
-                                duration: *elapsed,
-                                floor: true,
-                            }
-                            .style(self.styles.count),
+                            self.redactor
+                                .redact_hhmmss_duration(*elapsed, DurationRounding::Floor)
+                                .style(self.styles.count),
                         )?;
                     }
                     StressProgress::Count {
@@ -658,11 +657,9 @@ impl<'a> DisplayReporterImpl<'a> {
                             writer,
                             "iteration {} ({} elapsed so far",
                             (completed + 1).style(self.styles.count),
-                            DisplayHhMmSs {
-                                duration: *elapsed,
-                                floor: true,
-                            }
-                            .style(self.styles.count),
+                            self.redactor
+                                .redact_hhmmss_duration(*elapsed, DurationRounding::Floor)
+                                .style(self.styles.count),
                         )?;
                     }
                     StressProgress::Time {
@@ -674,16 +671,12 @@ impl<'a> DisplayReporterImpl<'a> {
                             writer,
                             "iteration {} ({}/{} elapsed so far",
                             (completed + 1).style(self.styles.count),
-                            DisplayHhMmSs {
-                                duration: *elapsed,
-                                floor: true,
-                            }
-                            .style(self.styles.count),
-                            DisplayHhMmSs {
-                                duration: *total,
-                                floor: true,
-                            }
-                            .style(self.styles.count),
+                            self.redactor
+                                .redact_hhmmss_duration(*elapsed, DurationRounding::Floor)
+                                .style(self.styles.count),
+                            self.redactor
+                                .redact_hhmmss_duration(*total, DurationRounding::Floor)
+                                .style(self.styles.count),
                         )?;
                     }
                 }
@@ -702,22 +695,20 @@ impl<'a> DisplayReporterImpl<'a> {
                             // There isn't anything to display here.
                         }
                         StressRemaining::Time(t) => {
+                            // Display the remaining time as a ceiling so that
+                            // we show something like:
+                            //
+                            // 00:02:05/00:30:00 elapsed so far, 00:27:55 remaining
+                            //
+                            // rather than
+                            //
+                            // 00:02:05/00:30:00 elapsed so far, 00:27:54 remaining
                             write!(
                                 writer,
                                 ", {} remaining",
-                                DisplayHhMmSs {
-                                    duration: t,
-                                    // Display the remaining time as a ceiling
-                                    // so that we show something like:
-                                    //
-                                    // 00:02:05/00:30:00 elapsed so far, 00:27:55 remaining
-                                    //
-                                    // rather than
-                                    //
-                                    // 00:02:05/00:30:00 elapsed so far, 00:27:54 remaining
-                                    floor: false,
-                                }
-                                .style(self.styles.count)
+                                self.redactor
+                                    .redact_hhmmss_duration(t, DurationRounding::Ceiling)
+                                    .style(self.styles.count)
                             )?;
                         }
                     }
@@ -2769,6 +2760,7 @@ mod tests {
             max_progress_running: MaxProgressRunning::default(),
             show_term_progress: ShowTerminalProgress::No,
             displayer_kind: DisplayerKind::Live,
+            redactor: Redactor::noop(),
         };
 
         let output = ReporterOutput::Writer {

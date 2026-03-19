@@ -633,6 +633,41 @@ pub(crate) fn rel_path_join(rel_path: &Utf8Path, path: &Utf8Path) -> Utf8PathBuf
 #[derive(Debug)]
 pub(crate) struct FormattedDuration(pub(crate) Duration);
 
+/// Controls how sub-second precision is handled when formatting durations.
+#[derive(Copy, Clone, Debug)]
+pub(crate) enum DurationRounding {
+    /// Truncate sub-second precision (floor). Use for elapsed time.
+    Floor,
+
+    /// Round up to the next second when sub-second milliseconds are present
+    /// (ceiling). Use for remaining time so that elapsed + remaining doesn't
+    /// appear to exceed the total.
+    Ceiling,
+}
+
+/// Formats a duration as `HH:MM:SS`.
+#[derive(Debug)]
+pub(crate) struct FormattedHhMmSs {
+    pub(crate) duration: Duration,
+    pub(crate) rounding: DurationRounding,
+}
+
+impl fmt::Display for FormattedHhMmSs {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let total_secs = self.duration.as_secs();
+        let total_secs = match self.rounding {
+            DurationRounding::Ceiling if self.duration.subsec_millis() > 0 => total_secs + 1,
+            _ => total_secs,
+        };
+        let secs = total_secs % 60;
+        let total_mins = total_secs / 60;
+        let mins = total_mins % 60;
+        let hours = total_mins / 60;
+
+        write!(f, "{hours:02}:{mins:02}:{secs:02}")
+    }
+}
+
 impl fmt::Display for FormattedDuration {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let duration = self.0.as_secs_f64();

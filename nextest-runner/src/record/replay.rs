@@ -602,6 +602,7 @@ use crate::{
         run_id_index::{RunIdIndex, ShortestRunIdPrefix},
         store::{RecordedRunInfo, RecordedRunStatus},
     },
+    redact::Redactor,
     reporter::{
         DisplayConfig, DisplayReporter, DisplayReporterBuilder, DisplayerKind, FinalStatusLevel,
         MaxProgressRunning, OutputLoadDecider, ReporterOutput, ShowProgress, ShowTerminalProgress,
@@ -663,6 +664,7 @@ pub struct ReplayReporterBuilder {
     show_progress: ShowProgress,
     max_progress_running: MaxProgressRunning,
     no_output_indent: bool,
+    redactor: Redactor,
 }
 
 impl Default for ReplayReporterBuilder {
@@ -677,6 +679,7 @@ impl Default for ReplayReporterBuilder {
             show_progress: ShowProgress::default(),
             max_progress_running: MaxProgressRunning::default(),
             no_output_indent: false,
+            redactor: Redactor::noop(),
         }
     }
 }
@@ -744,6 +747,12 @@ impl ReplayReporterBuilder {
         self
     }
 
+    /// Sets the redactor for snapshot testing.
+    pub fn set_redactor(&mut self, redactor: Redactor) -> &mut Self {
+        self.redactor = redactor;
+        self
+    }
+
     /// Builds the replay reporter with the given output destination.
     pub fn build<'a>(
         self,
@@ -771,6 +780,7 @@ impl ReplayReporterBuilder {
             // we're replaying events, not running live tests.
             show_term_progress: ShowTerminalProgress::No,
             displayer_kind: DisplayerKind::Replay,
+            redactor: self.redactor,
         }
         .build(output);
 

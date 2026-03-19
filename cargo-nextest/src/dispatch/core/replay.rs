@@ -24,6 +24,7 @@ use nextest_runner::{
         STORE_FORMAT_VERSION, StoreReader, TestEventKindSummary, TestEventSummary,
         records_state_dir,
     },
+    redact::Redactor,
     reporter::ReporterOutput,
     user_config::{UserConfig, UserConfigExperimental},
 };
@@ -265,6 +266,9 @@ fn run_replay_common(
 
     let mut reporter_builder = ReplayReporterBuilder::new();
     reporter_builder.set_colorize(should_colorize);
+    if crate::output::should_redact() {
+        reporter_builder.set_redactor(Redactor::for_snapshot_testing());
+    }
     replay_opts.reporter_opts.apply_to_replay_builder(
         &mut reporter_builder,
         &user_config.ui,
