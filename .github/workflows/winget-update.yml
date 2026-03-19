@@ -5,6 +5,9 @@ on:
     schedule:
         - cron: "0 3 * * *" # Scheduled to run daily at 03:00
 
+permissions:
+  contents: read
+
 jobs:
     update:
         name: Update nextest on WinGet

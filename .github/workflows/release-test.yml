@@ -6,17 +6,21 @@ on:
     tags:
       - "*"
 
+permissions: {}
+
 jobs:
   internal-test-release:
+    permissions:
+      contents: write
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'internal-test-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
       # Note: do not publish this until binaries are built and uploaded below. This is so that
       # `cargo binstall` keeps working.
-      - uses: taiki-e/create-gh-release-action@c5baa0b5dc700cf06439d87935e130220a6882d9 # v1
+      - uses: taiki-e/create-gh-release-action@c5baa0b5dc700cf06439d87935e130220a6882d9 # v1.9.3
         id: create-gh-release
         with:
           prefix: internal-test
@@ -31,6 +35,8 @@ jobs:
 
   build-internal-test-binaries:
     name: Build internal-test binaries for ${{ matrix.target }}
+    permissions:
+      contents: write
     environment: release
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'internal-test-')
     needs:
@@ -56,7 +62,9 @@ jobs:
             dry-run: true
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/upload-rust-binary-action@0e34102c043ded9f2ca39f7af5cd99a540c61aff # v1.29.1
@@ -111,7 +119,7 @@ jobs:
       - name: Upload unsigned Windows artifact
         id: upload-unsigned-artifact
         if: endsWith(matrix.target, '-pc-windows-msvc')
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ${{ matrix.target }}-unsigned
           path: target/unsigned/internal-test.exe
