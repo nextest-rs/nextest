@@ -41,7 +41,7 @@ jobs:
       - name: Lint (rustfmt)
         run: cargo xfmt --check
       - name: Install cargo readme
-        uses: taiki-e/install-action@e24b8b7a939c6a537188f34a4163cb153dd85cf6 # v2
+        uses: taiki-e/install-action@e24b8b7a939c6a537188f34a4163cb153dd85cf6 # v2.69.1
         with:
           tool: cargo-readme
       - name: Run cargo readme
@@ -113,7 +113,9 @@ jobs:
           # Matrix instances (other than OS) need to be added to this explicitly
           key: ${{ matrix.rust-version }}
       - name: Install latest nextest release
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@e24b8b7a939c6a537188f34a4163cb153dd85cf6 # v2.69.1
+        with:
+          tool: nextest
       - name: Build nextest-metadata
         run: cargo build --package nextest-metadata
       - name: Build cargo-nextest without self-update
@@ -164,7 +166,7 @@ jobs:
       - name: Upload results
         # Run this step even if the test step fails
         if: "!cancelled()"
-        uses: trunk-io/analytics-uploader@main
+        uses: trunk-io/analytics-uploader@95a0fb8b29e45b6068304261fb518644b426a803 # v2.0.8
         with:
           # Path to your test results.
           junit-paths: target/nextest/ci/junit.xml

@@ -12,7 +12,7 @@ jobs:
 
         steps:
             - name: Sync winget-pkgs
-              uses: michidk/run-komac@latest
+              uses: michidk/run-komac@9b27eadc6e9235c252444a437d246c139da2f57f # v2.1.0
               with:
                   args: "sync --token=${{ secrets.KOMAC_TOKEN }}"
                   custom-fork-owner: nextest-rs
@@ -27,7 +27,7 @@ jobs:
             # michidk/winget-updater as of this writing (1.1.6) doesn't support
             # a custom version (which we need above).
             - name: Update nextest on WinGet
-              uses: michidk/run-komac@latest
+              uses: michidk/run-komac@9b27eadc6e9235c252444a437d246c139da2f57f # v2.1.0
               with:
                   args: "update nextest.cargo-nextest --version $LATEST_VERSION --urls $URLS --submit --token ${{ secrets.KOMAC_TOKEN }}"
                   custom-fork-owner: nextest-rs
@@ -39,7 +39,7 @@ jobs:
 
         steps:
             - name: Run Komac
-              uses: michidk/run-komac@latest
+              uses: michidk/run-komac@9b27eadc6e9235c252444a437d246c139da2f57f # v2.1.0
               with:
                   args: "cleanup --only-merged --token=${{ secrets.KOMAC_TOKEN }}"
                   custom-fork-owner: nextest-rs
