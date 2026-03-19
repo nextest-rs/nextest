@@ -1,8 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use camino::{Utf8Path, Utf8PathBuf};
-use std::env;
+use camino::Utf8PathBuf;
 
 #[track_caller]
 pub(crate) fn test_init() {
@@ -60,10 +59,10 @@ pub(crate) fn test_init() {
     }
 }
 
-pub(crate) fn workspace_root() -> Utf8PathBuf {
-    // one level up from the manifest dir -> into fixtures/nextest-tests
-    Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("fixtures/nextest-tests")
+pub(crate) fn nextest_tests_dir() -> Utf8PathBuf {
+    Utf8PathBuf::from(
+        std::env::var("NEXTEST_WORKSPACE_ROOT")
+            .expect("NEXTEST_WORKSPACE_ROOT is set (running under cargo nextest run)"),
+    )
+    .join("fixtures/nextest-tests")
 }

@@ -6,6 +6,8 @@ use camino::Utf8PathBuf;
 /// Environment info captured before sanitization.
 #[derive(Debug)]
 pub struct TestEnvInfo {
+    /// The workspace root, from `NEXTEST_WORKSPACE_ROOT`.
+    pub workspace_root: Utf8PathBuf,
     /// Path to the cargo-nextest-dup binary.
     pub cargo_nextest_dup_bin: Utf8PathBuf,
     /// Path to the fake_interceptor binary.
@@ -37,7 +39,11 @@ pub fn set_env_vars_for_script() {
 /// sanitizing the environment.
 #[track_caller]
 pub fn set_env_vars_for_test() -> TestEnvInfo {
-    // Capture required binary paths before sanitization.
+    // Capture required values before sanitization removes NEXTEST_* and
+    // CARGO_* variables.
+    let workspace_root: Utf8PathBuf = std::env::var("NEXTEST_WORKSPACE_ROOT")
+        .expect("NEXTEST_WORKSPACE_ROOT should be set")
+        .into();
     let cargo_nextest_dup_bin: Utf8PathBuf = std::env::var("NEXTEST_BIN_EXE_cargo_nextest_dup")
         .expect("NEXTEST_BIN_EXE_cargo_nextest_dup should be set")
         .into();
@@ -65,6 +71,7 @@ pub fn set_env_vars_for_test() -> TestEnvInfo {
     }
 
     TestEnvInfo {
+        workspace_root,
         cargo_nextest_dup_bin,
         fake_interceptor_bin,
         rustc_shim_bin,

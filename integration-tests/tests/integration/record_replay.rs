@@ -1111,6 +1111,7 @@ fn test_concurrent_access() {
     let cache_dir_str = cache_dir.to_string();
     let user_config_path_str = user_config_path.to_string();
     // Clone all paths needed for TestEnvInfo in threads.
+    let workspace_root = env_info.workspace_root.clone();
     let cargo_nextest_dup_bin = env_info.cargo_nextest_dup_bin.clone();
     let fake_interceptor_bin = env_info.fake_interceptor_bin.clone();
     let rustc_shim_bin = env_info.rustc_shim_bin.clone();
@@ -1122,6 +1123,7 @@ fn test_concurrent_access() {
             let m = manifest.clone();
             let c = cache_dir_str.clone();
             let u = user_config_path_str.clone();
+            let workspace_root = workspace_root.clone();
             let cargo_nextest_dup_bin = cargo_nextest_dup_bin.clone();
             let fake_interceptor_bin = fake_interceptor_bin.clone();
             let rustc_shim_bin = rustc_shim_bin.clone();
@@ -1130,6 +1132,7 @@ fn test_concurrent_access() {
             let grab_foreground_bin = grab_foreground_bin.clone();
             std::thread::spawn(move || {
                 let thread_env_info = TestEnvInfo {
+                    workspace_root,
                     cargo_nextest_dup_bin,
                     fake_interceptor_bin,
                     rustc_shim_bin,
