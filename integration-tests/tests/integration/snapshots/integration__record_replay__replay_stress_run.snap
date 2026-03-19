@@ -9,7 +9,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
  Nextest run ID 60000001-0000-0000-0000-000000000001 with nextest profile: default
     Starting 1 test across 7 binaries (31 tests skipped)
 ────────────
- Stress test iteration 1/5 (00:00:00 elapsed so far, 5 iterations remaining)
+ Stress test iteration 1/5 (HH:MM:SS elapsed so far, 5 iterations remaining)
         SKIP [         ] [1/5] (───) nextest-tests tests::call_dylib_add_two
         SKIP [         ] [1/5] (───) nextest-tests tests::unit_test_success
         SKIP [         ] [1/5] (───) nextest-tests::basic test_cargo_env_vars
@@ -44,7 +44,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         PASS [ duration] [1/5] (1/1) nextest-tests::basic test_success
  Stress test [ duration] iteration 1/5: 1 test run: 1 passed, 31 skipped
 ────────────
- Stress test iteration 2/5 (00:00:00 elapsed so far, 4 iterations remaining)
+ Stress test iteration 2/5 (HH:MM:SS elapsed so far, 4 iterations remaining)
         SKIP [         ] [2/5] (───) nextest-tests tests::call_dylib_add_two
         SKIP [         ] [2/5] (───) nextest-tests tests::unit_test_success
         SKIP [         ] [2/5] (───) nextest-tests::basic test_cargo_env_vars
@@ -79,7 +79,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         PASS [ duration] [2/5] (1/1) nextest-tests::basic test_success
  Stress test [ duration] iteration 2/5: 1 test run: 1 passed, 31 skipped
 ────────────
- Stress test iteration 3/5 (00:00:00 elapsed so far, 3 iterations remaining)
+ Stress test iteration 3/5 (HH:MM:SS elapsed so far, 3 iterations remaining)
         SKIP [         ] [3/5] (───) nextest-tests tests::call_dylib_add_two
         SKIP [         ] [3/5] (───) nextest-tests tests::unit_test_success
         SKIP [         ] [3/5] (───) nextest-tests::basic test_cargo_env_vars
@@ -114,7 +114,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         PASS [ duration] [3/5] (1/1) nextest-tests::basic test_success
  Stress test [ duration] iteration 3/5: 1 test run: 1 passed, 31 skipped
 ────────────
- Stress test iteration 4/5 (00:00:00 elapsed so far, 2 iterations remaining)
+ Stress test iteration 4/5 (HH:MM:SS elapsed so far, 2 iterations remaining)
         SKIP [         ] [4/5] (───) nextest-tests tests::call_dylib_add_two
         SKIP [         ] [4/5] (───) nextest-tests tests::unit_test_success
         SKIP [         ] [4/5] (───) nextest-tests::basic test_cargo_env_vars
@@ -149,7 +149,7 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         PASS [ duration] [4/5] (1/1) nextest-tests::basic test_success
  Stress test [ duration] iteration 4/5: 1 test run: 1 passed, 31 skipped
 ────────────
- Stress test iteration 5/5 (00:00:00 elapsed so far, 1 iteration remaining)
+ Stress test iteration 5/5 (HH:MM:SS elapsed so far, 1 iteration remaining)
         SKIP [         ] [5/5] (───) nextest-tests tests::call_dylib_add_two
         SKIP [         ] [5/5] (───) nextest-tests tests::unit_test_success
         SKIP [         ] [5/5] (───) nextest-tests::basic test_cargo_env_vars

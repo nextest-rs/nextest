@@ -34,6 +34,7 @@ use nextest_runner::{
         RecordSession, RecordSessionConfig, RerunRootInfo, RunIdOrRecordingSelector, RunIdSelector,
         RunStore, STORE_FORMAT_VERSION, Styles as RecordStyles, records_state_dir,
     },
+    redact::Redactor,
     reporter::{
         MaxProgressRunning, ReporterBuilder, ShowProgress, ShowTerminalProgress, TestOutputDisplay,
         events::{FinalRunStats, RunStats},
@@ -746,6 +747,9 @@ impl ReporterOpts {
 
         builder.set_show_progress(show_progress);
         builder.set_max_progress_running(max_progress_running);
+        if crate::output::should_redact() {
+            builder.set_redactor(Redactor::for_snapshot_testing());
+        }
         builder
     }
 }
@@ -787,6 +791,9 @@ impl BenchReporterOpts {
             .map(ShowProgress::from)
             .unwrap_or(resolved_ui.show_progress.into());
         builder.set_show_progress(show_progress);
+        if crate::output::should_redact() {
+            builder.set_redactor(Redactor::for_snapshot_testing());
+        }
         builder
     }
 }

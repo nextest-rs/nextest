@@ -15,6 +15,7 @@ use crate::{
     errors::WriteEventError,
     list::TestList,
     record::{ShortestRunIdPrefix, StoreSizes},
+    redact::Redactor,
     reporter::{
         aggregator::EventAggregator, displayer::ShowProgress, events::*,
         structured::StructuredReporter,
@@ -89,6 +90,7 @@ pub struct ReporterBuilder {
     show_progress: ShowProgress,
     no_output_indent: bool,
     max_progress_running: MaxProgressRunning,
+    redactor: Redactor,
 }
 
 impl ReporterBuilder {
@@ -160,6 +162,12 @@ impl ReporterBuilder {
         self.max_progress_running = max_progress_running;
         self
     }
+
+    /// Sets the redactor for snapshot testing.
+    pub fn set_redactor(&mut self, redactor: Redactor) -> &mut Self {
+        self.redactor = redactor;
+        self
+    }
 }
 
 impl ReporterBuilder {
@@ -194,6 +202,7 @@ impl ReporterBuilder {
             max_progress_running: self.max_progress_running,
             show_term_progress,
             displayer_kind: DisplayerKind::Live,
+            redactor: self.redactor.clone(),
         }
         .build(output);
 

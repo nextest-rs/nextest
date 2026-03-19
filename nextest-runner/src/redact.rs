@@ -7,8 +7,8 @@
 
 use crate::{
     helpers::{
-        FormattedDuration, FormattedRelativeDuration, convert_rel_path_to_forward_slash,
-        decimal_char_width,
+        DurationRounding, FormattedDuration, FormattedHhMmSs, FormattedRelativeDuration,
+        convert_rel_path_to_forward_slash, decimal_char_width,
     },
     list::RustBuildMeta,
 };
@@ -40,6 +40,8 @@ static SIZE_REDACTION: &str = "<size>";
 static VERSION_REDACTION: &str = "<version>";
 /// Placeholder for redacted relative durations (e.g. "30s ago").
 static RELATIVE_DURATION_REDACTION: &str = "<ago>";
+/// 8 chars, matches `HH:MM:SS` format.
+static HHMMSS_REDACTION: &str = "HH:MM:SS";
 
 /// A helper for redacting data that varies by environment.
 ///
@@ -48,6 +50,12 @@ static RELATIVE_DURATION_REDACTION: &str = "<ago>";
 #[derive(Clone, Debug)]
 pub struct Redactor {
     kind: Arc<RedactorKind>,
+}
+
+impl Default for Redactor {
+    fn default() -> Self {
+        Self::noop()
+    }
 }
 
 impl Redactor {
@@ -146,6 +154,23 @@ impl Redactor {
             RedactorOutput::Redacted(DURATION_REDACTION.to_string())
         } else {
             RedactorOutput::Unredacted(FormattedDuration(orig))
+        }
+    }
+
+    /// Redacts an `HH:MM:SS` duration (used for stress test elapsed/remaining
+    /// time).
+    ///
+    /// The placeholder `HH:MM:SS` is 8 characters, matching the width of the
+    /// zero-padded `%02H:%02M:%02S` format.
+    pub(crate) fn redact_hhmmss_duration(
+        &self,
+        duration: Duration,
+        rounding: DurationRounding,
+    ) -> RedactorOutput<FormattedHhMmSs> {
+        if self.kind.is_active() {
+            RedactorOutput::Redacted(HHMMSS_REDACTION.to_string())
+        } else {
+            RedactorOutput::Unredacted(FormattedHhMmSs { duration, rounding })
         }
     }
 
