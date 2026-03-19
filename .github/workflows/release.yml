@@ -231,10 +231,12 @@ jobs:
         # Bash seems to screw up argument parsing for verpatch. We really should
         # rewrite this tool in Rust at some point.
         shell: powershell
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
           cd target/unsigned
           # Extract version from ref_name, e.g. cargo-nextest-0.9.97 -> 0.9.97
-          $refName = "${{ github.ref_name }}"
+          $refName = $env:REF_NAME
           if ($refName -match "^cargo-nextest-(.+)$") {
             $version = $Matches[1]
           } else {
@@ -250,8 +252,10 @@ jobs:
         if: endsWith(matrix.target, '-pc-windows-msvc')
         id: get-signing-policy-slug
         shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          just win-signing-policy-slug "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          just win-signing-policy-slug "${REF_NAME}" >> "${GITHUB_OUTPUT}"
 
       - name: Upload unsigned Windows artifact
         id: upload-unsigned-artifact
@@ -280,39 +284,16 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -x
-          cd target/signed
-
-          tar -czf ${{ github.ref_name }}-${{ matrix.target }}.tar.gz cargo-nextest.exe
-          # Windows has 7z, not zip.
-          7z a ${{ github.ref_name }}-${{ matrix.target }}.zip cargo-nextest.exe
-
-          sha256sum --binary \
-            ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
-            ${{ github.ref_name }}-${{ matrix.target }}.zip \
-            > ${{ github.ref_name }}-${{ matrix.target }}.sha256
-          b2sum --binary \
-            ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
-            ${{ github.ref_name }}-${{ matrix.target }}.zip \
-            > ${{ github.ref_name }}-${{ matrix.target }}.b2
-
-          gh release upload ${{ github.ref_name }} \
-            ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
-            ${{ github.ref_name }}-${{ matrix.target }}.zip \
-            ${{ github.ref_name }}-${{ matrix.target }}.sha256 \
-            ${{ github.ref_name }}-${{ matrix.target }}.b2
-
+          REF_NAME: ${{ github.ref_name }}
+          TARGET: ${{ matrix.target }}
+        run: ./scripts/archive-and-upload-windows.sh cargo-nextest.exe
       - name: Set archive output variable
         id: archive-output
         shell: bash
-        run: |
-          if [[ ${{ matrix.target }} == *-pc-windows-msvc ]]; then
-            echo "${{ matrix.target }}-tar=${{ github.ref_name }}-${{ matrix.target }}".tar.gz >> $GITHUB_OUTPUT
-            echo "${{ matrix.target }}-zip=${{ github.ref_name }}-${{ matrix.target }}".zip >> $GITHUB_OUTPUT
-          else
-            echo "${{ matrix.target }}-tar=${{ github.ref_name }}-${{ matrix.target }}".tar.gz >> $GITHUB_OUTPUT
-          fi
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          TARGET: ${{ matrix.target }}
+        run: ./scripts/set-archive-output.sh
     outputs:
       x86_64-linux-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-gnu-tar }}
       x86_64-linux-musl-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-musl-tar }}
@@ -359,23 +340,26 @@ jobs:
       # metadata is generated, since that fetches release artifacts based on the
       # tag name (which isn't available until the release is created).
       - name: Mark GitHub release published
-        run: |
-          cd nextest
-          gh release edit ${{ github.ref_name }} --draft=false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          cd nextest
+          gh release edit "${REF_NAME}" --draft=false
       - name: Download mukti
         run: |
           mkdir -p ~/bin
           curl -LsSf "https://github.com/nextest-rs/mukti/releases/download/mukti-bin-0.7.8/mukti-bin-0.7.8-x86_64-unknown-linux-musl.tar.gz" \
             | tar xzf - -C ~/bin
       - name: Add release metadata
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
           cd release-meta
           ~/bin/mukti-bin --json releases.json add-release \
             --version ${{ needs.cargo-nextest-release.outputs.version }} \
-            --release-url "https://github.com/nextest-rs/nextest/releases/${{ github.ref_name }}" \
-            --archive-prefix "https://github.com/nextest-rs/nextest/releases/download/${{ github.ref_name }}" \
+            --release-url "https://github.com/nextest-rs/nextest/releases/${REF_NAME}" \
+            --archive-prefix "https://github.com/nextest-rs/nextest/releases/download/${REF_NAME}" \
             --archive x86_64-unknown-linux-gnu:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-linux-tar }} \
             --archive x86_64-unknown-linux-musl:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-linux-musl-tar }} \
             --archive aarch64-unknown-linux-gnu:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.aarch64-linux-tar }} \
@@ -412,13 +396,15 @@ jobs:
         run: |
           cat nextest/site/release-meta-static/extra-redirects >> release-meta/_redirects
       - name: Update release-meta repo
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
           cd release-meta
           git config user.email "bot@nexte.st"
           git config user.name "Nextest Bot"
           git pull --autostash --rebase origin main
           git add releases.json _redirects
-          git commit -m "Update release metadata for ${{ github.ref_name }}"
+          git commit -m "Update release metadata for ${REF_NAME}"
           git push origin HEAD:main
       - name: Run cargo-release-publish.sh
         run: |

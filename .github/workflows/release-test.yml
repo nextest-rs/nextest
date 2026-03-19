@@ -89,10 +89,12 @@ jobs:
       - name: Add metadata to Windows binary
         if: endsWith(matrix.target, '-pc-windows-msvc')
         shell: powershell
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
           cd target/unsigned
           # Extract version from ref_name, e.g. internal-test-0.9.97 -> 0.9.97
-          $refName = "${{ github.ref_name }}"
+          $refName = $env:REF_NAME
           if ($refName -match "^internal-test-(.+)$") {
             $version = $Matches[1]
           } else {
@@ -132,38 +134,16 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -x
-          cd target/signed
-
-          tar -czf ${{ github.ref_name }}-${{ matrix.target }}.tar.gz internal-test.exe
-          # Windows has 7z, not zip.
-          7z a ${{ github.ref_name }}-${{ matrix.target }}.zip internal-test.exe
-
-          sha256sum --binary \
-            ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
-            ${{ github.ref_name }}-${{ matrix.target }}.zip \
-            > ${{ github.ref_name }}-${{ matrix.target }}.sha256
-          b2sum --binary \
-            ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
-            ${{ github.ref_name }}-${{ matrix.target }}.zip \
-            > ${{ github.ref_name }}-${{ matrix.target }}.b2
-
-          gh release upload ${{ github.ref_name }} \
-            ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
-            ${{ github.ref_name }}-${{ matrix.target }}.zip \
-            ${{ github.ref_name }}-${{ matrix.target }}.sha256 \
-            ${{ github.ref_name }}-${{ matrix.target }}.b2
+          REF_NAME: ${{ github.ref_name }}
+          TARGET: ${{ matrix.target }}
+        run: ./scripts/archive-and-upload-windows.sh internal-test.exe
       - name: Set archive output variable
         id: archive-output
         shell: bash
-        run: |
-          if [[ ${{ matrix.target }} == *-pc-windows-msvc ]]; then
-            echo "${{ matrix.target }}-tar=${{ github.ref_name }}-${{ matrix.target }}".tar.gz >> $GITHUB_OUTPUT
-            echo "${{ matrix.target }}-zip=${{ github.ref_name }}-${{ matrix.target }}".zip >> $GITHUB_OUTPUT
-          else
-            echo "${{ matrix.target }}-tar=${{ github.ref_name }}-${{ matrix.target }}".tar.gz >> $GITHUB_OUTPUT
-          fi
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          TARGET: ${{ matrix.target }}
+        run: ./scripts/set-archive-output.sh
     outputs:
       x86_64-windows-tar: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-tar }}
       x86_64-windows-zip: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-zip }}
