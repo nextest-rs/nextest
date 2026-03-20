@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.20.0] - 2026-03-20
+
+### Changed
+
+- winnow updated to 1.0.0.
+
 ## [0.19.0] - 2026-03-16
 
 ### Changed
@@ -188,6 +194,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.20.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.20.0
 [0.19.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.19.0
 [0.18.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.18.0
 [0.17.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.17.0
