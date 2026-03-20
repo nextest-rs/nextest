@@ -12,6 +12,7 @@ jobs:
   internal-test-release:
     permissions:
       contents: write
+    environment: release
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'internal-test-')
     runs-on: ubuntu-latest
     steps:
@@ -37,7 +38,7 @@ jobs:
     name: Build internal-test binaries for ${{ matrix.target }}
     permissions:
       contents: write
-    environment: release
+    environment: release-binaries
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'internal-test-')
     needs:
       - internal-test-release

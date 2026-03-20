@@ -124,6 +124,7 @@ jobs:
     name: Build cargo-nextest binaries for ${{ matrix.target }}
     permissions:
       contents: write
+    environment: release-binaries
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'cargo-nextest-')
     needs:
       - cargo-nextest-release
@@ -291,10 +292,7 @@ jobs:
         if: endsWith(matrix.target, '-pc-windows-msvc')
         uses: signpath/github-action-submit-signing-request@3f9250c56651ff692d6729a2fbb0603a42d7d322 # v2.0
         with:
-          # The release environment is on the cargo-nextest-release gate job to
-          # avoid per-matrix-entry notifications. These jobs are gated behind it
-          # via `needs`.
-          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}' # zizmor: ignore[secrets-outside-env]
+          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
           organization-id: '34634019-2ee0-4162-830a-72cd1a0cb73f'
           project-slug: 'nextest'
           signing-policy-slug: '${{ steps.get-signing-policy-slug.outputs.signing-policy-slug }}'
@@ -337,6 +335,7 @@ jobs:
     name: Update release-meta branch and publish to crates.io
     permissions:
       contents: write
+    environment: release-binaries
     if: github.repository_owner == 'nextest-rs'
     needs:
       - cargo-nextest-release
@@ -355,10 +354,7 @@ jobs:
           persist-credentials: true
           repository: nextest-rs/release-meta
           ref: main
-          # The release environment is on the cargo-nextest-release gate job to
-          # avoid per-matrix-entry notifications. This job is gated behind it
-          # via `needs`.
-          token: ${{ secrets.RELEASE_META_DEPLOY_TOKEN }} # zizmor: ignore[secrets-outside-env]
+          token: ${{ secrets.RELEASE_META_DEPLOY_TOKEN }}
           path: release-meta
 
       - name: Install Rust
@@ -438,4 +434,4 @@ jobs:
           cd nextest
           PUBLISH_CARGO_NEXTEST=1 ./scripts/cargo-release-publish.sh
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }} # zizmor: ignore[secrets-outside-env]
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
