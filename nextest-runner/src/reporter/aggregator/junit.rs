@@ -372,7 +372,7 @@ fn non_success_kind_and_type(
         } => (
             NonSuccessKind::Failure,
             format!(
-                "{} abort with leaked handles",
+                "{} abort (leaked handles)",
                 DisplayUnitKind::new(mode, kind),
             ),
         ),
@@ -389,7 +389,7 @@ fn non_success_kind_and_type(
         } => (
             NonSuccessKind::Failure,
             format!(
-                "{} failure with exit code {code}, and leaked handles",
+                "{} failure with exit code {code} (leaked handles)",
                 DisplayUnitKind::new(mode, kind),
             ),
         ),
@@ -727,7 +727,7 @@ mod tests {
                     * error waiting for child process to exit
                         caused by:
                         - huh
-                    * process aborted with signal 15 (SIGTERM), and also leaked handles
+                    * process aborted with signal 15 (SIGTERM) (leaked handles)
                     * thread 'foo' panicked at xyz.rs:40
                 "}),
                 system_out: None,

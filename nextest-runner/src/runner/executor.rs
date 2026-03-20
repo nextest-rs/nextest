@@ -25,8 +25,9 @@ use crate::{
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
     list::{TestExecuteContext, TestInstance, TestInstanceWithSettings, TestList},
     reporter::events::{
-        ExecutionResult, FailureStatus, InfoResponse, RetryData, SetupScriptInfoResponse,
-        StressIndex, TestInfoResponse, TestSlotAssignment, UnitKind, UnitState,
+        ExecutionResult, ExecutionResultDescription, FailureStatus, InfoResponse, RetryData,
+        SetupScriptInfoResponse, StressIndex, TestInfoResponse, TestSlotAssignment, UnitKind,
+        UnitState,
     },
     runner::{
         ExecutorEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus,
@@ -325,8 +326,9 @@ impl<'a> ExecutorContext<'a> {
                     .next()
                     .expect("backoff delay must be non-empty");
 
-                // Capture the internal result before converting to external.
-                let previous_result = run_status.result;
+                // Convert the internal result to a platform-independent
+                // description before converting to external.
+                let previous_result = ExecutionResultDescription::from(run_status.result);
                 let run_status = run_status.into_external();
                 let previous_slow = run_status.is_slow;
 
@@ -624,12 +626,21 @@ impl<'a> ExecutorContext<'a> {
                 }
             };
 
-            // Build a tentative status using status and the exit status.
-            let tentative_status = status.or_else(|| {
-                res.as_ref().ok().map(|res| {
-                    create_execution_result(*res, &child_acc.errors, false, LeakTimeoutResult::Pass)
+            // Build a tentative status using status and the exit status,
+            // then convert to a platform-independent description for info
+            // responses.
+            let tentative_status = status
+                .or_else(|| {
+                    res.as_ref().ok().map(|res| {
+                        create_execution_result(
+                            *res,
+                            &child_acc.errors,
+                            false,
+                            LeakTimeoutResult::Pass,
+                        )
+                    })
                 })
-            });
+                .map(ExecutionResultDescription::from);
 
             let leak_info = detect_fd_leaks(
                 &cx,
@@ -1044,12 +1055,21 @@ impl<'a> ExecutorContext<'a> {
                 };
             };
 
-            // Build a tentative status using status and the exit status.
-            let tentative_status = status.or_else(|| {
-                res.as_ref().ok().map(|res| {
-                    create_execution_result(*res, &child_acc.errors, false, LeakTimeoutResult::Pass)
+            // Build a tentative status using status and the exit status,
+            // then convert to a platform-independent description for info
+            // responses.
+            let tentative_status = status
+                .or_else(|| {
+                    res.as_ref().ok().map(|res| {
+                        create_execution_result(
+                            *res,
+                            &child_acc.errors,
+                            false,
+                            LeakTimeoutResult::Pass,
+                        )
+                    })
                 })
-            });
+                .map(ExecutionResultDescription::from);
 
             let leak_info = if self.interceptor.should_skip_leak_detection() {
                 // Skip leak detection when running under an interceptor.
@@ -1366,7 +1386,7 @@ fn drain_req_rx<'a>(
 
 async fn handle_delay_between_attempts<'a>(
     packet: &TestPacket<'a>,
-    previous_result: ExecutionResult,
+    previous_result: ExecutionResultDescription,
     previous_slow: bool,
     delay: Duration,
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
@@ -1413,7 +1433,7 @@ async fn handle_delay_between_attempts<'a>(
                         _ = tx.send(
                             packet.info_response(
                                 UnitState::DelayBeforeNextAttempt {
-                                    previous_result,
+                                    previous_result: previous_result.clone(),
                                     previous_slow,
                                     waiting_duration: waiting_snapshot.active,
                                     remaining: delay
@@ -1464,7 +1484,7 @@ async fn detect_fd_leaks<'a>(
     cx: &UnitContext<'a>,
     child_pid: u32,
     child_acc: &mut ChildAccumulator,
-    tentative_result: Option<ExecutionResult>,
+    tentative_result: Option<ExecutionResultDescription>,
     leak_timeout: LeakTimeout,
     stopwatch: &mut StopwatchStart,
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
@@ -1510,7 +1530,7 @@ async fn detect_fd_leaks<'a>(
                                 pid: child_pid,
                                 time_taken: stopwatch.snapshot().active,
                                 slow_after: cx.slow_after,
-                                tentative_result,
+                                tentative_result: tentative_result.clone(),
                                 waiting_duration: snapshot.active,
                                 remaining: leak_timeout.period
                                     .checked_sub(snapshot.active)
