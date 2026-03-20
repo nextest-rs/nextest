@@ -15,5 +15,5 @@ export __NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_BOTH=test-FAILED-value-s
 export __NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_NONE=test-PASSED-value-set-by-environment
 export __NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_FALSE=test-PASSED-value-set-by-environment
 
-cd "$(git rev-parse --show-toplevel)"/fixtures/nextest-tests
+cd "$(git rev-parse --show-toplevel)"/fixtures/fixture-project
 cargo test --config .cargo/extra-config.toml -- test_cargo_env_vars

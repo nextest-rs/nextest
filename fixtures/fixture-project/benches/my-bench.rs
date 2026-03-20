@@ -50,6 +50,6 @@ mod tests {
     /// Test that a binary can be successfully executed.
     #[test]
     fn test_execute_bin() {
-        nextest_tests::test_execute_bin_helper();
+        fixture_project::test_execute_bin_helper();
     }
 }

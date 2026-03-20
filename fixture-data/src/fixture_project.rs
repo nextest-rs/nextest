@@ -1,9 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Information about the "nextest-tests" fixture.
-//!
-//! TODO: need a better name than "nextest-tests".
+//! Information about the "fixture-project" fixture.
 
 use crate::models::{
     TestCaseFixture, TestCaseFixtureProperties, TestCaseFixtureStatus, TestSuiteFixture,
@@ -17,7 +15,7 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
     id_ord_map! {
         // Integration tests
         TestSuiteFixture::new(
-            "nextest-tests::basic",
+            "fixture-project::basic",
             "basic",
             BuildPlatform::Target,
             id_ord_map! {
@@ -77,7 +75,7 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
             },
         ),
         TestSuiteFixture::new(
-            "nextest-tests::other",
+            "fixture-project::other",
             "other",
             BuildPlatform::Target,
             id_ord_map! {
@@ -85,7 +83,7 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
             },
         ),
         TestSuiteFixture::new(
-            "nextest-tests::segfault",
+            "fixture-project::segfault",
             "segfault",
             BuildPlatform::Target,
             id_ord_map! {
@@ -94,8 +92,8 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
         ),
         // Unit tests
         TestSuiteFixture::new(
-            "nextest-tests",
-            "nextest-tests",
+            "fixture-project",
+            "fixture-project",
             BuildPlatform::Target,
             id_ord_map! {
                 TestCaseFixture::new("tests::call_dylib_add_two", TestCaseFixtureStatus::Pass),
@@ -104,8 +102,8 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
         ),
         // Binary tests
         TestSuiteFixture::new(
-            "nextest-tests::bin/nextest-tests",
-            "nextest-tests",
+            "fixture-project::bin/fixture-project",
+            "fixture-project",
             BuildPlatform::Target,
             id_ord_map! {
                 // This is a fake test name produced by wrapper.rs.
@@ -114,7 +112,7 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
             },
         ),
         TestSuiteFixture::new(
-            "nextest-tests::bin/other",
+            "fixture-project::bin/other",
             "other",
             BuildPlatform::Target,
             id_ord_map! {
@@ -122,15 +120,15 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
             },
         ),
         TestSuiteFixture::new(
-            "nextest-tests::bin/wrapper",
+            "fixture-project::bin/wrapper",
             "wrapper",
             BuildPlatform::Target,
             IdOrdMap::new(),
         ),
         // Example tests
         TestSuiteFixture::new(
-            "nextest-tests::example/nextest-tests",
-            "nextest-tests",
+            "fixture-project::example/fixture-project",
+            "fixture-project",
             BuildPlatform::Target,
             id_ord_map! {
                 // This is a fake test name produced by wrapper.rs.
@@ -139,7 +137,7 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
             },
         ),
         TestSuiteFixture::new(
-            "nextest-tests::example/other",
+            "fixture-project::example/other",
             "other",
             BuildPlatform::Target,
             id_ord_map! {
@@ -148,7 +146,7 @@ pub static EXPECTED_TEST_SUITES: LazyLock<IdOrdMap<TestSuiteFixture>> = LazyLock
         ),
         // Benchmarks
         TestSuiteFixture::new(
-            "nextest-tests::bench/my-bench",
+            "fixture-project::bench/my-bench",
             "my-bench",
             BuildPlatform::Target,
             id_ord_map! {

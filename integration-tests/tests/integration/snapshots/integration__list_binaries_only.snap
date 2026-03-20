@@ -33,16 +33,16 @@ info: experimental features enabled: setup-scripts, wrapper-scripts, benchmarks
 
   error: operator didn't match any binary IDs
    ╭────
- 1 │ binary_id(nextest-tests::does_not_exist) | binary_id(=nextest-tests::basic)
-   ·           ──────────────┬──────────────
-   ·                         ╰── no binary IDs matched this
+ 1 │ binary_id(fixture-project::does_not_exist) | binary_id(=fixture-project::basic)
+   ·           ───────────────┬───────────────
+   ·                          ╰── no binary IDs matched this
    ╰────
 
   error: operator didn't match any binary IDs
    ╭────
- 1 │ binary_id(nextest-tests::example/*) | binary_id(dylib-test::example/*)
-   ·                                                 ──────────┬──────────
-   ·                                                           ╰── no binary IDs matched this
+ 1 │ binary_id(fixture-project::example/*) | binary_id(dylib-test::example/*)
+   ·                                                   ──────────┬──────────
+   ·                                                             ╰── no binary IDs matched this
    ╰────
 
 error: failed to parse filterset

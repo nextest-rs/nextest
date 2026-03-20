@@ -38,13 +38,13 @@ run-wrapper = "wrapper-overrides-windows"
 
 [[profile.default.scripts]]
 platform = { host = "cfg(unix)" }
-filter = "binary(nextest-tests)"
+filter = "binary(fixture-project)"
 setup = "my-script-unix"
 list-wrapper = "wrapper1-unix"
 
 [[profile.default.scripts]]
 platform = { host = "cfg(windows)" }
-filter = "binary(nextest-tests)"
+filter = "binary(fixture-project)"
 setup = "my-script-windows"
 list-wrapper = "wrapper1-windows"
 

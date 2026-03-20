@@ -6,7 +6,9 @@ use camino_tempfile::Utf8TempDir;
 use color_eyre::eyre::{Context, bail};
 use cp_r::CopyOptions;
 use fs_err as fs;
-use integration_tests::{env::TestEnvInfo, nextest_cli::CargoNextestCli, seed::nextest_tests_dir};
+use integration_tests::{
+    env::TestEnvInfo, nextest_cli::CargoNextestCli, seed::fixture_project_dir,
+};
 use nextest_metadata::BinaryListSummary;
 use std::path::Path;
 
@@ -77,7 +79,7 @@ impl TempProject {
         // which doesn't match compile time.
         let temp_root: Utf8PathBuf = fixup_macos_path(temp_dir.path());
         let workspace_root = temp_root.join("src");
-        let src_dir = nextest_tests_dir(&env_info.workspace_root);
+        let src_dir = fixture_project_dir(&env_info.workspace_root);
 
         copy_dir_all(src_dir, &workspace_root, true)?;
 

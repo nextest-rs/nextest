@@ -249,7 +249,7 @@ jobs:
           CARGO_NEXTEST: target/debug/cargo-nextest
           RUSTUP_AVAILABLE: 1
         run: |
-          ./scripts/nextest-without-rustup.sh archive --manifest-path fixtures/nextest-tests/Cargo.toml \
+          ./scripts/nextest-without-rustup.sh archive --manifest-path fixtures/fixture-project/Cargo.toml \
             --target x86_64-pc-windows-gnu --archive-file target/fixture-archive.tar.zst \
             --package cdylib-example --package nextest-derive
 
@@ -325,7 +325,7 @@ jobs:
           chmod +x $CARGO_NEXTEST
           ./scripts/nextest-without-rustup.sh run \
             --archive-file fixture-archive/fixture-archive.tar.zst \
-            --workspace-remap $GITHUB_WORKSPACE/fixtures/nextest-tests \
+            --workspace-remap $GITHUB_WORKSPACE/fixtures/fixture-project \
             -E 'platform(host)'
       - name: Run test fixtures (target)
         if: ${{ matrix.data.artifact-name == 'windows-latest' }}
@@ -335,7 +335,7 @@ jobs:
         run: |
           ./scripts/nextest-without-rustup.sh run \
             --archive-file fixture-archive/fixture-archive.tar.zst \
-            --workspace-remap $GITHUB_WORKSPACE/fixtures/nextest-tests \
+            --workspace-remap $GITHUB_WORKSPACE/fixtures/fixture-project \
             -E 'platform(target)'
 
   test-build-dir:
@@ -360,7 +360,7 @@ jobs:
         run: |
           ./scripts/nextest-without-rustup.sh run \
             -Z build-dir-new-layout \
-            --manifest-path fixtures/nextest-tests/Cargo.toml \
+            --manifest-path fixtures/fixture-project/Cargo.toml \
             --package cdylib-link --package cdylib-example \
             --package with-build-script
       - name: Archive fixture tests with build-dir
@@ -371,7 +371,7 @@ jobs:
         run: |
           ./scripts/nextest-without-rustup.sh archive \
             -Z build-dir-new-layout \
-            --manifest-path fixtures/nextest-tests/Cargo.toml \
+            --manifest-path fixtures/fixture-project/Cargo.toml \
             --archive-file target/build-dir-archive.tar.zst \
             --package cdylib-link --package cdylib-example \
             --package with-build-script
@@ -385,6 +385,6 @@ jobs:
           # Do not set RUSTUP_AVAILABLE here, since running tests out of an
           # archive should not require rustup or Cargo.
         run: |
-          rm -r fixtures/nextest-tests/target ${{ github.workspace }}/build-output
+          rm -r fixtures/fixture-project/target ${{ github.workspace }}/build-output
           ./scripts/nextest-without-rustup.sh run \
             --archive-file target/build-dir-archive.tar.zst

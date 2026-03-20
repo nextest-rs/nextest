@@ -10,4 +10,4 @@ group: unused (max threads = 20)
     (no matches)
 group: @global
   * override for with-termination profile with filter 'test(=test_slow_timeout_2)':
-      nextest-tests::basic:
+      fixture-project::basic:

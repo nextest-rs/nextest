@@ -1,7 +1,7 @@
 [package]
-name = "nextest-tests"
+name = "fixture-project"
 version = "0.1.0"
-description = "nextest-tests description"
+description = "fixture-project description"
 authors = [
     "Fake Author <fakeauthor@example.com>",
     "Author 2 <author2@example.org>",
@@ -19,7 +19,7 @@ edition = "2018"
 rust-version = "1.58.0"
 
 [[example]]
-name = "nextest-tests"
+name = "fixture-project"
 test = true
 
 [[example]]

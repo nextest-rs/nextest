@@ -27,6 +27,14 @@ name = "dylib-test"
 version = "0.1.0"
 
 [[package]]
+name = "fixture-project"
+version = "0.1.0"
+dependencies = [
+ "dylib-test",
+ "uuid",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -39,14 +47,6 @@ dependencies = [
 [[package]]
 name = "nextest-derive"
 version = "0.1.0"
-
-[[package]]
-name = "nextest-tests"
-version = "0.1.0"
-dependencies = [
- "dylib-test",
- "uuid",
-]
 
 [[package]]
 name = "once_cell"

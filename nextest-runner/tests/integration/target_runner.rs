@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::fixtures::{nextest_tests_dir, test_init};
+use crate::fixtures::{fixture_project_dir, test_init};
 use color_eyre::Result;
 use nextest_runner::{
     RustcCli,
@@ -14,8 +14,8 @@ use target_spec::Platform;
 fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunner)> {
     let configs = CargoConfigs::new_with_isolation(
         Vec::<String>::new(),
-        &nextest_tests_dir(),
-        &nextest_tests_dir(),
+        &fixture_project_dir(),
+        &fixture_project_dir(),
         Vec::new(),
     )
     .unwrap();
@@ -78,7 +78,7 @@ fn parse_triple(triple: &'static str) -> target_spec::Platform {
 
 #[test]
 fn parses_cargo_config_exact() {
-    let workspace_root = nextest_tests_dir();
+    let workspace_root = fixture_project_dir();
     let windows = parse_triple("x86_64-pc-windows-gnu");
     let configs = CargoConfigs::new_with_isolation(
         Vec::<String>::new(),
@@ -97,7 +97,7 @@ fn parses_cargo_config_exact() {
 
 #[test]
 fn disregards_non_matching() {
-    let workspace_root = nextest_tests_dir();
+    let workspace_root = fixture_project_dir();
     let windows = parse_triple("x86_64-unknown-linux-gnu");
     let configs = CargoConfigs::new_with_isolation(
         Vec::<String>::new(),
@@ -115,7 +115,7 @@ fn disregards_non_matching() {
 
 #[test]
 fn parses_cargo_config_cfg() {
-    let workspace_root = nextest_tests_dir();
+    let workspace_root = fixture_project_dir();
     let android = parse_triple("aarch64-linux-android");
     let configs = CargoConfigs::new_with_isolation(
         Vec::<String>::new(),

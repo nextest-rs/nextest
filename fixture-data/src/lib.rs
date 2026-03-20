@@ -3,5 +3,5 @@
 
 //! Information about nextest's fixtures, as contained in the `fixtures` directory.
 
+pub mod fixture_project;
 pub mod models;
-pub mod nextest_tests;

@@ -4,7 +4,7 @@
 //! Test that with libtest-mimic, passing in `--test-threads=1` runs the tests in a
 //! single thread, and not passing it runs the tests in multiple threads.
 //!
-//! This is technically a fixture and should live in `fixtures/nextest-tests`,
+//! This is technically a fixture and should live in `fixtures/fixture-project`,
 //! but making it so pulls in several dependencies and makes the test run quite
 //! a bit slower. So we make it part of integration-tests instead.
 //!

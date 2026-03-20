@@ -59,10 +59,10 @@ pub(crate) fn test_init() {
     }
 }
 
-pub(crate) fn nextest_tests_dir() -> Utf8PathBuf {
+pub(crate) fn fixture_project_dir() -> Utf8PathBuf {
     Utf8PathBuf::from(
         std::env::var("NEXTEST_WORKSPACE_ROOT")
             .expect("NEXTEST_WORKSPACE_ROOT is set (running under cargo nextest run)"),
     )
-    .join("fixtures/nextest-tests")
+    .join("fixtures/fixture-project")
 }

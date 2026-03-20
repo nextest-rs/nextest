@@ -76,7 +76,7 @@ fn test_failure_should_panic() {}
 fn test_cwd() {
     // Ensure that the cwd is correct. It's a bit tricky to do this in the face
     // of a relative path, but just ensure that the cwd looks like what it
-    // should be (has a `Cargo.toml` with `name = "nextest-tests"` within it).
+    // should be (has a `Cargo.toml` with `name = "fixture-project"` within it).
     let runtime_cwd = env::current_dir().expect("should be able to read current dir");
     let cargo_toml_path = runtime_cwd.join("Cargo.toml");
     let cargo_toml =
@@ -87,8 +87,8 @@ fn test_cwd() {
             )
         });
     assert!(
-        cargo_toml.contains("name = \"nextest-tests\""),
-        "{} contains name = \"nextest-tests\"",
+        cargo_toml.contains("name = \"fixture-project\""),
+        "{} contains name = \"fixture-project\"",
         cargo_toml_path.display()
     );
 
@@ -117,7 +117,7 @@ fn test_ignored_fail() {
 #[test]
 fn test_execute_bin() {
     assert_with_retries_serial();
-    nextest_tests::test_execute_bin_helper();
+    fixture_project::test_execute_bin_helper();
 }
 
 macro_rules! assert_env {
@@ -196,7 +196,7 @@ fn test_cargo_env_vars() {
 
     let test_name = "test_cargo_env_vars";
     assert_eq!(check_env("NEXTEST_TEST_NAME"), test_name);
-    let binary_id = "nextest-tests::basic";
+    let binary_id = "fixture-project::basic";
     assert_eq!(check_env("NEXTEST_BINARY_ID"), binary_id);
 
     // The test might run with 1 or 3 total attempts
@@ -244,7 +244,7 @@ fn test_cargo_env_vars() {
     // We don't use assert_env! here because the compile-time and runtime paths
     // may differ when running from archives with path remapping. The value is
     // validated by test_execute_bin instead.
-    check_env("CARGO_BIN_EXE_nextest-tests");
+    check_env("CARGO_BIN_EXE_fixture-project");
 
     // CARGO_CRATE_NAME is missing at runtime
     // CARGO_PRIMARY_PACKAGE is missing at runtime
@@ -430,7 +430,7 @@ fn test_cargo_env_vars() {
         test_threads,
     );
 
-    // The nextest-tests package is at the workspace root, so these should match.
+    // The fixture-project package is at the workspace root, so these should match.
     assert_eq!(
         check_env("NEXTEST_WORKSPACE_ROOT"),
         check_env("CARGO_MANIFEST_DIR"),
