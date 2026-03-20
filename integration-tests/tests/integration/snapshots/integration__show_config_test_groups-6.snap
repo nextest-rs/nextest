@@ -1,6 +1,5 @@
 ---
 source: integration-tests/tests/integration/main.rs
-assertion_line: 1479
 expression: with_termination_all_output.stdout_as_str()
 ---
 group: flaky (max threads = 4)
@@ -11,18 +10,16 @@ group: unused (max threads = 20)
     (no matches)
 group: @global
   * override for with-termination profile with filter 'test(=test_slow_timeout_2)':
-      nextest-tests::basic:
+      fixture-project::basic:
   * from default settings:
       cdylib-example:
           tests::test_multiply_two_cdylib
       cdylib-link:
           test_multiply_two
-      nextest-derive:
-          it_works
-      nextest-tests:
+      fixture-project:
           tests::call_dylib_add_two
           tests::unit_test_success
-      nextest-tests::basic:
+      fixture-project::basic:
           test_cargo_env_vars
           test_cwd
           test_execute_bin
@@ -40,21 +37,23 @@ group: @global
           test_subprocess_doesnt_exit_leak_fail
           test_success
           test_success_should_panic
-      nextest-tests::other:
+      fixture-project::other:
           other_test_success
-      nextest-tests::segfault:
+      fixture-project::segfault:
           test_segfault
-      nextest-tests::bench/my-bench:
+      fixture-project::bench/my-bench:
           bench_add_two
           tests::test_execute_bin
-      nextest-tests::bin/nextest-tests:
+      fixture-project::bin/fixture-project:
           tests::bin_success
-      nextest-tests::bin/other:
+      fixture-project::bin/other:
           tests::other_bin_success
-      nextest-tests::example/nextest-tests:
+      fixture-project::example/fixture-project:
           tests::example_success
-      nextest-tests::example/other:
+      fixture-project::example/other:
           tests::other_example_success
+      nextest-derive:
+          it_works
       with-build-script:
           tests::test_build_script_vars_set
           tests::test_out_dir_present

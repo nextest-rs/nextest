@@ -8,8 +8,8 @@ use fs_err as fs;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, time::SystemTime};
 
-pub fn nextest_tests_dir(workspace_root: &Utf8Path) -> Utf8PathBuf {
-    workspace_root.join("fixtures/nextest-tests")
+pub fn fixture_project_dir(workspace_root: &Utf8Path) -> Utf8PathBuf {
+    workspace_root.join("fixtures/fixture-project")
 }
 
 // We use SHA-256 because other parts of nextest do the same -- this can easily
@@ -152,7 +152,7 @@ pub fn get_seed_archive_name(hash: Sha256Hash) -> Utf8PathBuf {
     // Check in the std temp directory for the seed file.
     let temp_dir = Utf8PathBuf::try_from(std::env::temp_dir()).expect("temp dir is utf-8");
     let username = whoami::username().expect("obtained username");
-    let user_dir = temp_dir.join(format!("nextest-tests-seed-{username}"));
+    let user_dir = temp_dir.join(format!("fixture-project-seed-{username}"));
     user_dir.join(format!("seed-{hash}.tar.zst"))
 }
 

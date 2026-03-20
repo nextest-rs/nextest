@@ -1,6 +1,6 @@
 [32;1m Nextest run[0m ID [1m676e92cc-cf6d-4d31-8794-fe9999813e75[0m with nextest profile: [1mdefault[0m
 [32;1m    Starting[0m [1m1[0m test across [1m7[0m binaries ([1m26[0m tests [33;1mskipped[0m)
-[31;1m   LEAK-FAIL[0m [   0.104s] [35;1mnextest-tests::basic[0m [34;1mtest_subprocess_doesnt_exit_leak_fail[0m
+[31;1m   LEAK-FAIL[0m [   0.104s] [35;1mfixture-project::basic[0m [34;1mtest_subprocess_doesnt_exit_leak_fail[0m
   [31;1mstdout[0m [31;1m───[0m
 
     running 1 test

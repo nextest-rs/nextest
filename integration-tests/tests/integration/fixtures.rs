@@ -4,11 +4,11 @@
 use super::temp_project::TempProject;
 use camino::Utf8Path;
 use fixture_data::{
+    fixture_project::EXPECTED_TEST_SUITES,
     models::{
         CheckResult, ExpectedReruns, ExpectedTestResult, RunProperties, TerminalCheckResult,
         TestCaseFixtureProperties, TestSuiteFixtureProperties,
     },
-    nextest_tests::EXPECTED_TEST_SUITES,
 };
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use integration_tests::{
@@ -493,7 +493,7 @@ fn debug_run_properties(properties: RunProperties) -> String {
 // Format: (TRY N )?(STATUS) [duration] (count/total or progress) binary_id test_name
 // Example: "        PASS [   0.004s] (  1/249) nextest-runner cargo_config::test_..."
 // For flaky tests that eventually pass, the format includes "TRY N " prefix:
-// Example: "  TRY 3 PASS [   1.003s] (1/1) nextest-tests::basic test_flaky..."
+// Example: "  TRY 3 PASS [   1.003s] (1/1) fixture-project::basic test_flaky..."
 //
 // We capture ALL result lines (including intermediate TRY N lines with progress like "(─────)")
 // to track all attempts. The attempt number is captured in group 1 (if present).

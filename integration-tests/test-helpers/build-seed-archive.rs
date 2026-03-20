@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Builds an archive from the nextest-tests fixture, and prepares it for
+//! Builds an archive from the fixture-project fixture, and prepares it for
 //! testing.
 //!
 //! See the comment on `compute_dir_hash` for more information on caching and
@@ -10,7 +10,7 @@
 use camino::Utf8PathBuf;
 use color_eyre::eyre::Context;
 use integration_tests::seed::{
-    compute_dir_hash, get_seed_archive_name, make_seed_archive, nextest_tests_dir,
+    compute_dir_hash, fixture_project_dir, get_seed_archive_name, make_seed_archive,
 };
 
 fn main() -> color_eyre::Result<()> {
@@ -19,11 +19,11 @@ fn main() -> color_eyre::Result<()> {
     let workspace_root: Utf8PathBuf = std::env::var("NEXTEST_WORKSPACE_ROOT")
         .wrap_err("NEXTEST_WORKSPACE_ROOT not set -- is this being run as a setup script?")?
         .into();
-    let tests_dir = nextest_tests_dir(&workspace_root);
+    let tests_dir = fixture_project_dir(&workspace_root);
     let nextest_env_file = std::env::var("NEXTEST_ENV")
         .wrap_err("unable to find NEXTEST_ENV -- is this being run as a setup script?")?;
 
-    // First, hash the nextest-tests fixture.
+    // First, hash the fixture-project fixture.
     let dir_hash = compute_dir_hash(&tests_dir)?;
 
     // Get the seed archive name.

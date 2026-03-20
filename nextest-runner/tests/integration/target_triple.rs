@@ -59,7 +59,7 @@ fn parses_custom_target_cli() {
     unsafe { std::env::set_var("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl") };
     for (target_path, expected_triple) in MY_TARGET_PATHS {
         eprintln!("** testing: {}", target_path);
-        let expected_path = nextest_tests_dir()
+        let expected_path = fixture_project_dir()
             .join(target_path)
             .canonicalize_utf8()
             .expect("canonicalization succeeded");
@@ -89,7 +89,7 @@ fn parses_custom_target_env() {
     for (target_path, expected_triple) in MY_TARGET_PATHS {
         eprintln!("** testing: {}", target_path);
         unsafe { std::env::set_var("CARGO_BUILD_TARGET", target_path) };
-        let expected_path = nextest_tests_dir()
+        let expected_path = fixture_project_dir()
             .join(target_path)
             .canonicalize_utf8()
             .expect("canonicalization succeeded");
@@ -113,10 +113,10 @@ fn parses_custom_target_env() {
 
 #[test]
 fn parses_custom_target_cli_from_rust_target_path() {
-    let target_paths = vec![nextest_tests_dir().join("../custom-target")];
+    let target_paths = vec![fixture_project_dir().join("../custom-target")];
     for (target_path, expected_triple) in MY_TARGET_PATHS {
         eprintln!("** testing: {}", expected_triple);
-        let expected_path = nextest_tests_dir()
+        let expected_path = fixture_project_dir()
             .join(target_path)
             .canonicalize_utf8()
             .expect("canonicalization succeeded");
@@ -140,13 +140,13 @@ fn parses_custom_target_cli_from_rust_target_path() {
 
 #[test]
 fn parses_custom_target_env_from_rust_target_path() {
-    let target_paths = vec![nextest_tests_dir().join("../custom-target")];
+    let target_paths = vec![fixture_project_dir().join("../custom-target")];
     for (target_path, expected_triple) in MY_TARGET_PATHS {
         eprintln!("** testing: {}", expected_triple);
         // SAFETY:
         // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
         unsafe { std::env::set_var("CARGO_BUILD_TARGET", expected_triple) };
-        let expected_path = nextest_tests_dir()
+        let expected_path = fixture_project_dir()
             .join(target_path)
             .canonicalize_utf8()
             .expect("canonicalization succeeded");
@@ -189,8 +189,8 @@ fn target_triple(
 ) -> Result<Option<TargetTriple>> {
     let configs = CargoConfigs::new_with_isolation(
         Vec::<String>::new(),
-        &nextest_tests_dir(),
-        &nextest_tests_dir(),
+        &fixture_project_dir(),
+        &fixture_project_dir(),
         target_paths,
     )
     .unwrap();

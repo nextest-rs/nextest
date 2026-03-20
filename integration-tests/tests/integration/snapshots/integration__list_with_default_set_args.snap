@@ -2,4 +2,4 @@
 source: integration-tests/tests/integration/main.rs
 expression: with_args_output.stdout_as_str()
 ---
-nextest-tests::basic test_stdin_closed
+fixture-project::basic test_stdin_closed

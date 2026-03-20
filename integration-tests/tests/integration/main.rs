@@ -23,7 +23,7 @@
 //! `NEXTEST_BIN_EXE_cargo_nextest_dup`.
 
 use camino::{Utf8Path, Utf8PathBuf};
-use fixture_data::{models::RunProperties, nextest_tests::EXPECTED_TEST_SUITES};
+use fixture_data::{fixture_project::EXPECTED_TEST_SUITES, models::RunProperties};
 use integration_tests::{
     env::{TestEnvInfo, set_env_vars_for_test},
     nextest_cli::{CargoNextestCli, CargoNextestOutput},
@@ -230,13 +230,13 @@ fn test_list_binaries_only() {
             // Does exist.
             "-E",
             "binary_id(with-build-script) | binary_id(=with-build-script) | \
-             binary(nextest-tests) | binary(=nextest-tests)",
+             binary(fixture-project) | binary(=fixture-project)",
             // First one doesn't exist, second one does.
             "-E",
-            "binary_id(nextest-tests::does_not_exist) | binary_id(=nextest-tests::basic)",
+            "binary_id(fixture-project::does_not_exist) | binary_id(=fixture-project::basic)",
             // First one exists, second one doesn't.
             "-E",
-            "binary_id(nextest-tests::example/*) | binary_id(dylib-test::example/*)",
+            "binary_id(fixture-project::example/*) | binary_id(dylib-test::example/*)",
         ])
         .unchecked(true)
         .output();
@@ -971,13 +971,13 @@ fn test_run_with_priorities() {
     // `test_cargo_env_vars`.
     let stderr = output.stderr_as_str();
     let test_success = stderr
-        .find("nextest-tests::basic test_success")
+        .find("fixture-project::basic test_success")
         .expect("test_success is present in output");
     let test_flaky_mod_4 = stderr
-        .find("nextest-tests::basic test_flaky_mod_4")
+        .find("fixture-project::basic test_flaky_mod_4")
         .expect("test_flaky_mod_4 is present in output");
     let test_cargo_env_vars = stderr
-        .find("nextest-tests::basic test_cargo_env_vars")
+        .find("fixture-project::basic test_cargo_env_vars")
         .expect("test_cargo_env_vars is present in output");
 
     assert!(
@@ -1118,7 +1118,7 @@ fn test_archive_with_build_filter() {
     });
 
     let expected_package_test_file = "cdylib_example";
-    let filtered_test = "nextest_tests";
+    let filtered_test = "fixture_project";
     // Check that test files are filtered by the `package()` filter.
     check_archive_contents(
         &env_info,

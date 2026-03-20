@@ -31,12 +31,12 @@ fn generate_warning_for_tests() -> u32 {
 /// This method is called by integration tests and benchmarks to ensure that CARGO_BIN_EXE and
 /// NEXTEST_BIN_EXE environment variables are properly set.
 pub fn test_execute_bin_helper() {
-    let cargo_bin_exe = std::env::var("CARGO_BIN_EXE_nextest-tests")
-        .expect("CARGO_BIN_EXE_nextest-tests should be present");
-    let nextest_bin_exe = std::env::var("NEXTEST_BIN_EXE_nextest-tests")
-        .expect("NEXTEST_BIN_EXE_nextest-tests should be present");
-    let with_underscores = std::env::var("NEXTEST_BIN_EXE_nextest_tests")
-        .expect("NEXTEST_BIN_EXE_nextest_tests (with underscores) should be present");
+    let cargo_bin_exe = std::env::var("CARGO_BIN_EXE_fixture-project")
+        .expect("CARGO_BIN_EXE_fixture-project should be present");
+    let nextest_bin_exe = std::env::var("NEXTEST_BIN_EXE_fixture-project")
+        .expect("NEXTEST_BIN_EXE_fixture-project should be present");
+    let with_underscores = std::env::var("NEXTEST_BIN_EXE_fixture_project")
+        .expect("NEXTEST_BIN_EXE_fixture_project (with underscores) should be present");
     assert_eq!(
         cargo_bin_exe, nextest_bin_exe,
         "CARGO_BIN_EXE and NEXTEST_BIN_EXE should match"
@@ -73,22 +73,22 @@ mod tests {
         assert_eq!(2 + 2, 4, "this test should succeed");
         // Check that CARGO_BIN_EXE is not set at compile time (unit tests don't get it).
         assert_eq!(
-            option_env!("CARGO_BIN_EXE_nextest-tests"),
+            option_env!("CARGO_BIN_EXE_fixture-project"),
             None,
-            "CARGO_BIN_EXE_nextest-tests not set at compile time"
+            "CARGO_BIN_EXE_fixture-project not set at compile time"
         );
 
         // Neither CARGO_BIN_EXE nor NEXTEST_BIN_EXE should be set at runtime
         // for unit tests.
         assert_eq!(
-            std::env::var_os("CARGO_BIN_EXE_nextest-tests"),
+            std::env::var_os("CARGO_BIN_EXE_fixture-project"),
             None,
-            "CARGO_BIN_EXE_nextest-tests is not set at runtime"
+            "CARGO_BIN_EXE_fixture-project is not set at runtime"
         );
         assert_eq!(
-            std::env::var_os("NEXTEST_BIN_EXE_nextest-tests"),
+            std::env::var_os("NEXTEST_BIN_EXE_fixture-project"),
             None,
-            "NEXTEST_BIN_EXE_nextest-tests is not set at runtime"
+            "NEXTEST_BIN_EXE_fixture-project is not set at runtime"
         )
     }
 
