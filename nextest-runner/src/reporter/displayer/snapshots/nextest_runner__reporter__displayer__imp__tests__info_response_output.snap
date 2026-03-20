@@ -5,7 +5,7 @@ expression: out
 ────────────
 info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being leaky), 1 exec failed, 1 timed out, 5 skipped in 0.000s
 
-* 1/20:   setup: setup arg1 arg2
+* 1/21:   setup: setup arg1 arg2
   status: script running for 1.234s as PID 4567
   stdout:
     script stdout 1
@@ -15,7 +15,7 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 2/20:   setup-slow: setup-slow arg1 arg2
+* 2/21:   setup-slow: setup-slow arg1 arg2
   status: script running for 1.234s as PID 4568 (marked slow after 1.000s)
   errors:
     error reading standard output
@@ -27,7 +27,7 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 3/20:   setup-terminating: setup-terminating arg1 arg2
+* 3/21:   setup-terminating: setup-terminating arg1 arg2
   status: terminating script PID 5094 due to signal (script ran for 1.234s)
   note:   fake termination method; spent 6.789s waiting for script to exit, will kill after another 9.786s
   errors:
@@ -47,7 +47,7 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 4/20:   [1] setup-exiting: setup-exiting arg1 arg2
+* 4/21:   [1] setup-exiting: setup-exiting arg1 arg2
   status: script failed to execute after 1.234s (marked slow after 1.000s)
   note:   spent 10.467s waiting for script PID 9987 to shut down, will mark as leaky after another 0.335s
   errors:
@@ -58,8 +58,8 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 5/20:   [2/3] setup-exited: setup-exited arg1 arg2
-  status: script failed with exit code 1, and leaked handles after 9.999s (marked slow after 3.000s)
+* 5/21:   [2/3] setup-exited: setup-exited arg1 arg2
+  status: script failed with exit code 1 (leaked handles) after 9.999s (marked slow after 3.000s)
   errors:
     error spawning child process
       caused by:
@@ -68,7 +68,7 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 6/20:   my-binary-id test1
+* 6/21:   my-binary-id test1
   status: test running for 0.400s as PID 12345
   stdout:
     abc
@@ -78,7 +78,7 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 7/20:   [1] my-binary-id test2
+* 7/21:   [1] my-binary-id test2
   status: (attempt 2/3) terminating test PID 12346 due to timeout (test ran for 99.999s)
   note:   fake termination method; spent 6.789s waiting for test to exit, will kill after another 9.786s
   stdout:
@@ -89,7 +89,7 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 8/20:   my-binary-id test3
+* 8/21:   my-binary-id test3
   status: (attempt 2/3) test failed with unknown status after 99.999s (marked slow after 33.333s)
   stdout:
     abc
@@ -99,7 +99,7 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 9/20:   [2/3] my-binary-id test4
+* 9/21:   [2/3] my-binary-id test4
   status: test passed after 99.999s (marked slow after 33.333s)
   errors:
     error waiting for child process to exit
@@ -113,9 +113,17 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 10/20:  my-binary-id test4
+* 10/21:  my-binary-id test4
   status: (attempt 1/5) test failed to execute, currently waiting before next attempt
   note:   waited 1.234s so far, will wait another 5.678s before retrying test
+
+────────
+
+* 11/21:  my-binary-id test5
+  status: test aborted with signal 11: SIGSEGV (leaked handles) after 5.678s
+  stdout:
+    segfault output
+
 
 info: missing 2 responses
 ────────────

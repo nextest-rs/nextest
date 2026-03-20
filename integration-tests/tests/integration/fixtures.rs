@@ -1278,7 +1278,7 @@ fn verify_junit(expected: &ExpectedTestResults, junit_path: &Utf8Path, propertie
 // Expected JUnit type strings. These match the strings produced by nextest in
 // junit.rs. The Rust test harness always uses exit code 101 for test failures.
 const JUNIT_FAIL: &str = "test failure with exit code 101";
-const JUNIT_FAIL_LEAK: &str = "test failure with exit code 101, and leaked handles";
+const JUNIT_FAIL_LEAK: &str = "test failure with exit code 101 (leaked handles)";
 const JUNIT_FLAKY_FAIL: &str = "flaky failure";
 const JUNIT_ABORT: &str = "test abort";
 
@@ -1383,7 +1383,7 @@ impl JunitExpectedMessage<'_> {
 ///
 /// Expected formats from nextest-runner/src/reporter/aggregator/junit.rs:
 /// - Fail (exit code, no leak): "test failure with exit code 101"
-/// - Fail (exit code, leaked):  "test failure with exit code 101, and leaked handles"
+/// - Fail (exit code, leaked):  "test failure with exit code 101 (leaked handles)"
 /// - Abort (no leak):           "test abort"
 /// - LeakFail:                  "test exited with code 0, but leaked handles so was marked failed"
 /// - Timeout:                   "test timeout" or "benchmark timeout"

@@ -2039,9 +2039,8 @@ impl<'a> DisplayReporterImpl<'a> {
                     DisplayUnitKind::new(self.mode, kind)
                 )?;
 
-                let tentative_desc = tentative_result.map(ExecutionResultDescription::from);
                 self.write_info_execution_result(
-                    tentative_desc.as_ref(),
+                    tentative_result.as_ref(),
                     slow_after.is_some(),
                     writer,
                 )?;
@@ -2083,8 +2082,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     "{status_str}: {attempt_str}{} ",
                     DisplayUnitKind::new(self.mode, kind)
                 )?;
-                let result_desc = ExecutionResultDescription::from(*result);
-                self.write_info_execution_result(Some(&result_desc), slow_after.is_some(), writer)?;
+                self.write_info_execution_result(Some(result), slow_after.is_some(), writer)?;
                 write!(writer, " after {:.3?}s", time_taken.as_secs_f64())?;
                 if let Some(slow_after) = slow_after {
                     write!(
@@ -2106,8 +2104,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     "{status_str}: {attempt_str}{} ",
                     DisplayUnitKind::new(self.mode, kind)
                 )?;
-                let previous_desc = ExecutionResultDescription::from(*previous_result);
-                self.write_info_execution_result(Some(&previous_desc), *previous_slow, writer)?;
+                self.write_info_execution_result(Some(previous_result), *previous_slow, writer)?;
                 writeln!(
                     writer,
                     ", currently {} before next attempt",
@@ -2255,9 +2252,7 @@ impl<'a> DisplayReporterImpl<'a> {
             }
             Some(ExecutionResultDescription::Fail {
                 failure: FailureDescription::Abort { abort },
-                // TODO: show leaked info here like in FailureDescription::ExitCode
-                // below?
-                leaked: _,
+                leaked,
             }) => {
                 // The errors are shown in the output.
                 write!(writer, "{}", "aborted".style(self.styles.fail))?;
@@ -2270,27 +2265,25 @@ impl<'a> DisplayReporterImpl<'a> {
                         write!(writer, ": SIG{s}")?;
                     }
                 }
+                if *leaked {
+                    write!(writer, " (leaked handles)")?;
+                }
                 Ok(())
             }
             Some(ExecutionResultDescription::Fail {
                 failure: FailureDescription::ExitCode { code },
                 leaked,
             }) => {
+                write!(
+                    writer,
+                    "{} with exit code {}",
+                    "failed".style(self.styles.fail),
+                    code.style(self.styles.count),
+                )?;
                 if *leaked {
-                    write!(
-                        writer,
-                        "{} with exit code {}, and leaked handles",
-                        "failed".style(self.styles.fail),
-                        code.style(self.styles.count),
-                    )
-                } else {
-                    write!(
-                        writer,
-                        "{} with exit code {}",
-                        "failed".style(self.styles.fail),
-                        code.style(self.styles.count),
-                    )
+                    write!(writer, " (leaked handles)")?;
                 }
+                Ok(())
             }
             Some(ExecutionResultDescription::ExecFail) => {
                 write!(writer, "{}", "failed to execute".style(self.styles.fail))
@@ -3698,6 +3691,7 @@ mod tests {
         let test_name2 = TestCaseName::new("test2");
         let test_name3 = TestCaseName::new("test3");
         let test_name4 = TestCaseName::new("test4");
+        let test_name5 = TestCaseName::new("test5");
 
         let mut out = String::new();
 
@@ -3743,7 +3737,7 @@ mod tests {
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
                             index: 0,
-                            total: 20,
+                            total: 21,
                             // Technically, you won't get setup script and test responses in the
                             // same response, but it's easiest to test in this manner.
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
@@ -3774,7 +3768,7 @@ mod tests {
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
                             index: 1,
-                            total: 20,
+                            total: 21,
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
                                 stress_index: None,
                                 script_id: ScriptId::new(SmolStr::new("setup-slow")).unwrap(),
@@ -3804,7 +3798,7 @@ mod tests {
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
                             index: 2,
-                            total: 20,
+                            total: 21,
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
                                 stress_index: None,
                                 script_id: ScriptId::new(SmolStr::new("setup-terminating"))
@@ -3846,7 +3840,7 @@ mod tests {
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
                             index: 3,
-                            total: 20,
+                            total: 21,
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
                                 stress_index: Some(StressIndex {
                                     current: 0,
@@ -3862,7 +3856,7 @@ mod tests {
                                     // Even if exit_status is 0, the presence of
                                     // exec-fail errors should be considered
                                     // part of the output.
-                                    tentative_result: Some(ExecutionResult::ExecFail),
+                                    tentative_result: Some(ExecutionResultDescription::ExecFail),
                                     waiting_duration: Duration::from_millis(10467),
                                     remaining: Duration::from_millis(335),
                                 },
@@ -3882,7 +3876,7 @@ mod tests {
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
                             index: 4,
-                            total: 20,
+                            total: 21,
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
                                 stress_index: Some(StressIndex {
                                     current: 1,
@@ -3892,8 +3886,8 @@ mod tests {
                                 program: "setup-exited".to_owned(),
                                 args: args.clone(),
                                 state: UnitState::Exited {
-                                    result: ExecutionResult::Fail {
-                                        failure_status: FailureStatus::ExitCode(1),
+                                    result: ExecutionResultDescription::Fail {
+                                        failure: FailureDescription::ExitCode { code: 1 },
                                         leaked: true,
                                     },
                                     time_taken: Duration::from_millis(9999),
@@ -3915,7 +3909,7 @@ mod tests {
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
                             index: 5,
-                            total: 20,
+                            total: 21,
                             response: InfoResponse::Test(TestInfoResponse {
                                 stress_index: None,
                                 test_instance: TestInstanceId {
@@ -3944,7 +3938,7 @@ mod tests {
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
                             index: 6,
-                            total: 20,
+                            total: 21,
                             response: InfoResponse::Test(TestInfoResponse {
                                 stress_index: Some(StressIndex {
                                     current: 0,
@@ -3979,7 +3973,7 @@ mod tests {
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
                             index: 7,
-                            total: 20,
+                            total: 21,
                             response: InfoResponse::Test(TestInfoResponse {
                                 stress_index: None,
                                 test_instance: TestInstanceId {
@@ -4011,7 +4005,7 @@ mod tests {
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
                             index: 8,
-                            total: 20,
+                            total: 21,
                             response: InfoResponse::Test(TestInfoResponse {
                                 stress_index: Some(StressIndex {
                                     current: 1,
@@ -4026,7 +4020,7 @@ mod tests {
                                     total_attempts: 5,
                                 },
                                 state: UnitState::Exited {
-                                    result: ExecutionResult::Pass,
+                                    result: ExecutionResultDescription::Pass,
                                     time_taken: Duration::from_millis(99999),
                                     slow_after: Some(Duration::from_millis(33333)),
                                 },
@@ -4049,7 +4043,7 @@ mod tests {
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
                             index: 9,
-                            total: 20,
+                            total: 21,
                             response: InfoResponse::Test(TestInfoResponse {
                                 stress_index: None,
                                 test_instance: TestInstanceId {
@@ -4064,7 +4058,7 @@ mod tests {
                                     total_attempts: 5,
                                 },
                                 state: UnitState::DelayBeforeNextAttempt {
-                                    previous_result: ExecutionResult::ExecFail,
+                                    previous_result: ExecutionResultDescription::ExecFail,
                                     previous_slow: true,
                                     waiting_duration: Duration::from_millis(1234),
                                     remaining: Duration::from_millis(5678),
@@ -4080,6 +4074,43 @@ mod tests {
                                         ),
                                     )))],
                                 ),
+                            }),
+                        },
+                    })
+                    .unwrap();
+
+                // A test that was aborted by a signal and leaked handles.
+                reporter
+                    .write_event(&TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoResponse {
+                            index: 10,
+                            total: 21,
+                            response: InfoResponse::Test(TestInfoResponse {
+                                stress_index: None,
+                                test_instance: TestInstanceId {
+                                    binary_id: &binary_id,
+                                    test_name: &test_name5,
+                                },
+                                retry_data: RetryData {
+                                    attempt: 1,
+                                    total_attempts: 1,
+                                },
+                                state: UnitState::Exited {
+                                    result: ExecutionResultDescription::Fail {
+                                        failure: FailureDescription::Abort {
+                                            abort: AbortDescription::UnixSignal {
+                                                signal: 11,
+                                                name: Some("SEGV".into()),
+                                            },
+                                        },
+                                        leaked: true,
+                                    },
+                                    time_taken: Duration::from_millis(5678),
+                                    slow_after: None,
+                                },
+                                output: make_split_output(None, "segfault output", ""),
                             }),
                         },
                     })

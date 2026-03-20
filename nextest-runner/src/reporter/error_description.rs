@@ -160,7 +160,7 @@ impl fmt::Display for UnitAbortDescription {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "process {}", self.description)?;
         if self.leaked {
-            write!(f, ", and also leaked handles")?;
+            write!(f, " (leaked handles)")?;
         }
         Ok(())
     }

@@ -2422,7 +2422,7 @@ pub enum UnitState {
         ///
         /// None means that the exit status could not be read, and should be
         /// treated as a failure.
-        tentative_result: Option<ExecutionResult>,
+        tentative_result: Option<ExecutionResultDescription>,
 
         /// How long has been spent waiting for the process to exit.
         waiting_duration: Duration,
@@ -2437,7 +2437,7 @@ pub enum UnitState {
     /// The unit has finished running and the process has exited.
     Exited {
         /// The result of executing the unit.
-        result: ExecutionResult,
+        result: ExecutionResultDescription,
 
         /// The amount of time the unit ran for.
         time_taken: Duration,
@@ -2451,7 +2451,7 @@ pub enum UnitState {
     /// started. (Only relevant for tests.)
     DelayBeforeNextAttempt {
         /// The previous execution result.
-        previous_result: ExecutionResult,
+        previous_result: ExecutionResultDescription,
 
         /// Whether the previous attempt was marked as slow.
         previous_slow: bool,

@@ -20,8 +20,9 @@ use crate::{
         TestOutputDisplay, UnitErrorDescription,
         events::{
             ChildExecutionOutputDescription, ErrorSummary, ExecuteStatus, ExecutionResult,
-            InfoResponse, OutputErrorSlice, RetryData, SetupScriptEnvMap, SetupScriptExecuteStatus,
-            StressIndex, TestSlotAssignment, UnitKind, UnitState,
+            ExecutionResultDescription, InfoResponse, OutputErrorSlice, RetryData,
+            SetupScriptEnvMap, SetupScriptExecuteStatus, StressIndex, TestSlotAssignment, UnitKind,
+            UnitState,
         },
     },
     signal::ShutdownEvent,
@@ -142,7 +143,7 @@ impl<'a> UnitExecuteStatus<'a, '_> {
         match self {
             Self::Test(status) => status.test.info_response(
                 UnitState::Exited {
-                    result: status.result,
+                    result: ExecutionResultDescription::from(status.result),
                     time_taken: status.stopwatch_end.active,
                     slow_after: status.slow_after,
                 },
@@ -150,7 +151,7 @@ impl<'a> UnitExecuteStatus<'a, '_> {
             ),
             Self::SetupScript(status) => status.script.info_response(
                 UnitState::Exited {
-                    result: status.result,
+                    result: ExecutionResultDescription::from(status.result),
                     time_taken: status.stopwatch_end.active,
                     slow_after: status.slow_after,
                 },
