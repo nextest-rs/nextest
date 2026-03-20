@@ -9,7 +9,7 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.132] - 2026-03-20
+## [0.9.132-rc.1] - 2026-03-20
 
 Update aws-lc-sys to 0.39.0 to address [GHSA-394x-vwmw-crm3].
 
@@ -2089,7 +2089,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
-[0.9.132]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.132
+[0.9.132-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.132-rc.1
 [0.9.131]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.131
 [0.9.130]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.130
 [0.9.129]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.129
