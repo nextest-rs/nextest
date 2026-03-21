@@ -23,6 +23,10 @@ Earlier runs can be replayed by identifying them through their nextest run ID, w
 
 Replayed runs automatically use the [configured pager](../../user-config/pager.md), such as `less`.
 
+## Prerequisites
+
+To enable run recording, see [_Setting up run recording_](index.md#setting-up-run-recording).
+
 ## Reporter options for replay
 
 The following [reporter options](../../reporting.md) also apply to replays, allowing output to be displayed differently than the original run:
@@ -84,4 +88,3 @@ Replays also work with [portable recordings](portable-recordings.md), which are 
         ```bash exec="true" result="text"
         cargo nextest replay --help | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
         ```
-

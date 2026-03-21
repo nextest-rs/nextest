@@ -17,6 +17,10 @@ Perfetto traces can be used to observe the timeline of a test run, and to find b
 
 Perfetto also has a built-in query language called [PerfettoSQL](https://perfetto.dev/docs/analysis/perfetto-sql-getting-started). For example queries, see [_Example queries_](#example-queries) below.
 
+## Prerequisites
+
+To enable run recording, see [_Setting up run recording_](index.md#setting-up-run-recording).
+
 ## Exporting traces
 
 To export the latest recording as a Chrome trace:

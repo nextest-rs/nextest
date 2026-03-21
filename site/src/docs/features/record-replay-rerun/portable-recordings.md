@@ -9,6 +9,10 @@ description: Exporting and sharing recorded test runs as portable recordings.
 
 Recorded runs can be exported as self-contained *portable recordings* for sharing across machines. For example, a recording can be created in CI and downloaded locally to be [replayed](replay.md) or used as the basis for a [rerun](rerun.md).
 
+## Prerequisites
+
+To enable run recording, see [_Setting up run recording_](index.md#setting-up-run-recording).
+
 ## Exporting a recording
 
 To export a recording:

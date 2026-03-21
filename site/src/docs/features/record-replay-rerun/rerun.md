@@ -19,6 +19,10 @@ The rerun feature works purely at the test level, and does not track code or bui
 
     Build scope arguments include all arguments under the _Package selection_, _Target selection_, and _Feature selection_ headings of `cargo nextest run --help`.
 
+## Prerequisites
+
+To enable run recording, see [_Setting up run recording_](index.md#setting-up-run-recording).
+
 ## Example rerun flow
 
 Let's say that `cargo nextest run --package nextest-filtering` was run, and it had two failing tests:
