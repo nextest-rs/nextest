@@ -55,7 +55,7 @@ An example of a trace loaded into the Perfetto web UI: [`ui.perfetto.dev`](https
 
 ### Trace dimension mapping
 
-Each test binary is considered a "process", and each global slot number (see [_Slot numbers_](../../configuration/test-groups.md#slot-numbers)) is considered a "thread". Tests are shown as blocks within each slot.
+Each test binary is considered a "process", and each global slot number (see [_Slot numbers_](../../glossary.md#slot-numbers)) is considered a "thread". Tests are shown as blocks within each slot.
 
 - `pid` is a synthetic, numerically increasing ID unique to a binary ID.
 - `tid` is the global slot number (starting from 0) plus 10 000.
