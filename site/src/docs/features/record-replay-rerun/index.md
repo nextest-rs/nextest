@@ -14,7 +14,7 @@ render_macros: false
     - **Enable with:** Add `[experimental]` with `record = true` to [`~/.config/nextest/config.toml`](../../user-config/index.md), or set `NEXTEST_EXPERIMENTAL_RECORD=1` in the environment
     - **Tracking issue:** TBD
 
-Nextest supports recording test runs to rerun failing tests and to replay them later. Recorded runs are stored locally in the system cache.
+Nextest supports recording test runs to rerun failing tests and to replay them later. Recorded runs are stored locally in the system cache. By default, recordings are retained for up to 30 days, 100 runs, or 1 GB of compressed data per workspace; see [_Managing recorded runs_](managing-runs.md) for details.
 
 Recordings can also be exported from CI as portable archives, and visualized as Perfetto traces. For a full list of what you can do with recordings, see [_Learn more_](#learn-more) below.
 
@@ -57,15 +57,11 @@ For GitHub Actions, the following recipe sets up recording, then uploads the res
 
 - name: Run tests
   shell: bash
-  env:
-    NEXTEST_STATE_DIR: ${{ runner.temp }}/nextest-state
   run: cargo nextest run --profile ci --user-config-file "$RUNNER_TEMP/nextest-config/config.toml"
-  
+
 - name: Create portable archive from recorded run
   # Run this step even if the test step fails.
   if: "!cancelled()"
-  env:
-    NEXTEST_STATE_DIR: ${{ runner.temp }}/nextest-state
   shell: bash
   run: |
     cargo nextest store export latest \
@@ -123,4 +119,4 @@ exit "$NEXTEST_EXIT"
 
 ## Configuration options
 
-For a full list, see [_Record configuration_](../../user-config/reference.md#record-configuration).
+Retention limits can be changed through user configuration. For a full list, see [_Record configuration_](../../user-config/reference.md#record-configuration).

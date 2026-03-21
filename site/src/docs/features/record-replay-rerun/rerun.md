@@ -9,7 +9,7 @@ When the recording feature is enabled, you can rerun failing tests with `cargo n
 
 - failed;
 - did not run because the test run was cancelled; or,
-- were not previously seen, typically because they were newly added since the original run.
+- were not previously seen, typically because they were newly added since the original run. (New tests are included so that they are validated while iterating on a failing run.)
 
 The rerun feature works purely at the test level, and does not track code or build changes.
 
