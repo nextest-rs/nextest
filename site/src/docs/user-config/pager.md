@@ -1,5 +1,6 @@
 ---
 icon: material/page-next
+sidebar_icon: false
 description: "Pager support: scrollable output for long listings and help."
 ---
 

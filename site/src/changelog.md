@@ -1,5 +1,6 @@
 ---
 icon: material/list-box
+sidebar_icon: false
 description: Changelog for cargo-nextest.
 toc_depth: 1
 ---

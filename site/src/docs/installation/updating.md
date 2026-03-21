@@ -1,5 +1,6 @@
 ---
 icon: material/update
+sidebar_icon: false
 description: Updating nextest with self update or from source.
 ---
 

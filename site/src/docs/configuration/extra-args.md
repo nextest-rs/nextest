@@ -1,5 +1,6 @@
 ---
 icon: material/pencil
+sidebar_icon: false
 description: "Passing in extra arguments to test binaries at runtime: running tests on the main thread of a process."
 ---
 

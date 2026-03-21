@@ -1,5 +1,6 @@
 ---
 icon: material/restart
+sidebar_icon: false
 description: Rerunning failed tests to iteratively converge towards a successful test run.
 ---
 

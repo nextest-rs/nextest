@@ -1,5 +1,6 @@
 ---
 icon: material/weight-lifter
+sidebar_icon: false
 description: Marking some tests as consuming more resources than others.
 ---
 

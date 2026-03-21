@@ -1,5 +1,6 @@
 ---
 icon: material/keyboard
+sidebar_icon: false
 description: Design document describing how nextest handles interactive keyboard inputs.
 ---
 

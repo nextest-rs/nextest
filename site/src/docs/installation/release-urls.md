@@ -1,5 +1,6 @@
 ---
 icon: material/link
+sidebar_icon: false
 description: Stable URLs for downloading nextest binaries by version and platform.
 ---
 

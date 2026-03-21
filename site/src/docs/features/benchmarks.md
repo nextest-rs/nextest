@@ -1,5 +1,6 @@
 ---
 icon: material/chart-bar
+sidebar_icon: false
 status: experimental
 description: Running benchmarks with cargo nextest bench.
 ---

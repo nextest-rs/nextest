@@ -1,5 +1,6 @@
 ---
 icon: material/laptop
+sidebar_icon: false
 description: Using target triples and cfg() expressions to filter per-test settings by platform.
 ---
 

@@ -1,5 +1,6 @@
 ---
 icon: material/chart-scatter-plot
+sidebar_icon: false
 description: Running Criterion.rs benchmarks in test mode with nextest.
 ---
 

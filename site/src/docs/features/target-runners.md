@@ -1,5 +1,6 @@
 ---
 icon: material/select-group
+sidebar_icon: false
 description: Running tests through wrapper executables for cross-compilation and emulation.
 ---
 

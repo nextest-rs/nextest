@@ -1,5 +1,6 @@
 ---
 icon: material/database-cog-outline
+sidebar_icon: false
 description: Listing, pruning, and configuring recorded test runs.
 ---
 

@@ -1,5 +1,6 @@
 ---
 icon: material/layers-outline
+sidebar_icon: false
 status: experimental
 description: Wrapping test execution with custom commands using filtersets and platform-specific scoping.
 ---

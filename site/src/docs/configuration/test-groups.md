@@ -1,5 +1,6 @@
 ---
 icon: material/set-none
+sidebar_icon: false
 description: Defining logical mutexes or semaphores for subsets of tests; running tests serially; global and group slot numbers.
 ---
 

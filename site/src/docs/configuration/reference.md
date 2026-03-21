@@ -1,5 +1,6 @@
 ---
 icon: material/book-open-variant
+sidebar_icon: false
 description: Reference documentation for all nextest configuration parameters and settings.
 ---
 

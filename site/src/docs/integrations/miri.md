@@ -1,5 +1,6 @@
 ---
 icon: octicons/shield-24
+sidebar_icon: false
 description: Running tests under the Miri interpreter for undefined behavior detection.
 ---
 

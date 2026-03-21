@@ -1,5 +1,6 @@
 ---
 icon: material/refresh-auto
+sidebar_icon: false
 description: Running tests repeatedly in a loop with nextest.
 ---
 

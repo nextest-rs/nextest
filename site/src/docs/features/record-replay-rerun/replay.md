@@ -1,5 +1,6 @@
 ---
 icon: material/play-box-outline
+sidebar_icon: false
 description: Replaying recorded test runs, with options for different output formats.
 ---
 

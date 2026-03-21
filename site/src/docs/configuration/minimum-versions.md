@@ -1,5 +1,6 @@
 ---
 icon: material/tag-outline
+sidebar_icon: false
 description: Setting required and recommended nextest versions in .config/nextest.toml.
 ---
 

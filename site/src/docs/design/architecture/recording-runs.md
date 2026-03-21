@@ -1,5 +1,6 @@
 ---
 icon: material/history
+sidebar_icon: false
 description: Design document describing how and why nextest records and replays runs.
 ---
 

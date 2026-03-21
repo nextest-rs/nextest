@@ -1,5 +1,6 @@
 ---
 icon: material/ray-start-arrow
+sidebar_icon: false
 status: experimental
 description: Running scripts before tests with filtersets and platform-specific scoping.
 ---

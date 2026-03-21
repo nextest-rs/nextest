@@ -1,5 +1,6 @@
 ---
 icon: material/radar
+sidebar_icon: false
 description: Dynamically trace nextest events with DTrace and bpftrace.
 ---
 

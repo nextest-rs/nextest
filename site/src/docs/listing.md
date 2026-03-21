@@ -1,5 +1,6 @@
 ---
 icon: material/format-list-group
+sidebar_icon: false
 title: Listing tests
 description: Listing tests in a workspace with cargo nextest list.
 ---

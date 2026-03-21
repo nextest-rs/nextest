@@ -188,6 +188,13 @@
     letter-spacing: -0.028em;
 }
 
+/* Indent for sidebar entries with hidden icons (sidebar_icon: false),
+   matching the icon width + flex gap. Margin is outside the clickable
+   area, unlike a spacer element inside the link. */
+.md-nav__link--icon-hidden {
+    margin-left: calc(1.3em + 0.4rem);
+}
+
 /* hide the latest tag because it always gets truncated -- ideally we can fetch get.nexte.st */
 .md-source__fact--version {
     display: none;

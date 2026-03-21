@@ -1,5 +1,6 @@
 ---
 icon: material/xml
+sidebar_icon: false
 description: Producing JUnit/XUnit XML output for test results.
 ---
 

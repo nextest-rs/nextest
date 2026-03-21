@@ -1,5 +1,6 @@
 ---
 icon: material/code-json
+sidebar_icon: false
 status: experimental
 description: Experimental libtest-compatible JSON output for test runs.
 ---
