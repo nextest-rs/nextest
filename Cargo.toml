@@ -148,7 +148,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "tracing-log", "fmt"] }
 unicode-ident = "1.0.24"
 unicode-normalization = "0.1.25"
-ureq = { version = "3.2.0", default-features = false }
+ureq = { version = "3.2.1", default-features = false }
 usdt = "0.6.0"
 walkdir = "2.5.0"
 whoami = "2.1.1"
