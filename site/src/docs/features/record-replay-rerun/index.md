@@ -86,22 +86,32 @@ For GitHub Actions, the following recipe sets up recording, then uploads the res
 Follow this general pattern:
 
 ```bash
+#!/usr/bin/env bash
+
+set -euo pipefail
+
 # Create a user config which enables recording.
 mkdir -p "$TMPDIR/nextest-config"
 printf '[experimental]\nrecord = true\n\n[record]\nenabled = true\n' \
   > "$TMPDIR/nextest-config/config.toml"
 cat "$TMPDIR/nextest-config/config.toml"
 
-# Run tests with this user config file.
-cargo nextest run --profile ci --user-config-file "$TMPDIR/nextest-config/config.toml"
+# Run tests with this user config file. Save the exit code so the
+# recording is exported even if tests fail.
+NEXTEST_EXIT=0
+cargo nextest run --profile ci \
+  --user-config-file "$TMPDIR/nextest-config/config.toml" \
+  || NEXTEST_EXIT=$?
 
 # Export the recording.
 cargo nextest store export latest \
   --user-config-file "$TMPDIR/nextest-config/config.toml" \
   --archive-file "$TMPDIR/nextest-run-archive.zip"
-```
 
-Then, post-process or upload `$TMPDIR/nextest-run-archive.zip` as supported by your CI system.
+# Post-process or upload $TMPDIR/nextest-run-archive.zip as supported
+# by your CI system, then exit with the original test exit code.
+exit "$NEXTEST_EXIT"
+```
 
 ## Learn more
 
