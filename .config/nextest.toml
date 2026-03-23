@@ -46,6 +46,12 @@ platform = 'cfg(target_os = "macos")'
 filter = '(package(nextest-runner) and binary(integration)) or package(integration-tests)'
 retries = { count = 3, backoff = "fixed", delay = "1s" }
 
+[[profile.ci.overrides]]
+# These runners are a bit slow.
+platform = 'cfg(target_arch = "riscv64")'
+filter = 'package(integration-tests)'
+slow-timeout = { period = "60s", terminate-after = 8 }
+
 [profile.test-slow]
 # This is a test profile with a quick slow timeout.
 slow-timeout = "1s"
