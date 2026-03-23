@@ -13,6 +13,7 @@ theme:
     name: material
     custom_dir: overrides
     features:
+        - navigation.tabs
         - navigation.sections
         - navigation.footer
         - navigation.instant
@@ -73,21 +74,25 @@ hooks:
     - overrides/hooks/shortcodes.py
 
 nav:
-    - index.md
-    - "Getting started":
-          - "Pre-built binaries": docs/installation/pre-built-binaries.md
-          - docs/installation/from-source.md
-          - docs/installation/updating.md
+    - "Home":
+          - index.md
+          - "Get started":
+                - "Pre-built binaries": docs/installation/pre-built-binaries.md
+                - docs/installation/from-source.md
+                - docs/installation/updating.md
+                - docs/installation/release-urls.md
           - "Platform-specific notes":
                 - docs/installation/windows.md
                 - docs/installation/macos.md
-          - docs/installation/release-urls.md
-    - "Using nextest":
+          - "Benchmarks": docs/benchmarks/index.md
+          - "Stability policy": docs/stability/index.md
+          - docs/contributing.md
+          - changelog.md
+    - "Usage":
           - docs/running.md
           - docs/selecting.md
           - docs/listing.md
           - docs/reporting.md
-    - "Features":
           - docs/features/retries.md
           - docs/features/slow-tests.md
           - "Record, replay and rerun":
@@ -107,19 +112,12 @@ nav:
           - "Filterset DSL":
                 - "About filtersets": docs/filtersets/index.md
                 - "DSL reference": docs/filtersets/reference.md
-          - "Integrations":
-                - "Overview": docs/integrations/index.md
-                - docs/integrations/test-coverage.md
-                - "Miri interpreter": docs/integrations/miri.md
-                - "Debuggers and tracers": docs/integrations/debuggers-tracers.md
-                - docs/integrations/criterion.md
-                - "cargo-mutants": docs/integrations/cargo-mutants.md
-                - docs/integrations/usdt.md
-    - "Repository config":
-          - "Configuring nextest": docs/configuration/index.md
-          - "Configuration reference": docs/configuration/reference.md
-          - docs/configuration/per-test-overrides.md
-          - "More configuration":
+          - docs/glossary.md
+    - "Configuration":
+          - "Repository config":
+                - "Configuring nextest": docs/configuration/index.md
+                - "Configuration reference": docs/configuration/reference.md
+                - docs/configuration/per-test-overrides.md
                 - "Specifying platforms": docs/configuration/specifying-platforms.md
                 - "Minimum versions": docs/configuration/minimum-versions.md
                 - "Test priorities": docs/configuration/test-priorities.md
@@ -129,17 +127,23 @@ nav:
                 - "Extra arguments": docs/configuration/extra-args.md
                 - docs/configuration/setup-scripts.md
                 - docs/configuration/wrapper-scripts.md
-    - "User config":
-          - "User configuration": docs/user-config/index.md
-          - "Pager support": docs/user-config/pager.md
-          - "User config reference": docs/user-config/reference.md
-    - Machine-readable output:
-          - "About output formats": docs/machine-readable/index.md
-          - "JUnit support": docs/machine-readable/junit.md
-          - "More formats":
+          - "User config":
+                - "User configuration": docs/user-config/index.md
+                - "Pager support": docs/user-config/pager.md
+                - "User config reference": docs/user-config/reference.md
+    - "Integrations":
+          - "Overview": docs/integrations/index.md
+          - docs/integrations/test-coverage.md
+          - "Miri interpreter": docs/integrations/miri.md
+          - "Debuggers and tracers": docs/integrations/debuggers-tracers.md
+          - docs/integrations/criterion.md
+          - "cargo-mutants": docs/integrations/cargo-mutants.md
+          - docs/integrations/usdt.md
+          - "Machine-readable output":
+                - "About output formats": docs/machine-readable/index.md
+                - "JUnit support": docs/machine-readable/junit.md
                 - "Test and binary lists": docs/machine-readable/list.md
                 - docs/machine-readable/libtest-json.md
-    - "Stability policy": docs/stability/index.md
     - "Design":
           - docs/design/how-it-works.md
           - docs/design/why-process-per-test.md
@@ -149,11 +153,6 @@ nav:
                 - "Signal handling": docs/design/architecture/signal-handling.md
                 - "Input handling": docs/design/architecture/input-handling.md
                 - docs/design/architecture/recording-runs.md
-
-    - docs/glossary.md
-    - "Benchmarks": docs/benchmarks/index.md
-    - docs/contributing.md
-    - changelog.md
 
 markdown_extensions:
     # Python Markdown
