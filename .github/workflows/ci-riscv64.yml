@@ -1,0 +1,32 @@
+on:
+  push:
+    branches: [main, auto, canary]
+
+name: CI (riscv64)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  RUSTFLAGS: -D warnings
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: [self-hosted, linux, riscv64]
+    environment: riscv64
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - name: Build all targets
+        run: cargo build --all-targets
+      - name: Test with locally built nextest
+        run: cargo local-nt run --profile ci
