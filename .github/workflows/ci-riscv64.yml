@@ -1,11 +1,16 @@
+# Note: this runner is provided externally, so we minimize its access to
+# secrets.
 on:
   push:
     branches: [main, auto, canary]
+  # No pull_request (this should be safe, but the number of runners is limited
+  # so we limit it to pushes only.)
 
 name: CI (riscv64)
 
 permissions:
   contents: read
+  # No permissions to secrets.
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -19,6 +24,7 @@ jobs:
   build:
     name: Build and test
     runs-on: [self-hosted, linux, riscv64]
+    # This is in its own separate environment.
     environment: riscv64
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
