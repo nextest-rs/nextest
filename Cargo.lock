@@ -1063,9 +1063,9 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "eazip"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67daa9630dd24c56e2de19907fdb8ea935c19a76621eb2827cd888373f118d57"
+checksum = "fa96d97482d56b4c30764798a9b129904d7e1493671e5ef7ff95b35f0e1aecb0"
 dependencies = [
  "crc32fast",
  "flate2",
