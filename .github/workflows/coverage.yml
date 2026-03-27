@@ -61,7 +61,7 @@ jobs:
           cargo llvm-cov --no-report --doc
           cargo llvm-cov report --doctests --lcov --output-path lcov.info
       - name: Upload coverage data to codecov
-        uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.5.3
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }} # zizmor: ignore[secrets-outside-env]
         with:
