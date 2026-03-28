@@ -2,7 +2,6 @@
 template: home.html
 title: Home
 description: A next-generation test runner for Rust.
-icon: material/home
 hide:
     - navigation
     - toc

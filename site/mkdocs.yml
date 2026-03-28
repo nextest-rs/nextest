@@ -74,8 +74,7 @@ hooks:
     - overrides/hooks/shortcodes.py
 
 nav:
-    - "Home":
-          - index.md
+    - "Home": index.md
     - "About":
           - "Get started":
                 - "Pre-built binaries": docs/installation/pre-built-binaries.md
