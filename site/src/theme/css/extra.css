@@ -232,6 +232,71 @@
     display: flow;
 }
 
+/* --- Hero section (home page) --- */
+
+.mdx-hero {
+    background: var(--md-primary-fg-color);
+    padding: 4rem 1rem;
+}
+
+.mdx-hero__content {
+    text-align: center;
+    max-width: 38rem;
+    margin: 0 auto;
+}
+
+.mdx-hero__content h1 {
+    color: var(--md-primary-bg-color);
+    font-size: 2.5rem;
+    margin: 0 0 1rem;
+    line-height: 1.15;
+    letter-spacing: -0.04em;
+}
+
+.mdx-hero__content p {
+    color: hsla(0, 0%, 100%, 0.75);
+    font-size: 1.2rem;
+    line-height: 1.6;
+}
+
+.mdx-hero__content code {
+    background: hsla(0, 0%, 100%, 0.15);
+    color: inherit;
+}
+
+.mdx-hero__actions {
+    margin-top: 1.5rem;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.mdx-hero .md-typeset .md-button {
+    color: var(--md-primary-bg-color);
+    border-color: var(--md-primary-bg-color);
+}
+
+.mdx-hero .md-typeset .md-button:hover,
+.mdx-hero .md-typeset .md-button:focus {
+    background-color: hsla(0, 0%, 100%, 0.1);
+    border-color: var(--md-primary-bg-color);
+}
+
+.mdx-hero .md-typeset .md-button--primary {
+    background-color: var(--md-primary-bg-color);
+    color: var(--md-primary-fg-color);
+    border-color: var(--md-primary-bg-color);
+}
+
+.mdx-hero .md-typeset .md-button--primary:hover,
+.mdx-hero .md-typeset .md-button--primary:focus {
+    background-color: hsla(0, 0%, 100%, 0.85);
+    border-color: hsla(0, 0%, 100%, 0.85);
+}
+
+/* --- Cover image (feature card) --- */
+
 #nextest-cover {
     float: right;
     width: 250px;

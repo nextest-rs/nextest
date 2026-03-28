@@ -76,6 +76,7 @@ hooks:
 nav:
     - "Home":
           - index.md
+    - "About":
           - "Get started":
                 - "Pre-built binaries": docs/installation/pre-built-binaries.md
                 - docs/installation/from-source.md
