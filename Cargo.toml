@@ -142,7 +142,7 @@ test-strategy = "0.4.5"
 thiserror = "2.0.18"
 tokio = "1.50.0"
 tokio-stream = "0.1.18"
-toml = "1.0.7"
+toml = "1.1.0"
 toml_edit = "0.25.8"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "tracing-log", "fmt"] }
