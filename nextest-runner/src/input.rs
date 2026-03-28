@@ -8,7 +8,7 @@
 //! tests are currently running.
 
 use crate::errors::DisplayErrorChain;
-use crossterm::event::{Event, EventStream, KeyCode};
+use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind};
 use futures::StreamExt;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
@@ -104,7 +104,7 @@ impl InputHandler {
             // points at all, but okay with discarding `next` if there are any
             // await points.
             match next {
-                Ok(Event::Key(key)) => {
+                Ok(Event::Key(key)) if key.kind == KeyEventKind::Press => {
                     if key.code == KeyCode::Char(Self::INFO_CHAR) && key.modifiers.is_empty() {
                         return Some(InputEvent::Info);
                     }
