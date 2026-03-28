@@ -4,6 +4,35 @@
     --md-primary-fg-color--dark: #045;
 }
 
+body {
+    background-color: var(--md-primary-fg-color);
+}
+
+.md-container {
+    background-color: var(--md-default-bg-color);
+}
+
+.md-header {
+    background: color-mix(in srgb, var(--md-primary-fg-color) 85%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.md-header::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 1rem;
+    background: linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--md-primary-fg-color) 30%, transparent),
+        transparent
+    );
+    pointer-events: none;
+}
+
 .md-status--experimental::after {
     mask-image: var(--md-status--experimental);
     -webkit-mask-image: var(--md-status--experimental);
