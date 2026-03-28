@@ -15,8 +15,9 @@ The main benefit of using nextest with Miri is that each test runs [in its own p
 
 * Miri itself is single-threaded, so `cargo miri test`, which runs several tests in the same process, is also single-threaded. But nextest can run Miri tests in parallel, leading to test runs up to **3-4x faster**.
 
-> **Note:** [In some cases](https://github.com/nextest-rs/nextest/issues/3160), running `cargo miri nextest -j1` (running only 1 test at a time), can
-cause `nextest` to be slower than running plain `miri`.
+!!! info "Miri with `-j1`"
+
+    [In some cases](https://github.com/nextest-rs/nextest/issues/3160), `cargo miri nextest run -j1` (running only one test at a time) can cause nextest to be slower than `cargo miri test`.
 
 * Each test gets a separate Miri context, which can make it easier to perform operations like [identifying memory leaks](https://github.com/rust-lang/miri/issues/1481).
 
@@ -40,7 +41,9 @@ cargo miri nextest run --target mips64-unknown-linux-gnuabi64
 
 This does not require installing any special toolchain, and will work even if you are using macOS or Windows.
 
-> **Note:** [Archiving and reusing builds](../ci-features/archiving.md) is not supported under Miri.
+!!! info "Archiving builds with Miri"
+
+    [Archiving and reusing builds](../ci-features/archiving.md) is not supported under Miri.
 
 ## Configuring nextest running under Miri
 
