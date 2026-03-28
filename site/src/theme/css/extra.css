@@ -4,6 +4,35 @@
     --md-primary-fg-color--dark: #045;
 }
 
+body {
+    background-color: var(--md-primary-fg-color);
+}
+
+.md-container {
+    background-color: var(--md-default-bg-color);
+}
+
+.md-header {
+    background: color-mix(in srgb, var(--md-primary-fg-color) 85%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.md-header::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 1rem;
+    background: linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--md-primary-fg-color) 30%, transparent),
+        transparent
+    );
+    pointer-events: none;
+}
+
 .md-status--experimental::after {
     mask-image: var(--md-status--experimental);
     -webkit-mask-image: var(--md-status--experimental);
@@ -231,6 +260,71 @@
     /* By default mkdocs sets up a flow-root for lists. Disable that for nextest's features. */
     display: flow;
 }
+
+/* --- Hero section (home page) --- */
+
+.mdx-hero {
+    background: var(--md-primary-fg-color);
+    padding: 4rem 1rem;
+}
+
+.mdx-hero__content {
+    text-align: center;
+    max-width: 38rem;
+    margin: 0 auto;
+}
+
+.mdx-hero__content h1 {
+    color: var(--md-primary-bg-color);
+    font-size: 2.5rem;
+    margin: 0 0 1rem;
+    line-height: 1.15;
+    letter-spacing: -0.04em;
+}
+
+.mdx-hero__content p {
+    color: hsla(0, 0%, 100%, 0.75);
+    font-size: 1.2rem;
+    line-height: 1.6;
+}
+
+.mdx-hero__content code {
+    background: hsla(0, 0%, 100%, 0.15);
+    color: inherit;
+}
+
+.mdx-hero__actions {
+    margin-top: 1.5rem;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.mdx-hero .md-typeset .md-button {
+    color: var(--md-primary-bg-color);
+    border-color: var(--md-primary-bg-color);
+}
+
+.mdx-hero .md-typeset .md-button:hover,
+.mdx-hero .md-typeset .md-button:focus {
+    background-color: hsla(0, 0%, 100%, 0.1);
+    border-color: var(--md-primary-bg-color);
+}
+
+.mdx-hero .md-typeset .md-button--primary {
+    background-color: var(--md-primary-bg-color);
+    color: var(--md-primary-fg-color);
+    border-color: var(--md-primary-bg-color);
+}
+
+.mdx-hero .md-typeset .md-button--primary:hover,
+.mdx-hero .md-typeset .md-button--primary:focus {
+    background-color: hsla(0, 0%, 100%, 0.85);
+    border-color: hsla(0, 0%, 100%, 0.85);
+}
+
+/* --- Cover image (feature card) --- */
 
 #nextest-cover {
     float: right;

@@ -1,0 +1,30 @@
+{% extends "main.html" %}
+
+{% block tabs %}
+  {{ super() }}
+  <section class="mdx-hero">
+    <div class="md-grid md-typeset">
+      <div class="mdx-hero__content">
+        <h1>A next-generation test runner for Rust</h1>
+        <p>
+          Up to 3&times; faster than <code>cargo test</code>, with a modern
+          interface, per-test isolation, and first-class CI support.
+        </p>
+        <div class="mdx-hero__actions">
+          <a href="{{ 'docs/installation/pre-built-binaries/' | url }}"
+             class="md-button md-button--primary">
+            Get started
+          </a>
+          <a href="{{ 'docs/running/' | url }}" class="md-button">
+            Learn more
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+<!-- Render markdown content without the auto-generated h1. -->
+{% block content %}
+  {{ page.content }}
+{% endblock %}
