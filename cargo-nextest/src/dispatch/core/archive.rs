@@ -88,7 +88,7 @@ impl ArchiveApp {
         let binary_list = self.base.build_binary_list("test")?;
         let path_mapper = PathMapper::noop();
         let build_platforms = &binary_list.rust_build_meta.build_platforms;
-        let pcx = ParseContext::new(self.base.graph());
+        let pcx = ParseContext::new(self.base.graph()?);
         let (_, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
         let profile = self
             .base
@@ -121,7 +121,7 @@ impl ArchiveApp {
         let ecx = profile.filterset_ecx();
 
         let (binary_list_to_archive, filter_counts) = apply_archive_filters(
-            self.base.graph(),
+            self.base.graph()?,
             binary_list.clone(),
             &binary_filter,
             &ecx,
@@ -133,8 +133,8 @@ impl ArchiveApp {
             profile,
             &binary_list_to_archive,
             filter_counts,
-            &self.base.cargo_metadata_json,
-            self.base.graph(),
+            &self.base.cargo_metadata_json()?,
+            self.base.graph()?,
             // Note that path_mapper is currently a no-op -- we don't support reusing builds for
             // archive creation because it's too confusing.
             &path_mapper,
