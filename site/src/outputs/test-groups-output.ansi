@@ -1,0 +1,10 @@
+group: [4m[1mresource-limited[0m (max threads = [1m4[0m)
+  * override for [1mdefault[0m profile with filter [33m'test(resource_limited::)'[0m:
+      [35;1mresource-bindings[0m:
+          [34;1maccess::resource_limited::test_resource_access[0m
+          [34;1medit::resource_limited::test_resource_edit[0m
+group: [4m[1mserial-integration[0m (max threads = [1m1[0m)
+  * override for [1mdefault[0m profile with filter [33m'package(integration-tests)'[0m:
+      [35;1mintegration-tests::integration[0m:
+          [34;1mtest_service_read[0m
+          [34;1mtest_service_write[0m

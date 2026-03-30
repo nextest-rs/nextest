@@ -36,18 +36,16 @@ To include benchmarks in your test run, use `cargo nextest run --all-targets`.
 
 This will produce output that looks like:
 
-<pre><font color="#D3D7CF">% </font><font color="#4E9A06">cargo</font> nextest run --all-targets
-<font color="#4E9A06"><b>    Finished</b></font> test [unoptimized + debuginfo] target(s) in 0.05s
-<font color="#4E9A06"><b>    Starting</b></font> <b>7</b> tests across <b>1</b> binaries
-<font color="#4E9A06"><b>        PASS</b></font> [   0.368s] <font color="#75507B"><b>my-benchmarks::bench/my_bench</b></font> <font color="#3465A4"><b>depends_on_cache</b></font>
-<font color="#4E9A06"><b>        PASS</b></font> [   0.404s] <font color="#75507B"><b>my-benchmarks::bench/my_bench</b></font> <font color="#3465A4"><b>depends_on</b></font>
-<font color="#4E9A06"><b>        PASS</b></font> [   0.443s] <font color="#75507B"><b>my-benchmarks::bench/my_bench</b></font> <font color="#3465A4"><b>into_ids</b></font>
-<font color="#4E9A06"><b>        PASS</b></font> [   0.520s] <font color="#75507B"><b>my-benchmarks::bench/my_bench</b></font> <font color="#3465A4"><b>make_graph</b></font>
-<font color="#4E9A06"><b>        PASS</b></font> [   0.546s] <font color="#75507B"><b>my-benchmarks::bench/my_bench</b></font> <font color="#3465A4"><b>resolve_package</b></font>
-<font color="#4E9A06"><b>        PASS</b></font> [   0.588s] <font color="#75507B"><b>my-benchmarks::bench/my_bench</b></font> <font color="#3465A4"><b>make_cycles</b></font>
-<font color="#4E9A06"><b>        PASS</b></font> [   0.625s] <font color="#75507B"><b>my-benchmarks::bench/my_bench</b></font> <font color="#3465A4"><b>make_package_name</b></font>
-------------
-<font color="#4E9A06"><b>     Summary</b></font> [   0.626s] <b>7</b> tests run: <b>7</b> <font color="#4E9A06"><b>passed</b></font>, <b>0</b> <font color="#C4A000"><b>skipped</b></font>
-</pre>
+=== "Colorized"
+
+    ```bash exec="true" result="ansi"
+    cat src/outputs/criterion-output.ansi | ../scripts/strip-hyperlinks.sh
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/criterion-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
+    ```
 
 To run just benchmarks in test mode, use `cargo nextest run --benches`.

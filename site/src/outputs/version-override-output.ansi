@@ -1,0 +1,4 @@
+[1minfo[0m: overriding version check (required: 0.9.55, current: 0.9.54)
+[32;1m    Finished[0m test [unoptimized + debuginfo] target(s) in 0.22s
+[32;1m    Starting[0m [1m191[0m tests across [1m13[0m binaries
+...

@@ -82,19 +82,17 @@ You can show the test groups currently in effect with `cargo nextest show-config
 
 With the above example, you might see the following output:
 
-<pre>
-<font color="#4E9A06"><b>    Finished</b></font> test [unoptimized + debuginfo] target(s) in 0.09s
-group: <u style="text-decoration-style:single"><b>resource-limited</b></u> (max threads = <b>4</b>)
-  * override for <b>default</b> profile with filter <font color="#C4A000">&apos;test(resource_limited::)&apos;</font>:
-      <font color="#75507B"><b>resource-bindings</b></font>:
-          <font color="#3465A4"><b>access::resource_limited::test_resource_access</b></font>
-          <font color="#3465A4"><b>edit::resource_limited::test_resource_edit</b></font>
-group: <u style="text-decoration-style:single"><b>serial-integration</b></u> (max threads = <b>1</b>)
-  * override for <b>default</b> profile with filter <font color="#C4A000">&apos;package(integration-tests)&apos;</font>:
-      <font color="#75507B"><b>integration-tests::integration</b></font>:
-          <font color="#3465A4"><b>test_service_read</b></font>
-          <font color="#3465A4"><b>test_service_write</b></font>
-</pre>
+=== "Colorized"
+
+    ```bash exec="true" result="ansi"
+    cat src/outputs/test-groups-output.ansi | ../scripts/strip-hyperlinks.sh
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/test-groups-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
+    ```
 
 This command accepts [all the same options](../listing.md#options-and-arguments) that `cargo nextest list` does.
 

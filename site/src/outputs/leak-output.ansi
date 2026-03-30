@@ -1,0 +1,4 @@
+[32;1m    Starting[0m [1m1[0m tests across [1m8[0m binaries ([1m24[0m skipped)
+[33;1m        LEAK[0m [   0.103s] [35;1mfixture-project::basic[0m [34;1mtest_subprocess_doesnt_exit[0m
+────────────
+[32;1m     Summary[0m [   0.103s] [1m1[0m tests run: [1m1[0m [32;1mpassed[0m ([1m1[0m [33;1mleaky[0m), [1m24[0m [33;1mskipped[0m

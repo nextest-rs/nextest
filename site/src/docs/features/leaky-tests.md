@@ -30,13 +30,17 @@ fn test_subprocess_doesnt_exit() {
 
 For this test, nextest will output something like:
 
----
+=== "Colorized"
 
-<pre><font color="#4E9A06"><b>    Starting</b></font> <b>1</b> tests across <b>8</b> binaries (<b>24</b> skipped)
-<font color="#C4A000"><b>        LEAK</b></font> [   0.103s] <font color="#75507B"><b>fixture-project::basic</b></font> <font color="#3465A4"><b>test_subprocess_doesnt_exit</b></font>
-------------
-<font color="#4E9A06"><b>     Summary</b></font> [   0.103s] <b>1</b> tests run: <b>1</b> <font color="#4E9A06"><b>passed</b></font> (<b>1</b> <font color="#C4A000"><b>leaky</b></font>), <b>24</b> <font color="#C4A000"><b>skipped</b></font>
-</pre>
+    ```bash exec="true" result="ansi"
+    cat src/outputs/leak-output.ansi | ../scripts/strip-hyperlinks.sh
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/leak-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
+    ```
 
 ---
 

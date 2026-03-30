@@ -1,0 +1,11 @@
+[32;1m Nextest run[0m ID [1m1bed9018-d2c0-4054-ad23-29837188cc31[0m with nextest profile: [1mdefault[0m
+[32;1m    Starting[0m [1m7[0m tests across [1m1[0m binary
+[32;1m        PASS[0m [   0.368s] [35;1mmy-benchmarks::bench/my_bench[0m [34;1mdepends_on_cache[0m
+[32;1m        PASS[0m [   0.404s] [35;1mmy-benchmarks::bench/my_bench[0m [34;1mdepends_on[0m
+[32;1m        PASS[0m [   0.443s] [35;1mmy-benchmarks::bench/my_bench[0m [34;1minto_ids[0m
+[32;1m        PASS[0m [   0.520s] [35;1mmy-benchmarks::bench/my_bench[0m [34;1mmake_graph[0m
+[32;1m        PASS[0m [   0.546s] [35;1mmy-benchmarks::bench/my_bench[0m [34;1mresolve_package[0m
+[32;1m        PASS[0m [   0.588s] [35;1mmy-benchmarks::bench/my_bench[0m [34;1mmake_cycles[0m
+[32;1m        PASS[0m [   0.625s] [35;1mmy-benchmarks::bench/my_bench[0m [34;1mmake_package_name[0m
+────────────
+[32;1m     Summary[0m [   0.626s] [1m7[0m tests run: [1m7[0m [32;1mpassed[0m, [1m0[0m [33;1mskipped[0m

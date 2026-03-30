@@ -47,25 +47,33 @@ nextest-version = { required = "0.9.53", recommended = "0.9.55" }
 
 Nextest accepts an `--override-version-check` CLI option that bypasses the version check. If the override is activated, nextest will print a message informing you of that.
 
-<pre><font color="#D3D7CF">% </font><font color="#4E9A06">cargo</font> nextest run --override-version-check
-<b>info</b>: overriding version check (required: 0.9.55, current: 0.9.54)
-<font color="#4E9A06"><b>    Finished</b></font> test [unoptimized + debuginfo] target(s) in 0.22s
-<font color="#4E9A06"><b>    Starting</b></font> <b>191</b> tests across <b>13</b> binaries
-...
-</pre>
+=== "Colorized"
+
+    ```bash exec="true" result="ansi"
+    cat src/outputs/version-override-output.ansi | ../scripts/strip-hyperlinks.sh
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/version-override-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
+    ```
 
 ## Showing required and recommended versions
 
 To show and verify the version status, run `cargo nextest show-config version`. This will produce output similar to:
 
-<pre><font color="#D3D7CF">% </font><font color="#4E9A06">cargo</font> nextest show-config version
-current nextest version: <b>0.9.54</b>
-version requirements:
-    - required: <b>0.9.55</b>
-evaluation result: <font color="#CC0000"><b>does not meet required version</b></font>
-<font color="#CC0000"><b>error</b></font>: update nextest with <b>cargo nextest self update</b>, or bypass check
-with --override-version-check
-</pre>
+=== "Colorized"
+
+    ```bash exec="true" result="ansi"
+    cat src/outputs/version-show-output.ansi | ../scripts/strip-hyperlinks.sh
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/version-show-output.ansi | ../scripts/strip-ansi.sh | ../scripts/strip-hyperlinks.sh
+    ```
 
 This command exits with:
 

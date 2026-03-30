@@ -114,8 +114,9 @@ nav:
                 - "DSL reference": docs/filtersets/reference.md
           - docs/glossary.md
     - "Configuration":
+          - "Configuring nextest": docs/configuring-nextest.md
           - "Repository config":
-                - "Configuring nextest": docs/configuration/index.md
+                - "Repository configuration": docs/configuration/index.md
                 - "Configuration reference": docs/configuration/reference.md
                 - docs/configuration/per-test-overrides.md
                 - "Specifying platforms": docs/configuration/specifying-platforms.md

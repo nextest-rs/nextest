@@ -1,11 +1,13 @@
 ---
-icon: material/tune
-description: "Configuring nextest: information about profiles and hierarchical configuration."
+icon: material/file-cog
+description: "Repository configuration: profiles, hierarchical configuration, and tool-specific settings."
 ---
 
-# Configuring nextest
+# Repository configuration
 
 cargo-nextest supports repository-specific configuration at the location `.config/nextest.toml` from the Cargo workspace root. The location of the configuration file can be overridden with the `--config-file` option.
+
+Repository configuration controls test execution behavior: profiles, retries, timeouts, test groups, per-test overrides, and more. It is checked into version control and shared across all users of a project. For personal preferences like UI settings, see [user configuration](../user-config/index.md).
 
 For a comprehensive list of all configuration parameters, including default values, see [_Configuration reference_](reference.md).
 

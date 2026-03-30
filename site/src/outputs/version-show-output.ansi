@@ -1,0 +1,5 @@
+current nextest version: [1m0.9.54[0m
+version requirements:
+    - required: [1m0.9.55[0m
+evaluation result: [31;1mdoes not meet required version[0m
+[31;1merror[0m: update nextest with [1mcargo nextest self update[0m, or bypass check with --override-version-check
