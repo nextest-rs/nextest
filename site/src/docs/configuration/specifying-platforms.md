@@ -66,3 +66,15 @@ While cross-compiling code, some tests may need to be run on the host platform. 
 For tests that run on the host platform, to figure out if an override applies nextest will compute the result of the _target_ filter against the _host_ platform. (If the `host` key is specified, it will be considered as well based on the AND semantics listed above.)
 
 This behavior is similar to that of [target runners](../features/target-runners.md#cross-compiling).
+
+## Custom targets
+
+Nextest supports custom target specs as JSON files. For more information, see [_Creating a custom target_](https://docs.rust-embedded.org/embedonomicon/custom-target.html) in the Rust Embedonomicon.
+
+For a custom target named `my-target-triple`, create a file named `my-target-triple.json`. Then, run:
+
+```
+cargo nextest run --target my-target-triple.json
+```
+
+Nextest will apply platform filters to custom targets based on the JSON contents.
