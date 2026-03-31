@@ -11,6 +11,7 @@ permissions: {}
 jobs:
   nextest-filtering-release:
     permissions:
+      id-token: write
       contents: write
     environment: release
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-filtering-')
@@ -19,6 +20,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      - uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
+        id: auth
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
@@ -35,10 +38,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: ./scripts/cargo-release-publish.sh
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
   nextest-metadata-release:
     permissions:
+      id-token: write
       contents: write
     environment: release
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-metadata-')
@@ -47,6 +51,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      - uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
+        id: auth
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
@@ -63,10 +69,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: ./scripts/cargo-release-publish.sh
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
   nextest-runner-release:
     permissions:
+      id-token: write
       contents: write
     environment: release
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-runner-')
@@ -75,6 +82,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      - uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
+        id: auth
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
@@ -91,7 +100,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: ./scripts/cargo-release-publish.sh
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
   cargo-nextest-release:
     permissions:
@@ -334,6 +343,7 @@ jobs:
   update-release-meta:
     name: Update release-meta branch and publish to crates.io
     permissions:
+      id-token: write
       contents: write
     environment: release-binaries
     if: github.repository_owner == 'nextest-rs'
@@ -356,6 +366,8 @@ jobs:
           ref: main
           token: ${{ secrets.RELEASE_META_DEPLOY_TOKEN }}
           path: release-meta
+      - uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
+        id: auth
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -434,4 +446,4 @@ jobs:
           cd nextest
           PUBLISH_CARGO_NEXTEST=1 ./scripts/cargo-release-publish.sh
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
