@@ -744,16 +744,34 @@ impl<'a> DisplayReporterImpl<'a> {
             } => {
                 if !*will_terminate && self.status_levels.status_level >= StatusLevel::Slow {
                     write!(writer, "{:>12} ", "SETUP SLOW".style(self.styles.skip))?;
-                } else if *will_terminate {
+                    writeln!(
+                        writer,
+                        "{}{}",
+                        DisplaySlowDuration(*elapsed),
+                        self.display_script_instance(
+                            *stress_index,
+                            script_id.clone(),
+                            program,
+                            args
+                        )
+                    )?;
+                } else if *will_terminate && self.status_levels.status_level >= StatusLevel::Fail {
                     write!(writer, "{:>12} ", "TERMINATING".style(self.styles.fail))?;
+                    writeln!(
+                        writer,
+                        "{}{}",
+                        DisplaySlowDuration(*elapsed),
+                        self.display_script_instance(
+                            *stress_index,
+                            script_id.clone(),
+                            program,
+                            args
+                        )
+                    )?;
                 }
-
-                writeln!(
-                    writer,
-                    "{}{}",
-                    DisplaySlowDuration(*elapsed),
-                    self.display_script_instance(*stress_index, script_id.clone(), program, args)
-                )?;
+                // If neither condition is met (!will_terminate with
+                // status_level < Slow, or will_terminate with status_level
+                // < Fail), nothing is printed.
             }
             TestEventKind::SetupScriptFinished {
                 stress_index,
@@ -830,37 +848,51 @@ impl<'a> DisplayReporterImpl<'a> {
                     } else {
                         write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
                     }
+                    writeln!(
+                        writer,
+                        "{}{}",
+                        DisplaySlowDuration(*elapsed),
+                        self.display_test_instance(
+                            *stress_index,
+                            TestInstanceCounter::Padded,
+                            *test_instance
+                        )
+                    )?;
                 } else if *will_terminate {
                     let (required_status_level, style) = if retry_data.is_last_attempt() {
                         (StatusLevel::Fail, self.styles.fail)
                     } else {
                         (StatusLevel::Retry, self.styles.retry)
                     };
-                    // *Do* show TRY N TRMNTG for the first attempt, since we
-                    // will retry the test later.
-                    if retry_data.total_attempts > 1
-                        && self.status_levels.status_level > required_status_level
-                    {
-                        write!(
+                    if self.status_levels.status_level >= required_status_level {
+                        // *Do* show TRY N TRMNTG for the first attempt, since
+                        // we will retry the test later.
+                        if retry_data.total_attempts > 1
+                            && self.status_levels.status_level > required_status_level
+                        {
+                            write!(
+                                writer,
+                                "{:>12} ",
+                                format!("TRY {} TRMNTG", retry_data.attempt).style(style)
+                            )?;
+                        } else {
+                            write!(writer, "{:>12} ", "TERMINATING".style(style))?;
+                        };
+                        writeln!(
                             writer,
-                            "{:>12} ",
-                            format!("TRY {} TRMNTG", retry_data.attempt).style(style)
+                            "{}{}",
+                            DisplaySlowDuration(*elapsed),
+                            self.display_test_instance(
+                                *stress_index,
+                                TestInstanceCounter::Padded,
+                                *test_instance
+                            )
                         )?;
-                    } else {
-                        write!(writer, "{:>12} ", "TERMINATING".style(style))?;
-                    };
+                    }
                 }
-
-                writeln!(
-                    writer,
-                    "{}{}",
-                    DisplaySlowDuration(*elapsed),
-                    self.display_test_instance(
-                        *stress_index,
-                        TestInstanceCounter::Padded,
-                        *test_instance
-                    )
-                )?;
+                // If neither condition is met (!will_terminate with
+                // status_level < Slow, or will_terminate with status_level
+                // below the required level), nothing is printed.
             }
 
             TestEventKind::TestAttemptFailedWillRetry {
@@ -2710,6 +2742,7 @@ mod tests {
     use quick_junit::ReportUuid;
     use smol_str::SmolStr;
     use std::{num::NonZero, sync::Arc};
+    use test_case::test_case;
 
     /// Creates a test reporter with default settings and calls the given function with it.
     ///
@@ -2749,6 +2782,43 @@ mod tests {
             failure_output: Some(TestOutputDisplay::Immediate),
             should_colorize: false,
             verbose,
+            no_output_indent: false,
+            max_progress_running: MaxProgressRunning::default(),
+            show_term_progress: ShowTerminalProgress::No,
+            displayer_kind: DisplayerKind::Live,
+            redactor: Redactor::noop(),
+        };
+
+        let output = ReporterOutput::Writer {
+            writer: out,
+            use_unicode: true,
+        };
+        let reporter = builder.build(output);
+        f(reporter);
+    }
+
+    /// Creates a test reporter with a specific status level and capture
+    /// enabled (so the status level is not overridden).
+    fn with_reporter_at_status_level<'a, F>(f: F, out: &'a mut String, status_level: StatusLevel)
+    where
+        F: FnOnce(DisplayReporter<'a>),
+    {
+        let builder = DisplayReporterBuilder {
+            mode: NextestRunMode::Test,
+            default_filter: CompiledDefaultFilter::for_default_config(),
+            display_config: DisplayConfig {
+                show_progress: ShowProgress::Counter,
+                no_capture: false,
+                status_level: Some(status_level),
+                final_status_level: Some(FinalStatusLevel::Fail),
+                profile_status_level: StatusLevel::Fail,
+                profile_final_status_level: FinalStatusLevel::Fail,
+            },
+            run_count: 5000,
+            success_output: Some(TestOutputDisplay::Immediate),
+            failure_output: Some(TestOutputDisplay::Immediate),
+            should_colorize: false,
+            verbose: false,
             no_output_indent: false,
             max_progress_running: MaxProgressRunning::default(),
             show_term_progress: ShowTerminalProgress::No,
@@ -4304,149 +4374,271 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_slow_try_prefix() {
-        // On the first attempt, "SLOW" should be shown without a "TRY 1"
-        // prefix, even when total_attempts > 1. The "TRY N" prefix should
-        // only appear on retries (attempt > 1).
+    /// Writes the canonical set of TestSlow events to the reporter.
+    ///
+    /// Covers all interesting combinations:
+    /// - `!will_terminate`: attempt 1/1, attempt 1/3, attempt 2/3, attempt 3/3
+    /// - `will_terminate` (single attempt): attempt 1/1
+    /// - `will_terminate` (non-last): attempt 1/3, attempt 2/3
+    /// - `will_terminate` (last): attempt 3/3
+    fn write_test_slow_events<'a>(
+        reporter: &mut DisplayReporter<'a>,
+        binary_id: &'a RustBinaryId,
+        test_name: &'a TestCaseName,
+    ) {
+        // First attempt, single attempt total.
+        reporter
+            .write_event(&TestEvent {
+                timestamp: Local::now().into(),
+                elapsed: Duration::ZERO,
+                kind: TestEventKind::TestSlow {
+                    stress_index: None,
+                    test_instance: TestInstanceId {
+                        binary_id,
+                        test_name,
+                    },
+                    retry_data: RetryData {
+                        attempt: 1,
+                        total_attempts: 1,
+                    },
+                    elapsed: Duration::from_secs(60),
+                    will_terminate: false,
+                },
+            })
+            .unwrap();
+
+        // First attempt, multiple attempts total.
+        reporter
+            .write_event(&TestEvent {
+                timestamp: Local::now().into(),
+                elapsed: Duration::ZERO,
+                kind: TestEventKind::TestSlow {
+                    stress_index: None,
+                    test_instance: TestInstanceId {
+                        binary_id,
+                        test_name,
+                    },
+                    retry_data: RetryData {
+                        attempt: 1,
+                        total_attempts: 3,
+                    },
+                    elapsed: Duration::from_secs(60),
+                    will_terminate: false,
+                },
+            })
+            .unwrap();
+
+        // Second attempt.
+        reporter
+            .write_event(&TestEvent {
+                timestamp: Local::now().into(),
+                elapsed: Duration::ZERO,
+                kind: TestEventKind::TestSlow {
+                    stress_index: None,
+                    test_instance: TestInstanceId {
+                        binary_id,
+                        test_name,
+                    },
+                    retry_data: RetryData {
+                        attempt: 2,
+                        total_attempts: 3,
+                    },
+                    elapsed: Duration::from_secs(60),
+                    will_terminate: false,
+                },
+            })
+            .unwrap();
+
+        // Third attempt.
+        reporter
+            .write_event(&TestEvent {
+                timestamp: Local::now().into(),
+                elapsed: Duration::ZERO,
+                kind: TestEventKind::TestSlow {
+                    stress_index: None,
+                    test_instance: TestInstanceId {
+                        binary_id,
+                        test_name,
+                    },
+                    retry_data: RetryData {
+                        attempt: 3,
+                        total_attempts: 3,
+                    },
+                    elapsed: Duration::from_secs(60),
+                    will_terminate: false,
+                },
+            })
+            .unwrap();
+
+        // will_terminate on single attempt (required_status_level is Fail).
+        // This exercises the `total_attempts > 1` guard in the TRY N
+        // prefix logic: at Slow and above, the output should be
+        // "TERMINATING" (not "TRY 1 TRMNTG") because there's only one
+        // attempt.
+        reporter
+            .write_event(&TestEvent {
+                timestamp: Local::now().into(),
+                elapsed: Duration::ZERO,
+                kind: TestEventKind::TestSlow {
+                    stress_index: None,
+                    test_instance: TestInstanceId {
+                        binary_id,
+                        test_name,
+                    },
+                    retry_data: RetryData {
+                        attempt: 1,
+                        total_attempts: 1,
+                    },
+                    elapsed: Duration::from_secs(120),
+                    will_terminate: true,
+                },
+            })
+            .unwrap();
+
+        // will_terminate on first attempt with retries (non-last, so
+        // required_status_level is Retry).
+        reporter
+            .write_event(&TestEvent {
+                timestamp: Local::now().into(),
+                elapsed: Duration::ZERO,
+                kind: TestEventKind::TestSlow {
+                    stress_index: None,
+                    test_instance: TestInstanceId {
+                        binary_id,
+                        test_name,
+                    },
+                    retry_data: RetryData {
+                        attempt: 1,
+                        total_attempts: 3,
+                    },
+                    elapsed: Duration::from_secs(120),
+                    will_terminate: true,
+                },
+            })
+            .unwrap();
+
+        // will_terminate on non-last retry (required_status_level is Retry).
+        reporter
+            .write_event(&TestEvent {
+                timestamp: Local::now().into(),
+                elapsed: Duration::ZERO,
+                kind: TestEventKind::TestSlow {
+                    stress_index: None,
+                    test_instance: TestInstanceId {
+                        binary_id,
+                        test_name,
+                    },
+                    retry_data: RetryData {
+                        attempt: 2,
+                        total_attempts: 3,
+                    },
+                    elapsed: Duration::from_secs(120),
+                    will_terminate: true,
+                },
+            })
+            .unwrap();
+
+        // will_terminate on last attempt (required_status_level is Fail).
+        reporter
+            .write_event(&TestEvent {
+                timestamp: Local::now().into(),
+                elapsed: Duration::ZERO,
+                kind: TestEventKind::TestSlow {
+                    stress_index: None,
+                    test_instance: TestInstanceId {
+                        binary_id,
+                        test_name,
+                    },
+                    retry_data: RetryData {
+                        attempt: 3,
+                        total_attempts: 3,
+                    },
+                    elapsed: Duration::from_secs(120),
+                    will_terminate: true,
+                },
+            })
+            .unwrap();
+    }
+
+    /// Writes the canonical set of SetupScriptSlow events to the reporter.
+    ///
+    /// Setup scripts don't have retries, so the combinations are simpler:
+    /// - `!will_terminate`: displayed at Slow and above.
+    /// - `will_terminate`: displayed at Fail and above.
+    fn write_setup_script_slow_events(reporter: &mut DisplayReporter<'_>) {
+        // Slow but not terminating.
+        reporter
+            .write_event(&TestEvent {
+                timestamp: Local::now().into(),
+                elapsed: Duration::ZERO,
+                kind: TestEventKind::SetupScriptSlow {
+                    stress_index: None,
+                    script_id: ScriptId::new(SmolStr::new("my-script")).unwrap(),
+                    program: "my-program".to_owned(),
+                    args: vec!["--arg1".to_owned()],
+                    elapsed: Duration::from_secs(60),
+                    will_terminate: false,
+                },
+            })
+            .unwrap();
+
+        // Slow and about to be terminated.
+        reporter
+            .write_event(&TestEvent {
+                timestamp: Local::now().into(),
+                elapsed: Duration::ZERO,
+                kind: TestEventKind::SetupScriptSlow {
+                    stress_index: None,
+                    script_id: ScriptId::new(SmolStr::new("my-script")).unwrap(),
+                    program: "my-program".to_owned(),
+                    args: vec!["--arg1".to_owned()],
+                    elapsed: Duration::from_secs(120),
+                    will_terminate: true,
+                },
+            })
+            .unwrap();
+    }
+
+    /// Tests that TestSlow and SetupScriptSlow events are displayed correctly
+    /// at each status level. Each level produces a different subset of events.
+    ///
+    /// The hierarchy for slow events is:
+    /// - StatusLevel::None: nothing displayed
+    /// - StatusLevel::Fail: will_terminate on last/single attempt (Fail-level)
+    ///   for tests, will_terminate for setup scripts
+    /// - StatusLevel::Retry: will_terminate events (both last and non-last)
+    ///   for tests, same as Fail for setup scripts (no retries)
+    /// - StatusLevel::Slow and above: all events
+    #[test_case(StatusLevel::None; "none")]
+    #[test_case(StatusLevel::Fail; "fail")]
+    #[test_case(StatusLevel::Retry; "retry")]
+    #[test_case(StatusLevel::Slow; "slow")]
+    #[test_case(StatusLevel::Pass; "pass")]
+    fn test_slow_status_levels(status_level: StatusLevel) {
         let binary_id = RustBinaryId::new("my-binary-id");
         let test_name = TestCaseName::new("test_name");
         let mut out = String::new();
 
-        with_reporter(
+        with_reporter_at_status_level(
             |mut reporter| {
-                // First attempt, single attempt total: should show "SLOW".
-                reporter
-                    .write_event(&TestEvent {
-                        timestamp: Local::now().into(),
-                        elapsed: Duration::ZERO,
-                        kind: TestEventKind::TestSlow {
-                            stress_index: None,
-                            test_instance: TestInstanceId {
-                                binary_id: &binary_id,
-                                test_name: &test_name,
-                            },
-                            retry_data: RetryData {
-                                attempt: 1,
-                                total_attempts: 1,
-                            },
-                            elapsed: Duration::from_secs(60),
-                            will_terminate: false,
-                        },
-                    })
-                    .unwrap();
-
-                // First attempt, multiple attempts total: should still show
-                // "SLOW" (not "TRY 1 SLOW").
-                reporter
-                    .write_event(&TestEvent {
-                        timestamp: Local::now().into(),
-                        elapsed: Duration::ZERO,
-                        kind: TestEventKind::TestSlow {
-                            stress_index: None,
-                            test_instance: TestInstanceId {
-                                binary_id: &binary_id,
-                                test_name: &test_name,
-                            },
-                            retry_data: RetryData {
-                                attempt: 1,
-                                total_attempts: 3,
-                            },
-                            elapsed: Duration::from_secs(60),
-                            will_terminate: false,
-                        },
-                    })
-                    .unwrap();
-
-                // Second attempt: should show "TRY 2 SLOW".
-                reporter
-                    .write_event(&TestEvent {
-                        timestamp: Local::now().into(),
-                        elapsed: Duration::ZERO,
-                        kind: TestEventKind::TestSlow {
-                            stress_index: None,
-                            test_instance: TestInstanceId {
-                                binary_id: &binary_id,
-                                test_name: &test_name,
-                            },
-                            retry_data: RetryData {
-                                attempt: 2,
-                                total_attempts: 3,
-                            },
-                            elapsed: Duration::from_secs(60),
-                            will_terminate: false,
-                        },
-                    })
-                    .unwrap();
-
-                // Third attempt: should show "TRY 3 SLOW".
-                reporter
-                    .write_event(&TestEvent {
-                        timestamp: Local::now().into(),
-                        elapsed: Duration::ZERO,
-                        kind: TestEventKind::TestSlow {
-                            stress_index: None,
-                            test_instance: TestInstanceId {
-                                binary_id: &binary_id,
-                                test_name: &test_name,
-                            },
-                            retry_data: RetryData {
-                                attempt: 3,
-                                total_attempts: 3,
-                            },
-                            elapsed: Duration::from_secs(60),
-                            will_terminate: false,
-                        },
-                    })
-                    .unwrap();
-
-                // will_terminate on first attempt with retries: should show
-                // "TERMINATING" (not "TRY 1 TRMNTG").
-                reporter
-                    .write_event(&TestEvent {
-                        timestamp: Local::now().into(),
-                        elapsed: Duration::ZERO,
-                        kind: TestEventKind::TestSlow {
-                            stress_index: None,
-                            test_instance: TestInstanceId {
-                                binary_id: &binary_id,
-                                test_name: &test_name,
-                            },
-                            retry_data: RetryData {
-                                attempt: 1,
-                                total_attempts: 3,
-                            },
-                            elapsed: Duration::from_secs(120),
-                            will_terminate: true,
-                        },
-                    })
-                    .unwrap();
-
-                // will_terminate on retry: should show "TRY 2 TRMNTG".
-                reporter
-                    .write_event(&TestEvent {
-                        timestamp: Local::now().into(),
-                        elapsed: Duration::ZERO,
-                        kind: TestEventKind::TestSlow {
-                            stress_index: None,
-                            test_instance: TestInstanceId {
-                                binary_id: &binary_id,
-                                test_name: &test_name,
-                            },
-                            retry_data: RetryData {
-                                attempt: 2,
-                                total_attempts: 3,
-                            },
-                            elapsed: Duration::from_secs(120),
-                            will_terminate: true,
-                        },
-                    })
-                    .unwrap();
+                write_test_slow_events(&mut reporter, &binary_id, &test_name);
+                write_setup_script_slow_events(&mut reporter);
             },
             &mut out,
+            status_level,
         );
 
-        insta::assert_snapshot!("test_slow_try_prefix", out);
+        // The test_case label (e.g. "none", "fail") is used by insta as
+        // the snapshot suffix via the function name.
+        let label = match status_level {
+            StatusLevel::None => "none",
+            StatusLevel::Fail => "fail",
+            StatusLevel::Retry => "retry",
+            StatusLevel::Slow => "slow",
+            StatusLevel::Pass => "pass",
+            _ => unreachable!("test only covers these levels"),
+        };
+        insta::assert_snapshot!(format!("test_slow_status_level_{label}"), out);
     }
 
     #[test]

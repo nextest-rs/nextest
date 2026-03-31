@@ -1,10 +1,15 @@
 ---
 source: nextest-runner/src/reporter/displayer/imp.rs
+assertion_line: 4643
 expression: out
 ---
         SLOW [> 60.000s] (─────────) my-binary-id test_name
         SLOW [> 60.000s] (─────────) my-binary-id test_name
   TRY 2 SLOW [> 60.000s] (─────────) my-binary-id test_name
   TRY 3 SLOW [> 60.000s] (─────────) my-binary-id test_name
+ TERMINATING [>120.000s] (─────────) my-binary-id test_name
 TRY 1 TRMNTG [>120.000s] (─────────) my-binary-id test_name
 TRY 2 TRMNTG [>120.000s] (─────────) my-binary-id test_name
+TRY 3 TRMNTG [>120.000s] (─────────) my-binary-id test_name
+  SETUP SLOW [> 60.000s] my-script: my-program --arg1
+ TERMINATING [>120.000s] my-script: my-program --arg1

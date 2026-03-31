@@ -1,0 +1,8 @@
+---
+source: nextest-runner/src/reporter/displayer/imp.rs
+assertion_line: 4643
+expression: out
+---
+ TERMINATING [>120.000s] (─────────) my-binary-id test_name
+ TERMINATING [>120.000s] (─────────) my-binary-id test_name
+ TERMINATING [>120.000s] my-script: my-program --arg1
