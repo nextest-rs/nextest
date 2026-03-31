@@ -42,7 +42,7 @@ use crate::{
 use future_queue::FutureQueueContext;
 use nextest_metadata::FilterMatch;
 use quick_junit::ReportUuid;
-use rand::{Rng, distr::OpenClosed01};
+use rand::{RngExt, distr::OpenClosed01};
 use std::{
     fmt,
     num::NonZeroUsize,

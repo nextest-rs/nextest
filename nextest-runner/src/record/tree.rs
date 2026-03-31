@@ -289,7 +289,6 @@ mod tests {
     use super::*;
     use chrono::TimeZone;
     use proptest::prelude::*;
-    use rand::seq::SliceRandom;
     use test_strategy::proptest;
 
     fn make_run(id_suffix: u32, parent_suffix: Option<u32>, hours_ago: i64) -> RunInfo {
@@ -1003,7 +1002,15 @@ mod tests {
     fn arb_forest_with_shuffle() -> impl Strategy<Value = (Vec<RunInfo>, Vec<RunInfo>)> {
         arb_forest().prop_perturb(|original, mut rng| {
             let mut shuffled = original.clone();
-            shuffled.shuffle(&mut rng);
+            // TODO: revert to shuffled.shuffle(&mut rng) once proptest
+            // upgrades to rand 0.10. Manual Fisher-Yates is needed because
+            // proptest re-exports rand 0.9's Rng trait (via
+            // `proptest::prelude::*`), and rand 0.10's SliceRandom
+            // requires rand_core 0.10's Rng.
+            for i in (1..shuffled.len()).rev() {
+                let j = rng.random_range(0..=i);
+                shuffled.swap(i, j);
+            }
             (original, shuffled)
         })
     }
