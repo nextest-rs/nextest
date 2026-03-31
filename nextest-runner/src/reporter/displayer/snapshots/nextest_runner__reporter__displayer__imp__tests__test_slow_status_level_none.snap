@@ -1,0 +1,5 @@
+---
+source: nextest-runner/src/reporter/displayer/imp.rs
+expression: out
+---
+
