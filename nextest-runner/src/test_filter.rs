@@ -5,13 +5,10 @@
 //!
 //! The main structure in this module is [`TestFilter`].
 
-use crate::{
-    errors::TestFilterBuildError, list::RustTestArtifact, record::ComputedRerunInfo,
-    run_mode::NextestRunMode,
-};
+use crate::{errors::TestFilterBuildError, record::ComputedRerunInfo, run_mode::NextestRunMode};
 use aho_corasick::AhoCorasick;
-use nextest_filtering::{EvalContext, Filterset, TestQuery};
-use nextest_metadata::{FilterMatch, MismatchReason, RustTestKind, TestCaseName};
+use nextest_filtering::{BinaryQuery, EvalContext, Filterset, TestQuery};
+use nextest_metadata::{FilterMatch, MismatchReason, RustBinaryId, RustTestKind, TestCaseName};
 use std::{collections::HashSet, fmt, mem};
 
 /// Whether to run ignored tests.
@@ -63,11 +60,10 @@ impl BinaryFilter {
     /// list of tests within it.
     pub fn check_match(
         &self,
-        test_binary: &RustTestArtifact<'_>,
+        query: &BinaryQuery<'_>,
         ecx: &EvalContext<'_>,
         bound: FilterBound,
     ) -> FilterBinaryMatch {
-        let query = test_binary.to_binary_query();
         let expr_result = match &self.exprs {
             TestFilterExprs::All => FilterBinaryMatch::Definite,
             TestFilterExprs::Sets(exprs) => exprs.iter().fold(
@@ -77,7 +73,7 @@ impl BinaryFilter {
                 },
                 |acc, expr| {
                     acc.logic_or(FilterBinaryMatch::from_result(
-                        expr.matches_binary(&query, ecx),
+                        expr.matches_binary(query, ecx),
                         BinaryMismatchReason::Expression,
                     ))
                 },
@@ -92,7 +88,7 @@ impl BinaryFilter {
         match bound {
             FilterBound::All => expr_result,
             FilterBound::DefaultSet => expr_result.logic_and(FilterBinaryMatch::from_result(
-                ecx.default_filter.matches_binary(&query, ecx),
+                ecx.default_filter.matches_binary(query, ecx),
                 BinaryMismatchReason::DefaultSet,
             )),
         }
@@ -447,11 +443,11 @@ impl TestFilter {
     /// list of tests within it.
     pub fn filter_binary_match(
         &self,
-        test_binary: &RustTestArtifact<'_>,
+        query: &BinaryQuery<'_>,
         ecx: &EvalContext<'_>,
         bound: FilterBound,
     ) -> FilterBinaryMatch {
-        self.binary_filter.check_match(test_binary, ecx, bound)
+        self.binary_filter.check_match(query, ecx, bound)
     }
 
     /// Creates a new `TestFilter` that matches the default set of tests.
@@ -489,7 +485,7 @@ impl TestFilter {
     /// Returns an enum describing the match status of this filter.
     pub fn filter_match(
         &self,
-        test_binary: &RustTestArtifact<'_>,
+        binary_query: BinaryQuery<'_>,
         test_name: &TestCaseName,
         test_kind: &RustTestKind,
         ecx: &EvalContext<'_>,
@@ -502,19 +498,19 @@ impl TestFilter {
         }
 
         // Check if this test already passed in a prior rerun.
-        if self.is_rerun_already_passed(test_binary, test_name) {
+        if self.is_rerun_already_passed(binary_query.binary_id, test_name) {
             return FilterMatch::Mismatch {
                 reason: MismatchReason::RerunAlreadyPassed,
             };
         }
 
-        self.filter_match_base(test_binary, test_name, ecx, bound, ignored)
+        self.filter_match_base(binary_query, test_name, ecx, bound, ignored)
     }
 
     /// Core filter matching logic, used by `filter_match`.
     fn filter_match_base(
         &self,
-        test_binary: &RustTestArtifact<'_>,
+        binary_query: BinaryQuery<'_>,
         test_name: &TestCaseName,
         ecx: &EvalContext<'_>,
         bound: FilterBound,
@@ -548,7 +544,7 @@ impl TestFilter {
             use FilterNameMatch::*;
             match (
                 self.filter_name_match(test_name),
-                self.filter_expression_match(test_binary, test_name, ecx, bound),
+                self.filter_expression_match(binary_query, test_name, ecx, bound),
             ) {
                 // Tests must be accepted by both expressions and filters.
                 (
@@ -570,13 +566,9 @@ impl TestFilter {
     }
 
     /// Returns true if this test already passed in a prior rerun.
-    fn is_rerun_already_passed(
-        &self,
-        test_binary: &RustTestArtifact<'_>,
-        test_name: &TestCaseName,
-    ) -> bool {
+    fn is_rerun_already_passed(&self, binary_id: &RustBinaryId, test_name: &TestCaseName) -> bool {
         if let Some(rerun_info) = &self.rerun_info
-            && let Some(suite) = rerun_info.test_suites.get(&test_binary.binary_id)
+            && let Some(suite) = rerun_info.test_suites.get(binary_id)
         {
             return suite.passing.contains(test_name);
         }
@@ -610,13 +602,13 @@ impl TestFilter {
 
     fn filter_expression_match(
         &self,
-        test_binary: &RustTestArtifact<'_>,
+        binary_query: BinaryQuery<'_>,
         test_name: &TestCaseName,
         ecx: &EvalContext<'_>,
         bound: FilterBound,
     ) -> FilterNameMatch {
         let query = TestQuery {
-            binary_query: test_binary.to_binary_query(),
+            binary_query,
             test_name,
         };
 
