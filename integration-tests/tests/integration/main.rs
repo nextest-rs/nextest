@@ -3011,3 +3011,40 @@ fn test_run_with_target_runner() {
         RunProperties::WITH_TARGET_RUNNER,
     );
 }
+
+// ---
+// `debug parse-filterset` banned predicate tests
+// ---
+
+/// Helper to run `debug parse-filterset` and return the output.
+fn run_parse_filterset(env_info: &TestEnvInfo, kind: &str, expression: &str) -> CargoNextestOutput {
+    CargoNextestCli::for_test(env_info)
+        .args(["debug", "parse-filterset", "--kind", kind, expression])
+        .unchecked(true)
+        .output()
+}
+
+#[test]
+fn test_banned_predicates() {
+    let env_info = set_env_vars_for_test();
+
+    // group() in override-filter: circular dependency.
+    let output = run_parse_filterset(&env_info, "override-filter", "group(serial)");
+    insta::assert_snapshot!("banned_group_in_override_filter", output.stderr_as_str());
+
+    // group() in default-filter: not available.
+    let output = run_parse_filterset(&env_info, "default-filter", "group(serial)");
+    insta::assert_snapshot!("banned_group_in_default_filter", output.stderr_as_str());
+
+    // group() in archive-filter: not supported while archiving.
+    let output = run_parse_filterset(&env_info, "archive-filter", "group(serial)");
+    insta::assert_snapshot!("banned_group_in_archive_filter", output.stderr_as_str());
+
+    // test() in archive-filter: not supported while archiving.
+    let output = run_parse_filterset(&env_info, "archive-filter", "test(foo)");
+    insta::assert_snapshot!("banned_test_in_archive_filter", output.stderr_as_str());
+
+    // default() in default-filter: infinite recursion.
+    let output = run_parse_filterset(&env_info, "default-filter", "default()");
+    insta::assert_snapshot!("banned_default_in_default_filter", output.stderr_as_str());
+}

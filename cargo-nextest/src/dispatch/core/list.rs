@@ -71,8 +71,13 @@ impl App {
 
         let (version_only_config, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
         let profile = self.base.load_profile(&config)?;
-        let filter_exprs =
-            build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
+        let known_groups = profile.known_groups();
+        let filter_exprs = build_filtersets(
+            &pcx,
+            &self.build_filter.filterset,
+            FiltersetKind::Test,
+            &known_groups,
+        )?;
         let test_filter = self
             .build_filter
             .make_test_filter(NextestRunMode::Test, filter_exprs)?;
@@ -165,8 +170,13 @@ impl App {
         };
         let settings = ShowTestGroupSettings { mode, show_default };
 
-        let filter_exprs =
-            build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
+        let known_groups = profile.known_groups();
+        let filter_exprs = build_filtersets(
+            &pcx,
+            &self.build_filter.filterset,
+            FiltersetKind::Test,
+            &known_groups,
+        )?;
         let test_filter = self
             .build_filter
             .make_test_filter(NextestRunMode::Test, filter_exprs)?;

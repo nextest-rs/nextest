@@ -796,7 +796,7 @@ impl<'a> ExecutorContext<'a> {
                     test.cx.group_slot().is_none(),
                     "test_group being unset implies group_slot is unset"
                 );
-                command_mut.env("NEXTEST_TEST_GROUP", TestGroup::GLOBAL_STR);
+                command_mut.env("NEXTEST_TEST_GROUP", nextest_metadata::GLOBAL_TEST_GROUP);
             }
         }
         if let Some(group_slot) = test.cx.group_slot() {

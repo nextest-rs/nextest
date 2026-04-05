@@ -1,13 +1,12 @@
 ---
 source: integration-tests/tests/integration/main.rs
-assertion_line: 1305
 expression: output.stderr_as_str()
 ---
   error: predicate not allowed in `archive-filter` expressions
    ╭────
- 1 │ test(sample_test)
-   ·      ─────┬─────
-   ·           ╰── test() predicates are not supported while archiving
+ 1 │ test(foo)
+   ·      ─┬─
+   ·       ╰── test() predicates are not supported while archiving
    ╰────
 
 error: failed to parse filterset

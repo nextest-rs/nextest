@@ -3,6 +3,7 @@
 
 //! Support for per-test settings and overrides.
 
+pub(crate) mod group_membership;
 mod imp;
 
 pub use imp::*;

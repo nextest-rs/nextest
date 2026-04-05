@@ -124,6 +124,8 @@ pub enum FiltersetLeaf {
     BinaryId(NameMatcher, SourceSpan),
     /// All tests matching a name
     Test(NameMatcher, SourceSpan),
+    /// All tests in the named test group.
+    Group(NameMatcher, SourceSpan),
     /// The default set of tests to run.
     Default,
     /// All tests
@@ -139,8 +141,19 @@ impl FiltersetLeaf {
     /// Currently, this also returns true (conservatively) for the `Default`
     /// leaf, which is used to represent the default set of tests to run.
     pub fn is_runtime_only(&self) -> bool {
-        matches!(self, Self::Test(_, _) | Self::Default)
+        matches!(self, Self::Test(_, _) | Self::Group(_, _) | Self::Default)
     }
+}
+
+/// Trait for looking up test group membership during filterset evaluation.
+///
+/// Implemented in `nextest-runner` and passed to
+/// [`CompiledExpr::matches_test_with_groups`] to resolve `group()`
+/// predicates.
+pub trait GroupLookup: fmt::Debug {
+    /// Returns true if the given test is a member of a group matching
+    /// the provided name matcher.
+    fn is_member_test(&self, test: &TestQuery<'_>, matcher: &NameMatcher) -> bool;
 }
 
 /// A query for a binary, passed into [`Filterset::matches_binary`].
@@ -225,10 +238,39 @@ impl CompiledExpr {
     }
 
     /// Returns true if the given test is accepted by this filterset.
+    ///
+    /// If a `group()` predicate is encountered, this method panics.
+    /// Only use this for expressions that are guaranteed group-free
+    /// (i.e. compiled with any [`FiltersetKind`] other than
+    /// [`FiltersetKind::Test`], or Test expressions where
+    /// [`has_group_matchers`](Self::has_group_matchers) returns false).
     pub fn matches_test(&self, query: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
+        self.matches_test_impl(query, cx, &NoGroups)
+    }
+
+    /// Returns true if the given test is accepted by this filterset,
+    /// resolving `group()` predicates via the provided lookup.
+    ///
+    /// Use this for [`FiltersetKind::Test`] expressions that contain
+    /// `group()` predicates.
+    pub fn matches_test_with_groups(
+        &self,
+        query: &TestQuery<'_>,
+        cx: &EvalContext<'_>,
+        groups: &dyn GroupLookup,
+    ) -> bool {
+        self.matches_test_impl(query, cx, &WithGroups(groups))
+    }
+
+    fn matches_test_impl(
+        &self,
+        query: &TestQuery<'_>,
+        cx: &EvalContext<'_>,
+        groups: &impl GroupResolver,
+    ) -> bool {
         use ExprFrame::*;
         Wrapped(self).collapse_frames(|layer: ExprFrame<&FiltersetLeaf, bool>| match layer {
-            Set(set) => set.matches_test(query, cx),
+            Set(set) => set.matches_test_impl(query, cx, groups),
             Not(a) => !a,
             Union(a, b) => a || b,
             Intersection(a, b) => a && b,
@@ -236,10 +278,22 @@ impl CompiledExpr {
             Parens(a) => a,
         })
     }
+
+    /// Returns true if this expression contains any `group()` predicates.
+    pub fn has_group_matchers(&self) -> bool {
+        let mut found = false;
+        Wrapped(self).collapse_frames(|layer: ExprFrame<&FiltersetLeaf, ()>| {
+            if matches!(layer, ExprFrame::Set(FiltersetLeaf::Group(_, _))) {
+                found = true;
+            }
+        });
+        found
+    }
 }
 
 impl NameMatcher {
-    pub(crate) fn is_match(&self, input: &str) -> bool {
+    /// Returns true if the given input matches this name matcher.
+    pub fn is_match(&self, input: &str) -> bool {
         match self {
             Self::Equal { value, .. } => value == input,
             Self::Contains { value, .. } => input.contains(value),
@@ -250,17 +304,26 @@ impl NameMatcher {
 }
 
 impl FiltersetLeaf {
-    fn matches_test(&self, query: &TestQuery<'_>, cx: &EvalContext) -> bool {
+    fn matches_test_impl(
+        &self,
+        query: &TestQuery<'_>,
+        cx: &EvalContext,
+        groups: &impl GroupResolver,
+    ) -> bool {
         match self {
             Self::All => true,
             Self::None => false,
-            Self::Default => cx.default_filter.matches_test(query, cx),
+            // The default filter is always group-free (group() is banned
+            // in DefaultFilter), so recurse with NoGroups to enforce that
+            // invariant.
+            Self::Default => cx.default_filter.matches_test_impl(query, cx, &NoGroups),
             Self::Test(matcher, _) => matcher.is_match(query.test_name.as_str()),
             Self::Binary(matcher, _) => matcher.is_match(query.binary_query.binary_name),
             Self::BinaryId(matcher, _) => matcher.is_match(query.binary_query.binary_id.as_str()),
             Self::Platform(platform, _) => query.binary_query.platform == *platform,
             Self::Kind(matcher, _) => matcher.is_match(query.binary_query.kind.as_str()),
             Self::Packages(packages) => packages.contains(query.binary_query.package_id),
+            Self::Group(matcher, _) => groups.resolve_group(query, matcher),
         }
     }
 
@@ -275,6 +338,62 @@ impl FiltersetLeaf {
             Self::Platform(platform, _) => Some(query.platform == *platform),
             Self::Kind(matcher, _) => Some(matcher.is_match(query.kind.as_str())),
             Self::Packages(packages) => Some(packages.contains(query.package_id)),
+            // Group membership cannot be determined at the binary level.
+            Self::Group(_, _) => None,
+        }
+    }
+}
+
+/// Known test group names for validating `group()` predicates.
+///
+/// Passed to [`Filterset::parse`] to control group name validation at
+/// compile time.
+#[derive(Debug)]
+pub enum KnownGroups {
+    /// A known set of valid group names. The `group()` predicate is
+    /// validated against these names during compilation.
+    ///
+    /// `custom_groups` contains only custom (non-`@global`) group names.
+    /// `@global` is always implicitly valid and does not need to be
+    /// included.
+    Known { custom_groups: HashSet<String> },
+
+    /// Group names are not available in this context. If a `group()`
+    /// predicate reaches validation, it indicates a bug: the predicate
+    /// should have been banned during compilation for this filterset kind.
+    Unavailable,
+}
+
+impl KnownGroups {
+    /// Returns true if the given matcher matches any known group name
+    /// (including `@global`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is `Unavailable`, indicating a bug where `group()`
+    /// bypassed the ban check.
+    pub(crate) fn matches(&self, matcher: &NameMatcher) -> bool {
+        let custom_groups = match self {
+            KnownGroups::Known { custom_groups } => custom_groups,
+            KnownGroups::Unavailable => panic!(
+                "group() validation data is unavailable; \
+                 this is a nextest bug (group() should have been banned \
+                 during compilation for this filterset kind)"
+            ),
+        };
+
+        // Always check @global first.
+        if matcher.is_match(nextest_metadata::GLOBAL_TEST_GROUP) {
+            return true;
+        }
+
+        match matcher {
+            NameMatcher::Equal { value, .. } => custom_groups.contains(value.as_str()),
+            _ => {
+                // For anything more complex than equals, iterate over all
+                // known groups.
+                custom_groups.iter().any(|g| matcher.is_match(g))
+            }
         }
     }
 }
@@ -372,6 +491,13 @@ pub enum FiltersetKind {
     /// A test archive filterset.
     TestArchive,
 
+    /// An override filter in a config profile.
+    ///
+    /// Override filters cannot contain `group()` predicates because
+    /// group membership is determined by overrides, which would create
+    /// a circular dependency.
+    OverrideFilter,
+
     /// A default-filter filterset.
     ///
     /// To prevent recursion, default-filter expressions cannot contain `default()` themselves.
@@ -383,6 +509,7 @@ impl fmt::Display for FiltersetKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Test => write!(f, "test"),
+            Self::OverrideFilter => write!(f, "override-filter"),
             Self::TestArchive => write!(f, "archive-filter"),
             Self::DefaultFilter => write!(f, "default-filter"),
         }
@@ -396,12 +523,45 @@ pub struct EvalContext<'a> {
     pub default_filter: &'a CompiledExpr,
 }
 
+/// Internal trait for resolving `group()` predicates during expression
+/// evaluation. Not public; exposed only through the two `matches_test`
+/// variants on [`CompiledExpr`].
+trait GroupResolver {
+    fn resolve_group(&self, query: &TestQuery<'_>, matcher: &NameMatcher) -> bool;
+}
+
+/// Used by [`CompiledExpr::matches_test`]. Panics if a `group()` leaf
+/// is encountered, since the expression should have been compiled with
+/// a filterset kind that bans `group()`.
+struct NoGroups;
+
+impl GroupResolver for NoGroups {
+    fn resolve_group(&self, _query: &TestQuery<'_>, _matcher: &NameMatcher) -> bool {
+        panic!(
+            "group() predicate in expression where groups are not expected; \
+             this is a nextest bug (group() should be banned during compilation \
+             for this filterset kind)"
+        )
+    }
+}
+
+/// Used by [`CompiledExpr::matches_test_with_groups`]. Delegates to the
+/// provided [`GroupLookup`].
+struct WithGroups<'a>(&'a dyn GroupLookup);
+
+impl GroupResolver for WithGroups<'_> {
+    fn resolve_group(&self, query: &TestQuery<'_>, matcher: &NameMatcher) -> bool {
+        self.0.is_member_test(query, matcher)
+    }
+}
+
 impl Filterset {
     /// Parse a filterset.
     pub fn parse(
         input: String,
         cx: &ParseContext<'_>,
         kind: FiltersetKind,
+        known_groups: &KnownGroups,
     ) -> Result<Self, FiltersetParseErrors> {
         let mut errors = Vec::new();
         match parse(new_span(&input, &mut errors)) {
@@ -412,7 +572,7 @@ impl Filterset {
 
                 match parsed_expr {
                     ExprResult::Valid(parsed) => {
-                        let compiled = crate::compile::compile(&parsed, cx, kind)
+                        let compiled = crate::compile::compile(&parsed, cx, kind, known_groups)
                             .map_err(|errors| FiltersetParseErrors::new(input.clone(), errors))?;
                         Ok(Self {
                             input,
@@ -455,8 +615,24 @@ impl Filterset {
     }
 
     /// Returns true if the given test is accepted by this filterset.
+    ///
+    /// Panics if a `group()` predicate is encountered. See
+    /// [`CompiledExpr::matches_test`] for details.
     pub fn matches_test(&self, query: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
         self.compiled.matches_test(query, cx)
+    }
+
+    /// Returns true if the given test is accepted by this filterset,
+    /// resolving `group()` predicates via the provided lookup.
+    ///
+    /// See [`CompiledExpr::matches_test_with_groups`] for details.
+    pub fn matches_test_with_groups(
+        &self,
+        query: &TestQuery<'_>,
+        cx: &EvalContext<'_>,
+        groups: &dyn GroupLookup,
+    ) -> bool {
+        self.compiled.matches_test_with_groups(query, cx, groups)
     }
 
     /// Returns true if the given expression needs dependencies information to work

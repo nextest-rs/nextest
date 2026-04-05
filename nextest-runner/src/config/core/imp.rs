@@ -15,6 +15,7 @@ use crate::{
         overrides::{
             CompiledByProfile, CompiledData, CompiledDefaultFilter, DeserializedOverride,
             ListSettings, SettingSource, TestSettings,
+            group_membership::PrecomputedGroupMembership,
         },
         scripts::{
             DeserializedProfileScriptConfig, ProfileScriptType, ScriptConfig, ScriptId, ScriptInfo,
@@ -28,7 +29,7 @@ use crate::{
         provided_by_tool,
     },
     helpers::plural,
-    list::TestList,
+    list::{TestInstanceId, TestList},
     platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
     run_mode::NextestRunMode,
@@ -39,7 +40,9 @@ use config::{
 };
 use iddqd::IdOrdMap;
 use indexmap::IndexMap;
-use nextest_filtering::{BinaryQuery, EvalContext, Filterset, ParseContext, TestQuery};
+use nextest_filtering::{
+    BinaryQuery, EvalContext, Filterset, KnownGroups, ParseContext, TestQuery,
+};
 use petgraph::{Directed, Graph, algo::scc::kosaraju_scc, graph::NodeIndex};
 use serde::Deserialize;
 use std::{
@@ -986,6 +989,19 @@ impl<'cfg> EarlyProfile<'cfg> {
         self.test_groups
     }
 
+    /// Returns the known test groups for filterset validation.
+    ///
+    /// Only custom group names are included; `@global` is always
+    /// implicitly valid and handled by `KnownGroups` itself.
+    pub fn known_groups(&self) -> KnownGroups {
+        let custom_groups = self
+            .test_group_config()
+            .keys()
+            .map(|g| g.to_string())
+            .collect();
+        KnownGroups::Known { custom_groups }
+    }
+
     /// Applies build platforms to make the profile ready for evaluation.
     ///
     /// This is a separate step from parsing the config and reading a profile so that cargo-nextest
@@ -1063,6 +1079,35 @@ impl<'cfg> EvaluatableProfile<'cfg> {
         EvalContext {
             default_filter: &self.default_filter().expr,
         }
+    }
+
+    /// Precomputes test group memberships for the given tests.
+    ///
+    /// Uses [`settings_for`](Self::settings_for) to determine each
+    /// test's group, keeping the override resolution logic in one
+    /// place. The result implements [`nextest_filtering::GroupLookup`]
+    /// and should be passed into an [`EvalContext`] for CLI filterset
+    /// evaluation.
+    pub fn precompute_group_memberships<'a>(
+        &self,
+        tests: impl Iterator<Item = TestQuery<'a>>,
+    ) -> PrecomputedGroupMembership {
+        // test_group is not mode-dependent, so the choice of run mode
+        // doesn't matter here.
+        let run_mode = NextestRunMode::Test;
+
+        let mut membership = PrecomputedGroupMembership::empty();
+        for test in tests {
+            let group = self.settings_for(run_mode, &test).test_group().clone();
+            if group != TestGroup::Global {
+                let id = TestInstanceId {
+                    binary_id: test.binary_query.binary_id,
+                    test_name: test.test_name,
+                };
+                membership.insert(id.to_owned(), group);
+            }
+        }
+        membership
     }
 
     /// Returns the default set of tests to run.

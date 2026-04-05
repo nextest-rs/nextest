@@ -10,7 +10,7 @@ use crate::{
 };
 use camino::Utf8PathBuf;
 use clap::Args;
-use nextest_filtering::{FiltersetKind, ParseContext};
+use nextest_filtering::{FiltersetKind, KnownGroups, ParseContext};
 use nextest_runner::{
     redact::Redactor,
     reuse_build::{ArchiveReporter, PathMapper, apply_archive_filters, archive_to_file},
@@ -116,6 +116,7 @@ impl ArchiveApp {
             &pcx,
             &self.archive_filter.filterset,
             FiltersetKind::TestArchive,
+            &KnownGroups::Unavailable,
         )?;
         let binary_filter = BinaryFilter::new(filtersets);
         let ecx = profile.filterset_ecx();

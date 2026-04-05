@@ -122,6 +122,10 @@ pub enum ParseSingleError {
     #[error("operator didn't match any packages")]
     NoPackageMatch(#[label("no packages matched this")] SourceSpan),
 
+    /// This matcher didn't match any test groups.
+    #[error("operator didn't match any test groups")]
+    NoGroupMatch(#[label("no test groups matched this")] SourceSpan),
+
     /// This matcher didn't match any binary IDs.
     #[error("operator didn't match any binary IDs")]
     NoBinaryIdMatch(#[label("no binary IDs matched this")] SourceSpan),
@@ -199,19 +203,39 @@ impl<'a> State<'a> {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum BannedPredicateReason {
-    /// This predicate causes infinite recursion.
-    InfiniteRecursion,
-    /// This predicate is unsupported.
-    Unsupported,
+    /// `default()` causes infinite recursion in a default filter.
+    DefaultInfiniteRecursion,
+
+    /// `group()` creates a circular dependency in override filters, because
+    /// group membership is determined by overrides themselves.
+    GroupCircularDependency,
+
+    /// `group()` is not available in default-filter expressions.
+    GroupNotAvailableInDefaultFilter,
+
+    /// `group()` predicates are not supported while archiving.
+    GroupNotAvailableInArchive,
+
+    /// `test()` predicates are not supported while archiving.
+    TestNotAvailableInArchive,
 }
 
 impl fmt::Display for BannedPredicateReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BannedPredicateReason::InfiniteRecursion => {
-                write!(f, "this predicate causes infinite recursion")
+            BannedPredicateReason::DefaultInfiniteRecursion => {
+                write!(f, "default() causes infinite recursion")
             }
-            BannedPredicateReason::Unsupported => {
+            BannedPredicateReason::GroupCircularDependency => {
+                write!(f, "group() creates a circular dependency with overrides")
+            }
+            BannedPredicateReason::GroupNotAvailableInDefaultFilter => {
+                write!(f, "group() is not available in default-filter expressions")
+            }
+            BannedPredicateReason::GroupNotAvailableInArchive => {
+                write!(f, "group() predicates are not supported while archiving")
+            }
+            BannedPredicateReason::TestNotAvailableInArchive => {
                 write!(f, "test() predicates are not supported while archiving")
             }
         }

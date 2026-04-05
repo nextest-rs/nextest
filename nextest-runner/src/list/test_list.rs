@@ -6,7 +6,7 @@ use crate::{
     cargo_config::EnvironmentMap,
     config::{
         core::EvaluatableProfile,
-        overrides::{ListSettings, TestSettings},
+        overrides::{ListSettings, TestSettings, group_membership::PrecomputedGroupMembership},
         scripts::{ScriptCommandEnvMap, WrapperScriptConfig, WrapperScriptTargetRunner},
     },
     double_spawn::DoubleSpawnInfo,
@@ -33,7 +33,7 @@ use guppy::{
     graph::{PackageGraph, PackageMetadata},
 };
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
-use nextest_filtering::{BinaryQuery, EvalContext, TestQuery};
+use nextest_filtering::{BinaryQuery, EvalContext, GroupLookup, TestQuery};
 use nextest_metadata::{
     BuildPlatform, FilterMatch, MismatchReason, RustBinaryId, RustNonTestBinaryKind,
     RustTestBinaryKind, RustTestBinarySummary, RustTestCaseSummary, RustTestKind,
@@ -330,8 +330,19 @@ impl<'g> TestList<'g> {
         runtime.shutdown_background();
 
         // Phase 2: apply test-level filters and build suites.
-        let mut rust_suites = Self::build_suites(parsed_binaries, filter, &ecx, bound);
+        //
+        // If the CLI filter uses group() predicates, precompute group
+        // memberships first so that group() evaluates correctly in a
+        // single pass (no re-evaluation needed).
+        let group_membership = if filter.has_group_predicates() {
+            let test_queries = Self::collect_test_queries_from_parsed(&parsed_binaries);
+            Some(profile.precompute_group_memberships(test_queries.into_iter()))
+        } else {
+            None
+        };
+        let groups = group_membership.as_ref().map(|g| g as &dyn GroupLookup);
 
+        let mut rust_suites = Self::build_suites(parsed_binaries, filter, &ecx, bound, groups);
         Self::apply_partitioning(&mut rust_suites, partitioner_builder);
 
         let test_count = rust_suites
@@ -390,7 +401,7 @@ impl<'g> TestList<'g> {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let mut rust_suites = Self::build_suites(parsed_binaries, filter, ecx, bound);
+        let mut rust_suites = Self::build_suites(parsed_binaries, filter, ecx, bound, None);
 
         Self::apply_partitioning(&mut rust_suites, partitioner_builder);
 
@@ -784,12 +795,19 @@ impl<'g> TestList<'g> {
     /// Converts parsed binaries into filtered test suites.
     ///
     /// This is separated from [`Self::parse_output`] so that callers can
-    /// insert processing between parsing and filtering.
+    /// insert processing between parsing and filtering (e.g. precomputing
+    /// group memberships).
+    ///
+    /// `groups` should be `Some` when the CLI filter contains `group()`
+    /// predicates (see [`TestFilter::has_group_predicates`]), and `None`
+    /// otherwise. When `None`, encountering a `group()` predicate in the
+    /// expression panics.
     fn build_suites(
         parsed: impl IntoIterator<Item = ParsedTestBinary<'g>>,
         filter: &TestFilter,
         ecx: &EvalContext<'_>,
         bound: FilterBound,
+        groups: Option<&dyn GroupLookup>,
     ) -> IdOrdMap<RustTestSuite<'g>> {
         parsed
             .into_iter()
@@ -802,8 +820,9 @@ impl<'g> TestList<'g> {
                         let query = artifact.to_binary_query();
                         let mut map = IdOrdMap::new();
                         for tc in test_cases {
-                            let filter_match = filter
-                                .filter_match(query, &tc.name, &tc.kind, ecx, bound, tc.ignored);
+                            let filter_match = filter.filter_match(
+                                query, &tc.name, &tc.kind, ecx, bound, tc.ignored, groups,
+                            );
                             // Use insert_overwrite so that ignored entries
                             // (appended after non-ignored by parse_output)
                             // take precedence when a test name appears in
@@ -838,6 +857,34 @@ impl<'g> TestList<'g> {
             artifact: test_binary,
             reason,
         }
+    }
+
+    /// Collects test queries from parsed (but not yet filtered) binaries.
+    ///
+    /// Used to precompute group memberships before building suites.
+    /// Override filters that assign `test-group` are group-free
+    /// (group() is banned in override filters), so this evaluation
+    /// only needs a base `EvalContext` without group lookup.
+    fn collect_test_queries_from_parsed<'a>(
+        parsed_binaries: &'a [ParsedTestBinary<'g>],
+    ) -> Vec<TestQuery<'a>> {
+        parsed_binaries
+            .iter()
+            .filter_map(|binary| match binary {
+                ParsedTestBinary::Listed {
+                    artifact,
+                    test_cases,
+                } => Some((artifact, test_cases)),
+                ParsedTestBinary::Skipped { .. } => None,
+            })
+            .flat_map(|(artifact, test_cases)| {
+                let binary_query = artifact.to_binary_query();
+                test_cases.iter().map(move |tc| TestQuery {
+                    binary_query,
+                    test_name: &tc.name,
+                })
+            })
+            .collect()
     }
 
     /// Applies partitioning to the test suites as a post-filtering step.
@@ -1153,6 +1200,12 @@ pub trait ListProfile {
 
     /// Returns list-time settings for a test binary.
     fn list_settings_for(&self, query: &BinaryQuery<'_>) -> ListSettings<'_>;
+
+    /// Precomputes group memberships for the given tests.
+    fn precompute_group_memberships<'a>(
+        &self,
+        _tests: impl Iterator<Item = TestQuery<'a>>,
+    ) -> PrecomputedGroupMembership;
 }
 
 impl<'g> ListProfile for EvaluatableProfile<'g> {
@@ -1162,6 +1215,13 @@ impl<'g> ListProfile for EvaluatableProfile<'g> {
 
     fn list_settings_for(&self, query: &BinaryQuery<'_>) -> ListSettings<'_> {
         self.list_settings_for(query)
+    }
+
+    fn precompute_group_memberships<'a>(
+        &self,
+        tests: impl Iterator<Item = TestQuery<'a>>,
+    ) -> PrecomputedGroupMembership {
+        EvaluatableProfile::precompute_group_memberships(self, tests)
     }
 }
 
@@ -1869,10 +1929,13 @@ mod tests {
     };
     use iddqd::id_ord_map;
     use indoc::indoc;
-    use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext};
+    use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, KnownGroups, ParseContext};
     use nextest_metadata::{FilterMatch, MismatchReason, PlatformLibdirUnavailable, RustTestKind};
     use pretty_assertions::assert_eq;
-    use std::{collections::BTreeMap, hash::DefaultHasher};
+    use std::{
+        collections::{BTreeMap, HashSet},
+        hash::DefaultHasher,
+    };
     use target_spec::Platform;
     use test_strategy::proptest;
 
@@ -1898,7 +1961,15 @@ mod tests {
             TestFilterPatterns::default(),
             // Test against the platform() predicate because this is the most important one here.
             vec![
-                Filterset::parse("platform(target)".to_owned(), &cx, FiltersetKind::Test).unwrap(),
+                Filterset::parse(
+                    "platform(target)".to_owned(),
+                    &cx,
+                    FiltersetKind::Test,
+                    &KnownGroups::Known {
+                        custom_groups: HashSet::new(),
+                    },
+                )
+                .unwrap(),
             ],
         )
         .unwrap();
@@ -2800,5 +2871,133 @@ mod tests {
             hash_value(&borrowed2),
             "Hash must be consistent for owned2 and its borrowed form"
         );
+    }
+
+    /// A mock group lookup that reports all tests as members of a
+    /// single named group.
+    #[derive(Debug)]
+    struct MockGroupLookup {
+        group_name: String,
+    }
+
+    impl GroupLookup for MockGroupLookup {
+        fn is_member_test(
+            &self,
+            _test: &nextest_filtering::TestQuery<'_>,
+            matcher: &nextest_filtering::NameMatcher,
+        ) -> bool {
+            matcher.is_match(&self.group_name)
+        }
+    }
+
+    /// Tests that `build_suites` correctly resolves `group()` predicates
+    /// when a group lookup is provided.
+    #[test]
+    fn test_build_suites_with_group_filter() {
+        let cx = ParseContext::new(&PACKAGE_GRAPH_FIXTURE);
+
+        // Create a filter with group(serial) — only tests in the
+        // "serial" group should match.
+        let test_filter = TestFilter::new(
+            NextestRunMode::Test,
+            RunIgnored::Default,
+            TestFilterPatterns::default(),
+            vec![
+                Filterset::parse(
+                    "group(serial)".to_owned(),
+                    &cx,
+                    FiltersetKind::Test,
+                    &KnownGroups::Known {
+                        custom_groups: HashSet::from(["serial".to_owned()]),
+                    },
+                )
+                .unwrap(),
+            ],
+        )
+        .unwrap();
+
+        assert!(
+            test_filter.has_group_predicates(),
+            "filter with group() must report has_group_predicates"
+        );
+
+        let fake_binary_id = RustBinaryId::new("fake-package::fake-binary");
+
+        let make_parsed = || {
+            vec![ParsedTestBinary::Listed {
+                artifact: RustTestArtifact {
+                    binary_path: "/fake/binary".into(),
+                    cwd: "/fake/cwd".into(),
+                    package: package_metadata(),
+                    binary_name: "fake-binary".to_owned(),
+                    binary_id: fake_binary_id.clone(),
+                    kind: RustTestBinaryKind::LIB,
+                    non_test_binaries: BTreeSet::new(),
+                    build_platform: BuildPlatform::Target,
+                },
+                test_cases: vec![
+                    ParsedTestCase {
+                        name: TestCaseName::new("serial_test"),
+                        kind: RustTestKind::TEST,
+                        ignored: false,
+                    },
+                    ParsedTestCase {
+                        name: TestCaseName::new("parallel_test"),
+                        kind: RustTestKind::TEST,
+                        ignored: false,
+                    },
+                ],
+            }]
+        };
+
+        let ecx = EvalContext {
+            default_filter: &CompiledExpr::ALL,
+        };
+
+        // Mock: all tests report as members of the "serial" group.
+        let lookup = MockGroupLookup {
+            group_name: "serial".to_owned(),
+        };
+        let suites = TestList::build_suites(
+            make_parsed(),
+            &test_filter,
+            &ecx,
+            FilterBound::All,
+            Some(&lookup),
+        );
+        let suite = suites.get(&fake_binary_id).expect("suite exists");
+        // Both tests should match because the mock says all are in "serial".
+        for case in suite.status.test_cases() {
+            assert_eq!(
+                case.test_info.filter_match,
+                FilterMatch::Matches,
+                "{} should match with serial group lookup",
+                case.name,
+            );
+        }
+
+        // Mock: all tests report as members of "batch", not "serial".
+        let lookup_other = MockGroupLookup {
+            group_name: "batch".to_owned(),
+        };
+        let suites = TestList::build_suites(
+            make_parsed(),
+            &test_filter,
+            &ecx,
+            FilterBound::All,
+            Some(&lookup_other),
+        );
+        let suite = suites.get(&fake_binary_id).expect("suite exists");
+        // No tests should match because the group is "batch", not "serial".
+        for case in suite.status.test_cases() {
+            assert_eq!(
+                case.test_info.filter_match,
+                FilterMatch::Mismatch {
+                    reason: MismatchReason::Expression,
+                },
+                "{} should not match with batch group lookup",
+                case.name,
+            );
+        }
     }
 }
