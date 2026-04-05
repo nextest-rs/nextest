@@ -25,7 +25,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@1ed3272338f573e042a2e6bca3893aa19f43b47a # v2.71.3
+        uses: taiki-e/install-action@de6f06126afb86b5250a16ff961c57360c5edccc # v2.72.0
         with:
           tool: cargo-release@0.25.0
       - uses: taiki-e/create-gh-release-action@f67cf7b2dadd83d36b981e674a6b08063997ce68 # v1.10.0
@@ -56,7 +56,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@1ed3272338f573e042a2e6bca3893aa19f43b47a # v2.71.3
+        uses: taiki-e/install-action@de6f06126afb86b5250a16ff961c57360c5edccc # v2.72.0
         with:
           tool: cargo-release@0.25.0
       - uses: taiki-e/create-gh-release-action@f67cf7b2dadd83d36b981e674a6b08063997ce68 # v1.10.0
@@ -87,7 +87,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@1ed3272338f573e042a2e6bca3893aa19f43b47a # v2.71.3
+        uses: taiki-e/install-action@de6f06126afb86b5250a16ff961c57360c5edccc # v2.72.0
         with:
           tool: cargo-release@0.25.0
       - uses: taiki-e/create-gh-release-action@f67cf7b2dadd83d36b981e674a6b08063997ce68 # v1.10.0
@@ -243,7 +243,7 @@ jobs:
 
       - name: Install just on Windows
         if: endsWith(matrix.target, '-pc-windows-msvc')
-        uses: taiki-e/install-action@1ed3272338f573e042a2e6bca3893aa19f43b47a # v2.71.3
+        uses: taiki-e/install-action@de6f06126afb86b5250a16ff961c57360c5edccc # v2.72.0
         with:
           tool: just
       - name: Download verpatch on Windows
@@ -372,7 +372,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@1ed3272338f573e042a2e6bca3893aa19f43b47a # v2.71.3
+        uses: taiki-e/install-action@de6f06126afb86b5250a16ff961c57360c5edccc # v2.72.0
         with:
           tool: cargo-release@0.25.0
       # The GitHub release must be marked as published (immutable) before Mukti
