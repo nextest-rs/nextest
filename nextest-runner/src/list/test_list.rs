@@ -286,10 +286,13 @@ impl<'g> TestList<'g> {
 
         let runtime = Runtime::new().map_err(CreateTestListError::TokioRuntimeCreate)?;
 
+        // Phase 1: run test binaries and parse their output. Binary-level
+        // filtering decides which binaries to execute; test-level filtering is
+        // deferred to a separate sequential phase below.
         let stream = futures::stream::iter(test_artifacts).map(|test_binary| {
             async {
                 let binary_query = test_binary.to_binary_query();
-                let binary_match = filter.filter_binary_match(&test_binary, &ecx, bound);
+                let binary_match = filter.filter_binary_match(&binary_query, &ecx, bound);
                 match binary_match {
                     FilterBinaryMatch::Definite | FilterBinaryMatch::Possible => {
                         debug!(
@@ -302,30 +305,32 @@ impl<'g> TestList<'g> {
                         let (non_ignored, ignored) = test_binary
                             .exec(&lctx, &list_settings, ctx.target_runner)
                             .await?;
-                        let info = Self::process_output(
+                        let parsed = Self::parse_output(
                             test_binary,
-                            filter,
-                            &ecx,
-                            bound,
                             non_ignored.as_str(),
                             ignored.as_str(),
                         )?;
-                        Ok::<_, CreateTestListError>(info)
+                        Ok::<_, CreateTestListError>(parsed)
                     }
                     FilterBinaryMatch::Mismatch { reason } => {
                         debug!("skipping test binary: {reason}: {}", test_binary.binary_id,);
-                        Ok(Self::process_skipped(test_binary, reason))
+                        Ok(Self::make_skipped(test_binary, reason))
                     }
                 }
             }
         });
-        let fut = stream.buffer_unordered(list_threads).try_collect();
+        let fut = stream
+            .buffer_unordered(list_threads)
+            .try_collect::<Vec<_>>();
 
-        let mut rust_suites: IdOrdMap<_> = runtime.block_on(fut)?;
+        let parsed_binaries: Vec<ParsedTestBinary<'g>> = runtime.block_on(fut)?;
 
         // Ensure that the runtime doesn't stay hanging even if a custom test framework misbehaves
         // (can be an issue on Windows).
         runtime.shutdown_background();
+
+        // Phase 2: apply test-level filters and build suites.
+        let mut rust_suites = Self::build_suites(parsed_binaries, filter, &ecx, bound);
 
         Self::apply_partitioning(&mut rust_suites, partitioner_builder);
 
@@ -363,10 +368,11 @@ impl<'g> TestList<'g> {
     ) -> Result<Self, CreateTestListError> {
         let updated_dylib_path = Self::create_dylib_path(&rust_build_meta)?;
 
-        let mut rust_suites = test_bin_outputs
+        let parsed_binaries = test_bin_outputs
             .into_iter()
             .map(|(test_binary, non_ignored, ignored)| {
-                let binary_match = filter.filter_binary_match(&test_binary, ecx, bound);
+                let binary_query = test_binary.to_binary_query();
+                let binary_match = filter.filter_binary_match(&binary_query, ecx, bound);
                 match binary_match {
                     FilterBinaryMatch::Definite | FilterBinaryMatch::Possible => {
                         debug!(
@@ -374,23 +380,17 @@ impl<'g> TestList<'g> {
                             (match result is {binary_match:?}): {}",
                             test_binary.binary_id,
                         );
-                        let info = Self::process_output(
-                            test_binary,
-                            filter,
-                            ecx,
-                            bound,
-                            non_ignored.as_ref(),
-                            ignored.as_ref(),
-                        )?;
-                        Ok(info)
+                        Self::parse_output(test_binary, non_ignored.as_ref(), ignored.as_ref())
                     }
                     FilterBinaryMatch::Mismatch { reason } => {
                         debug!("skipping test binary: {reason}: {}", test_binary.binary_id,);
-                        Ok(Self::process_skipped(test_binary, reason))
+                        Ok(Self::make_skipped(test_binary, reason))
                     }
                 }
             })
-            .collect::<Result<IdOrdMap<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut rust_suites = Self::build_suites(parsed_binaries, filter, ecx, bound);
 
         Self::apply_partitioning(&mut rust_suites, partitioner_builder);
 
@@ -746,26 +746,20 @@ impl<'g> TestList<'g> {
             .map_err(move |error| CreateTestListError::dylib_join_paths(new_paths, error))
     }
 
-    fn process_output(
+    /// Parses test binary output into a [`ParsedTestBinary`] without
+    /// applying filters.
+    fn parse_output(
         test_binary: RustTestArtifact<'g>,
-        filter: &TestFilter,
-        ecx: &EvalContext<'_>,
-        bound: FilterBound,
         non_ignored: impl AsRef<str>,
         ignored: impl AsRef<str>,
-    ) -> Result<RustTestSuite<'g>, CreateTestListError> {
-        let mut test_cases = IdOrdMap::new();
+    ) -> Result<ParsedTestBinary<'g>, CreateTestListError> {
+        let mut test_cases = Vec::new();
 
         for (test_name, kind) in Self::parse(&test_binary.binary_id, non_ignored.as_ref())? {
-            let name = TestCaseName::new(test_name);
-            let filter_match = filter.filter_match(&test_binary, &name, &kind, ecx, bound, false);
-            test_cases.insert_overwrite(RustTestCase {
-                name,
-                test_info: RustTestCaseSummary {
-                    kind: Some(kind),
-                    ignored: false,
-                    filter_match,
-                },
+            test_cases.push(ParsedTestCase {
+                name: TestCaseName::new(test_name),
+                kind,
+                ignored: false,
             });
         }
 
@@ -774,28 +768,76 @@ impl<'g> TestList<'g> {
             // * just ignored tests if --ignored is passed in
             // * all tests, both ignored and non-ignored, if --ignored is not passed in
             // Adding ignored tests after non-ignored ones makes everything resolve correctly.
-            let name = TestCaseName::new(test_name);
-            let filter_match = filter.filter_match(&test_binary, &name, &kind, ecx, bound, true);
-            test_cases.insert_overwrite(RustTestCase {
-                name,
-                test_info: RustTestCaseSummary {
-                    kind: Some(kind),
-                    ignored: true,
-                    filter_match,
-                },
+            test_cases.push(ParsedTestCase {
+                name: TestCaseName::new(test_name),
+                kind,
+                ignored: true,
             });
         }
 
-        Ok(test_binary.into_test_suite(RustTestSuiteStatus::Listed {
-            test_cases: test_cases.into(),
-        }))
+        Ok(ParsedTestBinary::Listed {
+            artifact: test_binary,
+            test_cases,
+        })
     }
 
-    fn process_skipped(
+    /// Converts parsed binaries into filtered test suites.
+    ///
+    /// This is separated from [`Self::parse_output`] so that callers can
+    /// insert processing between parsing and filtering.
+    fn build_suites(
+        parsed: impl IntoIterator<Item = ParsedTestBinary<'g>>,
+        filter: &TestFilter,
+        ecx: &EvalContext<'_>,
+        bound: FilterBound,
+    ) -> IdOrdMap<RustTestSuite<'g>> {
+        parsed
+            .into_iter()
+            .map(|binary| match binary {
+                ParsedTestBinary::Listed {
+                    artifact,
+                    test_cases,
+                } => {
+                    let filtered = {
+                        let query = artifact.to_binary_query();
+                        let mut map = IdOrdMap::new();
+                        for tc in test_cases {
+                            let filter_match = filter
+                                .filter_match(query, &tc.name, &tc.kind, ecx, bound, tc.ignored);
+                            // Use insert_overwrite so that ignored entries
+                            // (appended after non-ignored by parse_output)
+                            // take precedence when a test name appears in
+                            // both outputs.
+                            map.insert_overwrite(RustTestCase {
+                                name: tc.name,
+                                test_info: RustTestCaseSummary {
+                                    kind: Some(tc.kind),
+                                    ignored: tc.ignored,
+                                    filter_match,
+                                },
+                            });
+                        }
+                        map
+                    };
+                    artifact.into_test_suite(RustTestSuiteStatus::Listed {
+                        test_cases: filtered.into(),
+                    })
+                }
+                ParsedTestBinary::Skipped { artifact, reason } => {
+                    artifact.into_test_suite(RustTestSuiteStatus::Skipped { reason })
+                }
+            })
+            .collect()
+    }
+
+    fn make_skipped(
         test_binary: RustTestArtifact<'g>,
         reason: BinaryMismatchReason,
-    ) -> RustTestSuite<'g> {
-        test_binary.into_test_suite(RustTestSuiteStatus::Skipped { reason })
+    ) -> ParsedTestBinary<'g> {
+        ParsedTestBinary::Skipped {
+            artifact: test_binary,
+            reason,
+        }
     }
 
     /// Applies partitioning to the test suites as a post-filtering step.
@@ -1201,6 +1243,19 @@ pub struct RustTestSuite<'g> {
     pub status: RustTestSuiteStatus,
 }
 
+impl<'g> RustTestSuite<'g> {
+    /// Returns a binary query for this suite.
+    pub fn to_binary_query(&self) -> BinaryQuery<'_> {
+        BinaryQuery {
+            package_id: self.package.id(),
+            binary_id: &self.binary_id,
+            kind: &self.kind,
+            binary_name: &self.binary_name,
+            platform: convert_build_platform(self.build_platform),
+        }
+    }
+}
+
 impl IdOrdItem for RustTestSuite<'_> {
     type Key<'a>
         = &'a RustBinaryId
@@ -1300,6 +1355,41 @@ impl RustTestArtifact<'_> {
             })
         }
     }
+}
+
+/// A test binary whose output has been parsed but whose tests have not yet
+/// been filtered.
+///
+/// This is the intermediate representation between the parsing and filtering
+/// phases of test list construction.
+enum ParsedTestBinary<'g> {
+    /// The binary was executed and its test cases were parsed.
+    Listed {
+        /// The original test artifact.
+        artifact: RustTestArtifact<'g>,
+
+        /// Parsed test cases without filter results.
+        test_cases: Vec<ParsedTestCase>,
+    },
+
+    /// The binary was skipped during binary-level filtering.
+    Skipped {
+        /// The original test artifact.
+        artifact: RustTestArtifact<'g>,
+
+        /// Why the binary was skipped.
+        reason: BinaryMismatchReason,
+    },
+}
+
+/// A test case parsed from binary output, before filtering has been applied.
+///
+/// Unlike [`RustTestCaseSummary`], this type has no `filter_match` field
+/// because the filter result has not been computed yet.
+struct ParsedTestCase {
+    name: TestCaseName,
+    kind: RustTestKind,
+    ignored: bool,
 }
 
 /// Serializable information about the status of and test cases within a test suite.
@@ -2157,6 +2247,89 @@ mod tests {
                 .expect("oneline verbose succeeded"),
             EXPECTED_ONELINE_VERBOSE
         );
+    }
+
+    /// Regression test: when a test name appears in both the non-ignored and
+    /// ignored outputs (which libtest does when `--ignored` is not passed),
+    /// the ignored entry must win via `insert_overwrite`.
+    #[test]
+    fn test_ignored_overrides_non_ignored() {
+        // "overlap_test" appears in both outputs. The ignored entry should
+        // take precedence.
+        let non_ignored_output = indoc! {"
+            tests::unique_non_ignored: test
+            tests::overlap_test: test
+        "};
+        let ignored_output = indoc! {"
+            tests::unique_ignored: test
+            tests::overlap_test: test
+        "};
+
+        let test_filter = TestFilter::new(
+            NextestRunMode::Test,
+            RunIgnored::All,
+            TestFilterPatterns::default(),
+            Vec::new(),
+        )
+        .unwrap();
+        let fake_cwd: Utf8PathBuf = "/fake/cwd".into();
+        let fake_binary_id = RustBinaryId::new("fake-package::overlap-binary");
+
+        let test_binary = RustTestArtifact {
+            binary_path: "/fake/binary".into(),
+            cwd: fake_cwd.clone(),
+            package: package_metadata(),
+            binary_name: "overlap-binary".to_owned(),
+            binary_id: fake_binary_id.clone(),
+            kind: RustTestBinaryKind::LIB,
+            non_test_binaries: BTreeSet::new(),
+            build_platform: BuildPlatform::Target,
+        };
+
+        let fake_host_libdir = "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib";
+        let build_platforms = BuildPlatforms {
+            host: HostPlatform {
+                platform: TargetTriple::x86_64_unknown_linux_gnu().platform,
+                libdir: PlatformLibdir::Available(fake_host_libdir.into()),
+            },
+            target: None,
+        };
+
+        let fake_env = EnvironmentMap::empty();
+        let rust_build_meta =
+            RustBuildMeta::new("/fake", "/fake", build_platforms).map_paths(&PathMapper::noop());
+        let ecx = EvalContext {
+            default_filter: &CompiledExpr::ALL,
+        };
+        let test_list = TestList::new_with_outputs(
+            [(test_binary, &non_ignored_output, &ignored_output)],
+            Utf8PathBuf::from("/fake/path"),
+            rust_build_meta,
+            &test_filter,
+            None,
+            fake_env,
+            &ecx,
+            FilterBound::All,
+        )
+        .expect("valid output");
+
+        // The overlapping test must be marked as ignored.
+        let suite = test_list
+            .rust_suites
+            .get(&fake_binary_id)
+            .expect("suite exists");
+        match &suite.status {
+            RustTestSuiteStatus::Listed { test_cases } => {
+                let overlap = test_cases
+                    .get(&TestCaseName::new("tests::overlap_test"))
+                    .expect("overlap_test exists");
+                assert!(
+                    overlap.test_info.ignored,
+                    "overlapping test should be marked ignored"
+                );
+            }
+            other => panic!("expected Listed status, got {other:?}"),
+        }
     }
 
     #[test]

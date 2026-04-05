@@ -53,7 +53,8 @@ pub fn apply_archive_filters(
             // Don't obey the default filter here. The default filter will
             // be applied while running tests from the archive (the
             // configuration is expected to be present at that time).
-            let filter_match = filter.check_match(test_artifact, ecx, FilterBound::All);
+            let query = test_artifact.to_binary_query();
+            let filter_match = filter.check_match(&query, ecx, FilterBound::All);
 
             debug_assert!(
                 !matches!(filter_match, FilterBinaryMatch::Possible),
