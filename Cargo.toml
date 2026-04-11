@@ -121,7 +121,7 @@ self_update = { version = "0.43.1", default-features = false, features = [
     # backend must be enabled for it to compile.
     "ureq",
 ] }
-semver = "1.0.27"
+semver = "1.0.28"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_ignored = "0.1.14"
 serde_json = "1.0.149"
