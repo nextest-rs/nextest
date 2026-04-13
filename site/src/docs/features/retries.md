@@ -21,14 +21,14 @@ Sometimes, tests fail nondeterministically, which can be quite annoying to devel
 
 `--retries 2` means that the test is retried twice, for a total of three attempts. In this case, the test fails on the first try but succeeds on the second try. The `TRY 2 PASS` text means that the test passed on the second try.
 
-By default, flaky tests are treated as ultimately successful. If there are no other tests that failed, the exit code for the test run is 0. <!-- md:version 0.9.131 --> To configure failure on flaky tests, see [_Failing flaky tests_](#failing-flaky-tests) below.
-
 Retries can also be:
 
 - passed in via the environment variable `NEXTEST_RETRIES`.
 - [configured in `.config/nextest.toml`](../configuration/index.md).
 
 For the order that configuration parameters are resolved in, see [_Hierarchical configuration_](../configuration/index.md#hierarchical-configuration).
+
+By default, flaky tests are treated as ultimately successful. If there are no other tests that failed, the exit code for the test run is 0. <!-- md:version 0.9.131 --> To configure failure on flaky tests, see [_Failing flaky tests_](#failing-flaky-tests) below. If you know or suspect that a test has a nondeterministic failure case and want to reproduce it by retrying on success (as opposed to retrying only on failure), you may be looking for the [stress tests](./stress-tests.md) feature.
 
 ## Delays and backoff
 
