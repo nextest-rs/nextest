@@ -536,6 +536,19 @@ where
                 }
 
                 let (req_tx, req_rx) = unbounded_channel();
+
+                // Write the status line before unblocking the executor (same
+                // reasoning as the Started case below).
+                self.basic_callback(TestEventKind::SetupScriptStarted {
+                    stress_index,
+                    index,
+                    total,
+                    script_id: script_id.clone(),
+                    program,
+                    args: config.command.args.clone(),
+                    no_capture: config.no_capture(),
+                });
+
                 match req_rx_tx.send(req_rx) {
                     Ok(_) => {}
                     Err(_) => {
@@ -544,17 +557,8 @@ where
                         return HandleEventResponse::None;
                     }
                 }
-                self.new_setup_script(script_id.clone(), config, index, total, req_tx);
-
-                self.callback_none_response(TestEventKind::SetupScriptStarted {
-                    stress_index,
-                    index,
-                    total,
-                    script_id,
-                    program,
-                    args: config.command.args.clone(),
-                    no_capture: config.no_capture(),
-                })
+                self.new_setup_script(script_id, config, index, total, req_tx);
+                HandleEventResponse::None
             }
             InternalEvent::Executor(ExecutorEvent::SetupScriptSlow {
                 stress_index,
@@ -668,6 +672,25 @@ where
                 }
 
                 let (req_tx, req_rx) = unbounded_channel();
+
+                // Write the status line before unblocking the executor. The
+                // executor spawns the child process immediately after receiving
+                // this ack, and in no-capture / interceptor mode the child
+                // inherits stderr. Writing the status line first prevents
+                // interleaving between the status line and the child's output.
+                //
+                // Use len() + 1 because new_test hasn't been called yet (it
+                // must happen after the successful send to avoid orphaned
+                // state on failure).
+                self.basic_callback(TestEventKind::TestStarted {
+                    stress_index,
+                    test_instance: test_instance.id(),
+                    slot_assignment,
+                    current_stats: self.run_stats,
+                    running: self.running_tests.len() + 1,
+                    command_line,
+                });
+
                 match req_rx_tx.send(req_rx) {
                     Ok(_) => {}
                     Err(_) => {
@@ -677,14 +700,7 @@ where
                     }
                 }
                 self.new_test(test_instance, req_tx, flaky_result);
-                self.callback_none_response(TestEventKind::TestStarted {
-                    stress_index,
-                    test_instance: test_instance.id(),
-                    slot_assignment,
-                    current_stats: self.run_stats,
-                    running: self.running_tests.len(),
-                    command_line,
-                })
+                HandleEventResponse::None
             }
             InternalEvent::Executor(ExecutorEvent::Slow {
                 stress_index,
@@ -751,23 +767,25 @@ where
                     return HandleEventResponse::None;
                 }
 
-                match tx.send(()) {
-                    Ok(_) => {}
-                    Err(_) => {
-                        // The test task died?
-                        debug!(test = ?test_instance.id(), "test task died, ignoring");
-                        return HandleEventResponse::None;
-                    }
-                }
-
-                self.callback_none_response(TestEventKind::TestRetryStarted {
+                // Write the status line before unblocking the executor (same
+                // reasoning as the Started case above).
+                self.basic_callback(TestEventKind::TestRetryStarted {
                     stress_index,
                     test_instance: test_instance.id(),
                     slot_assignment,
                     retry_data,
                     running: self.running_tests.len(),
                     command_line,
-                })
+                });
+
+                match tx.send(()) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        // The test task died?
+                        debug!(test = ?test_instance.id(), "test task died, ignoring");
+                    }
+                }
+                HandleEventResponse::None
             }
             InternalEvent::Executor(ExecutorEvent::Finished {
                 stress_index,
