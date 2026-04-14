@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.14.1] - 2026-04-14
+
+### Added
+
+- A new `GLOBAL_TEST_GROUP` constant (`"@global"`), representing the implicit global test group that all tests belong to unless assigned to a custom group.
+
 ## [0.14.0] - 2026-03-16
 
 ### Added
@@ -301,6 +307,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.14.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.14.1
 [0.14.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.14.0
 [0.13.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.3
 [0.13.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.2

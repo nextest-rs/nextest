@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.21.0] - 2026-04-14
+
+### Added
+
+- A new `group()` filterset predicate for CLI filter expressions. This allows filtering tests by their assigned [test group](https://nexte.st/docs/configuration/test-groups/). For example, `group(my-group)` matches tests in the `my-group` group, and `not group(@global)` matches tests in any non-global group.
+- A new `KnownGroups` type for validating group names during filterset compilation.
+
+### Changed
+
+- `nextest-metadata` updated to 0.14.1.
+
 ## [0.20.0] - 2026-03-20
 
 ### Changed
@@ -194,6 +205,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.21.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.21.0
 [0.20.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.20.0
 [0.19.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.19.0
 [0.18.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.18.0

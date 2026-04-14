@@ -10,6 +10,38 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.133] - 2026-04-14
+
+### Added
+
+- Nextest now supports a [`group()` filterset predicate](https://nexte.st/docs/configuration/test-groups/#enumerating-tests-in-a-test-group) for CLI filter expressions, allowing tests to be listed or run by their assigned [test group](https://nexte.st/docs/configuration/test-groups/). ([#3273])
+
+  For example, to run all tests in a specific group:
+
+  ```bash
+  cargo nextest run -E 'group(my-group)'
+  ```
+
+  To list all tests that aren't in the default global group:
+
+  ```bash
+  cargo nextest list -E 'not group(@global)'
+  ```
+
+### Fixed
+
+- When `--status-level fail` is set, slow test notifications now correctly display the `SLOW` status label. Previously, the duration and test name were shown but the status was omitted. ([#3236])
+- On Windows, pressing `t` for test status info no longer shows the output twice; nextest now only reacts to key-press events, ignoring key-release events. ([#3225])
+
+### Security
+
+- Update `rand` to 0.10.1 for [RUSTSEC-2026-0097](https://rustsec.org/advisories/RUSTSEC-2026-0097) / [GHSA-cq8v-f236-94qc](https://github.com/advisories/GHSA-cq8v-f236-94qc). Note that based on the advisory description, this unsoundness does not appear to affect nextest, since none of the covered `rand` versions have the `log` feature turned on.
+- Update `rustls-webpki` to 0.103.10.
+
+[#3225]: https://github.com/nextest-rs/nextest/pull/3225
+[#3236]: https://github.com/nextest-rs/nextest/pull/3236
+[#3273]: https://github.com/nextest-rs/nextest/pull/3273
+
 ## [0.9.132] - 2026-03-20
 
 Update aws-lc-sys to 0.39.0 to address [GHSA-394x-vwmw-crm3].
@@ -2090,6 +2122,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.133]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.133
 [0.9.132]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.132
 [0.9.131]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.131
 [0.9.130]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.130
