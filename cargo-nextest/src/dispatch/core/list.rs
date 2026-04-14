@@ -78,9 +78,11 @@ impl App {
             FiltersetKind::Test,
             &known_groups,
         )?;
+        // no_capture is ignored for list commands.
         let test_filter = self
             .build_filter
-            .make_test_filter(NextestRunMode::Test, filter_exprs)?;
+            .make_test_filter(NextestRunMode::Test, filter_exprs)?
+            .test_filter;
 
         let binary_list = self.base.build_binary_list("test")?;
 
@@ -177,9 +179,11 @@ impl App {
             FiltersetKind::Test,
             &known_groups,
         )?;
+        // no_capture is ignored for list commands.
         let test_filter = self
             .build_filter
-            .make_test_filter(NextestRunMode::Test, filter_exprs)?;
+            .make_test_filter(NextestRunMode::Test, filter_exprs)?
+            .test_filter;
 
         let binary_list = self.base.build_binary_list("test")?;
         let build_platforms = binary_list.rust_build_meta.build_platforms.clone();
