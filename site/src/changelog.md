@@ -32,7 +32,7 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
 ### Fixed
 
-- When `--status-level fail` is set, slow test notifications now correctly display the `SLOW` status label. Previously, the duration and test name were shown but the status was omitted. ([#3236])
+- When `--status-level fail` is set, slow test notifications were previously displayed in a corrupt format (the duration and test name were shown, but the status was omitted). Slow notifications are now correctly hidden. ([#3236])
 - On Windows, pressing `t` for test status info no longer shows the output twice; nextest now only reacts to key-press events, ignoring key-release events. ([#3225])
 
 ### Security
