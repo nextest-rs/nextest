@@ -394,7 +394,7 @@ impl ParseFiltersetOpts {
         let graph = PackageGraph::from_json(json).map_err(|err| {
             ExpectedError::CargoMetadataParseError {
                 file_name: self.cargo_metadata.clone(),
-                err,
+                err: Box::new(err),
             }
         })?;
 

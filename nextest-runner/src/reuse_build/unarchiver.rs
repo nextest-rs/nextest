@@ -166,7 +166,7 @@ impl<'a> Unarchiver<'a> {
                 let package_graph = cargo_metadata.build_graph().map_err(|error| {
                     ArchiveExtractError::Read(ArchiveReadError::PackageGraphConstructError {
                         path: cargo_metadata_path,
-                        error,
+                        error: Box::new(error),
                     })
                 })?;
                 graph_data = Some((json, package_graph));
