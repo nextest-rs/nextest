@@ -68,12 +68,24 @@ pub(crate) struct TestBuildFilter {
 
     /// Test name filters and emulated test binary arguments.
     ///
+    /// These arguments emulate the flags accepted by libtest (the standard Rust
+    /// test harness), so that `cargo nextest run -- <args>` works similarly to
+    /// `cargo test -- <args>`.
+    ///
     /// Supported arguments:
     ///
-    /// - --ignored:         Only run ignored tests
-    /// - --include-ignored: Run both ignored and non-ignored tests
-    /// - --skip PATTERN:    Skip tests that match the pattern
-    /// - --exact:           Run tests that exactly match patterns after `--`
+    /// `--ignored`: Only run ignored tests (equivalent to `--run-ignored ignored-only`).
+    ///
+    /// `--include-ignored`: Run both ignored and non-ignored tests (equivalent to `--run-ignored all`).
+    ///
+    /// `--skip PATTERN`: Skip tests matching PATTERN. May be specified multiple
+    /// times.
+    ///
+    /// `--exact`: Require that filters after -- match test names exactly, rather
+    /// than as substrings.
+    ///
+    /// `--nocapture` (or `--no-capture`): Run tests serially and do not capture
+    /// output. Equivalent to the `--no-capture` flag before --.
     #[arg(help_heading = None, value_name = "FILTERS_AND_ARGS", last = true)]
     filters: Vec<String>,
 }
@@ -138,24 +150,29 @@ impl TestBuildFilter {
         &self,
         mode: NextestRunMode,
         filter_exprs: Vec<nextest_filtering::Filterset>,
-    ) -> Result<TestFilter> {
+    ) -> Result<TestFilterWithCaptureOpts> {
         // Merge the test binary args into the patterns.
         let mut run_ignored = self.run_ignored.map(Into::into);
         let mut patterns = TestFilterPatterns::new(self.pre_double_dash_filters.clone());
-        self.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
+        let mut no_capture = false;
+        self.merge_test_binary_args(&mut run_ignored, &mut patterns, &mut no_capture)?;
 
-        Ok(TestFilter::new(
-            mode,
-            run_ignored.unwrap_or_default(),
-            patterns,
-            filter_exprs,
-        )?)
+        Ok(TestFilterWithCaptureOpts {
+            test_filter: TestFilter::new(
+                mode,
+                run_ignored.unwrap_or_default(),
+                patterns,
+                filter_exprs,
+            )?,
+            no_capture,
+        })
     }
 
     fn merge_test_binary_args(
         &self,
         run_ignored: &mut Option<RunIgnored>,
         patterns: &mut TestFilterPatterns,
+        no_capture: &mut bool,
     ) -> Result<()> {
         // First scan to see if `--exact` is specified. If so, then everything here will be added to
         // `--exact`.
@@ -177,6 +194,7 @@ impl TestBuildFilter {
 
         let mut ignore_filters = Vec::new();
         let mut read_trailing_filters = false;
+        let mut seen_nocapture = false;
 
         let mut unsupported_args = Vec::new();
 
@@ -209,6 +227,15 @@ impl TestBuildFilter {
                 }
             } else if arg == "--exact" {
                 // Already handled above.
+            } else if arg == "--nocapture" || arg == "--no-capture" {
+                if seen_nocapture {
+                    return Err(ExpectedError::test_binary_args_parse_error(
+                        "duplicated",
+                        vec![arg.clone()],
+                    ));
+                }
+                seen_nocapture = true;
+                *no_capture = true;
             } else {
                 unsupported_args.push(arg.clone());
             }
@@ -241,6 +268,16 @@ impl TestBuildFilter {
 
         Ok(())
     }
+}
+
+/// The result of parsing test filters, including emulated test binary arguments
+/// that affect runner behavior (not just filtering).
+pub(crate) struct TestFilterWithCaptureOpts {
+    /// The constructed test filter.
+    pub(crate) test_filter: TestFilter,
+
+    /// Whether `--nocapture` or `--no-capture` was specified after `--`.
+    pub(crate) no_capture: bool,
 }
 
 /// Archive build filtering options.

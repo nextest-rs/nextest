@@ -495,14 +495,19 @@ struct TestCli {
 
 #[test]
 fn test_test_binary_argument_parsing() {
+    use super::filter::TestFilterWithCaptureOpts;
     use crate::{ExpectedError, Result};
     use nextest_runner::test_filter::{RunIgnored, TestFilter, TestFilterPatterns};
 
-    fn get_test_filter(cmd: &str) -> Result<TestFilter> {
+    fn get_filter_result(cmd: &str) -> Result<TestFilterWithCaptureOpts> {
         let app = TestCli::try_parse_from(shell_words::split(cmd).expect("valid command line"))
             .unwrap_or_else(|_| panic!("{cmd} should have successfully parsed"));
         app.build_filter
             .make_test_filter(NextestRunMode::Test, vec![])
+    }
+
+    fn get_test_filter(cmd: &str) -> Result<TestFilter> {
+        Ok(get_filter_result(cmd)?.test_filter)
     }
 
     let valid = &[
@@ -565,6 +570,9 @@ fn test_test_binary_argument_parsing() {
         ("foo -- --include-ignored --include-ignored", "duplicated"),
         ("foo -- --ignored --ignored", "duplicated"),
         ("foo -- --exact --exact", "duplicated"),
+        ("foo -- --nocapture --nocapture", "duplicated"),
+        ("foo -- --no-capture --no-capture", "duplicated"),
+        ("foo -- --nocapture --no-capture", "duplicated"),
         // ---
         // mutually exclusive
         // ---
@@ -618,6 +626,69 @@ fn test_test_binary_argument_parsing() {
         } else {
             panic!("{s} should have errored out with TestBinaryArgsParseError, actual: {res:?}",);
         }
+    }
+
+    // ---
+    // nocapture
+    // ---
+
+    // Commands where no_capture should be true.
+    let nocapture_true = &[
+        "foo -- --nocapture",
+        "foo -- --no-capture",
+        "foo -- --nocapture --ignored",
+        "foo -- pattern --nocapture",
+    ];
+    for cmd in nocapture_true {
+        let result = get_filter_result(cmd).unwrap_or_else(|_| panic!("failed to parse {cmd}"));
+        assert!(result.no_capture, "{cmd} should set no_capture = true");
+    }
+
+    // Commands where no_capture should be false.
+    let nocapture_false = &[
+        "foo -- pattern",
+        "foo -- --ignored",
+        "foo -- --exact pattern",
+    ];
+    for cmd in nocapture_false {
+        let result = get_filter_result(cmd).unwrap_or_else(|_| panic!("failed to parse {cmd}"));
+        assert!(!result.no_capture, "{cmd} should set no_capture = false");
+    }
+
+    // --skip consumes --nocapture as its pattern argument (matching libtest
+    // behavior), so no_capture should be false.
+    {
+        let result =
+            get_filter_result("foo -- --skip --nocapture").expect("should parse successfully");
+        assert!(
+            !result.no_capture,
+            "-- --skip --nocapture should not set no_capture",
+        );
+        let expected = {
+            let mut patterns = TestFilterPatterns::default();
+            patterns.add_skip_pattern("--nocapture".to_owned());
+            patterns
+        };
+        let expected_filter = TestFilter::new(
+            NextestRunMode::Test,
+            RunIgnored::Default,
+            expected,
+            Vec::new(),
+        )
+        .expect("failed to build expected TestFilter");
+        assert!(
+            result.test_filter.patterns_eq(&expected_filter),
+            "-- --skip --nocapture should produce a skip pattern of --nocapture",
+        );
+    }
+
+    // After a second `--`, --nocapture is treated as a filter pattern, not a flag.
+    {
+        let result = get_filter_result("foo -- -- --nocapture").expect("should parse successfully");
+        assert!(
+            !result.no_capture,
+            "-- -- --nocapture should not set no_capture",
+        );
     }
 }
 

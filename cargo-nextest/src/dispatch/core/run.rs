@@ -906,6 +906,29 @@ impl App {
             }
         };
 
+        // Parse test filters and emulated test binary args. This must happen
+        // before computing cap_strat, since `-- --nocapture` affects capture.
+        let known_groups = profile.known_groups();
+        let filter_exprs = build_filtersets(
+            &pcx,
+            &self.build_filter.filterset,
+            FiltersetKind::Test,
+            &known_groups,
+        )?;
+        let filter_result = self
+            .build_filter
+            .make_test_filter(NextestRunMode::Test, filter_exprs)?;
+        let mut test_filter = filter_result.test_filter;
+
+        // Merge no_capture from the CLI flag and the emulated `-- --nocapture`.
+        if no_capture && filter_result.no_capture {
+            return Err(ExpectedError::test_binary_args_parse_error(
+                "duplicated",
+                vec!["--no-capture".to_owned()],
+            ));
+        }
+        let no_capture = no_capture || filter_result.no_capture;
+
         let cap_strat = if no_capture || runner_opts.interceptor.is_active() {
             CaptureStrategy::None
         } else if matches!(message_format, MessageFormat::Human) {
@@ -946,17 +969,6 @@ impl App {
             &resolved_user_config.ui,
         );
         reporter_builder.set_verbose(self.base.output.verbose);
-
-        let known_groups = profile.known_groups();
-        let filter_exprs = build_filtersets(
-            &pcx,
-            &self.build_filter.filterset,
-            FiltersetKind::Test,
-            &known_groups,
-        )?;
-        let mut test_filter = self
-            .build_filter
-            .make_test_filter(NextestRunMode::Test, filter_exprs)?;
         let (rerun_state, expected_outstanding) = match rerun {
             Some(RunIdOrRecordingSelector::RunId(selector)) => {
                 let (rerun_state, outstanding_tests) = self.resolve_rerun(selector)?;
@@ -1243,9 +1255,11 @@ impl App {
             FiltersetKind::Test,
             &known_groups,
         )?;
+        // no_capture is ignored for benchmarks: they always run without capture.
         let test_filter = self
             .build_filter
-            .make_test_filter(NextestRunMode::Benchmark, filter_exprs)?;
+            .make_test_filter(NextestRunMode::Benchmark, filter_exprs)?
+            .test_filter;
 
         let binary_list = self.base.build_binary_list("bench")?;
         let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
