@@ -112,7 +112,7 @@ regex = "1.12.3"
 regex-syntax = "0.8.10"
 sapling-streampager = "0.12.0"
 rustls = { version = "0.23.37", default-features = false }
-self_update = { version = "0.43.1", default-features = false, features = [
+self_update = { version = "0.44.0", default-features = false, features = [
     "archive-tar",
     "compression-flate2",
     # nextest only uses self_update for archive extraction (ArchiveKind,
