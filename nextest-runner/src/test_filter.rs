@@ -7,7 +7,7 @@
 
 use crate::{errors::TestFilterBuildError, record::ComputedRerunInfo, run_mode::NextestRunMode};
 use aho_corasick::AhoCorasick;
-use nextest_filtering::{BinaryQuery, EvalContext, Filterset, TestQuery};
+use nextest_filtering::{BinaryQuery, EvalContext, Filterset, GroupLookup, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason, RustBinaryId, RustTestKind, TestCaseName};
 use std::{collections::HashSet, fmt, mem};
 
@@ -477,12 +477,50 @@ impl TestFilter {
         self.patterns == other.patterns
     }
 
+    /// Returns true if the filter expressions contain any `group()` predicates.
+    /// When true, test list creation must precompute group memberships.
+    pub fn has_group_predicates(&self) -> bool {
+        match &self.binary_filter.exprs {
+            TestFilterExprs::All => false,
+            TestFilterExprs::Sets(exprs) => {
+                exprs.iter().any(|expr| expr.compiled.has_group_matchers())
+            }
+        }
+    }
+
+    /// Returns true if the given test matches the expression filters
+    /// with the given evaluation context (or there are no expression
+    /// filters).
+    ///
+    /// This evaluates only expression filters (`-E` arguments), not
+    /// name patterns or the default filter.
+    fn matches_expression(
+        &self,
+        query: &TestQuery<'_>,
+        ecx: &EvalContext<'_>,
+        groups: Option<&dyn GroupLookup>,
+    ) -> bool {
+        match &self.binary_filter.exprs {
+            TestFilterExprs::All => true,
+            TestFilterExprs::Sets(exprs) => exprs.iter().any(|expr| match groups {
+                Some(groups) => expr.matches_test_with_groups(query, ecx, groups),
+                None => expr.matches_test(query, ecx),
+            }),
+        }
+    }
+
     /// Consumes self, returning the underlying [`ComputedRerunInfo`] if any.
     pub fn into_rerun_info(self) -> Option<ComputedRerunInfo> {
         self.rerun_info
     }
 
     /// Returns an enum describing the match status of this filter.
+    ///
+    /// `groups` should be `Some` when the CLI filter contains `group()`
+    /// predicates, and `None` otherwise. When `None`, encountering a
+    /// `group()` predicate panics (it indicates a bug in filterset
+    /// compilation).
+    #[expect(clippy::too_many_arguments)]
     pub fn filter_match(
         &self,
         binary_query: BinaryQuery<'_>,
@@ -491,6 +529,7 @@ impl TestFilter {
         ecx: &EvalContext<'_>,
         bound: FilterBound,
         ignored: bool,
+        groups: Option<&dyn GroupLookup>,
     ) -> FilterMatch {
         // Handle benchmark mismatches first.
         if let Some(mismatch) = self.filter_benchmark_mismatch(test_kind) {
@@ -504,7 +543,7 @@ impl TestFilter {
             };
         }
 
-        self.filter_match_base(binary_query, test_name, ecx, bound, ignored)
+        self.filter_match_base(binary_query, test_name, ecx, bound, ignored, groups)
     }
 
     /// Core filter matching logic, used by `filter_match`.
@@ -515,6 +554,7 @@ impl TestFilter {
         ecx: &EvalContext<'_>,
         bound: FilterBound,
         ignored: bool,
+        groups: Option<&dyn GroupLookup>,
     ) -> FilterMatch {
         if let Some(mismatch) = self.filter_ignored_mismatch(ignored) {
             return mismatch;
@@ -544,7 +584,7 @@ impl TestFilter {
             use FilterNameMatch::*;
             match (
                 self.filter_name_match(test_name),
-                self.filter_expression_match(binary_query, test_name, ecx, bound),
+                self.filter_expression_match(binary_query, test_name, ecx, bound, groups),
             ) {
                 // Tests must be accepted by both expressions and filters.
                 (
@@ -606,26 +646,27 @@ impl TestFilter {
         test_name: &TestCaseName,
         ecx: &EvalContext<'_>,
         bound: FilterBound,
+        groups: Option<&dyn GroupLookup>,
     ) -> FilterNameMatch {
         let query = TestQuery {
             binary_query,
             test_name,
         };
 
-        let expr_result = match &self.binary_filter.exprs {
-            TestFilterExprs::All => FilterNameMatch::MatchEmptyPatterns,
-            TestFilterExprs::Sets(exprs) => {
-                if exprs.iter().any(|expr| expr.matches_test(&query, ecx)) {
-                    FilterNameMatch::MatchWithPatterns
-                } else {
-                    return FilterNameMatch::Mismatch(MismatchReason::Expression);
-                }
+        let expr_result = if self.matches_expression(&query, ecx, groups) {
+            match &self.binary_filter.exprs {
+                TestFilterExprs::All => FilterNameMatch::MatchEmptyPatterns,
+                TestFilterExprs::Sets(_) => FilterNameMatch::MatchWithPatterns,
             }
+        } else {
+            return FilterNameMatch::Mismatch(MismatchReason::Expression);
         };
 
         match bound {
             FilterBound::All => expr_result,
             FilterBound::DefaultSet => {
+                // The default filter is always group-free (group() is
+                // banned in DefaultFilter filtersets).
                 if ecx.default_filter.matches_test(&query, ecx) {
                     expr_result
                 } else {

@@ -27,7 +27,7 @@ use guppy::graph::cargo::BuildPlatform;
 use iddqd::{IdOrdItem, id_upcast};
 use indexmap::IndexMap;
 use nextest_filtering::{
-    BinaryQuery, EvalContext, Filterset, FiltersetKind, ParseContext, TestQuery,
+    BinaryQuery, EvalContext, Filterset, FiltersetKind, KnownGroups, ParseContext, TestQuery,
 };
 use quick_junit::ReportUuid;
 use serde::{Deserialize, de::Error};
@@ -429,6 +429,7 @@ impl CompiledProfileScripts<PreBuildPlatform> {
                 filter.clone(),
                 pcx,
                 FiltersetKind::DefaultFilter,
+                &KnownGroups::Unavailable,
             ))
             .transpose()
         });

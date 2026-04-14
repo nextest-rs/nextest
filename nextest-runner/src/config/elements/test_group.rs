@@ -20,9 +20,6 @@ pub enum TestGroup {
 }
 
 impl TestGroup {
-    /// The string `"@global"`, indicating the global test group.
-    pub const GLOBAL_STR: &'static str = "@global";
-
     /// Returns the custom group name if this is a custom group, or None if this is the global group.
     pub fn custom_name(&self) -> Option<&str> {
         match self {
@@ -61,7 +58,7 @@ impl<'de> Deserialize<'de> for TestGroup {
         // Try and deserialize the group as a string. (Note: we don't deserialize a
         // `CustomTestGroup` directly because that errors out on None.)
         let group = SmolStr::deserialize(deserializer)?;
-        if group == Self::GLOBAL_STR {
+        if group == nextest_metadata::GLOBAL_TEST_GROUP {
             Ok(TestGroup::Global)
         } else {
             Ok(TestGroup::Custom(
@@ -75,7 +72,7 @@ impl FromStr for TestGroup {
     type Err = InvalidCustomTestGroupName;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == Self::GLOBAL_STR {
+        if s == nextest_metadata::GLOBAL_TEST_GROUP {
             Ok(TestGroup::Global)
         } else {
             Ok(TestGroup::Custom(CustomTestGroup::new(s.into())?))

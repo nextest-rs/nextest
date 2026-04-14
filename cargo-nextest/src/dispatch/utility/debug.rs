@@ -10,6 +10,8 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Args, Subcommand, ValueEnum};
+use guppy::graph::PackageGraph;
+use nextest_filtering::{FiltersetKind, KnownGroups};
 use nextest_runner::{
     cargo_config::CargoConfigs,
     errors::{DisplayErrorChain, RecordReadError},
@@ -21,7 +23,7 @@ use nextest_runner::{
     redact::Redactor,
     user_config::elements::MAX_MAX_OUTPUT_SIZE,
 };
-use std::{fmt, fs};
+use std::{collections::HashSet, fmt, fs};
 use tracing::{error, warn};
 
 /// Debug subcommands.
@@ -69,6 +71,12 @@ pub(crate) enum DebugCommand {
 
     /// Extract metadata files from a portable recording.
     ExtractPortableRecording(ExtractPortableRecordingOpts),
+
+    /// Parse and compile a filterset expression, displaying the result or errors.
+    ///
+    /// This is useful for testing how filterset expressions are validated in
+    /// different contexts.
+    ParseFilterset(ParseFiltersetOpts),
 }
 
 impl DebugCommand {
@@ -156,6 +164,9 @@ impl DebugCommand {
                 }
             }
             DebugCommand::ExtractPortableRecording(opts) => {
+                return opts.exec();
+            }
+            DebugCommand::ParseFilterset(opts) => {
                 return opts.exec();
             }
         }
@@ -336,6 +347,103 @@ impl ExtractPortableRecordingOpts {
             })
         } else {
             Ok(0)
+        }
+    }
+}
+
+/// The empty graph JSON used when no `--cargo-metadata` is provided.
+const EMPTY_GRAPH: &str = r#"{
+    "packages": [],
+    "workspace_members": [],
+    "workspace_root": "",
+    "target_directory": "",
+    "version": 1
+}"#;
+
+/// Options for `nextest debug parse-filterset`.
+#[derive(Debug, Args)]
+pub(crate) struct ParseFiltersetOpts {
+    /// The filterset expression to parse.
+    expression: String,
+
+    /// The kind of filterset context to parse the expression in.
+    #[arg(long, value_enum)]
+    kind: FiltersetKindArg,
+
+    /// Path to a cargo metadata JSON file.
+    ///
+    /// If not provided, an empty workspace graph is used. This is sufficient for
+    /// checking banned predicates, but expressions referencing specific packages
+    /// will report no-match warnings.
+    #[arg(long)]
+    cargo_metadata: Option<Utf8PathBuf>,
+}
+
+impl ParseFiltersetOpts {
+    fn exec(self) -> Result<i32> {
+        let json = match &self.cargo_metadata {
+            Some(path) => {
+                fs::read_to_string(path).map_err(|err| ExpectedError::CargoMetadataReadError {
+                    path: path.clone(),
+                    err,
+                })?
+            }
+            None => EMPTY_GRAPH.to_string(),
+        };
+
+        let graph = PackageGraph::from_json(json).map_err(|err| {
+            ExpectedError::CargoMetadataParseError {
+                file_name: self.cargo_metadata.clone(),
+                err,
+            }
+        })?;
+
+        let kind: FiltersetKind = self.kind.into();
+        let cx = nextest_filtering::ParseContext::new(&graph);
+        // The debug command doesn't load config, so no custom groups are
+        // known. @global is always implicitly valid.
+        let known_groups = KnownGroups::Known {
+            custom_groups: HashSet::new(),
+        };
+
+        match nextest_filtering::Filterset::parse(self.expression, &cx, kind, &known_groups) {
+            Ok(expr) => {
+                println!("{expr:?}");
+                Ok(0)
+            }
+            Err(errors) => {
+                for single_error in &errors.errors {
+                    let report = miette::Report::new(single_error.clone())
+                        .with_source_code(errors.input.clone());
+                    error!(target: "cargo_nextest::no_heading", "{report:?}");
+                }
+                error!("failed to parse filterset");
+                Ok(1)
+            }
+        }
+    }
+}
+
+/// The kind of filterset context, as a CLI argument.
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub(crate) enum FiltersetKindArg {
+    /// A test filterset (used with `nextest run -E` or `nextest list -E`).
+    Test,
+    /// An override filter in a config profile.
+    OverrideFilter,
+    /// A test archive filterset (used with `nextest archive -E`).
+    ArchiveFilter,
+    /// A default-filter filterset (used in profile configuration).
+    DefaultFilter,
+}
+
+impl From<FiltersetKindArg> for FiltersetKind {
+    fn from(arg: FiltersetKindArg) -> Self {
+        match arg {
+            FiltersetKindArg::Test => FiltersetKind::Test,
+            FiltersetKindArg::OverrideFilter => FiltersetKind::OverrideFilter,
+            FiltersetKindArg::ArchiveFilter => FiltersetKind::TestArchive,
+            FiltersetKindArg::DefaultFilter => FiltersetKind::DefaultFilter,
         }
     }
 }

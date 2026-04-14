@@ -58,6 +58,9 @@ fn main() {
         args.expr,
         &cx,
         nextest_filtering::FiltersetKind::Test,
+        &nextest_filtering::KnownGroups::Known {
+            custom_groups: std::collections::HashSet::new(),
+        },
     ) {
         Ok(expr) => println!("{expr:?}"),
         Err(FiltersetParseErrors { input, errors, .. }) => {

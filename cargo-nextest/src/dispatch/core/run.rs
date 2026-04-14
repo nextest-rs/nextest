@@ -947,8 +947,13 @@ impl App {
         );
         reporter_builder.set_verbose(self.base.output.verbose);
 
-        let filter_exprs =
-            build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
+        let known_groups = profile.known_groups();
+        let filter_exprs = build_filtersets(
+            &pcx,
+            &self.build_filter.filterset,
+            FiltersetKind::Test,
+            &known_groups,
+        )?;
         let mut test_filter = self
             .build_filter
             .make_test_filter(NextestRunMode::Test, filter_exprs)?;
@@ -1231,8 +1236,13 @@ impl App {
             reporter_opts.to_builder(should_colorize, &resolved_user_config.ui);
         reporter_builder.set_verbose(self.base.output.verbose);
 
-        let filter_exprs =
-            build_filtersets(&pcx, &self.build_filter.filterset, FiltersetKind::Test)?;
+        let known_groups = profile.known_groups();
+        let filter_exprs = build_filtersets(
+            &pcx,
+            &self.build_filter.filterset,
+            FiltersetKind::Test,
+            &known_groups,
+        )?;
         let test_filter = self
             .build_filter
             .make_test_filter(NextestRunMode::Benchmark, filter_exprs)?;

@@ -115,6 +115,7 @@ impl ParsedLeaf<()> {
             1 => NameMatcher::default_glob_strategy().prop_map(|s| Self::BinaryId(s, ())),
             1 => build_platform_strategy().prop_map(|p| Self::Platform(p, ())),
             1 => NameMatcher::default_contains_strategy().prop_map(|s| Self::Test(s, ())),
+            1 => NameMatcher::default_glob_strategy().prop_map(|s| Self::Group(s, ())),
             1 => Just(Self::All),
             1 => Just(Self::None),
         ]

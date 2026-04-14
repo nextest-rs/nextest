@@ -190,6 +190,12 @@ pub enum ExpectedError {
         #[source]
         err: PathMapperConstructError,
     },
+    #[error("cargo metadata read error")]
+    CargoMetadataReadError {
+        path: Utf8PathBuf,
+        #[source]
+        err: std::io::Error,
+    },
     #[error("cargo metadata parse error")]
     CargoMetadataParseError {
         file_name: Option<Utf8PathBuf>,
@@ -597,6 +603,7 @@ impl ExpectedError {
             | Self::PathMapperConstructError { .. }
             | Self::TestRunnerBuildError { .. }
             | Self::ConfigureHandleInheritanceError { .. }
+            | Self::CargoMetadataReadError { .. }
             | Self::CargoMetadataParseError { .. }
             | Self::TestBinaryArgsParseError { .. }
             | Self::SignalHandlerSetupError { .. }
@@ -1001,6 +1008,13 @@ impl ExpectedError {
                     "argument {} specified `{}` that couldn't be read",
                     format!("--{arg_name}").style(styles.bold),
                     err.input().style(styles.bold)
+                );
+                Some(err as &dyn Error)
+            }
+            Self::CargoMetadataReadError { path, err } => {
+                error!(
+                    "error reading Cargo metadata from file `{}`",
+                    path.style(styles.bold),
                 );
                 Some(err as &dyn Error)
             }

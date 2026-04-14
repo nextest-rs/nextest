@@ -19,13 +19,22 @@ pub(crate) fn compile(
     expr: &ParsedExpr,
     cx: &ParseContext<'_>,
     kind: FiltersetKind,
+    known_groups: &KnownGroups,
 ) -> Result<CompiledExpr, Vec<ParseSingleError>> {
     let mut errors = vec![];
     check_banned_predicates(expr, kind, &mut errors);
 
+    // Return early if banned predicates were found. This ensures that
+    // KnownGroups::Unavailable never reaches group validation during
+    // normal operation (the ban check catches group() first), and avoids
+    // mixing ban errors with unrelated validation errors.
+    if !errors.is_empty() {
+        return Err(errors);
+    }
+
     let cx_cache = cx.make_cache();
     let mut cache = cx.graph().new_depends_cache();
-    let expr = compile_expr(expr, cx_cache, &mut cache, &mut errors);
+    let expr = compile_expr(expr, cx_cache, known_groups, &mut cache, &mut errors);
 
     if errors.is_empty() {
         Ok(expr)
@@ -41,29 +50,63 @@ fn check_banned_predicates(
 ) {
     match kind {
         FiltersetKind::Test => {}
-        FiltersetKind::TestArchive => {
-            // The `test` predicate is unsupported for a test archive since we need to
-            // package the whole binary and it may be cross-compiled.
+        FiltersetKind::OverrideFilter => {
+            // The `group` predicate is banned in override filters because group
+            // membership is determined by overrides themselves, creating a
+            // circular dependency.
             Wrapped(expr).collapse_frames(|layer: ExprFrame<&ParsedLeaf, ()>| {
-                if let ExprFrame::Set(ParsedLeaf::Test(_, span)) = layer {
+                if let ExprFrame::Set(ParsedLeaf::Group(_, span)) = layer {
                     errors.push(ParseSingleError::BannedPredicate {
                         kind,
                         span: *span,
-                        reason: BannedPredicateReason::Unsupported,
+                        reason: BannedPredicateReason::GroupCircularDependency,
                     });
                 }
             })
         }
-        FiltersetKind::DefaultFilter => {
-            // The `default` predicate is banned.
-            Wrapped(expr).collapse_frames(|layer: ExprFrame<&ParsedLeaf, ()>| {
-                if let ExprFrame::Set(ParsedLeaf::Default(span)) = layer {
+        FiltersetKind::TestArchive => {
+            // The `test` and `group` predicates are unsupported for a
+            // test archive since we need to package the whole binary
+            // and it may be cross-compiled.
+            Wrapped(expr).collapse_frames(|layer: ExprFrame<&ParsedLeaf, ()>| match layer {
+                ExprFrame::Set(ParsedLeaf::Test(_, span)) => {
                     errors.push(ParseSingleError::BannedPredicate {
                         kind,
                         span: *span,
-                        reason: BannedPredicateReason::InfiniteRecursion,
+                        reason: BannedPredicateReason::TestNotAvailableInArchive,
                     });
                 }
+                ExprFrame::Set(ParsedLeaf::Group(_, span)) => {
+                    errors.push(ParseSingleError::BannedPredicate {
+                        kind,
+                        span: *span,
+                        reason: BannedPredicateReason::GroupNotAvailableInArchive,
+                    });
+                }
+                _ => {}
+            })
+        }
+        FiltersetKind::DefaultFilter => {
+            // The `default` and `group` predicates are banned: `default`
+            // because it would cause infinite recursion, and `group`
+            // because group membership is not available in the default
+            // filter context.
+            Wrapped(expr).collapse_frames(|layer: ExprFrame<&ParsedLeaf, ()>| match layer {
+                ExprFrame::Set(ParsedLeaf::Default(span)) => {
+                    errors.push(ParseSingleError::BannedPredicate {
+                        kind,
+                        span: *span,
+                        reason: BannedPredicateReason::DefaultInfiniteRecursion,
+                    });
+                }
+                ExprFrame::Set(ParsedLeaf::Group(_, span)) => {
+                    errors.push(ParseSingleError::BannedPredicate {
+                        kind,
+                        span: *span,
+                        reason: BannedPredicateReason::GroupNotAvailableInDefaultFilter,
+                    });
+                }
+                _ => {}
             })
         }
     }
@@ -125,6 +168,7 @@ fn rdependencies_packages(
 fn compile_set_def(
     set: &ParsedLeaf,
     cx_cache: &ParseContextCache<'_>,
+    known_groups: &KnownGroups,
     cache: &mut DependsCache<'_>,
     errors: &mut Vec<ParseSingleError>,
 ) -> FiltersetLeaf {
@@ -155,6 +199,10 @@ fn compile_set_def(
         ),
         ParsedLeaf::Platform(platform, span) => FiltersetLeaf::Platform(*platform, *span),
         ParsedLeaf::Test(matcher, span) => FiltersetLeaf::Test(matcher.clone(), *span),
+        ParsedLeaf::Group(matcher, span) => FiltersetLeaf::Group(
+            expect_known_group(matcher, known_groups, *span, errors),
+            *span,
+        ),
         ParsedLeaf::Default(_) => FiltersetLeaf::Default,
         ParsedLeaf::All => FiltersetLeaf::All,
         ParsedLeaf::None => FiltersetLeaf::None,
@@ -216,16 +264,29 @@ fn expect_non_empty_binary_ids(
     matcher.clone()
 }
 
+fn expect_known_group(
+    matcher: &NameMatcher,
+    known_groups: &KnownGroups,
+    span: SourceSpan,
+    errors: &mut Vec<ParseSingleError>,
+) -> NameMatcher {
+    if !known_groups.matches(matcher) {
+        errors.push(ParseSingleError::NoGroupMatch(span));
+    }
+    matcher.clone()
+}
+
 fn compile_expr(
     expr: &ParsedExpr,
     cx_cache: &ParseContextCache<'_>,
+    known_groups: &KnownGroups,
     cache: &mut DependsCache<'_>,
     errors: &mut Vec<ParseSingleError>,
 ) -> CompiledExpr {
     use crate::expression::ExprFrame::*;
 
     Wrapped(expr).collapse_frames(|layer: ExprFrame<&ParsedLeaf, CompiledExpr>| match layer {
-        Set(set) => CompiledExpr::Set(compile_set_def(set, cx_cache, cache, errors)),
+        Set(set) => CompiledExpr::Set(compile_set_def(set, cx_cache, known_groups, cache, errors)),
         Not(expr) => CompiledExpr::Not(Box::new(expr)),
         Union(expr_1, expr_2) => CompiledExpr::Union(Box::new(expr_1), Box::new(expr_2)),
         Intersection(expr_1, expr_2) => {

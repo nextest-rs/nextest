@@ -23,7 +23,7 @@ use crate::{
 };
 use guppy::graph::cargo::BuildPlatform;
 use nextest_filtering::{
-    BinaryQuery, CompiledExpr, Filterset, FiltersetKind, ParseContext, TestQuery,
+    BinaryQuery, CompiledExpr, Filterset, FiltersetKind, KnownGroups, ParseContext, TestQuery,
 };
 use owo_colors::{OwoColorize, Style};
 use serde::{Deserialize, Deserializer};
@@ -277,24 +277,9 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
         let mut junit_flaky_fail_status = None;
 
         for override_ in &profile.compiled_data.overrides {
-            if !override_.state.host_eval {
+            if !override_.matches_test_query(query, &ecx) {
                 continue;
             }
-            if query.binary_query.platform == BuildPlatform::Host && !override_.state.host_test_eval
-            {
-                continue;
-            }
-            if query.binary_query.platform == BuildPlatform::Target && !override_.state.target_eval
-            {
-                continue;
-            }
-
-            if let Some(expr) = &override_.filter()
-                && !expr.matches_test(query, &ecx)
-            {
-                continue;
-            }
-            // If no expression is present, it's equivalent to "all()".
 
             if priority.is_none()
                 && let Some(p) = override_.data.priority
@@ -625,7 +610,12 @@ impl CompiledData<PreBuildPlatform> {
     ) -> Self {
         let profile_default_filter =
             profile_default_filter.and_then(|filter| {
-                match Filterset::parse(filter.to_owned(), pcx, FiltersetKind::DefaultFilter) {
+                match Filterset::parse(
+                    filter.to_owned(),
+                    pcx,
+                    FiltersetKind::DefaultFilter,
+                    &KnownGroups::Unavailable,
+                ) {
                     Ok(expr) => Some(CompiledDefaultFilter {
                         expr: expr.compiled,
                         profile: profile_name.to_owned(),
@@ -781,13 +771,20 @@ impl CompiledOverride<PreBuildPlatform> {
         let host_spec = MaybeTargetSpec::new(source.platform.host.as_deref());
         let target_spec = MaybeTargetSpec::new(source.platform.target.as_deref());
         let filter = source.filter.as_ref().map_or(Ok(None), |filter| {
-            Some(Filterset::parse(filter.clone(), pcx, FiltersetKind::Test)).transpose()
+            Some(Filterset::parse(
+                filter.clone(),
+                pcx,
+                FiltersetKind::OverrideFilter,
+                &KnownGroups::Unavailable,
+            ))
+            .transpose()
         });
         let default_filter = source.default_filter.as_ref().map_or(Ok(None), |filter| {
             Some(Filterset::parse(
                 filter.clone(),
                 pcx,
                 FiltersetKind::DefaultFilter,
+                &KnownGroups::Unavailable,
             ))
             .transpose()
         });
@@ -901,6 +898,31 @@ impl CompiledOverride<FinalConfig> {
             Some(FilterOrDefaultFilter::Filter(filter)) => Some(filter),
             _ => None,
         }
+    }
+
+    /// Returns true if this override's platform and filter constraints
+    /// match the given test query.
+    pub(in crate::config) fn matches_test_query(
+        &self,
+        query: &TestQuery<'_>,
+        ecx: &nextest_filtering::EvalContext<'_>,
+    ) -> bool {
+        if !self.state.host_eval {
+            return false;
+        }
+        if query.binary_query.platform == BuildPlatform::Host && !self.state.host_test_eval {
+            return false;
+        }
+        if query.binary_query.platform == BuildPlatform::Target && !self.state.target_eval {
+            return false;
+        }
+        // If no expression is present, it's equivalent to "all()".
+        if let Some(expr) = self.filter()
+            && !expr.matches_test(query, ecx)
+        {
+            return false;
+        }
+        true
     }
 
     /// Returns the default filter if it matches the platform.
@@ -1456,7 +1478,7 @@ mod tests {
             message: "predicate not allowed in `default-filter` expressions".to_owned(),
             labels: vec![
                 MietteJsonLabel {
-                    label: "this predicate causes infinite recursion".to_owned(),
+                    label: "default() causes infinite recursion".to_owned(),
                     span: MietteJsonSpan { offset: 4, length: 9 },
                 },
             ],
@@ -1551,7 +1573,7 @@ mod tests {
         &[MietteJsonReport {
             message: "predicate not allowed in `default-filter` expressions".to_owned(),
             labels: vec![
-                MietteJsonLabel { label: "this predicate causes infinite recursion".to_owned(), span: MietteJsonSpan { offset: 13, length: 9 } }
+                MietteJsonLabel { label: "default() causes infinite recursion".to_owned(), span: MietteJsonSpan { offset: 13, length: 9 } }
             ]
         }]
 

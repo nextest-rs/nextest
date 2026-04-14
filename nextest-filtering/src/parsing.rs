@@ -58,6 +58,8 @@ pub enum ParsedLeaf<S = SourceSpan> {
     BinaryId(NameMatcher, S),
     Platform(BuildPlatform, S),
     Test(NameMatcher, S),
+    /// All tests in the named test group.
+    Group(NameMatcher, S),
     Default(S),
     All,
     None,
@@ -70,7 +72,10 @@ impl ParsedLeaf {
     /// Currently, this also returns true (conservatively) for the `Default`
     /// leaf, which is used to represent the default set of tests to run.
     pub fn is_runtime_only(&self) -> bool {
-        matches!(self, Self::Test(_, _) | Self::Default(_))
+        matches!(
+            self,
+            Self::Test(_, _) | Self::Group(_, _) | Self::Default(_)
+        )
     }
 
     #[cfg(test)]
@@ -84,6 +89,7 @@ impl ParsedLeaf {
             Self::BinaryId(matcher, _) => ParsedLeaf::BinaryId(matcher, ()),
             Self::Platform(platform, _) => ParsedLeaf::Platform(platform, ()),
             Self::Test(matcher, _) => ParsedLeaf::Test(matcher, ()),
+            Self::Group(matcher, _) => ParsedLeaf::Group(matcher, ()),
             Self::Default(_) => ParsedLeaf::Default(()),
             Self::All => ParsedLeaf::All,
             Self::None => ParsedLeaf::None,
@@ -102,6 +108,7 @@ impl<S> fmt::Display for ParsedLeaf<S> {
             Self::BinaryId(matcher, _) => write!(f, "binary_id({matcher})"),
             Self::Platform(platform, _) => write!(f, "platform({platform})"),
             Self::Test(matcher, _) => write!(f, "test({matcher})"),
+            Self::Group(matcher, _) => write!(f, "group({matcher})"),
             Self::Default(_) => write!(f, "default()"),
             Self::All => write!(f, "all()"),
             Self::None => write!(f, "none()"),
@@ -665,8 +672,9 @@ fn parse_set_def(input: &mut Span<'_>) -> PResult<Option<ParsedLeaf>> {
             unary_set_def("binary_id", DefaultMatcher::Glob, ParsedLeaf::BinaryId),
             unary_set_def("binary", DefaultMatcher::Glob, ParsedLeaf::Binary),
             unary_set_def("test", DefaultMatcher::Contains, ParsedLeaf::Test),
-            platform_def,
             alt((
+                unary_set_def("group", DefaultMatcher::Glob, ParsedLeaf::Group),
+                platform_def,
                 nullary_set_def("default", ParsedLeaf::Default),
                 nullary_set_def("all", |_| ParsedLeaf::All),
                 nullary_set_def("none", |_| ParsedLeaf::None),

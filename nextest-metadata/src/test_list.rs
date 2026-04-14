@@ -15,6 +15,12 @@ use std::{
 };
 use target_spec::summaries::PlatformSummary;
 
+/// The string `"@global"`, representing the implicit global test group.
+///
+/// All tests belong to `@global` unless assigned to a custom group by
+/// a per-test override.
+pub const GLOBAL_TEST_GROUP: &str = "@global";
+
 /// Command builder for `cargo nextest list`.
 #[derive(Clone, Debug, Default)]
 pub struct ListCommand {

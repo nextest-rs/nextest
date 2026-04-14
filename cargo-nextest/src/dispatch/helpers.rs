@@ -10,7 +10,7 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use itertools::Itertools;
-use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
+use nextest_filtering::{Filterset, FiltersetKind, KnownGroups, ParseContext};
 use nextest_runner::{
     RustcCli,
     cargo_config::{CargoConfigs, TargetTriple},
@@ -172,10 +172,11 @@ pub(super) fn build_filtersets(
     pcx: &ParseContext<'_>,
     filter_set: &[String],
     kind: FiltersetKind,
+    known_groups: &KnownGroups,
 ) -> Result<Vec<Filterset>> {
     let (exprs, all_errors): (Vec<_>, Vec<_>) = filter_set
         .iter()
-        .map(|input| Filterset::parse(input.clone(), pcx, kind))
+        .map(|input| Filterset::parse(input.clone(), pcx, kind, known_groups))
         .partition_result();
 
     if !all_errors.is_empty() {
