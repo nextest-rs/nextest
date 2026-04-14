@@ -28,6 +28,8 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
   cargo nextest list -E 'not group(@global)'
   ```
 
+- As part of `cargo test` binary emulation, `--nocapture` can now be passed in after `--`.
+
 ### Fixed
 
 - When `--status-level fail` is set, slow test notifications now correctly display the `SLOW` status label. Previously, the duration and test name were shown but the status was omitted. ([#3236])

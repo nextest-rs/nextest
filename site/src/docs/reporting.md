@@ -67,6 +67,8 @@ different tests isn't interspersed. This is different from `cargo test --
 --nocapture`, which will run tests in parallel and potentially cause interleaved
 output.
 
+<!-- md:version 0.9.133 --> No-capture mode can also be enabled with `cargo nextest run -- --nocapture`.
+
 ## Displaying captured test output
 
 When `--no-capture` isn't used, nextest will capture standard output and
