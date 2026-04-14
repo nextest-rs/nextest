@@ -267,7 +267,7 @@ impl DeserializedUserConfig {
                 UserConfigError::OverridePlatformSpec {
                     path: path.to_owned(),
                     index,
-                    error,
+                    error: Box::new(error),
                 }
             })?;
             // Each override entry uses the same platform spec for both UI and

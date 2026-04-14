@@ -865,7 +865,7 @@ pub enum UserConfigError {
         index: usize,
         /// The underlying target-spec error.
         #[source]
-        error: target_spec::Error,
+        error: Box<target_spec::Error>,
     },
 }
 
@@ -1494,7 +1494,7 @@ pub enum MetadataMaterializeError {
 
         /// The error that occurred.
         #[source]
-        error: RustBuildMetaParseError,
+        error: Box<RustBuildMetaParseError>,
     },
 
     /// An error occurred converting data into a `PackageGraph`.
@@ -1505,7 +1505,7 @@ pub enum MetadataMaterializeError {
 
         /// The error that occurred.
         #[source]
-        error: guppy::Error,
+        error: Box<guppy::Error>,
     },
 }
 
@@ -1584,7 +1584,7 @@ pub enum ArchiveReadError {
 
         /// The error.
         #[source]
-        error: guppy::Error,
+        error: Box<guppy::Error>,
     },
 }
 

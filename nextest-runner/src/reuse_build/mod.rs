@@ -219,7 +219,7 @@ impl MetadataKind for ReusedBinaryList {
         let binary_list = BinaryList::from_summary(summary).map_err(|error| {
             MetadataMaterializeError::RustBuildMeta {
                 path: path.to_owned(),
-                error,
+                error: Box::new(error),
             }
         })?;
 
@@ -257,7 +257,7 @@ impl MetadataKind for ReusedCargoMetadata {
         let graph = PackageGraph::from_json(&json).map_err(|error| {
             MetadataMaterializeError::PackageGraphConstruct {
                 path: path.to_owned(),
-                error,
+                error: Box::new(error),
             }
         })?;
 
