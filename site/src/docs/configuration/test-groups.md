@@ -96,6 +96,32 @@ With the above example, you might see the following output:
 
 This command accepts [all the same options](../listing.md#options-and-arguments) that `cargo nextest list` does.
 
+## Enumerating tests in a test group
+
+<!-- md:version 0.9.133 -->
+
+Tests in a particular group can be listed or run via the [`group()` filterset predicate](../filtersets/index.md).
+
+To list all tests in the `my-group` group:
+
+```bash
+cargo nextest list -E 'group(my-group)'
+```
+
+To run all tests in the `my-group` group:
+
+```bash
+cargo nextest run -E 'group(my-group)'
+```
+
+To list all tests in a non-global group:
+
+```bash
+cargo nextest list -E 'not group(@global)'
+```
+
+For more about filtersets, see [_Filterset DSL_](../filtersets/index.md).
+
 ## Slot numbers
 
 <!-- md:version 0.9.90 -->

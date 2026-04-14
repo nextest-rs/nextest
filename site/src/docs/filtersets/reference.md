@@ -19,6 +19,9 @@ This section contains the full set of operators supported by the filterset DSL.
 `test(name-matcher)`
 : Include all tests matching `name-matcher`.
 
+`group(name-matcher)` <!-- md:version 0.9.133 -->
+: Include all tests in [test groups](../configuration/test-groups.md) matching `name-matcher`. This predicate can only be used on the command line.
+
 `package(name-matcher)`
 : Include all tests in packages (crates) matching `name-matcher`.
 
@@ -137,6 +140,8 @@ This defines the general syntax for matching against names.
 #### Default matchers
 
 For `test()` predicates, the default matching strategy is the _contains matcher_, equivalent to `~string`.
+
+For `group()` predicates, the default matching strategy is the _glob matcher_, equivalent to `#string`.
 
 For package-related predicates (`package()`, `deps()`, and `rdeps()`), this is the _glob matcher_, equivalent to `#string`.
 
