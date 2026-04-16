@@ -466,8 +466,8 @@ impl<'a, W: Write> Archiver<'a, W> {
             .binary_list
             .rust_build_meta
             .non_test_binaries
-            .iter()
-            .flat_map(|(_, binaries)| binaries)
+            .values()
+            .flatten()
         {
             let src_path = self
                 .binary_list

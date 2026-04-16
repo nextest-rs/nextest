@@ -993,7 +993,7 @@ impl RunStoreSnapshot {
                         .into_iter()
                         .filter_map(|run_id| self.get_run(run_id).cloned())
                         .collect();
-                    candidates.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+                    candidates.sort_by_key(|run| std::cmp::Reverse(run.started_at));
                     RunIdResolutionError::Ambiguous {
                         prefix: prefix.to_string(),
                         count,

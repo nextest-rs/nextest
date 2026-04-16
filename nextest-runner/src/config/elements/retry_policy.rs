@@ -198,14 +198,15 @@ where
             count: _,
             delay,
             jitter,
-        }) => {
+        })
             // Jitter can't be specified if delay is 0.
-            if delay.is_zero() && *jitter {
-                return Err(serde::de::Error::custom(
-                    "`jitter` cannot be true if `delay` isn't specified or is zero",
-                ));
-            }
+            if delay.is_zero() && *jitter =>
+        {
+            return Err(serde::de::Error::custom(
+                "`jitter` cannot be true if `delay` isn't specified or is zero",
+            ));
         }
+        Some(RetryPolicy::Fixed { .. }) => {}
         Some(RetryPolicy::Exponential {
             count,
             delay,

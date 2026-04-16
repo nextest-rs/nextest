@@ -342,17 +342,13 @@ impl ProgressBarState {
                 // sub-runs.
                 self.bar.finish_and_clear();
             }
-            TestEventKind::SetupScriptStarted { no_capture, .. } => {
-                // Hide the progress bar if either stderr or stdout are being passed through.
-                if *no_capture {
-                    self.hidden_no_capture = true;
-                }
+            // Hide the progress bar if either stderr or stdout are being passed through.
+            TestEventKind::SetupScriptStarted { no_capture, .. } if *no_capture => {
+                self.hidden_no_capture = true;
             }
-            TestEventKind::SetupScriptFinished { no_capture, .. } => {
-                // Restore the progress bar if it was hidden.
-                if *no_capture {
-                    self.hidden_no_capture = false;
-                }
+            // Restore the progress bar if it was hidden.
+            TestEventKind::SetupScriptFinished { no_capture, .. } if *no_capture => {
+                self.hidden_no_capture = false;
             }
             TestEventKind::TestStarted {
                 current_stats,
