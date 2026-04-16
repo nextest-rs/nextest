@@ -53,6 +53,13 @@ const NEXTEST_STATE_DIR_ENV: &str = "NEXTEST_STATE_DIR";
 /// This is the same constant as in `nextest_runner::runner::imp`.
 const FORCE_RUN_ID_ENV: &str = "__NEXTEST_FORCE_RUN_ID";
 
+/// Environment variable to force a specific store format version in the
+/// per-run metadata written to `runs.json.zst` (for testing).
+///
+/// This is the same constant as `FORCE_STORE_FORMAT_VERSION_ENV` in
+/// `nextest_runner::record::format`.
+const FORCE_STORE_FORMAT_VERSION_ENV: &str = "__NEXTEST_FORCE_STORE_FORMAT_VERSION";
+
 /// Environment variable to enable redaction of dynamic fields (timestamps, durations, sizes).
 ///
 /// When set to "1", nextest produces fixed-width placeholders for these fields,
@@ -2186,6 +2193,66 @@ fn test_replayability_all_runs_non_replayable() {
         stderr.contains("error opening archive at"),
         "replay error should mention opening archive: {stderr}"
     );
+}
+
+/// Replayability: store format version incompatible with current nextest.
+///
+/// Coverage: Verifies that replay, `run --rerun`, `store export`, and
+/// `store export-chrome-trace` all reject a run whose per-run
+/// `store_format_version` metadata is unreadable by the current nextest,
+/// before attempting to open the archive or event log. Uses the testing-only
+/// `__NEXTEST_FORCE_STORE_FORMAT_VERSION` knob to synthesize a run whose
+/// metadata claims a future major version.
+#[test]
+fn test_replayability_store_version_too_new() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    // Deterministic so the run ID appears stably in error snapshots.
+    const RUN_ID: &str = "84000001-0000-0000-0000-000000000001";
+
+    // Record a run with the per-run store format version forced to a future
+    // major version. The store.zip and run.log.zst payloads still use the real
+    // current format, which is fine: every dependent command checks the
+    // metadata version before opening either one.
+    let recording = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
+        .env(FORCE_STORE_FORMAT_VERSION_ENV, "9999.0")
+        .args(["run", "-E", "test(=test_success)"])
+        .output();
+    assert!(
+        recording.exit_status.success(),
+        "recording with forced store format version should succeed: {recording}"
+    );
+
+    // Each dependent command should exit with SETUP_ERROR and surface the
+    // StoreVersionIncompatible diagnostic.
+    let cases: [(&str, &[&str]); 4] = [
+        ("replay", &["replay", "--run-id", RUN_ID]),
+        ("run_rerun", &["run", "--rerun", RUN_ID]),
+        ("store_export", &["store", "export", RUN_ID]),
+        (
+            "store_export_chrome_trace",
+            &["store", "export-chrome-trace", RUN_ID],
+        ),
+    ];
+    for (command_label, args) in cases {
+        let out = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args(args.iter().copied())
+            .unchecked(true)
+            .output();
+        assert_eq!(
+            out.exit_status.code(),
+            Some(NextestExitCode::SETUP_ERROR),
+            "{command_label} should fail with SETUP_ERROR: {out}"
+        );
+        insta::assert_snapshot!(
+            format!("version_incompat_too_new_major__{command_label}"),
+            redact_dynamic_fields(&out.stderr_as_str(), temp_root)
+        );
+    }
 }
 
 // --- Rerun tests ---
