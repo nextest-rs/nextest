@@ -299,7 +299,7 @@ jobs:
       - name: Submit Windows artifact signing request
         id: submit-signing-request
         if: endsWith(matrix.target, '-pc-windows-msvc')
-        uses: signpath/github-action-submit-signing-request@bc66d86b015a46e9c6d9700de73143a82f9570ff # v2.1
+        uses: signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2.2
         with:
           api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
           organization-id: '34634019-2ee0-4162-830a-72cd1a0cb73f'
