@@ -5,22 +5,22 @@
 
 use super::{
     app::CargoNextestApp,
-    clap_error::{EarlySetup, handle_clap_error},
+    clap_error::{EarlyArgs, handle_clap_error},
 };
 use clap::{CommandFactory, Parser};
 
 /// Main entry point for cargo-nextest.
 ///
-/// This function handles CLI parsing, early setup (for paged help), and
-/// dispatches to the appropriate command. Both the main binary and the
-/// integration test duplicate use this.
+/// This function handles CLI parsing, early argument extraction (for paged
+/// help), and dispatches to the appropriate command. Both the main binary and
+/// the integration test duplicate use this.
 pub fn main_impl() -> ! {
     let cli_args: Vec<_> = std::env::args_os()
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect();
 
     let app = CargoNextestApp::command();
-    let early_setup = EarlySetup::new(&cli_args, &app);
+    let early_args = EarlyArgs::extract(&cli_args, &app);
 
     match CargoNextestApp::try_parse() {
         Ok(opts) => {
@@ -34,7 +34,7 @@ pub fn main_impl() -> ! {
             }
         }
         Err(err) => {
-            let code = handle_clap_error(err, &early_setup);
+            let code = handle_clap_error(err, &early_args);
             std::process::exit(code);
         }
     }

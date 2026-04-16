@@ -146,13 +146,13 @@ impl CompiledUiOverride {
         }
     }
 
-    /// Checks if this override matches the host platform.
+    /// Checks if this override matches the given platform.
     ///
     /// Unknown results (e.g., unrecognized target features) are treated as
     /// non-matching to be conservative.
-    pub(in crate::user_config) fn matches(&self, host_platform: &Platform) -> bool {
+    pub(in crate::user_config) fn matches(&self, build_target: &Platform) -> bool {
         self.platform_spec
-            .eval(host_platform)
+            .eval(build_target)
             .unwrap_or(/* unknown results are mapped to false */ false)
     }
 
@@ -226,8 +226,8 @@ pub struct UiConfig {
 }
 
 impl UiConfig {
-    /// Resolves UI configuration from user configs, defaults, and the host
-    /// platform.
+    /// Resolves UI configuration from user configs, defaults, and the build
+    /// target of the nextest binary.
     ///
     /// Resolution order (highest to lowest priority):
     ///
@@ -242,7 +242,7 @@ impl UiConfig {
         default_overrides: &[CompiledUiOverride],
         user_config: Option<&DeserializedUiConfig>,
         user_overrides: &[CompiledUiOverride],
-        host_platform: &Platform,
+        build_target: &Platform,
     ) -> Self {
         Self {
             show_progress: resolve_ui_setting(
@@ -250,7 +250,7 @@ impl UiConfig {
                 default_overrides,
                 user_config.and_then(|c| c.show_progress.as_ref()),
                 user_overrides,
-                host_platform,
+                build_target,
                 |data| data.show_progress.as_ref(),
             ),
             max_progress_running: resolve_ui_setting(
@@ -258,7 +258,7 @@ impl UiConfig {
                 default_overrides,
                 user_config.and_then(|c| c.max_progress_running.as_ref()),
                 user_overrides,
-                host_platform,
+                build_target,
                 |data| data.max_progress_running.as_ref(),
             ),
             input_handler: resolve_ui_setting(
@@ -266,7 +266,7 @@ impl UiConfig {
                 default_overrides,
                 user_config.and_then(|c| c.input_handler.as_ref()),
                 user_overrides,
-                host_platform,
+                build_target,
                 |data| data.input_handler.as_ref(),
             ),
             output_indent: resolve_ui_setting(
@@ -274,7 +274,7 @@ impl UiConfig {
                 default_overrides,
                 user_config.and_then(|c| c.output_indent.as_ref()),
                 user_overrides,
-                host_platform,
+                build_target,
                 |data| data.output_indent.as_ref(),
             ),
             pager: resolve_ui_setting(
@@ -282,7 +282,7 @@ impl UiConfig {
                 default_overrides,
                 user_config.and_then(|c| c.pager.as_ref()),
                 user_overrides,
-                host_platform,
+                build_target,
                 |data| data.pager.as_ref(),
             ),
             paginate: resolve_ui_setting(
@@ -290,7 +290,7 @@ impl UiConfig {
                 default_overrides,
                 user_config.and_then(|c| c.paginate.as_ref()),
                 user_overrides,
-                host_platform,
+                build_target,
                 |data| data.paginate.as_ref(),
             ),
             streampager: StreampagerConfig {
@@ -299,7 +299,7 @@ impl UiConfig {
                     default_overrides,
                     user_config.and_then(|c| c.streampager.interface.as_ref()),
                     user_overrides,
-                    host_platform,
+                    build_target,
                     |data| data.streampager_interface.as_ref(),
                 ),
                 wrapping: resolve_ui_setting(
@@ -307,7 +307,7 @@ impl UiConfig {
                     default_overrides,
                     user_config.and_then(|c| c.streampager.wrapping.as_ref()),
                     user_overrides,
-                    host_platform,
+                    build_target,
                     |data| data.streampager_wrapping.as_ref(),
                 ),
                 show_ruler: resolve_ui_setting(
@@ -315,7 +315,7 @@ impl UiConfig {
                     default_overrides,
                     user_config.and_then(|c| c.streampager.show_ruler.as_ref()),
                     user_overrides,
-                    host_platform,
+                    build_target,
                     |data| data.streampager_show_ruler.as_ref(),
                 ),
             },
@@ -715,7 +715,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{platform::detect_host_platform_for_tests, user_config::DefaultUserConfig};
+    use crate::user_config::DefaultUserConfig;
 
     /// Helper to create a CompiledUiOverride for tests.
     fn make_override(platform: &str, data: DeserializedUiOverrideData) -> CompiledUiOverride {
@@ -839,8 +839,9 @@ mod tests {
     fn test_resolved_ui_config_defaults_only() {
         let defaults = DefaultUserConfig::from_embedded().ui;
 
-        let host = detect_host_platform_for_tests();
-        let resolved = UiConfig::resolve(&defaults, &[], None, &[], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = UiConfig::resolve(&defaults, &[], None, &[], &build_target);
 
         // Resolved values should match the embedded defaults.
         assert_eq!(resolved.show_progress, defaults.show_progress);
@@ -860,8 +861,9 @@ mod tests {
             ..Default::default()
         };
 
-        let host = detect_host_platform_for_tests();
-        let resolved = UiConfig::resolve(&defaults, &[], Some(&user_config), &[], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = UiConfig::resolve(&defaults, &[], Some(&user_config), &[], &build_target);
 
         assert_eq!(resolved.show_progress, UiShowProgress::Bar);
         assert_eq!(resolved.max_progress_running, MaxProgressRunning::Count(4));
@@ -883,8 +885,9 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
-        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &build_target);
 
         assert_eq!(resolved.show_progress, UiShowProgress::Counter);
         assert_eq!(resolved.max_progress_running, defaults.max_progress_running); // From defaults.
@@ -906,8 +909,9 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
-        let resolved = UiConfig::resolve(&defaults, &[override_], None, &[], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = UiConfig::resolve(&defaults, &[override_], None, &[], &build_target);
 
         assert_eq!(resolved.show_progress, UiShowProgress::Counter);
         assert_eq!(resolved.max_progress_running, defaults.max_progress_running); // From defaults.
@@ -934,8 +938,9 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
-        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &build_target);
 
         // Nothing should be overridden - all values should match defaults.
         assert_eq!(resolved.show_progress, defaults.show_progress);
@@ -966,8 +971,10 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
-        let resolved = UiConfig::resolve(&defaults, &[], None, &[override1, override2], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved =
+            UiConfig::resolve(&defaults, &[], None, &[override1, override2], &build_target);
 
         // First override wins for show_progress.
         assert_eq!(resolved.show_progress, UiShowProgress::Bar);
@@ -998,13 +1005,14 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
         let resolved = UiConfig::resolve(
             &defaults,
             &[default_override],
             None,
             &[user_override],
-            &host,
+            &build_target,
         );
 
         // User override wins for show_progress.
@@ -1033,13 +1041,14 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
         let resolved = UiConfig::resolve(
             &defaults,
             &[default_override],
             Some(&user_config),
             &[],
-            &host,
+            &build_target,
         );
 
         // Default override is chosen over user base for show_progress.
@@ -1309,8 +1318,9 @@ mod tests {
     fn test_resolved_ui_config_pager_defaults() {
         let defaults = DefaultUserConfig::from_embedded().ui;
 
-        let host = detect_host_platform_for_tests();
-        let resolved = UiConfig::resolve(&defaults, &[], None, &[], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = UiConfig::resolve(&defaults, &[], None, &[], &build_target);
 
         // Resolved values should match the embedded defaults.
         assert_eq!(resolved.pager, defaults.pager);
@@ -1334,8 +1344,9 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
-        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &build_target);
 
         assert_eq!(resolved.pager, custom_pager);
         // paginate should still be from defaults.
@@ -1355,8 +1366,9 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
-        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &build_target);
 
         assert_eq!(resolved.paginate, PaginateSetting::Never);
         // pager should still be from defaults.
@@ -1431,8 +1443,9 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
-        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = UiConfig::resolve(&defaults, &[], None, &[override_], &build_target);
 
         // Interface should be overridden.
         assert_eq!(

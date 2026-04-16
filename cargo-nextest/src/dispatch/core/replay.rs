@@ -6,12 +6,16 @@
 use super::run::ReporterCommonOpts;
 use crate::{
     ExpectedError, Result,
-    dispatch::{EarlyArgs, common::CommonOpts, helpers::locate_workspace_root},
+    dispatch::{
+        EarlyArgs,
+        common::CommonOpts,
+        helpers::{locate_workspace_root, resolve_user_config},
+    },
     output::OutputContext,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Args;
-use guppy::{graph::PackageGraph, platform::Platform};
+use guppy::graph::PackageGraph;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{
     errors::{DisplayErrorChain, RecordReadError},
@@ -86,11 +90,7 @@ pub(crate) fn exec_replay(
     output: OutputContext,
 ) -> Result<i32> {
     // Load user config and check the experimental feature early.
-    let host_platform =
-        Platform::build_target().expect("nextest is built for a supported platform");
-    let user_config =
-        UserConfig::for_host_platform(&host_platform, early_args.user_config_location())
-            .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })?;
+    let user_config = resolve_user_config(early_args.user_config_location())?;
 
     // The replay command requires the record experimental feature to be enabled.
     if !user_config.is_experimental_enabled(UserConfigExperimental::Record) {

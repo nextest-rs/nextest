@@ -944,10 +944,8 @@ impl App {
             .should_colorize(supports_color::Stream::Stderr);
 
         // Load and resolve user config with platform-specific overrides.
-        let resolved_user_config = resolve_user_config(
-            &self.base.build_platforms.host.platform,
-            self.base.early_args.user_config_location(),
-        )?;
+        let resolved_user_config =
+            resolve_user_config(self.base.early_args.user_config_location())?;
 
         // The -R/--rerun option requires the record experimental feature to be enabled.
         if rerun.is_some()
@@ -1236,10 +1234,8 @@ impl App {
             .should_colorize(supports_color::Stream::Stderr);
 
         // Load and resolve user config with platform-specific overrides.
-        let resolved_user_config = resolve_user_config(
-            &self.base.build_platforms.host.platform,
-            self.base.early_args.user_config_location(),
-        )?;
+        let resolved_user_config =
+            resolve_user_config(self.base.early_args.user_config_location())?;
 
         // Make the runner and reporter builders. Do them now so warnings are
         // emitted before we start doing the build.
