@@ -14,12 +14,12 @@ pub(crate) fn resolve_ui_setting<T: Clone>(
     default_overrides: &[CompiledUiOverride],
     user_value: Option<&T>,
     user_overrides: &[CompiledUiOverride],
-    host_platform: &Platform,
+    build_target: &Platform,
     get_override: impl Fn(&UiOverrideData) -> Option<&T>,
 ) -> T {
     // 1. User overrides (first match).
     for override_ in user_overrides {
-        if override_.matches(host_platform)
+        if override_.matches(build_target)
             && let Some(v) = get_override(override_.data())
         {
             return v.clone();
@@ -28,7 +28,7 @@ pub(crate) fn resolve_ui_setting<T: Clone>(
 
     // 2. Default overrides (first match).
     for override_ in default_overrides {
-        if override_.matches(host_platform)
+        if override_.matches(build_target)
             && let Some(v) = get_override(override_.data())
         {
             return v.clone();
@@ -50,12 +50,12 @@ pub(crate) fn resolve_record_setting<T: Clone>(
     default_overrides: &[CompiledRecordOverride],
     user_value: Option<&T>,
     user_overrides: &[CompiledRecordOverride],
-    host_platform: &Platform,
+    build_target: &Platform,
     get_override: impl Fn(&RecordOverrideData) -> Option<&T>,
 ) -> T {
     // 1. User overrides (first match).
     for override_ in user_overrides {
-        if override_.matches(host_platform)
+        if override_.matches(build_target)
             && let Some(v) = get_override(override_.data())
         {
             return v.clone();
@@ -64,7 +64,7 @@ pub(crate) fn resolve_record_setting<T: Clone>(
 
     // 2. Default overrides (first match).
     for override_ in default_overrides {
-        if override_.matches(host_platform)
+        if override_.matches(build_target)
             && let Some(v) = get_override(override_.data())
         {
             return v.clone();

@@ -10,12 +10,11 @@ use super::{
         App, ArchiveApp, ArchiveOpts, BaseApp, BenchOpts, ListOpts, ReplayOpts, RunOpts,
         exec_replay,
     },
+    helpers::resolve_user_config,
     utility::{DebugCommand, SelfCommand, ShowConfigCommand, StoreCommand},
 };
-use crate::{ExpectedError, Result, output::OutputContext, reuse_build::ReuseBuildOpts};
+use crate::{Result, output::OutputContext, reuse_build::ReuseBuildOpts};
 use clap::{Args, Subcommand};
-use guppy::platform::Platform;
-use nextest_runner::user_config::UserConfig;
 
 /// A next-generation test runner for Rust.
 ///
@@ -200,13 +199,7 @@ impl AppOpts {
                 exec_replay(&early_args, *replay_opts, self.common.manifest_path, output)
             }
             Command::Store { command } => {
-                let host_platform =
-                    Platform::build_target().expect("nextest is built for a supported platform");
-                let user_config = UserConfig::for_host_platform(
-                    &host_platform,
-                    early_args.user_config_location(),
-                )
-                .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })?;
+                let user_config = resolve_user_config(early_args.user_config_location())?;
                 command.exec(&early_args, self.common.manifest_path, &user_config, output)
             }
         }

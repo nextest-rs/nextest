@@ -288,7 +288,7 @@ Each override has a required `platform` filter and optional settings in the `ui`
 #### `overrides.platform`
 
 - **Type**: String (target spec expression)
-- **Description**: Platform specification for when this override applies. The expression is evaluated against the *host* platform (where nextest is running).
+- **Description**: Platform specification for when this override applies. The expression is evaluated against the _build target_: the platform nextest was compiled for. This is distinct from the `platform` field in [per-test overrides](../configuration/per-test-overrides.md#selecting-tests), which is matched against the host or target platform of the tests being run.
 - **Required**: Yes
 - **Documentation**: [_Specifying platforms_](../configuration/specifying-platforms.md)
 - **Valid formats**:

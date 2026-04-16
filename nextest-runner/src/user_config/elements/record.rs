@@ -133,13 +133,13 @@ impl CompiledRecordOverride {
         }
     }
 
-    /// Checks if this override matches the host platform.
+    /// Checks if this override matches the given platform.
     ///
     /// Unknown results (e.g., unrecognized target features) are treated as
     /// non-matching to be conservative.
-    pub(in crate::user_config) fn matches(&self, host_platform: &Platform) -> bool {
+    pub(in crate::user_config) fn matches(&self, build_target: &Platform) -> bool {
         self.platform_spec
-            .eval(host_platform)
+            .eval(build_target)
             .unwrap_or(/* unknown results are mapped to false */ false)
     }
 
@@ -209,8 +209,8 @@ pub struct RecordConfig {
 }
 
 impl RecordConfig {
-    /// Resolves record configuration from user configs, defaults, and the host
-    /// platform.
+    /// Resolves record configuration from user configs, defaults, and the
+    /// build target of the nextest binary.
     ///
     /// Resolution order (highest to lowest priority):
     ///
@@ -228,14 +228,14 @@ impl RecordConfig {
         default_overrides: &[CompiledRecordOverride],
         user_config: Option<&DeserializedRecordConfig>,
         user_overrides: &[CompiledRecordOverride],
-        host_platform: &Platform,
+        build_target: &Platform,
     ) -> Self {
         let mut max_output_size = resolve_record_setting(
             &default_config.max_output_size,
             default_overrides,
             user_config.and_then(|c| c.max_output_size.as_ref()),
             user_overrides,
-            host_platform,
+            build_target,
             |data| data.max_output_size(),
         );
 
@@ -262,7 +262,7 @@ impl RecordConfig {
                 default_overrides,
                 user_config.and_then(|c| c.enabled.as_ref()),
                 user_overrides,
-                host_platform,
+                build_target,
                 |data| data.enabled(),
             ),
             max_records: resolve_record_setting(
@@ -270,7 +270,7 @@ impl RecordConfig {
                 default_overrides,
                 user_config.and_then(|c| c.max_records.as_ref()),
                 user_overrides,
-                host_platform,
+                build_target,
                 |data| data.max_records(),
             ),
             max_total_size: resolve_record_setting(
@@ -278,7 +278,7 @@ impl RecordConfig {
                 default_overrides,
                 user_config.and_then(|c| c.max_total_size.as_ref()),
                 user_overrides,
-                host_platform,
+                build_target,
                 |data| data.max_total_size(),
             ),
             max_age: resolve_record_setting(
@@ -286,7 +286,7 @@ impl RecordConfig {
                 default_overrides,
                 user_config.and_then(|c| c.max_age.as_ref()),
                 user_overrides,
-                host_platform,
+                build_target,
                 |data| data.max_age(),
             ),
             max_output_size,
@@ -297,7 +297,6 @@ impl RecordConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::detect_host_platform_for_tests;
 
     #[test]
     fn test_deserialized_record_config_parsing() {
@@ -372,8 +371,9 @@ mod tests {
             max_output_size: ByteSize::mb(10),
         };
 
-        let host = detect_host_platform_for_tests();
-        let resolved = RecordConfig::resolve(&defaults, &[], None, &[], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = RecordConfig::resolve(&defaults, &[], None, &[], &build_target);
 
         assert!(!resolved.enabled);
         assert_eq!(resolved.max_records, 100);
@@ -400,8 +400,10 @@ mod tests {
             max_output_size: Some(ByteSize::mb(5)),
         };
 
-        let host = detect_host_platform_for_tests();
-        let resolved = RecordConfig::resolve(&defaults, &[], Some(&user_config), &[], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved =
+            RecordConfig::resolve(&defaults, &[], Some(&user_config), &[], &build_target);
 
         assert!(resolved.enabled); // From user.
         assert_eq!(resolved.max_records, 50); // From user.
@@ -429,8 +431,10 @@ mod tests {
             max_output_size: Some(ByteSize::b(100)), // Way below minimum.
         };
 
-        let host = detect_host_platform_for_tests();
-        let resolved = RecordConfig::resolve(&defaults, &[], Some(&user_config), &[], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved =
+            RecordConfig::resolve(&defaults, &[], Some(&user_config), &[], &build_target);
 
         // Should be clamped to the minimum.
         assert_eq!(resolved.max_output_size, MIN_MAX_OUTPUT_SIZE);
@@ -455,8 +459,10 @@ mod tests {
             max_output_size: Some(MIN_MAX_OUTPUT_SIZE),
         };
 
-        let host = detect_host_platform_for_tests();
-        let resolved = RecordConfig::resolve(&defaults, &[], Some(&user_config), &[], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved =
+            RecordConfig::resolve(&defaults, &[], Some(&user_config), &[], &build_target);
 
         // Should be accepted as-is.
         assert_eq!(resolved.max_output_size, MIN_MAX_OUTPUT_SIZE);
@@ -481,8 +487,10 @@ mod tests {
             max_output_size: Some(ByteSize::gib(1)), // Way above maximum.
         };
 
-        let host = detect_host_platform_for_tests();
-        let resolved = RecordConfig::resolve(&defaults, &[], Some(&user_config), &[], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved =
+            RecordConfig::resolve(&defaults, &[], Some(&user_config), &[], &build_target);
 
         // Should be clamped to the maximum.
         assert_eq!(resolved.max_output_size, MAX_MAX_OUTPUT_SIZE);
@@ -507,8 +515,10 @@ mod tests {
             max_output_size: Some(MAX_MAX_OUTPUT_SIZE),
         };
 
-        let host = detect_host_platform_for_tests();
-        let resolved = RecordConfig::resolve(&defaults, &[], Some(&user_config), &[], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved =
+            RecordConfig::resolve(&defaults, &[], Some(&user_config), &[], &build_target);
 
         // Should be accepted as-is.
         assert_eq!(resolved.max_output_size, MAX_MAX_OUTPUT_SIZE);
@@ -544,8 +554,9 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
-        let resolved = RecordConfig::resolve(&defaults, &[], None, &[override_], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = RecordConfig::resolve(&defaults, &[], None, &[override_], &build_target);
 
         assert!(resolved.enabled);
         assert_eq!(resolved.max_records, 50);
@@ -574,8 +585,9 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
-        let resolved = RecordConfig::resolve(&defaults, &[override_], None, &[], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = RecordConfig::resolve(&defaults, &[override_], None, &[], &build_target);
 
         assert!(resolved.enabled);
         assert_eq!(resolved.max_records, 50);
@@ -605,8 +617,9 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
-        let resolved = RecordConfig::resolve(&defaults, &[], None, &[override_], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = RecordConfig::resolve(&defaults, &[], None, &[override_], &build_target);
 
         // Nothing should be overridden - all values should match defaults.
         assert!(!resolved.enabled);
@@ -644,8 +657,10 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
-        let resolved = RecordConfig::resolve(&defaults, &[], None, &[override1, override2], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved =
+            RecordConfig::resolve(&defaults, &[], None, &[override1, override2], &build_target);
 
         // First override wins for enabled.
         assert!(resolved.enabled);
@@ -682,13 +697,14 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
         let resolved = RecordConfig::resolve(
             &defaults,
             &[default_override],
             None,
             &[user_override],
-            &host,
+            &build_target,
         );
 
         // User override wins for enabled.
@@ -723,13 +739,14 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
         let resolved = RecordConfig::resolve(
             &defaults,
             &[default_override],
             Some(&user_config),
             &[],
-            &host,
+            &build_target,
         );
 
         // Default override is chosen over user base for enabled.
@@ -757,8 +774,9 @@ mod tests {
             },
         );
 
-        let host = detect_host_platform_for_tests();
-        let resolved = RecordConfig::resolve(&defaults, &[], None, &[override_], &host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let resolved = RecordConfig::resolve(&defaults, &[], None, &[override_], &build_target);
 
         // Should be clamped to the minimum.
         assert_eq!(resolved.max_output_size, MIN_MAX_OUTPUT_SIZE);

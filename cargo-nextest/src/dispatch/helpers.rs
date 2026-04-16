@@ -91,11 +91,9 @@ pub(super) fn detect_build_platforms(
 
 /// Loads and resolves user configuration with platform-specific overrides.
 pub(super) fn resolve_user_config(
-    host_platform: &Platform,
     location: UserConfigLocation<'_>,
 ) -> Result<UserConfig, ExpectedError> {
-    UserConfig::for_host_platform(host_platform, location)
-        .map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })
+    UserConfig::load(location).map_err(|e| ExpectedError::UserConfigError { err: Box::new(e) })
 }
 
 pub(super) fn discover_target_triple(

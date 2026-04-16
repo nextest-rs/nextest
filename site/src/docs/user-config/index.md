@@ -50,7 +50,13 @@ platform = "cfg(windows)"
 ui.max-progress-running = 4
 ```
 
-Overrides are evaluated against the *host* platform (where nextest is running). For each setting, the first matching override provides the value. See the [user config reference](reference.md#platform-specific-overrides) for details.
+<!-- md:version 0.9.134 --> Overrides are evaluated against the _build target_: the platform nextest was compiled for. In earlier versions, the build target was used in some cases and the host platform in others. See the [user config reference](reference.md#platform-specific-overrides) for details.
+
+!!! note "User config vs. per-test overrides"
+
+    <!-- md:version 0.9.134 --> The `platform` spec is matched against nextest's build target. In most cases, this is the same as the host platform. But it can sometimes differ, for example when running a musl-targeted nextest binary on a glibc (`-gnu`) host. In this case, the build target is `x86_64-unknown-linux-musl` or `aarch64-unknown-linux-musl`, while the host platform is the corresponding `-gnu` platform.
+    
+    This is distinct from the `platform` field in [per-test overrides](../configuration/per-test-overrides.md#selecting-tests), which is matched against the host or target platform of the tests being run.
 
 !!! note "User config versus repository config"
 

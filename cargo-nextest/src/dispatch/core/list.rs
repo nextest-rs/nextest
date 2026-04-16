@@ -86,10 +86,8 @@ impl App {
 
         let binary_list = self.base.build_binary_list("test")?;
 
-        let resolved_user_config = resolve_user_config(
-            &self.base.build_platforms.host.platform,
-            self.base.early_args.user_config_location(),
-        )?;
+        let resolved_user_config =
+            resolve_user_config(self.base.early_args.user_config_location())?;
         let (pager_setting, paginate) =
             self.base.early_args.resolve_pager(&resolved_user_config.ui);
 
@@ -199,10 +197,8 @@ impl App {
 
         let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
 
-        let resolved_user_config = resolve_user_config(
-            &self.base.build_platforms.host.platform,
-            self.base.early_args.user_config_location(),
-        )?;
+        let resolved_user_config =
+            resolve_user_config(self.base.early_args.user_config_location())?;
         let (pager_setting, paginate) =
             self.base.early_args.resolve_pager(&resolved_user_config.ui);
 

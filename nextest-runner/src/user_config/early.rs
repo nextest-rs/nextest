@@ -31,8 +31,8 @@ use tracing::{debug, warn};
 /// parsing completes. It contains only the settings needed to decide whether
 /// and how to page help output.
 ///
-/// Use [`Self::for_platform`] to load from the default location. If an error
-/// occurs, defaults are used and a warning is logged.
+/// Use [`Self::load`] to load from the default location. If an error occurs,
+/// defaults are used and a warning is logged.
 #[derive(Clone, Debug)]
 pub struct EarlyUserConfig {
     /// Which pager to use.
@@ -44,35 +44,41 @@ pub struct EarlyUserConfig {
 }
 
 impl EarlyUserConfig {
-    /// Loads early user configuration for the given host platform.
+    /// Loads early user configuration.
     ///
     /// This attempts to load user config from the specified location and resolve
     /// pager settings. On any error, returns defaults and logs a warning.
     ///
     /// This is intentionally fault-tolerant: help paging is a nice-to-have
     /// feature, so we prefer degraded behavior over failing to show help.
-    pub fn for_platform(host_platform: &Platform, location: UserConfigLocation<'_>) -> Self {
-        match Self::try_load(host_platform, location) {
+    ///
+    /// Platform overrides in the user config are evaluated against the build
+    /// target of the nextest binary (via [`Platform::build_target`]). See
+    /// [`super::UserConfig::load`] for the rationale.
+    pub fn load(location: UserConfigLocation<'_>) -> Self {
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        match Self::try_load(&build_target, location) {
             Ok(config) => config,
             Err(error) => {
                 warn!(
                     "failed to load user config for pager settings, using defaults: {}",
                     error
                 );
-                Self::defaults(host_platform)
+                Self::defaults(&build_target)
             }
         }
     }
 
-    /// Returns the default pager configuration for the host platform.
-    fn defaults(host_platform: &Platform) -> Self {
+    /// Returns the default pager configuration for the build target.
+    fn defaults(build_target: &Platform) -> Self {
         let default_config = DefaultUserConfig::from_embedded();
-        Self::resolve_from_defaults(&default_config, host_platform)
+        Self::resolve_from_defaults(&default_config, build_target)
     }
 
     /// Attempts to load early user configuration from the specified location.
     fn try_load(
-        host_platform: &Platform,
+        build_target: &Platform,
         location: UserConfigLocation<'_>,
     ) -> Result<Self, EarlyConfigError> {
         let default_config = DefaultUserConfig::from_embedded();
@@ -80,7 +86,7 @@ impl EarlyUserConfig {
         match location {
             UserConfigLocation::Isolated => {
                 debug!("early user config: skipping (isolated)");
-                Ok(Self::resolve_from_defaults(&default_config, host_platform))
+                Ok(Self::resolve_from_defaults(&default_config, build_target))
             }
             UserConfigLocation::Explicit(path) => {
                 debug!("early user config: loading from explicit path {path}");
@@ -90,7 +96,7 @@ impl EarlyUserConfig {
                         Ok(Self::resolve(
                             &default_config,
                             Some(&user_config),
-                            host_platform,
+                            build_target,
                         ))
                     }
                     Ok(None) => Err(EarlyConfigError::FileNotFound(path.to_owned())),
@@ -98,7 +104,7 @@ impl EarlyUserConfig {
                 }
             }
             UserConfigLocation::Default => {
-                Self::try_load_from_default_locations(&default_config, host_platform)
+                Self::try_load_from_default_locations(&default_config, build_target)
             }
         }
     }
@@ -106,13 +112,13 @@ impl EarlyUserConfig {
     /// Attempts to load early user configuration from default locations.
     fn try_load_from_default_locations(
         default_config: &DefaultUserConfig,
-        host_platform: &Platform,
+        build_target: &Platform,
     ) -> Result<Self, EarlyConfigError> {
         let paths = user_config_paths().map_err(EarlyConfigError::Discovery)?;
 
         if paths.is_empty() {
             debug!("early user config: no config directory found, using defaults");
-            return Ok(Self::resolve_from_defaults(default_config, host_platform));
+            return Ok(Self::resolve_from_defaults(default_config, build_target));
         }
 
         // Try each candidate path.
@@ -123,7 +129,7 @@ impl EarlyUserConfig {
                     return Ok(Self::resolve(
                         default_config,
                         Some(&user_config),
-                        host_platform,
+                        build_target,
                     ));
                 }
                 Ok(None) => {
@@ -139,19 +145,19 @@ impl EarlyUserConfig {
         }
 
         debug!("early user config: no config file found, using defaults");
-        Ok(Self::resolve_from_defaults(default_config, host_platform))
+        Ok(Self::resolve_from_defaults(default_config, build_target))
     }
 
     /// Resolves configuration from defaults.
-    fn resolve_from_defaults(default_config: &DefaultUserConfig, host_platform: &Platform) -> Self {
-        Self::resolve(default_config, None, host_platform)
+    fn resolve_from_defaults(default_config: &DefaultUserConfig, build_target: &Platform) -> Self {
+        Self::resolve(default_config, None, build_target)
     }
 
     /// Resolves configuration from defaults and optional user config.
     fn resolve(
         default_config: &DefaultUserConfig,
         user_config: Option<&EarlyDeserializedConfig>,
-        host_platform: &Platform,
+        build_target: &Platform,
     ) -> Self {
         // Compile user overrides.
         let user_overrides: Vec<CompiledUiOverride> = user_config
@@ -181,7 +187,7 @@ impl EarlyUserConfig {
             &default_config.ui_overrides,
             user_config.and_then(|c| c.ui.pager.as_ref()),
             &user_overrides,
-            host_platform,
+            build_target,
             |data| data.pager(),
         );
 
@@ -190,7 +196,7 @@ impl EarlyUserConfig {
             &default_config.ui_overrides,
             user_config.and_then(|c| c.ui.paginate.as_ref()),
             &user_overrides,
-            host_platform,
+            build_target,
             |data| data.paginate(),
         );
 
@@ -200,7 +206,7 @@ impl EarlyUserConfig {
                 &default_config.ui_overrides,
                 user_config.and_then(|c| c.ui.streampager_interface()),
                 &user_overrides,
-                host_platform,
+                build_target,
                 |data| data.streampager_interface(),
             ),
             wrapping: resolve_ui_setting(
@@ -208,7 +214,7 @@ impl EarlyUserConfig {
                 &default_config.ui_overrides,
                 user_config.and_then(|c| c.ui.streampager_wrapping()),
                 &user_overrides,
-                host_platform,
+                build_target,
                 |data| data.streampager_wrapping(),
             ),
             show_ruler: resolve_ui_setting(
@@ -216,7 +222,7 @@ impl EarlyUserConfig {
                 &default_config.ui_overrides,
                 user_config.and_then(|c| c.ui.streampager_show_ruler()),
                 &user_overrides,
-                host_platform,
+                build_target,
                 |data| data.streampager_show_ruler(),
             ),
         };
@@ -332,12 +338,12 @@ struct EarlyDeserializedOverride {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::detect_host_platform_for_tests;
 
     #[test]
     fn test_early_user_config_defaults() {
-        let host = detect_host_platform_for_tests();
-        let config = EarlyUserConfig::defaults(&host);
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+        let config = EarlyUserConfig::defaults(&build_target);
 
         // This should have a configured pager.
         match &config.pager {
@@ -352,11 +358,9 @@ mod tests {
     }
 
     #[test]
-    fn test_early_user_config_from_host_platform() {
-        let host = detect_host_platform_for_tests();
-
+    fn test_early_user_config_load() {
         // This should not panic, even if no config file exists.
-        let config = EarlyUserConfig::for_platform(&host, UserConfigLocation::Default);
+        let config = EarlyUserConfig::load(UserConfigLocation::Default);
 
         // Should return a valid config.
         match &config.pager {

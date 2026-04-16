@@ -67,11 +67,19 @@ pub struct UserConfig {
 }
 
 impl UserConfig {
-    /// Loads and resolves user configuration for the given host platform.
-    pub fn for_host_platform(
-        host_platform: &Platform,
-        location: UserConfigLocation<'_>,
-    ) -> Result<Self, UserConfigError> {
+    /// Loads and resolves user configuration.
+    ///
+    /// Platform overrides in the user config are evaluated against the build
+    /// target of the nextest binary (via [`Platform::build_target`]), not
+    /// against the host platform reported by `rustc -vV`. User config expresses
+    /// per-user preferences for the running nextest binary, so the binary's
+    /// build target is the right thing to match against — and this keeps
+    /// resolution consistent across normal runs, archive replay, and commands
+    /// that don't otherwise need to detect a host platform.
+    pub fn load(location: UserConfigLocation<'_>) -> Result<Self, UserConfigError> {
+        let build_target =
+            Platform::build_target().expect("nextest is built for a supported platform");
+
         let user_config = CompiledUserConfig::from_location(location)?;
         let default_user_config = DefaultUserConfig::from_embedded();
 
@@ -89,7 +97,7 @@ impl UserConfig {
                 .as_ref()
                 .map(|c| &c.ui_overrides[..])
                 .unwrap_or(&[]),
-            host_platform,
+            &build_target,
         );
 
         let resolved_record = RecordConfig::resolve(
@@ -100,7 +108,7 @@ impl UserConfig {
                 .as_ref()
                 .map(|c| &c.record_overrides[..])
                 .unwrap_or(&[]),
-            host_platform,
+            &build_target,
         );
 
         Ok(Self {
