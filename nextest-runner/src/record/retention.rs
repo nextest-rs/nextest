@@ -62,7 +62,7 @@ impl RecordRetentionPolicy {
     ) -> Vec<ReportUuid> {
         // Sort by last_written_at (most recently used first) for LRU eviction.
         let mut sorted_runs: Vec<_> = runs.iter().collect();
-        sorted_runs.sort_by(|a, b| b.last_written_at.cmp(&a.last_written_at));
+        sorted_runs.sort_by_key(|run| std::cmp::Reverse(run.last_written_at));
 
         let mut to_delete = Vec::new();
         let mut kept_count = 0usize;
@@ -210,7 +210,7 @@ impl PrunePlan {
     ///
     /// The runs are sorted by start time (oldest first).
     pub(crate) fn new(mut runs: Vec<RecordedRunInfo>) -> Self {
-        runs.sort_by(|a, b| a.started_at.cmp(&b.started_at));
+        runs.sort_by_key(|run| run.started_at);
         Self { runs }
     }
 

@@ -1282,7 +1282,7 @@ fn analyze_per_project(dict_source: &DictSource) -> Result<()> {
     }
 
     // Sort by test count descending.
-    results.sort_by(|a, b| b.4.cmp(&a.4));
+    results.sort_by_key(|r| std::cmp::Reverse(r.4));
 
     eprintln!(
         "{:<15} {:>6} {:>10} {:>10} {:>10} {:>7}",
