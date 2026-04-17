@@ -17,8 +17,9 @@ use nextest_runner::{
     record::{
         ChromeTraceGroupBy, ChromeTraceMessageFormat, DisplayRunList, PortableRecording,
         PortableRecordingWriter, PruneKind, RecordReader, RecordRetentionPolicy, RecordedRunStatus,
-        RunIdIndex, RunIdOrRecordingSelector, RunIdSelector, RunStore, SnapshotWithReplayability,
-        Styles as RecordStyles, convert_to_chrome_trace, has_zip_extension, records_state_dir,
+        RunIdIndex, RunIdOrRecordingSelector, RunIdSelector, RunStore, STORE_FORMAT_VERSION,
+        SnapshotWithReplayability, Styles as RecordStyles, convert_to_chrome_trace,
+        has_zip_extension, records_state_dir,
     },
     redact::Redactor,
     user_config::{UserConfig, elements::RecordConfig},
@@ -286,10 +287,23 @@ impl ExportChromeTraceOpts {
             .map_err(|err| ExpectedError::RunIdResolutionError { err })?;
         let run_id = resolved.run_id;
 
-        // Warn if the run is incomplete.
         let run = snapshot
             .get_run(run_id)
             .expect("run ID was just resolved, so the run should exist");
+
+        // Check the store format version before opening the archive. Otherwise,
+        // an incompatible run would fail partway through event deserialization
+        // with a confusing error.
+        if let Err(incompatibility) = run
+            .store_format_version
+            .check_readable_by(STORE_FORMAT_VERSION)
+        {
+            return Err(ExpectedError::StoreVersionIncompatible {
+                run_id,
+                incompatibility,
+            });
+        }
+
         if matches!(
             run.status,
             RecordedRunStatus::Incomplete | RecordedRunStatus::Unknown
@@ -401,7 +415,18 @@ impl ExportOpts {
             .get_run(run_id)
             .expect("run ID was just resolved, so the run should exist");
 
-        // Warn if the run is incomplete.
+        // Check the store format version. If the current nextest can't read
+        // the run, don't let it produce a portable recording from it.
+        if let Err(incompatibility) = run
+            .store_format_version
+            .check_readable_by(STORE_FORMAT_VERSION)
+        {
+            return Err(ExpectedError::StoreVersionIncompatible {
+                run_id,
+                incompatibility,
+            });
+        }
+
         if matches!(
             run.status,
             RecordedRunStatus::Incomplete | RecordedRunStatus::Unknown

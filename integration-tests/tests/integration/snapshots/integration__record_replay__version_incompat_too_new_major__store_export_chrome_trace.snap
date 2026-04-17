@@ -1,0 +1,5 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&out.stderr_as_str(), temp_root)"
+---
+error: run 84000001-0000-0000-0000-000000000001 has incompatible store format: recording has major version 9999, but this nextest only supports version 2 (upgrade nextest to replay this recording)

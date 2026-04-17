@@ -256,6 +256,43 @@ pub const STORE_FORMAT_VERSION: StoreFormatVersion = StoreFormatVersion::new(
     StoreFormatMinorVersion::new(0),
 );
 
+/// Testing-only environment variable to force a specific store format version
+/// in the per-run metadata written to `runs.json.zst`.
+///
+/// Integration tests use this to synthesize runs that exercise version mismatch
+/// error paths. The override only affects the version reported in the metadata.
+/// The `store.zip` and `run.log.zst` payloads are still written in the real
+/// current format.
+///
+/// Format: `MAJOR.MINOR` (e.g. `9999.0`). Unset in normal use.
+pub(super) const FORCE_STORE_FORMAT_VERSION_ENV: &str = "__NEXTEST_FORCE_STORE_FORMAT_VERSION";
+
+/// Returns the store format version to record for a new run.
+pub(super) fn store_format_version_for_new_run() -> StoreFormatVersion {
+    let Some(raw) = std::env::var_os(FORCE_STORE_FORMAT_VERSION_ENV) else {
+        return STORE_FORMAT_VERSION;
+    };
+    let raw = raw.to_str().unwrap_or_else(|| {
+        panic!("{FORCE_STORE_FORMAT_VERSION_ENV} contains non-UTF-8 bytes");
+    });
+    let (major, minor) = raw.split_once('.').unwrap_or_else(|| {
+        panic!(
+            "{FORCE_STORE_FORMAT_VERSION_ENV}={raw:?} is malformed \
+             (expected MAJOR.MINOR, e.g. 9999.0)"
+        )
+    });
+    let major: u32 = major.parse().unwrap_or_else(|err| {
+        panic!("{FORCE_STORE_FORMAT_VERSION_ENV}={raw:?} has invalid major version: {err}")
+    });
+    let minor: u32 = minor.parse().unwrap_or_else(|err| {
+        panic!("{FORCE_STORE_FORMAT_VERSION_ENV}={raw:?} has invalid minor version: {err}")
+    });
+    StoreFormatVersion::new(
+        StoreFormatMajorVersion::new(major),
+        StoreFormatMinorVersion::new(minor),
+    )
+}
+
 /// Whether a runs.json.zst file can be written to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunsJsonWritePermission {

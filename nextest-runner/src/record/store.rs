@@ -14,6 +14,7 @@ use super::{
     format::{
         RUN_LOG_FILE_NAME, RecordedRunList, RunsJsonWritePermission, STORE_FORMAT_VERSION,
         STORE_ZIP_FILE_NAME, StoreFormatVersion, StoreVersionIncompatibility,
+        store_format_version_for_new_run,
     },
     recorder::{RunRecorder, StoreSizes},
     retention::{
@@ -425,7 +426,7 @@ impl<'store> ExclusiveLockedRunStore<'store> {
         let now = Local::now().fixed_offset();
         let run = RecordedRunInfo {
             run_id,
-            store_format_version: STORE_FORMAT_VERSION,
+            store_format_version: store_format_version_for_new_run(),
             nextest_version,
             started_at,
             last_written_at: now,
