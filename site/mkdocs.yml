@@ -134,6 +134,8 @@ nav:
                 - "User config reference": docs/user-config/reference.md
     - "Integrations":
           - "Overview": docs/integrations/index.md
+          - "Editors and IDEs":
+                - "Visual Studio Code": docs/integrations/vscode.md
           - docs/integrations/test-coverage.md
           - "Miri interpreter": docs/integrations/miri.md
           - "Debuggers and tracers": docs/integrations/debuggers-tracers.md
