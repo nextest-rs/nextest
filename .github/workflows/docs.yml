@@ -33,7 +33,7 @@ jobs:
       # Deployment is gated on push to main, so PR cache poisoning is not a concern.
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1 # zizmor: ignore[cache-poisoning]
       - name: Install nextest for help text in docs
-        uses: taiki-e/install-action@58e862542551f667fa44c8a2a4a1d64ad477c96a # v2.75.17
+        uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2.75.18
         with:
           tool: nextest
       - name: Install uv
