@@ -58,7 +58,7 @@ syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit
 ucd-trie = { version = "0.1.7" }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
@@ -71,7 +71,7 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
@@ -81,18 +81,18 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.aarch64-unknown-linux-gnu.dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 
 [target.aarch64-unknown-linux-gnu.build-dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 
 [target.x86_64-unknown-linux-musl.dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
@@ -105,7 +105,7 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.x86_64-unknown-linux-musl.build-dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
@@ -115,18 +115,18 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.aarch64-unknown-linux-musl.dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 
 [target.aarch64-unknown-linux-musl.build-dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 
 [target.x86_64-unknown-illumos.dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
@@ -139,7 +139,7 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.x86_64-unknown-illumos.build-dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
@@ -149,7 +149,7 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.x86_64-unknown-freebsd.dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
@@ -162,7 +162,7 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.x86_64-unknown-freebsd.build-dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
@@ -172,7 +172,7 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.aarch64-unknown-freebsd.dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
@@ -185,7 +185,7 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.aarch64-unknown-freebsd.build-dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
@@ -195,7 +195,7 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.aarch64-apple-darwin.dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
@@ -207,7 +207,7 @@ usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
-bitflags = { version = "2.11.0", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.185", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
