@@ -26,7 +26,7 @@ Then, if you run a test from within the UI, RustRover will invoke nextest.
 
     Currently, RustRover does not support debugging tests with the nextest environment configured. For more, see [_Debugger and tracer integration_](debuggers-tracers.md).
 
-# Learn more
+## Learn more
 
 - [RustRover 2026.1: Professional Testing With Native cargo-nextest Integration](https://blog.jetbrains.com/rust/2026/04/03/rustrover-2026-1-professional-testing-with-native-cargo-nextest-integration/) on the JetBrains blog
 - [RustRover documentation on nextest](https://www.jetbrains.com/help/rust/nextest.html)
