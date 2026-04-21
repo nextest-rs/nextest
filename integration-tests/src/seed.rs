@@ -3,10 +3,10 @@
 
 use crate::{env::set_env_vars_for_script, nextest_cli::CargoNextestCli};
 use camino::{Utf8Path, Utf8PathBuf};
-use color_eyre::eyre::Context;
+use color_eyre::eyre::{Context, eyre};
 use fs_err as fs;
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, time::SystemTime};
+use std::{collections::BTreeMap, path::PathBuf, process::Command, time::SystemTime};
 
 pub fn fixture_project_dir(workspace_root: &Utf8Path) -> Utf8PathBuf {
     workspace_root.join("fixtures/fixture-project")
@@ -70,15 +70,12 @@ pub fn compute_dir_hash(dir: impl AsRef<Utf8Path>) -> color_eyre::Result<Sha256H
     let files = collect_all_files(dir.as_ref(), true)?;
     let mut hasher = Sha256::new();
 
-    // Hash the path to `cargo` to ensure that the hash is different for
-    // different Rust versions.
-    hasher.update(b"nextest:cargo-path\0");
-    hasher.update(
-        std::env::var("CARGO")
-            .expect("this should be run under cargo")
-            .as_bytes(),
-    );
+    // Hash `rustc --version --verbose` so that a rustup toolchain update
+    // invalidates the cache.
+    hasher.update(b"nextest:rustc-version-verbose\0");
+    hasher.update(&rustc_version_verbose()?);
     hasher.update([0, 0]);
+
     for (file_name, metadata) in files {
         hasher.update(file_name.as_str());
         hasher.update([0]);
@@ -92,6 +89,31 @@ pub fn compute_dir_hash(dir: impl AsRef<Utf8Path>) -> color_eyre::Result<Sha256H
         hasher.update([0]);
     }
     Ok(Sha256Hash(hasher.finalize().into()))
+}
+
+fn rustc_version_verbose() -> color_eyre::Result<Vec<u8>> {
+    let rustc_path = match std::env::var_os("RUSTC") {
+        Some(path) => PathBuf::from(path),
+        None => PathBuf::from("rustc"),
+    };
+    let output = Command::new(&rustc_path)
+        .args(["--version", "--verbose"])
+        .output()
+        .wrap_err_with(|| {
+            format!(
+                "failed to spawn `{} --version --verbose`",
+                rustc_path.display()
+            )
+        })?;
+    if !output.status.success() {
+        return Err(eyre!(
+            "`{} --version --verbose` failed with {}\nstderr:\n{}",
+            rustc_path.display(),
+            output.status,
+            String::from_utf8_lossy(&output.stderr),
+        ));
+    }
+    Ok(output.stdout)
 }
 
 // Hash and collect metadata about all the files in a directory.
