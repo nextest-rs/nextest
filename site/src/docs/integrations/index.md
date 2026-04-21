@@ -8,7 +8,7 @@ description: Integrations with test coverage tools, Miri, Criterion, cargo-mutan
 Nextest integrates with several IDEs and editors:
 
 - [Visual Studio Code](vscode.md)
-- JetBrains RustRover (documentation coming soon)
+- [JetBrains RustRover](rustrover.md) (documentation coming soon)
 - Zed (documentation coming soon)
 
 Nextest also integrates with a number of other tools in the Rust ecosystem and beyond:
