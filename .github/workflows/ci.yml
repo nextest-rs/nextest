@@ -46,7 +46,7 @@ jobs:
       - name: Lint (rustfmt)
         run: cargo xfmt --check
       - name: Install cargo readme
-        uses: taiki-e/install-action@74e87cbfa15a59692b158178d8905a61bf6fca95 # v2.75.20
+        uses: taiki-e/install-action@787505cde8a44ea468a00478fe52baf23b15bccd # v2.75.21
         with:
           tool: cargo-readme
       - name: Run cargo readme
@@ -124,7 +124,7 @@ jobs:
           # Matrix instances (other than OS) need to be added to this explicitly
           key: ${{ matrix.rust-version }}
       - name: Install latest nextest release
-        uses: taiki-e/install-action@74e87cbfa15a59692b158178d8905a61bf6fca95 # v2.75.20
+        uses: taiki-e/install-action@787505cde8a44ea468a00478fe52baf23b15bccd # v2.75.21
         with:
           tool: nextest
       - name: Build nextest-metadata
