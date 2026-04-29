@@ -21,6 +21,21 @@ impl<'de> Deserialize<'de> for GlobalTimeout {
     }
 }
 
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for GlobalTimeout {
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "GlobalTimeout".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        generator.subschema_for::<String>()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

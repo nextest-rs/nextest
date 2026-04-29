@@ -1487,8 +1487,10 @@ impl NextestConfigImpl {
 
 // This is the form of `NextestConfig` that gets deserialized.
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
-struct NextestConfigDeserialize {
+pub(crate) struct NextestConfigDeserialize {
     store: StoreConfigImpl,
 
     // These are parsed as part of NextestConfigVersionOnly. They're re-parsed here to avoid
@@ -1539,9 +1541,21 @@ impl NextestConfigDeserialize {
     }
 }
 
+/// Returns the JSON schema for `.config/nextest.toml`.
+#[cfg(feature = "config-schema")]
+pub fn nextest_config_schema() -> schemars::Schema {
+    schemars::schema_for!(NextestConfigDeserialize)
+}
+
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 struct StoreConfigImpl {
+    #[cfg_attr(
+        feature = "config-schema",
+        schemars(schema_with = "String::json_schema")
+    )]
     dir: Utf8PathBuf,
 }
 
@@ -1653,6 +1667,8 @@ impl DefaultProfileImpl {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct CustomProfileImpl {
     /// The default set of tests run by `cargo nextest run`.

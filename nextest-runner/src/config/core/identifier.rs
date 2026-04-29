@@ -18,7 +18,14 @@ use unicode_normalization::{IsNormalized, UnicodeNormalization, is_nfc_quick};
 /// Identifiers can also be tool identifiers, which are of the form "@tool:tool-name:identifier".
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 #[serde(transparent)]
-pub struct ConfigIdentifier(SmolStr);
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+pub struct ConfigIdentifier(
+    #[cfg_attr(
+        feature = "config-schema",
+        schemars(schema_with = "String::json_schema")
+    )]
+    SmolStr,
+);
 
 impl ConfigIdentifier {
     /// Validates and creates a new identifier.

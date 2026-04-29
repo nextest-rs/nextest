@@ -1,0 +1,1296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NextestConfigDeserialize",
+  "type": "object",
+  "properties": {
+    "experimental": {
+      "$ref": "#/$defs/ExperimentalDeserialize"
+    },
+    "nextest-version": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NextestVersionDeserialize"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/CustomProfileImpl"
+      }
+    },
+    "script": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/SetupScriptConfig"
+      }
+    },
+    "scripts": {
+      "$ref": "#/$defs/ScriptConfig"
+    },
+    "store": {
+      "$ref": "#/$defs/StoreConfigImpl"
+    },
+    "test-groups": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/TestGroupConfig"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "store",
+    "profile"
+  ],
+  "$defs": {
+    "ArchiveConfig": {
+      "description": "Configuration for archives.",
+      "type": "object",
+      "properties": {
+        "include": {
+          "description": "Files to include in the archive.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArchiveInclude"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "include"
+      ]
+    },
+    "ArchiveInclude": {
+      "description": "Type for the archive-include key.\n\n# Notes\n\nThis is `deny_unknown_fields` because if we take additional arguments in the future, they're\nlikely to change semantics in an incompatible way.",
+      "type": "object",
+      "properties": {
+        "depth": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "enum": [
+                "infinite"
+              ]
+            }
+          ]
+        },
+        "on-missing": {
+          "$ref": "#/$defs/ArchiveIncludeOnMissing"
+        },
+        "path": {
+          "type": "string"
+        },
+        "relative-to": {
+          "$ref": "#/$defs/ArchiveRelativeTo"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "relative-to"
+      ]
+    },
+    "ArchiveIncludeOnMissing": {
+      "description": "What to do when an archive-include path is missing.",
+      "oneOf": [
+        {
+          "description": "Ignore and continue.",
+          "type": "string",
+          "const": "ignore"
+        },
+        {
+          "description": "Warn and continue.",
+          "type": "string",
+          "const": "warn"
+        },
+        {
+          "description": "Produce an error.",
+          "type": "string",
+          "const": "error"
+        }
+      ]
+    },
+    "ArchiveRelativeTo": {
+      "description": "Defines the base of the path",
+      "oneOf": [
+        {
+          "description": "Path starts at the target directory",
+          "type": "string",
+          "const": "target"
+        }
+      ]
+    },
+    "BenchConfig": {
+      "description": "Benchmark-specific configuration (deserialized form with optional fields).",
+      "type": "object",
+      "properties": {
+        "global-timeout": {
+          "description": "Global timeout for benchmarks.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "slow-timeout": {
+          "description": "Slow timeout for benchmarks.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlowTimeout"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CustomProfileImpl": {
+      "type": "object",
+      "properties": {
+        "archive": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArchiveConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bench": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BenchConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "default-filter": {
+          "description": "The default set of tests run by `cargo nextest run`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "fail-fast": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MaxFail"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failure-output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TestOutputDisplay"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "final-status-level": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FinalStatusLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "flaky-result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FlakyResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "global-timeout": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inherits": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "junit": {
+          "$ref": "#/$defs/JunitImpl"
+        },
+        "leak-timeout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LeakTimeout"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "overrides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeserializedOverride"
+          }
+        },
+        "retries": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RetryPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run-extra-args": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "default": null,
+          "items": {
+            "type": "string"
+          }
+        },
+        "scripts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeserializedProfileScriptConfig"
+          }
+        },
+        "slow-timeout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlowTimeout"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status-level": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatusLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "success-output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TestOutputDisplay"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "test-threads": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TestThreads"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "threads-required": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadsRequired"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CustomTestGroup": {
+      "description": "Represents a custom test group.",
+      "type": "string"
+    },
+    "DeserializedJunitOutput": {
+      "type": "object",
+      "properties": {
+        "flaky-fail-status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JunitFlakyFailStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "store-failure-output": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "store-success-output": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeserializedOverride": {
+      "description": "Deserialized form of profile overrides before compilation.",
+      "type": "object",
+      "properties": {
+        "bench": {
+          "description": "Benchmark-specific overrides.",
+          "$ref": "#/$defs/DeserializedOverrideBench"
+        },
+        "default-filter": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "failure-output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TestOutputDisplay"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "filter": {
+          "description": "The filterset to match against.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "flaky-result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FlakyResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "junit": {
+          "$ref": "#/$defs/DeserializedJunitOutput"
+        },
+        "leak-timeout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LeakTimeout"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "platform": {
+          "description": "The host and/or target platforms to match against.",
+          "$ref": "#/$defs/PlatformStrings"
+        },
+        "priority": {
+          "description": "Overrides. (This used to use serde(flatten) but that has issues:\nhttps://github.com/serde-rs/serde/issues/2312.)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TestPriority"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retries": {
+          "description": "Retry policy for this override.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RetryPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run-extra-args": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "default": null,
+          "items": {
+            "type": "string"
+          }
+        },
+        "slow-timeout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlowTimeout"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "success-output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TestOutputDisplay"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "test-group": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CustomTestGroup"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "threads-required": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadsRequired"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeserializedOverrideBench": {
+      "description": "Deserialized form of benchmark-specific overrides.",
+      "type": "object",
+      "properties": {
+        "slow-timeout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlowTimeout"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeserializedProfileScriptConfig": {
+      "description": "Deserialized form of profile-specific script configuration before compilation.",
+      "type": "object",
+      "properties": {
+        "filter": {
+          "description": "The filterset to match against.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "list-wrapper": {
+          "description": "The wrapper script to run at list time.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScriptId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "platform": {
+          "description": "The host and/or target platforms to match against.",
+          "$ref": "#/$defs/PlatformStrings"
+        },
+        "run-wrapper": {
+          "description": "The wrapper script to run at run time.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScriptId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "setup": {
+          "description": "The setup script or scripts to run.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ScriptId"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExperimentalDeserialize": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "setup-scripts",
+              "wrapper-scripts",
+              "benchmarks"
+            ]
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "benchmarks": {
+              "type": "boolean"
+            },
+            "setup-scripts": {
+              "type": "boolean"
+            },
+            "wrapper-scripts": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "FinalStatusLevel": {
+      "description": "Status level to show at the end of test runs in the reporter output.\n\nStatus levels are incremental.\n\nThis differs from [`StatusLevel`] in two ways:\n* It has a \"flaky\" test indicator that's different from \"retry\" (though \"retry\" works as an alias.)\n* It has a different ordering: skipped tests are prioritized over passing ones.",
+      "oneOf": [
+        {
+          "description": "No output.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "Only output test failures.",
+          "type": "string",
+          "const": "fail"
+        },
+        {
+          "description": "Output flaky tests.",
+          "type": "string",
+          "const": "flaky"
+        },
+        {
+          "description": "Output information about slow tests, and all variants above.",
+          "type": "string",
+          "const": "slow"
+        },
+        {
+          "description": "Output skipped tests in addition to all variants above.",
+          "type": "string",
+          "const": "skip"
+        },
+        {
+          "description": "Output leaky tests in addition to all variants above.",
+          "type": "string",
+          "const": "leak"
+        },
+        {
+          "description": "Output passing tests in addition to all variants above.",
+          "type": "string",
+          "const": "pass"
+        },
+        {
+          "description": "Currently has the same meaning as [`Pass`](Self::Pass).",
+          "type": "string",
+          "const": "all"
+        }
+      ]
+    },
+    "FlakyResult": {
+      "description": "Controls whether a flaky test is treated as a pass or a failure.",
+      "oneOf": [
+        {
+          "description": "The test is marked as failed.",
+          "type": "string",
+          "const": "fail"
+        },
+        {
+          "description": "The test is marked as passed.",
+          "type": "string",
+          "const": "pass"
+        }
+      ]
+    },
+    "JunitFlakyFailStatus": {
+      "description": "Controls how flaky-fail tests are reported in JUnit XML output.\n\nFlaky-fail tests are tests that eventually passed on retry but are configured\nwith `flaky-result = \"fail\"`. This setting controls whether they appear as\nfailures or successes in the JUnit report.",
+      "oneOf": [
+        {
+          "description": "Report flaky-fail tests as failures with `<failure>` and\n`<flakyFailure>` elements.",
+          "type": "string",
+          "const": "failure"
+        },
+        {
+          "description": "Report flaky-fail tests as successes, identical to flaky-pass tests.",
+          "type": "string",
+          "const": "success"
+        }
+      ]
+    },
+    "JunitImpl": {
+      "type": "object",
+      "properties": {
+        "flaky-fail-status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JunitFlakyFailStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "path": {
+          "type": "string",
+          "default": null
+        },
+        "report-name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "store-failure-output": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        },
+        "store-success-output": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "LeakTimeout": {
+      "title": "LeakTimeout",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "period": {
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/LeakTimeoutResult"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "period"
+          ]
+        }
+      ]
+    },
+    "LeakTimeoutResult": {
+      "description": "The result of controlling leak timeout behavior.",
+      "oneOf": [
+        {
+          "description": "The test is marked as failed.",
+          "type": "string",
+          "const": "fail"
+        },
+        {
+          "description": "The test is marked as passed.",
+          "type": "string",
+          "const": "pass"
+        }
+      ]
+    },
+    "MaxFail": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "max-fail": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "all"
+                  ]
+                }
+              ]
+            },
+            "terminate": {
+              "$ref": "#/$defs/TerminateMode"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "max-fail"
+          ]
+        }
+      ]
+    },
+    "NextestVersionDeserialize": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "recommended": {
+              "type": "string"
+            },
+            "required": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PlatformStrings": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RetryPolicy": {
+      "title": "RetryPolicy",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backoff": {
+              "type": "string",
+              "const": "fixed"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "delay": {
+              "type": "string"
+            },
+            "jitter": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "backoff",
+            "count"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backoff": {
+              "type": "string",
+              "const": "exponential"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "delay": {
+              "type": "string"
+            },
+            "jitter": {
+              "type": "boolean"
+            },
+            "max-delay": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "backoff",
+            "count",
+            "delay"
+          ]
+        }
+      ]
+    },
+    "ScriptCommand": {
+      "title": "ScriptCommand",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command-line": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              ]
+            },
+            "env": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "relative-to": {
+              "$ref": "#/$defs/ScriptCommandRelativeTo"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "command-line"
+          ]
+        }
+      ]
+    },
+    "ScriptCommandRelativeTo": {
+      "description": "The directory to interpret a [`ScriptCommand`] as relative to, in case it is\na relative path.\n\nIf specified, the program will be joined with the provided path.",
+      "oneOf": [
+        {
+          "description": "Do not join the program with any path.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "Join the program with the workspace root.",
+          "type": "string",
+          "const": "workspace-root"
+        },
+        {
+          "description": "Join the program with the target directory.",
+          "type": "string",
+          "const": "target"
+        }
+      ]
+    },
+    "ScriptConfig": {
+      "description": "The scripts defined in nextest configuration.",
+      "type": "object",
+      "properties": {
+        "setup": {
+          "description": "The setup scripts defined in nextest's configuration.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/SetupScriptConfig"
+          }
+        },
+        "wrapper": {
+          "description": "The wrapper scripts defined in nextest's configuration.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/WrapperScriptConfig"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ScriptId": {
+      "description": "The name of a configuration script.",
+      "type": "string"
+    },
+    "SetupScriptConfig": {
+      "description": "Deserialized form of setup script configuration before compilation.\n\nThis is defined as a top-level element.",
+      "type": "object",
+      "properties": {
+        "capture-stderr": {
+          "description": "Whether to capture standard error for this command.",
+          "type": "boolean",
+          "default": false
+        },
+        "capture-stdout": {
+          "description": "Whether to capture standard output for this command.",
+          "type": "boolean",
+          "default": false
+        },
+        "command": {
+          "description": "The command to run. The first element is the program and the second element is a list\nof arguments.",
+          "$ref": "#/$defs/ScriptCommand"
+        },
+        "junit": {
+          "description": "JUnit configuration for this script.",
+          "$ref": "#/$defs/SetupScriptJunitConfig"
+        },
+        "leak-timeout": {
+          "description": "An optional leak timeout for this command.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LeakTimeout"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "slow-timeout": {
+          "description": "An optional slow timeout for this command.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlowTimeout"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "command"
+      ]
+    },
+    "SetupScriptJunitConfig": {
+      "description": "A JUnit override configuration.",
+      "type": "object",
+      "properties": {
+        "store-failure-output": {
+          "description": "Whether to store failing output.\n\nDefaults to true.",
+          "type": "boolean",
+          "default": true
+        },
+        "store-success-output": {
+          "description": "Whether to store successful output.\n\nDefaults to true.",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "SlowTimeout": {
+      "title": "SlowTimeout",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "grace-period": {
+              "type": "string"
+            },
+            "on-timeout": {
+              "$ref": "#/$defs/SlowTimeoutResult"
+            },
+            "period": {
+              "type": "string"
+            },
+            "terminate-after": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "period"
+          ]
+        }
+      ]
+    },
+    "SlowTimeoutResult": {
+      "description": "The result of controlling slow timeout behavior.\n\nIn most situations a timed out test should be marked failing. However, there are certain\nclasses of tests which are expected to run indefinitely long, like fuzzing, which explores a\nhuge state space. For these tests it's nice to be able to treat a timeout as a success since\nthey generally check for invariants and other properties of the code under test during their\nexecution. A timeout in this context doesn't mean that there are no failing inputs, it just\nmeans that they weren't found up until that moment, which is still valuable information.",
+      "oneOf": [
+        {
+          "description": "The test is marked as failed.",
+          "type": "string",
+          "const": "fail"
+        },
+        {
+          "description": "The test is marked as passed.",
+          "type": "string",
+          "const": "pass"
+        }
+      ]
+    },
+    "StatusLevel": {
+      "description": "Status level to show in the reporter output.\n\nStatus levels are incremental: each level causes all the statuses listed above it to be output. For example,\n[`Slow`](Self::Slow) implies [`Retry`](Self::Retry) and [`Fail`](Self::Fail).",
+      "oneOf": [
+        {
+          "description": "No output.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "Only output test failures.",
+          "type": "string",
+          "const": "fail"
+        },
+        {
+          "description": "Output retries and failures.",
+          "type": "string",
+          "const": "retry"
+        },
+        {
+          "description": "Output information about slow tests, and all variants above.",
+          "type": "string",
+          "const": "slow"
+        },
+        {
+          "description": "Output information about leaky tests, and all variants above.",
+          "type": "string",
+          "const": "leak"
+        },
+        {
+          "description": "Output passing tests in addition to all variants above.",
+          "type": "string",
+          "const": "pass"
+        },
+        {
+          "description": "Output skipped tests in addition to all variants above.",
+          "type": "string",
+          "const": "skip"
+        },
+        {
+          "description": "Currently has the same meaning as [`Skip`](Self::Skip).",
+          "type": "string",
+          "const": "all"
+        }
+      ]
+    },
+    "StoreConfigImpl": {
+      "type": "object",
+      "properties": {
+        "dir": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "dir"
+      ]
+    },
+    "TerminateMode": {
+      "description": "Mode for terminating running tests when max-fail is exceeded.",
+      "oneOf": [
+        {
+          "description": "Wait for running tests to complete (default)",
+          "type": "string",
+          "const": "wait"
+        },
+        {
+          "description": "Terminate running tests immediately",
+          "type": "string",
+          "const": "immediate"
+        }
+      ]
+    },
+    "TestGroupConfig": {
+      "description": "Configuration for a test group.",
+      "type": "object",
+      "properties": {
+        "max-threads": {
+          "description": "The maximum number of threads allowed for this test group.",
+          "$ref": "#/$defs/TestThreads"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "max-threads"
+      ]
+    },
+    "TestOutputDisplay": {
+      "description": "When to display test output in the reporter.",
+      "oneOf": [
+        {
+          "description": "Show output immediately on execution completion.\n\nThis is the default for failing tests.",
+          "type": "string",
+          "const": "immediate"
+        },
+        {
+          "description": "Show output immediately, and at the end of a test run.",
+          "type": "string",
+          "const": "immediate-final"
+        },
+        {
+          "description": "Show output at the end of execution.",
+          "type": "string",
+          "const": "final"
+        },
+        {
+          "description": "Never show output.",
+          "type": "string",
+          "const": "never"
+        }
+      ]
+    },
+    "TestPriority": {
+      "description": "A test priority: a number between -100 and 100.\n\nThe sort order is from highest to lowest priority.",
+      "type": "integer",
+      "format": "int8",
+      "maximum": 100,
+      "minimum": -100
+    },
+    "TestThreads": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "not": {
+            "const": 0
+          }
+        },
+        {
+          "type": "string",
+          "enum": [
+            "num-cpus"
+          ]
+        }
+      ]
+    },
+    "ThreadsRequired": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "string",
+          "enum": [
+            "num-cpus",
+            "num-test-threads"
+          ]
+        }
+      ]
+    },
+    "WrapperScriptConfig": {
+      "description": "Deserialized form of wrapper script configuration before compilation.\n\nThis is defined as a top-level element.",
+      "type": "object",
+      "properties": {
+        "command": {
+          "description": "The command to run.",
+          "$ref": "#/$defs/ScriptCommand"
+        },
+        "target-runner": {
+          "description": "How this script interacts with a configured target runner, if any.\nDefaults to ignoring the target runner.",
+          "$ref": "#/$defs/WrapperScriptTargetRunner"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "command"
+      ]
+    },
+    "WrapperScriptTargetRunner": {
+      "description": "Interaction of wrapper script with a configured target runner.",
+      "oneOf": [
+        {
+          "description": "The target runner is ignored. This is the default.",
+          "type": "string",
+          "const": "ignore"
+        },
+        {
+          "description": "The target runner overrides the wrapper.",
+          "type": "string",
+          "const": "overrides-wrapper"
+        },
+        {
+          "description": "The target runner runs within the wrapper script. The command line used\nis `<wrapper> <target-runner> <test-binary> <args>`.",
+          "type": "string",
+          "const": "within-wrapper"
+        },
+        {
+          "description": "The target runner runs around the wrapper script. The command line used\nis `<target-runner> <wrapper> <test-binary> <args>`.",
+          "type": "string",
+          "const": "around-wrapper"
+        }
+      ]
+    }
+  }
+}

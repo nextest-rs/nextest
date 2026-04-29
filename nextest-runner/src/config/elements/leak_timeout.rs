@@ -29,8 +29,34 @@ impl Default for LeakTimeout {
     }
 }
 
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for LeakTimeout {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "LeakTimeout".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "title": "LeakTimeout",
+            "oneOf": [
+                generator.subschema_for::<String>(),
+                {
+                    "type": "object",
+                    "properties": {
+                        "period": generator.subschema_for::<String>(),
+                        "result": generator.subschema_for::<LeakTimeoutResult>(),
+                    },
+                    "required": ["period"],
+                    "additionalProperties": false,
+                }
+            ]
+        })
+    }
+}
+
 /// The result of controlling leak timeout behavior.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum LeakTimeoutResult {
