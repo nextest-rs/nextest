@@ -6,8 +6,9 @@ use crate::{
     cargo_config::{CargoConfigSource, CargoConfigs, DiscoveredConfig},
     errors::TargetTripleError,
 };
+use bstr::ByteSlice;
 use camino::{Utf8Path, Utf8PathBuf};
-use std::fmt;
+use std::{fmt, process::Command};
 use target_spec::{Platform, TargetFeatures, summaries::PlatformSummary};
 
 /// Represents a target triple that's being cross-compiled against.
@@ -85,6 +86,9 @@ impl TargetTriple {
                 json,
                 self.source.clone(),
             ),
+            TargetDefinitionLocation::RustcCfgCustom(rustc_cfg) => {
+                Ok(CargoTargetArg::RustcCfg(rustc_cfg.clone()))
+            }
         }
     }
 
@@ -245,6 +249,26 @@ impl TargetTriple {
             }
         }
 
+        if let Ok(stdout) = Command::new(std::env::var("RUSTC").unwrap_or("rustc".to_owned()))
+            .arg("--print=cfg")
+            .arg("--target")
+            .arg(triple_str_or_path)
+            .output()
+            .map(|out| out.stdout)
+            && let Ok(cfg_text) = stdout.to_str()
+            && let Ok(platform) = Platform::new_custom_cfg(
+                triple_str_or_path.to_owned(),
+                cfg_text,
+                TargetFeatures::Unknown,
+            )
+        {
+            return Ok(Self {
+                platform,
+                source,
+                location: TargetDefinitionLocation::RustcCfgCustom(cfg_text.to_owned()),
+            });
+        }
+
         // TODO: search in rustlib. This isn't documented and we need to implement searching for
         // rustlib:
         // https://github.com/rust-lang/rust/blob/2d0aa57684e10f7b3d3fe740ee18d431181583ad/compiler/rustc_target/src/spec/mod.rs#L2789-L2799.
@@ -338,6 +362,9 @@ pub enum CargoTargetArg {
 
     /// The target triple was extracted from metadata and stored in a temporary directory.
     Extracted(ExtractedCustomPlatform),
+
+    /// The target triple was extracted from `rustc --print=cfg`.
+    RustcCfg(String),
 }
 
 impl CargoTargetArg {
@@ -362,6 +389,9 @@ impl fmt::Display for CargoTargetArg {
             }
             Self::Extracted(extracted) => {
                 write!(f, "{}", extracted.path())
+            }
+            Self::RustcCfg(cfg) => {
+                write!(f, "{}", cfg)
             }
         }
     }
@@ -434,6 +464,9 @@ pub enum TargetDefinitionLocation {
 
     /// A custom definition was stored in metadata. The string is the JSON of the custom target.
     MetadataCustom(String),
+
+    /// The custom cfg retrieved by calling `rustc --print=cfg`.
+    RustcCfgCustom(String),
 }
 
 impl fmt::Display for TargetDefinitionLocation {
@@ -453,6 +486,9 @@ impl fmt::Display for TargetDefinitionLocation {
             }
             Self::MetadataCustom(_) => {
                 write!(f, "custom definition stored in metadata")
+            }
+            Self::RustcCfgCustom(_) => {
+                write!(f, "custom definition from the rustc cfg")
             }
         }
     }
