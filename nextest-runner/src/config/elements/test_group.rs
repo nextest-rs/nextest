@@ -107,13 +107,7 @@ impl fmt::Display for TestGroup {
 /// Represents a custom test group.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
-pub struct CustomTestGroup(
-    #[cfg_attr(
-        feature = "config-schema",
-        schemars(schema_with = "String::json_schema")
-    )]
-    ConfigIdentifier,
-);
+pub struct CustomTestGroup(ConfigIdentifier);
 
 impl CustomTestGroup {
     /// Creates a new custom test group, returning an error if it is invalid.
