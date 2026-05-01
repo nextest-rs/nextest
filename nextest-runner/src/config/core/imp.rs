@@ -1491,6 +1491,7 @@ impl NextestConfigImpl {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct NextestConfigDeserialize {
+    #[cfg_attr(feature = "config-schema", schemars(with = "Option<StoreConfigImpl>"))]
     store: StoreConfigImpl,
 
     // These are parsed as part of NextestConfigVersionOnly. They're re-parsed here to avoid
@@ -1498,18 +1499,26 @@ pub(crate) struct NextestConfigDeserialize {
     #[expect(unused)]
     #[serde(default)]
     nextest_version: Option<NextestVersionDeserialize>,
+
     #[expect(unused)]
     #[serde(default)]
     experimental: ExperimentalDeserialize,
 
     #[serde(default)]
     test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,
+
     // Previous version of setup scripts, stored as "script.<name of script>".
     #[serde(default, rename = "script")]
     old_setup_scripts: IndexMap<ScriptId, SetupScriptConfig>,
+
     #[serde(default)]
     scripts: ScriptConfig,
+
     #[serde(rename = "profile")]
+    #[cfg_attr(
+        feature = "config-schema",
+        schemars(with = "Option<HashMap<String, CustomProfileImpl>>")
+    )]
     profiles: HashMap<String, CustomProfileImpl>,
 }
 
@@ -1552,10 +1561,7 @@ pub fn nextest_config_schema() -> schemars::Schema {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 struct StoreConfigImpl {
-    #[cfg_attr(
-        feature = "config-schema",
-        schemars(schema_with = "String::json_schema")
-    )]
+    #[cfg_attr(feature = "config-schema", schemars(with = "Option<String>"))]
     dir: Utf8PathBuf,
 }
 

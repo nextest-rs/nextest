@@ -13,6 +13,10 @@ use std::fmt;
 #[serde(rename_all = "kebab-case")]
 pub struct ArchiveConfig {
     /// Files to include in the archive.
+    #[cfg_attr(
+        feature = "config-schema",
+        schemars(with = "Option<Vec<ArchiveInclude>>")
+    )]
     pub include: Vec<ArchiveInclude>,
 }
 

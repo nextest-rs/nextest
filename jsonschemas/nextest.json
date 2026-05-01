@@ -17,7 +17,10 @@
       ]
     },
     "profile": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "additionalProperties": {
         "$ref": "#/$defs/CustomProfileImpl"
       }
@@ -32,7 +35,14 @@
       "$ref": "#/$defs/ScriptConfig"
     },
     "store": {
-      "$ref": "#/$defs/StoreConfigImpl"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StoreConfigImpl"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "test-groups": {
       "type": "object",
@@ -42,10 +52,6 @@
     }
   },
   "additionalProperties": false,
-  "required": [
-    "store",
-    "profile"
-  ],
   "$defs": {
     "ArchiveConfig": {
       "description": "Configuration for archives.",
@@ -53,16 +59,16 @@
       "properties": {
         "include": {
           "description": "Files to include in the archive.",
-          "type": "array",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "$ref": "#/$defs/ArchiveInclude"
           }
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "include"
-      ]
+      "additionalProperties": false
     },
     "ArchiveInclude": {
       "description": "Type for the archive-include key.\n\n# Notes\n\nThis is `deny_unknown_fields` because if we take additional arguments in the future, they're\nlikely to change semantics in an incompatible way.",
@@ -152,6 +158,10 @@
         }
       },
       "additionalProperties": false
+    },
+    "ConfigIdentifier": {
+      "description": "An identifier used in configuration.\n\nThe identifier goes through some basic validation:\n* conversion to NFC\n* ensuring that it is of the form (XID_Start)(XID_Continue | -)*\n\nIdentifiers can also be tool identifiers, which are of the form \"@tool:tool-name:identifier\".",
+      "type": "string"
     },
     "CustomProfileImpl": {
       "type": "object",
@@ -340,7 +350,7 @@
     },
     "CustomTestGroup": {
       "description": "Represents a custom test group.",
-      "type": "string"
+      "$ref": "#/$defs/ConfigIdentifier"
     },
     "DeserializedJunitOutput": {
       "type": "object",
@@ -1149,13 +1159,13 @@
       "type": "object",
       "properties": {
         "dir": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "dir"
-      ]
+      "additionalProperties": false
     },
     "TerminateMode": {
       "description": "Mode for terminating running tests when max-fail is exceeded.",
