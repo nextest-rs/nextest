@@ -29,7 +29,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       - name: Install cargo-hakari
-        uses: taiki-e/install-action@51cd0b8c0499559d9a4d75c0f5c67bec3a894ec8 # v2.75.28
+        uses: taiki-e/install-action@b5fddbb5361bce8a06fb168c9d403a6cc552b084 # v2.75.29
         with:
           tool: cargo-hakari
       - name: Check workspace-hack Cargo.toml is up-to-date
