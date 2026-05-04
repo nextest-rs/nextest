@@ -183,6 +183,61 @@ fn parses_custom_target_cli_heuristic() {
     )
 }
 
+/// Tests the use of a custom target triple that gets resolved via `rustc --print=cfg`,
+/// because it is not part of the builtin rustc targets.
+/// e.g. targets in custom rustc builds
+///
+/// To test this with the default rustc, the script `rustc-cfg-test.sh` is used as RUSTC wrapper,
+/// and returns the `cfg_text` string if `--print=cfg` is given as first argument.
+/// All other invocations are forwarded to `rustc`.
+///
+/// Note: Only runs on *unix* targets due to the shell script. Since the behavior is OS independent,
+/// testing it for Unix is enough.
+#[cfg(target_family = "unix")]
+#[test]
+fn parses_custom_target_rustc_cfg() {
+    let script_path = fixture_project_dir()
+        .join("scripts")
+        .join("rustc-cfg-test.sh");
+
+    // SAFETY:
+    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+    unsafe { std::env::set_var("RUSTC", script_path) };
+
+    // This target is never going to exist.
+    let triple_str = "some-custom-cfg-target";
+    let triple = target_triple(Some(triple_str), Vec::new()).unwrap();
+
+    let cfg_text = r#"debug_assertions
+panic="abort"
+target_abi="eabihf"
+target_arch="arm"
+target_endian="little"
+target_env="musl"
+target_family="unix"
+target_has_atomic="16"
+target_has_atomic="32"
+target_has_atomic="8"
+target_has_atomic="ptr"
+target_os="linux"
+target_pointer_width="32"
+target_vendor="unknown"
+unix
+"#;
+
+    let platform = Platform::new_custom_cfg(triple_str, cfg_text, TargetFeatures::Unknown)
+        .expect("Failed to get platform from valid rustc cfg");
+
+    assert_eq!(
+        triple,
+        Some(TargetTriple {
+            platform,
+            source: TargetTripleSource::CliOption,
+            location: TargetDefinitionLocation::RustcCfgCustom(cfg_text.to_owned()),
+        })
+    )
+}
+
 fn target_triple(
     target_cli_option: Option<&str>,
     target_paths: Vec<Utf8PathBuf>,
