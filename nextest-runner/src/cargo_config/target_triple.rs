@@ -87,7 +87,10 @@ impl TargetTriple {
                 self.source.clone(),
             ),
             TargetDefinitionLocation::RustcCfgCustom(rustc_cfg) => {
-                Ok(CargoTargetArg::RustcCfg(rustc_cfg.clone()))
+                Ok(CargoTargetArg::RustcCfg(CustomRustcCfg {
+                    triple: self.platform.triple_str().to_string(),
+                    cfg: rustc_cfg.clone(),
+                }))
             }
         }
     }
@@ -345,6 +348,15 @@ impl TargetTriple {
     }
 }
 
+/// Stores target triple information for targets that were resolved using rustc `--print=cfg`.
+#[derive(Debug)]
+pub struct CustomRustcCfg {
+    /// The target triple that got passed.
+    pub triple: String,
+    /// The configuration returned by `rustc --print=cfg`, when passing the `triple` as target.
+    pub cfg: String,
+}
+
 /// Cargo argument for downstream commands.
 ///
 /// If it is necessary to run a Cargo command with a target triple, this enum provides the right
@@ -364,7 +376,7 @@ pub enum CargoTargetArg {
     Extracted(ExtractedCustomPlatform),
 
     /// The target triple was extracted from `rustc --print=cfg`.
-    RustcCfg(String),
+    RustcCfg(CustomRustcCfg),
 }
 
 impl CargoTargetArg {
@@ -391,7 +403,7 @@ impl fmt::Display for CargoTargetArg {
                 write!(f, "{}", extracted.path())
             }
             Self::RustcCfg(cfg) => {
-                write!(f, "{}", cfg)
+                write!(f, "{}", cfg.triple)
             }
         }
     }
