@@ -45,6 +45,35 @@ impl MaxFail {
     }
 }
 
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for MaxFail {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "MaxFail".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "oneOf": [
+                generator.subschema_for::<bool>(),
+                {
+                    "type": "object",
+                    "properties": {
+                        "max-fail": {
+                            "oneOf": [
+                                { "type": "integer", "minimum": 1 },
+                                { "type": "string", "enum": ["all"] }
+                            ]
+                        },
+                        "terminate": generator.subschema_for::<TerminateMode>(),
+                    },
+                    "required": ["max-fail"],
+                    "additionalProperties": false,
+                }
+            ]
+        })
+    }
+}
+
 impl FromStr for MaxFail {
     type Err = MaxFailParseError;
 
@@ -96,6 +125,7 @@ impl fmt::Display for MaxFail {
 
 /// Mode for terminating running tests when max-fail is exceeded.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum TerminateMode {
     /// Wait for running tests to complete (default)

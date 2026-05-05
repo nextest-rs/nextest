@@ -89,6 +89,22 @@ impl<'de> Deserialize<'de> for ThreadsRequired {
     }
 }
 
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for ThreadsRequired {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "ThreadsRequired".into()
+    }
+
+    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "oneOf": [
+                { "type": "integer", "minimum": 1 },
+                { "type": "string", "enum": ["num-cpus", "num-test-threads"] }
+            ]
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -60,8 +60,48 @@ impl RetryPolicy {
     }
 }
 
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for RetryPolicy {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "RetryPolicy".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "title": "RetryPolicy",
+            "oneOf": [
+                { "type": "integer", "minimum": 0 },
+                {
+                    "type": "object",
+                    "properties": {
+                        "backoff": { "type": "string", "const": "fixed" },
+                        "count": { "type": "integer", "minimum": 0 },
+                        "delay": generator.subschema_for::<String>(),
+                        "jitter": generator.subschema_for::<bool>(),
+                    },
+                    "required": ["backoff", "count"],
+                    "additionalProperties": false,
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "backoff": { "type": "string", "const": "exponential" },
+                        "count": { "type": "integer", "minimum": 0 },
+                        "delay": generator.subschema_for::<String>(),
+                        "jitter": generator.subschema_for::<bool>(),
+                        "max-delay": generator.subschema_for::<String>(),
+                    },
+                    "required": ["backoff", "count", "delay"],
+                    "additionalProperties": false,
+                }
+            ]
+        })
+    }
+}
+
 /// Controls whether a flaky test is treated as a pass or a failure.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum FlakyResult {

@@ -981,6 +981,8 @@ pub(crate) enum FilterOrDefaultFilter {
 
 /// Deserialized form of profile overrides before compilation.
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct DeserializedOverride {
     /// The host and/or target platforms to match against.
@@ -1031,6 +1033,8 @@ pub(in crate::config) struct DeserializedOverride {
 }
 
 #[derive(Copy, Clone, Debug, Default, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct DeserializedJunitOutput {
     store_success_output: Option<bool>,
@@ -1040,6 +1044,8 @@ pub(in crate::config) struct DeserializedJunitOutput {
 
 /// Deserialized form of benchmark-specific overrides.
 #[derive(Clone, Debug, Default, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct DeserializedOverrideBench {
     #[serde(
@@ -1050,6 +1056,8 @@ pub(in crate::config) struct DeserializedOverrideBench {
 }
 
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 pub(in crate::config) struct PlatformStrings {
     pub(in crate::config) host: Option<String>,
     pub(in crate::config) target: Option<String>,

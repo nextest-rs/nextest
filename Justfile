@@ -6,6 +6,10 @@ set positional-arguments
 help:
     just --list
 
+# Generate the JSON schema for .config/nextest.toml.
+generate-config-schema:
+    cargo run --package nextest-runner --features config-schema --bin generate-config-schema
+
 # Get the signing key slug to use on Windows, given a tag's ref_name.
 win-signing-policy-slug ref_name:
     #!/usr/bin/env bash
