@@ -54,7 +54,7 @@ phf_shared = { version = "0.11.3" }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 serde_core = { version = "1.0.228", features = ["alloc", "rc"] }
-syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 ucd-trie = { version = "0.1.7" }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
@@ -66,7 +66,7 @@ mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -100,7 +100,7 @@ mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -134,7 +134,7 @@ mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -157,7 +157,7 @@ mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -180,7 +180,7 @@ mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -202,7 +202,7 @@ mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.117", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
