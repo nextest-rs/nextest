@@ -67,6 +67,9 @@ For your test harness to work with nextest, follow these rules (keywords are as 
 - **The test harness MUST support being run with `<test-name> --nocapture --exact`**. This command will be called with every test name provided by the harness in `--list` above.
 - **The test harness SHOULD be able to efficiently identify single tests specified with --exact.** This is particularly relevant in cases where discovering the list of tests is expensive. This can lead to a quadratic performance issue: if there are N tests in your custom test harness, nextest will run your test harness N times, leading to O(N²) behavior.
 
-  For example, when invoked with `--exact`, the datatest-stable library switches to a more efficient mode. This is implemented in [datatest-stable PR #49](https://github.com/nextest-rs/datatest-stable/pull/49).
+  Some examples:
+
+  - [datatest-stable](https://github.com/nextest-rs/datatest-stable) switches to a more efficient mode when run with `--exact`, where it determines the name of the file to test with by parsing the test name. This is implemented in [datatest-stable PR #49](https://github.com/nextest-rs/datatest-stable/pull/49).
+  - The default Rust libtest harness switches from a linear search to a binary search when run with `--exact`. The wall-clock improvement is significant when [running tests under the Miri interpreter](../integrations/miri.md). This is implemented in [rust-lang/rust PR #154865](https://github.com/rust-lang/rust/pull/154865).
 
 - <!-- md:version 0.9.117 --> **For test names ending with `: benchmark`, the harness MUST support running them with `<test-name> --nocapture --exact --bench`.** This enables benchmarks [to be run](../features/benchmarks.md) via `cargo nextest bench`.
