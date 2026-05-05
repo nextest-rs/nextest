@@ -151,7 +151,7 @@ unicode-normalization = "0.1.25"
 ureq = { version = "3.3.0", default-features = false }
 usdt = "0.6.0"
 walkdir = "2.5.0"
-whoami = "2.1.1"
+whoami = "2.1.2"
 win32job = "2.0.3"
 windows-sys = "0.61.2"
 winnow = "1.0.2"
