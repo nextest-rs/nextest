@@ -14,6 +14,7 @@ use serde::Deserialize;
 /// Status levels are incremental: each level causes all the statuses listed above it to be output. For example,
 /// [`Slow`](Self::Slow) implies [`Retry`](Self::Retry) and [`Fail`](Self::Fail).
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
@@ -51,6 +52,7 @@ pub enum StatusLevel {
 /// * It has a "flaky" test indicator that's different from "retry" (though "retry" works as an alias.)
 /// * It has a different ordering: skipped tests are prioritized over passing ones.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]

@@ -34,6 +34,8 @@ impl DefaultBenchConfig {
 
 /// Benchmark-specific configuration (deserialized form with optional fields).
 #[derive(Clone, Debug, Default, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct BenchConfig {
     /// Slow timeout for benchmarks.

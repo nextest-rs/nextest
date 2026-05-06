@@ -42,6 +42,8 @@ use swrite::{SWrite, swrite};
 
 /// The scripts defined in nextest configuration.
 #[derive(Clone, Debug, Default, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub struct ScriptConfig {
     // These maps are ordered because scripts are used in the order they're defined.
@@ -540,8 +542,15 @@ impl CompiledProfileScripts<FinalConfig> {
 
 /// The name of a configuration script.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord, serde::Serialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(transparent)]
-pub struct ScriptId(pub ConfigIdentifier);
+pub struct ScriptId(
+    #[cfg_attr(
+        feature = "config-schema",
+        schemars(schema_with = "String::json_schema")
+    )]
+    pub ConfigIdentifier,
+);
 
 impl ScriptId {
     /// Creates a new script identifier.
@@ -603,6 +612,8 @@ impl ProfileScriptData {
 
 /// Deserialized form of profile-specific script configuration before compilation.
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct DeserializedProfileScriptConfig {
     /// The host and/or target platforms to match against.
@@ -614,6 +625,7 @@ pub(in crate::config) struct DeserializedProfileScriptConfig {
     filter: Option<String>,
 
     /// The setup script or scripts to run.
+    #[cfg_attr(feature = "config-schema", schemars(schema_with = "script_ids_schema"))]
     #[serde(default, deserialize_with = "deserialize_script_ids")]
     setup: Vec<ScriptId>,
 
@@ -626,10 +638,25 @@ pub(in crate::config) struct DeserializedProfileScriptConfig {
     run_wrapper: Option<ScriptId>,
 }
 
+#[cfg(feature = "config-schema")]
+fn script_ids_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "oneOf": [
+            generator.subschema_for::<ScriptId>(),
+            {
+                "type": "array",
+                "items": generator.subschema_for::<ScriptId>(),
+            }
+        ]
+    })
+}
+
 /// Deserialized form of setup script configuration before compilation.
 ///
 /// This is defined as a top-level element.
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub struct SetupScriptConfig {
     /// The command to run. The first element is the program and the second element is a list
@@ -673,6 +700,8 @@ impl SetupScriptConfig {
 
 /// A JUnit override configuration.
 #[derive(Copy, Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub struct SetupScriptJunitConfig {
     /// Whether to store successful output.
@@ -701,6 +730,8 @@ impl Default for SetupScriptJunitConfig {
 ///
 /// This is defined as a top-level element.
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub struct WrapperScriptConfig {
     /// The command to run.
@@ -714,6 +745,8 @@ pub struct WrapperScriptConfig {
 
 /// Interaction of wrapper script with a configured target runner.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(rename_all = "kebab-case"))]
 pub enum WrapperScriptTargetRunner {
     /// The target runner is ignored. This is the default.
     #[default]
@@ -949,6 +982,48 @@ impl<'de> Deserialize<'de> for ScriptCommand {
     }
 }
 
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for ScriptCommand {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "ScriptCommand".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        fn non_empty_string_array_schema(
+            generator: &mut schemars::SchemaGenerator,
+        ) -> schemars::Schema {
+            schemars::json_schema!({
+                "type": "array",
+                "items": generator.subschema_for::<String>(),
+                "minItems": 1,
+            })
+        }
+
+        schemars::json_schema!({
+            "title": "ScriptCommand",
+            "oneOf": [
+                generator.subschema_for::<String>(),
+                non_empty_string_array_schema(generator),
+                {
+                    "type": "object",
+                    "properties": {
+                        "command-line": {
+                            "oneOf": [
+                                generator.subschema_for::<String>(),
+                                non_empty_string_array_schema(generator),
+                            ]
+                        },
+                        "env": generator.subschema_for::<std::collections::BTreeMap<String, String>>(),
+                        "relative-to": generator.subschema_for::<ScriptCommandRelativeTo>(),
+                    },
+                    "required": ["command-line"],
+                    "additionalProperties": false,
+                }
+            ]
+        })
+    }
+}
+
 struct CommandInnerSeed;
 
 impl<'de> serde::de::DeserializeSeed<'de> for CommandInnerSeed {
@@ -1007,6 +1082,8 @@ impl<'de> serde::de::DeserializeSeed<'de> for CommandInnerSeed {
 ///
 /// If specified, the program will be joined with the provided path.
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(rename_all = "kebab-case"))]
 pub enum ScriptCommandRelativeTo {
     /// Do not join the program with any path.
     None,

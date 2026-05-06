@@ -8,7 +8,10 @@ use serde::{Deserialize, Deserializer};
 ///
 /// The sort order is from highest to lowest priority.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct TestPriority(i8);
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+pub struct TestPriority(
+    #[cfg_attr(feature = "config-schema", schemars(range(min = -100, max = 100)))] i8,
+);
 
 impl TestPriority {
     /// Creates a new `TestPriority`.

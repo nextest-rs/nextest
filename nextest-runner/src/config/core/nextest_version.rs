@@ -258,6 +258,36 @@ impl<'de> Deserialize<'de> for ExperimentalDeserialize {
     }
 }
 
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for ExperimentalDeserialize {
+    fn schema_name() -> Cow<'static, str> {
+        "ExperimentalDeserialize".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "oneOf": [
+                {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": ["setup-scripts", "wrapper-scripts", "benchmarks"],
+                    },
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "setup-scripts": generator.subschema_for::<bool>(),
+                        "wrapper-scripts": generator.subschema_for::<bool>(),
+                        "benchmarks": generator.subschema_for::<bool>(),
+                    },
+                    "additionalProperties": true,
+                }
+            ]
+        })
+    }
+}
+
 /// Nextest version configuration.
 ///
 /// Similar to the [`rust-version`
@@ -654,6 +684,29 @@ impl<'de> Deserialize<'de> for NextestVersionDeserialize {
         }
 
         deserializer.deserialize_any(V)
+    }
+}
+
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for NextestVersionDeserialize {
+    fn schema_name() -> Cow<'static, str> {
+        "NextestVersionDeserialize".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "oneOf": [
+                generator.subschema_for::<String>(),
+                {
+                    "type": "object",
+                    "properties": {
+                        "required": generator.subschema_for::<String>(),
+                        "recommended": generator.subschema_for::<String>(),
+                    },
+                    "additionalProperties": false,
+                }
+            ]
+        })
     }
 }
 

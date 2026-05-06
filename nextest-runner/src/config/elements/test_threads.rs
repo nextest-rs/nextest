@@ -105,6 +105,22 @@ impl<'de> Deserialize<'de> for TestThreads {
     }
 }
 
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for TestThreads {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "TestThreads".into()
+    }
+
+    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "oneOf": [
+                { "type": "integer", "not": { "const": 0 } },
+                { "type": "string", "enum": ["num-cpus"] }
+            ]
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

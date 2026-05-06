@@ -30,6 +30,36 @@ impl SlowTimeout {
     };
 }
 
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for SlowTimeout {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "SlowTimeout".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "title": "SlowTimeout",
+            "oneOf": [
+                generator.subschema_for::<String>(),
+                {
+                    "type": "object",
+                    "properties": {
+                        "period": generator.subschema_for::<String>(),
+                        "terminate-after": {
+                            "type": ["integer", "null"],
+                            "minimum": 1,
+                        },
+                        "grace-period": generator.subschema_for::<String>(),
+                        "on-timeout": generator.subschema_for::<SlowTimeoutResult>(),
+                    },
+                    "required": ["period"],
+                    "additionalProperties": false,
+                }
+            ]
+        })
+    }
+}
+
 fn default_grace_period() -> Duration {
     Duration::from_secs(10)
 }
@@ -89,6 +119,7 @@ where
 /// execution. A timeout in this context doesn't mean that there are no failing inputs, it just
 /// means that they weren't found up until that moment, which is still valuable information.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum SlowTimeoutResult {

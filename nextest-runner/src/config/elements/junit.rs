@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 /// with `flaky-result = "fail"`. This setting controls whether they appear as
 /// failures or successes in the JUnit report.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum JunitFlakyFailStatus {
@@ -116,9 +117,15 @@ impl DefaultJunitImpl {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct JunitImpl {
     #[serde(default)]
+    #[cfg_attr(
+        feature = "config-schema",
+        schemars(schema_with = "String::json_schema")
+    )]
     pub(in crate::config) path: Option<Utf8PathBuf>,
     #[serde(default)]
     pub(in crate::config) report_name: Option<String>,

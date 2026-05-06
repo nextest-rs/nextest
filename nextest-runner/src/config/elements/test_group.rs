@@ -80,6 +80,21 @@ impl FromStr for TestGroup {
     }
 }
 
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for TestGroup {
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "TestGroup".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        generator.subschema_for::<CustomTestGroup>()
+    }
+}
+
 impl fmt::Display for TestGroup {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -91,6 +106,7 @@ impl fmt::Display for TestGroup {
 
 /// Represents a custom test group.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 pub struct CustomTestGroup(ConfigIdentifier);
 
 impl CustomTestGroup {
@@ -135,6 +151,8 @@ impl fmt::Display for CustomTestGroup {
 
 /// Configuration for a test group.
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub struct TestGroupConfig {
     /// The maximum number of threads allowed for this test group.
