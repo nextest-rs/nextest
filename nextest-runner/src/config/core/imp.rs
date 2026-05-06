@@ -1553,7 +1553,12 @@ impl NextestConfigDeserialize {
 /// Returns the JSON schema for `.config/nextest.toml`.
 #[cfg(feature = "config-schema")]
 pub fn nextest_config_schema() -> schemars::Schema {
-    schemars::schema_for!(NextestConfigDeserialize)
+    let mut schema = schemars::schema_for!(NextestConfigDeserialize);
+    schema.insert(
+        "x-tombi-toml-version".to_owned(),
+        serde_json::Value::String("v1.1.0".to_owned()),
+    );
+    schema
 }
 
 #[derive(Clone, Debug, Deserialize)]

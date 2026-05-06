@@ -52,6 +52,7 @@
     }
   },
   "additionalProperties": false,
+  "x-tombi-toml-version": "v1.1.0",
   "$defs": {
     "ArchiveConfig": {
       "description": "Configuration for archives.",

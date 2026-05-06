@@ -1,0 +1,6 @@
+[lsp]
+formatting.enabled = false
+
+[[schemas]]
+path = "jsonschemas/nextest.json"
+include = [".config/nextest.toml"]
