@@ -52,6 +52,9 @@ impl UpdateVersionOpt {
     }
 }
 
+/// The embedded JSON Schema for nextest's configuration format.
+static CONFIG_SCHEMA: &str = include_str!("../../../../jsonschemas/nextest.json");
+
 /// Subcommands for self.
 #[derive(Debug, Subcommand)]
 pub(crate) enum SelfCommand {
@@ -62,6 +65,8 @@ pub(crate) enum SelfCommand {
         #[arg(long, value_enum, default_value_t = SetupSource::User)]
         source: SetupSource,
     },
+    /// Print the JSON Schema for `nextest.toml`.
+    ConfigSchema,
     #[cfg_attr(
         not(feature = "self-update"),
         doc = "This version of nextest does not have self-update enabled.\n\
@@ -114,6 +119,10 @@ impl SelfCommand {
     pub(crate) fn exec(self, output: OutputContext) -> Result<i32> {
         match self {
             Self::Setup { source: _source } => Ok(0),
+            Self::ConfigSchema => {
+                print!("{CONFIG_SCHEMA}");
+                Ok(0)
+            }
             Self::Update {
                 version,
                 check,
