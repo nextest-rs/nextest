@@ -165,12 +165,14 @@ color-eyre.workspace = true
 fixture-data.workspace = true
 indoc.workspace = true
 insta.workspace = true
+jsonschema.workspace = true
 maplit.workspace = true
 newtype-uuid = { workspace = true, features = ["proptest1"] }
 nextest-metadata = { workspace = true, features = ["proptest1"] }
 pathdiff.workspace = true
 pretty_assertions.workspace = true
 proptest.workspace = true
+schemars.workspace = true
 test-strategy.workspace = true
 test-case.workspace = true
 tracing-subscriber.workspace = true

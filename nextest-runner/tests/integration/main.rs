@@ -4,5 +4,6 @@
 //! Integration tests for nextest-runner.
 
 mod fixtures;
+mod jsonschema;
 mod target_runner;
 mod target_triple;
