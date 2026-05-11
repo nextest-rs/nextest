@@ -260,31 +260,56 @@ impl<'de> Deserialize<'de> for ExperimentalDeserialize {
 
 #[cfg(feature = "config-schema")]
 impl schemars::JsonSchema for ExperimentalDeserialize {
-    fn schema_name() -> Cow<'static, str> {
-        "ExperimentalDeserialize".into()
+    fn schema_name() -> String {
+        "ExperimentalDeserialize".to_owned()
     }
 
-    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        schemars::json_schema!({
-            "oneOf": [
-                {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "enum": ["setup-scripts", "wrapper-scripts", "benchmarks"],
-                    },
-                },
-                {
-                    "type": "object",
-                    "properties": {
-                        "setup-scripts": generator.subschema_for::<bool>(),
-                        "wrapper-scripts": generator.subschema_for::<bool>(),
-                        "benchmarks": generator.subschema_for::<bool>(),
-                    },
-                    "additionalProperties": true,
-                }
-            ]
-        })
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
+        use schemars::schema::*;
+
+        let items = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::String))),
+            enum_values: Some(vec![
+                "setup-scripts".into(),
+                "wrapper-scripts".into(),
+                "benchmarks".into(),
+            ]),
+            ..Default::default()
+        };
+        let array = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Array))),
+            array: Some(Box::new(ArrayValidation {
+                items: Some(SingleOrVec::Single(Box::new(items.into()))),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut properties = schemars::Map::new();
+        properties.insert("setup-scripts".to_owned(), generator.subschema_for::<bool>());
+        properties.insert(
+            "wrapper-scripts".to_owned(),
+            generator.subschema_for::<bool>(),
+        );
+        properties.insert("benchmarks".to_owned(), generator.subschema_for::<bool>());
+        let object = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Object))),
+            object: Some(Box::new(ObjectValidation {
+                properties,
+                additional_properties: Some(Box::new(Schema::Bool(true))),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        SchemaObject {
+            subschemas: Some(Box::new(SubschemaValidation {
+                one_of: Some(vec![array.into(), object.into()]),
+                ..Default::default()
+            })),
+            ..Default::default()
+        }
+        .into()
     }
 }
 
@@ -689,24 +714,37 @@ impl<'de> Deserialize<'de> for NextestVersionDeserialize {
 
 #[cfg(feature = "config-schema")]
 impl schemars::JsonSchema for NextestVersionDeserialize {
-    fn schema_name() -> Cow<'static, str> {
-        "NextestVersionDeserialize".into()
+    fn schema_name() -> String {
+        "NextestVersionDeserialize".to_owned()
     }
 
-    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        schemars::json_schema!({
-            "oneOf": [
-                generator.subschema_for::<String>(),
-                {
-                    "type": "object",
-                    "properties": {
-                        "required": generator.subschema_for::<String>(),
-                        "recommended": generator.subschema_for::<String>(),
-                    },
-                    "additionalProperties": false,
-                }
-            ]
-        })
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
+        use schemars::schema::*;
+
+        let mut properties = schemars::Map::new();
+        properties.insert("required".to_owned(), generator.subschema_for::<String>());
+        properties.insert(
+            "recommended".to_owned(),
+            generator.subschema_for::<String>(),
+        );
+        let object = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Object))),
+            object: Some(Box::new(ObjectValidation {
+                properties,
+                additional_properties: Some(Box::new(Schema::Bool(false))),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        SchemaObject {
+            subschemas: Some(Box::new(SubschemaValidation {
+                one_of: Some(vec![generator.subschema_for::<String>(), object.into()]),
+                ..Default::default()
+            })),
+            ..Default::default()
+        }
+        .into()
     }
 }
 

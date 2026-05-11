@@ -62,40 +62,95 @@ impl RetryPolicy {
 
 #[cfg(feature = "config-schema")]
 impl schemars::JsonSchema for RetryPolicy {
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        "RetryPolicy".into()
+    fn schema_name() -> String {
+        "RetryPolicy".to_owned()
     }
 
-    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        schemars::json_schema!({
-            "title": "RetryPolicy",
-            "oneOf": [
-                { "type": "integer", "minimum": 0 },
-                {
-                    "type": "object",
-                    "properties": {
-                        "backoff": { "type": "string", "const": "fixed" },
-                        "count": { "type": "integer", "minimum": 0 },
-                        "delay": generator.subschema_for::<String>(),
-                        "jitter": generator.subschema_for::<bool>(),
-                    },
-                    "required": ["backoff", "count"],
-                    "additionalProperties": false,
-                },
-                {
-                    "type": "object",
-                    "properties": {
-                        "backoff": { "type": "string", "const": "exponential" },
-                        "count": { "type": "integer", "minimum": 0 },
-                        "delay": generator.subschema_for::<String>(),
-                        "jitter": generator.subschema_for::<bool>(),
-                        "max-delay": generator.subschema_for::<String>(),
-                    },
-                    "required": ["backoff", "count", "delay"],
-                    "additionalProperties": false,
-                }
-            ]
-        })
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
+        use schemars::schema::*;
+
+        let non_neg_integer = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Integer))),
+            number: Some(Box::new(NumberValidation {
+                minimum: Some(0.0),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let backoff_fixed = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::String))),
+            const_value: Some(serde_json::Value::String("fixed".to_owned())),
+            ..Default::default()
+        };
+        let mut fixed_props = schemars::Map::new();
+        fixed_props.insert("backoff".to_owned(), backoff_fixed.into());
+        fixed_props.insert("count".to_owned(), non_neg_integer.clone().into());
+        fixed_props.insert("delay".to_owned(), generator.subschema_for::<String>());
+        fixed_props.insert("jitter".to_owned(), generator.subschema_for::<bool>());
+        let fixed_required: schemars::Set<String> =
+            ["backoff".to_owned(), "count".to_owned()].into_iter().collect();
+        let fixed_object = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Object))),
+            object: Some(Box::new(ObjectValidation {
+                properties: fixed_props,
+                required: fixed_required,
+                additional_properties: Some(Box::new(Schema::Bool(false))),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let backoff_exp = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::String))),
+            const_value: Some(serde_json::Value::String("exponential".to_owned())),
+            ..Default::default()
+        };
+        let mut exp_props = schemars::Map::new();
+        exp_props.insert("backoff".to_owned(), backoff_exp.into());
+        exp_props.insert("count".to_owned(), non_neg_integer.into());
+        exp_props.insert("delay".to_owned(), generator.subschema_for::<String>());
+        exp_props.insert("jitter".to_owned(), generator.subschema_for::<bool>());
+        exp_props.insert("max-delay".to_owned(), generator.subschema_for::<String>());
+        let exp_required: schemars::Set<String> =
+            ["backoff".to_owned(), "count".to_owned(), "delay".to_owned()]
+                .into_iter()
+                .collect();
+        let exp_object = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Object))),
+            object: Some(Box::new(ObjectValidation {
+                properties: exp_props,
+                required: exp_required,
+                additional_properties: Some(Box::new(Schema::Bool(false))),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        SchemaObject {
+            metadata: Some(Box::new(Metadata {
+                title: Some("RetryPolicy".to_owned()),
+                ..Default::default()
+            })),
+            subschemas: Some(Box::new(SubschemaValidation {
+                one_of: Some(vec![
+                    SchemaObject {
+                        instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Integer))),
+                        number: Some(Box::new(NumberValidation {
+                            minimum: Some(0.0),
+                            ..Default::default()
+                        })),
+                        ..Default::default()
+                    }
+                    .into(),
+                    fixed_object.into(),
+                    exp_object.into(),
+                ]),
+                ..Default::default()
+            })),
+            ..Default::default()
+        }
+        .into()
     }
 }
 

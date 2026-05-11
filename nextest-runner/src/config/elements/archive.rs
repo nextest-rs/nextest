@@ -253,17 +253,37 @@ impl<'de> Deserialize<'de> for RecursionDepth {
 
 #[cfg(feature = "config-schema")]
 impl schemars::JsonSchema for RecursionDepth {
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        "RecursionDepth".into()
+    fn schema_name() -> String {
+        "RecursionDepth".to_owned()
     }
 
-    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        schemars::json_schema!({
-            "oneOf": [
-                { "type": "integer", "minimum": 0 },
-                { "type": "string", "enum": ["infinite"] }
-            ]
-        })
+    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
+        use schemars::schema::*;
+
+        SchemaObject {
+            subschemas: Some(Box::new(SubschemaValidation {
+                one_of: Some(vec![
+                    SchemaObject {
+                        instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Integer))),
+                        number: Some(Box::new(NumberValidation {
+                            minimum: Some(0.0),
+                            ..Default::default()
+                        })),
+                        ..Default::default()
+                    }
+                    .into(),
+                    SchemaObject {
+                        instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::String))),
+                        enum_values: Some(vec!["infinite".into()]),
+                        ..Default::default()
+                    }
+                    .into(),
+                ]),
+                ..Default::default()
+            })),
+            ..Default::default()
+        }
+        .into()
     }
 }
 

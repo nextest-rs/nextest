@@ -31,26 +31,43 @@ impl Default for LeakTimeout {
 
 #[cfg(feature = "config-schema")]
 impl schemars::JsonSchema for LeakTimeout {
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        "LeakTimeout".into()
+    fn schema_name() -> String {
+        "LeakTimeout".to_owned()
     }
 
-    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        schemars::json_schema!({
-            "title": "LeakTimeout",
-            "oneOf": [
-                generator.subschema_for::<String>(),
-                {
-                    "type": "object",
-                    "properties": {
-                        "period": generator.subschema_for::<String>(),
-                        "result": generator.subschema_for::<LeakTimeoutResult>(),
-                    },
-                    "required": ["period"],
-                    "additionalProperties": false,
-                }
-            ]
-        })
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
+        use schemars::schema::*;
+
+        let mut properties = schemars::Map::new();
+        properties.insert("period".to_owned(), generator.subschema_for::<String>());
+        properties.insert(
+            "result".to_owned(),
+            generator.subschema_for::<LeakTimeoutResult>(),
+        );
+        let required: schemars::Set<String> = ["period".to_owned()].into_iter().collect();
+        let object = SchemaObject {
+            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Object))),
+            object: Some(Box::new(ObjectValidation {
+                properties,
+                required,
+                additional_properties: Some(Box::new(Schema::Bool(false))),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        SchemaObject {
+            metadata: Some(Box::new(Metadata {
+                title: Some("LeakTimeout".to_owned()),
+                ..Default::default()
+            })),
+            subschemas: Some(Box::new(SubschemaValidation {
+                one_of: Some(vec![generator.subschema_for::<String>(), object.into()]),
+                ..Default::default()
+            })),
+            ..Default::default()
+        }
+        .into()
     }
 }
 

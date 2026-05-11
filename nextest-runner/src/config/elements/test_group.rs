@@ -82,15 +82,17 @@ impl FromStr for TestGroup {
 
 #[cfg(feature = "config-schema")]
 impl schemars::JsonSchema for TestGroup {
-    fn inline_schema() -> bool {
-        true
+    // Always inline this schema rather than using a $ref, since it delegates
+    // directly to CustomTestGroup.
+    fn is_referenceable() -> bool {
+        false
     }
 
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        "TestGroup".into()
+    fn schema_name() -> String {
+        "TestGroup".to_owned()
     }
 
-    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
         generator.subschema_for::<CustomTestGroup>()
     }
 }
