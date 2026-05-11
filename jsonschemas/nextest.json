@@ -444,7 +444,7 @@
           "$ref": "#/$defs/PlatformStrings"
         },
         "priority": {
-          "description": "Overrides. (This used to use serde(flatten) but that has issues:\nhttps://github.com/serde-rs/serde/issues/2312.)",
+          "description": "Overrides.",
           "anyOf": [
             {
               "$ref": "#/$defs/TestPriority"

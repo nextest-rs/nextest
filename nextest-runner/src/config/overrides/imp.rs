@@ -991,8 +991,9 @@ pub(in crate::config) struct DeserializedOverride {
     /// The filterset to match against.
     #[serde(default)]
     filter: Option<String>,
-    /// Overrides. (This used to use serde(flatten) but that has issues:
-    /// https://github.com/serde-rs/serde/issues/2312.)
+    /// Overrides.
+    // (This used to use serde(flatten) but that has issues:
+    //  https://github.com/serde-rs/serde/issues/2312.)
     #[serde(default)]
     priority: Option<TestPriority>,
     #[serde(default)]
