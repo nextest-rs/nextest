@@ -1486,12 +1486,20 @@ impl NextestConfigImpl {
 }
 
 // This is the form of `NextestConfig` that gets deserialized.
+//
+// NOTE: NextestConfigDeserialize doesn't map directly to nextest.toml,
+//       as some fields are preprocessed with default values.
+//       Thus, parts of the JSON Schema require customization.
 #[derive(Clone, Debug, Deserialize)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct NextestConfigDeserialize {
-    #[cfg_attr(feature = "config-schema", schemars(with = "Option<StoreConfigImpl>"))]
+    #[cfg_attr(
+        feature = "config-schema",
+        // NOTE: `store` in the JSON Schema should be optional, given the pre-deserialization logic.
+        schemars(with = "Option<StoreConfigImpl>")
+    )]
     store: StoreConfigImpl,
 
     // These are parsed as part of NextestConfigVersionOnly. They're re-parsed here to avoid
@@ -1517,6 +1525,7 @@ pub(crate) struct NextestConfigDeserialize {
     #[serde(rename = "profile")]
     #[cfg_attr(
         feature = "config-schema",
+        // NOTE: `profiles` in the JSON Schema should be optional, given the pre-deserialization logic.
         schemars(with = "Option<HashMap<String, CustomProfileImpl>>")
     )]
     profiles: HashMap<String, CustomProfileImpl>,
@@ -1566,7 +1575,11 @@ pub fn nextest_config_schema() -> schemars::schema::RootSchema {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 struct StoreConfigImpl {
-    #[cfg_attr(feature = "config-schema", schemars(with = "Option<String>"))]
+    #[cfg_attr(
+        feature = "config-schema",
+        // NOTE: `dir` in the JSON Schema should be optional, given the pre-deserialization logic.
+        schemars(with = "Option<String>")
+    )]
     dir: Utf8PathBuf,
 }
 

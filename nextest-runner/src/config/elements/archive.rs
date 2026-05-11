@@ -15,6 +15,7 @@ pub struct ArchiveConfig {
     /// Files to include in the archive.
     #[cfg_attr(
         feature = "config-schema",
+        // NOTE: `include` in the JSON Schema should be optional, given the pre-deserialization logic.
         schemars(with = "Option<Vec<ArchiveInclude>>")
     )]
     pub include: Vec<ArchiveInclude>,
