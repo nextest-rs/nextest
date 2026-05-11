@@ -28,7 +28,6 @@ pub struct ArchiveConfig {
 /// likely to change semantics in an incompatible way.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ArchiveInclude {
     // We only allow well-formed relative paths within the target directory here. It's possible we
