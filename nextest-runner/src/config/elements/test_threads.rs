@@ -107,43 +107,17 @@ impl<'de> Deserialize<'de> for TestThreads {
 
 #[cfg(feature = "config-schema")]
 impl schemars::JsonSchema for TestThreads {
-    fn schema_name() -> String {
-        "TestThreads".to_owned()
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "TestThreads".into()
     }
 
-    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
-        use schemars::schema::*;
-
-        // Represent non-zero integer as integer with "not: {const: 0}".
-        let not_zero = SchemaObject {
-            const_value: Some(serde_json::Value::Number(0.into())),
-            ..Default::default()
-        };
-        let non_zero_integer = SchemaObject {
-            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Integer))),
-            subschemas: Some(Box::new(SubschemaValidation {
-                not: Some(Box::new(not_zero.into())),
-                ..Default::default()
-            })),
-            ..Default::default()
-        };
-
-        SchemaObject {
-            subschemas: Some(Box::new(SubschemaValidation {
-                one_of: Some(vec![
-                    non_zero_integer.into(),
-                    SchemaObject {
-                        instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::String))),
-                        enum_values: Some(vec!["num-cpus".into()]),
-                        ..Default::default()
-                    }
-                    .into(),
-                ]),
-                ..Default::default()
-            })),
-            ..Default::default()
-        }
-        .into()
+    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "oneOf": [
+                { "type": "integer", "not": { "const": 0 } },
+                { "type": "string", "enum": ["num-cpus"] }
+            ]
+        })
     }
 }
 

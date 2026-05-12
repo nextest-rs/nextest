@@ -91,37 +91,17 @@ impl<'de> Deserialize<'de> for ThreadsRequired {
 
 #[cfg(feature = "config-schema")]
 impl schemars::JsonSchema for ThreadsRequired {
-    fn schema_name() -> String {
-        "ThreadsRequired".to_owned()
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "ThreadsRequired".into()
     }
 
-    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
-        use schemars::schema::*;
-
-        SchemaObject {
-            subschemas: Some(Box::new(SubschemaValidation {
-                one_of: Some(vec![
-                    SchemaObject {
-                        instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Integer))),
-                        number: Some(Box::new(NumberValidation {
-                            minimum: Some(1.0),
-                            ..Default::default()
-                        })),
-                        ..Default::default()
-                    }
-                    .into(),
-                    SchemaObject {
-                        instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::String))),
-                        enum_values: Some(vec!["num-cpus".into(), "num-test-threads".into()]),
-                        ..Default::default()
-                    }
-                    .into(),
-                ]),
-                ..Default::default()
-            })),
-            ..Default::default()
-        }
-        .into()
+    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "oneOf": [
+                { "type": "integer", "minimum": 1 },
+                { "type": "string", "enum": ["num-cpus", "num-test-threads"] }
+            ]
+        })
     }
 }
 

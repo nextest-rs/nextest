@@ -1064,38 +1064,28 @@ pub(in crate::config) struct PlatformStrings {
 
 #[cfg(feature = "config-schema")]
 impl schemars::JsonSchema for PlatformStrings {
-    fn schema_name() -> String {
-        "PlatformStrings".to_owned()
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "PlatformStrings".into()
     }
 
-    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
-        use schemars::schema::*;
-
-        let nullable_string = SchemaObject {
-            instance_type: Some(SingleOrVec::Vec(vec![InstanceType::String, InstanceType::Null])),
-            ..Default::default()
-        };
-        let mut properties = schemars::Map::new();
-        properties.insert("host".to_owned(), nullable_string.clone().into());
-        properties.insert("target".to_owned(), nullable_string.into());
-        let object = SchemaObject {
-            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Object))),
-            object: Some(Box::new(ObjectValidation {
-                properties,
-                additional_properties: Some(Box::new(Schema::Bool(false))),
-                ..Default::default()
-            })),
-            ..Default::default()
-        };
-
-        SchemaObject {
-            subschemas: Some(Box::new(SubschemaValidation {
-                one_of: Some(vec![generator.subschema_for::<String>(), object.into()]),
-                ..Default::default()
-            })),
-            ..Default::default()
-        }
-        .into()
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "oneOf": [
+                generator.subschema_for::<String>(),
+                {
+                    "type": "object",
+                    "properties": {
+                        "host": {
+                            "type": ["string", "null"],
+                        },
+                        "target": {
+                            "type": ["string", "null"],
+                        },
+                    },
+                    "additionalProperties": false,
+                }
+            ]
+        })
     }
 }
 

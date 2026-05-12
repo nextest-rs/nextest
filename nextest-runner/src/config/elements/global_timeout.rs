@@ -23,17 +23,15 @@ impl<'de> Deserialize<'de> for GlobalTimeout {
 
 #[cfg(feature = "config-schema")]
 impl schemars::JsonSchema for GlobalTimeout {
-    // Always inline this schema rather than using a $ref, since it is a simple
-    // string wrapper.
-    fn is_referenceable() -> bool {
-        false
+    fn inline_schema() -> bool {
+        true
     }
 
-    fn schema_name() -> String {
-        "GlobalTimeout".to_owned()
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "GlobalTimeout".into()
     }
 
-    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
         generator.subschema_for::<String>()
     }
 }

@@ -47,60 +47,30 @@ impl MaxFail {
 
 #[cfg(feature = "config-schema")]
 impl schemars::JsonSchema for MaxFail {
-    fn schema_name() -> String {
-        "MaxFail".to_owned()
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "MaxFail".into()
     }
 
-    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
-        use schemars::schema::*;
-
-        let max_fail_value = SchemaObject {
-            subschemas: Some(Box::new(SubschemaValidation {
-                one_of: Some(vec![
-                    SchemaObject {
-                        instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Integer))),
-                        number: Some(Box::new(NumberValidation {
-                            minimum: Some(1.0),
-                            ..Default::default()
-                        })),
-                        ..Default::default()
-                    }
-                    .into(),
-                    SchemaObject {
-                        instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::String))),
-                        enum_values: Some(vec!["all".into()]),
-                        ..Default::default()
-                    }
-                    .into(),
-                ]),
-                ..Default::default()
-            })),
-            ..Default::default()
-        };
-
-        let mut properties = schemars::Map::new();
-        properties.insert("max-fail".to_owned(), max_fail_value.into());
-        properties.insert("terminate".to_owned(), generator.subschema_for::<TerminateMode>());
-        let required: schemars::Set<String> = ["max-fail".to_owned()].into_iter().collect();
-        let object = SchemaObject {
-            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Object))),
-            object: Some(Box::new(ObjectValidation {
-                properties,
-                required,
-                additional_properties: Some(Box::new(Schema::Bool(false))),
-                ..Default::default()
-            })),
-            ..Default::default()
-        };
-
-        SchemaObject {
-            subschemas: Some(Box::new(SubschemaValidation {
-                one_of: Some(vec![generator.subschema_for::<bool>(), object.into()]),
-                ..Default::default()
-            })),
-            ..Default::default()
-        }
-        .into()
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "oneOf": [
+                generator.subschema_for::<bool>(),
+                {
+                    "type": "object",
+                    "properties": {
+                        "max-fail": {
+                            "oneOf": [
+                                { "type": "integer", "minimum": 1 },
+                                { "type": "string", "enum": ["all"] }
+                            ]
+                        },
+                        "terminate": generator.subschema_for::<TerminateMode>(),
+                    },
+                    "required": ["max-fail"],
+                    "additionalProperties": false,
+                }
+            ]
+        })
     }
 }
 

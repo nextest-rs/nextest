@@ -639,26 +639,16 @@ pub(in crate::config) struct DeserializedProfileScriptConfig {
 }
 
 #[cfg(feature = "config-schema")]
-fn script_ids_schema(generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
-    use schemars::schema::*;
-
-    let array = SchemaObject {
-        instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Array))),
-        array: Some(Box::new(ArrayValidation {
-            items: Some(SingleOrVec::Single(Box::new(generator.subschema_for::<ScriptId>()))),
-            ..Default::default()
-        })),
-        ..Default::default()
-    };
-
-    SchemaObject {
-        subschemas: Some(Box::new(SubschemaValidation {
-            one_of: Some(vec![generator.subschema_for::<ScriptId>(), array.into()]),
-            ..Default::default()
-        })),
-        ..Default::default()
-    }
-    .into()
+fn script_ids_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "oneOf": [
+            generator.subschema_for::<ScriptId>(),
+            {
+                "type": "array",
+                "items": generator.subschema_for::<ScriptId>(),
+            }
+        ]
+    })
 }
 
 /// Deserialized form of setup script configuration before compilation.
@@ -994,76 +984,43 @@ impl<'de> Deserialize<'de> for ScriptCommand {
 
 #[cfg(feature = "config-schema")]
 impl schemars::JsonSchema for ScriptCommand {
-    fn schema_name() -> String {
-        "ScriptCommand".to_owned()
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "ScriptCommand".into()
     }
 
-    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::schema::Schema {
-        use schemars::schema::*;
-
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
         fn non_empty_string_array_schema(
             generator: &mut schemars::SchemaGenerator,
-        ) -> schemars::schema::Schema {
-            SchemaObject {
-                instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Array))),
-                array: Some(Box::new(ArrayValidation {
-                    items: Some(SingleOrVec::Single(Box::new(generator.subschema_for::<String>()))),
-                    min_items: Some(1),
-                    ..Default::default()
-                })),
-                ..Default::default()
-            }
-            .into()
+        ) -> schemars::Schema {
+            schemars::json_schema!({
+                "type": "array",
+                "items": generator.subschema_for::<String>(),
+                "minItems": 1,
+            })
         }
 
-        let command_line = SchemaObject {
-            subschemas: Some(Box::new(SubschemaValidation {
-                one_of: Some(vec![
-                    generator.subschema_for::<String>(),
-                    non_empty_string_array_schema(generator),
-                ]),
-                ..Default::default()
-            })),
-            ..Default::default()
-        };
-        let mut properties = schemars::Map::new();
-        properties.insert("command-line".to_owned(), command_line.into());
-        properties.insert(
-            "env".to_owned(),
-            generator.subschema_for::<std::collections::BTreeMap<String, String>>(),
-        );
-        properties.insert(
-            "relative-to".to_owned(),
-            generator.subschema_for::<ScriptCommandRelativeTo>(),
-        );
-        let required: schemars::Set<String> = ["command-line".to_owned()].into_iter().collect();
-        let object = SchemaObject {
-            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Object))),
-            object: Some(Box::new(ObjectValidation {
-                properties,
-                required,
-                additional_properties: Some(Box::new(Schema::Bool(false))),
-                ..Default::default()
-            })),
-            ..Default::default()
-        };
-
-        SchemaObject {
-            metadata: Some(Box::new(Metadata {
-                title: Some("ScriptCommand".to_owned()),
-                ..Default::default()
-            })),
-            subschemas: Some(Box::new(SubschemaValidation {
-                one_of: Some(vec![
-                    generator.subschema_for::<String>(),
-                    non_empty_string_array_schema(generator),
-                    object.into(),
-                ]),
-                ..Default::default()
-            })),
-            ..Default::default()
-        }
-        .into()
+        schemars::json_schema!({
+            "title": "ScriptCommand",
+            "oneOf": [
+                generator.subschema_for::<String>(),
+                non_empty_string_array_schema(generator),
+                {
+                    "type": "object",
+                    "properties": {
+                        "command-line": {
+                            "oneOf": [
+                                generator.subschema_for::<String>(),
+                                non_empty_string_array_schema(generator),
+                            ]
+                        },
+                        "env": generator.subschema_for::<std::collections::BTreeMap<String, String>>(),
+                        "relative-to": generator.subschema_for::<ScriptCommandRelativeTo>(),
+                    },
+                    "required": ["command-line"],
+                    "additionalProperties": false,
+                }
+            ]
+        })
     }
 }
 
