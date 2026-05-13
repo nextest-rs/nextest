@@ -183,59 +183,6 @@ fn parses_custom_target_cli_heuristic() {
     )
 }
 
-/// Tests the use of a custom target triple that gets resolved via `rustc --print=cfg`,
-/// because it is not part of the builtin rustc targets.
-/// e.g. targets in custom rustc builds
-///
-/// To test this with the default rustc, the `rustc-shim` is used as RUSTC wrapper.
-/// The shim returns the `cfg_text` string if `--print=cfg --target` are given as arguments,
-/// and `__NEXTEST_RUSTC_SHIM_PRINT_CFG` is set to `true`.
-/// All other invocations are forwarded to `rustc`.
-///
-/// **Note:** Requires that `NEXTEST_BIN_EXE_rustc_shim` is set and contains the path to the `rustc-shim` binary.
-#[test]
-fn parses_custom_target_rustc_cfg() {
-    let rustc_shim_bin: Utf8PathBuf = std::env::var("NEXTEST_BIN_EXE_rustc_shim")
-        .expect("NEXTEST_BIN_EXE_rustc_shim should be set")
-        .into();
-
-    // SAFETY:
-    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
-    unsafe { std::env::set_var("__NEXTEST_RUSTC_SHIM_PRINT_CFG", "true") };
-    unsafe { std::env::set_var("RUSTC", rustc_shim_bin) };
-
-    // This target is never going to exist.
-    let triple_str = "some-custom-cfg-target";
-    let triple = target_triple(Some(triple_str), Vec::new()).unwrap();
-
-    let cfg_text = r#"debug_assertions
-panic="abort"
-target_abi="eabihf"
-target_arch="arm"
-target_endian="little"
-target_env=""
-target_has_atomic="16"
-target_has_atomic="32"
-target_has_atomic="8"
-target_has_atomic="ptr"
-target_os="none"
-target_pointer_width="32"
-target_vendor="unknown"
-"#;
-
-    let platform = Platform::new_custom_cfg(triple_str, cfg_text, TargetFeatures::Unknown)
-        .expect("Failed to get platform from valid rustc cfg");
-
-    assert_eq!(
-        triple,
-        Some(TargetTriple {
-            platform,
-            source: TargetTripleSource::CliOption,
-            location: TargetDefinitionLocation::RustcCfgCustom(cfg_text.to_owned()),
-        })
-    )
-}
-
 fn target_triple(
     target_cli_option: Option<&str>,
     target_paths: Vec<Utf8PathBuf>,

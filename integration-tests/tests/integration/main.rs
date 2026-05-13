@@ -3048,3 +3048,55 @@ fn test_banned_predicates() {
     let output = run_parse_filterset(&env_info, "default-filter", "default()");
     insta::assert_snapshot!("banned_default_in_default_filter", output.stderr_as_str());
 }
+
+/// Tests the use of a custom target triple that gets resolved via `rustc --print=cfg`,
+/// because it is not part of the builtin rustc targets.
+/// e.g. targets in custom rustc builds
+///
+/// To test this with the default rustc, the `rustc-shim` is used as RUSTC wrapper.
+/// The shim returns the `cfg_text` string if `--print=cfg --target` are given as arguments,
+/// and `__NEXTEST_RUSTC_SHIM_PRINT_CFG` is set to `true`.
+/// All other invocations are forwarded to `rustc`.
+#[test]
+fn test_custom_target_rustc_cfg() {
+    let env_info = set_env_vars_for_test();
+
+    // Set RUSTC to the shim.
+    let shim_rustc = &env_info.rustc_shim_bin;
+
+    // This target is never going to exist.
+    let triple_str = "some-custom-cfg-target";
+    let cfg_text = r#"debug_assertions
+panic="abort"
+target_abi="eabihf"
+target_arch="arm"
+target_endian="little"
+target_env=""
+target_has_atomic="16"
+target_has_atomic="32"
+target_has_atomic="8"
+target_has_atomic="ptr"
+target_os="none"
+target_pointer_width="32"
+target_vendor="unknown"
+"#;
+
+    let mut command = CargoNextestCli::for_test(&env_info);
+    let output = command
+        .args(["debug", "print-cargo-target-arg", "--target", triple_str])
+        .env("RUSTC", shim_rustc)
+        .env("__NEXTEST_RUSTC_SHIM_PRINT_CFG", "true")
+        .output();
+
+    let output = String::from_utf8_lossy(&output.stdout);
+
+    // Note: output format defined by `DebugCommand::PrintCargoTargetArg` in cargo-nextest/src/dispatch/utility/debug.rs
+    assert_eq!(
+        output.trim(),
+        format!(
+            "triple={}\n## rustc --print=cfg #########\n{}",
+            triple_str, cfg_text
+        )
+        .trim()
+    );
+}

@@ -69,6 +69,16 @@ pub(crate) enum DebugCommand {
         output_format: BuildPlatformsOutputFormat,
     },
 
+    /// Print cargo target arguments for the given target triple.
+    PrintCargoTargetArg {
+        /// The target triple to use.
+        #[arg(long)]
+        target: String,
+        /// Override a Cargo Configuration value.
+        #[arg(long, value_name = "KEY=VALUE")]
+        config: Vec<String>,
+    },
+
     /// Extract metadata files from a portable recording.
     ExtractPortableRecording(ExtractPortableRecordingOpts),
 
@@ -168,6 +178,27 @@ impl DebugCommand {
             }
             DebugCommand::ParseFilterset(opts) => {
                 return opts.exec();
+            }
+            DebugCommand::PrintCargoTargetArg { target, config } => {
+                let cargo_configs = CargoConfigs::new(&config).map_err(Box::new)?;
+                let build_platforms = detect_build_platforms(&cargo_configs, Some(&target))?;
+                let target_arg = build_platforms.to_cargo_target_arg()?;
+
+                match target_arg {
+                    nextest_runner::cargo_config::CargoTargetArg::Builtin(_) => println!("builtin"),
+                    nextest_runner::cargo_config::CargoTargetArg::Path(utf8_path_buf) => {
+                        println!("path: {}", utf8_path_buf)
+                    }
+                    nextest_runner::cargo_config::CargoTargetArg::Extracted(
+                        extracted_custom_platform,
+                    ) => println!("custom platform path: {}", extracted_custom_platform.path()),
+                    nextest_runner::cargo_config::CargoTargetArg::RustcCfg(custom_rustc_cfg) => {
+                        println!(
+                            "triple={}\n## rustc --print=cfg #########\n{}",
+                            custom_rustc_cfg.triple, custom_rustc_cfg.cfg
+                        );
+                    }
+                }
             }
         }
 
