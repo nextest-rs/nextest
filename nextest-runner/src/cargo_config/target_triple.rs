@@ -86,12 +86,9 @@ impl TargetTriple {
                 json,
                 self.source.clone(),
             ),
-            TargetDefinitionLocation::RustcCfgCustom(rustc_cfg) => {
-                Ok(CargoTargetArg::RustcCfg(CustomRustcCfg {
-                    triple: self.platform.triple_str().to_string(),
-                    cfg: rustc_cfg.clone(),
-                }))
-            }
+            TargetDefinitionLocation::RustcCfgCustom => Ok(CargoTargetArg::RustcCfg(
+                self.platform.triple_str().to_string(),
+            )),
         }
     }
 
@@ -268,7 +265,7 @@ impl TargetTriple {
             return Ok(Self {
                 platform,
                 source,
-                location: TargetDefinitionLocation::RustcCfgCustom(cfg_text.to_owned()),
+                location: TargetDefinitionLocation::RustcCfgCustom,
             });
         }
 
@@ -348,15 +345,6 @@ impl TargetTriple {
     }
 }
 
-/// Stores target triple information for targets that were resolved using rustc `--print=cfg`.
-#[derive(Debug)]
-pub struct CustomRustcCfg {
-    /// The target triple that got passed.
-    pub triple: String,
-    /// The configuration returned by `rustc --print=cfg`, when passing the `triple` as target.
-    pub cfg: String,
-}
-
 /// Cargo argument for downstream commands.
 ///
 /// If it is necessary to run a Cargo command with a target triple, this enum provides the right
@@ -375,8 +363,8 @@ pub enum CargoTargetArg {
     /// The target triple was extracted from metadata and stored in a temporary directory.
     Extracted(ExtractedCustomPlatform),
 
-    /// The target triple was extracted from `rustc --print=cfg`.
-    RustcCfg(CustomRustcCfg),
+    /// The target triple was resolved via `rustc --print=cfg`.
+    RustcCfg(String),
 }
 
 impl CargoTargetArg {
@@ -402,8 +390,8 @@ impl fmt::Display for CargoTargetArg {
             Self::Extracted(extracted) => {
                 write!(f, "{}", extracted.path())
             }
-            Self::RustcCfg(cfg) => {
-                write!(f, "{}", cfg.triple)
+            Self::RustcCfg(triple) => {
+                write!(f, "{triple}")
             }
         }
     }
@@ -478,7 +466,7 @@ pub enum TargetDefinitionLocation {
     MetadataCustom(String),
 
     /// The custom cfg retrieved by calling `rustc --print=cfg`.
-    RustcCfgCustom(String),
+    RustcCfgCustom,
 }
 
 impl fmt::Display for TargetDefinitionLocation {
@@ -499,7 +487,7 @@ impl fmt::Display for TargetDefinitionLocation {
             Self::MetadataCustom(_) => {
                 write!(f, "custom definition stored in metadata")
             }
-            Self::RustcCfgCustom(_) => {
+            Self::RustcCfgCustom => {
                 write!(f, "custom definition from the rustc cfg")
             }
         }

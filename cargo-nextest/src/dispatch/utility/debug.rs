@@ -15,6 +15,8 @@ use nextest_filtering::{FiltersetKind, KnownGroups};
 use nextest_runner::{
     cargo_config::CargoConfigs,
     errors::{DisplayErrorChain, RecordReadError},
+    list::SerializableFormat,
+    platform::BuildPlatforms,
     record::{
         CARGO_METADATA_JSON_PATH, ExtractOuterFileResult, PORTABLE_MANIFEST_FILE_NAME,
         PortableRecording, RECORD_OPTS_JSON_PATH, RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME,
@@ -67,16 +69,6 @@ pub(crate) enum DebugCommand {
         /// Output format.
         #[arg(long, value_enum, default_value_t)]
         output_format: BuildPlatformsOutputFormat,
-    },
-
-    /// Print cargo target arguments for the given target triple.
-    PrintCargoTargetArg {
-        /// The target triple to use.
-        #[arg(long)]
-        target: String,
-        /// Override a Cargo Configuration value.
-        #[arg(long, value_name = "KEY=VALUE")]
-        config: Vec<String>,
     },
 
     /// Extract metadata files from a portable recording.
@@ -171,6 +163,15 @@ impl DebugCommand {
                             println!("target triple: (none)");
                         }
                     }
+                    BuildPlatformsOutputFormat::Json => {
+                        print_build_platforms_summary(&build_platforms, SerializableFormat::Json);
+                    }
+                    BuildPlatformsOutputFormat::JsonPretty => {
+                        print_build_platforms_summary(
+                            &build_platforms,
+                            SerializableFormat::JsonPretty,
+                        );
+                    }
                 }
             }
             DebugCommand::ExtractPortableRecording(opts) => {
@@ -178,27 +179,6 @@ impl DebugCommand {
             }
             DebugCommand::ParseFilterset(opts) => {
                 return opts.exec();
-            }
-            DebugCommand::PrintCargoTargetArg { target, config } => {
-                let cargo_configs = CargoConfigs::new(&config).map_err(Box::new)?;
-                let build_platforms = detect_build_platforms(&cargo_configs, Some(&target))?;
-                let target_arg = build_platforms.to_cargo_target_arg()?;
-
-                match target_arg {
-                    nextest_runner::cargo_config::CargoTargetArg::Builtin(_) => println!("builtin"),
-                    nextest_runner::cargo_config::CargoTargetArg::Path(utf8_path_buf) => {
-                        println!("path: {}", utf8_path_buf)
-                    }
-                    nextest_runner::cargo_config::CargoTargetArg::Extracted(
-                        extracted_custom_platform,
-                    ) => println!("custom platform path: {}", extracted_custom_platform.path()),
-                    nextest_runner::cargo_config::CargoTargetArg::RustcCfg(custom_rustc_cfg) => {
-                        println!(
-                            "triple={}\n## rustc --print=cfg #########\n{}",
-                            custom_rustc_cfg.triple, custom_rustc_cfg.cfg
-                        );
-                    }
-                }
             }
         }
 
@@ -241,6 +221,21 @@ pub enum BuildPlatformsOutputFormat {
 
     /// Show just the triple.
     Triple,
+
+    /// Show the build platforms summary as JSON.
+    Json,
+
+    /// Show the build platforms summary as pretty-printed JSON.
+    JsonPretty,
+}
+
+fn print_build_platforms_summary(build_platforms: &BuildPlatforms, format: SerializableFormat) {
+    let summary = build_platforms.to_summary();
+    let mut buf = String::new();
+    format
+        .to_writer(&summary, &mut buf)
+        .expect("BuildPlatformsSummary serializes to JSON into a String");
+    println!("{buf}");
 }
 
 /// Options for `nextest debug extract-portable-recording`.

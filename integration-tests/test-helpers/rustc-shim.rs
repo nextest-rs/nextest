@@ -43,23 +43,7 @@ fn main() -> ExitCode {
             }
         }
     } else if &args[1] == "--print=cfg" && &args[2] == "--target" && shim_print_cfg() {
-        print!(
-            r#"debug_assertions
-panic="abort"
-target_abi="eabihf"
-target_arch="arm"
-target_endian="little"
-target_env=""
-target_has_atomic="16"
-target_has_atomic="32"
-target_has_atomic="8"
-target_has_atomic="ptr"
-target_os="none"
-target_pointer_width="32"
-target_vendor="unknown"
-"#
-        );
-
+        print!("{}", include_str!("rustc-shim-print-cfg.txt"));
         return ExitCode::SUCCESS;
     }
 

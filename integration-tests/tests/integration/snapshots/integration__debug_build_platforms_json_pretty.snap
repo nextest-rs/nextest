@@ -1,0 +1,28 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: "&pretty_stdout"
+---
+{
+  "host": {
+    "platform": {
+      "triple": "x86_64-unknown-linux-gnu",
+      "target-features": "unknown"
+    },
+    "libdir": {
+      "status": "unavailable",
+      "reason": "rustc-failed"
+    }
+  },
+  "targets": [
+    {
+      "platform": {
+        "triple": "aarch64-unknown-linux-gnu",
+        "target-features": "unknown"
+      },
+      "libdir": {
+        "status": "unavailable",
+        "reason": "rustc-failed"
+      }
+    }
+  ]
+}
