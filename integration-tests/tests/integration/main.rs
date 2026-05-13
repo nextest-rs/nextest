@@ -29,7 +29,8 @@ use integration_tests::{
     nextest_cli::{CargoNextestCli, CargoNextestOutput},
 };
 use nextest_metadata::{
-    BuildPlatform, FilterMatch, MismatchReason, NextestExitCode, TestCaseName, TestListSummary,
+    BuildPlatform, BuildPlatformsSummary, FilterMatch, MismatchReason, NextestExitCode,
+    TestCaseName, TestListSummary,
 };
 use std::{borrow::Cow, fs::File, io::Write};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
@@ -2322,6 +2323,55 @@ fn test_rustc_version_verbose_errors() {
             command.unchecked(true).output().to_snapshot()
         );
     }
+}
+
+/// Tests the `json` and `json-pretty` output formats for
+/// `nextest debug build-platforms`.
+#[test]
+fn test_debug_build_platforms_json() {
+    let env_info = set_env_vars_for_test();
+
+    let shim_rustc = &env_info.rustc_shim_bin;
+
+    let mut base = CargoNextestCli::for_test(&env_info);
+    base.args([
+        "debug",
+        "build-platforms",
+        // Use a builtin triple as the target so triple resolution does not
+        // require running rustc.
+        "--target",
+        "aarch64-unknown-linux-gnu",
+    ])
+    // By default, nextest will attempt to invoke `rustc -vV` to obtain the host
+    // platform. We force that to fail via the rustc shim so that we fall back
+    // to the build target (which, in turn, we force to be
+    // x86_64-unknown-linux-gnu via __NEXTEST_FORCE_BUILD_TARGET).
+    .env("RUSTC", shim_rustc)
+    .env("__NEXTEST_RUSTC_SHIM_VERSION_VERBOSE_ERROR", "non-zero")
+    .env("__NEXTEST_FORCE_BUILD_TARGET", "x86_64-unknown-linux-gnu");
+
+    // The pretty-printed output is the one checked into the repo as a snapshot.
+    let mut pretty = base.clone();
+    pretty.args(["--output-format", "json-pretty"]);
+    let pretty_output = pretty.output();
+    let pretty_stdout = pretty_output.stdout_as_str();
+    insta::assert_snapshot!("debug_build_platforms_json_pretty", &pretty_stdout);
+
+    // Verify the pretty output parses as a valid summary.
+    let parsed: BuildPlatformsSummary = serde_json::from_str(&pretty_stdout)
+        .expect("json-pretty output deserializes into a BuildPlatformsSummary");
+
+    // The compact json output must encode the same summary.
+    let mut compact = base.clone();
+    compact.args(["--output-format", "json"]);
+    let compact_output = compact.output();
+    let compact_stdout = compact_output.stdout_as_str();
+    let compact_parsed: BuildPlatformsSummary = serde_json::from_str(&compact_stdout)
+        .expect("json output deserializes into a BuildPlatformsSummary");
+    assert_eq!(
+        parsed, compact_parsed,
+        "json and json-pretty must represent the same summary"
+    );
 }
 
 /// Test that filterset expressions combined with string filters work correctly.

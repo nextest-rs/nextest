@@ -15,6 +15,8 @@ use nextest_filtering::{FiltersetKind, KnownGroups};
 use nextest_runner::{
     cargo_config::CargoConfigs,
     errors::{DisplayErrorChain, RecordReadError},
+    list::SerializableFormat,
+    platform::BuildPlatforms,
     record::{
         CARGO_METADATA_JSON_PATH, ExtractOuterFileResult, PORTABLE_MANIFEST_FILE_NAME,
         PortableRecording, RECORD_OPTS_JSON_PATH, RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME,
@@ -161,6 +163,15 @@ impl DebugCommand {
                             println!("target triple: (none)");
                         }
                     }
+                    BuildPlatformsOutputFormat::Json => {
+                        print_build_platforms_summary(&build_platforms, SerializableFormat::Json);
+                    }
+                    BuildPlatformsOutputFormat::JsonPretty => {
+                        print_build_platforms_summary(
+                            &build_platforms,
+                            SerializableFormat::JsonPretty,
+                        );
+                    }
                 }
             }
             DebugCommand::ExtractPortableRecording(opts) => {
@@ -210,6 +221,21 @@ pub enum BuildPlatformsOutputFormat {
 
     /// Show just the triple.
     Triple,
+
+    /// Show the build platforms summary as JSON.
+    Json,
+
+    /// Show the build platforms summary as pretty-printed JSON.
+    JsonPretty,
+}
+
+fn print_build_platforms_summary(build_platforms: &BuildPlatforms, format: SerializableFormat) {
+    let summary = build_platforms.to_summary();
+    let mut buf = String::new();
+    format
+        .to_writer(&summary, &mut buf)
+        .expect("BuildPlatformsSummary serializes to JSON into a String");
+    println!("{buf}");
 }
 
 /// Options for `nextest debug extract-portable-recording`.
