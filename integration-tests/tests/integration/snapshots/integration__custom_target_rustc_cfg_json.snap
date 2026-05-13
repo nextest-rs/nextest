@@ -1,0 +1,29 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: "&stdout"
+---
+{
+  "host": {
+    "platform": {
+      "triple": "x86_64-unknown-linux-gnu",
+      "target-features": "unknown"
+    },
+    "libdir": {
+      "status": "unavailable",
+      "reason": "rustc-failed"
+    }
+  },
+  "targets": [
+    {
+      "platform": {
+        "triple": "some-custom-cfg-target",
+        "custom-cfg": "debug_assertions\npanic=\"abort\"\ntarget_abi=\"eabihf\"\ntarget_arch=\"arm\"\ntarget_endian=\"little\"\ntarget_env=\"\"\ntarget_has_atomic=\"16\"\ntarget_has_atomic=\"32\"\ntarget_has_atomic=\"8\"\ntarget_has_atomic=\"ptr\"\ntarget_os=\"none\"\ntarget_pointer_width=\"32\"\ntarget_vendor=\"unknown\"\n",
+        "target-features": "unknown"
+      },
+      "libdir": {
+        "status": "unavailable",
+        "reason": "rustc-failed"
+      }
+    }
+  ]
+}

@@ -42,6 +42,9 @@ fn main() -> ExitCode {
                 // Pass through to the real rustc.
             }
         }
+    } else if &args[1] == "--print=cfg" && &args[2] == "--target" && shim_print_cfg() {
+        print!("{}", include_str!("rustc-shim-print-cfg.txt"));
+        return ExitCode::SUCCESS;
     }
 
     let code = Command::new(rustc_path())
@@ -70,6 +73,17 @@ fn version_verbose_error() -> Option<VersionVerboseError> {
             _ => panic!("unrecognized value for {VAR}: {s}"),
         },
         Err(_) => None,
+    }
+}
+
+fn shim_print_cfg() -> bool {
+    const VAR: &str = "__NEXTEST_RUSTC_SHIM_PRINT_CFG";
+    match std::env::var(VAR) {
+        Ok(s) => match s.as_str() {
+            "true" => true,
+            _ => panic!("unrecognized value for {VAR}: {s}"),
+        },
+        Err(_) => false,
     }
 }
 
