@@ -3,8 +3,11 @@
 
 //! Self command implementation for managing the nextest installation.
 
-use crate::{Result, output::OutputContext};
+use crate::{ExpectedError, Result, output::OutputContext};
+use camino::Utf8PathBuf;
 use clap::{Args, Subcommand, ValueEnum};
+use std::io::Write;
+use tracing::info;
 
 /// Arguments for specifying which version to update to.
 #[derive(Debug, Args)]
@@ -33,8 +36,7 @@ impl UpdateVersionOpt {
     #[cfg(feature = "self-update")]
     pub(crate) fn to_update_version_req(
         &self,
-    ) -> Result<nextest_runner::update::UpdateVersionReq, crate::ExpectedError> {
-        use crate::ExpectedError;
+    ) -> Result<nextest_runner::update::UpdateVersionReq, ExpectedError> {
         use nextest_runner::update::{PrereleaseKind, UpdateVersionReq};
 
         if self.beta {
@@ -121,17 +123,40 @@ pub(crate) enum SetupSource {
 #[derive(Debug, Subcommand)]
 pub(crate) enum SchemaCommand {
     /// Print the JSON Schema for `.config/nextest.toml`.
-    RepoConfig,
+    RepoConfig(RepoConfigOpts),
+}
+
+/// Options for the `cargo nextest self schema repo-config` command.
+#[derive(Debug, Args)]
+pub(crate) struct RepoConfigOpts {
+    /// Output file path. Defaults to stdout.
+    #[arg(short = 'o', long = "output", value_name = "PATH")]
+    output: Option<Utf8PathBuf>,
 }
 
 impl SchemaCommand {
-    fn exec(self) -> i32 {
+    fn exec(self) -> Result<i32> {
         match self {
-            Self::RepoConfig => {
-                print!("{REPO_CONFIG_SCHEMA}");
-                0
+            Self::RepoConfig(opts) => opts.exec(),
+        }
+    }
+}
+
+impl RepoConfigOpts {
+    fn exec(&self) -> Result<i32> {
+        match &self.output {
+            Some(path) => {
+                std::fs::write(path, REPO_CONFIG_SCHEMA)
+                    .map_err(|err| ExpectedError::WriteError { err })?;
+                info!("wrote JSON Schema for repo config to {path}");
+            }
+            None => {
+                std::io::stdout()
+                    .write_all(REPO_CONFIG_SCHEMA.as_bytes())
+                    .map_err(|err| ExpectedError::WriteError { err })?;
             }
         }
+        Ok(0)
     }
 }
 
@@ -140,7 +165,7 @@ impl SelfCommand {
     pub(crate) fn exec(self, output: OutputContext) -> Result<i32> {
         match self {
             Self::Setup { source: _source } => Ok(0),
-            Self::Schema { kind } => Ok(kind.exec()),
+            Self::Schema { kind } => kind.exec(),
             Self::Update {
                 version,
                 check,

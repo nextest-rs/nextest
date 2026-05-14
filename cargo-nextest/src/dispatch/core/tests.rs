@@ -139,6 +139,13 @@ fn test_argument_parsing() {
         "cargo nextest self update --beta --check",
         "cargo nextest self update --rc --force",
         // ---
+        // Self schema
+        // ---
+        "cargo nextest self schema repo-config",
+        "cargo nextest self schema repo-config -o schema.json",
+        "cargo nextest self schema repo-config --output schema.json",
+        "cargo nextest self schema repo-config --output /path/to/schema.json",
+        // ---
         // Bench command
         // ---
         "cargo nextest bench",
