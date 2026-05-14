@@ -14,7 +14,7 @@ fn workspace_root() -> Utf8PathBuf {
 }
 
 fn build_validator() -> eyre::Result<(Utf8PathBuf, jsonschema::Validator)> {
-    let schema_path = workspace_root().join("jsonschemas/nextest.json");
+    let schema_path = workspace_root().join("jsonschemas/repo-config.json");
     let schema_text = fs::read_to_string(&schema_path)
         .wrap_err_with(|| format!("error reading schema file at {schema_path}"))?;
     let schema: serde_json::Value = serde_json::from_str(&schema_text)

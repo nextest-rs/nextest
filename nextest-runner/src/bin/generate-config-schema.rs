@@ -38,5 +38,5 @@ fn repository_root() -> Utf8PathBuf {
 }
 
 fn schema_path(repository_root: &Utf8Path) -> Utf8PathBuf {
-    repository_root.join("jsonschemas/nextest.json")
+    repository_root.join("jsonschemas/repo-config.json")
 }

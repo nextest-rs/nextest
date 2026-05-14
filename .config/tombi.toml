@@ -2,5 +2,5 @@
 formatting.enabled = false
 
 [[schemas]]
-path = "jsonschemas/nextest.json"
+path = "jsonschemas/repo-config.json"
 include = [".config/nextest.toml"]
