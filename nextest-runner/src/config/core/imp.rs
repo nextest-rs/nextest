@@ -1560,6 +1560,14 @@ impl NextestConfigDeserialize {
 }
 
 /// Returns the JSON schema for `.config/nextest.toml`.
+///
+/// The schema is intentionally stricter than nextest's runtime parser. Unknown
+/// fields are warnings at runtime, since this lets older nextest binaries
+/// continue to load configs written for newer versions. In the schema, however,
+/// unknown fields are errors so that editors surface them as likely typos. This
+/// is the reason behind the various `schemars(deny_unknown_fields)` attributes
+/// and `additionalProperties: false` clauses in the custom `JsonSchema` impls
+/// across the config module.
 #[cfg(feature = "config-schema")]
 pub fn nextest_config_schema() -> schemars::Schema {
     let mut schema = schemars::schema_for!(NextestConfigDeserialize);
