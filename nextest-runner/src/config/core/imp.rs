@@ -1581,6 +1581,7 @@ impl NextestConfigDeserialize {
 #[cfg(feature = "config-schema")]
 pub fn nextest_config_schema() -> schemars::Schema {
     let mut schema = schemars::schema_for!(NextestConfigDeserialize);
+    // This indicates to Tombi that nextest supports TOML 1.1.0.
     schema.insert(
         "x-tombi-toml-version".to_owned(),
         serde_json::Value::String("v1.1.0".to_owned()),

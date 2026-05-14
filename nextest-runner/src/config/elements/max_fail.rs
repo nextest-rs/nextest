@@ -52,6 +52,7 @@ impl schemars::JsonSchema for MaxFail {
     }
 
     fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        // This should stay in sync with deserialize_fail_fast.
         schemars::json_schema!({
             "oneOf": [
                 generator.subschema_for::<bool>(),
