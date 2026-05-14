@@ -31,6 +31,7 @@ pub struct ArchiveConfig {
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ArchiveInclude {
+    /// Relative path to include.
     // We only allow well-formed relative paths within the target directory here. It's possible we
     // can relax this in the future, but better safe than sorry for now.
     #[serde(deserialize_with = "deserialize_relative_path")]
@@ -39,13 +40,16 @@ pub struct ArchiveInclude {
         schemars(schema_with = "String::json_schema")
     )]
     path: Utf8PathBuf,
+    /// Base directory that `path` is relative to.
     relative_to: ArchiveRelativeTo,
+    /// Maximum recursion depth.
     #[serde(default = "default_depth")]
     #[cfg_attr(
         feature = "config-schema",
         schemars(schema_with = "RecursionDepth::json_schema")
     )]
     depth: TrackDefault<RecursionDepth>,
+    /// What to do if the path is missing.
     #[serde(default = "default_on_missing")]
     on_missing: ArchiveIncludeOnMissing,
 }

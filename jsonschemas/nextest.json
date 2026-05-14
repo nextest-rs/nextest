@@ -4,9 +4,11 @@
   "type": "object",
   "properties": {
     "experimental": {
+      "description": "Enables experimental nextest features.",
       "$ref": "#/$defs/ExperimentalDeserialize"
     },
     "nextest-version": {
+      "description": "The minimum required and recommended versions of nextest for this\nconfiguration.",
       "anyOf": [
         {
           "$ref": "#/$defs/NextestVersionDeserialize"
@@ -17,6 +19,7 @@
       ]
     },
     "profile": {
+      "description": "Test profiles.",
       "type": [
         "object",
         "null"
@@ -26,15 +29,18 @@
       }
     },
     "script": {
+      "description": "Deprecated location for setup scripts.\n\nNew configurations should use `[scripts.setup.<name>]` instead.",
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/SetupScriptConfig"
       }
     },
     "scripts": {
+      "description": "Setup and wrapper scripts.",
       "$ref": "#/$defs/ScriptConfig"
     },
     "store": {
+      "description": "Configuration for the nextest store directory.",
       "anyOf": [
         {
           "$ref": "#/$defs/StoreConfigImpl"
@@ -45,6 +51,7 @@
       ]
     },
     "test-groups": {
+      "description": "Custom test groups for mutual exclusion and resource management.",
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/TestGroupConfig"
@@ -76,6 +83,7 @@
       "type": "object",
       "properties": {
         "depth": {
+          "description": "Maximum recursion depth.",
           "oneOf": [
             {
               "type": "integer",
@@ -90,12 +98,15 @@
           ]
         },
         "on-missing": {
+          "description": "What to do if the path is missing.",
           "$ref": "#/$defs/ArchiveIncludeOnMissing"
         },
         "path": {
+          "description": "Relative path to include.",
           "type": "string"
         },
         "relative-to": {
+          "description": "Base directory that `path` is relative to.",
           "$ref": "#/$defs/ArchiveRelativeTo"
         }
       },
@@ -168,6 +179,7 @@
       "type": "object",
       "properties": {
         "archive": {
+          "description": "Archive configuration for this profile.",
           "anyOf": [
             {
               "$ref": "#/$defs/ArchiveConfig"
@@ -178,6 +190,7 @@
           ]
         },
         "bench": {
+          "description": "Benchmark-specific configuration.",
           "anyOf": [
             {
               "$ref": "#/$defs/BenchConfig"
@@ -196,6 +209,7 @@
           "default": null
         },
         "fail-fast": {
+          "description": "Controls when to stop running tests after failures.",
           "anyOf": [
             {
               "$ref": "#/$defs/MaxFail"
@@ -206,6 +220,7 @@
           ]
         },
         "failure-output": {
+          "description": "When to display output for failed tests.",
           "anyOf": [
             {
               "$ref": "#/$defs/TestOutputDisplay"
@@ -217,6 +232,7 @@
           "default": null
         },
         "final-status-level": {
+          "description": "Level of status information to display in the final summary.",
           "anyOf": [
             {
               "$ref": "#/$defs/FinalStatusLevel"
@@ -227,6 +243,7 @@
           ]
         },
         "flaky-result": {
+          "description": "Whether to treat flaky tests as passing or failing.",
           "anyOf": [
             {
               "$ref": "#/$defs/FlakyResult"
@@ -238,12 +255,14 @@
           "default": null
         },
         "global-timeout": {
+          "description": "A global timeout for test execution.",
           "type": [
             "string",
             "null"
           ]
         },
         "inherits": {
+          "description": "The profile to inherit configuration settings from.",
           "type": [
             "string",
             "null"
@@ -251,9 +270,11 @@
           "default": null
         },
         "junit": {
+          "description": "JUnit output configuration.",
           "$ref": "#/$defs/JunitImpl"
         },
         "leak-timeout": {
+          "description": "Time to wait for child processes to exit after a test completes.",
           "anyOf": [
             {
               "$ref": "#/$defs/LeakTimeout"
@@ -264,12 +285,14 @@
           ]
         },
         "overrides": {
+          "description": "Per-test setting overrides.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/DeserializedOverride"
           }
         },
         "retries": {
+          "description": "Retry policy for failed tests.",
           "anyOf": [
             {
               "$ref": "#/$defs/RetryPolicy"
@@ -280,6 +303,7 @@
           ]
         },
         "run-extra-args": {
+          "description": "Extra arguments to pass to test binaries.",
           "type": [
             "array",
             "null"
@@ -290,12 +314,14 @@
           }
         },
         "scripts": {
+          "description": "Profile-specific script configuration.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/DeserializedProfileScriptConfig"
           }
         },
         "slow-timeout": {
+          "description": "Time after which tests are considered slow, and timeout configuration.",
           "anyOf": [
             {
               "$ref": "#/$defs/SlowTimeout"
@@ -306,6 +332,7 @@
           ]
         },
         "status-level": {
+          "description": "Level of status information to display during test runs.",
           "anyOf": [
             {
               "$ref": "#/$defs/StatusLevel"
@@ -316,6 +343,7 @@
           ]
         },
         "success-output": {
+          "description": "When to display output for successful tests.",
           "anyOf": [
             {
               "$ref": "#/$defs/TestOutputDisplay"
@@ -327,6 +355,7 @@
           "default": null
         },
         "test-threads": {
+          "description": "Number of threads to run tests with.",
           "anyOf": [
             {
               "$ref": "#/$defs/TestThreads"
@@ -337,6 +366,7 @@
           ]
         },
         "threads-required": {
+          "description": "Number of threads each test requires.",
           "anyOf": [
             {
               "$ref": "#/$defs/ThreadsRequired"
@@ -357,6 +387,7 @@
       "type": "object",
       "properties": {
         "flaky-fail-status": {
+          "description": "How flaky-fail tests are reported in the JUnit XML report.",
           "anyOf": [
             {
               "$ref": "#/$defs/JunitFlakyFailStatus"
@@ -367,12 +398,14 @@
           ]
         },
         "store-failure-output": {
+          "description": "Whether to store failed test output in the JUnit XML report.",
           "type": [
             "boolean",
             "null"
           ]
         },
         "store-success-output": {
+          "description": "Whether to store successful test output in the JUnit XML report.",
           "type": [
             "boolean",
             "null"
@@ -390,6 +423,7 @@
           "$ref": "#/$defs/DeserializedOverrideBench"
         },
         "default-filter": {
+          "description": "The default filter for tests. Only supported if platform is specified\nbut filter is not.",
           "type": [
             "string",
             "null"
@@ -397,6 +431,7 @@
           "default": null
         },
         "failure-output": {
+          "description": "Failure output display for matching tests.",
           "anyOf": [
             {
               "$ref": "#/$defs/TestOutputDisplay"
@@ -416,6 +451,7 @@
           "default": null
         },
         "flaky-result": {
+          "description": "Whether to treat flaky tests as passing or failing.",
           "anyOf": [
             {
               "$ref": "#/$defs/FlakyResult"
@@ -427,9 +463,11 @@
           "default": null
         },
         "junit": {
+          "description": "JUnit output configuration for matching tests.",
           "$ref": "#/$defs/DeserializedJunitOutput"
         },
         "leak-timeout": {
+          "description": "Leak timeout for matching tests.",
           "anyOf": [
             {
               "$ref": "#/$defs/LeakTimeout"
@@ -444,7 +482,7 @@
           "$ref": "#/$defs/PlatformStrings"
         },
         "priority": {
-          "description": "Overrides.",
+          "description": "Test priority.",
           "anyOf": [
             {
               "$ref": "#/$defs/TestPriority"
@@ -455,7 +493,7 @@
           ]
         },
         "retries": {
-          "description": "Retry policy for this override.",
+          "description": "Retry policy for matching tests.",
           "anyOf": [
             {
               "$ref": "#/$defs/RetryPolicy"
@@ -466,6 +504,7 @@
           ]
         },
         "run-extra-args": {
+          "description": "Extra arguments to pass to the test runner.",
           "type": [
             "array",
             "null"
@@ -476,6 +515,7 @@
           }
         },
         "slow-timeout": {
+          "description": "Slow timeout for matching tests.",
           "anyOf": [
             {
               "$ref": "#/$defs/SlowTimeout"
@@ -486,6 +526,7 @@
           ]
         },
         "success-output": {
+          "description": "Success output display for matching tests.",
           "anyOf": [
             {
               "$ref": "#/$defs/TestOutputDisplay"
@@ -497,6 +538,7 @@
           "default": null
         },
         "test-group": {
+          "description": "Test group to put matching tests in.",
           "anyOf": [
             {
               "$ref": "#/$defs/CustomTestGroup"
@@ -508,6 +550,7 @@
           "default": null
         },
         "threads-required": {
+          "description": "The number of threads required for matching tests.",
           "anyOf": [
             {
               "$ref": "#/$defs/ThreadsRequired"
@@ -525,6 +568,7 @@
       "type": "object",
       "properties": {
         "slow-timeout": {
+          "description": "Slow timeout for matching benchmarks.",
           "anyOf": [
             {
               "$ref": "#/$defs/SlowTimeout"
@@ -704,6 +748,7 @@
       "type": "object",
       "properties": {
         "flaky-fail-status": {
+          "description": "How flaky-fail tests are reported in the JUnit XML report.",
           "anyOf": [
             {
               "$ref": "#/$defs/JunitFlakyFailStatus"
@@ -715,10 +760,12 @@
           "default": null
         },
         "path": {
+          "description": "Path to write the JUnit XML report to. If unset, JUnit support is\ndisabled.",
           "type": "string",
           "default": null
         },
         "report-name": {
+          "description": "Name for the JUnit report.",
           "type": [
             "string",
             "null"
@@ -726,6 +773,7 @@
           "default": null
         },
         "store-failure-output": {
+          "description": "Whether to store failed test output in the JUnit XML report.",
           "type": [
             "boolean",
             "null"
@@ -733,6 +781,7 @@
           "default": null
         },
         "store-success-output": {
+          "description": "Whether to store successful test output in the JUnit XML report.",
           "type": [
             "boolean",
             "null"
@@ -1174,6 +1223,7 @@
       "type": "object",
       "properties": {
         "dir": {
+          "description": "Directory where nextest stores its data.",
           "type": [
             "string",
             "null"

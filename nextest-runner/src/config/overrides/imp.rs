@@ -991,41 +991,55 @@ pub(in crate::config) struct DeserializedOverride {
     /// The filterset to match against.
     #[serde(default)]
     filter: Option<String>,
-    /// Overrides.
+    // Overrides start here.
+    //
     // (This used to use serde(flatten) but that has issues:
-    //  https://github.com/serde-rs/serde/issues/2312.)
+    // https://github.com/serde-rs/serde/issues/2312.)
+    // ---
+    /// Test priority.
     #[serde(default)]
     priority: Option<TestPriority>,
+    /// The default filter for tests. Only supported if platform is specified
+    /// but filter is not.
     #[serde(default)]
     default_filter: Option<String>,
+    /// The number of threads required for matching tests.
     #[serde(default)]
     threads_required: Option<ThreadsRequired>,
+    /// Extra arguments to pass to the test runner.
     #[serde(default)]
     run_extra_args: Option<Vec<String>>,
-    /// Retry policy for this override.
+    /// Retry policy for matching tests.
     #[serde(
         default,
         deserialize_with = "crate::config::elements::deserialize_retry_policy"
     )]
     retries: Option<RetryPolicy>,
+    /// Whether to treat flaky tests as passing or failing.
     #[serde(default)]
     flaky_result: Option<FlakyResult>,
+    /// Slow timeout for matching tests.
     #[serde(
         default,
         deserialize_with = "crate::config::elements::deserialize_slow_timeout"
     )]
     slow_timeout: Option<SlowTimeout>,
+    /// Leak timeout for matching tests.
     #[serde(
         default,
         deserialize_with = "crate::config::elements::deserialize_leak_timeout"
     )]
     leak_timeout: Option<LeakTimeout>,
+    /// Test group to put matching tests in.
     #[serde(default)]
     test_group: Option<TestGroup>,
+    /// Success output display for matching tests.
     #[serde(default)]
     success_output: Option<TestOutputDisplay>,
+    /// Failure output display for matching tests.
     #[serde(default)]
     failure_output: Option<TestOutputDisplay>,
+    /// JUnit output configuration for matching tests.
     #[serde(default)]
     junit: DeserializedJunitOutput,
     /// Benchmark-specific overrides.
@@ -1038,8 +1052,11 @@ pub(in crate::config) struct DeserializedOverride {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct DeserializedJunitOutput {
+    /// Whether to store successful test output in the JUnit XML report.
     store_success_output: Option<bool>,
+    /// Whether to store failed test output in the JUnit XML report.
     store_failure_output: Option<bool>,
+    /// How flaky-fail tests are reported in the JUnit XML report.
     flaky_fail_status: Option<JunitFlakyFailStatus>,
 }
 
@@ -1049,6 +1066,7 @@ pub(in crate::config) struct DeserializedJunitOutput {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct DeserializedOverrideBench {
+    /// Slow timeout for matching benchmarks.
     #[serde(
         default,
         deserialize_with = "crate::config::elements::deserialize_slow_timeout"

@@ -1495,6 +1495,7 @@ impl NextestConfigImpl {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct NextestConfigDeserialize {
+    /// Configuration for the nextest store directory.
     #[cfg_attr(
         feature = "config-schema",
         // NOTE: `store` in the JSON Schema should be optional, given the pre-deserialization logic.
@@ -1502,26 +1503,35 @@ pub(crate) struct NextestConfigDeserialize {
     )]
     store: StoreConfigImpl,
 
-    // These are parsed as part of NextestConfigVersionOnly. They're re-parsed here to avoid
-    // printing an "unknown key" message.
+    /// The minimum required and recommended versions of nextest for this
+    /// configuration.
+    // These are parsed as part of NextestConfigVersionOnly. They're re-parsed
+    // here to avoid printing an "unknown key" message.
     #[expect(unused)]
     #[serde(default)]
     nextest_version: Option<NextestVersionDeserialize>,
 
+    /// Enables experimental nextest features.
     #[expect(unused)]
     #[serde(default)]
     experimental: ExperimentalDeserialize,
 
+    /// Custom test groups for mutual exclusion and resource management.
     #[serde(default)]
     test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,
 
+    /// Deprecated location for setup scripts.
+    ///
+    /// New configurations should use `[scripts.setup.<name>]` instead.
     // Previous version of setup scripts, stored as "script.<name of script>".
     #[serde(default, rename = "script")]
     old_setup_scripts: IndexMap<ScriptId, SetupScriptConfig>,
 
+    /// Setup and wrapper scripts.
     #[serde(default)]
     scripts: ScriptConfig,
 
+    /// Test profiles.
     #[serde(rename = "profile")]
     #[cfg_attr(
         feature = "config-schema",
@@ -1583,6 +1593,7 @@ pub fn nextest_config_schema() -> schemars::Schema {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 struct StoreConfigImpl {
+    /// Directory where nextest stores its data.
     #[cfg_attr(
         feature = "config-schema",
         // NOTE: `dir` in the JSON Schema should be optional, given the pre-deserialization logic.
@@ -1706,46 +1717,65 @@ pub(in crate::config) struct CustomProfileImpl {
     /// The default set of tests run by `cargo nextest run`.
     #[serde(default)]
     default_filter: Option<String>,
+    /// Retry policy for failed tests.
     #[serde(default, deserialize_with = "deserialize_retry_policy")]
     retries: Option<RetryPolicy>,
+    /// Whether to treat flaky tests as passing or failing.
     #[serde(default)]
     flaky_result: Option<FlakyResult>,
+    /// Number of threads to run tests with.
     #[serde(default)]
     test_threads: Option<TestThreads>,
+    /// Number of threads each test requires.
     #[serde(default)]
     threads_required: Option<ThreadsRequired>,
+    /// Extra arguments to pass to test binaries.
     #[serde(default)]
     run_extra_args: Option<Vec<String>>,
+    /// Level of status information to display during test runs.
     #[serde(default)]
     status_level: Option<StatusLevel>,
+    /// Level of status information to display in the final summary.
     #[serde(default)]
     final_status_level: Option<FinalStatusLevel>,
+    /// When to display output for failed tests.
     #[serde(default)]
     failure_output: Option<TestOutputDisplay>,
+    /// When to display output for successful tests.
     #[serde(default)]
     success_output: Option<TestOutputDisplay>,
+    /// Controls when to stop running tests after failures.
     #[serde(
         default,
         rename = "fail-fast",
         deserialize_with = "deserialize_fail_fast"
     )]
     max_fail: Option<MaxFail>,
+    /// Time after which tests are considered slow, and timeout configuration.
     #[serde(default, deserialize_with = "deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
+    /// A global timeout for test execution.
     #[serde(default)]
     global_timeout: Option<GlobalTimeout>,
+    /// Time to wait for child processes to exit after a test completes.
     #[serde(default, deserialize_with = "deserialize_leak_timeout")]
     leak_timeout: Option<LeakTimeout>,
+    /// Per-test setting overrides.
     #[serde(default)]
     overrides: Vec<DeserializedOverride>,
+    /// Profile-specific script configuration.
     #[serde(default)]
     scripts: Vec<DeserializedProfileScriptConfig>,
+    /// JUnit output configuration.
     #[serde(default)]
     junit: JunitImpl,
+    /// Archive configuration for this profile.
     #[serde(default)]
     archive: Option<ArchiveConfig>,
+    /// Benchmark-specific configuration.
     #[serde(default)]
     bench: Option<BenchConfig>,
+    /// The profile to inherit configuration settings from.
     #[serde(default)]
     inherits: Option<String>,
 }
