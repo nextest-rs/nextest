@@ -1,38 +1,38 @@
-use camino::{Utf8Path, Utf8PathBuf};
+// Copyright (c) The nextest Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
-fn repository_root() -> Utf8PathBuf {
-    Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("nextest-runner should be within the repository root")
-        .to_path_buf()
+use camino::Utf8PathBuf;
+use color_eyre::eyre::{self, Context};
+use std::fs;
+
+fn workspace_root() -> Utf8PathBuf {
+    Utf8PathBuf::from(
+        std::env::var("NEXTEST_WORKSPACE_ROOT")
+            .expect("NEXTEST_WORKSPACE_ROOT is set (running under cargo nextest run)"),
+    )
 }
 
 #[test]
-fn validates_nextest_config() {
-    // Read JSON Schema
-    let schema_path = repository_root().join("jsonschemas/nextest.json");
-    let Ok(schema) = std::fs::read_to_string(schema_path) else {
-        panic!("Failed to read schema file");
-    };
-    let Ok(schema) = serde_json::from_str(&schema) else {
-        panic!("Failed to parse schema file");
-    };
-    let Ok(validator) = jsonschema::validator_for(&schema) else {
-        panic!("Failed to create validator");
-    };
+fn test_validate_nextest_config() -> eyre::Result<()> {
+    let schema_path = workspace_root().join("jsonschemas/nextest.json");
+    let schema_text = fs::read_to_string(&schema_path)
+        .wrap_err_with(|| format!("error reading schema file at {schema_path}"))?;
+    let schema: serde_json::Value = serde_json::from_str(&schema_text)
+        .wrap_err_with(|| format!("error parsing schema at {schema_path}"))?;
+    let validator = jsonschema::validator_for(&schema)
+        .wrap_err_with(|| format!("error building validator from {schema_path}"))?;
 
-    // Read `nextest.toml`
-    let config_path = repository_root().join(".config/nextest.toml");
-    let Ok(config) = std::fs::read_to_string(config_path) else {
-        panic!("Failed to read config file");
-    };
-    let Ok(config) = toml::from_str(&config) else {
-        panic!("Failed to parse config file");
-    };
+    let config_path = workspace_root().join(".config/nextest.toml");
+    let config_text = fs::read_to_string(&config_path)
+        .wrap_err_with(|| format!("error reading config file at {config_path}"))?;
+    let config: serde_json::Value = toml::from_str(&config_text)
+        .wrap_err_with(|| format!("error parsing config at {config_path}"))?;
 
-    // Validate `nextest.toml`
+    let errors: Vec<_> = validator.iter_errors(&config).collect();
     assert!(
-        validator.validate(&config).is_ok(),
-        "Config file is not valid"
+        errors.is_empty(),
+        "{config_path} does not validate against {schema_path}:\n{errors:#?}",
     );
+
+    Ok(())
 }
