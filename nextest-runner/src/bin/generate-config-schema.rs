@@ -7,8 +7,7 @@ use nextest_runner::config::core::nextest_config_schema;
 use std::fs;
 
 fn main() -> Result<()> {
-    let repository_root = repository_root();
-    let schema_path = schema_path(&repository_root);
+    let schema_path = schema_path();
     let schema_dir = schema_path
         .parent()
         .expect("schema path always has a parent directory");
@@ -30,13 +29,6 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn repository_root() -> Utf8PathBuf {
-    Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("nextest-runner should be within the repository root")
-        .to_path_buf()
-}
-
-fn schema_path(repository_root: &Utf8Path) -> Utf8PathBuf {
-    repository_root.join("jsonschemas/repo-config.json")
+fn schema_path() -> Utf8PathBuf {
+    Utf8Path::new(env!("CARGO_MANIFEST_DIR")).join("jsonschemas/repo-config.json")
 }

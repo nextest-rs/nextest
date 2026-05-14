@@ -226,6 +226,14 @@ impl NextestConfig {
     /// Repository-specific configuration is layered on top of the default config.
     pub const DEFAULT_CONFIG: &'static str = include_str!("../../../default-config.toml");
 
+    /// The pregenerated JSON Schema for `.config/nextest.toml`.
+    ///
+    /// The schema is checked into the repository at
+    /// `nextest-runner/jsonschemas/repo-config.json`. (If you're working within
+    /// the nextest repository, regenerate the schema with `just
+    /// generate-config-schema`.
+    pub const SCHEMA: &'static str = include_str!("../../../jsonschemas/repo-config.json");
+
     /// Environment configuration uses this prefix, plus a _.
     pub const ENVIRONMENT_PREFIX: &'static str = "NEXTEST";
 

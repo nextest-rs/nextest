@@ -6,6 +6,7 @@
 use crate::{ExpectedError, Result, output::OutputContext};
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand, ValueEnum};
+use nextest_runner::config::core::NextestConfig;
 use std::io::Write;
 use tracing::info;
 
@@ -53,9 +54,6 @@ impl UpdateVersionOpt {
         }
     }
 }
-
-/// The embedded JSON Schema for nextest's repository configuration format.
-static REPO_CONFIG_SCHEMA: &str = include_str!("../../../../jsonschemas/repo-config.json");
 
 /// Subcommands for self.
 #[derive(Debug, Subcommand)]
@@ -146,13 +144,13 @@ impl RepoConfigOpts {
     fn exec(&self) -> Result<i32> {
         match &self.output {
             Some(path) => {
-                std::fs::write(path, REPO_CONFIG_SCHEMA)
+                std::fs::write(path, NextestConfig::SCHEMA)
                     .map_err(|err| ExpectedError::WriteError { err })?;
                 info!("wrote JSON Schema for repo config to {path}");
             }
             None => {
                 std::io::stdout()
-                    .write_all(REPO_CONFIG_SCHEMA.as_bytes())
+                    .write_all(NextestConfig::SCHEMA.as_bytes())
                     .map_err(|err| ExpectedError::WriteError { err })?;
             }
         }
