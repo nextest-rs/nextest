@@ -48,7 +48,7 @@ jobs:
       - name: Generate config schema
         run: cargo run --package nextest-runner --features config-schema --bin generate-config-schema
       - name: Install cargo readme
-        uses: taiki-e/install-action@3235f8901fd37ffed0052b276cec25a362fb82e9 # v2.77.7
+        uses: taiki-e/install-action@184183c2401be73c3bf42c2e61268aa5855379c1 # v2.78.1
         with:
           tool: cargo-readme
       - name: Run cargo readme
@@ -126,7 +126,7 @@ jobs:
           # Matrix instances (other than OS) need to be added to this explicitly
           key: ${{ matrix.rust-version }}
       - name: Install latest nextest release
-        uses: taiki-e/install-action@3235f8901fd37ffed0052b276cec25a362fb82e9 # v2.77.7
+        uses: taiki-e/install-action@184183c2401be73c3bf42c2e61268aa5855379c1 # v2.78.1
         with:
           tool: nextest
       - name: Build nextest-metadata
