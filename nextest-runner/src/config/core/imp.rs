@@ -231,7 +231,7 @@ impl NextestConfig {
     /// The schema is checked into the repository at
     /// `nextest-runner/jsonschemas/repo-config.json`. (If you're working within
     /// the nextest repository, regenerate the schema with `just
-    /// generate-config-schema`.
+    /// generate-schemas`.)
     pub const SCHEMA: &'static str = include_str!("../../../jsonschemas/repo-config.json");
 
     /// Environment configuration uses this prefix, plus a _.

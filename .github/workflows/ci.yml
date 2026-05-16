@@ -45,8 +45,8 @@ jobs:
         run: cargo clippy --all-features --all-targets
       - name: Lint (rustfmt)
         run: cargo xfmt --check
-      - name: Generate config schema
-        run: cargo run --package nextest-runner --features config-schema --bin generate-config-schema
+      - name: Generate config schemas
+        run: cargo run --package nextest-runner --features config-schema --bin generate-schemas
       - name: Install cargo readme
         uses: taiki-e/install-action@184183c2401be73c3bf42c2e61268aa5855379c1 # v2.78.1
         with:

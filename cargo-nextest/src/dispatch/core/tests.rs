@@ -145,6 +145,10 @@ fn test_argument_parsing() {
         "cargo nextest self schema repo-config -o schema.json",
         "cargo nextest self schema repo-config --output schema.json",
         "cargo nextest self schema repo-config --output /path/to/schema.json",
+        "cargo nextest self schema user-config",
+        "cargo nextest self schema user-config -o schema.json",
+        "cargo nextest self schema user-config --output schema.json",
+        "cargo nextest self schema user-config --output /path/to/schema.json",
         // ---
         // Bench command
         // ---

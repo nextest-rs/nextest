@@ -465,6 +465,15 @@ pub enum ExpectedError {
         #[source]
         err: std::io::Error,
     },
+    #[error("error writing {label} JSON Schema to {path}")]
+    SchemaWriteError {
+        /// Identifies which schema was being written ("repo config", "user
+        /// config", …) so a write error names the subcommand the user ran.
+        label: &'static str,
+        path: Utf8PathBuf,
+        #[source]
+        err: std::io::Error,
+    },
 }
 
 impl ExpectedError {
@@ -672,7 +681,9 @@ impl ExpectedError {
             Self::ChromeTraceExportError {
                 err: ChromeTraceError::SerializeError(_),
             } => NextestExitCode::WRITE_OUTPUT_ERROR,
-            Self::WriteError { .. } => NextestExitCode::WRITE_OUTPUT_ERROR,
+            Self::WriteError { .. } | Self::SchemaWriteError { .. } => {
+                NextestExitCode::WRITE_OUTPUT_ERROR
+            }
             Self::FiltersetParseError { .. } => NextestExitCode::INVALID_FILTERSET,
         }
     }
@@ -1396,6 +1407,10 @@ impl ExpectedError {
             }
             Self::WriteError { err } => {
                 error!("write error");
+                Some(err as &dyn Error)
+            }
+            Self::SchemaWriteError { label, path, err } => {
+                error!("error writing {label} JSON Schema to {path}");
                 Some(err as &dyn Error)
             }
         };

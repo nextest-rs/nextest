@@ -1,0 +1,488 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DeserializedUserConfig",
+  "description": "Per-user nextest configuration.\n\nStores personal preferences such as UI defaults and recording behavior.\nThis is distinct from the repository config (`.config/nextest.toml`),\nwhich controls test execution.\n\nSee [_User configuration reference_](https://nexte.st/docs/user-config/reference)\nfor details on each setting.",
+  "type": "object",
+  "properties": {
+    "experimental": {
+      "description": "Toggles for experimental, non-stable features.\n\n```toml\n[experimental]\nrecord = true\n```",
+      "$ref": "#/$defs/ExperimentalConfig"
+    },
+    "overrides": {
+      "description": "Platform-specific overrides applied on top of the base configuration.\n\nEach entry specifies a `platform` filter and any number of settings to\nsubstitute when that filter matches. For each setting, the first\nmatching override wins; the base configuration is used if no override\nmatches.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DeserializedOverride"
+      }
+    },
+    "record": {
+      "description": "Retention settings for the record-replay-rerun feature.",
+      "$ref": "#/$defs/DeserializedRecordConfig"
+    },
+    "ui": {
+      "description": "Display, progress, and pager settings.",
+      "$ref": "#/$defs/DeserializedUiConfig"
+    }
+  },
+  "additionalProperties": false,
+  "x-tombi-toml-version": "v1.1.0",
+  "$defs": {
+    "CommandNameAndArgs": {
+      "title": "CommandNameAndArgs",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "env": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "command"
+          ]
+        }
+      ]
+    },
+    "DeserializedOverride": {
+      "description": "A single platform-specific override entry.",
+      "type": "object",
+      "properties": {
+        "platform": {
+          "description": "Target-spec expression selecting which platforms this override applies\nto.\n\nAccepts a target triple (e.g. `x86_64-unknown-linux-gnu`) or a `cfg()`\nexpression (e.g. `cfg(windows)`, `cfg(target_os = \"macos\")`). Matched\nagainst the platform nextest was built for.",
+          "type": "string"
+        },
+        "record": {
+          "description": "Record retention settings to substitute on matching platforms.",
+          "$ref": "#/$defs/DeserializedRecordOverrideData"
+        },
+        "ui": {
+          "description": "UI settings to substitute on matching platforms.",
+          "$ref": "#/$defs/DeserializedUiOverrideData"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "platform"
+      ]
+    },
+    "DeserializedRecordConfig": {
+      "description": "Retention policy for recorded test runs.\n\nRecording only happens when the `record` experimental feature is enabled\n_and_ `enabled` here is true. The least-recently-used runs are evicted to\nkeep within `max-records`, `max-total-size`, and `max-age`.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Whether to record test runs.\n\nSet to false to temporarily disable recording without removing the rest\nof the configuration. Has no effect unless the `record` experimental\nfeature is also enabled.",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        },
+        "max-age": {
+          "description": "Maximum idle time before a recorded run is evicted (e.g. `\"30d\"`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "max-output-size": {
+          "description": "Maximum size of a single captured stdout or stderr stream before it is\ntruncated (e.g. `\"10MB\"`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "max-records": {
+          "description": "Maximum number of recorded runs to retain.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "default": null,
+          "minimum": 0
+        },
+        "max-total-size": {
+          "description": "Maximum combined size of all recorded runs (e.g. `\"1GB\"`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeserializedRecordOverrideData": {
+      "description": "Per-platform substitutions for `[record]` settings.\n\nEach field has the same meaning as in the `[record]` table. Only the\nfields actually set here are substituted on matching platforms.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Whether to record test runs.",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        },
+        "max-age": {
+          "description": "Maximum idle time before a recorded run is evicted (e.g. `\"30d\"`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "max-output-size": {
+          "description": "Maximum size of a single captured stdout or stderr stream before it is\ntruncated (e.g. `\"10MB\"`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "max-records": {
+          "description": "Maximum number of recorded runs to retain.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "default": null,
+          "minimum": 0
+        },
+        "max-total-size": {
+          "description": "Maximum combined size of all recorded runs (e.g. `\"1GB\"`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeserializedStreampagerConfig": {
+      "description": "Settings for nextest's built-in pager (active when `pager = \":builtin\"`).",
+      "type": "object",
+      "properties": {
+        "interface": {
+          "description": "How the pager uses the alternate screen and when it exits.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StreampagerInterface"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "show-ruler": {
+          "description": "Shows a ruler at the bottom of the pager.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "wrapping": {
+          "description": "How long lines are wrapped.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StreampagerWrapping"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeserializedUiConfig": {
+      "description": "Display, progress, and pager settings.",
+      "type": "object",
+      "properties": {
+        "input-handler": {
+          "description": "Enables the interactive keyboard input handler (e.g. `t` to dump test\nstatus, `Enter` to print a summary line).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "max-progress-running": {
+          "description": "Maximum number of running tests to list in the progress bar.\n\nAccepts a non-negative integer, or `\"infinite\"` for no limit. When the\nnumber of running tests exceeds this, the remainder is collapsed into a\nsummary line.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MaxProgressRunning"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output-indent": {
+          "description": "Indents captured test output for visual clarity.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "pager": {
+          "description": "Pager command to use for output that benefits from scrolling. Use\n`\":builtin\"` to select nextest's built-in pager.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PagerSetting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paginate": {
+          "description": "When to send output through the pager.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PaginateSetting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "show-progress": {
+          "description": "Style of progress display shown during test runs.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UiShowProgress"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "streampager": {
+          "description": "Settings for the built-in pager (active when `pager = \":builtin\"`).",
+          "$ref": "#/$defs/DeserializedStreampagerConfig"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeserializedUiOverrideData": {
+      "description": "Per-platform substitutions for `[ui]` settings.\n\nEach field has the same meaning as in the `[ui]` table. Only the fields\nactually set here are substituted on matching platforms.",
+      "type": "object",
+      "properties": {
+        "input-handler": {
+          "description": "Enables the interactive keyboard input handler.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "max-progress-running": {
+          "description": "Maximum number of running tests to list in the progress bar.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MaxProgressRunning"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output-indent": {
+          "description": "Indents captured test output for visual clarity.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "pager": {
+          "description": "Pager command to use for output that benefits from scrolling.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PagerSetting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paginate": {
+          "description": "When to send output through the pager.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PaginateSetting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "show-progress": {
+          "description": "Style of progress display shown during test runs.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UiShowProgress"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "streampager": {
+          "description": "Settings for the built-in pager (active when `pager = \":builtin\"`).",
+          "$ref": "#/$defs/DeserializedStreampagerConfig"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExperimentalConfig": {
+      "description": "User-level experimental features.\n\nConfigured in the `[experimental]` table of the user config file:\n\n```toml\n[experimental]\nrecord = true\n```\n\nUnknown features in this table produce a warning rather than an error, so\nolder nextest binaries can load configs written for newer ones.",
+      "type": "object",
+      "properties": {
+        "record": {
+          "description": "Enables the record-replay-rerun feature, which stores test run results\non disk so they can be replayed or selectively rerun later.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "MaxProgressRunning": {
+      "title": "MaxProgressRunning",
+      "description": "Maximum number of running tests to display: a non-negative integer, or \"infinite\" for no limit.",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "enum": [
+            "infinite"
+          ]
+        }
+      ]
+    },
+    "PagerSetting": {
+      "title": "PagerSetting",
+      "anyOf": [
+        {
+          "type": "string",
+          "const": ":builtin"
+        },
+        {
+          "$ref": "#/$defs/CommandNameAndArgs"
+        }
+      ]
+    },
+    "PaginateSetting": {
+      "description": "When to send output through the pager.",
+      "oneOf": [
+        {
+          "description": "Pages output from supported commands when stdout is a terminal.",
+          "type": "string",
+          "const": "auto"
+        },
+        {
+          "description": "Disables pagination entirely.",
+          "type": "string",
+          "const": "never"
+        }
+      ]
+    },
+    "StreampagerInterface": {
+      "description": "How the built-in pager uses the alternate screen and when it exits.",
+      "oneOf": [
+        {
+          "description": "Exits immediately if the output fits on one page; otherwise switches\nto full-screen and clears on exit.",
+          "type": "string",
+          "const": "quit-if-one-page"
+        },
+        {
+          "description": "Always uses full-screen mode and clears the screen on exit.",
+          "type": "string",
+          "const": "full-screen-clear-output"
+        },
+        {
+          "description": "Waits briefly before entering full-screen mode; clears on exit only if\nit switched to full-screen.",
+          "type": "string",
+          "const": "quit-quickly-or-clear-output"
+        }
+      ]
+    },
+    "StreampagerWrapping": {
+      "description": "How long lines are wrapped in the built-in pager.",
+      "oneOf": [
+        {
+          "description": "Disables wrapping; long lines extend off-screen and can be scrolled\nhorizontally.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "Wraps at word boundaries.",
+          "type": "string",
+          "const": "word"
+        },
+        {
+          "description": "Wraps at any character (grapheme) boundary.",
+          "type": "string",
+          "const": "anywhere"
+        }
+      ]
+    },
+    "UiShowProgress": {
+      "description": "Style of progress display shown during test runs.",
+      "oneOf": [
+        {
+          "description": "Picks a display based on terminal capabilities: a progress bar in\ninteractive terminals, a counter otherwise.",
+          "type": "string",
+          "const": "auto"
+        },
+        {
+          "description": "Disables progress display entirely.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "Shows a progress bar listing the currently running tests.",
+          "type": "string",
+          "const": "bar"
+        },
+        {
+          "description": "Shows a single-line counter (e.g. `(1/10)`).",
+          "type": "string",
+          "const": "counter"
+        },
+        {
+          "description": "Like `bar` in interactive terminals, but additionally hides successful\ntest output (sets `status-level` to `slow` and `final-status-level` to\n`none`). Falls back to `auto` behavior in non-interactive contexts\n(e.g. piped output, CI).",
+          "type": "string",
+          "const": "only"
+        }
+      ]
+    }
+  }
+}

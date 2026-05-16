@@ -49,6 +49,26 @@ pub enum MaxProgressRunning {
     Infinite,
 }
 
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for MaxProgressRunning {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "MaxProgressRunning".into()
+    }
+
+    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "title": "MaxProgressRunning",
+            "description":
+                "Maximum number of running tests to display: a non-negative integer, \
+                 or \"infinite\" for no limit.",
+            "oneOf": [
+                { "type": "integer", "minimum": 0 },
+                { "type": "string", "enum": ["infinite"] }
+            ]
+        })
+    }
+}
+
 impl MaxProgressRunning {
     /// The default value (8 tests).
     pub const DEFAULT_VALUE: Self = Self::Count(8);

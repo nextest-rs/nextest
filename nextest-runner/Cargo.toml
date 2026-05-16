@@ -196,8 +196,8 @@ experimental-tokio-console = [
 ]
 
 [[bin]]
-name = "generate-config-schema"
-path = "src/bin/generate-config-schema.rs"
+name = "generate-schemas"
+path = "src/bin/generate-schemas.rs"
 required-features = ["config-schema"]
 
 [lints]

@@ -6,7 +6,7 @@
 use crate::{ExpectedError, Result, output::OutputContext};
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand, ValueEnum};
-use nextest_runner::config::core::NextestConfig;
+use nextest_runner::{config::core::NextestConfig, user_config::UserConfig};
 use std::io::Write;
 use tracing::info;
 
@@ -121,12 +121,14 @@ pub(crate) enum SetupSource {
 #[derive(Debug, Subcommand)]
 pub(crate) enum SchemaCommand {
     /// Print the JSON Schema for `.config/nextest.toml`.
-    RepoConfig(RepoConfigOpts),
+    RepoConfig(SchemaOutputOpts),
+    /// Print the JSON Schema for the user config file (e.g. `~/.config/nextest/config.toml`).
+    UserConfig(SchemaOutputOpts),
 }
 
-/// Options for the `cargo nextest self schema repo-config` command.
+/// Output options shared by `cargo nextest self schema` subcommands.
 #[derive(Debug, Args)]
-pub(crate) struct RepoConfigOpts {
+pub(crate) struct SchemaOutputOpts {
     /// Output file path. Defaults to stdout.
     #[arg(short = 'o', long = "output", value_name = "PATH")]
     output: Option<Utf8PathBuf>,
@@ -135,22 +137,34 @@ pub(crate) struct RepoConfigOpts {
 impl SchemaCommand {
     fn exec(self) -> Result<i32> {
         match self {
-            Self::RepoConfig(opts) => opts.exec(),
+            Self::RepoConfig(opts) => opts.exec(NextestConfig::SCHEMA, "repo config"),
+            Self::UserConfig(opts) => opts.exec(UserConfig::SCHEMA, "user config"),
         }
     }
 }
 
-impl RepoConfigOpts {
-    fn exec(&self) -> Result<i32> {
+impl SchemaOutputOpts {
+    fn exec(&self, schema: &str, label: &'static str) -> Result<i32> {
         match &self.output {
             Some(path) => {
-                std::fs::write(path, NextestConfig::SCHEMA)
-                    .map_err(|err| ExpectedError::WriteError { err })?;
-                info!("wrote JSON Schema for repo config to {path}");
+                std::fs::write(path, schema).map_err(|err| ExpectedError::SchemaWriteError {
+                    label,
+                    path: path.clone(),
+                    err,
+                })?;
+                info!("wrote JSON Schema for {label} to {path}");
             }
             None => {
-                std::io::stdout()
-                    .write_all(NextestConfig::SCHEMA.as_bytes())
+                // Lock stdout to keep the write and flush atomic, and propagate
+                // flush errors so that broken pipes (e.g. `… | head`) don't
+                // silently truncate output.
+                let stdout = std::io::stdout();
+                let mut stdout = stdout.lock();
+                stdout
+                    .write_all(schema.as_bytes())
+                    .map_err(|err| ExpectedError::WriteError { err })?;
+                stdout
+                    .flush()
                     .map_err(|err| ExpectedError::WriteError { err })?;
             }
         }

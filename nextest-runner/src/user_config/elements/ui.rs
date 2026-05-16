@@ -14,39 +14,40 @@ use serde::{
 use std::{collections::BTreeMap, fmt, process::Command};
 use target_spec::{Platform, TargetSpec};
 
-/// UI-related configuration (deserialized form).
-///
-/// This section controls how nextest displays progress and output during test
-/// runs. All fields are optional; unspecified fields will use defaults.
+/// Display, progress, and pager settings.
 #[derive(Clone, Debug, Default, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::user_config) struct DeserializedUiConfig {
-    /// How to show progress during test runs.
-    ///
-    /// Accepts: `"auto"`, `"none"`, `"bar"`, `"counter"`, `"only"`.
+    /// Style of progress display shown during test runs.
     pub(in crate::user_config) show_progress: Option<UiShowProgress>,
 
-    /// Maximum running tests to display in the progress bar.
+    /// Maximum number of running tests to list in the progress bar.
     ///
-    /// Accepts: an integer, or `"infinite"` for unlimited.
+    /// Accepts a non-negative integer, or `"infinite"` for no limit. When the
+    /// number of running tests exceeds this, the remainder is collapsed into a
+    /// summary line.
     #[serde(default, deserialize_with = "deserialize_max_progress_running")]
     max_progress_running: Option<MaxProgressRunning>,
 
-    /// Whether to enable the input handler.
+    /// Enables the interactive keyboard input handler (e.g. `t` to dump test
+    /// status, `Enter` to print a summary line).
     input_handler: Option<bool>,
 
-    /// Whether to indent captured test output.
+    /// Indents captured test output for visual clarity.
     output_indent: Option<bool>,
 
-    /// Pager command for output that benefits from scrolling.
+    /// Pager command to use for output that benefits from scrolling. Use
+    /// `":builtin"` to select nextest's built-in pager.
     #[serde(default)]
     pager: Option<PagerSetting>,
 
-    /// When to paginate output.
+    /// When to send output through the pager.
     #[serde(default)]
     paginate: Option<PaginateSetting>,
 
-    /// Configuration for the builtin streampager.
+    /// Settings for the built-in pager (active when `pager = ":builtin"`).
     #[serde(default)]
     streampager: DeserializedStreampagerConfig,
 }
@@ -81,35 +82,37 @@ pub(crate) struct DefaultUiConfig {
     pub(in crate::user_config) streampager: DefaultStreampagerConfig,
 }
 
-/// Deserialized form of UI override settings.
+/// Per-platform substitutions for `[ui]` settings.
 ///
-/// Each field is optional; only the fields that are specified will override the
-/// base configuration.
+/// Each field has the same meaning as in the `[ui]` table. Only the fields
+/// actually set here are substituted on matching platforms.
 #[derive(Clone, Debug, Default, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::user_config) struct DeserializedUiOverrideData {
-    /// How to show progress during test runs.
+    /// Style of progress display shown during test runs.
     pub(in crate::user_config) show_progress: Option<UiShowProgress>,
 
-    /// Maximum running tests to display in the progress bar.
+    /// Maximum number of running tests to list in the progress bar.
     #[serde(default, deserialize_with = "deserialize_max_progress_running")]
     pub(in crate::user_config) max_progress_running: Option<MaxProgressRunning>,
 
-    /// Whether to enable the input handler.
+    /// Enables the interactive keyboard input handler.
     pub(in crate::user_config) input_handler: Option<bool>,
 
-    /// Whether to indent captured test output.
+    /// Indents captured test output for visual clarity.
     pub(in crate::user_config) output_indent: Option<bool>,
 
-    /// Pager command for output that benefits from scrolling.
+    /// Pager command to use for output that benefits from scrolling.
     #[serde(default)]
     pub(in crate::user_config) pager: Option<PagerSetting>,
 
-    /// When to paginate output.
+    /// When to send output through the pager.
     #[serde(default)]
     pub(in crate::user_config) paginate: Option<PaginateSetting>,
 
-    /// Configuration for the builtin streampager.
+    /// Settings for the built-in pager (active when `pager = ":builtin"`).
     #[serde(default)]
     pub(in crate::user_config) streampager: DeserializedStreampagerConfig,
 }
@@ -323,28 +326,25 @@ impl UiConfig {
     }
 }
 
-/// Show progress setting for UI configuration.
-///
-/// This is a serde-friendly config enum, separate from [`ShowProgress`] (the
-/// runtime enum). `UiShowProgress` is deserialized from nextest profiles and
-/// then converted to `ShowProgress` for use at runtime.
+/// Style of progress display shown during test runs.
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum UiShowProgress {
-    /// Automatically choose based on terminal capabilities.
+    /// Picks a display based on terminal capabilities: a progress bar in
+    /// interactive terminals, a counter otherwise.
     #[default]
     Auto,
-    /// No progress display.
+    /// Disables progress display entirely.
     None,
-    /// Show a progress bar with running tests.
+    /// Shows a progress bar listing the currently running tests.
     Bar,
-    /// Show a simple counter (e.g., "(1/10)").
+    /// Shows a single-line counter (e.g. `(1/10)`).
     Counter,
-    /// Like `Bar` in interactive terminals, but also hides successful test
-    /// output by defaulting to `status-level=slow` and
-    /// `final-status-level=none`. In non-interactive contexts (piped output,
-    /// CI), behaves identically to `Auto`: successful test output is shown
-    /// normally.
+    /// Like `bar` in interactive terminals, but additionally hides successful
+    /// test output (sets `status-level` to `slow` and `final-status-level` to
+    /// `none`). Falls back to `auto` behavior in non-interactive contexts
+    /// (e.g. piped output, CI).
     Only,
 }
 
@@ -364,31 +364,32 @@ impl From<UiShowProgress> for ShowProgress {
     }
 }
 
-/// Controls when to paginate output.
+/// When to send output through the pager.
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum PaginateSetting {
-    /// Automatically page if stdout is a TTY and output would benefit from it.
+    /// Pages output from supported commands when stdout is a terminal.
     #[default]
     Auto,
-    /// Never use a pager.
+    /// Disables pagination entirely.
     Never,
 }
 
 /// The special string that indicates the builtin pager should be used.
 pub const BUILTIN_PAGER_NAME: &str = ":builtin";
 
-/// Deserialized streampager configuration (all fields optional).
-///
-/// Used in user config and overrides where any field may be unspecified.
+/// Settings for nextest's built-in pager (active when `pager = ":builtin"`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::user_config) struct DeserializedStreampagerConfig {
-    /// Interface mode controlling alternate screen behavior.
+    /// How the pager uses the alternate screen and when it exits.
     pub(in crate::user_config) interface: Option<StreampagerInterface>,
-    /// Text wrapping mode.
+    /// How long lines are wrapped.
     pub(in crate::user_config) wrapping: Option<StreampagerWrapping>,
-    /// Whether to show a ruler at the bottom.
+    /// Shows a ruler at the bottom of the pager.
     pub(in crate::user_config) show_ruler: Option<bool>,
 }
 
@@ -443,32 +444,34 @@ impl StreampagerConfig {
     }
 }
 
-/// Interface mode for the builtin streampager.
-///
-/// Controls how the pager uses the alternate screen and when it exits.
+/// How the built-in pager uses the alternate screen and when it exits.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum StreampagerInterface {
-    /// Exit immediately if content fits on one page; otherwise use full screen
-    /// and clear on exit.
+    /// Exits immediately if the output fits on one page; otherwise switches
+    /// to full-screen and clears on exit.
     #[default]
     QuitIfOnePage,
-    /// Always use full screen mode and clear the screen on exit.
+    /// Always uses full-screen mode and clears the screen on exit.
     FullScreenClearOutput,
-    /// Wait briefly before entering full screen; clear on exit if entered.
+    /// Waits briefly before entering full-screen mode; clears on exit only if
+    /// it switched to full-screen.
     QuitQuicklyOrClearOutput,
 }
 
-/// Text wrapping mode for the builtin streampager.
+/// How long lines are wrapped in the built-in pager.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum StreampagerWrapping {
-    /// Do not wrap text; allow horizontal scrolling.
+    /// Disables wrapping; long lines extend off-screen and can be scrolled
+    /// horizontally.
     None,
-    /// Wrap at word boundaries.
+    /// Wraps at word boundaries.
     #[default]
     Word,
-    /// Wrap at any character (grapheme) boundary.
+    /// Wraps at any character (grapheme) boundary.
     Anywhere,
 }
 
@@ -511,6 +514,48 @@ impl CommandNameAndArgs {
 impl<'de> Deserialize<'de> for CommandNameAndArgs {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         deserializer.deserialize_any(CommandNameAndArgsVisitor)
+    }
+}
+
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for CommandNameAndArgs {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "CommandNameAndArgs".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        // The string form is split via `shell_words`, which rejects empty and
+        // whitespace-only inputs. `pattern: "\\S"` (one non-whitespace
+        // character anywhere) mirrors that — `minLength` alone would still
+        // accept whitespace-only strings.
+        schemars::json_schema!({
+            "title": "CommandNameAndArgs",
+            "oneOf": [
+                {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S",
+                },
+                {
+                    "type": "array",
+                    "items": generator.subschema_for::<String>(),
+                    "minItems": 1,
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "command": {
+                            "type": "array",
+                            "items": generator.subschema_for::<String>(),
+                            "minItems": 1,
+                        },
+                        "env": generator.subschema_for::<BTreeMap<String, String>>(),
+                    },
+                    "required": ["command"],
+                    "additionalProperties": false,
+                }
+            ]
+        })
     }
 }
 
@@ -601,6 +646,28 @@ impl Default for PagerSetting {
 impl<'de> Deserialize<'de> for PagerSetting {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         deserializer.deserialize_any(PagerSettingVisitor)
+    }
+}
+
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for PagerSetting {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "PagerSetting".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        // `PagerSetting` accepts everything that `CommandNameAndArgs` does, plus
+        // the special string ":builtin". Defer to `CommandNameAndArgs`'s schema
+        // for the command forms so the two stay in sync. `anyOf` (rather than
+        // `oneOf`) is used because the string ":builtin" satisfies both
+        // branches — at runtime it is special-cased to mean the builtin pager.
+        schemars::json_schema!({
+            "title": "PagerSetting",
+            "anyOf": [
+                { "type": "string", "const": BUILTIN_PAGER_NAME },
+                generator.subschema_for::<CommandNameAndArgs>(),
+            ]
+        })
     }
 }
 

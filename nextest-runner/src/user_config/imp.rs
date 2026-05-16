@@ -67,6 +67,20 @@ pub struct UserConfig {
 }
 
 impl UserConfig {
+    /// The pregenerated JSON Schema for `config.toml` in the user config
+    /// directory.
+    ///
+    /// The schema is checked into the repository at
+    /// `nextest-runner/jsonschemas/user-config.json`. (If you're working
+    /// within the nextest repository, regenerate the schema with `just
+    /// generate-schemas`.)
+    pub const SCHEMA: &'static str = include_str!("../../jsonschemas/user-config.json");
+
+    /// The embedded default user config TOML.
+    ///
+    /// User-specific configuration is layered on top of this default config.
+    pub const DEFAULT_CONFIG: &'static str = include_str!("../../default-user-config.toml");
+
     /// Loads and resolves user configuration.
     ///
     /// Platform overrides in the user config are evaluated against the build
@@ -160,19 +174,20 @@ impl UserConfigWarnings for DefaultUserConfigWarnings {
     }
 }
 
-/// User-specific configuration (deserialized form).
+/// Per-user nextest configuration.
 ///
-/// This configuration is loaded from the user's config directory and contains
-/// personal preferences that shouldn't be version-controlled.
+/// Stores personal preferences such as UI defaults and recording behavior.
+/// This is distinct from the repository config (`.config/nextest.toml`),
+/// which controls test execution.
 ///
-/// Use [`DeserializedUserConfig::compile`] to compile platform specs and get a
-/// [`CompiledUserConfig`].
+/// See [_User configuration reference_](https://nexte.st/docs/user-config/reference)
+/// for details on each setting.
 #[derive(Clone, Debug, Default, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 struct DeserializedUserConfig {
-    /// Experimental features to enable.
-    ///
-    /// This is a table with boolean fields for each experimental feature:
+    /// Toggles for experimental, non-stable features.
     ///
     /// ```toml
     /// [experimental]
@@ -181,39 +196,63 @@ struct DeserializedUserConfig {
     #[serde(default)]
     experimental: ExperimentalConfig,
 
-    /// UI configuration.
+    /// Display, progress, and pager settings.
     #[serde(default)]
     ui: DeserializedUiConfig,
 
-    /// Record configuration.
+    /// Retention settings for the record-replay-rerun feature.
     #[serde(default)]
     record: DeserializedRecordConfig,
 
-    /// Configuration overrides.
+    /// Platform-specific overrides applied on top of the base configuration.
+    ///
+    /// Each entry specifies a `platform` filter and any number of settings to
+    /// substitute when that filter matches. For each setting, the first
+    /// matching override wins; the base configuration is used if no override
+    /// matches.
     #[serde(default)]
     overrides: Vec<DeserializedOverride>,
 }
 
-/// Deserialized form of a single override entry.
-///
-/// Each override has a platform filter and optional settings for different
-/// configuration sections.
+/// A single platform-specific override entry.
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 struct DeserializedOverride {
-    /// Platform to match (required).
+    /// Target-spec expression selecting which platforms this override applies
+    /// to.
     ///
-    /// This is a target-spec expression like `cfg(windows)` or
-    /// `x86_64-unknown-linux-gnu`.
+    /// Accepts a target triple (e.g. `x86_64-unknown-linux-gnu`) or a `cfg()`
+    /// expression (e.g. `cfg(windows)`, `cfg(target_os = "macos")`). Matched
+    /// against the platform nextest was built for.
     platform: String,
 
-    /// UI settings to override.
+    /// UI settings to substitute on matching platforms.
     #[serde(default)]
     ui: DeserializedUiOverrideData,
 
-    /// Record settings to override.
+    /// Record retention settings to substitute on matching platforms.
     #[serde(default)]
     record: DeserializedRecordOverrideData,
+}
+
+/// Returns the JSON schema for `config.toml` in the user config directory.
+///
+/// As with [`nextest_config_schema`](crate::config::core::nextest_config_schema),
+/// the schema is intentionally stricter than nextest's runtime parser: unknown
+/// fields are errors so that editors flag likely typos, while at runtime they
+/// are warnings so that older nextest binaries can load configs written for
+/// newer versions.
+#[cfg(feature = "config-schema")]
+pub fn user_config_schema() -> schemars::Schema {
+    let mut schema = schemars::schema_for!(DeserializedUserConfig);
+    // This indicates to Tombi that nextest supports TOML 1.1.0.
+    schema.insert(
+        "x-tombi-toml-version".to_owned(),
+        serde_json::Value::String("v1.1.0".to_owned()),
+    );
+    schema
 }
 
 impl DeserializedUserConfig {
@@ -423,15 +462,12 @@ pub(super) struct DefaultUserConfig {
 }
 
 impl DefaultUserConfig {
-    /// The embedded default user config TOML.
-    const DEFAULT_CONFIG: &'static str = include_str!("../../default-user-config.toml");
-
     /// Parses and compiles the default config.
     ///
     /// Panics if the embedded TOML is invalid, contains unknown keys, or has
     /// invalid platform specs in overrides.
     pub(crate) fn from_embedded() -> Self {
-        let deserializer = toml::Deserializer::parse(Self::DEFAULT_CONFIG)
+        let deserializer = toml::Deserializer::parse(UserConfig::DEFAULT_CONFIG)
             .expect("embedded default user config should parse");
         let mut unknown = BTreeSet::new();
         let config: DeserializedDefaultUserConfig =
