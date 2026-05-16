@@ -635,7 +635,7 @@ impl<'de> de::Visitor<'de> for PagerSettingVisitor {
     }
 }
 
-/// Visitor for deserializing max-progress-running (string or integer).
+/// Visitor for deserializing max-progress-running (integer or `"infinite"`).
 struct MaxProgressRunningVisitor;
 
 impl<'de> de::Visitor<'de> for MaxProgressRunningVisitor {
@@ -661,10 +661,7 @@ impl<'de> de::Visitor<'de> for MaxProgressRunningVisitor {
         if v == "infinite" {
             Ok(MaxProgressRunning::Infinite)
         } else {
-            // Try parsing as a number.
-            v.parse::<usize>()
-                .map(MaxProgressRunning::Count)
-                .map_err(|_| E::invalid_value(Unexpected::Str(v), &self))
+            Err(E::invalid_value(Unexpected::Str(v), &self))
         }
     }
 }
@@ -806,6 +803,9 @@ mod tests {
 
         // Test that matching is case-sensitive.
         toml::from_str::<DeserializedUiConfig>(r#"max-progress-running = "INFINITE""#).unwrap_err();
+
+        // Numeric strings are rejected.
+        toml::from_str::<DeserializedUiConfig>(r#"max-progress-running = "8""#).unwrap_err();
 
         // Test missing value.
         let config: DeserializedUiConfig = toml::from_str("").unwrap();
