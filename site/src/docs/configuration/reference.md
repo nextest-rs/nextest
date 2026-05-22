@@ -34,11 +34,11 @@ A JSON Schema is available for nextest's repository configuration. The schema ca
 The schema can be used:
 
 - To validate a repository configuration file.
-- With the [Tombi](https://tombi-toml.github.io/tombi) language server for TOML, to provide autocomplete in supported IDEs and editors. (The taplo language server is not supported due to a [crash bug](https://github.com/tamasfe/taplo/pull/779).)
+- With the [Tombi](https://tombi-toml.github.io/tombi) language server for TOML or [RustRover](../integrations/rustrover.md), to provide autocomplete in supported IDEs and editors. (The taplo language server is not supported due to a [crash bug](https://github.com/tamasfe/taplo/pull/779).)
 
 Note that the schema is somewhat stricter than nextest's own config parser: unknown configuration items will fail schema validation, while nextest itself will only print out a warning.
 
-The schema is part of the [JSON Schema Store](https://www.schemastore.org/), so language servers like Tombi will automatically download it for you. Because nextest's configuration (outside of experimental configuration) is [append-only](../stability/index.md), the schema will automatically be updated as new nextest versions are released.
+The schema is part of the [JSON Schema Store](https://www.schemastore.org/), so both Tombi and RustRover will automatically download it for you. Because nextest's configuration (outside of experimental configuration) is [append-only](../stability/index.md), the schema will automatically be updated as new nextest versions are released.
 
 ## Top-level configuration
 

@@ -26,6 +26,10 @@ Then, if you run a test from within the UI, RustRover will invoke nextest.
 
     Currently, RustRover does not support debugging tests with the nextest environment configured. For more, see [_Debugger and tracer integration_](debuggers-tracers.md).
 
+## Configuration autocomplete
+
+RustRover automatically downloads nextest's JSON schemas from the [JSON Schema Store](https://www.schemastore.org/), providing autocomplete and validation for both [repository configuration](../configuration/reference.md#repository-configuration-schema) (`.config/nextest.toml`) and [user configuration](../user-config/reference.md#user-configuration-schema) files. No additional setup is required.
+
 ## Learn more
 
 - [RustRover 2026.1: Professional Testing With Native cargo-nextest Integration](https://blog.jetbrains.com/rust/2026/04/03/rustrover-2026-1-professional-testing-with-native-cargo-nextest-integration/) on the JetBrains blog

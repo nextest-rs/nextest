@@ -94,3 +94,17 @@ For more information about CodeLLDB, see [its manual](https://github.com/vadimcn
       // ...
     }
     ```
+
+## Configuration autocomplete
+
+For autocomplete and validation in nextest configuration files, install the [Tombi extension](https://marketplace.visualstudio.com/items?itemName=tombi-toml.tombi) for VS Code:
+
+```
+ext install tombi-toml.tombi
+```
+
+The Tombi language server automatically downloads nextest's JSON schemas from the [JSON Schema Store](https://www.schemastore.org/), so no additional setup is required. Both [repository configuration](../configuration/reference.md#repository-configuration-schema) (`.config/nextest.toml`) and [user configuration](../user-config/reference.md#user-configuration-schema) files are supported.
+
+!!! warning "Other TOML extensions are not supported"
+
+    The Even Better TOML extension is not supported since it uses the [taplo language server](https://taplo.tamasfe.dev/) which has a [crash bug](https://github.com/tamasfe/taplo/pull/779) when validating nextest's schemas.
