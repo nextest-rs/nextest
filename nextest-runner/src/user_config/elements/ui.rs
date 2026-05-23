@@ -25,9 +25,8 @@ pub(in crate::user_config) struct DeserializedUiConfig {
 
     /// Maximum number of running tests to list in the progress bar.
     ///
-    /// Accepts a non-negative integer, or `"infinite"` for no limit. When the
-    /// number of running tests exceeds this, the remainder is collapsed into a
-    /// summary line.
+    /// Accepts a non-negative integer, or `"infinite"` for no limit. Excess
+    /// running tests are collapsed into a summary line.
     #[serde(default, deserialize_with = "deserialize_max_progress_running")]
     max_progress_running: Option<MaxProgressRunning>,
 
@@ -39,7 +38,7 @@ pub(in crate::user_config) struct DeserializedUiConfig {
     output_indent: Option<bool>,
 
     /// Pager command to use for output that benefits from scrolling. Use
-    /// `":builtin"` to select nextest's built-in pager.
+    /// `":builtin"` to select nextest's builtin pager.
     #[serde(default)]
     pager: Option<PagerSetting>,
 
@@ -47,7 +46,7 @@ pub(in crate::user_config) struct DeserializedUiConfig {
     #[serde(default)]
     paginate: Option<PaginateSetting>,
 
-    /// Settings for the built-in pager (active when `pager = ":builtin"`).
+    /// Settings for the builtin pager (active when `pager = ":builtin"`).
     #[serde(default)]
     streampager: DeserializedStreampagerConfig,
 }
@@ -59,26 +58,31 @@ pub(in crate::user_config) struct DeserializedUiConfig {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct DefaultUiConfig {
-    /// How to show progress during test runs.
+    /// Style of progress display shown during test runs.
     show_progress: UiShowProgress,
 
-    /// Maximum running tests to display in the progress bar.
+    /// Maximum number of running tests to list in the progress bar.
+    ///
+    /// Accepts a non-negative integer, or `"infinite"` for no limit. Excess
+    /// running tests are collapsed into a summary line.
     #[serde(deserialize_with = "deserialize_max_progress_running_required")]
     max_progress_running: MaxProgressRunning,
 
-    /// Whether to enable the input handler.
+    /// Enables the interactive keyboard input handler (e.g. `t` to dump test
+    /// status, `Enter` to print a summary line).
     input_handler: bool,
 
-    /// Whether to indent captured test output.
+    /// Indents captured test output for visual clarity.
     output_indent: bool,
 
-    /// Pager command for output that benefits from scrolling.
+    /// Pager command to use for output that benefits from scrolling. Use
+    /// `":builtin"` to select nextest's builtin pager.
     pub(in crate::user_config) pager: PagerSetting,
 
-    /// When to paginate output.
+    /// When to send output through the pager.
     pub(in crate::user_config) paginate: PaginateSetting,
 
-    /// Configuration for the builtin streampager.
+    /// Settings for the builtin pager (active when `pager = ":builtin"`).
     pub(in crate::user_config) streampager: DefaultStreampagerConfig,
 }
 
@@ -95,16 +99,21 @@ pub(in crate::user_config) struct DeserializedUiOverrideData {
     pub(in crate::user_config) show_progress: Option<UiShowProgress>,
 
     /// Maximum number of running tests to list in the progress bar.
+    ///
+    /// Accepts a non-negative integer, or `"infinite"` for no limit. Excess
+    /// running tests are collapsed into a summary line.
     #[serde(default, deserialize_with = "deserialize_max_progress_running")]
     pub(in crate::user_config) max_progress_running: Option<MaxProgressRunning>,
 
-    /// Enables the interactive keyboard input handler.
+    /// Enables the interactive keyboard input handler (e.g. `t` to dump test
+    /// status, `Enter` to print a summary line).
     pub(in crate::user_config) input_handler: Option<bool>,
 
     /// Indents captured test output for visual clarity.
     pub(in crate::user_config) output_indent: Option<bool>,
 
-    /// Pager command to use for output that benefits from scrolling.
+    /// Pager command to use for output that benefits from scrolling. Use
+    /// `":builtin"` to select nextest's builtin pager.
     #[serde(default)]
     pub(in crate::user_config) pager: Option<PagerSetting>,
 
@@ -112,7 +121,7 @@ pub(in crate::user_config) struct DeserializedUiOverrideData {
     #[serde(default)]
     pub(in crate::user_config) paginate: Option<PaginateSetting>,
 
-    /// Settings for the built-in pager (active when `pager = ":builtin"`).
+    /// Settings for the builtin pager (active when `pager = ":builtin"`).
     #[serde(default)]
     pub(in crate::user_config) streampager: DeserializedStreampagerConfig,
 }
@@ -343,8 +352,8 @@ pub enum UiShowProgress {
     Counter,
     /// Like `bar` in interactive terminals, but additionally hides successful
     /// test output (sets `status-level` to `slow` and `final-status-level` to
-    /// `none`). Falls back to `auto` behavior in non-interactive contexts
-    /// (e.g. piped output, CI).
+    /// `none`). Falls back to `auto` in non-interactive contexts (e.g. piped
+    /// output, CI).
     Only,
 }
 
@@ -379,17 +388,17 @@ pub enum PaginateSetting {
 /// The special string that indicates the builtin pager should be used.
 pub const BUILTIN_PAGER_NAME: &str = ":builtin";
 
-/// Settings for nextest's built-in pager (active when `pager = ":builtin"`).
+/// Settings for nextest's builtin pager (active when `pager = ":builtin"`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::user_config) struct DeserializedStreampagerConfig {
-    /// How the pager uses the alternate screen and when it exits.
+    /// How the builtin pager uses the alternate screen and when it exits.
     pub(in crate::user_config) interface: Option<StreampagerInterface>,
-    /// How long lines are wrapped.
+    /// How the builtin pager wraps long lines.
     pub(in crate::user_config) wrapping: Option<StreampagerWrapping>,
-    /// Shows a ruler at the bottom of the pager.
+    /// Whether to show a ruler at the bottom of the builtin pager.
     pub(in crate::user_config) show_ruler: Option<bool>,
 }
 
@@ -399,11 +408,11 @@ pub(in crate::user_config) struct DeserializedStreampagerConfig {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::user_config) struct DefaultStreampagerConfig {
-    /// Interface mode controlling alternate screen behavior.
+    /// How the builtin pager uses the alternate screen and when it exits.
     pub(in crate::user_config) interface: StreampagerInterface,
-    /// Text wrapping mode.
+    /// How the builtin pager wraps long lines.
     pub(in crate::user_config) wrapping: StreampagerWrapping,
-    /// Whether to show a ruler at the bottom.
+    /// Whether to show a ruler at the bottom of the builtin pager.
     pub(in crate::user_config) show_ruler: bool,
 }
 
@@ -412,11 +421,11 @@ pub(in crate::user_config) struct DefaultStreampagerConfig {
 /// These settings control behavior when `pager = ":builtin"` is configured.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StreampagerConfig {
-    /// Interface mode controlling alternate screen behavior.
+    /// How the builtin pager uses the alternate screen and when it exits.
     pub interface: StreampagerInterface,
-    /// Text wrapping mode.
+    /// How the builtin pager wraps long lines.
     pub wrapping: StreampagerWrapping,
-    /// Whether to show a ruler at the bottom.
+    /// Whether to show a ruler at the bottom of the builtin pager.
     pub show_ruler: bool,
 }
 
@@ -444,7 +453,7 @@ impl StreampagerConfig {
     }
 }
 
-/// How the built-in pager uses the alternate screen and when it exits.
+/// How the builtin pager uses the alternate screen and when it exits.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
@@ -460,7 +469,7 @@ pub enum StreampagerInterface {
     QuitQuicklyOrClearOutput,
 }
 
-/// How long lines are wrapped in the built-in pager.
+/// How long lines are wrapped in the builtin pager.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]

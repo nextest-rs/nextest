@@ -21,7 +21,7 @@ Here is a recommended profile for CI runs:
 
 ```toml title="Configuring a CI profile in <code>.config/nextest.toml</code>"
 [profile.ci]
-# Do not cancel the test run on the first failure.
+# Run all tests regardless of failures.
 fail-fast = false
 ```
 

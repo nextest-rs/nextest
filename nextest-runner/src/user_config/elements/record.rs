@@ -25,40 +25,38 @@ pub const MIN_MAX_OUTPUT_SIZE: ByteSize = ByteSize::b(1000);
 /// a recorded archive, preventing malicious archives from causing OOM.
 pub const MAX_MAX_OUTPUT_SIZE: ByteSize = ByteSize::mib(256);
 
-/// Retention policy for recorded test runs.
+/// Retention settings for the record-replay-rerun feature.
 ///
-/// Recording only happens when the `record` experimental feature is enabled
-/// _and_ `enabled` here is true. The least-recently-used runs are evicted to
+/// Recording happens only when the `record` experimental feature is enabled
+/// and `enabled` here is true. The least-recently-used runs are evicted to
 /// keep within `max-records`, `max-total-size`, and `max-age`.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub struct DeserializedRecordConfig {
-    /// Whether to record test runs.
-    ///
-    /// Set to false to temporarily disable recording without removing the rest
-    /// of the configuration. Has no effect unless the `record` experimental
-    /// feature is also enabled.
+    /// Whether to record test runs. Has no effect unless `[experimental]
+    /// record = true`.
     #[serde(default)]
     pub enabled: Option<bool>,
 
-    /// Maximum number of recorded runs to retain.
+    /// Maximum number of recorded runs to retain before eviction.
     #[serde(default)]
     pub max_records: Option<usize>,
 
-    /// Maximum combined size of all recorded runs (e.g. `"1GB"`).
+    /// Maximum combined size of all retained recordings before eviction (e.g.
+    /// `"1GB"`).
     #[serde(default)]
     #[cfg_attr(feature = "config-schema", schemars(with = "Option<String>"))]
     pub max_total_size: Option<ByteSize>,
 
-    /// Maximum idle time before a recorded run is evicted (e.g. `"30d"`).
+    /// Maximum age of a recorded run before eviction (e.g. `"30d"`).
     #[serde(default, with = "humantime_serde")]
     #[cfg_attr(feature = "config-schema", schemars(with = "Option<String>"))]
     pub max_age: Option<Duration>,
 
-    /// Maximum size of a single captured stdout or stderr stream before it is
-    /// truncated (e.g. `"10MB"`).
+    /// Maximum size of a single captured stdout or stderr stream before
+    /// truncation (e.g. `"10MB"`).
     #[serde(default)]
     #[cfg_attr(feature = "config-schema", schemars(with = "Option<String>"))]
     pub max_output_size: Option<ByteSize>,
@@ -71,20 +69,23 @@ pub struct DeserializedRecordConfig {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct DefaultRecordConfig {
-    /// Whether recording is enabled by default.
+    /// Whether to record test runs. Has no effect unless `[experimental]
+    /// record = true`.
     pub enabled: bool,
 
-    /// Maximum number of records to keep.
+    /// Maximum number of recorded runs to retain before eviction.
     pub max_records: usize,
 
-    /// Maximum total size of all records.
+    /// Maximum combined size of all retained recordings before eviction (e.g.
+    /// `"1GB"`).
     pub max_total_size: ByteSize,
 
-    /// Maximum age of records.
+    /// Maximum age of a recorded run before eviction (e.g. `"30d"`).
     #[serde(with = "humantime_serde")]
     pub max_age: Duration,
 
-    /// Maximum size of a single output (stdout/stderr) before truncation.
+    /// Maximum size of a single captured stdout or stderr stream before
+    /// truncation (e.g. `"10MB"`).
     pub max_output_size: ByteSize,
 }
 
@@ -97,26 +98,28 @@ pub struct DefaultRecordConfig {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::user_config) struct DeserializedRecordOverrideData {
-    /// Whether to record test runs.
+    /// Whether to record test runs. Has no effect unless `[experimental]
+    /// record = true`.
     #[serde(default)]
     pub(in crate::user_config) enabled: Option<bool>,
 
-    /// Maximum number of recorded runs to retain.
+    /// Maximum number of recorded runs to retain before eviction.
     #[serde(default)]
     pub(in crate::user_config) max_records: Option<usize>,
 
-    /// Maximum combined size of all recorded runs (e.g. `"1GB"`).
+    /// Maximum combined size of all retained recordings before eviction (e.g.
+    /// `"1GB"`).
     #[serde(default)]
     #[cfg_attr(feature = "config-schema", schemars(with = "Option<String>"))]
     pub(in crate::user_config) max_total_size: Option<ByteSize>,
 
-    /// Maximum idle time before a recorded run is evicted (e.g. `"30d"`).
+    /// Maximum age of a recorded run before eviction (e.g. `"30d"`).
     #[serde(default, with = "humantime_serde")]
     #[cfg_attr(feature = "config-schema", schemars(with = "Option<String>"))]
     pub(in crate::user_config) max_age: Option<Duration>,
 
-    /// Maximum size of a single captured stdout or stderr stream before it is
-    /// truncated (e.g. `"10MB"`).
+    /// Maximum size of a single captured stdout or stderr stream before
+    /// truncation (e.g. `"10MB"`).
     #[serde(default)]
     #[cfg_attr(feature = "config-schema", schemars(with = "Option<String>"))]
     pub(in crate::user_config) max_output_size: Option<ByteSize>,

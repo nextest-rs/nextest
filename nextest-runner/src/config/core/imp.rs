@@ -1511,20 +1511,21 @@ pub(crate) struct NextestConfigDeserialize {
     )]
     store: StoreConfigImpl,
 
-    /// The minimum required and recommended versions of nextest for this
-    /// configuration.
+    /// The minimum required (and optionally recommended) version of nextest
+    /// for this configuration.
     // These are parsed as part of NextestConfigVersionOnly. They're re-parsed
     // here to avoid printing an "unknown key" message.
     #[expect(unused)]
     #[serde(default)]
     nextest_version: Option<NextestVersionDeserialize>,
 
-    /// Enables experimental nextest features.
+    /// Enables experimental, non-stable features.
     #[expect(unused)]
     #[serde(default)]
     experimental: ExperimentalDeserialize,
 
-    /// Custom test groups for mutual exclusion and resource management.
+    /// Custom test groups for mutual exclusion and resource management, keyed
+    /// by group name.
     #[serde(default)]
     test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,
 
@@ -1535,11 +1536,11 @@ pub(crate) struct NextestConfigDeserialize {
     #[serde(default, rename = "script")]
     old_setup_scripts: IndexMap<ScriptId, SetupScriptConfig>,
 
-    /// Setup and wrapper scripts.
+    /// Setup and wrapper scripts, keyed by script name.
     #[serde(default)]
     scripts: ScriptConfig,
 
-    /// Test profiles.
+    /// Test profiles, keyed by profile name.
     #[serde(rename = "profile")]
     #[cfg_attr(
         feature = "config-schema",
@@ -1723,7 +1724,8 @@ impl DefaultProfileImpl {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct CustomProfileImpl {
-    /// The default set of tests run by `cargo nextest run`.
+    /// The default set of tests run by `cargo nextest run`, as a filterset
+    /// expression.
     #[serde(default)]
     default_filter: Option<String>,
     /// Retry policy for failed tests.
@@ -1735,7 +1737,7 @@ pub(in crate::config) struct CustomProfileImpl {
     /// Number of threads to run tests with.
     #[serde(default)]
     test_threads: Option<TestThreads>,
-    /// Number of threads each test requires.
+    /// Number of threads (slots) each test reserves from the pool.
     #[serde(default)]
     threads_required: Option<ThreadsRequired>,
     /// Extra arguments to pass to test binaries.
@@ -1760,22 +1762,23 @@ pub(in crate::config) struct CustomProfileImpl {
         deserialize_with = "deserialize_fail_fast"
     )]
     max_fail: Option<MaxFail>,
-    /// Time after which tests are considered slow, and timeout configuration.
+    /// Time after which tests are considered slow, plus optional termination
+    /// policy.
     #[serde(default, deserialize_with = "deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
-    /// A global timeout for test execution.
+    /// A global timeout for the entire test run.
     #[serde(default)]
     global_timeout: Option<GlobalTimeout>,
     /// Time to wait for child processes to exit after a test completes.
     #[serde(default, deserialize_with = "deserialize_leak_timeout")]
     leak_timeout: Option<LeakTimeout>,
-    /// Per-test setting overrides.
+    /// Per-test setting overrides, evaluated in order.
     #[serde(default)]
     overrides: Vec<DeserializedOverride>,
-    /// Profile-specific script configuration.
+    /// Profile-specific script bindings (setup and wrapper).
     #[serde(default)]
     scripts: Vec<DeserializedProfileScriptConfig>,
-    /// JUnit output configuration.
+    /// JUnit XML output configuration.
     #[serde(default)]
     junit: JunitImpl,
     /// Archive configuration for this profile.
@@ -1784,7 +1787,7 @@ pub(in crate::config) struct CustomProfileImpl {
     /// Benchmark-specific configuration.
     #[serde(default)]
     bench: Option<BenchConfig>,
-    /// The profile to inherit configuration settings from.
+    /// The profile to inherit settings from.
     #[serde(default)]
     inherits: Option<String>,
 }

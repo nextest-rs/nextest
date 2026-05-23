@@ -9,10 +9,10 @@ use super::TestOutputDisplay;
 use crate::reporter::events::{CancelReason, ExecutionResultDescription};
 use serde::Deserialize;
 
-/// Status level to show in the reporter output.
+/// Level of status information to display during test runs.
 ///
-/// Status levels are incremental: each level causes all the statuses listed above it to be output. For example,
-/// [`Slow`](Self::Slow) implies [`Retry`](Self::Retry) and [`Fail`](Self::Fail).
+/// Status levels are incremental: each level causes all the statuses listed
+/// above it to be output. For example, `slow` implies `retry` and `fail`.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
@@ -25,32 +25,34 @@ pub enum StatusLevel {
     /// Only output test failures.
     Fail,
 
-    /// Output retries and failures.
+    /// Output test retries; includes `fail`.
     Retry,
 
-    /// Output information about slow tests, and all variants above.
+    /// Output slow tests; includes `retry`.
     Slow,
 
-    /// Output information about leaky tests, and all variants above.
+    /// Output leaky tests; includes `slow`.
     Leak,
 
-    /// Output passing tests in addition to all variants above.
+    /// Output passing tests; includes `leak`.
     Pass,
 
-    /// Output skipped tests in addition to all variants above.
+    /// Output skipped tests; includes `pass`.
     Skip,
 
-    /// Currently has the same meaning as [`Skip`](Self::Skip).
+    /// Equivalent to `"skip"` today; reserved for future expansion.
     All,
 }
 
-/// Status level to show at the end of test runs in the reporter output.
+/// Level of status information to display in the final summary.
 ///
-/// Status levels are incremental.
+/// Status levels are incremental. This differs from `status-level` in two
+/// ways:
 ///
-/// This differs from [`StatusLevel`] in two ways:
-/// * It has a "flaky" test indicator that's different from "retry" (though "retry" works as an alias.)
-/// * It has a different ordering: skipped tests are prioritized over passing ones.
+/// * It has a "flaky" test indicator distinct from "retry" (though "retry"
+///   works as an alias).
+/// * It has a different ordering: skipped tests are prioritized over passing
+///   ones.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
@@ -63,23 +65,23 @@ pub enum FinalStatusLevel {
     /// Only output test failures.
     Fail,
 
-    /// Output flaky tests.
+    /// Output flaky tests; includes `fail`. Accepts `"retry"` as an alias.
     #[serde(alias = "retry")]
     Flaky,
 
-    /// Output information about slow tests, and all variants above.
+    /// Output slow tests; includes `flaky`.
     Slow,
 
-    /// Output skipped tests in addition to all variants above.
+    /// Output skipped tests; includes `slow`.
     Skip,
 
-    /// Output leaky tests in addition to all variants above.
+    /// Output leaky tests; includes `skip`.
     Leak,
 
-    /// Output passing tests in addition to all variants above.
+    /// Output passing tests; includes `leak`.
     Pass,
 
-    /// Currently has the same meaning as [`Pass`](Self::Pass).
+    /// Equivalent to `"pass"` today; reserved for future expansion.
     All,
 }
 

@@ -149,13 +149,13 @@ impl fmt::Display for CustomTestGroup {
     }
 }
 
-/// Configuration for a test group.
+/// Configuration for a single test group.
 #[derive(Clone, Debug, Deserialize)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub struct TestGroupConfig {
-    /// The maximum number of threads allowed for this test group.
+    /// Maximum number of threads this test group may use concurrently.
     pub max_threads: TestThreads,
 }
 

@@ -5,13 +5,13 @@ use crate::{config::core::get_num_cpus, errors::TestThreadsParseError};
 use serde::Deserialize;
 use std::{cmp::Ordering, fmt, str::FromStr};
 
-/// Type for the test-threads config key.
+/// Number of threads to run tests with.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TestThreads {
-    /// Run tests with a specified number of threads.
+    /// Run tests with a fixed number of threads.
     Count(usize),
 
-    /// Run tests with a number of threads equal to the logical CPU count.
+    /// Run tests with one thread per logical CPU.
     NumCpus,
 }
 

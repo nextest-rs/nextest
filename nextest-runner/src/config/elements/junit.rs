@@ -121,7 +121,7 @@ impl DefaultJunitImpl {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct JunitImpl {
-    /// Path to write the JUnit XML report to. If unset, JUnit support is
+    /// Path to write the JUnit XML report to. If unset, JUnit reporting is
     /// disabled.
     #[serde(default)]
     #[cfg_attr(
@@ -129,7 +129,7 @@ pub(in crate::config) struct JunitImpl {
         schemars(schema_with = "String::json_schema")
     )]
     pub(in crate::config) path: Option<Utf8PathBuf>,
-    /// Name for the JUnit report.
+    /// Name for the JUnit XML report.
     #[serde(default)]
     pub(in crate::config) report_name: Option<String>,
     /// Whether to store successful test output in the JUnit XML report.

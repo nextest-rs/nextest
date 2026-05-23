@@ -4,10 +4,11 @@
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt, time::Duration};
 
-/// Type for the retry config key.
+/// Retry policy for failed tests: maximum retries, plus an optional backoff
+/// schedule between attempts.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RetryPolicy {
-    /// Fixed backoff.
+    /// Fixed delay between retries.
     Fixed {
         /// Maximum retry count.
         count: u32,
@@ -15,22 +16,22 @@ pub enum RetryPolicy {
         /// Delay between retries.
         delay: Duration,
 
-        /// If set to true, randomness will be added to the delay on each retry attempt.
+        /// If true, add jitter to the delay on each retry attempt.
         jitter: bool,
     },
 
-    /// Exponential backoff.
+    /// Exponentially increasing delay between retries.
     Exponential {
         /// Maximum retry count.
         count: u32,
 
-        /// Delay between retries. Not optional for exponential backoff.
+        /// Initial delay between retries. Required for exponential backoff.
         delay: Duration,
 
-        /// If set to true, randomness will be added to the delay on each retry attempt.
+        /// If true, add jitter to the delay on each retry attempt.
         jitter: bool,
 
-        /// If set, limits the delay between retries.
+        /// If set, caps the delay between retries.
         max_delay: Option<Duration>,
     },
 }

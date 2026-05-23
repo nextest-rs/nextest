@@ -4,7 +4,8 @@
 use serde::{Deserialize, Deserializer};
 use std::time::Duration;
 
-/// Type for the global-timeout config key.
+/// A global timeout for an entire test or benchmark run, after which nextest
+/// aborts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GlobalTimeout {
     pub(crate) period: Duration,
