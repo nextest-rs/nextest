@@ -6,13 +6,13 @@ use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, de::Unexpected};
 use std::fmt;
 
-/// Configuration for archives.
+/// Archive configuration for this profile.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub struct ArchiveConfig {
-    /// Files to include in the archive.
+    /// Extra paths to include in the archive.
     #[cfg_attr(
         feature = "config-schema",
         // NOTE: `include` in the JSON Schema should be optional, given the pre-deserialization logic.
@@ -21,35 +21,33 @@ pub struct ArchiveConfig {
     pub include: Vec<ArchiveInclude>,
 }
 
-/// Type for the archive-include key.
-///
-/// # Notes
-///
-/// This is `deny_unknown_fields` because if we take additional arguments in the future, they're
-/// likely to change semantics in an incompatible way.
+/// A single entry under `archive.include`.
+// This is `deny_unknown_fields` because if we take additional arguments in the
+// future, they're likely to change semantics in an incompatible way.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ArchiveInclude {
-    /// Relative path to include.
-    // We only allow well-formed relative paths within the target directory here. It's possible we
-    // can relax this in the future, but better safe than sorry for now.
+    /// Path to include, relative to `relative-to`.
+    // We only allow well-formed relative paths within the target directory
+    // here. It's possible we can relax this in the future, but better safe than
+    // sorry for now.
     #[serde(deserialize_with = "deserialize_relative_path")]
     #[cfg_attr(
         feature = "config-schema",
         schemars(schema_with = "String::json_schema")
     )]
     path: Utf8PathBuf,
-    /// Base directory that `path` is relative to.
+    /// Base directory `path` is interpreted relative to.
     relative_to: ArchiveRelativeTo,
-    /// Maximum recursion depth.
+    /// Maximum recursion depth: a non-negative integer, or `"infinite"`.
     #[serde(default = "default_depth")]
     #[cfg_attr(
         feature = "config-schema",
         schemars(schema_with = "RecursionDepth::json_schema")
     )]
     depth: TrackDefault<RecursionDepth>,
-    /// What to do if the path is missing.
+    /// What to do if `path` is missing: `"ignore"`, `"warn"`, or `"error"`.
     #[serde(default = "default_on_missing")]
     on_missing: ArchiveIncludeOnMissing,
 }
@@ -108,18 +106,18 @@ fn join_rel_path(a: &Utf8Path, rel: &Utf8Path) -> Utf8PathBuf {
     out.into()
 }
 
-/// What to do when an archive-include path is missing.
+/// What to do when an `archive.include` path is missing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "config-schema", schemars(rename_all = "kebab-case"))]
 pub enum ArchiveIncludeOnMissing {
-    /// Ignore and continue.
+    /// Skip the missing path (printed in verbose mode).
     Ignore,
 
-    /// Warn and continue.
+    /// Print a warning and continue.
     Warn,
 
-    /// Produce an error.
+    /// Produce an error and abort the archive operation.
     Error,
 }
 
@@ -157,12 +155,12 @@ impl<'de> Deserialize<'de> for ArchiveIncludeOnMissing {
     }
 }
 
-/// Defines the base of the path
+/// Base directory `path` is interpreted relative to.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum ArchiveRelativeTo {
-    /// Path starts at the target directory
+    /// Resolve `path` against the target directory.
     Target,
     // TODO: add support for profile relative
     //TargetProfile,

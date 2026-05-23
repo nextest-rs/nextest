@@ -10,23 +10,17 @@
 use serde::Deserialize;
 use std::{collections::BTreeSet, env, fmt, str::FromStr};
 
-/// User-level experimental features.
+/// Toggles for user-level experimental, non-stable features.
 ///
-/// Configured in the `[experimental]` table of the user config file:
-///
-/// ```toml
-/// [experimental]
-/// record = true
-/// ```
-///
-/// Unknown features in this table produce a warning rather than an error, so
-/// older nextest binaries can load configs written for newer ones.
+/// Configured in the `[experimental]` table of the user config file. Unknown
+/// keys here produce a warning rather than an error so that older nextest
+/// binaries can load configs written for newer ones.
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub struct ExperimentalConfig {
-    /// Enables the record-replay-rerun feature, which stores test run results
-    /// on disk so they can be replayed or selectively rerun later.
+    /// Enables the record-replay-rerun feature: stores test run results on
+    /// disk for replay or selective rerun.
     #[serde(default)]
     pub record: bool,
 }

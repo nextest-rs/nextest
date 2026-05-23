@@ -59,7 +59,7 @@ For more information, see [_Selecting tests_](selecting.md).
 
 ## Failing fast
 
-By default, nextest cancels the test run on encountering a single failure. Tests currently running are run to completion, but new tests are not started.
+By default, nextest stops running tests after the first failure. Tests currently running are run to completion, but new tests are not started.
 
 This behavior can be customized through either the command-line, or through [configuration](configuration/index.md).
 
@@ -69,8 +69,8 @@ This behavior can be customized through either the command-line, or through [con
 
 When max-fail is exceeded, nextest supports two termination modes:
 
-- **`wait` (default)**: Nextest stops scheduling new tests but waits for currently running tests to finish naturally. This is the safest option and ensures tests complete their cleanup logic.
-- **`immediate`**: Nextest sends termination signals to running tests (respecting the [grace period](features/slow-tests.md#how-nextest-terminates-tests) configured via `slow-timeout.terminate-after`). This is faster but may interrupt tests mid-execution.
+- **`wait` (default)**: nextest stops scheduling new tests but waits for currently running tests to finish naturally. This is the safest option and ensures tests complete their cleanup logic.
+- **`immediate`**: nextest sends termination signals to running tests (respecting the [grace period](features/slow-tests.md#how-nextest-terminates-tests) configured via `slow-timeout.terminate-after`). This is faster but may interrupt tests mid-execution.
 
 ### Command-line options
 

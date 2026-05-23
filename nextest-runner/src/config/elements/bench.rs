@@ -12,9 +12,12 @@ use serde::Deserialize;
 /// Benchmark-specific configuration for the default profile.
 #[derive(Clone, Debug)]
 pub(in crate::config) struct DefaultBenchConfig {
-    /// Slow timeout for benchmarks.
+    /// Time after which benchmarks are considered slow, plus optional
+    /// termination policy. Replaces `slow-timeout` when running
+    /// `cargo nextest bench`.
     pub(in crate::config) slow_timeout: SlowTimeout,
-    /// Global timeout for benchmarks.
+    /// Global timeout for the entire benchmark run. Replaces `global-timeout`
+    /// when running `cargo nextest bench`.
     pub(in crate::config) global_timeout: GlobalTimeout,
 }
 
@@ -32,16 +35,23 @@ impl DefaultBenchConfig {
     }
 }
 
-/// Benchmark-specific configuration (deserialized form with optional fields).
+/// Benchmark-specific timeout overrides used when running
+/// `cargo nextest bench`.
+///
+/// Each field, if set, replaces its non-`bench` counterpart for benchmark
+/// runs only.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct BenchConfig {
-    /// Slow timeout for benchmarks.
+    /// Time after which benchmarks are considered slow, plus optional
+    /// termination policy. Replaces `slow-timeout` when running
+    /// `cargo nextest bench`.
     #[serde(default, deserialize_with = "deserialize_slow_timeout")]
     pub(in crate::config) slow_timeout: Option<SlowTimeout>,
-    /// Global timeout for benchmarks.
+    /// Global timeout for the entire benchmark run. Replaces `global-timeout`
+    /// when running `cargo nextest bench`.
     #[serde(default)]
     pub(in crate::config) global_timeout: Option<GlobalTimeout>,
 }

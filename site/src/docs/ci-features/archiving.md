@@ -92,13 +92,13 @@ archive.include = [
 
 `archive.include` takes a list of tables, with the following parameters:
 
-- `path` — The relative path to the archive.
-- `relative-to` — The root directory that `path` is defined against. Currently, only `"target"` is
+- `path` — Path to include, relative to `relative-to`.
+- `relative-to` — Base directory `path` is interpreted relative to. Currently, only `"target"` is
   supported, to indicate the target directory.
-- `depth` — The recursion depth for directories; either a non-negative integer or `"infinite"`. The
-  default is a depth of 16, which should cover most non-degenerate use cases.
-- `on-missing` — What to do if the specified path was not found. One of `"warn"` (default),
-  `"ignore"`, or `"error"`.
+- `depth` — Maximum recursion depth for directories: a non-negative integer, or `"infinite"`. The
+  default is 16, which should cover most non-degenerate use cases.
+- `on-missing` — What to do if `path` is missing. One of `"warn"` (default), `"ignore"`, or
+  `"error"`.
 
 > NOTE: The following features are not currently supported:
 >

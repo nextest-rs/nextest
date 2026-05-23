@@ -247,13 +247,13 @@ impl From<ShowProgressOpt> for ShowProgress {
     }
 }
 
-/// Flaky test result behavior.
+/// Whether to treat flaky tests as passing or failing.
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub(crate) enum FlakyResultOpt {
-    /// Flaky tests are treated as passing.
+    /// Treat flaky tests as passing.
     Pass,
 
-    /// Flaky tests are treated as failing.
+    /// Treat flaky tests as failing.
     Fail,
 }
 

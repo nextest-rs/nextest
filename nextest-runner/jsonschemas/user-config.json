@@ -5,11 +5,11 @@
   "type": "object",
   "properties": {
     "experimental": {
-      "description": "Toggles for experimental, non-stable features.\n\n```toml\n[experimental]\nrecord = true\n```",
+      "description": "Toggles for experimental, non-stable features.",
       "$ref": "#/$defs/ExperimentalConfig"
     },
     "overrides": {
-      "description": "Platform-specific overrides applied on top of the base configuration.\n\nEach entry specifies a `platform` filter and any number of settings to\nsubstitute when that filter matches. For each setting, the first\nmatching override wins; the base configuration is used if no override\nmatches.",
+      "description": "Platform-specific overrides applied on top of `[ui]` and `[record]`.\nThe first matching override per setting wins.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/DeserializedOverride"
@@ -71,15 +71,15 @@
       "type": "object",
       "properties": {
         "platform": {
-          "description": "Target-spec expression selecting which platforms this override applies\nto.\n\nAccepts a target triple (e.g. `x86_64-unknown-linux-gnu`) or a `cfg()`\nexpression (e.g. `cfg(windows)`, `cfg(target_os = \"macos\")`). Matched\nagainst the platform nextest was built for.",
+          "description": "Target-spec expression selecting which platforms this override applies\nto (target triple or `cfg()` expression). Matched against the platform\nnextest was built for.",
           "type": "string"
         },
         "record": {
-          "description": "Record retention settings to substitute on matching platforms.",
+          "description": "Record retention settings substituted on matching platforms.",
           "$ref": "#/$defs/DeserializedRecordOverrideData"
         },
         "ui": {
-          "description": "UI settings to substitute on matching platforms.",
+          "description": "UI settings substituted on matching platforms.",
           "$ref": "#/$defs/DeserializedUiOverrideData"
         }
       },
@@ -89,11 +89,11 @@
       ]
     },
     "DeserializedRecordConfig": {
-      "description": "Retention policy for recorded test runs.\n\nRecording only happens when the `record` experimental feature is enabled\n_and_ `enabled` here is true. The least-recently-used runs are evicted to\nkeep within `max-records`, `max-total-size`, and `max-age`.",
+      "description": "Retention settings for the record-replay-rerun feature.\n\nRecording happens only when the `record` experimental feature is enabled\nand `enabled` here is true. The least-recently-used runs are evicted to\nkeep within `max-records`, `max-total-size`, and `max-age`.",
       "type": "object",
       "properties": {
         "enabled": {
-          "description": "Whether to record test runs.\n\nSet to false to temporarily disable recording without removing the rest\nof the configuration. Has no effect unless the `record` experimental\nfeature is also enabled.",
+          "description": "Whether to record test runs. Has no effect unless `[experimental]\nrecord = true`.",
           "type": [
             "boolean",
             "null"
@@ -101,7 +101,7 @@
           "default": null
         },
         "max-age": {
-          "description": "Maximum idle time before a recorded run is evicted (e.g. `\"30d\"`).",
+          "description": "Maximum age of a recorded run before eviction (e.g. `\"30d\"`).",
           "type": [
             "string",
             "null"
@@ -109,7 +109,7 @@
           "default": null
         },
         "max-output-size": {
-          "description": "Maximum size of a single captured stdout or stderr stream before it is\ntruncated (e.g. `\"10MB\"`).",
+          "description": "Maximum size of a single captured stdout or stderr stream before\ntruncation (e.g. `\"10MB\"`).",
           "type": [
             "string",
             "null"
@@ -117,7 +117,7 @@
           "default": null
         },
         "max-records": {
-          "description": "Maximum number of recorded runs to retain.",
+          "description": "Maximum number of recorded runs to retain before eviction.",
           "type": [
             "integer",
             "null"
@@ -127,7 +127,7 @@
           "minimum": 0
         },
         "max-total-size": {
-          "description": "Maximum combined size of all recorded runs (e.g. `\"1GB\"`).",
+          "description": "Maximum combined size of all retained recordings before eviction (e.g.\n`\"1GB\"`).",
           "type": [
             "string",
             "null"
@@ -142,7 +142,7 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "description": "Whether to record test runs.",
+          "description": "Whether to record test runs. Has no effect unless `[experimental]\nrecord = true`.",
           "type": [
             "boolean",
             "null"
@@ -150,7 +150,7 @@
           "default": null
         },
         "max-age": {
-          "description": "Maximum idle time before a recorded run is evicted (e.g. `\"30d\"`).",
+          "description": "Maximum age of a recorded run before eviction (e.g. `\"30d\"`).",
           "type": [
             "string",
             "null"
@@ -158,7 +158,7 @@
           "default": null
         },
         "max-output-size": {
-          "description": "Maximum size of a single captured stdout or stderr stream before it is\ntruncated (e.g. `\"10MB\"`).",
+          "description": "Maximum size of a single captured stdout or stderr stream before\ntruncation (e.g. `\"10MB\"`).",
           "type": [
             "string",
             "null"
@@ -166,7 +166,7 @@
           "default": null
         },
         "max-records": {
-          "description": "Maximum number of recorded runs to retain.",
+          "description": "Maximum number of recorded runs to retain before eviction.",
           "type": [
             "integer",
             "null"
@@ -176,7 +176,7 @@
           "minimum": 0
         },
         "max-total-size": {
-          "description": "Maximum combined size of all recorded runs (e.g. `\"1GB\"`).",
+          "description": "Maximum combined size of all retained recordings before eviction (e.g.\n`\"1GB\"`).",
           "type": [
             "string",
             "null"
@@ -187,11 +187,11 @@
       "additionalProperties": false
     },
     "DeserializedStreampagerConfig": {
-      "description": "Settings for nextest's built-in pager (active when `pager = \":builtin\"`).",
+      "description": "Settings for nextest's builtin pager (active when `pager = \":builtin\"`).",
       "type": "object",
       "properties": {
         "interface": {
-          "description": "How the pager uses the alternate screen and when it exits.",
+          "description": "How the builtin pager uses the alternate screen and when it exits.",
           "anyOf": [
             {
               "$ref": "#/$defs/StreampagerInterface"
@@ -202,14 +202,14 @@
           ]
         },
         "show-ruler": {
-          "description": "Shows a ruler at the bottom of the pager.",
+          "description": "Whether to show a ruler at the bottom of the builtin pager.",
           "type": [
             "boolean",
             "null"
           ]
         },
         "wrapping": {
-          "description": "How long lines are wrapped.",
+          "description": "How the builtin pager wraps long lines.",
           "anyOf": [
             {
               "$ref": "#/$defs/StreampagerWrapping"
@@ -234,7 +234,7 @@
           ]
         },
         "max-progress-running": {
-          "description": "Maximum number of running tests to list in the progress bar.\n\nAccepts a non-negative integer, or `\"infinite\"` for no limit. When the\nnumber of running tests exceeds this, the remainder is collapsed into a\nsummary line.",
+          "description": "Maximum number of running tests to list in the progress bar.\n\nAccepts a non-negative integer, or `\"infinite\"` for no limit. Excess\nrunning tests are collapsed into a summary line.",
           "anyOf": [
             {
               "$ref": "#/$defs/MaxProgressRunning"
@@ -252,7 +252,7 @@
           ]
         },
         "pager": {
-          "description": "Pager command to use for output that benefits from scrolling. Use\n`\":builtin\"` to select nextest's built-in pager.",
+          "description": "Pager command to use for output that benefits from scrolling. Use\n`\":builtin\"` to select nextest's builtin pager.",
           "anyOf": [
             {
               "$ref": "#/$defs/PagerSetting"
@@ -285,7 +285,7 @@
           ]
         },
         "streampager": {
-          "description": "Settings for the built-in pager (active when `pager = \":builtin\"`).",
+          "description": "Settings for the builtin pager (active when `pager = \":builtin\"`).",
           "$ref": "#/$defs/DeserializedStreampagerConfig"
         }
       },
@@ -296,14 +296,14 @@
       "type": "object",
       "properties": {
         "input-handler": {
-          "description": "Enables the interactive keyboard input handler.",
+          "description": "Enables the interactive keyboard input handler (e.g. `t` to dump test\nstatus, `Enter` to print a summary line).",
           "type": [
             "boolean",
             "null"
           ]
         },
         "max-progress-running": {
-          "description": "Maximum number of running tests to list in the progress bar.",
+          "description": "Maximum number of running tests to list in the progress bar.\n\nAccepts a non-negative integer, or `\"infinite\"` for no limit. Excess\nrunning tests are collapsed into a summary line.",
           "anyOf": [
             {
               "$ref": "#/$defs/MaxProgressRunning"
@@ -321,7 +321,7 @@
           ]
         },
         "pager": {
-          "description": "Pager command to use for output that benefits from scrolling.",
+          "description": "Pager command to use for output that benefits from scrolling. Use\n`\":builtin\"` to select nextest's builtin pager.",
           "anyOf": [
             {
               "$ref": "#/$defs/PagerSetting"
@@ -354,18 +354,18 @@
           ]
         },
         "streampager": {
-          "description": "Settings for the built-in pager (active when `pager = \":builtin\"`).",
+          "description": "Settings for the builtin pager (active when `pager = \":builtin\"`).",
           "$ref": "#/$defs/DeserializedStreampagerConfig"
         }
       },
       "additionalProperties": false
     },
     "ExperimentalConfig": {
-      "description": "User-level experimental features.\n\nConfigured in the `[experimental]` table of the user config file:\n\n```toml\n[experimental]\nrecord = true\n```\n\nUnknown features in this table produce a warning rather than an error, so\nolder nextest binaries can load configs written for newer ones.",
+      "description": "Toggles for user-level experimental, non-stable features.\n\nConfigured in the `[experimental]` table of the user config file. Unknown\nkeys here produce a warning rather than an error so that older nextest\nbinaries can load configs written for newer ones.",
       "type": "object",
       "properties": {
         "record": {
-          "description": "Enables the record-replay-rerun feature, which stores test run results\non disk so they can be replayed or selectively rerun later.",
+          "description": "Enables the record-replay-rerun feature: stores test run results on\ndisk for replay or selective rerun.",
           "type": "boolean",
           "default": false
         }
@@ -415,7 +415,7 @@
       ]
     },
     "StreampagerInterface": {
-      "description": "How the built-in pager uses the alternate screen and when it exits.",
+      "description": "How the builtin pager uses the alternate screen and when it exits.",
       "oneOf": [
         {
           "description": "Exits immediately if the output fits on one page; otherwise switches\nto full-screen and clears on exit.",
@@ -435,7 +435,7 @@
       ]
     },
     "StreampagerWrapping": {
-      "description": "How long lines are wrapped in the built-in pager.",
+      "description": "How long lines are wrapped in the builtin pager.",
       "oneOf": [
         {
           "description": "Disables wrapping; long lines extend off-screen and can be scrolled\nhorizontally.",
@@ -478,7 +478,7 @@
           "const": "counter"
         },
         {
-          "description": "Like `bar` in interactive terminals, but additionally hides successful\ntest output (sets `status-level` to `slow` and `final-status-level` to\n`none`). Falls back to `auto` behavior in non-interactive contexts\n(e.g. piped output, CI).",
+          "description": "Like `bar` in interactive terminals, but additionally hides successful\ntest output (sets `status-level` to `slow` and `final-status-level` to\n`none`). Falls back to `auto` in non-interactive contexts (e.g. piped\noutput, CI).",
           "type": "string",
           "const": "only"
         }

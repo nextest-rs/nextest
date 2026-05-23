@@ -151,17 +151,21 @@ pub struct TestRunnerOpts {
     test_threads: Option<TestThreads>,
 
     /// Number of retries for failing tests [default: from profile].
+    ///
+    /// For more advanced retry policies (jitter, exponential backoff, max
+    /// delay), configure `retries` in `.config/nextest.toml`.
     #[arg(long, env = "NEXTEST_RETRIES", value_name = "N")]
     retries: Option<u32>,
 
-    /// Flaky test result behavior [default: from profile].
+    /// Whether to treat flaky tests as passing or failing [default: from
+    /// profile].
     ///
-    /// Controls whether tests that pass on retry are treated as passing or
-    /// failing.
+    /// "pass" treats tests that pass on retry as passing; "fail" treats them
+    /// as failing.
     #[arg(long, env = "NEXTEST_FLAKY_RESULT", value_name = "RESULT", value_enum)]
     flaky_result: Option<FlakyResultOpt>,
 
-    /// Cancel test run on the first failure.
+    /// Stop running tests after the first failure.
     #[arg(
         long,
         visible_alias = "ff",
@@ -185,11 +189,11 @@ pub struct TestRunnerOpts {
     )]
     no_fail_fast: bool,
 
-    /// Number of tests that can fail before exiting test run.
+    /// Number of failures after which to stop running tests.
     ///
     /// To control whether currently running tests are waited for or terminated
     /// immediately, append ':wait' (default) or ':immediate' to the number
-    /// (e.g., '5:immediate').
+    /// (e.g. '5:immediate').
     ///
     /// [possible values: integer, "all", "N:wait", "N:immediate"]
     #[arg(
@@ -283,7 +287,7 @@ pub(crate) struct BenchRunnerOpts {
     #[arg(long, name = "no-run")]
     pub(crate) no_run: bool,
 
-    /// Cancel benchmark run on the first failure.
+    /// Stop running benchmarks after the first failure.
     #[arg(
         long,
         visible_alias = "ff",
@@ -307,7 +311,7 @@ pub(crate) struct BenchRunnerOpts {
     )]
     no_fail_fast: bool,
 
-    /// Number of benchmarks that can fail before exiting run [possible
+    /// Number of failures after which to stop running benchmarks [possible
     /// values: integer or "all"].
     #[arg(
         long,
@@ -477,7 +481,7 @@ fn no_run_no_capture_reasons(no_run: bool, no_capture: bool) -> Option<&'static 
 /// during live test runs and when replaying recorded runs.
 #[derive(Debug, Default, Args)]
 pub(crate) struct ReporterCommonOpts {
-    /// Output stdout and stderr on failure.
+    /// When to display output for failed tests.
     #[arg(
         long,
         value_enum,
@@ -487,7 +491,7 @@ pub(crate) struct ReporterCommonOpts {
     )]
     pub(crate) failure_output: Option<TestOutputDisplayOpt>,
 
-    /// Output stdout and stderr on success.
+    /// When to display output for successful tests.
     #[arg(
         long,
         value_enum,
@@ -498,7 +502,7 @@ pub(crate) struct ReporterCommonOpts {
     pub(crate) success_output: Option<TestOutputDisplayOpt>,
 
     // status_level does not conflict with --no-capture because pass vs skip still makes sense.
-    /// Test statuses to output.
+    /// Level of status information to display during test runs.
     #[arg(
         long,
         value_enum,
@@ -508,7 +512,7 @@ pub(crate) struct ReporterCommonOpts {
     )]
     pub(crate) status_level: Option<StatusLevelOpt>,
 
-    /// Test statuses to output at the end of the run.
+    /// Level of status information to display in the final summary.
     #[arg(
         long,
         value_enum,
@@ -628,12 +632,11 @@ pub(crate) struct ReporterOpts {
     #[arg(long, env = "NEXTEST_NO_INPUT_HANDLER", value_parser = BoolishValueParser::new())]
     pub(crate) no_input_handler: bool,
 
-    /// Maximum number of running tests to display progress for.
+    /// Maximum number of running tests to list in the progress bar.
     ///
-    /// When more tests are running than this limit, the progress bar will show
-    /// the first N tests and a summary of remaining tests (e.g. "... and 24
-    /// more tests running"). Set to **0** to hide running tests, or
-    /// **infinite** for unlimited. This applies when using
+    /// Excess running tests are collapsed into a summary line (e.g. "... and
+    /// 24 more tests running"). Set to **0** to hide running tests, or
+    /// **infinite** for no limit. This applies when using
     /// `--show-progress=bar` or `--show-progress=only`.
     ///
     /// This can also be set via user config at `~/.config/nextest/config.toml`.

@@ -5,16 +5,16 @@ use crate::config::core::get_num_cpus;
 use serde::Deserialize;
 use std::{cmp::Ordering, fmt};
 
-/// Type for the threads-required config key.
+/// Number of threads (slots) each test reserves from the pool.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ThreadsRequired {
-    /// Take up "slots" equal to the number of threads.
+    /// Reserve a fixed number of slots.
     Count(usize),
 
-    /// Take up as many slots as the number of CPUs.
+    /// Reserve as many slots as the logical CPU count.
     NumCpus,
 
-    /// Take up as many slots as the number of test threads specified.
+    /// Reserve as many slots as the configured `test-threads` value.
     NumTestThreads,
 }
 

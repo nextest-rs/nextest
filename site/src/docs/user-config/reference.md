@@ -48,7 +48,7 @@ Experimental features are configured under `[experimental]`.
 ### `experimental.record`
 
 - **Type**: Boolean
-- **Description**: Enables the record feature
+- **Description**: Enables the record-replay-rerun feature: stores test run results on disk for replay or selective rerun.
 - **Documentation**: [_Record, replay, and rerun_](../features/record-replay-rerun/index.md)
 - **Default**: `false`
 - **Environment variable**: `NEXTEST_EXPERIMENTAL_RECORD=1`
@@ -69,7 +69,7 @@ For detailed information, see [_Record, replay, and rerun_](../features/record-r
 ### `record.enabled`
 
 - **Type**: Boolean
-- **Description**: Whether to record test runs
+- **Description**: Whether to record test runs. Has no effect unless `[experimental] record = true`.
 - **Default**: `false`
 - **Example**:
   ```toml
@@ -80,25 +80,25 @@ For detailed information, see [_Record, replay, and rerun_](../features/record-r
 ### `record.max-output-size`
 
 - **Type**: String (size)
-- **Description**: Maximum size per output file before truncation
+- **Description**: Maximum size of a single captured stdout or stderr stream before truncation (e.g. `"10MB"`).
 - **Default**: `"10MB"`
 
 ### `record.max-records`
 
 - **Type**: Integer
-- **Description**: Maximum number of recorded runs to retain
+- **Description**: Maximum number of recorded runs to retain before eviction.
 - **Default**: `100`
 
 ### `record.max-total-size`
 
 - **Type**: String (size)
-- **Description**: Maximum total size of all recorded runs
+- **Description**: Maximum combined size of all retained recordings before eviction (e.g. `"1GB"`).
 - **Default**: `"1GB"`
 
 ### `record.max-age`
 
 - **Type**: String (duration)
-- **Description**: Maximum age of recorded runs before eviction
+- **Description**: Maximum age of a recorded run before eviction (e.g. `"30d"`).
 - **Default**: `"30d"`
 
 ## UI configuration
@@ -110,13 +110,13 @@ UI settings are configured under `[ui]`.
 <!-- md:version 0.9.118 -->
 
 - **Type**: String
-- **Description**: Controls how progress is displayed during test runs
+- **Description**: Style of progress display shown during test runs.
 - **Valid values**:
-  - `"auto"`: Auto-detect based on terminal capabilities
-  - `"none"`: No progress display
-  - `"bar"`: Show a progress bar with running tests
-  - `"counter"`: Show a simple test counter (e.g., "(1/10)")
-  - `"only"`: Show only the progress bar, hide successful test output
+  - `"auto"`: picks a display based on terminal capabilities — a progress bar in interactive terminals, a counter otherwise.
+  - `"none"`: disables progress display entirely.
+  - `"bar"`: shows a progress bar listing the currently running tests.
+  - `"counter"`: shows a single-line counter (e.g. `(1/10)`).
+  - `"only"`: like `"bar"` in interactive terminals, but additionally hides successful test output (sets `status-level` to `slow` and `final-status-level` to `none`). Falls back to `"auto"` in non-interactive contexts (e.g. piped output, CI).
 - **Default**: `"auto"`
 - **CLI equivalent**: `--show-progress`
 - **Environment variable**: `NEXTEST_SHOW_PROGRESS`
@@ -131,11 +131,11 @@ UI settings are configured under `[ui]`.
 <!-- md:version 0.9.118 -->
 
 - **Type**: Integer or string
-- **Description**: Maximum number of running tests to display in the progress bar. When more tests are running than this limit, the progress bar shows the first N tests and a summary (e.g., "... and 24 more tests running").
+- **Description**: Maximum number of running tests to list in the progress bar. Excess running tests are collapsed into a summary line.
 - **Valid values**:
-  - Positive integer (e.g., `8`): Display up to this many running tests
-  - `0`: Hide running tests entirely
-  - `"infinite"`: Display all running tests
+  - Positive integer (e.g. `8`): display up to this many running tests.
+  - `0`: hide the list of running tests entirely (the bar still tracks progress).
+  - `"infinite"`: display all running tests, no limit.
 - **Default**: `8`
 - **CLI equivalent**: `--max-progress-running`
 - **Environment variable**: `NEXTEST_MAX_PROGRESS_RUNNING`
@@ -157,7 +157,7 @@ UI settings are configured under `[ui]`.
 <!-- md:version 0.9.118 -->
 
 - **Type**: Boolean
-- **Description**: Controls whether nextest's [keyboard input handler](../reporting.md#live-output) is enabled. When enabled, nextest accepts keyboard shortcuts during test runs (e.g., `t` to dump test information, `Enter` to produce a summary line).
+- **Description**: Enables the interactive [keyboard input handler](../reporting.md#live-output) (e.g. `t` to dump test status, `Enter` to print a summary line).
 - **Valid values**: `true` or `false`
 - **Default**: `true` (input handler enabled)
 - **CLI equivalent**: `--no-input-handler` (to disable)
@@ -174,7 +174,7 @@ UI settings are configured under `[ui]`.
 <!-- md:version 0.9.118 -->
 
 - **Type**: Boolean
-- **Description**: Controls whether captured test output is indented. By default, test output produced by `--failure-output` and `--success-output` is indented for visual clarity.
+- **Description**: Indents captured test output for visual clarity. Applies to output produced by `--failure-output` and `--success-output`.
 - **Valid values**: `true` or `false`
 - **Default**: `true`
 - **CLI equivalent**: `--no-output-indent` (to disable)
@@ -191,12 +191,12 @@ UI settings are configured under `[ui]`.
 <!-- md:version 0.9.120 -->
 
 - **Type**: String, array, or table
-- **Description**: Specifies the pager command for output that benefits from scrolling (e.g., `nextest list`, help output). See [_Pager support_](pager.md) for details.
+- **Description**: Pager command for output that benefits from scrolling (e.g. `nextest list`, help output). Use `":builtin"` for the builtin pager. See [_Pager support_](pager.md) for details.
 - **Valid values**:
   - String: `"less -FRX"` (split on whitespace)
   - Array: `["less", "-FRX"]`
   - Table: `{ command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }`
-  - `":builtin"`: Use the builtin pager
+  - `":builtin"`: use the builtin pager.
 - **Default**: `{ command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }` on Unix, `":builtin"` on Windows (specified via an override)
 - **CLI equivalent**: `--no-pager` (to disable paging)
 - **Examples**:
@@ -223,10 +223,10 @@ UI settings are configured under `[ui]`.
 <!-- md:version 0.9.120 -->
 
 - **Type**: String
-- **Description**: Controls when to paginate output.
+- **Description**: When to send output through the pager.
 - **Valid values**:
-  - `"auto"`: Page supported commands if stdout is a terminal
-  - `"never"`: Never use a pager
+  - `"auto"`: pages output from supported commands when stdout is a terminal.
+  - `"never"`: disables pagination entirely.
 - **Default**: `"auto"`
 - **CLI equivalent**: `--no-pager` (equivalent to `paginate = "never"`)
 - **Example**:
@@ -245,11 +245,11 @@ When `pager = ":builtin"` is set, the builtin pager's behavior can be customized
 ### `ui.streampager.interface`
 
 - **Type**: String
-- **Description**: Controls how the builtin pager uses the alternate screen.
+- **Description**: How the builtin pager uses the alternate screen and when it exits.
 - **Valid values**:
-  - `"quit-if-one-page"`: Exit immediately if content fits on one page; otherwise use full screen and clear on exit
-  - `"full-screen-clear-output"`: Always use full screen mode and clear the screen on exit
-  - `"quit-quickly-or-clear-output"`: Wait briefly before entering full screen; clear on exit if entered
+  - `"quit-if-one-page"`: exits immediately if the output fits on one page; otherwise switches to full-screen and clears on exit.
+  - `"full-screen-clear-output"`: always uses full-screen mode and clears the screen on exit.
+  - `"quit-quickly-or-clear-output"`: waits briefly before entering full-screen mode; clears on exit only if it switched to full-screen.
 - **Default**: `"quit-if-one-page"`
 - **Example**:
   ```toml
@@ -260,11 +260,11 @@ When `pager = ":builtin"` is set, the builtin pager's behavior can be customized
 ### `ui.streampager.wrapping`
 
 - **Type**: String
-- **Description**: Controls text wrapping in the builtin pager.
+- **Description**: How the builtin pager wraps long lines.
 - **Valid values**:
-  - `"none"`: No wrapping; allow horizontal scrolling
-  - `"word"`: Wrap at word boundaries
-  - `"anywhere"`: Wrap at any character (grapheme) boundary
+  - `"none"`: disables wrapping; long lines extend off-screen and can be scrolled horizontally.
+  - `"word"`: wraps at word boundaries.
+  - `"anywhere"`: wraps at any character (grapheme) boundary.
 - **Default**: `"word"`
 - **Example**:
   ```toml
@@ -306,7 +306,7 @@ Each override has a required `platform` filter and optional settings in the `ui`
 #### `overrides.platform`
 
 - **Type**: String (target spec expression)
-- **Description**: Platform specification for when this override applies. The expression is evaluated against the _build target_: the platform nextest was compiled for. This is distinct from the `platform` field in [per-test overrides](../configuration/per-test-overrides.md#selecting-tests), which is matched against the host or target platform of the tests being run.
+- **Description**: Target-spec expression selecting which platforms this override applies to (target triple or `cfg()` expression). Matched against the platform nextest was built for. This is distinct from the `platform` field in [per-test overrides](../configuration/per-test-overrides.md#selecting-tests), which is matched against the host or target platform of the tests being run.
 - **Required**: Yes
 - **Documentation**: [_Specifying platforms_](../configuration/specifying-platforms.md)
 - **Valid formats**:

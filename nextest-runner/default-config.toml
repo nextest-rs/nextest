@@ -12,76 +12,83 @@ dir = "target/nextest"
 # The set of tests run by `cargo nextest run` by default.
 default-filter = "all()"
 
-# "retries" defines the number of times a test should be retried. If set to a
-# non-zero value, tests that succeed on a subsequent attempt will be marked as
-# flaky. Can be overridden through the `--retries` option.
-# Examples
+# Retry policy for failed tests. A non-zero value causes tests that pass on a
+# subsequent attempt to be marked as flaky. Can be overridden through the
+# `--retries` option.
+# Examples:
 # * retries = 3
 # * retries = { backoff = "fixed", count = 2, delay = "1s" }
 # * retries = { backoff = "exponential", count = 10, delay = "1s", jitter = true, max-delay = "10s" }
 retries = 0
 
-# Controls whether a flaky test is treated as passing or failing.
+# Whether to treat flaky tests as passing or failing.
 flaky-result = "pass"
 
-# The number of threads to run tests with. Supported values are either an integer or
-# the string "num-cpus". Can be overridden through the `--test-threads` option.
+# Number of threads to run tests with. Either an integer or "num-cpus". Can be
+# overridden through the `--test-threads` option.
 test-threads = "num-cpus"
 
-# The number of threads required for each test. This is generally used in overrides to
-# mark certain tests as heavier than others. However, it can also be set as a global parameter.
+# Number of threads (slots) each test reserves from the pool. Generally used in
+# overrides to mark certain tests as heavier than others; can also be set as a
+# global default.
 threads-required = 1
 
-# Extra arguments to pass in to the test binary at runtime. Intended primarily for
+# Extra arguments to pass to test binaries at runtime. Intended primarily for
 # communication with custom test harnesses -- use with caution!
 run-extra-args = []
 
-# Show these test statuses in the output.
+# Level of status information to display during test runs.
 #
-# The possible values this can take are:
-# * none: no output
-# * fail: show failed (including exec-failed) tests
-# * retry: show flaky and retried tests
-# * slow: show slow tests
-# * pass: show passed tests
-# * skip: show skipped tests (most useful for CI)
-# * all: all of the above
+# Status levels are incremental: each level includes all levels above it. For
+# example, "slow" implies "retry" and "fail".
 #
-# Each value includes all the values above it; for example, "slow" includes
-# failed and retried tests.
+# Valid values:
+# * "none": no output.
+# * "fail": only output test failures.
+# * "retry": output test retries; includes "fail".
+# * "slow": output slow tests; includes "retry".
+# * "leak": output leaky tests; includes "slow".
+# * "pass": output passing tests; includes "leak".
+# * "skip": output skipped tests; includes "pass".
+# * "all": equivalent to "skip" today; reserved for future expansion.
 #
 # Can be overridden through the `--status-level` flag.
 status-level = "pass"
 
-# Similar to status-level, show these test statuses at the end of the run.
+# Level of status information to display in the final summary. Differs from
+# status-level in that it has a separate "flaky" indicator distinct from
+# "retry" (though "retry" works as an alias), and in that "skip" is prioritized
+# over "pass".
 final-status-level = "flaky"
 
-# "failure-output" defines when standard output and standard error for failing tests are produced.
-# Accepted values are
-# * "immediate": output failures as soon as they happen
-# * "final": output failures at the end of the test run
-# * "immediate-final": output failures as soon as they happen and at the end of
-#   the test run; combination of "immediate" and "final"
-# * "never": don't output failures at all
+# When to display output for failed tests.
+#
+# Valid values:
+# * "immediate": show captured output as soon as the test completes.
+# * "final": show captured output only at the end of the run.
+# * "immediate-final": show captured output when the test completes and again
+#   at the end of the run.
+# * "never": never show captured output.
 #
 # For large test suites and CI it is generally useful to use "immediate-final".
 #
 # Can be overridden through the `--failure-output` option.
 failure-output = "immediate"
 
-# "success-output" controls production of standard output and standard error on success. This should
-# generally be set to "never".
+# When to display output for successful tests. Generally best left as "never".
 success-output = "never"
 
-# Cancel the test run on the first failure. For CI runs, consider setting this
-# to false.
-# Accepted values are
-# * true: cancel the test run on the first failure (waits for running tests to complete)
-# * false: continue running tests even after a failure
-# * { max-fail = 10 }: cancel the test run after 10 failures (waits for running tests)
-# * { max-fail = 10, terminate = "wait" }: same as above (explicit)
-# * { max-fail = 10, terminate = "immediate" }: cancel and terminate running tests immediately
-# * { max-fail = "all" }: continue running tests even after a failure
+# Failure handling for the test run. Accepted values:
+# * true: stop running tests after the first failure (waits for running tests
+#   to complete).
+# * false: run all tests regardless of failures.
+# * { max-fail = 10 }: stop after 10 failures (waits for running tests).
+# * { max-fail = 10, terminate = "wait" }: same as above (explicit).
+# * { max-fail = 10, terminate = "immediate" }: stop and terminate running
+#   tests immediately.
+# * { max-fail = "all" }: run all tests regardless of failures.
+#
+# For CI runs, consider setting this to false.
 fail-fast = true
 
 # Treat a test that takes longer than the configured 'period' as slow, and print a message.
@@ -97,7 +104,8 @@ fail-fast = true
 # Example: slow-timeout = { period = "60s", on-timeout = "pass" }
 slow-timeout = { period = "60s", on-timeout = "fail" }
 
-# Treat a benchmark that takes longer than the configured 'period' as slow, and print a message.
+# Time after which benchmarks are considered slow, plus optional termination
+# policy. Replaces `slow-timeout` when running `cargo nextest bench`.
 # See <https://nexte.st/docs/features/slow-tests> for more information.
 #
 # Optional: specify the parameter 'terminate-after' with a non-zero integer,
@@ -105,20 +113,17 @@ slow-timeout = { period = "60s", on-timeout = "fail" }
 # periods have passed.
 # Example: bench.slow-timeout = { period = "60s", terminate-after = 2 }
 #
-# This is a separate configuration for benchmarks, because benchmarks are often
-# expected to take longer than tests.
-#
-# Defaults to 30 years, which is a large enough value to feel "infinite" without
-# running into overflows on various platforms.
+# Benchmarks have a separate configuration because they are often expected to
+# take longer than tests. Defaults to 30 years, which is a large enough value
+# to feel "infinite" without running into overflows on various platforms.
 bench.slow-timeout = { period = "30y" }
 
-# Stop all benchmarks after the configured global timeout.
+# Global timeout for the entire benchmark run. Replaces `global-timeout` when
+# running `cargo nextest bench`.
 #
-# This is a separate configuration for benchmarks, because benchmarks are often
-# expected to take longer than tests.
-#
-# Defaults to 30 years, which is a large enough value to feel "infinite" without
-# running into overflows on various platforms.
+# Benchmarks have a separate configuration because they are often expected to
+# take longer than tests. Defaults to 30 years, which is a large enough value
+# to feel "infinite" without running into overflows on various platforms.
 bench.global-timeout = "30y"
 
 # Treat a test as leaky if after the process is shut down, standard output and standard error
@@ -136,9 +141,9 @@ leak-timeout = "200ms"
 # running into overflows on various platforms.
 global-timeout = "30y"
 
-# `nextest archive` automatically includes any build output required by a standard build.
-# However sometimes extra non-standard files are required.
-# To address this, "archive.include" specifies additional paths that will be included in the archive.
+# Extra paths to include in `nextest archive`. The standard build output is
+# included automatically; use this to add any non-standard files the tests
+# need at runtime.
 archive.include = [
     # Examples:
     #
@@ -146,35 +151,38 @@ archive.include = [
     # { path = "data-from-some-dependency/file.txt", relative-to = "target" },
     #
     # In the above example:
-    # * the directory and its contents at "target/application-data" will be included recursively in the archive.
-    # * the file "target/data-from-some-dependency/file.txt" will be included in the archive.
+    # * the directory and its contents at "target/application-data" are
+    #   included recursively in the archive.
+    # * the file "target/data-from-some-dependency/file.txt" is included in
+    #   the archive.
 ]
 
 [profile.default.junit]
-# Output a JUnit report into the given file inside 'store.dir/<profile-name>'.
-# If unspecified, JUnit is not written out.
+# Path to write the JUnit XML report to, relative to 'store.dir/<profile-name>'.
+# If unset, JUnit reporting is disabled.
 
 # path = "junit.xml"
 
-# The name of the top-level "report" element in JUnit report. If aggregating
-# reports across different test runs, it may be useful to provide separate names
-# for each report.
+# Name for the JUnit XML report. When aggregating reports across different test
+# runs, it may be useful to provide separate names for each report.
 report-name = "nextest-run"
 
-# Whether standard output and standard error for passing tests should be stored in the JUnit report.
-# Output is stored in the <system-out> and <system-err> elements of the <testcase> element.
+# Whether to store successful test output in the JUnit XML report. When true,
+# output is stored in the <system-out> and <system-err> elements of the
+# <testcase> element.
 store-success-output = false
 
-# Whether standard output and standard error for failing tests should be stored in the JUnit report.
-# Output is stored in the <system-out> and <system-err> elements of the <testcase> element.
+# Whether to store failed test output in the JUnit XML report. When true,
+# output is stored in the <system-out> and <system-err> elements of the
+# <testcase> element.
 #
-# Note that if a description can be extracted from the output, it is always stored in the
-# <description> element.
+# Note that if a description can be extracted from the output, it is always
+# stored in the <description> element.
 store-failure-output = true
 
-# Controls how flaky-fail tests are reported in the JUnit report. "failure" reports
-# them as failures with <failure> and <flakyFailure> elements; "success" reports them
-# as successes, identical to flaky-pass tests.
+# How flaky-fail tests are reported in the JUnit XML report. "failure" reports
+# them as failures with <failure> and <flakyFailure> elements; "success"
+# reports them as successes, identical to flaky-pass tests.
 flaky-fail-status = "failure"
 
 # This profile is activated if MIRI_SYSROOT is set.

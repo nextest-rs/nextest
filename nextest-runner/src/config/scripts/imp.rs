@@ -40,17 +40,17 @@ use std::{
 };
 use swrite::{SWrite, swrite};
 
-/// The scripts defined in nextest configuration.
+/// Setup and wrapper scripts defined in nextest configuration.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub struct ScriptConfig {
     // These maps are ordered because scripts are used in the order they're defined.
-    /// The setup scripts defined in nextest's configuration.
+    /// Setup scripts, keyed by script name.
     #[serde(default)]
     pub setup: IndexMap<ScriptId, SetupScriptConfig>,
-    /// The wrapper scripts defined in nextest's configuration.
+    /// Wrapper scripts, keyed by script name.
     #[serde(default)]
     pub wrapper: IndexMap<ScriptId, WrapperScriptConfig>,
 }
@@ -616,24 +616,24 @@ impl ProfileScriptData {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct DeserializedProfileScriptConfig {
-    /// The host and/or target platforms to match against.
+    /// Host and/or target platforms these scripts apply to.
     #[serde(default)]
     pub(in crate::config) platform: PlatformStrings,
 
-    /// The filterset to match against.
+    /// Filterset expression selecting tests these scripts apply to.
     #[serde(default)]
     filter: Option<String>,
 
-    /// The setup script or scripts to run.
+    /// Names of setup scripts to run (single name or array).
     #[cfg_attr(feature = "config-schema", schemars(schema_with = "script_ids_schema"))]
     #[serde(default, deserialize_with = "deserialize_script_ids")]
     setup: Vec<ScriptId>,
 
-    /// The wrapper script to run at list time.
+    /// Name of the wrapper script used during test listing.
     #[serde(default)]
     list_wrapper: Option<ScriptId>,
 
-    /// The wrapper script to run at run time.
+    /// Name of the wrapper script used during test execution.
     #[serde(default)]
     run_wrapper: Option<ScriptId>,
 }
@@ -659,33 +659,32 @@ fn script_ids_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Sch
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub struct SetupScriptConfig {
-    /// The command to run. The first element is the program and the second element is a list
-    /// of arguments.
+    /// The command to run for this setup script.
     pub command: ScriptCommand,
 
-    /// An optional slow timeout for this command.
+    /// Slow-timeout configuration for this setup script.
     #[serde(
         default,
         deserialize_with = "crate::config::elements::deserialize_slow_timeout"
     )]
     pub slow_timeout: Option<SlowTimeout>,
 
-    /// An optional leak timeout for this command.
+    /// Leak-timeout configuration for this setup script.
     #[serde(
         default,
         deserialize_with = "crate::config::elements::deserialize_leak_timeout"
     )]
     pub leak_timeout: Option<LeakTimeout>,
 
-    /// Whether to capture standard output for this command.
+    /// Whether to capture stdout from this setup script.
     #[serde(default)]
     pub capture_stdout: bool,
 
-    /// Whether to capture standard error for this command.
+    /// Whether to capture stderr from this setup script.
     #[serde(default)]
     pub capture_stderr: bool,
 
-    /// JUnit configuration for this script.
+    /// JUnit XML output settings for this setup script.
     #[serde(default)]
     pub junit: SetupScriptJunitConfig,
 }
@@ -698,21 +697,19 @@ impl SetupScriptConfig {
     }
 }
 
-/// A JUnit override configuration.
+/// JUnit XML output settings for a setup script.
 #[derive(Copy, Clone, Debug, Deserialize)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub struct SetupScriptJunitConfig {
-    /// Whether to store successful output.
-    ///
-    /// Defaults to true.
+    /// Whether to store this setup script's output on success in the JUnit XML
+    /// report. Defaults to true.
     #[serde(default = "default_true")]
     pub store_success_output: bool,
 
-    /// Whether to store failing output.
-    ///
-    /// Defaults to true.
+    /// Whether to store this setup script's output on failure in the JUnit XML
+    /// report. Defaults to true.
     #[serde(default = "default_true")]
     pub store_failure_output: bool,
 }
@@ -734,25 +731,25 @@ impl Default for SetupScriptJunitConfig {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub struct WrapperScriptConfig {
-    /// The command to run.
+    /// The command to run as the wrapper.
     pub command: ScriptCommand,
 
-    /// How this script interacts with a configured target runner, if any.
-    /// Defaults to ignoring the target runner.
+    /// How this wrapper composes with a configured target runner.
     #[serde(default)]
     pub target_runner: WrapperScriptTargetRunner,
 }
 
-/// Interaction of wrapper script with a configured target runner.
+/// How a wrapper script composes with a configured target runner.
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "config-schema", schemars(rename_all = "kebab-case"))]
 pub enum WrapperScriptTargetRunner {
-    /// The target runner is ignored. This is the default.
+    /// The target runner is ignored.
     #[default]
     Ignore,
 
-    /// The target runner overrides the wrapper.
+    /// When a target runner is configured, it replaces the wrapper; otherwise
+    /// the wrapper runs as usual.
     OverridesWrapper,
 
     /// The target runner runs within the wrapper script. The command line used
@@ -1077,21 +1074,20 @@ impl<'de> serde::de::DeserializeSeed<'de> for CommandInnerSeed {
     }
 }
 
-/// The directory to interpret a [`ScriptCommand`] as relative to, in case it is
-/// a relative path.
+/// Base directory a relative script program is resolved against.
 ///
-/// If specified, the program will be joined with the provided path.
+/// If specified, the program is joined with the provided path.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "config-schema", schemars(rename_all = "kebab-case"))]
 pub enum ScriptCommandRelativeTo {
-    /// Do not join the program with any path.
+    /// Use the program path as-is, without joining.
     None,
 
-    /// Join the program with the workspace root.
+    /// Resolve the program against the workspace root.
     WorkspaceRoot,
 
-    /// Join the program with the target directory.
+    /// Resolve the program against the target directory.
     Target,
     // TODO: TargetProfile, similar to ArchiveRelativeTo
 }

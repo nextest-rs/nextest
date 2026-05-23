@@ -14,53 +14,53 @@ Overrides are set via the `[[profile.<name>.overrides]]` list.
 At least one of these fields must be specified:
 
 `filter`
-: The [filterset](../filtersets/index.md) to match.
+: [Filterset](../filtersets/index.md) expression selecting tests this override applies to.
 
 `platform`
-: The platforms to match: either a string, or a map with `host` and `target`
-keys for cross-compiling. See [*Specifying platforms*](specifying-platforms.md)
-for more information.
+: Host and/or target platforms this override applies to. Either a string,
+or a map with `host` and `target` keys for cross-compiling. See
+[*Specifying platforms*](specifying-platforms.md) for more information.
 
 ## Supported overrides
 
 `priority` <!-- md:version 0.9.91 -->
-: The [test priority](test-priorities.md): a number from -100 to 100, both inclusive, with a default of 0.
+: [Priority](test-priorities.md) for matching tests; higher values run sooner. A number from -100 to 100, inclusive. Default: 0.
 
 `retries`
-: The number of retries, or a more complex [retry policy](../features/retries.md) for this test.
+: [Retry policy](../features/retries.md) for matching tests.
 
 `flaky-result` <!-- md:version 0.9.131 -->
-: Whether flaky tests are treated as [passing or failing](../features/retries.md#failing-flaky-tests).
+: Whether to treat matching flaky tests as [passing or failing](../features/retries.md#failing-flaky-tests).
 
 `threads-required`
-: Number of [threads required](threads-required.md) for this test.
+: Number of [threads](threads-required.md) each matching test reserves from the pool.
 
 `test-group`
-: An optional [test group](test-groups.md) for this test.
+: Assigns matching tests to a [test group](test-groups.md).
 
 `slow-timeout`
-: Amount of time after which [tests are marked slow](../features/slow-tests.md).
+: Time after which matching tests are considered [slow](../features/slow-tests.md), plus optional termination policy.
 
 `bench.slow-timeout` <!-- md:version 0.9.117 -->
-: Amount of time after which [benchmarks are marked slow](../features/benchmarks.md). Only applies when running benchmarks with `cargo nextest bench`.
+: Time after which matching benchmarks are considered [slow](../features/benchmarks.md), plus optional termination policy. Replaces `slow-timeout` when running `cargo nextest bench`.
 
 `leak-timeout`
-: How long to wait after the test completes [for any subprocesses to exit](../features/leaky-tests.md).
+: Time to wait for [child processes to exit](../features/leaky-tests.md) after a matching test completes.
 
 `success-output` and `failure-output`
-: Control [when standard output and standard error are displayed](../reporting.md#displaying-captured-test-output) for passing and failing tests, respectively.
+: [When to display output](../reporting.md#displaying-captured-test-output) for matching successful and failed tests, respectively.
 
 `junit.store-success-output` and `junit.store-failure-output`
-: In [JUnit reports](../machine-readable/junit.md), whether to store output for passing and failing tests, respectively.
+: Whether to store successful and failed output, respectively, for matching tests in the [JUnit XML report](../machine-readable/junit.md).
 
 `junit.flaky-fail-status` <!-- md:version 0.9.131 -->
-: In [JUnit reports](../machine-readable/junit.md), how [flaky-fail](../features/retries.md#failing-flaky-tests) tests are reported: as `"failure"` (default) or `"success"`.
+: How matching [flaky-fail](../features/retries.md#failing-flaky-tests) tests are reported in the [JUnit XML report](../machine-readable/junit.md): as `"failure"` (default) or `"success"`.
 
 `default-filter` <!-- md:version 0.9.84 -->
-: The [default filter](../selecting.md#running-a-subset-of-tests-by-default) on this platform. Only supported for overrides that specify `platform` and not `filter`.
+: Replaces [`default-filter`](../selecting.md#running-a-subset-of-tests-by-default) for matching platforms. Requires `platform` and must not be combined with `filter`.
 
 `run-extra-args` <!-- md:version 0.9.86 -->
-: [Extra arguments](extra-args.md) to pass to the test binary.
+: [Extra arguments](extra-args.md) to pass to matching test binaries.
 
 ## Example
 

@@ -49,9 +49,9 @@ These parameters are specified at the root level of the configuration file.
 <!-- md:version 0.9.55 -->
 
 - **Type**: String or object
-- **Description**: Specifies the minimum required version of nextest
+- **Description**: The minimum required (and optionally recommended) version of nextest for this configuration.
 - **Documentation**: [_Minimum nextest versions_](minimum-versions.md)
-- **Default**: Unset: the minimum version check is disabled
+- **Default**: Unset (the minimum version check is disabled)
 - **Examples**:
   ```toml
   nextest-version = "0.9.50"
@@ -62,9 +62,9 @@ These parameters are specified at the root level of the configuration file.
 ### `experimental`
 
 - **Type**: Array of strings
-- **Description**: Enables experimental features
+- **Description**: Enables experimental, non-stable features.
 - **Documentation**: [_Setup scripts_](setup-scripts.md), [_wrapper scripts_](wrapper-scripts.md)
-- **Default**: `[]`: no experimental features are enabled
+- **Default**: `[]` (no experimental features enabled)
 - **Valid values**:
   - `"setup-scripts"` <!-- md:version 0.9.98 --> (originally <!-- md:version 0.9.59 -->)
   - `"wrapper-scripts"` <!-- md:version 0.9.98 -->
@@ -76,12 +76,12 @@ These parameters are specified at the root level of the configuration file.
 ### `store`
 
 - **Type**: Object
-- **Description**: Configuration for the nextest store directory
+- **Description**: Configuration for the nextest store directory.
 
 #### `store.dir`
 
 - **Type**: String (path)
-- **Description**: Directory where nextest stores its data
+- **Description**: Directory where nextest stores its data.
 - **Default**: `target/nextest`
 
 ## Profile configuration
@@ -95,18 +95,18 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 <!-- md:version 0.9.115 -->
 
 - **Type**: String
-- **Description**: The profile to inherit configuration settings from
+- **Description**: The profile to inherit settings from.
 - **Documentation**: [_Profile inheritance_](index.md#profile-inheritance)
-- **Default**: `default`: the default profile
+- **Default**: `"default"`
 
 ### Core test execution
 
 #### `profile.<name>.default-filter`
 
 - **Type**: String (filterset expression)
-- **Description**: The default set of tests to run
+- **Description**: The default set of tests run by `cargo nextest run`, as a filterset expression.
 - **Documentation**: [_Running a subset of tests by default_](../selecting.md#running-a-subset-of-tests-by-default)
-- **Default**: `all()`: all tests are run
+- **Default**: `"all()"` (all tests are run)
 - **Example**: `default-filter = "not test(very_slow_tests)"`
 
 #### `profile.<name>.global-timeout`
@@ -114,15 +114,15 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 <!-- md:version 0.9.100 -->
 
 - **Type**: String (duration)
-- **Description**: A global timeout for test execution
+- **Description**: A global timeout for the entire test run.
 - **Documentation**: [_Setting a global timeout_](../features/slow-tests.md#setting-a-global-timeout)
-- **Default**: none
+- **Default**: Unset (no global timeout)
 - **Example**: `global-timeout = "2h"`
 
 #### `profile.<name>.test-threads`
 
 - **Type**: Integer or string
-- **Description**: Number of threads to run tests with
+- **Description**: Number of threads to run tests with.
 - **Valid values**: Positive integer, negative integer (relative to CPU count), or `"num-cpus"`
 - **Default**: `"num-cpus"`
 - **Example**: `test-threads = 4` or `test-threads = "num-cpus"`
@@ -130,7 +130,7 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 #### `profile.<name>.threads-required`
 
 - **Type**: Integer or string
-- **Description**: Number of threads each test requires
+- **Description**: Number of threads each test reserves from the pool.
 - **Documentation**: [_Heavy tests and `threads-required`_](threads-required.md)
 - **Valid values**: Positive integer, `"num-cpus"`, or `"num-test-threads"`
 - **Default**: `1`
@@ -140,9 +140,9 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 <!-- md:version 0.9.86 -->
 
 - **Type**: Array of strings
-- **Description**: Extra arguments to pass to test binaries
+- **Description**: Extra arguments to pass to test binaries.
 - **Documentation**: [_Extra arguments_](extra-args.md)
-- **Default**: `[]`: no extra arguments
+- **Default**: `[]`
 - **Example**: `run-extra-args = ["--test-threads", "1"]`
 
 ### Retry configuration
@@ -150,7 +150,7 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 #### `profile.<name>.retries`
 
 - **Type**: Integer or object
-- **Description**: Retry policy for failed tests
+- **Description**: Retry policy for failed tests.
 - **Documentation**: [_Retries and flaky tests_](../features/retries.md)
 - **Default**: `0`
 - **Examples**:
@@ -167,7 +167,7 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 <!-- md:version 0.9.131 -->
 
 - **Type**: String
-- **Description**: Controls whether flaky tests are treated as passing or failing
+- **Description**: Whether to treat flaky tests as passing or failing.
 - **Documentation**: [_Failing flaky tests_](../features/retries.md#failing-flaky-tests)
 - **Valid values**: `"pass"`, `"fail"`
 - **Default**: `"pass"`
@@ -178,7 +178,7 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 #### `profile.<name>.slow-timeout`
 
 - **Type**: String (duration) or object
-- **Description**: Time after which tests are considered slow, and timeout configuration
+- **Description**: Time after which tests are considered slow, plus optional termination policy.
 - **Documentation**: [_Slow tests and timeouts_](../features/slow-tests.md)
 - **Default**: `60s` with no termination on timeout
 - **Examples**:
@@ -200,7 +200,7 @@ The `slow-timeout` object accepts the following parameters:
 #### `profile.<name>.leak-timeout`
 
 - **Type**: String (duration) or object
-- **Description**: Time to wait for child processes to exit after a test completes
+- **Description**: Time to wait for child processes to exit after a test completes.
 - **Documentation**: [_Leaky tests_](../features/leaky-tests.md)
 - **Examples**:
   ```toml
@@ -216,18 +216,17 @@ The `slow-timeout` object accepts the following parameters:
 <!-- md:version 0.9.117 -->
 
 - **Type**: String (duration)
-- **Description**: A global timeout for benchmark execution
+- **Description**: Global timeout for the entire benchmark run. Replaces `global-timeout` when running `cargo nextest bench`.
 - **Documentation**: [_Running benchmarks_](../features/benchmarks.md)
-- **Default**: none
+- **Default**: Unset (no global timeout)
 - **Example**: `bench.global-timeout = "2h"`
-- **Note**: This setting only applies when running benchmarks with `cargo nextest bench`. The regular `global-timeout` setting is ignored for benchmarks.
 
 #### `profile.<name>.bench.slow-timeout`
 
 <!-- md:version 0.9.117 -->
 
 - **Type**: String (duration) or object
-- **Description**: Time after which benchmarks are considered slow, and timeout configuration
+- **Description**: Time after which benchmarks are considered slow, plus optional termination policy. Replaces `slow-timeout` when running `cargo nextest bench`.
 - **Documentation**: [_Running benchmarks_](../features/benchmarks.md)
 - **Default**: `60s` with no termination on timeout
 - **Examples**:
@@ -236,7 +235,6 @@ The `slow-timeout` object accepts the following parameters:
   # or
   bench.slow-timeout = { period = "60s", terminate-after = 10, grace-period = "10s" }
   ```
-- **Note**: This setting only applies when running benchmarks with `cargo nextest bench`. The regular `slow-timeout` setting is ignored for benchmarks.
 
 The `bench.slow-timeout` object accepts the same parameters as `slow-timeout`:
 
@@ -249,33 +247,53 @@ The `bench.slow-timeout` object accepts the same parameters as `slow-timeout`:
 #### `profile.<name>.status-level`
 
 - **Type**: String
-- **Description**: Level of status information to display during test runs
+- **Description**: Level of status information to display during test runs.
 - **Documentation**: [_Reporting test results_](../reporting.md)
-- **Valid values**: `"none"`, `"fail"`, `"retry"`, `"slow"`, `"leak"`, `"pass"`, `"skip"`, `"all"`
+- **Valid values** (incremental; each level includes those above it):
+  - `"none"`: no output.
+  - `"fail"`: only output test failures.
+  - `"retry"`: output test retries; includes `fail`.
+  - `"slow"`: output slow tests; includes `retry`.
+  - `"leak"`: output leaky tests; includes `slow`.
+  - `"pass"`: output passing tests; includes `leak`.
+  - `"skip"`: output skipped tests; includes `pass`.
+  - `"all"`: equivalent to `"skip"` today; reserved for future expansion.
 - **Default**: `"pass"`
 
 #### `profile.<name>.final-status-level`
 
 - **Type**: String
-- **Description**: Level of status information to display in final summary
+- **Description**: Level of status information to display in the final summary.
 - **Documentation**: [_Reporting test results_](../reporting.md)
-- **Valid values**: `"none"`, `"fail"`, `"flaky"`, `"slow"`, `"skip"`, `"leak"`, `"pass"`, `"all"`
-- **Default**: `"fail"`
+- **Valid values** (incremental; each level includes those above it):
+  - `"none"`: no output.
+  - `"fail"`: only output test failures.
+  - `"flaky"`: output flaky tests; includes `fail`. Accepts `"retry"` as an alias.
+  - `"slow"`: output slow tests; includes `flaky`.
+  - `"skip"`: output skipped tests; includes `slow`.
+  - `"leak"`: output leaky tests; includes `skip`.
+  - `"pass"`: output passing tests; includes `leak`.
+  - `"all"`: equivalent to `"pass"` today; reserved for future expansion.
+- **Default**: `"flaky"`
 
 #### `profile.<name>.failure-output`
 
 - **Type**: String
-- **Description**: When to display output for failed tests
+- **Description**: When to display output for failed tests.
 - **Documentation**: [_Reporting test results_](../reporting.md)
-- **Valid values**: `"immediate"`, `"immediate-final"`, `"final"`, `"never"`
+- **Valid values**:
+  - `"immediate"`: show captured output as soon as the test completes.
+  - `"immediate-final"`: show captured output when the test completes _and_ again at the end of the run.
+  - `"final"`: show captured output only at the end of the run.
+  - `"never"`: never show captured output.
 - **Default**: `"immediate"`
 
 #### `profile.<name>.success-output`
 
 - **Type**: String
-- **Description**: When to display output for successful tests
+- **Description**: When to display output for successful tests.
 - **Documentation**: [_Reporting test results_](../reporting.md)
-- **Valid values**: `"immediate"`, `"immediate-final"`, `"final"`, `"never"`
+- **Valid values**: same as [`failure-output`](#profilenamefailure-output)
 - **Default**: `"never"`
 
 ### Failure handling
@@ -283,7 +301,7 @@ The `bench.slow-timeout` object accepts the same parameters as `slow-timeout`:
 #### `profile.<name>.fail-fast`
 
 - **Type**: Boolean or object
-- **Description**: Controls when to stop running tests after failures
+- **Description**: Controls when to stop running tests after failures.
 - **Documentation**: [_Failing fast_](../running.md#failing-fast)
 - **Default**: `true` (stop after first failure, wait for running tests to complete)
 - **Examples**:
@@ -299,8 +317,8 @@ The `bench.slow-timeout` object accepts the same parameters as `slow-timeout`:
   ```
 
 When `max-fail` is exceeded:
-- **`terminate = "wait"`** (default): Nextest stops scheduling new tests but waits for currently running tests to finish naturally
-- **`terminate = "immediate"`** <!-- md:version 0.9.111 -->: Nextest sends termination signals to running tests (respecting the grace period configured via `slow-timeout.terminate-after`)
+- **`terminate = "wait"`** (default): nextest stops scheduling new tests but waits for currently running tests to finish naturally.
+- **`terminate = "immediate"`** <!-- md:version 0.9.111 -->: nextest sends termination signals to running tests (respecting the grace period configured via `slow-timeout.terminate-after`).
 
 ### Test grouping
 
@@ -309,7 +327,7 @@ When `max-fail` is exceeded:
 <!-- md:version 0.9.48 -->
 
 - **Type**: String
-- **Description**: Assigns tests to a custom group for resource management
+- **Description**: Assigns matching tests to a custom test group for resource management.
 - **Documentation**: [_Test groups for mutual exclusion_](test-groups.md)
 - **Valid values**: Custom group name or `"@global"`
 - **Default**: `"@global"`
@@ -319,29 +337,29 @@ When `max-fail` is exceeded:
 #### `profile.<name>.junit.path`
 
 - **Type**: String (path)
-- **Description**: Path to write JUnit XML report
+- **Description**: Path to write the JUnit XML report to. If unset, JUnit reporting is disabled.
 - **Documentation**: [_JUnit support_](../machine-readable/junit.md)
-- **Default**: JUnit support is disabled
+- **Default**: Unset
 - **Example**: `junit.path = "target/nextest/junit.xml"`
 
 #### `profile.<name>.junit.report-name`
 
 - **Type**: String
-- **Description**: Name for the JUnit report
+- **Description**: Name for the JUnit XML report.
 - **Documentation**: [_JUnit support_](../machine-readable/junit.md)
 - **Default**: `"nextest-run"`
 
 #### `profile.<name>.junit.store-success-output`
 
 - **Type**: Boolean
-- **Description**: Whether to store successful test output in JUnit XML
+- **Description**: Whether to store successful test output in the JUnit XML report.
 - **Documentation**: [_JUnit support_](../machine-readable/junit.md)
 - **Default**: `false`
 
 #### `profile.<name>.junit.store-failure-output`
 
 - **Type**: Boolean
-- **Description**: Whether to store failed test output in JUnit XML
+- **Description**: Whether to store failed test output in the JUnit XML report.
 - **Documentation**: [_JUnit support_](../machine-readable/junit.md)
 - **Default**: `true`
 
@@ -350,7 +368,7 @@ When `max-fail` is exceeded:
 <!-- md:version 0.9.131 -->
 
 - **Type**: String
-- **Description**: How flaky-fail tests are reported in the JUnit XML report
+- **Description**: How flaky-fail tests are reported in the JUnit XML report.
 - **Documentation**: [_JUnit support_](../machine-readable/junit.md)
 - **Valid values**: `"failure"` or `"success"`
 - **Default**: `"failure"`
@@ -362,7 +380,7 @@ When `max-fail` is exceeded:
 #### `profile.<name>.archive.include`
 
 - **Type**: Array of objects
-- **Description**: Files to include when creating test archives
+- **Description**: Extra paths to include in the archive.
 - **Documentation**: [_Archiving and reusing builds_](../ci-features/archiving.md)
 - **Example**:
   ```toml
@@ -375,10 +393,10 @@ When `max-fail` is exceeded:
 
 ##### Archive include parameters
 
-- `path`: Relative path to include
-- `relative-to`: Base directory (`"target"`)
-- `depth`: Maximum recursion depth (integer or `"infinite"`)
-- `on-missing`: What to do if path is missing (`"ignore"`, `"warn"`, `"error"`)
+- `path`: Path to include, relative to `relative-to`.
+- `relative-to`: Base directory `path` is interpreted relative to. Valid values: `"target"`.
+- `depth`: Maximum recursion depth (non-negative integer or `"infinite"`).
+- `on-missing`: What to do if `path` is missing. Valid values: `"ignore"`, `"warn"`, `"error"`.
 
 ## Override configuration
 
@@ -393,7 +411,7 @@ At least one of these filters must be specified.
 #### `filter`
 
 - **Type**: String (filterset expression)
-- **Description**: Selects which tests this override applies to
+- **Description**: Filterset expression selecting tests this override applies to.
 - **Documentation**: [_Filterset DSL_](../filtersets/index.md)
 - **Default**: Override applies to all tests
 - **Example**: `filter = 'test(integration_test)'`
@@ -403,7 +421,7 @@ At least one of these filters must be specified.
 <!-- md:version 0.9.58 -->
 
 - **Type**: String or Object
-- **Description**: Platform specification for when override applies
+- **Description**: Host and/or target platforms this override applies to.
 - **Documentation**: [_Specifying platforms_](specifying-platforms.md)
 - **Default**: Override applies to all platforms
 - **Examples**:
@@ -420,16 +438,15 @@ At least one of these filters must be specified.
 <!-- md:version 0.9.84 -->
 
 - **Type**: String (filterset expression)
-- **Description**: Override the default filter for specific platforms
+- **Description**: Replaces `default-filter` for matching platforms. Requires `platform` and must not be combined with `filter`.
 - **Documentation**: [_Running a subset of tests by default_](../selecting.md#running-a-subset-of-tests-by-default)
-- **Note**: Can only be used with `platform` specification
 
 #### `priority`
 
 <!-- md:version 0.9.91 -->
 
 - **Type**: Integer (-100 to 100)
-- **Description**: Test priority (a greater number means a higher priority)
+- **Description**: Priority for matching tests; higher values run sooner.
 - **Documentation**: [_Test priorities_](test-priorities.md)
 - **Default**: `0`
 
@@ -461,7 +478,7 @@ For detailed information, see [_Test groups for mutual exclusion_](test-groups.m
 #### `test-groups.<name>.max-threads`
 
 - **Type**: Integer or string
-- **Description**: Maximum number of threads this test group can use
+- **Description**: Maximum number of threads this test group may use concurrently.
 - **Valid values**: Positive integer or `"num-cpus"`
 
 ## Script configuration
@@ -479,7 +496,7 @@ For detailed information, see [_Setup scripts_](setup-scripts.md).
 #### `scripts.setup.<name>.command`
 
 - **Type**: String, array, or object
-- **Description**: The command to execute
+- **Description**: The command to run for this setup script.
 - **Examples**:
   ```toml
   command = "echo hello"
@@ -492,7 +509,7 @@ For detailed information, see [_Setup scripts_](setup-scripts.md).
 #### `scripts.setup.<name>.slow-timeout`
 
 - **Type**: String (duration) or object
-- **Description**: Timeout configuration for the setup script
+- **Description**: Slow-timeout configuration for this setup script.
 - **Default**: No timeout
 - **Examples**:
   ```toml
@@ -504,7 +521,7 @@ For detailed information, see [_Setup scripts_](setup-scripts.md).
 #### `scripts.setup.<name>.leak-timeout`
 
 - **Type**: String (duration) or object
-- **Description**: Leak timeout for the setup script
+- **Description**: Leak-timeout configuration for this setup script.
 - **Default**: `200ms`
 - **Examples**:
   ```toml
@@ -516,25 +533,25 @@ For detailed information, see [_Setup scripts_](setup-scripts.md).
 #### `scripts.setup.<name>.capture-stdout`
 
 - **Type**: Boolean
-- **Description**: Whether to capture stdout from the script
+- **Description**: Whether to capture stdout from this setup script.
 - **Default**: `false`
 
 #### `scripts.setup.<name>.capture-stderr`
 
 - **Type**: Boolean
-- **Description**: Whether to capture stderr from the script
+- **Description**: Whether to capture stderr from this setup script.
 - **Default**: `false`
 
 #### `scripts.setup.<name>.junit.store-success-output`
 
 - **Type**: Boolean
-- **Description**: Store successful script output in JUnit
+- **Description**: Whether to store this setup script's output on success in the JUnit XML report.
 - **Default**: `true`
 
 #### `scripts.setup.<name>.junit.store-failure-output`
 
 - **Type**: Boolean
-- **Description**: Store failed script output in JUnit
+- **Description**: Whether to store this setup script's output on failure in the JUnit XML report.
 - **Default**: `true`
 
 ### Wrapper scripts
@@ -546,7 +563,7 @@ For detailed information, see [_Wrapper scripts_](wrapper-scripts.md).
 #### `scripts.wrapper.<name>.command`
 
 - **Type**: String, array, or object
-- **Description**: The wrapper command to execute
+- **Description**: The command to run as the wrapper.
 - **Examples**:
   ```toml
   command = "my-script.sh"
@@ -559,9 +576,13 @@ For detailed information, see [_Wrapper scripts_](wrapper-scripts.md).
 #### `scripts.wrapper.<name>.target-runner`
 
 - **Type**: String
-- **Description**: How to interact with the configured target runner
+- **Description**: How this wrapper composes with a configured target runner.
 - **Documentation**: [_Target runners_](../features/target-runners.md)
-- **Valid values**: `"ignore"`, `"overrides-wrapper"`, `"within-wrapper"`, `"around-wrapper"`
+- **Valid values**:
+  - `"ignore"`: the target runner is ignored.
+  - `"overrides-wrapper"`: when a target runner is configured, it replaces the wrapper; otherwise the wrapper runs as usual.
+  - `"within-wrapper"`: the target runner runs within the wrapper script (command line: `<wrapper> <target-runner> <test-binary> <args>`).
+  - `"around-wrapper"`: the target runner runs around the wrapper script (command line: `<target-runner> <wrapper> <test-binary> <args>`).
 - **Default**: `"ignore"`
 
 ## Profile script configuration
@@ -577,7 +598,7 @@ At least one of these filters must be specified.
 #### `platform`
 
 - **Type**: String or object
-- **Description**: Platform specification for when scripts apply
+- **Description**: Host and/or target platforms these scripts apply to.
 - **Documentation**: [_Specifying platforms_](specifying-platforms.md)
 - **Default**: Scripts apply to all platforms
 - **Examples**:
@@ -590,7 +611,7 @@ At least one of these filters must be specified.
 #### `filter`
 
 - **Type**: String (filterset expression)
-- **Description**: Test filter for when scripts apply
+- **Description**: Filterset expression selecting tests these scripts apply to.
 - **Documentation**: [_Filterset DSL_](../filtersets/index.md)
 - **Default**: Scripts apply to all tests
 - **Example**: `filter = 'test(integration_test)'`
@@ -602,7 +623,7 @@ At least one instruction must be specified.
 #### `setup`
 
 - **Type**: String or array of strings
-- **Description**: Setup script(s) to run
+- **Description**: Names of setup scripts to run (single name or array).
 - **Documentation**: [_Setup scripts_](setup-scripts.md)
 - **Examples**:
   ```toml
@@ -614,14 +635,14 @@ At least one instruction must be specified.
 #### `list-wrapper`
 
 - **Type**: String
-- **Description**: Wrapper script to use during test listing
+- **Description**: Name of the wrapper script used during test listing.
 - **Documentation**: [_Wrapper scripts_](wrapper-scripts.md)
 - **Example**: `list-wrapper = "my-list-wrapper"`
 
 #### `run-wrapper`
 
 - **Type**: String
-- **Description**: Wrapper script to use during test execution
+- **Description**: Name of the wrapper script used during test execution.
 - **Documentation**: [_Wrapper scripts_](wrapper-scripts.md)
 - **Example**: `run-wrapper = "my-run-wrapper"`
 

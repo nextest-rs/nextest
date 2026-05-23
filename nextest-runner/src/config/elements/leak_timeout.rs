@@ -6,9 +6,8 @@
 use serde::{Deserialize, Serialize, de::IntoDeserializer};
 use std::{fmt, time::Duration};
 
-/// Controls leak timeout behavior.
-///
-/// Includes a period and a result (pass or fail).
+/// Time to wait for child processes to exit after a test completes, plus the
+/// pass/fail result recorded when the timeout elapses.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 pub struct LeakTimeout {
     /// The leak timeout period.
@@ -54,17 +53,17 @@ impl schemars::JsonSchema for LeakTimeout {
     }
 }
 
-/// The result of controlling leak timeout behavior.
+/// Whether to mark a test as passed or failed when the leak timeout elapses.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum LeakTimeoutResult {
-    /// The test is marked as failed.
+    /// Mark the test as failed.
     Fail,
 
     #[default]
-    /// The test is marked as passed.
+    /// Mark the test as passed.
     Pass,
 }
 

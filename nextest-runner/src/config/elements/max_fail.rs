@@ -5,18 +5,20 @@ use crate::errors::MaxFailParseError;
 use serde::Deserialize;
 use std::{fmt, str::FromStr};
 
-/// Type for the max-fail flag and fail-fast configuration.
+/// The number of failures after which to stop running tests, plus the
+/// termination policy for tests already in flight.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MaxFail {
-    /// Allow a specific number of tests to fail before exiting.
+    /// Allow a specific number of tests to fail before stopping.
     Count {
-        /// The maximum number of tests that can fail before exiting.
+        /// The maximum number of tests that may fail before stopping.
         max_fail: usize,
-        /// Whether to terminate running tests immediately or wait for them to complete.
+        /// Whether to wait for currently running tests to complete or terminate
+        /// them immediately.
         terminate: TerminateMode,
     },
 
-    /// Run all tests. Equivalent to --no-fast-fail.
+    /// Run all tests regardless of failures. Equivalent to `--no-fail-fast`.
     All,
 }
 
@@ -129,10 +131,10 @@ impl fmt::Display for MaxFail {
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum TerminateMode {
-    /// Wait for running tests to complete (default)
+    /// Wait for running tests to complete naturally.
     #[default]
     Wait,
-    /// Terminate running tests immediately
+    /// Send termination signals to running tests immediately.
     Immediate,
 }
 

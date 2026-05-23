@@ -188,11 +188,6 @@ impl UserConfigWarnings for DefaultUserConfigWarnings {
 #[serde(rename_all = "kebab-case")]
 struct DeserializedUserConfig {
     /// Toggles for experimental, non-stable features.
-    ///
-    /// ```toml
-    /// [experimental]
-    /// record = true
-    /// ```
     #[serde(default)]
     experimental: ExperimentalConfig,
 
@@ -204,12 +199,8 @@ struct DeserializedUserConfig {
     #[serde(default)]
     record: DeserializedRecordConfig,
 
-    /// Platform-specific overrides applied on top of the base configuration.
-    ///
-    /// Each entry specifies a `platform` filter and any number of settings to
-    /// substitute when that filter matches. For each setting, the first
-    /// matching override wins; the base configuration is used if no override
-    /// matches.
+    /// Platform-specific overrides applied on top of `[ui]` and `[record]`.
+    /// The first matching override per setting wins.
     #[serde(default)]
     overrides: Vec<DeserializedOverride>,
 }
@@ -221,18 +212,15 @@ struct DeserializedUserConfig {
 #[serde(rename_all = "kebab-case")]
 struct DeserializedOverride {
     /// Target-spec expression selecting which platforms this override applies
-    /// to.
-    ///
-    /// Accepts a target triple (e.g. `x86_64-unknown-linux-gnu`) or a `cfg()`
-    /// expression (e.g. `cfg(windows)`, `cfg(target_os = "macos")`). Matched
-    /// against the platform nextest was built for.
+    /// to (target triple or `cfg()` expression). Matched against the platform
+    /// nextest was built for.
     platform: String,
 
-    /// UI settings to substitute on matching platforms.
+    /// UI settings substituted on matching platforms.
     #[serde(default)]
     ui: DeserializedUiOverrideData,
 
-    /// Record retention settings to substitute on matching platforms.
+    /// Record retention settings substituted on matching platforms.
     #[serde(default)]
     record: DeserializedRecordOverrideData,
 }

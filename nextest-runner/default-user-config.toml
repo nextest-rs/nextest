@@ -5,55 +5,55 @@
 # https://nexte.st/docs/user-config/reference
 
 [ui]
-# How to show progress during test runs.
+# Style of progress display shown during test runs.
 # Valid values: "auto", "none", "bar", "counter", "only"
 show-progress = "auto"
 
-# Maximum running tests to display in the progress bar.
-# Valid values: an integer, or "infinite" for unlimited.
+# Maximum number of running tests to list in the progress bar. Excess running
+# tests are collapsed into a summary line.
+# Valid values: a non-negative integer, or "infinite" for no limit.
 max-progress-running = 8
 
-# Whether to enable the input handler for keyboard shortcuts during test runs.
+# Enables the interactive keyboard input handler (e.g. `t` to dump test status,
+# `Enter` to print a summary line).
 input-handler = true
 
-# Whether to indent captured test output for visual clarity.
+# Indents captured test output for visual clarity.
 output-indent = true
 
-# Pager for supported command output.
+# Pager command for output that benefits from scrolling.
 #
 # Accepts a command string ("less -FRX"), an array (["less", "-FRX"]),
 # a table ({ command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }),
 # or ":builtin" to use the builtin pager.
 pager = { command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }
 
-# When to paginate output.
+# When to send output through the pager.
 # Valid values: "auto", "never"
 paginate = "auto"
 
-# Configuration for the builtin streampager (used when pager = ":builtin").
+# Settings for the builtin pager (active when pager = ":builtin").
 [ui.streampager]
-# Interface mode controlling alternate screen behavior.
+# How the builtin pager uses the alternate screen and when it exits.
 # Valid values: "quit-if-one-page", "full-screen-clear-output", "quit-quickly-or-clear-output"
 interface = "quit-if-one-page"
-# Text wrapping mode.
+# How the builtin pager wraps long lines.
 # Valid values: "none", "word", "anywhere"
 wrapping = "word"
-# Whether to show a ruler at the bottom.
+# Whether to show a ruler at the bottom of the builtin pager.
 show-ruler = true
 
-# Record retention settings (for experimental record-replay feature).
+# Retention settings for the record-replay-rerun feature.
 [record]
-# Whether recording is enabled.
-# Recording only occurs when the `record` experimental feature is enabled AND
-# this is set to true.
+# Whether to record test runs. Has no effect unless [experimental] record = true.
 enabled = false
-# Maximum number of recorded runs to keep.
+# Maximum number of recorded runs to retain before eviction.
 max-records = 100
-# Maximum total size of all recorded runs.
+# Maximum combined size of all retained recordings before eviction.
 max-total-size = "1GB"
-# Maximum age of recorded runs.
+# Maximum age of a recorded run before eviction.
 max-age = "30d"
-# Maximum size of a single output (stdout/stderr) before truncation.
+# Maximum size of a single captured stdout or stderr stream before truncation.
 max-output-size = "10MB"
 
 # Windows uses the builtin pager by default because external pagers are

@@ -27,18 +27,17 @@ use std::{fmt, io};
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[serde(rename_all = "kebab-case")]
 pub enum TestOutputDisplay {
-    /// Show output immediately on execution completion.
-    ///
-    /// This is the default for failing tests.
+    /// Shows captured output as soon as the test completes.
     Immediate,
 
-    /// Show output immediately, and at the end of a test run.
+    /// Shows captured output when the test completes and again at the end of
+    /// the run.
     ImmediateFinal,
 
-    /// Show output at the end of execution.
+    /// Shows captured output only at the end of the run.
     Final,
 
-    /// Never show output.
+    /// Never shows captured output.
     Never,
 }
 

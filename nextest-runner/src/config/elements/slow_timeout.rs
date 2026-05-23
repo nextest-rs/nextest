@@ -5,7 +5,8 @@ use crate::time::far_future_duration;
 use serde::{Deserialize, Serialize, de::IntoDeserializer};
 use std::{fmt, num::NonZeroUsize, time::Duration};
 
-/// Type for the slow-timeout config key.
+/// Time after which a test is considered slow, plus optional termination
+/// policy.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct SlowTimeout {

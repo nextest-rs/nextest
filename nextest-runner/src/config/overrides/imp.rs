@@ -985,10 +985,10 @@ pub(crate) enum FilterOrDefaultFilter {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct DeserializedOverride {
-    /// The host and/or target platforms to match against.
+    /// Host and/or target platforms this override applies to.
     #[serde(default)]
     platform: PlatformStrings,
-    /// The filterset to match against.
+    /// Filterset expression selecting tests this override applies to.
     #[serde(default)]
     filter: Option<String>,
     // Overrides start here.
@@ -996,17 +996,17 @@ pub(in crate::config) struct DeserializedOverride {
     // (This used to use serde(flatten) but that has issues:
     // https://github.com/serde-rs/serde/issues/2312.)
     // ---
-    /// Test priority.
+    /// Priority for matching tests; higher values run sooner.
     #[serde(default)]
     priority: Option<TestPriority>,
-    /// The default filter for tests. Only supported if platform is specified
-    /// but filter is not.
+    /// Replaces `default-filter` for matching platforms. Requires `platform`
+    /// and must not be combined with `filter`.
     #[serde(default)]
     default_filter: Option<String>,
-    /// The number of threads required for matching tests.
+    /// Number of threads each matching test reserves from the pool.
     #[serde(default)]
     threads_required: Option<ThreadsRequired>,
-    /// Extra arguments to pass to the test runner.
+    /// Extra arguments to pass to matching test binaries.
     #[serde(default)]
     run_extra_args: Option<Vec<String>>,
     /// Retry policy for matching tests.
@@ -1015,7 +1015,7 @@ pub(in crate::config) struct DeserializedOverride {
         deserialize_with = "crate::config::elements::deserialize_retry_policy"
     )]
     retries: Option<RetryPolicy>,
-    /// Whether to treat flaky tests as passing or failing.
+    /// Whether to treat matching flaky tests as passing or failing.
     #[serde(default)]
     flaky_result: Option<FlakyResult>,
     /// Slow timeout for matching tests.
@@ -1033,16 +1033,16 @@ pub(in crate::config) struct DeserializedOverride {
     /// Test group to put matching tests in.
     #[serde(default)]
     test_group: Option<TestGroup>,
-    /// Success output display for matching tests.
+    /// When to display output for matching successful tests.
     #[serde(default)]
     success_output: Option<TestOutputDisplay>,
-    /// Failure output display for matching tests.
+    /// When to display output for matching failed tests.
     #[serde(default)]
     failure_output: Option<TestOutputDisplay>,
-    /// JUnit output configuration for matching tests.
+    /// JUnit XML output settings for matching tests.
     #[serde(default)]
     junit: DeserializedJunitOutput,
-    /// Benchmark-specific overrides.
+    /// Benchmark-specific overrides for matching tests.
     #[serde(default)]
     bench: DeserializedOverrideBench,
 }
@@ -1052,9 +1052,11 @@ pub(in crate::config) struct DeserializedOverride {
 #[cfg_attr(feature = "config-schema", schemars(deny_unknown_fields))]
 #[serde(rename_all = "kebab-case")]
 pub(in crate::config) struct DeserializedJunitOutput {
-    /// Whether to store successful test output in the JUnit XML report.
+    /// Whether to store successful output for matching tests in the JUnit XML
+    /// report.
     store_success_output: Option<bool>,
-    /// Whether to store failed test output in the JUnit XML report.
+    /// Whether to store failed output for matching tests in the JUnit XML
+    /// report.
     store_failure_output: Option<bool>,
     /// How flaky-fail tests are reported in the JUnit XML report.
     flaky_fail_status: Option<JunitFlakyFailStatus>,

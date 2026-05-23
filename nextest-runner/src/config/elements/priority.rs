@@ -4,9 +4,7 @@
 use crate::errors::TestPriorityOutOfRange;
 use serde::{Deserialize, Deserializer};
 
-/// A test priority: a number between -100 and 100.
-///
-/// The sort order is from highest to lowest priority.
+/// A test priority between -100 and 100, inclusive. Higher values run sooner.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 pub struct TestPriority(
