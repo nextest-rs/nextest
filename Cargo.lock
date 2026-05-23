@@ -4299,9 +4299,9 @@ dependencies = [
 
 [[package]]
 name = "target-spec-miette"
-version = "0.4.6"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65023d7d29e9c01575018456b662a6af2a02d22c0ad648e15182dc37f6adc048"
+checksum = "c6259294bbf45237355d68da4e7ed1d4bd1fd0b51ff063d242e14fe6aa6773ef"
 dependencies = [
  "guppy-workspace-hack",
  "include_dir",
