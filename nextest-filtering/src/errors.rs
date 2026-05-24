@@ -114,6 +114,45 @@ pub enum ParseSingleError {
     #[error("expected expression")]
     ExpectedExpr(#[label("missing expression")] SourceSpan),
 
+    /// A binary operator keyword or sigil was used in a position where an
+    /// expression was expected.
+    ///
+    /// Filterset binary operators are infix operators, not prefix ones. The
+    /// `suggest` field is the canonical recognized form of the operator, used
+    /// to nudge the user toward valid syntax in a single step: for `AND` it's
+    /// `and`, for `&&` it's `&`, and so on.
+    #[error("expected expression, found `{op}`")]
+    #[diagnostic(help("use `<expr> {suggest} <expr>` instead"))]
+    ExprFoundBinaryOp {
+        /// The matched operator, exactly as it appeared in the input.
+        op: &'static str,
+
+        /// The canonical recognized form to suggest in the help.
+        suggest: &'static str,
+
+        /// The span of the operator.
+        #[label("`{suggest}` is a binary operator")]
+        span: SourceSpan,
+    },
+
+    /// A unary-operator-shaped token was used in a syntax filtersets don't
+    /// recognize, e.g. uppercase `NOT` instead of `not`.
+    ///
+    /// The `suggest` field is the canonical recognized form.
+    #[error("expected expression, found `{op}`")]
+    #[diagnostic(help("use `{suggest} <expr>` instead"))]
+    ExprFoundUnaryOp {
+        /// The matched token, exactly as it appeared in the input.
+        op: &'static str,
+
+        /// The canonical recognized form to suggest in the help.
+        suggest: &'static str,
+
+        /// The span of the token.
+        #[label("`{op}` is not a recognized operator")]
+        span: SourceSpan,
+    },
+
     /// The expression was expected to end here but some extra text was found.
     #[error("expected end of expression")]
     ExpectedEndOfExpression(#[label("unparsed input")] SourceSpan),

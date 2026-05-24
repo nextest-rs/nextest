@@ -20,9 +20,9 @@ use std::fmt;
 use winnow::{
     LocatingSlice, ModalParser, Parser,
     ascii::line_ending,
-    combinator::{alt, delimited, eof, peek, preceded, repeat, terminated, trace},
-    stream::{Location, SliceLen, Stream},
-    token::{literal, take_till},
+    combinator::{alt, delimited, eof, not, peek, preceded, repeat, terminated, trace},
+    stream::{AsChar, Location, SliceLen, Stream},
+    token::{literal, one_of, take_till},
 };
 
 mod glob;
@@ -336,6 +336,16 @@ where
         Err(winnow::error::ErrMode::Backtrack(_)) | Err(winnow::error::ErrMode::Cut(_)) => Ok(None),
         Err(err) => Err(err),
     }
+}
+
+/// Succeeds when the next character is not an identifier-continuation
+/// character. The end of input also counts as a word boundary.
+///
+/// Used to enforce word boundaries on alphabetic operator keywords, so that
+/// e.g. `notall()` does not get tokenized as `not all()` while `not(test(x))`
+/// does parse as `not (test(x))`.
+fn word_boundary(input: &mut Span<'_>) -> PResult<()> {
+    peek(not(one_of(|c: char| c.is_alphanum() || c == '_'))).parse_next(input)
 }
 
 fn ws<'a, T, P: ModalParser<Span<'a>, T, Error>>(
@@ -713,8 +723,55 @@ fn parse_basic_expr(input: &mut Span<'_>) -> PResult<ExprResult> {
             }),
             parse_expr_not,
             parse_parentheses_expr,
+            // Recover from misuse of a unary or binary operator at prefix
+            // position.
+            //
+            // Emitting a dedicated diagnostic prevents a cascade of follow-up
+            // errors.
+            parse_misplaced_binary_op,
+            parse_misplaced_unary_op,
         ))),
     )
+    .parse_next(input)
+}
+
+fn parse_misplaced_binary_op(input: &mut Span<'_>) -> PResult<ExprResult> {
+    trace("parse_misplaced_binary_op", |input: &mut Span<'_>| {
+        let start = input.current_token_start();
+        let (op, suggest) = alt((
+            terminated("and", word_boundary).value(("and", "and")),
+            terminated("or", word_boundary).value(("or", "or")),
+            terminated("AND", word_boundary).value(("AND", "and")),
+            terminated("OR", word_boundary).value(("OR", "or")),
+            "&&".value(("&&", "&")),
+            "||".value(("||", "|")),
+        ))
+        .parse_next(input)?;
+        let err = ParseSingleError::ExprFoundBinaryOp {
+            op,
+            suggest,
+            span: (start, op.len()).into(),
+        };
+        input.state.report_error(err);
+        Ok(ExprResult::Error)
+    })
+    .parse_next(input)
+}
+
+fn parse_misplaced_unary_op(input: &mut Span<'_>) -> PResult<ExprResult> {
+    trace("parse_misplaced_unary_op", |input: &mut Span<'_>| {
+        let start = input.current_token_start();
+        let op: &'static str = terminated("NOT", word_boundary)
+            .value("NOT")
+            .parse_next(input)?;
+        let err = ParseSingleError::ExprFoundUnaryOp {
+            op,
+            suggest: "not",
+            span: (start, op.len()).into(),
+        };
+        input.state.report_error(err);
+        Ok(ExprResult::Error)
+    })
     .parse_next(input)
 }
 
@@ -742,7 +799,7 @@ fn parse_expr_not(input: &mut Span<'_>) -> PResult<ExprResult> {
         "parse_expr_not",
         (
             alt((
-                "not ".value(NotOperator::LiteralNot),
+                terminated("not", word_boundary).value(NotOperator::LiteralNot),
                 '!'.value(NotOperator::Exclamation),
             )),
             expect_expr(ws(parse_basic_expr)),
@@ -814,14 +871,14 @@ fn parse_or_operator<'i>(input: &mut Span<'i>) -> PResult<Option<OrOperator>> {
                 let start = input.current_token_start();
                 // This is not a valid OR operator in this position, but catch it to provide a better
                 // experience.
-                let op = alt(("||", "OR ")).parse_next(input)?;
+                let op = alt(("||", terminated("OR", word_boundary))).parse_next(input)?;
                 // || is not supported in filtersets: suggest using | instead.
                 let length = op.len();
                 let err = ParseSingleError::InvalidOrOperator((start, length).into());
                 input.state.report_error(err);
                 Ok(None)
             },
-            "or ".value(Some(OrOperator::LiteralOr)),
+            terminated("or", word_boundary).value(Some(OrOperator::LiteralOr)),
             '|'.value(Some(OrOperator::Pipe)),
             '+'.value(Some(OrOperator::Plus)),
         ))),
@@ -915,14 +972,15 @@ fn parse_and_or_difference_operator<'i>(
         ws(alt((
             |input: &mut Span<'i>| {
                 let start = input.current_token_start();
-                let op = alt(("&&", "AND ")).parse_next(input)?;
+                let op = alt(("&&", terminated("AND", word_boundary))).parse_next(input)?;
                 // && is not supported in filtersets: suggest using & instead.
                 let length = op.len();
                 let err = ParseSingleError::InvalidAndOperator((start, length).into());
                 input.state.report_error(err);
                 Ok(None)
             },
-            "and ".value(Some(AndOrDifferenceOperator::And(AndOperator::LiteralAnd))),
+            terminated("and", word_boundary)
+                .value(Some(AndOrDifferenceOperator::And(AndOperator::LiteralAnd))),
             '&'.value(Some(AndOrDifferenceOperator::And(AndOperator::Ampersand))),
             '-'.value(Some(AndOrDifferenceOperator::Difference(
                 DifferenceOperator::Minus,
@@ -1322,6 +1380,18 @@ mod tests {
             .not(NotOperator::LiteralNot)
             .not(NotOperator::LiteralNot);
         assert_eq_both_ways(&expr, "not not all()");
+
+        // `not` followed by `(` without intervening whitespace must parse as
+        // `not (...)`.
+        let expr = ParsedExpr::all().parens().not(NotOperator::LiteralNot);
+        assert_eq!(expr, parse("not(all())"));
+        assert_eq_both_ways(&expr, "not (all())");
+
+        // `not` followed by `!` without intervening whitespace.
+        let expr = ParsedExpr::all()
+            .not(NotOperator::Exclamation)
+            .not(NotOperator::LiteralNot);
+        assert_eq!(expr, parse("not!all()"));
     }
 
     #[test]
@@ -1341,6 +1411,15 @@ mod tests {
         );
         assert_eq_both_ways(&expr, "all() & none()");
         assert_eq!(expr, parse("all()&none()"));
+
+        // Tight syntax: `and` followed by `(` without a space.
+        let expr = ParsedExpr::intersection(
+            AndOperator::LiteralAnd,
+            ParsedExpr::all(),
+            ParsedExpr::none().parens(),
+        );
+        assert_eq!(expr, parse("all()and(none())"));
+        assert_eq!(expr, parse("all() and(none())"));
     }
 
     #[test]
@@ -1356,6 +1435,15 @@ mod tests {
         let expr = ParsedExpr::union(OrOperator::Plus, ParsedExpr::all(), ParsedExpr::none());
         assert_eq_both_ways(&expr, "all() + none()");
         assert_eq!(expr, parse("all()+none()"));
+
+        // Tight syntax: `or` followed by `(` without a space.
+        let expr = ParsedExpr::union(
+            OrOperator::LiteralOr,
+            ParsedExpr::all(),
+            ParsedExpr::none().parens(),
+        );
+        assert_eq!(expr, parse("all()or(none())"));
+        assert_eq!(expr, parse("all() or(none())"));
     }
 
     #[test]
@@ -1505,7 +1593,15 @@ mod tests {
         let mut errors = parse_err(src);
         assert_eq!(1, errors.len());
         let error = errors.remove(0);
-        assert_error!(error, InvalidAndOperator, 6, 4);
+        assert_error!(error, InvalidAndOperator, 6, 3);
+
+        // Tight syntax for the diagnostic variant must also surface the
+        // dedicated error rather than a generic "unparsed input".
+        let src = "all() AND(none())";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        assert_error!(error, InvalidAndOperator, 6, 3);
     }
 
     #[test]
@@ -1520,7 +1616,13 @@ mod tests {
         let mut errors = parse_err(src);
         assert_eq!(1, errors.len());
         let error = errors.remove(0);
-        assert_error!(error, InvalidOrOperator, 6, 3);
+        assert_error!(error, InvalidOrOperator, 6, 2);
+
+        let src = "all() OR(none())";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        assert_error!(error, InvalidOrOperator, 6, 2);
     }
 
     #[test]
@@ -1652,6 +1754,169 @@ mod tests {
         assert_eq!(1, errors.len());
         let error = errors.remove(0);
         assert_error!(error, ExpectedExpr, 7, 1);
+    }
+
+    #[test]
+    fn test_misplaced_binary_op() {
+        // `and(a, b)`.
+        let mut errors = parse_err("and(a, b)");
+        assert_eq!(2, errors.len(), "errors: {errors:?}");
+        match errors.remove(0) {
+            ParseSingleError::ExprFoundBinaryOp { op, suggest, span } => {
+                assert_eq!(op, "and");
+                assert_eq!(suggest, "and");
+                assert_eq!(span, (0, 3).into());
+            }
+            other => panic!("expected ExprFoundBinaryOp, got: {other:?}"),
+        }
+        let error = errors.remove(0);
+        assert_error!(error, ExpectedEndOfExpression, 3, 6);
+
+        // `or(a, b)`.
+        let mut errors = parse_err("or(a, b)");
+        assert_eq!(2, errors.len(), "errors: {errors:?}");
+        match errors.remove(0) {
+            ParseSingleError::ExprFoundBinaryOp { op, suggest, span } => {
+                assert_eq!(op, "or");
+                assert_eq!(suggest, "or");
+                assert_eq!(span, (0, 2).into());
+            }
+            other => panic!("expected ExprFoundBinaryOp, got: {other:?}"),
+        }
+
+        // Uppercase variants are caught and the suggestion uses the
+        // canonical lowercase form (the uppercase form is not a recognized
+        // operator either).
+        let errors = parse_err("AND(test(foo))");
+        match &errors[0] {
+            ParseSingleError::ExprFoundBinaryOp { op, suggest, span } => {
+                assert_eq!(*op, "AND");
+                assert_eq!(*suggest, "and");
+                assert_eq!(*span, (0, 3).into());
+            }
+            other => panic!("expected ExprFoundBinaryOp, got: {other:?}"),
+        }
+
+        let errors = parse_err("OR(test(foo))");
+        match &errors[0] {
+            ParseSingleError::ExprFoundBinaryOp { op, suggest, span } => {
+                assert_eq!(*op, "OR");
+                assert_eq!(*suggest, "or");
+                assert_eq!(*span, (0, 2).into());
+            }
+            other => panic!("expected ExprFoundBinaryOp, got: {other:?}"),
+        }
+
+        // A misplaced binary operator on the right-hand side of another
+        // operator should also produce the dedicated error.
+        let errors = parse_err("all() and or all()");
+        let positioned = errors
+            .iter()
+            .find(|e| matches!(e, ParseSingleError::ExprFoundBinaryOp { op: "or", .. }));
+        assert!(
+            positioned.is_some(),
+            "expected ExprFoundBinaryOp for `or` in RHS position; got: {errors:?}"
+        );
+
+        // Inside parentheses too.
+        let errors = parse_err("(and all())");
+        let positioned = errors
+            .iter()
+            .find(|e| matches!(e, ParseSingleError::ExprFoundBinaryOp { op: "and", .. }));
+        assert!(
+            positioned.is_some(),
+            "expected ExprFoundBinaryOp inside parens; got: {errors:?}"
+        );
+
+        // The sigil forms `&&` and `||` are also caught as misplaced binary ops
+        // when they appear at the start of an expression. The suggestion is the
+        // matching single-character sigil.
+        let mut errors = parse_err("&&(a, b)");
+        assert_eq!(2, errors.len(), "errors: {errors:?}");
+        match errors.remove(0) {
+            ParseSingleError::ExprFoundBinaryOp { op, suggest, span } => {
+                assert_eq!(op, "&&");
+                assert_eq!(suggest, "&");
+                assert_eq!(span, (0, 2).into());
+            }
+            other => panic!("expected ExprFoundBinaryOp, got: {other:?}"),
+        }
+        let error = errors.remove(0);
+        assert_error!(error, ExpectedEndOfExpression, 2, 6);
+
+        let mut errors = parse_err("||(a, b)");
+        assert_eq!(2, errors.len(), "errors: {errors:?}");
+        match errors.remove(0) {
+            ParseSingleError::ExprFoundBinaryOp { op, suggest, span } => {
+                assert_eq!(op, "||");
+                assert_eq!(suggest, "|");
+                assert_eq!(span, (0, 2).into());
+            }
+            other => panic!("expected ExprFoundBinaryOp, got: {other:?}"),
+        }
+        let error = errors.remove(0);
+        assert_error!(error, ExpectedEndOfExpression, 2, 6);
+    }
+
+    #[test]
+    fn test_misplaced_unary_op() {
+        let mut errors = parse_err("NOT(all())");
+        assert_eq!(errors.len(), 2, "errors: {errors:?}");
+        match errors.remove(0) {
+            ParseSingleError::ExprFoundUnaryOp { op, suggest, span } => {
+                assert_eq!(op, "NOT");
+                assert_eq!(suggest, "not");
+                assert_eq!(span, (0, 3).into());
+            }
+            other => panic!("expected ExprFoundUnaryOp, got: {other:?}"),
+        }
+        let error = errors.remove(0);
+        assert_error!(error, ExpectedEndOfExpression, 3, 7);
+
+        // Also fires inside parentheses and on the right-hand side of a
+        // binary operator.
+        let errors = parse_err("all() and NOT all()");
+        let positioned = errors
+            .iter()
+            .find(|e| matches!(e, ParseSingleError::ExprFoundUnaryOp { op: "NOT", .. }));
+        assert!(
+            positioned.is_some(),
+            "expected ExprFoundUnaryOp for `NOT` in RHS position; got: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_keyword_word_boundary() {
+        // `notall()` must not parse as `not all()`. No keyword matches at
+        // position 0, so the parser reports `ExpectedExpr` and then
+        // `ExpectedEndOfExpression`, both spanning the entire input.
+        let mut errors = parse_err("notall()");
+        assert_eq!(2, errors.len(), "errors: {errors:?}");
+        let error = errors.remove(0);
+        assert_error!(error, ExpectedExpr, 0, 8);
+        let error = errors.remove(0);
+        assert_error!(error, ExpectedEndOfExpression, 0, 8);
+
+        // Same shape for `nottest(foo)` (12 chars).
+        let mut errors = parse_err("nottest(foo)");
+        assert_eq!(2, errors.len(), "errors: {errors:?}");
+        let error = errors.remove(0);
+        assert_error!(error, ExpectedExpr, 0, 12);
+        let error = errors.remove(0);
+        assert_error!(error, ExpectedEndOfExpression, 0, 12);
+
+        // `all() andall()`: the `all()` LHS parses, but no operator matches
+        // (because `andall` fails the word-boundary check on `and`), so the
+        // remaining ` andall()` is reported as `ExpectedEndOfExpression`.
+        let mut errors = parse_err("all() andall()");
+        assert_eq!(1, errors.len(), "errors: {errors:?}");
+        let error = errors.remove(0);
+        assert_error!(error, ExpectedEndOfExpression, 5, 9);
+
+        let mut errors = parse_err("all() ornone()");
+        assert_eq!(1, errors.len(), "errors: {errors:?}");
+        let error = errors.remove(0);
+        assert_error!(error, ExpectedEndOfExpression, 5, 9);
     }
 
     #[test]
