@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.21.1] - 2026-05-26
+
+### Fixed
+
+- Filterset expressions like `not(test(foo))`, `all()and(test(foo))`, and `all()or(test(foo))`, where `not`, `and`, or `or` is immediately followed by an opening parenthesis, now parse correctly. Previously, a separating space was required. ([#3367])
+
+[#3367]: https://github.com/nextest-rs/nextest/pull/3367
+
 ## [0.21.0] - 2026-04-14
 
 ### Added
@@ -205,6 +213,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.21.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.21.1
 [0.21.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.21.0
 [0.20.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.20.0
 [0.19.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.19.0

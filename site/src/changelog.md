@@ -10,6 +10,19 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.137] - 2026-05-26
+
+### Changed
+
+- CLI `--help` descriptions, configuration-reference docs, and JSON schema descriptions now use consistent language and voice. ([#3366])
+
+### Fixed
+
+- Filterset expressions like `not(test(foo))`, `all()and(test(foo))`, and `all()or(test(foo))`, where `not`, `and`, or `or` is immediately followed by an opening parenthesis, now parse correctly. Previously, a separating space was required. ([#3367])
+
+[#3366]: https://github.com/nextest-rs/nextest/pull/3366
+[#3367]: https://github.com/nextest-rs/nextest/pull/3367
+
 ## [0.9.136] - 2026-05-16
 
 ### Added
@@ -2170,6 +2183,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.137]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.137
 [0.9.136]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.136
 [0.9.135]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.135
 [0.9.134]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.134
