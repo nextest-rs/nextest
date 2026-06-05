@@ -32,14 +32,10 @@ use crate::{
 use chrono::Local;
 use debug_ignore::DebugIgnore;
 use futures::future::{Fuse, FusedFuture};
+use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_metadata::MismatchReason;
 use quick_junit::ReportUuid;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    env, mem,
-    pin::Pin,
-    time::Duration,
-};
+use std::{collections::BTreeSet, env, mem, pin::Pin, time::Duration};
 use tokio::{
     sync::{
         mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
@@ -65,7 +61,7 @@ pub(super) struct DispatcherContext<'a, F> {
     max_fail: MaxFail,
     global_timeout: Duration,
     running_setup_script: Option<ContextSetupScript<'a>>,
-    running_tests: BTreeMap<TestInstanceId<'a>, ContextTestInstance<'a>>,
+    running_tests: IdOrdMap<ContextTestInstance<'a>>,
     signal_count: Option<SignalCount>,
     stress_cx: DispatcherStressContext,
     tick_interval: Duration,
@@ -108,7 +104,7 @@ where
             max_fail,
             global_timeout,
             running_setup_script: None,
-            running_tests: BTreeMap::new(),
+            running_tests: IdOrdMap::new(),
             signal_count: None,
             stress_cx: DispatcherStressContext::new(stress_condition),
             tick_interval: Duration::from_millis(tick_interval_ms),
@@ -742,8 +738,7 @@ where
                 run_status,
                 delay_before_next_attempt,
             }) => {
-                let instance = self.existing_test(test_instance.id());
-                instance.attempt_failed_will_retry(run_status.clone());
+                self.test_attempt_failed_will_retry(test_instance.id(), run_status.clone());
                 self.callback_none_response(TestEventKind::TestAttemptFailedWillRetry {
                     stress_index,
                     test_instance: test_instance.id(),
@@ -918,24 +913,29 @@ where
         // Track this test as seen for rerun tracking.
         self.rerun_cx.mark_seen(instance.id());
 
-        let prev = self.running_tests.insert(
-            instance.id(),
-            ContextTestInstance {
-                instance,
-                past_attempts: Vec::new(),
-                req_tx,
-                flaky_result,
-            },
-        );
-        if let Some(prev) = prev {
-            panic!("new test instance expected, but already exists: {prev:?}");
+        if let Err(error) = self.running_tests.insert_unique(ContextTestInstance {
+            instance,
+            past_attempts: Vec::new(),
+            req_tx,
+            flaky_result,
+        }) {
+            panic!(
+                "new test instance expected, but already exists: {:?}",
+                error.duplicates()
+            );
         }
     }
 
-    fn existing_test(&mut self, key: TestInstanceId<'a>) -> &mut ContextTestInstance<'a> {
+    /// Records a failed attempt that will be retried against a running test.
+    fn test_attempt_failed_will_retry(
+        &mut self,
+        key: TestInstanceId<'a>,
+        run_status: ExecuteStatus<LiveSpec>,
+    ) {
         self.running_tests
             .get_mut(&key)
             .expect("existing test instance expected but not found")
+            .attempt_failed_will_retry(run_status);
     }
 
     fn finish_test(
@@ -981,13 +981,13 @@ where
             }
         }
 
-        for (key, instance) in &self.running_tests {
+        for instance in &self.running_tests {
             if instance.req_tx.send(req.clone()).is_err() {
                 // The most likely reason for this error is that the test
                 // instance has been marked as closed but we haven't processed
                 // the exit event yet.
                 debug!(
-                    ?key,
+                    key = ?instance.instance.id(),
                     "failed to send request to test instance (likely closed)"
                 );
             } else {
@@ -1411,12 +1411,23 @@ struct ContextSetupScript<'a> {
 
 #[derive(Clone, Debug)]
 struct ContextTestInstance<'a> {
-    // Store the instance primarily for debugging.
-    #[expect(dead_code)]
     instance: TestInstance<'a>,
     past_attempts: Vec<ExecuteStatus<LiveSpec>>,
     req_tx: UnboundedSender<RunUnitRequest<'a>>,
     flaky_result: FlakyResult,
+}
+
+impl<'a> IdOrdItem for ContextTestInstance<'a> {
+    type Key<'k>
+        = TestInstanceId<'a>
+    where
+        Self: 'k;
+
+    fn key(&self) -> Self::Key<'_> {
+        self.instance.id()
+    }
+
+    id_upcast!();
 }
 
 impl ContextTestInstance<'_> {
