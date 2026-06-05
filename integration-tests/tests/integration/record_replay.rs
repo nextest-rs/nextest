@@ -215,14 +215,18 @@ fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
             if line.contains("Blocking waiting for file lock") {
                 return false;
             }
-            // Cargo warnings from fixture Cargo.toml appear in non-deterministic
-            // order.
+            // Cargo warnings from the fixture Cargo.toml files appear in
+            // non-deterministic order, and exactly which ones appear depends on
+            // the Cargo version. The trailing "<pkg> (manifest) generated N
+            // warning" summary lines (emitted by Cargo 1.98+ for manifest-level
+            // warnings) are filtered for the same reason.
             if line.contains("only one of `license` or `license-file` is necessary")
                 || line.contains("no edition set: defaulting to the 2015 edition")
                 || line.contains("`package.edition` is unspecified")
                 || line.contains("`license` should be used if the package license")
                 || line.contains("`license-file` should be used if the package uses")
                 || line.contains("See https://doc.rust-lang.org/cargo/reference/manifest.html")
+                || line.contains("(manifest) generated")
             {
                 return false;
             }
@@ -289,7 +293,7 @@ fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
 // --- Tests ---
 
 #[test]
-fn test_redact_dynamic_fields_filters_package_edition_warning() {
+fn test_redact_dynamic_fields_filters_manifest_warnings() {
     let temp_dir = camino_tempfile::Builder::new()
         .prefix("nextest-record-redact-")
         .tempdir()
@@ -299,6 +303,8 @@ fn test_redact_dynamic_fields_filters_package_edition_warning() {
         "info: rerun: inheriting build scope from original run: (default scope)",
         "warning: [TEMP_DIR]/src/derive/Cargo.toml: no edition set: defaulting to the 2015 edition while the latest is 2024",
         "warning: [TEMP_DIR]/src/derive/Cargo.toml: `package.edition` is unspecified, defaulting to `2015` while the latest is `2024`",
+        "warning: `nextest-derive` (manifest) generated 1 warning",
+        "warning: `fixture-project` (manifest) generated 1 warning",
         "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s",
     ]
     .join("\n");
