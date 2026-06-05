@@ -2146,6 +2146,73 @@ fn test_setup_script_defined_env() {
 }
 
 #[test]
+fn test_cargo_config_env_vars() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    let manifest_path = p.manifest_path();
+    let workspace_dir = manifest_path
+        .parent()
+        .expect("manifest_path's parent should be a dir");
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "run",
+            "--config",
+            ".cargo/extra-config.toml",
+            "-E",
+            "test(=test_cargo_env_vars)",
+        ])
+        .current_dir(workspace_dir)
+        // .cargo/config is active (cwd is set) but CMD_ENV_VAR is not in the
+        // parent env, so it is set from the config.
+        .env("__NEXTEST_SETUP_SCRIPT_WITH_CARGO_CONFIG_NO_PARENT", "1")
+        // Re-enable the cargo [env] assertions that the harness disables by
+        // default (they need the config in the search path, which we provide).
+        .env_remove("__NEXTEST_NO_CHECK_CARGO_ENV_VARS")
+        // Parent-env values the fixture's assertions expect.
+        .env(
+            "__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_NO_OVERRIDE",
+            "test-PASSED-value-set-by-environment",
+        )
+        .env(
+            "__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_OVERRIDDEN",
+            "test-FAILED-value-set-by-environment",
+        )
+        .env(
+            "__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_RELATIVE_NO_OVERRIDE",
+            "test-PASSED-value-set-by-environment",
+        )
+        .env(
+            "__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_RELATIVE_OVERRIDDEN",
+            "test-FAILED-value-set-by-environment",
+        )
+        .env(
+            "__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_EXTRA",
+            "test-FAILED-value-set-by-environment",
+        )
+        .env(
+            "__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_MAIN",
+            "test-FAILED-value-set-by-environment",
+        )
+        .env(
+            "__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_BOTH",
+            "test-FAILED-value-set-by-environment",
+        )
+        .env(
+            "__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_NONE",
+            "test-PASSED-value-set-by-environment",
+        )
+        .env(
+            "__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_FALSE",
+            "test-PASSED-value-set-by-environment",
+        )
+        .output();
+
+    assert_eq!(output.exit_status.code(), Some(NextestExitCode::OK));
+}
+
+#[test]
 fn test_overrides_wrapper_env() {
     let env_info = set_env_vars_for_test();
     let p = TempProject::new(&env_info).unwrap();
