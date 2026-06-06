@@ -152,6 +152,8 @@ bitflags::bitflags! {
         /// Run with `--flaky-result pass` CLI flag. No flaky tests should
         /// count as failures, even if config has `flaky-result = "fail"`.
         const WITH_CLI_FLAKY_RESULT_PASS = 0x200000;
+        /// Run with `--profile with-retries --retries 2` on the CLI.
+        const WITH_CLI_RETRIES_2 = 0x400000;
     }
 }
 
@@ -455,7 +457,17 @@ impl TestCaseFixture {
             TestCaseFixtureStatus::Leak => CheckResult::Leak,
             TestCaseFixtureStatus::LeakFail => CheckResult::LeakFail,
             TestCaseFixtureStatus::Fail => CheckResult::Fail,
-            TestCaseFixtureStatus::Flaky { .. } => {
+            TestCaseFixtureStatus::Flaky { pass_attempt } => {
+                // A global `--retries N` on the CLI replaces per-test config
+                // retry overrides entirely.
+                if properties.contains(RunProperties::WITH_CLI_RETRIES_2) {
+                    // `--retries 2` => 3 attempts total.
+                    return if pass_attempt <= 3 {
+                        CheckResult::Pass
+                    } else {
+                        CheckResult::Fail
+                    };
+                }
                 // CLI --flaky-result overrides all config-level settings.
                 if properties.contains(RunProperties::WITH_CLI_FLAKY_RESULT_FAIL) {
                     return CheckResult::FlakyFail;
@@ -549,7 +561,8 @@ impl TestCaseFixture {
             RunProperties::WITH_RETRIES
                 | RunProperties::WITH_RETRIES_FLAKY_FAIL
                 | RunProperties::WITH_CLI_FLAKY_RESULT_FAIL
-                | RunProperties::WITH_CLI_FLAKY_RESULT_PASS,
+                | RunProperties::WITH_CLI_FLAKY_RESULT_PASS
+                | RunProperties::WITH_CLI_RETRIES_2,
         );
         if has_retries && result.is_failure() {
             return ExpectedReruns::SomeReruns;

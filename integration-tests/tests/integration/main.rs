@@ -2550,11 +2550,22 @@ fn test_filterset_with_string_filters() {
                     "{full_name}: expected Expression mismatch"
                 );
             } else {
-                // Should not match.
-                assert!(
-                    !test_info.filter_match.is_match(),
-                    "{full_name}: expected no match, got {:?}",
-                    test_info.filter_match
+                // Matches neither the expression nor the string filters.
+                //
+                // * The mismatch reason is `Ignored` for ignored tests (the
+                //   run-ignored check has the highest priority) and `String`
+                //   otherwise.
+                // * When a test fails both the name and the expression
+                //   match, nextest reports the name reason first.
+                let reason = if test_info.ignored {
+                    MismatchReason::Ignored
+                } else {
+                    MismatchReason::String
+                };
+                assert_eq!(
+                    test_info.filter_match,
+                    FilterMatch::Mismatch { reason },
+                    "{full_name}: expected {reason:?} mismatch"
                 );
             }
         }
@@ -2900,6 +2911,46 @@ fn test_retries_cli_preserves_flaky_fail() {
         &output.stderr,
         &["test_flaky_mod_4", "test_flaky_mod_6"],
         RunProperties::WITH_RETRIES_FLAKY_FAIL,
+    );
+}
+
+/// Test that a global `--retries` on the CLI overrides per-test config retry
+/// overrides.
+#[test]
+fn test_retries_cli_overrides_config_count() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--profile",
+            "with-retries",
+            "--retries",
+            "2",
+            "-E",
+            "test(=test_flaky_mod_3) | test(=test_flaky_mod_4) | test(=test_flaky_mod_6)",
+        ])
+        .unchecked(true)
+        .output();
+
+    // test_flaky_mod_4 and test_flaky_mod_6 need more than 3 attempts to pass,
+    // so capping them at `--retries 2` (overriding their config overrides of 4
+    // and 5) makes the run fail.
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "global --retries 2 should override config retry overrides and fail \
+         test_flaky_mod_4/test_flaky_mod_6\n{output}"
+    );
+    check_run_output_for_test_names(
+        &output.stderr,
+        &["test_flaky_mod_3", "test_flaky_mod_4", "test_flaky_mod_6"],
+        RunProperties::WITH_CLI_RETRIES_2,
     );
 }
 
