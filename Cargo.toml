@@ -87,7 +87,7 @@ jsonschema = "0.46.5"
 libc = "0.2.186"
 libtest-mimic = "0.8.2"
 locked-tripwire = { version = "0.1.0", features = ["nextest"] }
-log = "0.4.30"
+log = "0.4.31"
 maplit = "1.0.2"
 miette = "7.6.0"
 mukti-metadata = "0.3.0"
