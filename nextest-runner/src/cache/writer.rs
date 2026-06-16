@@ -9,11 +9,16 @@ use crate::{
         key::{CacheKey, ContentHash, hash_file},
         result::CacheEntry,
     },
-    list::TestList,
+    list::{RustTestSuite, TestList},
     reporter::events::{ExecutionResultDescription, ReporterEvent, TestEventKind},
 };
 use nextest_metadata::RustBinaryId;
-use std::{collections::HashMap, time::SystemTime};
+use std::{
+    collections::HashMap,
+    sync::atomic::{AtomicUsize, Ordering},
+    thread,
+    time::SystemTime,
+};
 use tracing::debug;
 
 /// Observes test events and stores passing results in the cache.
@@ -38,21 +43,14 @@ pub struct CacheWriter<'a> {
 
 impl<'a> CacheWriter<'a> {
     /// Creates a writer that stores passing results for the given test list.
+    ///
+    /// Every binary's content hash is computed up front, in parallel. Each hash
+    /// reads the full multi-gigabyte binary, so hashing the whole test list
+    /// serially is by far the slowest part of constructing the writer; spreading
+    /// it across the available cores mirrors what the pre-run consult path does.
     pub fn new(backend: &'a dyn CacheBackend, test_list: &TestList<'_>) -> Self {
-        let mut binary_hashes = HashMap::new();
-        for suite in test_list.iter() {
-            match hash_file(&suite.binary_path) {
-                Ok(hash) => {
-                    binary_hashes.insert(suite.binary_id.clone(), hash);
-                }
-                Err(error) => {
-                    debug!(
-                        "cache: not caching results for {}: failed to hash {}: {error}",
-                        suite.binary_id, suite.binary_path,
-                    );
-                }
-            }
-        }
+        let suites: Vec<_> = test_list.iter().collect();
+        let binary_hashes = hash_binaries(&suites);
         Self {
             backend,
             binary_hashes,
@@ -102,6 +100,57 @@ impl<'a> CacheWriter<'a> {
             );
         }
     }
+}
+
+/// Hashes every test suite's binary in parallel, returning a map from binary ID
+/// to content hash. A binary that cannot be hashed is simply omitted: its
+/// results will never be cached, which never fails the run.
+///
+/// Work is distributed across a bounded thread pool via a shared atomic cursor,
+/// so threads pull the next binary as they finish rather than being assigned a
+/// fixed slice — this keeps every core busy even when binaries vary widely in
+/// size.
+fn hash_binaries(suites: &[&RustTestSuite<'_>]) -> HashMap<RustBinaryId, ContentHash> {
+    if suites.is_empty() {
+        return HashMap::new();
+    }
+
+    let parallelism = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    let num_threads = parallelism.min(suites.len());
+
+    let next = AtomicUsize::new(0);
+    let mut binary_hashes = HashMap::new();
+    thread::scope(|scope| {
+        let handles: Vec<_> = (0..num_threads)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut local = Vec::new();
+                    loop {
+                        let idx = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(suite) = suites.get(idx) else {
+                            break;
+                        };
+                        match hash_file(&suite.binary_path) {
+                            Ok(hash) => local.push((suite.binary_id.clone(), hash)),
+                            Err(error) => {
+                                debug!(
+                                    "cache: not caching results for {}: failed to hash {}: {error}",
+                                    suite.binary_id, suite.binary_path,
+                                );
+                            }
+                        }
+                    }
+                    local
+                })
+            })
+            .collect();
+        for handle in handles {
+            binary_hashes.extend(handle.join().expect("cache hashing thread panicked"));
+        }
+    });
+    binary_hashes
 }
 
 /// Returns true if a finished test's result may be cached.

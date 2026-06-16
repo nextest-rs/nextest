@@ -8,7 +8,7 @@ use crate::cache::{
     backend::CacheBackend,
     fs_backend::FsBackend,
     imp::cache_dir_from_base,
-    key::hash_bytes,
+    key::{hash_bytes, hash_file},
     result::{CleanPolicy, CleanStats},
 };
 use camino::Utf8PathBuf;
@@ -252,6 +252,39 @@ fn info_counts_entries_and_binaries() {
     let info = backend.info().unwrap();
     assert_eq!(info.entry_count, 3);
     assert_eq!(info.binary_count, 2);
+}
+
+#[test]
+fn hash_file_matches_hash_bytes() {
+    // Streaming a file through the hasher must produce the same digest as
+    // hashing the equivalent in-memory slice. Use content larger than the
+    // streaming chunk size so the multi-chunk path is exercised.
+    let dir = Utf8TempDir::new().unwrap();
+    let path = dir.path().join("binary");
+
+    let content: Vec<u8> = (0..(1024 * 1024 + 7)).map(|i| (i % 251) as u8).collect();
+    std::fs::write(&path, &content).unwrap();
+
+    assert_eq!(hash_file(&path).unwrap(), hash_bytes(&content));
+}
+
+#[test]
+fn hash_file_empty_matches_empty_bytes() {
+    // A zero-length file must hash identically to an empty slice — the read
+    // loop terminates on the first zero-length read without updating the hasher.
+    let dir = Utf8TempDir::new().unwrap();
+    let path = dir.path().join("empty");
+    std::fs::write(&path, b"").unwrap();
+
+    assert_eq!(hash_file(&path).unwrap(), hash_bytes(b""));
+}
+
+#[test]
+fn hash_bytes_is_deterministic_and_content_sensitive() {
+    // Same input → same hash; differing input → different hash (with
+    // overwhelming probability at 128 bits).
+    assert_eq!(hash_bytes(b"abc"), hash_bytes(b"abc"));
+    assert_ne!(hash_bytes(b"abc"), hash_bytes(b"abd"));
 }
 
 #[test]

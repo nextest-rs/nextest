@@ -5,7 +5,12 @@
 
 use camino::Utf8Path;
 use nextest_metadata::TestCaseName;
-use std::fmt;
+use std::{
+    fmt,
+    fs::File,
+    io::{BufReader, Read},
+};
+use xxhash_rust::xxh3::Xxh3;
 
 /// A cache key identifying a specific test result.
 ///
@@ -70,12 +75,31 @@ impl fmt::Display for ContentHash {
     }
 }
 
+/// The buffer size used when streaming a file through the hasher.
+///
+/// Test binaries can be many gigabytes, so the file is hashed incrementally in
+/// chunks rather than read into memory all at once. 256 KiB is large enough to
+/// amortize syscall overhead while staying within the CPU cache.
+const HASH_CHUNK_SIZE: usize = 256 * 1024;
+
 /// Computes a [`ContentHash`] for the file at the given path.
+///
+/// The file is streamed through the hasher in fixed-size chunks rather than read
+/// fully into memory: test binaries are routinely multiple gigabytes, and slurping
+/// each one would allocate that much RAM per binary.
 pub fn hash_file(path: &Utf8Path) -> std::io::Result<ContentHash> {
-    // TODO: this reads the whole file into memory. For large binaries we
-    // should hash incrementally with a buffered reader.
-    let content = std::fs::read(path)?;
-    Ok(hash_bytes(&content))
+    let file = File::open(path)?;
+    let mut reader = BufReader::with_capacity(HASH_CHUNK_SIZE, file);
+    let mut hasher = Xxh3::new();
+    let mut buf = [0u8; HASH_CHUNK_SIZE];
+    loop {
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(finish(hasher))
 }
 
 /// Computes a [`ContentHash`] from a byte slice.
@@ -85,10 +109,17 @@ pub fn hash_file(path: &Utf8Path) -> std::io::Result<ContentHash> {
 /// test that should have run, and the inputs (locally built test binaries) are
 /// not adversarial. The 128-bit width makes accidental collisions negligible.
 pub fn hash_bytes(data: &[u8]) -> ContentHash {
-    let lo = xxhash_rust::xxh3::xxh3_64(data);
-    let hi = xxhash_rust::xxh3::xxh3_64_with_seed(data, 1);
-    let combined = (hi as u128) << 64 | lo as u128;
+    let mut hasher = Xxh3::new();
+    hasher.update(data);
+    finish(hasher)
+}
+
+/// Finalizes a streaming hasher into a [`ContentHash`].
+///
+/// XXH3 produces a native 128-bit digest in a single pass, so both the byte-slice
+/// and the streaming paths share this one finalize step.
+fn finish(hasher: Xxh3) -> ContentHash {
     ContentHash {
-        bytes: combined.to_le_bytes(),
+        bytes: hasher.digest128().to_le_bytes(),
     }
 }
