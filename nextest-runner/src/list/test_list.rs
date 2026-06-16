@@ -217,6 +217,10 @@ pub struct SkipCounts {
     /// already passing.
     pub skipped_tests_rerun: usize,
 
+    /// The number of tests skipped because their result is cached as passing
+    /// and the test binary is unchanged since it was cached.
+    pub skipped_tests_cached: usize,
+
     /// The number of tests skipped because they are not benchmarks.
     ///
     /// This is used when running in benchmark mode.
@@ -550,6 +554,7 @@ impl<'g> TestList<'g> {
     pub fn skip_counts(&self) -> &SkipCounts {
         self.skip_counts.get_or_init(|| {
             let mut skipped_tests_rerun = 0;
+            let mut skipped_tests_cached = 0;
             let mut skipped_tests_non_benchmark = 0;
             let mut skipped_tests_default_filter = 0;
             let skipped_tests = self
@@ -559,6 +564,12 @@ impl<'g> TestList<'g> {
                         reason: MismatchReason::RerunAlreadyPassed,
                     } => {
                         skipped_tests_rerun += 1;
+                        true
+                    }
+                    FilterMatch::Mismatch {
+                        reason: MismatchReason::UnchangedSinceCached,
+                    } => {
+                        skipped_tests_cached += 1;
                         true
                     }
                     FilterMatch::Mismatch {
@@ -597,6 +608,7 @@ impl<'g> TestList<'g> {
             SkipCounts {
                 skipped_tests,
                 skipped_tests_rerun,
+                skipped_tests_cached,
                 skipped_tests_non_benchmark,
                 skipped_tests_default_filter,
                 skipped_binaries,

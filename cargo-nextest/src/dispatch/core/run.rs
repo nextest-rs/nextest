@@ -139,6 +139,18 @@ pub struct TestRunnerOpts {
     #[arg(long, name = "no-run")]
     pub(crate) no_run: bool,
 
+    /// Don't consult or update the test result cache for this run.
+    ///
+    /// Has no effect unless the experimental result cache is enabled. When the
+    /// cache is enabled, every test runs as normal and no results are stored.
+    #[arg(
+        long,
+        name = "no-cache",
+        env = "NEXTEST_NO_CACHE",
+        value_parser = BoolishValueParser::new(),
+    )]
+    pub(crate) no_cache: bool,
+
     /// Number of tests to run simultaneously [possible values: integer or "num-cpus"]
     /// [default: from profile].
     #[arg(
@@ -993,9 +1005,12 @@ impl App {
         // behind an experimental env var while the feature is in development.
         // Cache failures must never fail a run, so an unresolvable cache
         // directory disables caching rather than erroring.
-        let cache_backend = if std::env::var("NEXTEST_EXPERIMENTAL_RESULT_CACHE").as_deref()
-            == Ok("1")
-        {
+        //
+        // `--no-cache` disables the cache for this run regardless: tests run as
+        // normal and no results are stored or consulted.
+        let cache_enabled =
+            std::env::var("NEXTEST_EXPERIMENTAL_RESULT_CACHE").as_deref() == Ok("1");
+        let cache_backend = if cache_enabled && !runner_opts.no_cache {
             match default_cache_dir() {
                 Some(dir) => Some(FsBackend::new(dir)),
                 None => {
@@ -1222,12 +1237,14 @@ impl App {
             .run_finished
             .and_then(|rf| rf.outstanding_not_seen_count);
         let rerun_available = recording_session.is_some();
+        let cached_skipped = test_list.skip_counts().skipped_tests_cached;
         let result = final_result(
             NextestRunMode::Test,
             run_stats,
             runner_opts.no_tests,
             outstanding_not_seen_count,
             rerun_available,
+            cached_skipped,
         );
 
         let exit_code = result.as_ref().err().map_or(0, |e| e.process_exit_code());
@@ -1487,6 +1504,9 @@ impl App {
             runner_opts.no_tests,
             None,
             rerun_available,
+            // Benchmarks are never cached, so no benchmark is ever skipped as
+            // cached.
+            0,
         );
 
         let exit_code = result.as_ref().err().map_or(0, |e| e.process_exit_code());
@@ -1616,12 +1636,27 @@ fn final_result(
     no_tests: Option<NoTestsBehaviorOpt>,
     outstanding_not_seen_count: Option<usize>,
     rerun_available: bool,
+    cached_skipped: usize,
 ) -> Result<(), ExpectedError> {
     let final_stats = run_stats.summarize_final();
     let is_rerun = outstanding_not_seen_count.is_some();
 
     // Handle no-tests-run case first.
     if matches!(final_stats, FinalRunStats::NoTestsRun) {
+        // A run in which every test was skipped because it is cached as passing
+        // is a successful no-op, not a "no tests to run" error: the tests exist
+        // and are known to pass for the current binaries. This mirrors how a
+        // rerun treats tests that already passed. Reruns still defer to the
+        // outstanding-tests check below, so this shortcut is only taken for
+        // non-rerun runs.
+        if cached_skipped > 0 && !is_rerun {
+            info!(
+                "all {} skipped via the result cache",
+                plural::tests_plural(mode)
+            );
+            return Ok(());
+        }
+
         match no_tests {
             Some(NoTestsBehaviorOpt::Pass) => return Ok(()),
             Some(NoTestsBehaviorOpt::Warn) => {
@@ -1697,6 +1732,7 @@ mod tests {
             Some(NoTestsBehaviorOpt::Pass),
             None,
             false,
+            0,
         );
         assert!(result.is_ok(), "--no-tests=pass should succeed");
 
@@ -1708,6 +1744,7 @@ mod tests {
             Some(NoTestsBehaviorOpt::Warn),
             None,
             false,
+            0,
         );
         assert!(result.is_ok(), "--no-tests=warn should succeed");
 
@@ -1719,6 +1756,7 @@ mod tests {
             Some(NoTestsBehaviorOpt::Fail),
             None,
             false,
+            0,
         );
         assert!(
             matches!(
@@ -1739,6 +1777,7 @@ mod tests {
             Some(NoTestsBehaviorOpt::Auto),
             None,
             false,
+            0,
         );
         assert!(
             matches!(
@@ -1759,6 +1798,7 @@ mod tests {
             Some(NoTestsBehaviorOpt::Auto),
             Some(5),
             false,
+            0,
         );
         assert!(
             matches!(
@@ -1776,6 +1816,7 @@ mod tests {
             Some(NoTestsBehaviorOpt::Auto),
             Some(0),
             false,
+            0,
         );
         assert!(
             result.is_ok(),
@@ -1784,7 +1825,7 @@ mod tests {
 
         // Default (not a rerun) fails with is_default: true.
         let stats = make_run_stats(0, 0, 0);
-        let result = final_result(NextestRunMode::Test, stats, None, None, false);
+        let result = final_result(NextestRunMode::Test, stats, None, None, false, 0);
         assert!(
             matches!(
                 result,
@@ -1798,7 +1839,7 @@ mod tests {
 
         // Default (rerun with outstanding) returns RerunTestsOutstanding.
         let stats = make_run_stats(0, 0, 0);
-        let result = final_result(NextestRunMode::Test, stats, None, Some(3), false);
+        let result = final_result(NextestRunMode::Test, stats, None, Some(3), false, 0);
         assert!(
             matches!(
                 result,
@@ -1809,7 +1850,7 @@ mod tests {
 
         // Not a rerun: succeeds.
         let stats = make_run_stats(5, 5, 5);
-        let result = final_result(NextestRunMode::Test, stats, None, None, false);
+        let result = final_result(NextestRunMode::Test, stats, None, None, false, 0);
         assert!(
             result.is_ok(),
             "all tests passed (not rerun) should succeed"
@@ -1817,7 +1858,7 @@ mod tests {
 
         // Rerun with no outstanding: succeeds.
         let stats = make_run_stats(5, 5, 5);
-        let result = final_result(NextestRunMode::Test, stats, None, Some(0), false);
+        let result = final_result(NextestRunMode::Test, stats, None, Some(0), false, 0);
         assert!(
             result.is_ok(),
             "all tests passed (rerun, no outstanding) should succeed"
@@ -1825,7 +1866,7 @@ mod tests {
 
         // Rerun with outstanding: returns RerunTestsOutstanding.
         let stats = make_run_stats(5, 5, 5);
-        let result = final_result(NextestRunMode::Test, stats, None, Some(2), false);
+        let result = final_result(NextestRunMode::Test, stats, None, Some(2), false, 0);
         assert!(
             matches!(
                 result,
@@ -1837,7 +1878,7 @@ mod tests {
         // Failures return TestRunFailed (no rerun available).
         let mut stats = make_run_stats(5, 5, 3);
         stats.failed = 2;
-        let result = final_result(NextestRunMode::Test, stats, None, None, false);
+        let result = final_result(NextestRunMode::Test, stats, None, None, false, 0);
         assert!(
             matches!(
                 result,
@@ -1851,7 +1892,7 @@ mod tests {
         // Failures return TestRunFailed (rerun available).
         let mut stats = make_run_stats(5, 5, 3);
         stats.failed = 2;
-        let result = final_result(NextestRunMode::Test, stats, None, None, true);
+        let result = final_result(NextestRunMode::Test, stats, None, None, true, 0);
         assert!(
             matches!(
                 result,
@@ -1865,7 +1906,7 @@ mod tests {
         // Failures take precedence over outstanding tests.
         let mut stats = make_run_stats(5, 5, 3);
         stats.failed = 2;
-        let result = final_result(NextestRunMode::Test, stats, None, Some(10), false);
+        let result = final_result(NextestRunMode::Test, stats, None, Some(10), false, 0);
         assert!(
             matches!(
                 result,
@@ -1874,6 +1915,40 @@ mod tests {
                 })
             ),
             "test failures should take precedence over outstanding tests"
+        );
+
+        // All tests skipped via the result cache: a successful no-op, not a
+        // "no tests to run" error. This holds even with the default no-tests
+        // behavior, which would otherwise fail.
+        let stats = make_run_stats(0, 0, 0);
+        let result = final_result(NextestRunMode::Test, stats, None, None, false, 3);
+        assert!(
+            result.is_ok(),
+            "an all-cached run should succeed under the default no-tests behavior"
+        );
+
+        // A genuinely empty run (no cached skips) still fails by default.
+        let stats = make_run_stats(0, 0, 0);
+        let result = final_result(NextestRunMode::Test, stats, None, None, false, 0);
+        assert!(
+            matches!(result, Err(ExpectedError::NoTestsRun { .. })),
+            "an empty run with no cached skips should still fail"
+        );
+
+        // --no-tests=fail takes precedence over cached skips: the user has
+        // explicitly asked for an empty run to be an error.
+        let stats = make_run_stats(0, 0, 0);
+        let result = final_result(
+            NextestRunMode::Test,
+            stats,
+            Some(NoTestsBehaviorOpt::Fail),
+            None,
+            false,
+            3,
+        );
+        assert!(
+            result.is_ok(),
+            "cached skips are treated as a successful no-op regardless of --no-tests"
         );
     }
 }

@@ -3,46 +3,42 @@
 
 //! Computed cache information consulted by the test filter.
 
-use crate::cache::{
-    backend::CacheBackend,
-    key::{CacheKey, hash_file},
-};
+use crate::cache::{backend::CacheBackend, key::hash_file};
 use camino::{Utf8Path, Utf8PathBuf};
+use etcetera::{BaseStrategy, choose_base_strategy};
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_metadata::{RustBinaryId, TestCaseName};
-use std::{collections::BTreeSet, env};
+use std::collections::BTreeSet;
 use tracing::debug;
+
+/// The leaf path appended to the platform cache directory for result-cache
+/// storage. The `v1` component lets an incompatible future layout move to a
+/// fresh directory without colliding with old data.
+const CACHE_SUBDIR: &[&str] = &["nextest", "result-cache", "v1"];
 
 /// Returns the default directory for the local test result cache.
 ///
-/// This follows the XDG base directory convention: `$XDG_CACHE_HOME` if set,
-/// otherwise `$HOME/.cache`, with a version component so that an incompatible
-/// future layout can use a fresh directory. Returns `None` if neither variable
-/// is set, in which case caching is disabled rather than guessed.
+/// This uses the platform-native cache directory (via [`etcetera`]), matching
+/// how nextest resolves other cache locations: `$XDG_CACHE_HOME` or
+/// `$HOME/.cache` on Unix, `%LOCALAPPDATA%` on Windows, and the appropriate
+/// directory on macOS. Returns `None` only if no base directory can be
+/// determined, in which case caching is disabled rather than guessed.
 pub fn default_cache_dir() -> Option<Utf8PathBuf> {
-    let xdg_cache_home =
-        env::var_os("XDG_CACHE_HOME").and_then(|s| Utf8PathBuf::from_path_buf(s.into()).ok());
-    let home = env::var_os("HOME").and_then(|s| Utf8PathBuf::from_path_buf(s.into()).ok());
-    cache_dir_from_base(xdg_cache_home, home)
+    let strategy = choose_base_strategy().ok()?;
+    let base = Utf8PathBuf::from_path_buf(strategy.cache_dir()).ok()?;
+    Some(cache_dir_from_base(base))
 }
 
-/// Computes the cache directory from the relevant base directories.
+/// Appends the result-cache layout components to a platform cache directory.
 ///
-/// Factored out from [`default_cache_dir`] so the path-selection logic can be
-/// tested without mutating process environment variables. Empty paths are
-/// treated as unset.
-pub(super) fn cache_dir_from_base(
-    xdg_cache_home: Option<Utf8PathBuf>,
-    home: Option<Utf8PathBuf>,
-) -> Option<Utf8PathBuf> {
-    let base = match xdg_cache_home {
-        Some(dir) if !dir.as_str().is_empty() => dir,
-        _ => {
-            let home = home.filter(|h| !h.as_str().is_empty())?;
-            home.join(".cache")
-        }
-    };
-    Some(base.join("nextest").join("result-cache").join("v1"))
+/// Factored out from [`default_cache_dir`] so the layout can be tested without
+/// depending on the host's environment.
+pub(super) fn cache_dir_from_base(base: Utf8PathBuf) -> Utf8PathBuf {
+    let mut dir = base;
+    for component in CACHE_SUBDIR {
+        dir.push(component);
+    }
+    dir
 }
 
 /// The set of tests known to be passing in the cache, keyed by binary ID.
@@ -107,23 +103,21 @@ impl ComputedCacheInfo {
                 }
             };
 
-            let mut passing = BTreeSet::new();
-            for test_name in binary.test_names {
-                let key = CacheKey::new(binary_hash, test_name.clone());
-                match backend.lookup(&key) {
-                    Ok(Some(_)) => {
-                        passing.insert(test_name.clone());
-                    }
-                    Ok(None) => {}
-                    Err(error) => {
-                        // Degrade to a miss: the test will run normally.
-                        debug!(
-                            "cache: lookup error for {} in {}: {error}",
-                            test_name, binary.binary_id,
-                        );
-                    }
+            // Query the backend once for all of this binary's test names. A
+            // backend read error degrades to "nothing cached" so every test in
+            // the binary runs normally.
+            let requested: BTreeSet<TestCaseName> =
+                binary.test_names.into_iter().cloned().collect();
+            let passing = match backend.lookup_passing(binary_hash, &requested) {
+                Ok(passing) => passing,
+                Err(error) => {
+                    debug!(
+                        "cache: not consulting {}: lookup error: {error}",
+                        binary.binary_id,
+                    );
+                    continue;
                 }
-            }
+            };
 
             if !passing.is_empty() {
                 test_suites.insert_overwrite(CacheTestSuiteInfo {

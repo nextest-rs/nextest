@@ -14,7 +14,14 @@ use crate::cache::{
 use camino::Utf8PathBuf;
 use camino_tempfile::Utf8TempDir;
 use nextest_metadata::TestCaseName;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    collections::BTreeSet,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+fn names(names: &[&str]) -> BTreeSet<TestCaseName> {
+    names.iter().map(|n| TestCaseName::new(n)).collect()
+}
 
 fn key(binary_hash: ContentHash, test_name: &str) -> CacheKey {
     CacheKey::new(binary_hash, TestCaseName::new(test_name))
@@ -52,8 +59,74 @@ fn store_and_lookup_round_trips() {
         .unwrap()
         .expect("entry should be present");
     assert_eq!(cached.created_at, entry.created_at);
-    // last_hit_at is refreshed on lookup, so it is at least the stored value.
-    assert!(cached.last_hit_at >= entry.last_hit_at);
+    // `lookup` is read-only: it returns the stored hit time unchanged.
+    assert_eq!(cached.last_hit_at, entry.last_hit_at);
+}
+
+#[test]
+fn lookup_does_not_mutate_the_cache() {
+    let dir = Utf8TempDir::new().unwrap();
+    let backend = FsBackend::new(dir.path().join("cache"));
+    let bin = hash_bytes(b"bin");
+    backend
+        .store(&key(bin, "tests::a"), &entry_at(1000))
+        .unwrap();
+
+    let manifest_path = dir
+        .path()
+        .join("cache")
+        .join(bin.to_hex())
+        .join("results.json");
+    let before = std::fs::read(&manifest_path).unwrap();
+
+    // A read-only lookup, even a hit, must not rewrite the manifest.
+    backend.lookup(&key(bin, "tests::a")).unwrap();
+
+    let after = std::fs::read(&manifest_path).unwrap();
+    assert_eq!(before, after, "lookup must not rewrite the manifest");
+}
+
+#[test]
+fn lookup_passing_returns_only_cached_names() {
+    let dir = Utf8TempDir::new().unwrap();
+    let backend = FsBackend::new(dir.path().join("cache"));
+    let bin = hash_bytes(b"bin");
+    backend.store(&key(bin, "tests::a"), &entry_at(1)).unwrap();
+    backend.store(&key(bin, "tests::c"), &entry_at(1)).unwrap();
+
+    // Request a, b, and c; only a and c are cached.
+    let passing = backend
+        .lookup_passing(bin, &names(&["tests::a", "tests::b", "tests::c"]))
+        .unwrap();
+    assert_eq!(passing, names(&["tests::a", "tests::c"]));
+
+    // A different binary hash shares no entries.
+    let passing_other = backend
+        .lookup_passing(hash_bytes(b"other"), &names(&["tests::a"]))
+        .unwrap();
+    assert!(passing_other.is_empty());
+}
+
+#[test]
+fn lookup_passing_refreshes_last_hit_at() {
+    let dir = Utf8TempDir::new().unwrap();
+    let backend = FsBackend::new(dir.path().join("cache"));
+    let bin = hash_bytes(b"bin");
+    // Stored with an ancient hit time.
+    backend.store(&key(bin, "tests::a"), &entry_at(1)).unwrap();
+
+    backend.lookup_passing(bin, &names(&["tests::a"])).unwrap();
+
+    // After a batch lookup, the hit time should be refreshed to roughly now,
+    // well after the stored second-1 value.
+    let refreshed = backend
+        .lookup(&key(bin, "tests::a"))
+        .unwrap()
+        .expect("entry should be present");
+    assert!(
+        refreshed.last_hit_at > UNIX_EPOCH + Duration::from_secs(1),
+        "last_hit_at should be refreshed past the stored value"
+    );
 }
 
 #[test]
@@ -193,36 +266,7 @@ fn info_on_missing_dir_is_empty() {
 }
 
 #[test]
-fn cache_dir_prefers_xdg_cache_home() {
-    let dir = cache_dir_from_base(
-        Some(Utf8PathBuf::from("/tmp/xdg-cache")),
-        Some(Utf8PathBuf::from("/home/someone")),
-    )
-    .expect("a directory should be resolved");
-    assert!(
-        dir.starts_with("/tmp/xdg-cache/nextest"),
-        "expected XDG-rooted path, got {dir}"
-    );
-}
-
-#[test]
-fn cache_dir_falls_back_to_home() {
-    // Both an unset and an empty XDG_CACHE_HOME should fall back to HOME.
-    for xdg in [None, Some(Utf8PathBuf::new())] {
-        let dir = cache_dir_from_base(xdg, Some(Utf8PathBuf::from("/home/someone")))
-            .expect("a directory should be resolved");
-        assert!(
-            dir.starts_with("/home/someone/.cache/nextest"),
-            "expected HOME/.cache-rooted path, got {dir}"
-        );
-    }
-}
-
-#[test]
-fn cache_dir_none_without_env() {
-    assert_eq!(cache_dir_from_base(None, None), None);
-    assert_eq!(
-        cache_dir_from_base(Some(Utf8PathBuf::new()), Some(Utf8PathBuf::new())),
-        None
-    );
+fn cache_dir_appends_layout_to_base() {
+    let dir = cache_dir_from_base(Utf8PathBuf::from("/some/cache"));
+    assert_eq!(dir, "/some/cache/nextest/result-cache/v1");
 }

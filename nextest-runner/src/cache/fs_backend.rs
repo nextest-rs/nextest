@@ -13,14 +13,17 @@
 
 use crate::cache::{
     backend::{CacheBackend, CacheError},
-    key::CacheKey,
+    key::{CacheKey, ContentHash},
     result::{CacheEntry, CacheInfo, CleanPolicy, CleanStats},
 };
+use atomicwrites::{AtomicFile, OverwriteBehavior};
 use camino::{Utf8Path, Utf8PathBuf};
+use nextest_metadata::TestCaseName;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
+    io::Write,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -73,30 +76,65 @@ impl FsBackend {
         fs::create_dir_all(dir)?;
         let data = serde_json::to_vec_pretty(manifest)
             .map_err(|e| CacheError::InvalidData(e.to_string()))?;
-        fs::write(&path, &data)?;
-        Ok(())
+
+        // Write atomically (temp file + rename) so a concurrent reader, or a
+        // second nextest process sharing this cache directory, never observes a
+        // half-written manifest.
+        AtomicFile::new(&path, OverwriteBehavior::AllowOverwrite)
+            .write(|f| f.write_all(&data))
+            .map_err(|e| match e {
+                atomicwrites::Error::Internal(io) | atomicwrites::Error::User(io) => {
+                    CacheError::Io(io)
+                }
+            })
     }
 }
 
 impl CacheBackend for FsBackend {
     fn lookup(&self, key: &CacheKey) -> Result<Option<CacheEntry>, CacheError> {
         let binary_hash_hex = key.binary_hash_hex();
+        let manifest = self.read_manifest(&binary_hash_hex)?;
+
+        Ok(manifest
+            .entries
+            .get(key.test_name())
+            .map(|entry| CacheEntry {
+                created_at: secs_to_system_time(entry.created_at),
+                last_hit_at: secs_to_system_time(entry.last_hit_at),
+            }))
+    }
+
+    fn lookup_passing(
+        &self,
+        binary_hash: ContentHash,
+        test_names: &BTreeSet<TestCaseName>,
+    ) -> Result<BTreeSet<TestCaseName>, CacheError> {
+        let binary_hash_hex = binary_hash.to_hex();
         let mut manifest = self.read_manifest(&binary_hash_hex)?;
 
-        let Some(entry) = manifest.entries.get_mut(key.test_name()) else {
-            return Ok(None);
-        };
+        // Read the manifest once and intersect with the requested names, rather
+        // than reading once per name. Only names actually present in the
+        // manifest are returned, so the result is the set of cached-passing
+        // tests for this binary.
+        let mut passing = BTreeSet::new();
+        let now = system_time_to_secs(&SystemTime::now());
+        for name in test_names {
+            if let Some(entry) = manifest.entries.get_mut(name.as_str()) {
+                entry.last_hit_at = now;
+                passing.insert(name.clone());
+            }
+        }
 
-        let now = SystemTime::now();
-        entry.last_hit_at = system_time_to_secs(&now);
-        let result = CacheEntry {
-            created_at: secs_to_system_time(entry.created_at),
-            last_hit_at: now,
-        };
+        // Persist the refreshed `last_hit_at` times in a single write. If this
+        // fails, the lookup still succeeds: refreshing hit times is best effort
+        // and only affects eviction ordering, never correctness.
+        if !passing.is_empty()
+            && let Err(error) = self.write_manifest(&binary_hash_hex, &manifest)
+        {
+            tracing::debug!("cache: failed to refresh last_hit_at for {binary_hash_hex}: {error}");
+        }
 
-        self.write_manifest(&binary_hash_hex, &manifest)?;
-
-        Ok(Some(result))
+        Ok(passing)
     }
 
     fn store(&self, key: &CacheKey, entry: &CacheEntry) -> Result<(), CacheError> {

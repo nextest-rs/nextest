@@ -10,7 +10,7 @@ use crate::{
         result::CacheEntry,
     },
     list::TestList,
-    reporter::events::{ReporterEvent, TestEventKind},
+    reporter::events::{ExecutionResultDescription, ReporterEvent, TestEventKind},
 };
 use nextest_metadata::RustBinaryId;
 use std::{collections::HashMap, time::SystemTime};
@@ -18,11 +18,16 @@ use tracing::debug;
 
 /// Observes test events and stores passing results in the cache.
 ///
-/// A result is cached only when the test passed on its first attempt: flaky
-/// tests (failed then passed on retry) and tests run under stress are never
-/// cached, because their outcome is not a deterministic function of the binary.
-/// This mirrors nextest's retry model — a cached failure would defeat retries,
-/// so only unambiguous passes are recorded.
+/// A result is cached only when the test cleanly passed on its first attempt:
+/// flaky tests (failed then passed on retry) and tests run under stress are
+/// never cached, because their outcome is not a deterministic function of the
+/// binary. This mirrors nextest's retry model — a cached failure would defeat
+/// retries, so only unambiguous passes are recorded.
+///
+/// A pass that also *leaked handles* or *timed out but was tolerated* is
+/// likewise not cached: those outcomes depend on subprocess and timing behavior
+/// rather than binary content, so caching them would silently suppress leak and
+/// timeout detection on subsequent runs.
 ///
 /// Binary hashes are computed once, up front, from the test list. A binary that
 /// cannot be hashed is simply never cached; this never fails the run.
@@ -72,16 +77,11 @@ impl<'a> CacheWriter<'a> {
             return;
         };
 
-        // Never cache results observed under stress: the same test runs many
-        // times and the outcome is intentionally not treated as a stable result.
-        if stress_index.is_some() {
-            return;
-        }
-
-        // Cache only a clean first-attempt pass. More than one attempt means the
-        // test was retried (and is therefore flaky), and a non-successful last
-        // status means it failed.
-        if run_statuses.len() != 1 || !run_statuses.last_status().result.is_success() {
+        if !is_cacheable(
+            stress_index.is_some(),
+            run_statuses.len(),
+            &run_statuses.last_status().result,
+        ) {
             return;
         }
 
@@ -101,5 +101,89 @@ impl<'a> CacheWriter<'a> {
                 test_instance.test_name, test_instance.binary_id,
             );
         }
+    }
+}
+
+/// Returns true if a finished test's result may be cached.
+///
+/// A result is cacheable only when all of the following hold:
+///
+/// - It was not observed under stress (`under_stress` is false): a stress run
+///   executes the same test many times and its outcome is not a stable result.
+/// - It ran exactly once (`attempt_count == 1`): more than one attempt means the
+///   test was retried and is therefore flaky.
+/// - Its result is a clean [`Pass`](ExecutionResultDescription::Pass). We
+///   deliberately do not accept every `is_success()` outcome: a leaky or
+///   timeout-but-tolerated pass counts as success for reporting, but its outcome
+///   depends on subprocess and timing behavior rather than binary content, so
+///   caching it would suppress leak and timeout detection on later runs.
+fn is_cacheable(
+    under_stress: bool,
+    attempt_count: usize,
+    result: &ExecutionResultDescription,
+) -> bool {
+    !under_stress && attempt_count == 1 && matches!(result, ExecutionResultDescription::Pass)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::elements::{LeakTimeoutResult, SlowTimeoutResult},
+        reporter::events::FailureDescription,
+    };
+
+    fn fail() -> ExecutionResultDescription {
+        ExecutionResultDescription::Fail {
+            failure: FailureDescription::ExitCode { code: 1 },
+            leaked: false,
+        }
+    }
+
+    #[test]
+    fn only_clean_single_pass_is_cacheable() {
+        // The one cacheable case: a clean, single-attempt, non-stress pass.
+        assert!(is_cacheable(false, 1, &ExecutionResultDescription::Pass));
+
+        // Stress runs are never cached, even on a clean pass.
+        assert!(!is_cacheable(true, 1, &ExecutionResultDescription::Pass));
+
+        // Retried (flaky) passes are never cached.
+        assert!(!is_cacheable(false, 2, &ExecutionResultDescription::Pass));
+        assert!(!is_cacheable(false, 3, &ExecutionResultDescription::Pass));
+
+        // A leaky pass is a success for reporting but is not cached: the leak
+        // must be re-detected on the next run.
+        assert!(!is_cacheable(
+            false,
+            1,
+            &ExecutionResultDescription::Leak {
+                result: LeakTimeoutResult::Pass,
+            },
+        ));
+
+        // A tolerated timeout (treated as a pass) is likewise not cached.
+        assert!(!is_cacheable(
+            false,
+            1,
+            &ExecutionResultDescription::Timeout {
+                result: SlowTimeoutResult::Pass,
+            },
+        ));
+
+        // Failures of every kind are not cached.
+        assert!(!is_cacheable(false, 1, &fail()));
+        assert!(!is_cacheable(
+            false,
+            1,
+            &ExecutionResultDescription::ExecFail
+        ));
+        assert!(!is_cacheable(
+            false,
+            1,
+            &ExecutionResultDescription::Leak {
+                result: LeakTimeoutResult::Fail,
+            },
+        ));
     }
 }
