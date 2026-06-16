@@ -3,13 +3,16 @@
 
 //! Computed cache information consulted by the test filter.
 
-use crate::cache::{backend::CacheBackend, key::hash_file};
+use crate::cache::{
+    backend::CacheBackend,
+    key::{ContentHash, hash_file},
+};
 use camino::{Utf8Path, Utf8PathBuf};
 use etcetera::{BaseStrategy, choose_base_strategy};
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_metadata::{RustBinaryId, TestCaseName};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashMap},
     sync::atomic::{AtomicUsize, Ordering},
     thread,
 };
@@ -53,11 +56,26 @@ pub(super) fn cache_dir_from_base(base: Utf8PathBuf) -> Utf8PathBuf {
 /// binary's *current* hash. As a result, [`TestFilter`] can consult this with a
 /// pure name lookup — it never needs to re-hash a binary or touch the backend.
 ///
+/// The content hash of every binary is also retained in [`binary_hashes`]: it
+/// was computed here anyway, and the post-run [`CacheWriter`] needs the same
+/// hashes to store results. Carrying them forward lets the writer skip a second
+/// full pass over every (multi-gigabyte) binary.
+///
 /// [`TestFilter`]: crate::test_filter::TestFilter
+/// [`CacheWriter`]: crate::cache::CacheWriter
+/// [`binary_hashes`]: Self::binary_hashes
 #[derive(Clone, Debug, Default)]
 pub struct ComputedCacheInfo {
     /// Cached-passing tests, keyed by binary ID.
     pub test_suites: IdOrdMap<CacheTestSuiteInfo>,
+
+    /// The content hash of every successfully-hashed binary, keyed by binary ID.
+    ///
+    /// This covers all binaries that could be hashed, not just those with cached
+    /// passes, so the writer can reuse it to store newly-passing results. A
+    /// binary that failed to hash is absent (its results simply will not be
+    /// cached).
+    pub binary_hashes: HashMap<RustBinaryId, ContentHash>,
 }
 
 /// Cached-passing tests for a single test binary.
@@ -118,14 +136,32 @@ impl ComputedCacheInfo {
         // worker closures borrow `work`, `backend`, and the `'a` references
         // without `'static` bounds, because the scope joins all threads before
         // returning.
-        let suites = process_work(backend, &work);
+        let outcomes = process_work(backend, &work);
 
         let mut test_suites = IdOrdMap::new();
-        for suite in suites {
-            test_suites.insert_overwrite(suite);
+        let mut binary_hashes = HashMap::with_capacity(outcomes.len());
+        for outcome in outcomes {
+            // Retain every successful hash so the writer can reuse it, even when
+            // the binary had no cached passes (`suite` is `None`).
+            binary_hashes.insert(outcome.binary_id.clone(), outcome.hash);
+            if let Some(suite) = outcome.suite {
+                test_suites.insert_overwrite(suite);
+            }
         }
-        Self { test_suites }
+        Self {
+            test_suites,
+            binary_hashes,
+        }
     }
+}
+
+/// The result of consulting one binary: its content hash (always present, since
+/// a hash failure produces no outcome at all) and the cached-passing tests, if
+/// any.
+struct BinaryOutcome {
+    binary_id: RustBinaryId,
+    hash: ContentHash,
+    suite: Option<CacheTestSuiteInfo>,
 }
 
 /// One binary's hashing-and-lookup unit of work, with its test names already
@@ -136,11 +172,11 @@ struct BinaryWork<'a> {
     requested: BTreeSet<TestCaseName>,
 }
 
-/// Hashes and looks up every binary in `work`, returning the suites that have at
-/// least one cached-passing test. Work is distributed across a bounded thread
+/// Hashes and looks up every binary in `work`, returning one [`BinaryOutcome`]
+/// per binary that could be hashed. Work is distributed across a bounded thread
 /// pool via a shared atomic cursor (work-stealing by index), which keeps every
 /// thread busy even when binaries differ wildly in size.
-fn process_work(backend: &dyn CacheBackend, work: &[BinaryWork<'_>]) -> Vec<CacheTestSuiteInfo> {
+fn process_work(backend: &dyn CacheBackend, work: &[BinaryWork<'_>]) -> Vec<BinaryOutcome> {
     if work.is_empty() {
         return Vec::new();
     }
@@ -164,8 +200,8 @@ fn process_work(backend: &dyn CacheBackend, work: &[BinaryWork<'_>]) -> Vec<Cach
                         let Some(binary) = work.get(idx) else {
                             break;
                         };
-                        if let Some(suite) = consult_binary(backend, binary) {
-                            local.push(suite);
+                        if let Some(outcome) = consult_binary(backend, binary) {
+                            local.push(outcome);
                         }
                     }
                     local
@@ -183,13 +219,12 @@ fn process_work(backend: &dyn CacheBackend, work: &[BinaryWork<'_>]) -> Vec<Cach
 
 /// Hashes a single binary and queries the backend for its cached-passing tests.
 ///
-/// Returns `None` (the binary's tests all run normally) on any hashing or lookup
-/// error, or when nothing is cached — the cache is strictly an optimization and
-/// must never turn a transient I/O problem into a run failure.
-fn consult_binary(
-    backend: &dyn CacheBackend,
-    binary: &BinaryWork<'_>,
-) -> Option<CacheTestSuiteInfo> {
+/// Returns `None` only when the binary cannot be hashed — in that case its tests
+/// run normally and its results are never cached. Otherwise returns the hash
+/// (always, so the writer can reuse it) along with the cached-passing tests,
+/// which are `None` when nothing is cached or the lookup failed. A lookup
+/// failure degrades to "nothing cached" rather than failing the run.
+fn consult_binary(backend: &dyn CacheBackend, binary: &BinaryWork<'_>) -> Option<BinaryOutcome> {
     // Hash once per binary. On error, skip this binary entirely so all of its
     // tests run.
     let binary_hash = match hash_file(binary.binary_path) {
@@ -213,16 +248,18 @@ fn consult_binary(
                 "cache: not consulting {}: lookup error: {error}",
                 binary.binary_id,
             );
-            return None;
+            BTreeSet::new()
         }
     };
 
-    if passing.is_empty() {
-        return None;
-    }
-    Some(CacheTestSuiteInfo {
+    let suite = (!passing.is_empty()).then(|| CacheTestSuiteInfo {
         binary_id: binary.binary_id.clone(),
         passing,
+    });
+    Some(BinaryOutcome {
+        binary_id: binary.binary_id.clone(),
+        hash: binary_hash,
+        suite,
     })
 }
 

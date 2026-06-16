@@ -44,13 +44,33 @@ pub struct CacheWriter<'a> {
 impl<'a> CacheWriter<'a> {
     /// Creates a writer that stores passing results for the given test list.
     ///
-    /// Every binary's content hash is computed up front, in parallel. Each hash
-    /// reads the full multi-gigabyte binary, so hashing the whole test list
-    /// serially is by far the slowest part of constructing the writer; spreading
-    /// it across the available cores mirrors what the pre-run consult path does.
+    /// The content hashes were already computed while consulting the cache
+    /// before the run (see [`ComputedCacheInfo`]), so they are reused here rather
+    /// than recomputed: hashing reads every byte of each (multi-gigabyte) binary,
+    /// and doing it a second time would roughly double the cache's overhead. Only
+    /// binaries missing from the precomputed set — which should not normally
+    /// happen — are hashed as a fallback, in parallel.
+    ///
+    /// [`ComputedCacheInfo`]: crate::cache::ComputedCacheInfo
     pub fn new(backend: &'a dyn CacheBackend, test_list: &TestList<'_>) -> Self {
-        let suites: Vec<_> = test_list.iter().collect();
-        let binary_hashes = hash_binaries(&suites);
+        let mut binary_hashes = test_list.binary_hashes().clone();
+
+        // Fallback: hash any suite whose hash was not carried over from the
+        // consult pass. In practice the consult pass hashes every binary, so
+        // this is empty; it exists so the writer is correct even if the two
+        // sets ever diverge.
+        let missing: Vec<_> = test_list
+            .iter()
+            .filter(|suite| !binary_hashes.contains_key(&suite.binary_id))
+            .collect();
+        if !missing.is_empty() {
+            debug!(
+                "cache: hashing {} binaries not covered by the consult pass",
+                missing.len(),
+            );
+            binary_hashes.extend(hash_binaries(&missing));
+        }
+
         Self {
             backend,
             binary_hashes,

@@ -4,7 +4,7 @@
 //! Tests for the cache module.
 
 use crate::cache::{
-    CacheEntry, CacheKey, ContentHash,
+    CacheBinaryInput, CacheEntry, CacheKey, ComputedCacheInfo, ContentHash,
     backend::CacheBackend,
     fs_backend::FsBackend,
     imp::cache_dir_from_base,
@@ -13,7 +13,7 @@ use crate::cache::{
 };
 use camino::Utf8PathBuf;
 use camino_tempfile::Utf8TempDir;
-use nextest_metadata::TestCaseName;
+use nextest_metadata::{RustBinaryId, TestCaseName};
 use std::{
     collections::BTreeSet,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -302,4 +302,57 @@ fn info_on_missing_dir_is_empty() {
 fn cache_dir_appends_layout_to_base() {
     let dir = cache_dir_from_base(Utf8PathBuf::from("/some/cache"));
     assert_eq!(dir, "/some/cache/nextest/result-cache/v1");
+}
+
+#[test]
+fn collect_retains_hashes_for_every_binary() {
+    // The single-hash optimization relies on `collect` retaining the content
+    // hash of *every* binary it could hash — including binaries with no cached
+    // passes — so the writer can reuse them instead of re-hashing.
+    let tmp = Utf8TempDir::new().unwrap();
+    let backend = FsBackend::new(tmp.path().join("cache"));
+
+    // Two real on-disk binaries. Only `cached` has a stored passing result; the
+    // hash of `uncached` must still be retained.
+    let cached_path = tmp.path().join("cached-bin");
+    let uncached_path = tmp.path().join("uncached-bin");
+    std::fs::write(&cached_path, b"cached binary contents").unwrap();
+    std::fs::write(&uncached_path, b"uncached binary contents").unwrap();
+
+    let cached_id = RustBinaryId::new("cached");
+    let uncached_id = RustBinaryId::new("uncached");
+
+    // Seed the cache so `cached`'s test is a hit under its real content hash.
+    let cached_hash = hash_file(&cached_path).unwrap();
+    backend
+        .store(&key(cached_hash, "tests::a"), &entry_at(1))
+        .unwrap();
+
+    let a = TestCaseName::new("tests::a");
+    let info = ComputedCacheInfo::collect(
+        &backend,
+        vec![
+            CacheBinaryInput {
+                binary_id: &cached_id,
+                binary_path: &cached_path,
+                test_names: vec![&a],
+            },
+            CacheBinaryInput {
+                binary_id: &uncached_id,
+                binary_path: &uncached_path,
+                test_names: vec![],
+            },
+        ],
+    );
+
+    // Both binaries' hashes are retained, matching their on-disk content...
+    assert_eq!(info.binary_hashes.get(&cached_id), Some(&cached_hash));
+    assert_eq!(
+        info.binary_hashes.get(&uncached_id),
+        Some(&hash_file(&uncached_path).unwrap()),
+    );
+
+    // ...but only the binary with a stored pass appears in the suites.
+    assert!(info.test_suites.get(&cached_id).is_some());
+    assert!(info.test_suites.get(&uncached_id).is_none());
 }

@@ -3,7 +3,7 @@
 
 use super::{DisplayFilterMatcher, TestListDisplayFilter};
 use crate::{
-    cache::{CacheBackend, CacheBinaryInput, ComputedCacheInfo},
+    cache::{CacheBackend, CacheBinaryInput, ComputedCacheInfo, ContentHash},
     cargo_config::EnvironmentMap,
     config::{
         core::EvaluatableProfile,
@@ -45,7 +45,7 @@ use quick_junit::ReportUuid;
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::{Borrow, Cow},
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     ffi::{OsStr, OsString},
     fmt,
     hash::{Hash, Hasher},
@@ -246,6 +246,11 @@ pub struct TestList<'g> {
     workspace_root: Utf8PathBuf,
     env: EnvironmentMap,
     updated_dylib_path: OsString,
+    /// Content hashes of the test binaries, computed while consulting the cache.
+    ///
+    /// Empty when the result cache is disabled. When populated, the post-run
+    /// `CacheWriter` reuses these instead of re-hashing every binary.
+    binary_hashes: HashMap<RustBinaryId, ContentHash>,
     // Computed on first access.
     skip_counts: OnceLock<SkipCounts>,
 }
@@ -342,8 +347,15 @@ impl<'g> TestList<'g> {
         // are recorded on the filter so that `filter_match` skips them. We
         // clone the filter to attach this information because the caller holds
         // it by shared reference; the clone is cheap relative to listing.
+        //
+        // Consulting also computes the content hash of every binary. We hold on
+        // to those hashes and store them on the `TestList` so the post-run
+        // `CacheWriter` can reuse them instead of re-hashing every (multi-
+        // gigabyte) binary a second time.
+        let mut binary_hashes = HashMap::new();
         let cache_filter = cache_backend.map(|backend| {
-            let cache_info = Self::collect_cache_info(backend, &parsed_binaries);
+            let mut cache_info = Self::collect_cache_info(backend, &parsed_binaries);
+            binary_hashes = std::mem::take(&mut cache_info.binary_hashes);
             let mut filter = filter.clone();
             filter.set_cache_info(cache_info);
             filter
@@ -379,6 +391,7 @@ impl<'g> TestList<'g> {
             rust_build_meta,
             updated_dylib_path,
             test_count,
+            binary_hashes,
             skip_counts: OnceLock::new(),
         })
     }
@@ -439,6 +452,7 @@ impl<'g> TestList<'g> {
             rust_build_meta,
             updated_dylib_path,
             test_count,
+            binary_hashes: HashMap::new(),
             skip_counts: OnceLock::new(),
         })
     }
@@ -531,6 +545,7 @@ impl<'g> TestList<'g> {
             rust_build_meta,
             updated_dylib_path,
             test_count,
+            binary_hashes: HashMap::new(),
             skip_counts: OnceLock::new(),
         })
     }
@@ -707,6 +722,15 @@ impl<'g> TestList<'g> {
         self.rust_suites.get(binary_id)
     }
 
+    /// Returns the content hashes computed for each test binary while consulting
+    /// the result cache, keyed by binary ID.
+    ///
+    /// This is empty when the cache is disabled. When populated, the post-run
+    /// `CacheWriter` reuses these instead of hashing every binary a second time.
+    pub fn binary_hashes(&self) -> &HashMap<RustBinaryId, ContentHash> {
+        &self.binary_hashes
+    }
+
     /// Iterates over the list of tests, returning the path and test name.
     pub fn iter_tests(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
         self.rust_suites.iter().flat_map(|test_suite| {
@@ -748,6 +772,7 @@ impl<'g> TestList<'g> {
             env: EnvironmentMap::empty(),
             updated_dylib_path: OsString::new(),
             rust_suites: IdOrdMap::new(),
+            binary_hashes: HashMap::new(),
             skip_counts: OnceLock::new(),
         }
     }
