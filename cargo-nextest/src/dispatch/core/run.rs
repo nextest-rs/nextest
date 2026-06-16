@@ -1006,11 +1006,21 @@ impl App {
         // Cache failures must never fail a run, so an unresolvable cache
         // directory disables caching rather than erroring.
         //
-        // `--no-cache` disables the cache for this run regardless: tests run as
-        // normal and no results are stored or consulted.
+        // The cache is disabled when:
+        //
+        // - `--no-cache` (or `NEXTEST_NO_CACHE`) is set: tests run as normal and
+        //   no results are stored or consulted.
+        // - This is a rerun (`-R`/`--rerun`): the rerun's outstanding set is the
+        //   authoritative description of what must run. A test the rerun wants
+        //   to run is, by definition, one that did not pass last time, so
+        //   consulting the cache could only wrongly skip it (a stale cached pass
+        //   from before it started failing) — silently dropping a test the user
+        //   explicitly asked to rerun. Reruns already skip prior passes via
+        //   their own mechanism, so the cache adds nothing here.
         let cache_enabled =
             std::env::var("NEXTEST_EXPERIMENTAL_RESULT_CACHE").as_deref() == Ok("1");
-        let cache_backend = if cache_enabled && !runner_opts.no_cache {
+        let is_rerun = rerun_state.is_some();
+        let cache_backend = if cache_enabled && !runner_opts.no_cache && !is_rerun {
             match default_cache_dir() {
                 Some(dir) => Some(FsBackend::new(dir)),
                 None => {
@@ -1021,6 +1031,9 @@ impl App {
                 }
             }
         } else {
+            if cache_enabled && is_rerun {
+                debug!("result cache disabled for this run because it is a rerun");
+            }
             None
         };
 
