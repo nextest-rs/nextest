@@ -3,6 +3,7 @@
 
 use super::{DisplayFilterMatcher, TestListDisplayFilter};
 use crate::{
+    cache::{CacheBackend, CacheBinaryInput, ComputedCacheInfo},
     cargo_config::EnvironmentMap,
     config::{
         core::EvaluatableProfile,
@@ -259,6 +260,7 @@ impl<'g> TestList<'g> {
         profile: &impl ListProfile,
         bound: FilterBound,
         list_threads: usize,
+        cache_backend: Option<&dyn CacheBackend>,
     ) -> Result<Self, CreateTestListError>
     where
         I: IntoIterator<Item = RustTestArtifact<'g>>,
@@ -330,6 +332,19 @@ impl<'g> TestList<'g> {
         // Ensure that the runtime doesn't stay hanging even if a custom test framework misbehaves
         // (can be an issue on Windows).
         runtime.shutdown_background();
+
+        // If a cache backend is configured, consult it now that the test names
+        // are known. Tests cached as passing for their binary's current hash
+        // are recorded on the filter so that `filter_match` skips them. We
+        // clone the filter to attach this information because the caller holds
+        // it by shared reference; the clone is cheap relative to listing.
+        let cache_filter = cache_backend.map(|backend| {
+            let cache_info = Self::collect_cache_info(backend, &parsed_binaries);
+            let mut filter = filter.clone();
+            filter.set_cache_info(cache_info);
+            filter
+        });
+        let filter = cache_filter.as_ref().unwrap_or(filter);
 
         // Phase 2: apply test-level filters and build suites.
         //
@@ -804,6 +819,28 @@ impl<'g> TestList<'g> {
     /// predicates (see [`TestFilter::has_group_predicates`]), and `None`
     /// otherwise. When `None`, encountering a `group()` predicate in the
     /// expression panics.
+    /// Consults the cache backend for each listed binary, returning the set of
+    /// tests cached as passing for each binary's current hash.
+    ///
+    /// Skipped binaries are ignored: they have no test cases to cache.
+    fn collect_cache_info(
+        backend: &dyn CacheBackend,
+        parsed: &[ParsedTestBinary<'g>],
+    ) -> ComputedCacheInfo {
+        let binaries = parsed.iter().filter_map(|binary| match binary {
+            ParsedTestBinary::Listed {
+                artifact,
+                test_cases,
+            } => Some(CacheBinaryInput {
+                binary_id: &artifact.binary_id,
+                binary_path: &artifact.binary_path,
+                test_names: test_cases.iter().map(|tc| &tc.name),
+            }),
+            ParsedTestBinary::Skipped { .. } => None,
+        });
+        ComputedCacheInfo::collect(backend, binaries)
+    }
+
     fn build_suites(
         parsed: impl IntoIterator<Item = ParsedTestBinary<'g>>,
         filter: &TestFilter,

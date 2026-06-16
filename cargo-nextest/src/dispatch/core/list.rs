@@ -142,7 +142,10 @@ impl App {
                     target_runner,
                 };
 
-                let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
+                // Listing never consults the result cache: it enumerates tests
+                // rather than running them.
+                let test_list =
+                    self.build_test_list(&ctx, binary_list, &test_filter, &profile, None)?;
 
                 // Spawn the pager after building the list. (In an upcoming
                 // change we're going to add a progress bar to the list display
@@ -223,7 +226,9 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
+        // Listing never consults the result cache: it enumerates tests rather
+        // than running them.
+        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile, None)?;
 
         let resolved_user_config =
             resolve_user_config(self.base.early_args.user_config_location())?;

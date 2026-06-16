@@ -319,9 +319,11 @@ fn handle_skipped(
     curr: &mut RerunTestSuiteInfo,
 ) {
     match skipped {
-        TestOutcomeSkipped::Rerun => {
-            // This test was skipped due to having passed in a prior run in this
-            // rerun chain. Add it to passing.
+        TestOutcomeSkipped::Rerun | TestOutcomeSkipped::Cached => {
+            // This test was skipped because it is known to have passed: either
+            // it passed in a prior run in this rerun chain, or its result was
+            // cached for the binary's current hash. Either way, add it to
+            // passing.
             //
             // Note that if a test goes from passing to not being present in the
             // list at all, and then back to being present, it becomes
@@ -364,6 +366,9 @@ pub(crate) enum TestOutcomeSkipped {
 
     /// Test was skipped due to this being a rerun.
     Rerun,
+
+    /// Test was skipped because its result was cached and the binary is unchanged.
+    Cached,
 }
 
 impl TestOutcomeSkipped {
@@ -377,6 +382,7 @@ impl TestOutcomeSkipped {
             | MismatchReason::Partition
             | MismatchReason::DefaultFilter => TestOutcomeSkipped::Explicit,
             MismatchReason::RerunAlreadyPassed => TestOutcomeSkipped::Rerun,
+            MismatchReason::UnchangedSinceCached => TestOutcomeSkipped::Cached,
             other => unreachable!("all known match arms are covered, found {other:?}"),
         }
     }
@@ -569,7 +575,9 @@ mod tests {
                         let should_be_tracked = match outcome {
                             Some(TestOutcome::Passed)
                             | Some(TestOutcome::Failed)
-                            | Some(TestOutcome::Skipped(TestOutcomeSkipped::Rerun))
+                            | Some(TestOutcome::Skipped(
+                                TestOutcomeSkipped::Rerun | TestOutcomeSkipped::Cached,
+                            ))
                             | None => true,
                             Some(TestOutcome::Skipped(TestOutcomeSkipped::Explicit)) => false,
                         };
@@ -1286,7 +1294,9 @@ mod tests {
                         // Test was scheduled but not seen in event log: outstanding.
                         Decision::Outstanding
                     }
-                    Some(TestOutcome::Skipped(TestOutcomeSkipped::Rerun)) => Decision::Passing,
+                    Some(TestOutcome::Skipped(
+                        TestOutcomeSkipped::Rerun | TestOutcomeSkipped::Cached,
+                    )) => Decision::Passing,
                     Some(TestOutcome::Skipped(TestOutcomeSkipped::Explicit)) => {
                         // Carry forward, or not tracked if unknown.
                         match prev {
@@ -1299,7 +1309,7 @@ mod tests {
             }
             FilterMatchResult::HasMatch(FilterMatch::Mismatch { reason }) => {
                 match TestOutcomeSkipped::from_mismatch_reason(reason) {
-                    TestOutcomeSkipped::Rerun => Decision::Passing,
+                    TestOutcomeSkipped::Rerun | TestOutcomeSkipped::Cached => Decision::Passing,
                     TestOutcomeSkipped::Explicit => {
                         // Carry forward, or not tracked if unknown.
                         match prev {

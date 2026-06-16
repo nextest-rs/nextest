@@ -21,6 +21,7 @@ use camino::Utf8Path;
 use clap::{Args, builder::BoolishValueParser};
 use nextest_filtering::{FiltersetKind, ParseContext};
 use nextest_runner::{
+    cache::{CacheBackend, CacheWriter, FsBackend, default_cache_dir},
     cargo_config::EnvironmentMap,
     config::{
         core::ConfigExperimental,
@@ -851,6 +852,7 @@ impl App {
         binary_list: Arc<BinaryList>,
         test_filter: &TestFilter,
         profile: &nextest_runner::config::core::EvaluatableProfile<'_>,
+        cache_backend: Option<&dyn CacheBackend>,
     ) -> Result<TestList<'_>> {
         let env = EnvironmentMap::new(&self.base.cargo_configs);
         self.build_filter.compute_test_list(
@@ -862,6 +864,7 @@ impl App {
             env,
             profile,
             &self.base.reuse_build,
+            cache_backend,
         )
     }
 
@@ -986,6 +989,26 @@ impl App {
             None => (None, None),
         };
 
+        // Resolve the test result cache backend, if enabled. This is gated
+        // behind an experimental env var while the feature is in development.
+        // Cache failures must never fail a run, so an unresolvable cache
+        // directory disables caching rather than erroring.
+        let cache_backend = if std::env::var("NEXTEST_EXPERIMENTAL_RESULT_CACHE").as_deref()
+            == Ok("1")
+        {
+            match default_cache_dir() {
+                Some(dir) => Some(FsBackend::new(dir)),
+                None => {
+                    warn!(
+                        "result cache enabled but no cache directory could be determined; disabling"
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         // Start running Cargo commands at this point, once all initial
         // validation is complete.
         let rerun_build_scope = rerun_state
@@ -1014,7 +1037,13 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
+        let test_list = self.build_test_list(
+            &ctx,
+            binary_list,
+            &test_filter,
+            &profile,
+            cache_backend.as_ref().map(|b| b as &dyn CacheBackend),
+        )?;
 
         // Validate interceptor mode requirements.
         if runner_opts.interceptor.is_active() {
@@ -1175,8 +1204,18 @@ impl App {
             reporter.set_run_id_unique_prefix(prefix);
         }
 
+        // If caching is enabled, observe events to store passing results.
+        let cache_writer = cache_backend
+            .as_ref()
+            .map(|backend| CacheWriter::new(backend, &test_list));
+
         configure_handle_inheritance(no_capture)?;
-        let run_stats = runner.try_execute(|event| reporter.report_event(event))?;
+        let run_stats = runner.try_execute(|event| {
+            if let Some(writer) = &cache_writer {
+                writer.observe(&event);
+            }
+            reporter.report_event(event)
+        })?;
         let reporter_stats = reporter.finish();
 
         let outstanding_not_seen_count = reporter_stats
@@ -1285,7 +1324,9 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
+        // Benchmark results are not cached: their value is the measured time,
+        // not a pass/fail outcome.
+        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile, None)?;
 
         // Validate interceptor mode requirements.
         if runner_opts.interceptor.is_active() {

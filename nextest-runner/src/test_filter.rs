@@ -5,7 +5,10 @@
 //!
 //! The main structure in this module is [`TestFilter`].
 
-use crate::{errors::TestFilterBuildError, record::ComputedRerunInfo, run_mode::NextestRunMode};
+use crate::{
+    cache::ComputedCacheInfo, errors::TestFilterBuildError, record::ComputedRerunInfo,
+    run_mode::NextestRunMode,
+};
 use aho_corasick::AhoCorasick;
 use nextest_filtering::{BinaryQuery, EvalContext, Filterset, GroupLookup, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason, RustBinaryId, RustTestKind, TestCaseName};
@@ -102,6 +105,7 @@ impl BinaryFilter {
 pub struct TestFilter {
     mode: NextestRunMode,
     rerun_info: Option<ComputedRerunInfo>,
+    cache_info: Option<ComputedCacheInfo>,
     run_ignored: RunIgnored,
     patterns: ResolvedFilterPatterns,
     binary_filter: BinaryFilter,
@@ -433,6 +437,7 @@ impl TestFilter {
         Ok(Self {
             mode,
             rerun_info: None,
+            cache_info: None,
             run_ignored,
             patterns,
             binary_filter,
@@ -456,6 +461,7 @@ impl TestFilter {
         Self {
             mode,
             rerun_info: None,
+            cache_info: None,
             run_ignored,
             patterns: ResolvedFilterPatterns::default(),
             binary_filter,
@@ -465,6 +471,14 @@ impl TestFilter {
     /// Sets the list of outstanding tests, if this is a rerun.
     pub fn set_outstanding_tests(&mut self, rerun_info: ComputedRerunInfo) {
         self.rerun_info = Some(rerun_info);
+    }
+
+    /// Sets the tests known to be cached as passing, so that they are skipped.
+    ///
+    /// This must be called after the test list is known, since the cache is
+    /// keyed by binary hash and test name.
+    pub fn set_cache_info(&mut self, cache_info: ComputedCacheInfo) {
+        self.cache_info = Some(cache_info);
     }
 
     /// Returns the nextest execution mode.
@@ -543,6 +557,12 @@ impl TestFilter {
             };
         }
 
+        if self.is_unchanged_since_cached(binary_query.binary_id, test_name) {
+            return FilterMatch::Mismatch {
+                reason: MismatchReason::UnchangedSinceCached,
+            };
+        }
+
         self.filter_match_base(binary_query, test_name, ecx, bound, ignored, groups)
     }
 
@@ -609,6 +629,25 @@ impl TestFilter {
     fn is_rerun_already_passed(&self, binary_id: &RustBinaryId, test_name: &TestCaseName) -> bool {
         if let Some(rerun_info) = &self.rerun_info
             && let Some(suite) = rerun_info.test_suites.get(binary_id)
+        {
+            return suite.passing.contains(test_name);
+        }
+        false
+    }
+
+    /// Returns true if this test is cached as passing for its binary's current
+    /// hash.
+    ///
+    /// The hash check happened when `cache_info` was computed (see
+    /// [`ComputedCacheInfo`]), so this is a pure name lookup: a test is present
+    /// here only if it was cached for the binary that is about to run.
+    fn is_unchanged_since_cached(
+        &self,
+        binary_id: &RustBinaryId,
+        test_name: &TestCaseName,
+    ) -> bool {
+        if let Some(cache_info) = &self.cache_info
+            && let Some(suite) = cache_info.test_suites.get(binary_id)
         {
             return suite.passing.contains(test_name);
         }
