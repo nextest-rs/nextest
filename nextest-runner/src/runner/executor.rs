@@ -75,7 +75,7 @@ pub(super) struct ExecutorContext<'a> {
     // command-line.
     force_flaky_result: Option<FlakyResult>,
     interceptor: Interceptor,
-    version_env_vars: Option<VersionEnvVars>,
+    version_env_vars: VersionEnvVars,
 }
 
 impl<'a> ExecutorContext<'a> {
@@ -91,7 +91,7 @@ impl<'a> ExecutorContext<'a> {
         force_retries: Option<RetryPolicy>,
         force_flaky_result: Option<FlakyResult>,
         interceptor: Interceptor,
-        version_env_vars: Option<VersionEnvVars>,
+        version_env_vars: VersionEnvVars,
     ) -> Self {
         Self {
             run_id,
@@ -110,6 +110,8 @@ impl<'a> ExecutorContext<'a> {
 
     fn test_execute_context(&self) -> TestExecuteContext<'_> {
         TestExecuteContext {
+            run_id: self.run_id,
+            version_env_vars: &self.version_env_vars,
             profile_name: self.profile.name(),
             double_spawn: &self.double_spawn,
             target_runner: &self.target_runner,
@@ -422,9 +424,7 @@ impl<'a> ExecutorContext<'a> {
             "NEXTEST_WORKSPACE_ROOT",
             self.test_list.workspace_root().as_str(),
         );
-        if let Some(version_env_vars) = &self.version_env_vars {
-            version_env_vars.apply_env(command_mut);
-        }
+        self.version_env_vars.apply_env(command_mut);
         command_mut.stdin(Stdio::null());
         super::os::set_process_group(command_mut);
 
@@ -810,9 +810,7 @@ impl<'a> ExecutorContext<'a> {
             "NEXTEST_WORKSPACE_ROOT",
             self.test_list.workspace_root().as_str(),
         );
-        if let Some(version_env_vars) = &self.version_env_vars {
-            version_env_vars.apply_env(command_mut);
-        }
+        self.version_env_vars.apply_env(command_mut);
 
         test.setup_script_data.apply(
             &test.test_instance.to_test_query(),

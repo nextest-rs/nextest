@@ -18,9 +18,11 @@ use clap::Args;
 use nextest_filtering::{FiltersetKind, ParseContext};
 use nextest_runner::{
     errors::WriteTestListError,
+    helpers::force_or_new_run_id,
     list::TestExecuteContext,
     pager::PagedOutput,
     run_mode::NextestRunMode,
+    runner::VersionEnvVars,
     show_config::{ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     user_config::elements::PaginateSetting,
     write_str::WriteStr,
@@ -126,7 +128,15 @@ impl App {
                     .load_runner(&binary_list.rust_build_meta.build_platforms);
                 let profile =
                     profile.apply_build_platforms(&binary_list.rust_build_meta.build_platforms);
+                let nextest_version_config = version_only_config.nextest_version();
+                let version_env_vars = VersionEnvVars {
+                    current_version: self.base.current_version.clone(),
+                    required_version: nextest_version_config.required.version().cloned(),
+                    recommended_version: nextest_version_config.recommended.version().cloned(),
+                };
                 let ctx = TestExecuteContext {
+                    run_id: force_or_new_run_id(),
+                    version_env_vars: &version_env_vars,
                     profile_name: profile.name(),
                     double_spawn,
                     target_runner,
@@ -158,7 +168,7 @@ impl App {
         groups: Vec<nextest_runner::config::elements::TestGroup>,
     ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
-        let (_, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
+        let (version_only_config, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
         let profile = self.base.load_profile(&config)?;
 
         // Validate test groups before doing any other work.
@@ -189,7 +199,15 @@ impl App {
         let double_spawn = self.base.load_double_spawn();
         let target_runner = self.base.load_runner(&build_platforms);
         let profile = profile.apply_build_platforms(&build_platforms);
+        let nextest_version_config = version_only_config.nextest_version();
+        let version_env_vars = VersionEnvVars {
+            current_version: self.base.current_version.clone(),
+            required_version: nextest_version_config.required.version().cloned(),
+            recommended_version: nextest_version_config.recommended.version().cloned(),
+        };
         let ctx = TestExecuteContext {
+            run_id: force_or_new_run_id(),
+            version_env_vars: &version_env_vars,
             profile_name: profile.name(),
             double_spawn,
             target_runner,
