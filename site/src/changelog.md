@@ -10,6 +10,29 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.138] - 2026-06-21
+
+### Added
+
+- Nextest now sets the following [environment variables](https://nexte.st/docs/configuration/env-vars) during the list phase, not just the run phase:
+
+  - `NEXTEST_VERSION`
+  - `NEXTEST_REQUIRED_VERSION`
+  - `NEXTEST_RECOMMENDED_VERSION`
+  - `NEXTEST_RUN_ID`
+  - `NEXTEST_BINARY_ID`
+  - `NEXTEST_WORKSPACE_ROOT`
+
+  This lets [target runners](https://nexte.st/docs/features/target-runners) and [custom test harnesses](https://nexte.st/docs/design/custom-test-harnesses) use this information while listing tests. ([#3410])
+
+### Changed
+
+- When `--cargo-metadata` is passed without `--binaries-metadata`, and the Cargo metadata contains exactly one default member (for example, metadata generated with `--manifest-path path/to/package/Cargo.toml`), nextest now anchors the build scope to that member's `Cargo.toml` rather than widening it to the entire workspace. ([#3409])
+- `--workspace-remap` now requires both `--cargo-metadata` and `--binaries-metadata`. The combination of `--workspace-remap` and `--cargo-metadata` cannot work without `--binaries-metadata`, so nextest now reports this as an error up front. ([#3409])
+
+[#3409]: https://github.com/nextest-rs/nextest/pull/3409
+[#3410]: https://github.com/nextest-rs/nextest/pull/3410
+
 ## [0.9.137] - 2026-05-26
 
 ### Changed
@@ -2183,6 +2206,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.138]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.138
 [0.9.137]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.137
 [0.9.136]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.136
 [0.9.135]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.135
