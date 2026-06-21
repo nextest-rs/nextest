@@ -29,10 +29,10 @@ use integration_tests::{
     nextest_cli::{CargoNextestCli, CargoNextestOutput},
 };
 use nextest_metadata::{
-    BuildPlatform, BuildPlatformsSummary, FilterMatch, MismatchReason, NextestExitCode,
-    TestCaseName, TestListSummary,
+    BinaryListSummary, BuildPlatform, BuildPlatformsSummary, FilterMatch, MismatchReason,
+    NextestExitCode, TestCaseName, TestListSummary,
 };
-use std::{borrow::Cow, fs::File, io::Write};
+use std::{borrow::Cow, collections::BTreeSet, fs::File, io::Write};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
 
 mod cargo_message_format;
@@ -937,6 +937,83 @@ fn test_relocated_run() {
         &output.stderr,
         &p2.junit_path("default"),
         RunProperties::RELOCATED,
+    );
+}
+
+// Test that `--cargo-metadata` defines the build scope.
+#[test]
+fn test_cargo_metadata_defines_build_scope() {
+    // The member the metadata is scoped to. The fixture model tells us which
+    // binaries belong to it.
+    const MEMBER: &str = "proc-macro-test";
+
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    // Metadata scoped to MEMBER (its manifest), so the file's default_members is
+    // exactly [MEMBER].
+    let member_manifest = p.workspace_root().join(MEMBER).join("Cargo.toml");
+    save_cargo_metadata_for(&p, &member_manifest);
+
+    // List binaries with `--cargo-metadata` from the workspace root (which acts
+    // as a scope different from MEMBER), plus any extra args.
+    let list = |extra: &[&str]| -> BinaryListSummary {
+        let metadata_path = p.cargo_metadata_path();
+        let mut args = vec![
+            "list",
+            "--cargo-metadata",
+            metadata_path.as_str(),
+            "--message-format",
+            "json",
+            "--list-type",
+            "binaries-only",
+        ];
+        args.extend_from_slice(extra);
+        let output = CargoNextestCli::for_test(&env_info)
+            .args(args)
+            .current_dir(p.workspace_root())
+            .output();
+        serde_json::from_slice(&output.stdout).expect("binaries-only list is valid JSON")
+    };
+    // The distinct packages a listing built.
+    let packages = |list: &BinaryListSummary| -> BTreeSet<String> {
+        list.rust_binaries
+            .values()
+            .map(|b| b.binary_id.components().package_name.to_owned())
+            .collect()
+    };
+
+    // No build-scope args: the metadata defines the scope, so only MEMBER's
+    // binaries are built, regardless of the (root) current directory.
+    let default = list(&[]);
+    let listed: BTreeSet<_> = default.rust_binaries.keys().collect();
+    let expected: BTreeSet<_> = EXPECTED_TEST_SUITES
+        .iter()
+        .filter(|suite| suite.binary_id.components().package_name == MEMBER)
+        .map(|suite| &suite.binary_id)
+        .collect();
+    assert_eq!(
+        listed, expected,
+        "`--cargo-metadata` scoped to `{MEMBER}` should build only that member"
+    );
+
+    // `--lib` narrows to libs *within* MEMBER. It must not widen the package
+    // scope back out to the whole workspace.
+    assert_eq!(
+        packages(&list(&["--lib"])),
+        BTreeSet::from([MEMBER.to_owned()]),
+        "`--lib` must stay scoped to `{MEMBER}`, not list other packages' libs"
+    );
+
+    // Explicit package selection still overrides the metadata's scope.
+    let all_members: BTreeSet<String> = EXPECTED_TEST_SUITES
+        .iter()
+        .map(|suite| suite.binary_id.components().package_name.to_owned())
+        .collect();
+    assert_eq!(
+        packages(&list(&["--workspace"])),
+        all_members,
+        "`--workspace` should override the scope and build every workspace member"
     );
 }
 
