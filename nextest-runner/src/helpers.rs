@@ -14,9 +14,30 @@ use camino::{Utf8Path, Utf8PathBuf};
 use console::AnsiCodeIterator;
 use nextest_metadata::TestCaseName;
 use owo_colors::{OwoColorize, Style};
+use quick_junit::ReportUuid;
 use std::{fmt, io, ops::ControlFlow, path::PathBuf, process::ExitStatus, time::Duration};
 use swrite::{SWrite, swrite};
+use tracing::warn;
 use unicode_width::UnicodeWidthChar;
+
+/// Environment variable to force a specific run ID (for testing).
+const FORCE_RUN_ID_ENV: &str = "__NEXTEST_FORCE_RUN_ID";
+
+/// Returns a forced run ID from the environment, or generates a new one.
+pub fn force_or_new_run_id() -> ReportUuid {
+    if let Ok(id_str) = std::env::var(FORCE_RUN_ID_ENV) {
+        match id_str.parse::<ReportUuid>() {
+            Ok(uuid) => return uuid,
+            Err(err) => {
+                warn!(
+                    "{FORCE_RUN_ID_ENV} is set but invalid (expected UUID): {err}, \
+                     generating random ID"
+                );
+            }
+        }
+    }
+    ReportUuid::new_v4()
+}
 
 /// Utilities for pluralizing various words based on count or plurality.
 pub mod plural {

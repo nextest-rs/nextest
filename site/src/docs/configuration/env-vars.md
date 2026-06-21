@@ -89,23 +89,33 @@ Nextest exposes these environment variables to your tests _at runtime only_. The
 `NEXTEST_RUN_ID`
 : A UUID corresponding to a particular nextest run. Set for both tests and [setup scripts](setup-scripts.md).
 
+    <!-- md:version 0.9.138 --> This is also set during the list phase. Within a single `cargo nextest run`, the list and run phases share the same run ID, so a [target runner](../features/target-runners.md) or [custom test harness](../design/custom-test-harnesses.md) can correlate the two.
+
 `NEXTEST_PROFILE` <!-- md:version 0.9.89 -->
 : The [nextest profile](index.md#profiles) in use.
 
 `NEXTEST_VERSION` <!-- md:version 0.9.130 -->
 : The current nextest version as a semver string (e.g. `"0.9.120"`). Set for both tests and [setup scripts](setup-scripts.md).
 
+    <!-- md:version 0.9.138 --> This is also set during the list phase, so a [target runner](../features/target-runners.md) or [custom test harness](../design/custom-test-harnesses.md) can adapt to the nextest version while listing tests.
+
 `NEXTEST_REQUIRED_VERSION` <!-- md:version 0.9.130 -->
 : The minimum required nextest version from the repository's [`nextest-version` configuration](minimum-versions.md), as a semver string. If no required version is configured, this is `"none"`. Set for both tests and [setup scripts](setup-scripts.md).
 
+    <!-- md:version 0.9.138 --> This is also set during the list phase.
+
 `NEXTEST_RECOMMENDED_VERSION` <!-- md:version 0.9.130 -->
 : The minimum recommended nextest version from the repository's [`nextest-version` configuration](minimum-versions.md), as a semver string. If no recommended version is configured, this is `"none"`. Set for both tests and [setup scripts](setup-scripts.md).
+
+    <!-- md:version 0.9.138 --> This is also set during the list phase.
 
 `NEXTEST_EXECUTION_MODE`
 : Currently, always `process-per-test`. More options may be added in the future if nextest gains the ability to run multiple tests within the same process ([#27]).
 
 `NEXTEST_BINARY_ID` <!-- md:version 0.9.116 -->
 : The [binary ID](../glossary.md#binary-id) corresponding to the test.
+
+    <!-- md:version 0.9.138 --> This is also set during the list phase, so a [target runner](../features/target-runners.md) or [custom test harness](../design/custom-test-harnesses.md) can tell which binary it is being invoked for while listing tests.
 
 `NEXTEST_TEST_NAME` <!-- md:version 0.9.116 -->
 : The name of the test.
@@ -147,6 +157,8 @@ Nextest exposes these environment variables to your tests _at runtime only_. The
 : The absolute path to the workspace root. Set for both tests and [setup scripts](setup-scripts.md).
 
     When [`--workspace-remap`](../ci-features/archiving.md#specifying-a-new-location-for-the-source-code) is passed in, this is set to the remapped workspace root.
+
+    <!-- md:version 0.9.138 --> This is also set during the list phase, so a [target runner](../features/target-runners.md) or [custom test harness](../design/custom-test-harnesses.md) can locate the workspace while listing tests.
 
 `NEXTEST_BIN_EXE_<name>`
 : The absolute path to a binary target's executable. (See also, `CARGO_BIN_EXE_<name>` below.) This is only set when running an [integration test] or benchmark. The `<name>` is the name of the binary target, exactly as-is. For example, `NEXTEST_BIN_EXE_my-program` for a binary named `my-program`.

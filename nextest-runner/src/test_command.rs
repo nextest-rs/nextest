@@ -7,11 +7,12 @@ use crate::{
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     helpers::dylib_path_envvar,
     list::{RustBuildMeta, TestListState},
-    runner::Interceptor,
+    runner::{Interceptor, VersionEnvVars},
     test_output::CaptureStrategy,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use guppy::graph::PackageMetadata;
+use quick_junit::ReportUuid;
 use std::{
     borrow::Cow,
     collections::{BTreeSet, HashMap},
@@ -28,6 +29,8 @@ pub(crate) use imp::{Child, ChildAccumulator, ChildFds};
 #[derive(Clone, Debug)]
 pub(crate) struct LocalExecuteContext<'a> {
     pub(crate) phase: TestCommandPhase,
+    pub(crate) run_id: ReportUuid,
+    pub(crate) version_env_vars: &'a VersionEnvVars,
     pub(crate) workspace_root: &'a Utf8Path,
     // Note: Must use TestListState here to get remapped paths.
     pub(crate) rust_build_meta: &'a RustBuildMeta<TestListState>,

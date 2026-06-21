@@ -26,7 +26,7 @@ use nextest_runner::{
         core::ConfigExperimental,
         elements::{MaxFail, RetryPolicy, TestThreads},
     },
-    helpers::plural,
+    helpers::{force_or_new_run_id, plural},
     input::InputHandlerKind,
     list::{BinaryList, TestExecuteContext, TestList},
     record::{
@@ -999,7 +999,16 @@ impl App {
         let target_runner = self.base.load_runner(build_platforms);
 
         let profile = profile.apply_build_platforms(build_platforms);
+        let run_id = force_or_new_run_id();
+        let nextest_version_config = version_only_config.nextest_version();
+        let version_env_vars = VersionEnvVars {
+            current_version: self.base.current_version.clone(),
+            required_version: nextest_version_config.required.version().cloned(),
+            recommended_version: nextest_version_config.recommended.version().cloned(),
+        };
         let ctx = TestExecuteContext {
+            run_id,
+            version_env_vars: &version_env_vars,
             profile_name: profile.name(),
             double_spawn,
             target_runner,
@@ -1081,16 +1090,11 @@ impl App {
             runner_builder.set_expected_outstanding(expected);
         }
 
-        let nextest_version_config = version_only_config.nextest_version();
-        runner_builder.set_version_env_vars(VersionEnvVars {
-            current_version: self.base.current_version.clone(),
-            required_version: nextest_version_config.required.version().cloned(),
-            recommended_version: nextest_version_config.recommended.version().cloned(),
-        });
-
         // Save cli_args for recording before moving them to the runner.
         let cli_args_for_recording = cli_args.clone();
         let runner = runner_builder.build(
+            run_id,
+            version_env_vars,
             &test_list,
             &profile,
             cli_args,
@@ -1266,7 +1270,16 @@ impl App {
         let target_runner = self.base.load_runner(build_platforms);
 
         let profile = profile.apply_build_platforms(build_platforms);
+        let run_id = force_or_new_run_id();
+        let nextest_version_config = version_only_config.nextest_version();
+        let version_env_vars = VersionEnvVars {
+            current_version: self.base.current_version.clone(),
+            required_version: nextest_version_config.required.version().cloned(),
+            recommended_version: nextest_version_config.recommended.version().cloned(),
+        };
         let ctx = TestExecuteContext {
+            run_id,
+            version_env_vars: &version_env_vars,
             profile_name: profile.name(),
             double_spawn,
             target_runner,
@@ -1339,20 +1352,15 @@ impl App {
                 InputHandlerKind::Noop
             };
 
-        let Some(mut runner_builder) = runner_builder else {
+        let Some(runner_builder) = runner_builder else {
             return Ok(());
         };
-
-        let nextest_version_config = version_only_config.nextest_version();
-        runner_builder.set_version_env_vars(VersionEnvVars {
-            current_version: self.base.current_version.clone(),
-            required_version: nextest_version_config.required.version().cloned(),
-            recommended_version: nextest_version_config.recommended.version().cloned(),
-        });
 
         // Save cli_args for recording before moving them to the runner.
         let cli_args_for_recording = cli_args.clone();
         let runner = runner_builder.build(
+            run_id,
+            version_env_vars,
             &test_list,
             &profile,
             cli_args,

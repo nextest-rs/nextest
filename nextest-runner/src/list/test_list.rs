@@ -19,7 +19,7 @@ use crate::{
     partition::{Partitioner, PartitionerBuilder, PartitionerScope},
     reuse_build::PathMapper,
     run_mode::NextestRunMode,
-    runner::Interceptor,
+    runner::{Interceptor, VersionEnvVars},
     target_runner::{PlatformRunner, TargetRunner},
     test_command::{LocalExecuteContext, TestCommand, TestCommandPhase},
     test_filter::{BinaryMismatchReason, FilterBinaryMatch, FilterBound, TestFilter},
@@ -272,6 +272,8 @@ impl<'g> TestList<'g> {
         );
         let lctx = LocalExecuteContext {
             phase: TestCommandPhase::List,
+            run_id: ctx.run_id,
+            version_env_vars: ctx.version_env_vars,
             // Note: this is the remapped workspace root, not the original one.
             // (We really should have newtypes for this.)
             workspace_root: &workspace_root,
@@ -1375,7 +1377,7 @@ impl RustTestArtifact<'_> {
             cli.push("--ignored");
         }
 
-        let cmd = TestCommand::new(
+        let mut cmd = TestCommand::new(
             lctx,
             cli.program
                 .clone()
@@ -1388,6 +1390,13 @@ impl RustTestArtifact<'_> {
             &self.non_test_binaries,
             &Interceptor::None, // Interceptors are not used during the test list phase.
         );
+
+        // Expose a subset of environment variables to the list phase.
+        cmd.command_mut()
+            .env("NEXTEST_RUN_ID", lctx.run_id.to_string())
+            .env("NEXTEST_BINARY_ID", self.binary_id.as_str())
+            .env("NEXTEST_WORKSPACE_ROOT", lctx.workspace_root.as_str());
+        lctx.version_env_vars.apply_env(cmd.command_mut());
 
         let output =
             cmd.wait_with_output()
@@ -1608,6 +1617,8 @@ impl<'a> TestInstance<'a> {
 
         let lctx = LocalExecuteContext {
             phase: TestCommandPhase::Run,
+            run_id: ctx.run_id,
+            version_env_vars: ctx.version_env_vars,
             workspace_root: test_list.workspace_root(),
             rust_build_meta: &test_list.rust_build_meta,
             double_spawn: ctx.double_spawn,
@@ -1903,6 +1914,12 @@ impl<'a> Hash for dyn TestInstanceIdKey + 'a {
 /// Context required for test execution.
 #[derive(Clone, Debug)]
 pub struct TestExecuteContext<'a> {
+    /// The run ID for this invocation.
+    pub run_id: ReportUuid,
+
+    /// Version-related environment variables.
+    pub version_env_vars: &'a VersionEnvVars,
+
     /// The name of the profile.
     pub profile_name: &'a str,
 

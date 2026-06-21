@@ -210,7 +210,7 @@ pub struct VersionEnvVars {
 
 impl VersionEnvVars {
     /// Applies the version environment variables to a command.
-    pub(super) fn apply_env(&self, cmd: &mut std::process::Command) {
+    pub(crate) fn apply_env(&self, cmd: &mut std::process::Command) {
         cmd.env("NEXTEST_VERSION", self.current_version.to_string());
         cmd.env(
             "NEXTEST_REQUIRED_VERSION",
@@ -267,7 +267,6 @@ pub struct TestRunnerBuilder {
     stress_condition: Option<StressCondition>,
     interceptor: Interceptor,
     expected_outstanding: Option<BTreeSet<OwnedTestInstanceId>>,
-    version_env_vars: Option<VersionEnvVars>,
 }
 
 impl TestRunnerBuilder {
@@ -335,16 +334,16 @@ impl TestRunnerBuilder {
         self
     }
 
-    /// Sets version-related environment variables for tests and setup scripts.
-    pub fn set_version_env_vars(&mut self, version_env_vars: VersionEnvVars) -> &mut Self {
-        self.version_env_vars = Some(version_env_vars);
-        self
-    }
-
     /// Creates a new test runner.
+    ///
+    /// `run_id` identifies this invocation. The caller should generate it via
+    /// [`force_or_new_run_id`](crate::helpers::force_or_new_run_id) and pass it
+    /// in.
     #[expect(clippy::too_many_arguments)]
     pub fn build<'a>(
         self,
+        run_id: ReportUuid,
+        version_env_vars: VersionEnvVars,
         test_list: &'a TestList,
         profile: &'a EvaluatableProfile<'a>,
         cli_args: Vec<String>,
@@ -376,7 +375,7 @@ impl TestRunnerBuilder {
 
         Ok(TestRunner {
             inner: TestRunnerInner {
-                run_id: force_or_new_run_id(),
+                run_id,
                 started_at: Local::now(),
                 profile,
                 test_list,
@@ -391,7 +390,7 @@ impl TestRunnerBuilder {
                 stress_condition: self.stress_condition,
                 interceptor: self.interceptor,
                 expected_outstanding: self.expected_outstanding,
-                version_env_vars: self.version_env_vars,
+                version_env_vars,
                 runtime,
             },
             signal_handler,
@@ -562,7 +561,7 @@ struct TestRunnerInner<'a> {
     stress_condition: Option<StressCondition>,
     interceptor: Interceptor,
     expected_outstanding: Option<BTreeSet<OwnedTestInstanceId>>,
-    version_env_vars: Option<VersionEnvVars>,
+    version_env_vars: VersionEnvVars,
     runtime: Runtime,
 }
 
@@ -873,25 +872,6 @@ pub fn configure_handle_inheritance(
     super::os::configure_handle_inheritance_impl(no_capture)
 }
 
-/// Environment variable to force a specific run ID (for testing).
-const FORCE_RUN_ID_ENV: &str = "__NEXTEST_FORCE_RUN_ID";
-
-/// Returns a forced run ID from the environment, or generates a new one.
-fn force_or_new_run_id() -> ReportUuid {
-    if let Ok(id_str) = std::env::var(FORCE_RUN_ID_ENV) {
-        match id_str.parse::<ReportUuid>() {
-            Ok(uuid) => return uuid,
-            Err(err) => {
-                warn!(
-                    "{FORCE_RUN_ID_ENV} is set but invalid (expected UUID): {err}, \
-                     generating random ID"
-                );
-            }
-        }
-    }
-    ReportUuid::new_v4()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -911,8 +891,15 @@ mod tests {
         let signal_handler = SignalHandlerKind::Noop;
         let input_handler = InputHandlerKind::Noop;
         let profile = profile.apply_build_platforms(&build_platforms);
+        let version_env_vars = VersionEnvVars {
+            current_version: Version::new(0, 0, 0),
+            required_version: None,
+            recommended_version: None,
+        };
         let runner = builder
             .build(
+                crate::helpers::force_or_new_run_id(),
+                version_env_vars,
                 &test_list,
                 &profile,
                 vec![],
