@@ -95,8 +95,29 @@ impl BaseApp {
             }
         };
 
+        // How `--cargo-metadata` interacts with the build scope.
         let manifest_path = if reuse_build.cargo_metadata.is_some() {
-            Some(package_graph.workspace().root().join("Cargo.toml"))
+            if reuse_build.binaries_metadata.is_some() {
+                // No fresh build (binaries reused): anchor to the workspace root.
+                Some(package_graph.workspace().root().join("Cargo.toml"))
+            } else {
+                // Anchor the build at the metadata's default members.
+                //
+                // This sets only the *package* scope; target (`--lib`/`--test`)
+                // and feature selection still compose with it, and an explicit
+                // `-p` / `--workspace` overrides the package at the manifest
+                // path the usual way.
+                let mut members = package_graph.workspace().default_members();
+                match (members.next(), members.next()) {
+                    // Exactly one default member: build just that one.
+                    (Some(only), None) => Some(only.manifest_path().to_owned()),
+                    // Zero or many. This indicates that this is the default
+                    // member set for the workspace (which could be the whole
+                    // workspace, if workspace.default-members isn't defined in
+                    // Cargo.toml). Anchor the build at the root.
+                    _ => Some(package_graph.workspace().root().join("Cargo.toml")),
+                }
+            }
         } else {
             manifest_path
         };

@@ -25,6 +25,11 @@ use std::{collections::BTreeSet, process::Command, sync::LazyLock};
 
 #[track_caller]
 pub fn save_cargo_metadata(p: &TempProject) {
+    save_cargo_metadata_for(p, &p.manifest_path());
+}
+
+#[track_caller]
+pub fn save_cargo_metadata_for(p: &TempProject, manifest_path: &Utf8Path) {
     let mut cmd = Command::new(cargo_bin());
     cmd.args([
         "metadata",
@@ -33,7 +38,7 @@ pub fn save_cargo_metadata(p: &TempProject) {
         "--no-deps",
         "--manifest-path",
     ]);
-    cmd.arg(p.manifest_path());
+    cmd.arg(manifest_path);
     let output = cmd.output().expect("cargo metadata could run");
 
     assert_eq!(Some(0), output.status.code());

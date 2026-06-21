@@ -71,7 +71,15 @@ pub(crate) struct ReuseBuildOpts {
     pub(crate) cargo_metadata: Option<Utf8PathBuf>,
 
     /// Remapping for the workspace root
-    #[arg(long, requires = "cargo-metadata-sources", value_name = "PATH")]
+    #[arg(
+        long,
+        // --workspace-remap relocates a prebuilt workspace, so it requires reused
+        // binaries in addition to the cargo metadata. (A fresh build can't
+        // be relocated since its package IDs come from the metadata's original
+        // location.)
+        requires_all = &["cargo-metadata-sources", "binaries-metadata-sources"],
+        value_name = "PATH"
+    )]
     pub(crate) workspace_remap: Option<Utf8PathBuf>,
 
     /// Path to binaries-metadata JSON
