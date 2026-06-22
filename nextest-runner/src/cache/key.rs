@@ -14,10 +14,14 @@ use xxhash_rust::xxh3::Xxh3;
 
 /// A cache key identifying a specific test result.
 ///
-/// The key captures everything that determines whether a test should produce
+/// The key captures most of what determines whether a test should produce
 /// the same result: the content of the test binary and the test name. Because
 /// the binary hash changes whenever the test code is recompiled, a cached
 /// result is automatically invalidated when the binary changes.
+///
+/// However, tests are not sandboxed, so environment variables and other system state
+/// may also affect a test's result. Some of these should be included in the key
+/// in the future, though it's impossible to cover every case.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CacheKey {
     binary_hash: ContentHash,
