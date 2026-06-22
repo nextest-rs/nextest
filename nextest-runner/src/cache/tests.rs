@@ -8,7 +8,7 @@ use crate::cache::{
     backend::CacheBackend,
     fs_backend::FsBackend,
     imp::cache_dir_from_base,
-    key::{hash_bytes, hash_file},
+    key::{hash_file, hash_reader},
     result::{CleanPolicy, CleanStats},
 };
 use camino::Utf8PathBuf;
@@ -21,6 +21,14 @@ use std::{
 
 fn names(names: &[&str]) -> BTreeSet<TestCaseName> {
     names.iter().map(|n| TestCaseName::new(n)).collect()
+}
+
+/// Hashes an in-memory slice through the same streaming path as [`hash_file`].
+///
+/// A `&[u8]` is itself a `Read`, so this exercises [`hash_reader`] exactly as a
+/// file would, just without touching the filesystem.
+fn hash_bytes(data: &[u8]) -> ContentHash {
+    hash_reader(data).expect("reading from a slice is infallible")
 }
 
 fn key(binary_hash: ContentHash, test_name: &str) -> CacheKey {

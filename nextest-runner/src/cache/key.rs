@@ -8,7 +8,7 @@ use nextest_metadata::TestCaseName;
 use std::{
     fmt,
     fs::File,
-    io::{BufReader, Read},
+    io::{self, BufReader, Read},
 };
 use xxhash_rust::xxh3::Xxh3;
 
@@ -62,11 +62,7 @@ impl ContentHash {
 
     /// Returns the hash as a lowercase hexadecimal string.
     pub fn to_hex(self) -> String {
-        let mut s = String::with_capacity(32);
-        for byte in &self.bytes {
-            fmt::Write::write_fmt(&mut s, format_args!("{byte:02x}")).expect("writing to a String");
-        }
-        s
+        self.to_string()
     }
 }
 
@@ -91,9 +87,21 @@ const HASH_CHUNK_SIZE: usize = 256 * 1024;
 /// The file is streamed through the hasher in fixed-size chunks rather than read
 /// fully into memory: test binaries are routinely multiple gigabytes, and slurping
 /// each one would allocate that much RAM per binary.
-pub fn hash_file(path: &Utf8Path) -> std::io::Result<ContentHash> {
+pub fn hash_file(path: &Utf8Path) -> io::Result<ContentHash> {
     let file = File::open(path)?;
-    let mut reader = BufReader::with_capacity(HASH_CHUNK_SIZE, file);
+    hash_reader(BufReader::with_capacity(HASH_CHUNK_SIZE, file))
+}
+
+/// Computes a [`ContentHash`] by streaming a reader through the hasher.
+///
+/// This uses XXH3, a fast non-cryptographic hash. Collision resistance is not a
+/// security property here: a collision would only ever cause nextest to skip a
+/// test that should have run, and the inputs (locally built test binaries) are
+/// not adversarial. The 128-bit width makes accidental collisions negligible.
+///
+/// The reader is consumed in fixed-size chunks so that arbitrarily large inputs
+/// hash in constant memory; see [`hash_file`] for why that matters.
+pub fn hash_reader<R: Read>(mut reader: R) -> io::Result<ContentHash> {
     let mut hasher = Xxh3::new();
     let mut buf = [0u8; HASH_CHUNK_SIZE];
     loop {
@@ -103,27 +111,7 @@ pub fn hash_file(path: &Utf8Path) -> std::io::Result<ContentHash> {
         }
         hasher.update(&buf[..n]);
     }
-    Ok(finish(hasher))
-}
-
-/// Computes a [`ContentHash`] from a byte slice.
-///
-/// This uses XXH3, a fast non-cryptographic hash. Collision resistance is not a
-/// security property here: a collision would only ever cause nextest to skip a
-/// test that should have run, and the inputs (locally built test binaries) are
-/// not adversarial. The 128-bit width makes accidental collisions negligible.
-pub fn hash_bytes(data: &[u8]) -> ContentHash {
-    let mut hasher = Xxh3::new();
-    hasher.update(data);
-    finish(hasher)
-}
-
-/// Finalizes a streaming hasher into a [`ContentHash`].
-///
-/// XXH3 produces a native 128-bit digest in a single pass, so both the byte-slice
-/// and the streaming paths share this one finalize step.
-fn finish(hasher: Xxh3) -> ContentHash {
-    ContentHash {
+    Ok(ContentHash {
         bytes: hasher.digest128().to_le_bytes(),
-    }
+    })
 }
