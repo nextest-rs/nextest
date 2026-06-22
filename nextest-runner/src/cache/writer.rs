@@ -12,12 +12,12 @@ use crate::{
     list::{RustTestSuite, TestList},
     reporter::events::{ExecutionResultDescription, ReporterEvent, TestEventKind},
 };
+use chrono::Utc;
 use nextest_metadata::RustBinaryId;
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicUsize, Ordering},
     thread,
-    time::SystemTime,
 };
 use tracing::debug;
 
@@ -108,7 +108,7 @@ impl<'a> CacheWriter<'a> {
         };
 
         let key = CacheKey::new(*binary_hash, test_instance.test_name.clone());
-        let now = SystemTime::now();
+        let now = Utc::now();
         let entry = CacheEntry {
             created_at: now,
             last_hit_at: now,

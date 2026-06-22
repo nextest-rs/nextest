@@ -18,13 +18,13 @@ use crate::cache::{
 };
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use camino::{Utf8Path, Utf8PathBuf};
+use chrono::{DateTime, Utc};
 use nextest_metadata::TestCaseName;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    io::Write,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    io::{self, BufWriter, Write},
 };
 
 const CACHE_FORMAT_VERSION: u32 = 1;
@@ -74,14 +74,16 @@ impl FsBackend {
         let path = self.manifest_path(binary_hash_hex);
         let dir = path.parent().expect("manifest path always has a parent");
         fs::create_dir_all(dir)?;
-        let data = serde_json::to_vec_pretty(manifest)
-            .map_err(|e| CacheError::InvalidData(e.to_string()))?;
 
         // Write atomically (temp file + rename) so a concurrent reader, or a
         // second nextest process sharing this cache directory, never observes a
         // half-written manifest.
         AtomicFile::new(&path, OverwriteBehavior::AllowOverwrite)
-            .write(|f| f.write_all(&data))
+            .write(|f| {
+                let mut writer = BufWriter::new(f);
+                serde_json::to_writer(&mut writer, manifest).map_err(io::Error::from)?;
+                writer.flush()
+            })
             .map_err(|e| match e {
                 atomicwrites::Error::Internal(io) | atomicwrites::Error::User(io) => {
                     CacheError::Io(io)
@@ -99,8 +101,8 @@ impl CacheBackend for FsBackend {
             .entries
             .get(key.test_name())
             .map(|entry| CacheEntry {
-                created_at: secs_to_system_time(entry.created_at),
-                last_hit_at: secs_to_system_time(entry.last_hit_at),
+                created_at: entry.created_at,
+                last_hit_at: entry.last_hit_at,
             }))
     }
 
@@ -117,7 +119,7 @@ impl CacheBackend for FsBackend {
         // manifest are returned, so the result is the set of cached-passing
         // tests for this binary.
         let mut passing = BTreeSet::new();
-        let now = system_time_to_secs(&SystemTime::now());
+        let now = Utc::now();
         for name in test_names {
             if let Some(entry) = manifest.entries.get_mut(name.as_str()) {
                 entry.last_hit_at = now;
@@ -144,8 +146,8 @@ impl CacheBackend for FsBackend {
         manifest.entries.insert(
             key.test_name().to_owned(),
             ManifestEntry {
-                created_at: system_time_to_secs(&entry.created_at),
-                last_hit_at: system_time_to_secs(&entry.last_hit_at),
+                created_at: entry.created_at,
+                last_hit_at: entry.last_hit_at,
             },
         );
 
@@ -200,10 +202,9 @@ impl CacheBackend for FsBackend {
                         Err(_) => continue,
                     };
 
-                    let cutoff_secs = system_time_to_secs(cutoff);
                     let mut remaining = Manifest::empty();
                     for (name, entry) in manifest.entries {
-                        if entry.last_hit_at < cutoff_secs {
+                        if entry.last_hit_at < *cutoff {
                             stats.entries_removed += 1;
                         } else {
                             remaining.entries.insert(name, entry);
@@ -269,18 +270,8 @@ impl Manifest {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ManifestEntry {
-    created_at: u64,
-    last_hit_at: u64,
-}
-
-fn system_time_to_secs(time: &SystemTime) -> u64 {
-    time.duration_since(UNIX_EPOCH)
-        .unwrap_or(Duration::ZERO)
-        .as_secs()
-}
-
-fn secs_to_system_time(secs: u64) -> SystemTime {
-    UNIX_EPOCH + Duration::from_secs(secs)
+    created_at: DateTime<Utc>,
+    last_hit_at: DateTime<Utc>,
 }
 
 fn dir_size(path: &std::path::Path) -> u64 {

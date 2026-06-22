@@ -13,11 +13,9 @@ use crate::cache::{
 };
 use camino::Utf8PathBuf;
 use camino_tempfile::Utf8TempDir;
+use chrono::{DateTime, Utc};
 use nextest_metadata::{RustBinaryId, TestCaseName};
-use std::{
-    collections::BTreeSet,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::collections::BTreeSet;
 
 fn names(names: &[&str]) -> BTreeSet<TestCaseName> {
     names.iter().map(|n| TestCaseName::new(n)).collect()
@@ -35,8 +33,12 @@ fn key(binary_hash: ContentHash, test_name: &str) -> CacheKey {
     CacheKey::new(binary_hash, TestCaseName::new(test_name))
 }
 
-fn entry_at(secs: u64) -> CacheEntry {
-    let time = UNIX_EPOCH + Duration::from_secs(secs);
+fn at_secs(secs: i64) -> DateTime<Utc> {
+    DateTime::from_timestamp(secs, 0).expect("timestamp is in range")
+}
+
+fn entry_at(secs: i64) -> CacheEntry {
+    let time = at_secs(secs);
     CacheEntry {
         created_at: time,
         last_hit_at: time,
@@ -132,7 +134,7 @@ fn lookup_passing_refreshes_last_hit_at() {
         .unwrap()
         .expect("entry should be present");
     assert!(
-        refreshed.last_hit_at > UNIX_EPOCH + Duration::from_secs(1),
+        refreshed.last_hit_at > at_secs(1),
         "last_hit_at should be refreshed past the stored value"
     );
 }
@@ -213,13 +215,10 @@ fn clean_older_than_keeps_recent_entries() {
 
     // An old entry (last hit at second 100) under one binary, and a recent one
     // (last hit "now") under another.
-    let old = CacheEntry {
-        created_at: UNIX_EPOCH + Duration::from_secs(100),
-        last_hit_at: UNIX_EPOCH + Duration::from_secs(100),
-    };
+    let old = entry_at(100);
     backend.store(&key(hash_bytes(b"old"), "t"), &old).unwrap();
 
-    let now = SystemTime::now();
+    let now = Utc::now();
     let recent = CacheEntry {
         created_at: now,
         last_hit_at: now,
@@ -228,7 +227,7 @@ fn clean_older_than_keeps_recent_entries() {
         .store(&key(hash_bytes(b"recent"), "t"), &recent)
         .unwrap();
 
-    let cutoff = UNIX_EPOCH + Duration::from_secs(1000);
+    let cutoff = at_secs(1000);
     let stats = backend.clean(&CleanPolicy::OlderThan(cutoff)).unwrap();
     assert_eq!(stats.entries_removed, 1);
 

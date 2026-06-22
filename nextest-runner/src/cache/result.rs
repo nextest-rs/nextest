@@ -3,7 +3,7 @@
 
 //! Cached test result types.
 
-use std::time::SystemTime;
+use chrono::{DateTime, Utc};
 
 /// A cached test result entry.
 ///
@@ -12,12 +12,12 @@ use std::time::SystemTime;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CacheEntry {
     /// When this result was first stored in the cache.
-    pub created_at: SystemTime,
+    pub created_at: DateTime<Utc>,
 
     /// When this cache entry was last accessed, either stored or looked up.
     ///
     /// Used by eviction policies (e.g., `cargo nextest cache clean --older-than 7d`).
-    pub last_hit_at: SystemTime,
+    pub last_hit_at: DateTime<Utc>,
 }
 
 /// Summary statistics about the cache.
@@ -41,7 +41,7 @@ pub enum CleanPolicy {
     All,
 
     /// Remove entries whose `last_hit_at` is older than the given time.
-    OlderThan(SystemTime),
+    OlderThan(DateTime<Utc>),
 }
 
 /// Statistics returned after a clean operation.
