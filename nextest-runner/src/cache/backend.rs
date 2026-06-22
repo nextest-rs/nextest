@@ -14,34 +14,53 @@ use std::collections::BTreeSet;
 ///
 /// # Contract
 ///
-/// - **Lookup must be safe to call concurrently** from multiple threads, and is
-///   read-only: it never mutates stored state.
+/// Methods are split into reads, which never mutate stored state, and writes,
+/// which do. Reads ([`lookup`](Self::lookup), [`passing`](Self::passing)) and
+/// writes ([`store`](Self::store), [`record_access`](Self::record_access),
+/// [`invalidate`](Self::invalidate)) are separate so that callers express
+/// whether they intend to mutate the cache, rather than a read silently writing.
+///
+/// - **Reads must be safe to call concurrently** from multiple threads, and never
+///   mutate stored state.
 /// - **Store is called after test execution completes,** and only for tests that passed on their
 ///   first attempt.
-/// - **`last_hit_at` is refreshed** on store and on [`lookup_passing`](Self::lookup_passing), which
-///   is the access path used before a run. Read-only [`lookup`](Self::lookup) does not refresh it.
+/// - **`last_hit_at` is refreshed** on store and by [`record_access`](Self::record_access), the
+///   write the pre-run path issues after [`passing`](Self::passing) so eviction policies see
+///   recently-consulted entries as recently used.
 /// - **Errors are non-fatal but not silent.** The caller treats cache failures
 ///   as misses and never fails a run because of them, but surfaces them as
 ///   warnings rather than dropping them: while this feature is experimental, an
 ///   error most likely indicates a bug worth seeing.
 pub trait CacheBackend: Send + Sync {
-    /// Looks up a cached result for the given key, without mutating the cache.
+    /// Looks up a cached result for the given key. Read-only.
     ///
-    /// This does not refresh `last_hit_at`; use [`lookup_passing`](Self::lookup_passing) on the
-    /// pre-run path so that eviction policies see recently-consulted entries as recently used.
+    /// This never refreshes `last_hit_at`; the pre-run path uses
+    /// [`record_access`](Self::record_access) for that.
     fn lookup(&self, key: &CacheKey) -> Result<Option<CacheEntry>, CacheError>;
 
-    /// Returns the subset of `test_names` cached as passing for `binary_hash`, refreshing the
-    /// `last_hit_at` time of each match.
+    /// Returns the subset of `test_names` cached as passing for `binary_hash`. Read-only.
     ///
-    /// This is the batch read path used before a run. Backends should read each binary's storage
-    /// once rather than once per test name, so that consulting a binary with N cached tests costs
-    /// O(1) reads rather than O(N).
-    fn lookup_passing(
+    /// This is the batch read path used before a run; the caller follows it with
+    /// [`record_access`](Self::record_access) to record the consultation. Backends should read each
+    /// binary's storage once rather than once per test name, so that consulting a binary with N
+    /// cached tests costs O(1) reads rather than O(N).
+    fn passing(
         &self,
         binary_hash: ContentHash,
         test_names: &BTreeSet<TestCaseName>,
     ) -> Result<BTreeSet<TestCaseName>, CacheError>;
+
+    /// Records that the given cached tests were just consulted, refreshing the `last_hit_at` time
+    /// of each one present for `binary_hash`. Names with no cached entry are ignored.
+    ///
+    /// This is the write the pre-run path issues after [`passing`](Self::passing), so that eviction
+    /// policies treat recently-consulted entries as recently used. Refreshing hit times only affects
+    /// eviction ordering, never correctness.
+    fn record_access(
+        &self,
+        binary_hash: ContentHash,
+        test_names: &BTreeSet<TestCaseName>,
+    ) -> Result<(), CacheError>;
 
     /// Stores a test result in the cache.
     fn store(&self, key: &CacheKey, entry: &CacheEntry) -> Result<(), CacheError>;

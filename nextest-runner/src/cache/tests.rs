@@ -89,15 +89,16 @@ fn lookup_does_not_mutate_the_cache() {
         .join("results.json");
     let before = std::fs::read(&manifest_path).unwrap();
 
-    // A read-only lookup, even a hit, must not rewrite the manifest.
+    // The read-only methods, even on a hit, must not rewrite the manifest.
     backend.lookup(&key(bin, "tests::a")).unwrap();
+    backend.passing(bin, &names(&["tests::a"])).unwrap();
 
     let after = std::fs::read(&manifest_path).unwrap();
-    assert_eq!(before, after, "lookup must not rewrite the manifest");
+    assert_eq!(before, after, "reads must not rewrite the manifest");
 }
 
 #[test]
-fn lookup_passing_returns_only_cached_names() {
+fn passing_returns_only_cached_names() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("cache"));
     let bin = hash_bytes(b"bin");
@@ -106,28 +107,50 @@ fn lookup_passing_returns_only_cached_names() {
 
     // Request a, b, and c; only a and c are cached.
     let passing = backend
-        .lookup_passing(bin, &names(&["tests::a", "tests::b", "tests::c"]))
+        .passing(bin, &names(&["tests::a", "tests::b", "tests::c"]))
         .unwrap();
     assert_eq!(passing, names(&["tests::a", "tests::c"]));
 
     // A different binary hash shares no entries.
     let passing_other = backend
-        .lookup_passing(hash_bytes(b"other"), &names(&["tests::a"]))
+        .passing(hash_bytes(b"other"), &names(&["tests::a"]))
         .unwrap();
     assert!(passing_other.is_empty());
 }
 
 #[test]
-fn lookup_passing_refreshes_last_hit_at() {
+fn passing_does_not_refresh_last_hit_at() {
+    let dir = Utf8TempDir::new().unwrap();
+    let backend = FsBackend::new(dir.path().join("cache"));
+    let bin = hash_bytes(b"bin");
+    backend.store(&key(bin, "tests::a"), &entry_at(1)).unwrap();
+
+    // A pure read must leave the stored hit time untouched: refreshing is the job
+    // of `record_access`, not `passing`.
+    backend.passing(bin, &names(&["tests::a"])).unwrap();
+
+    let entry = backend
+        .lookup(&key(bin, "tests::a"))
+        .unwrap()
+        .expect("entry should be present");
+    assert_eq!(
+        entry.last_hit_at,
+        at_secs(1),
+        "passing must not refresh last_hit_at"
+    );
+}
+
+#[test]
+fn record_access_refreshes_last_hit_at() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("cache"));
     let bin = hash_bytes(b"bin");
     // Stored with an ancient hit time.
     backend.store(&key(bin, "tests::a"), &entry_at(1)).unwrap();
 
-    backend.lookup_passing(bin, &names(&["tests::a"])).unwrap();
+    backend.record_access(bin, &names(&["tests::a"])).unwrap();
 
-    // After a batch lookup, the hit time should be refreshed to roughly now,
+    // After recording access, the hit time should be refreshed to roughly now,
     // well after the stored second-1 value.
     let refreshed = backend
         .lookup(&key(bin, "tests::a"))

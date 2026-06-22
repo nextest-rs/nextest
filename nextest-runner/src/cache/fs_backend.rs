@@ -107,39 +107,49 @@ impl CacheBackend for FsBackend {
             }))
     }
 
-    fn lookup_passing(
+    fn passing(
         &self,
         binary_hash: ContentHash,
         test_names: &BTreeSet<TestCaseName>,
     ) -> Result<BTreeSet<TestCaseName>, CacheError> {
         let binary_hash_hex = binary_hash.to_hex();
-        let mut manifest = self.read_manifest(&binary_hash_hex)?;
+        let manifest = self.read_manifest(&binary_hash_hex)?;
 
         // Read the manifest once and intersect with the requested names, rather
         // than reading once per name. Only names actually present in the
         // manifest are returned, so the result is the set of cached-passing
         // tests for this binary.
-        let mut passing = BTreeSet::new();
+        Ok(test_names
+            .iter()
+            .filter(|name| manifest.entries.contains_key(name.as_str()))
+            .cloned()
+            .collect())
+    }
+
+    fn record_access(
+        &self,
+        binary_hash: ContentHash,
+        test_names: &BTreeSet<TestCaseName>,
+    ) -> Result<(), CacheError> {
+        let binary_hash_hex = binary_hash.to_hex();
+        let mut manifest = self.read_manifest(&binary_hash_hex)?;
+
+        // Refresh the hit time of every requested name present in the manifest,
+        // in a single read-modify-write. Names with no cached entry are ignored.
         let now = Utc::now();
+        let mut refreshed = false;
         for name in test_names {
             if let Some(entry) = manifest.entries.get_mut(name.as_str()) {
                 entry.last_hit_at = now;
-                passing.insert(name.clone());
+                refreshed = true;
             }
         }
 
-        // Persist the refreshed `last_hit_at` times in a single write. A failure
-        // here does not fail the lookup — refreshing hit times only affects
-        // eviction ordering, never correctness — but it is surfaced as a warning
-        // rather than dropped, since while the feature is experimental a write
-        // failure most likely indicates a bug.
-        if !passing.is_empty()
-            && let Err(error) = self.write_manifest(&binary_hash_hex, &manifest)
-        {
-            warn!("cache: failed to refresh last_hit_at for {binary_hash_hex}: {error}");
+        if refreshed {
+            self.write_manifest(&binary_hash_hex, &manifest)?;
         }
 
-        Ok(passing)
+        Ok(())
     }
 
     fn store(&self, key: &CacheKey, entry: &CacheEntry) -> Result<(), CacheError> {

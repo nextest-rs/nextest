@@ -113,8 +113,8 @@ impl ComputedCacheInfo {
     /// gigabytes, so the work is I/O- and CPU-bound and scales well across
     /// cores; doing it serially is the dominant cost of consulting the cache for
     /// a large workspace. The backend lookup ([`CacheBackend`] is `Send + Sync`
-    /// and documents `lookup_passing` as safe to call concurrently) runs on the
-    /// same worker so each binary is touched by exactly one thread.
+    /// and documents its reads as safe to call concurrently) runs on the same
+    /// worker so each binary is touched by exactly one thread.
     pub fn collect<'a, B, N>(backend: &dyn CacheBackend, binaries: B) -> Self
     where
         B: IntoIterator<Item = CacheBinaryInput<'a, N>>,
@@ -242,7 +242,7 @@ fn consult_binary(backend: &dyn CacheBackend, binary: &BinaryWork<'_>) -> Option
     // error degrades to "nothing cached" so every test in the binary runs
     // normally.
     let passing = backend
-        .lookup_passing(binary_hash, &binary.requested)
+        .passing(binary_hash, &binary.requested)
         .inspect_err(|error| {
             warn!(
                 "cache: not consulting {}: lookup error: {error}",
@@ -250,6 +250,19 @@ fn consult_binary(backend: &dyn CacheBackend, binary: &BinaryWork<'_>) -> Option
             );
         })
         .unwrap_or_default();
+
+    // Record the consultation so eviction sees these entries as recently used.
+    // This is a best-effort write: a failure never changes which tests are
+    // reported as cached, so it degrades to a warning rather than discarding the
+    // results computed above.
+    if !passing.is_empty()
+        && let Err(error) = backend.record_access(binary_hash, &passing)
+    {
+        warn!(
+            "cache: failed to record access for {}: {error}",
+            binary.binary_id,
+        );
+    }
 
     let suite = (!passing.is_empty()).then(|| CacheTestSuiteInfo {
         binary_id: binary.binary_id.clone(),
