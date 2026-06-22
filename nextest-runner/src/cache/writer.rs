@@ -19,7 +19,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
     thread,
 };
-use tracing::debug;
+use tracing::warn;
 
 /// Observes test events and stores passing results in the cache.
 ///
@@ -64,8 +64,12 @@ impl<'a> CacheWriter<'a> {
             .filter(|suite| !binary_hashes.contains_key(&suite.binary_id))
             .collect();
         if !missing.is_empty() {
-            debug!(
-                "cache: hashing {} binaries not covered by the consult pass",
+            // The consult pass is expected to hash every binary, so a non-empty
+            // set here means the two passes diverged. That is not fatal — the
+            // fallback below hashes the stragglers — but it is unexpected, so
+            // surface it while the feature is experimental.
+            warn!(
+                "cache: {} binaries were not covered by the consult pass; hashing them now",
                 missing.len(),
             );
             binary_hashes.extend(hash_binaries(&missing));
@@ -79,8 +83,10 @@ impl<'a> CacheWriter<'a> {
 
     /// Inspects an event and, if it reports a clean pass, stores it in the cache.
     ///
-    /// Storage errors are non-fatal: they are logged and otherwise ignored, so a
-    /// failing cache never turns a passing run into a failure.
+    /// Storage errors do not fail the run — a failing cache never turns a passing
+    /// run into a failure — but they are surfaced as warnings rather than silently
+    /// dropped: while this feature is experimental, a store failure most likely
+    /// indicates a bug we want to see, not a benign condition.
     pub fn observe(&self, event: &ReporterEvent<'_>) {
         let ReporterEvent::Test(event) = event else {
             return;
@@ -114,7 +120,7 @@ impl<'a> CacheWriter<'a> {
             last_hit_at: now,
         };
         if let Err(error) = self.backend.store(&key, &entry) {
-            debug!(
+            warn!(
                 "cache: failed to store result for {} in {}: {error}",
                 test_instance.test_name, test_instance.binary_id,
             );
@@ -152,14 +158,14 @@ fn hash_binaries(suites: &[&RustTestSuite<'_>]) -> HashMap<RustBinaryId, Content
                         let Some(suite) = suites.get(idx) else {
                             break;
                         };
-                        match hash_file(&suite.binary_path) {
-                            Ok(hash) => local.push((suite.binary_id.clone(), hash)),
-                            Err(error) => {
-                                debug!(
-                                    "cache: not caching results for {}: failed to hash {}: {error}",
-                                    suite.binary_id, suite.binary_path,
-                                );
-                            }
+                        let hash = hash_file(&suite.binary_path).inspect_err(|error| {
+                            warn!(
+                                "cache: not caching results for {}: failed to hash {}: {error}",
+                                suite.binary_id, suite.binary_path,
+                            );
+                        });
+                        if let Ok(hash) = hash {
+                            local.push((suite.binary_id.clone(), hash));
                         }
                     }
                     local

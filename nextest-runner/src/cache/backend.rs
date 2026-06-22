@@ -20,7 +20,10 @@ use std::collections::BTreeSet;
 ///   first attempt.
 /// - **`last_hit_at` is refreshed** on store and on [`lookup_passing`](Self::lookup_passing), which
 ///   is the access path used before a run. Read-only [`lookup`](Self::lookup) does not refresh it.
-/// - **Errors are non-fatal.** The caller treats cache failures as misses.
+/// - **Errors are non-fatal but not silent.** The caller treats cache failures
+///   as misses and never fails a run because of them, but surfaces them as
+///   warnings rather than dropping them: while this feature is experimental, an
+///   error most likely indicates a bug worth seeing.
 pub trait CacheBackend: Send + Sync {
     /// Looks up a cached result for the given key, without mutating the cache.
     ///

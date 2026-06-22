@@ -16,7 +16,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
     thread,
 };
-use tracing::debug;
+use tracing::warn;
 
 /// The leaf path appended to the platform cache directory for result-cache
 /// storage. The `v1` component lets an incompatible future layout move to a
@@ -104,7 +104,9 @@ impl ComputedCacheInfo {
     ///
     /// Errors hashing a binary or reading the backend degrade to "not cached"
     /// (the test runs normally): the cache is strictly an optimization and must
-    /// never turn a transient I/O problem into a run failure.
+    /// never turn a transient I/O problem into a run failure. Such errors are
+    /// logged as warnings rather than dropped, so that a bug surfacing during
+    /// this feature's experimental phase is visible rather than silent.
     ///
     /// Binaries are hashed in parallel across a small thread pool. Hashing a
     /// test binary means reading every byte of a file that is routinely several
@@ -227,30 +229,27 @@ fn process_work(backend: &dyn CacheBackend, work: &[BinaryWork<'_>]) -> Vec<Bina
 fn consult_binary(backend: &dyn CacheBackend, binary: &BinaryWork<'_>) -> Option<BinaryOutcome> {
     // Hash once per binary. On error, skip this binary entirely so all of its
     // tests run.
-    let binary_hash = match hash_file(binary.binary_path) {
-        Ok(hash) => hash,
-        Err(error) => {
-            debug!(
+    let binary_hash = hash_file(binary.binary_path)
+        .inspect_err(|error| {
+            warn!(
                 "cache: not consulting {}: failed to hash {}: {error}",
                 binary.binary_id, binary.binary_path,
             );
-            return None;
-        }
-    };
+        })
+        .ok()?;
 
     // Query the backend once for all of this binary's test names. A backend read
     // error degrades to "nothing cached" so every test in the binary runs
     // normally.
-    let passing = match backend.lookup_passing(binary_hash, &binary.requested) {
-        Ok(passing) => passing,
-        Err(error) => {
-            debug!(
+    let passing = backend
+        .lookup_passing(binary_hash, &binary.requested)
+        .inspect_err(|error| {
+            warn!(
                 "cache: not consulting {}: lookup error: {error}",
                 binary.binary_id,
             );
-            BTreeSet::new()
-        }
-    };
+        })
+        .unwrap_or_default();
 
     let suite = (!passing.is_empty()).then(|| CacheTestSuiteInfo {
         binary_id: binary.binary_id.clone(),

@@ -26,6 +26,7 @@ use std::{
     fs,
     io::{self, BufWriter, Write},
 };
+use tracing::warn;
 
 const CACHE_FORMAT_VERSION: u32 = 1;
 
@@ -127,13 +128,15 @@ impl CacheBackend for FsBackend {
             }
         }
 
-        // Persist the refreshed `last_hit_at` times in a single write. If this
-        // fails, the lookup still succeeds: refreshing hit times is best effort
-        // and only affects eviction ordering, never correctness.
+        // Persist the refreshed `last_hit_at` times in a single write. A failure
+        // here does not fail the lookup — refreshing hit times only affects
+        // eviction ordering, never correctness — but it is surfaced as a warning
+        // rather than dropped, since while the feature is experimental a write
+        // failure most likely indicates a bug.
         if !passing.is_empty()
             && let Err(error) = self.write_manifest(&binary_hash_hex, &manifest)
         {
-            tracing::debug!("cache: failed to refresh last_hit_at for {binary_hash_hex}: {error}");
+            warn!("cache: failed to refresh last_hit_at for {binary_hash_hex}: {error}");
         }
 
         Ok(passing)
@@ -161,11 +164,22 @@ impl CacheBackend for FsBackend {
         manifest.entries.remove(key.test_name());
 
         if manifest.entries.is_empty() {
+            // The manifest is the only persistent file under this directory, so
+            // removing the directory removes the cache entry. A failure here only
+            // leaves a stale empty directory behind, never affecting correctness,
+            // so it does not fail the call — but it is surfaced as a warning
+            // rather than dropped, since while the feature is experimental such a
+            // failure most likely indicates a bug.
             let dir = self.cache_dir.join(&binary_hash_hex);
-            // Removing the now-empty directory is best effort: a concurrent
-            // writer may have repopulated it, and a leftover empty directory is
-            // harmless.
-            let _ = fs::remove_dir_all(&dir);
+            match fs::remove_dir_all(&dir) {
+                Ok(()) => {}
+                // The directory legitimately may not exist: invalidating a key
+                // that was never cached reads an empty manifest and lands here.
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    warn!("cache: failed to remove empty cache directory {dir}: {error}");
+                }
+            }
             Ok(())
         } else {
             self.write_manifest(&binary_hash_hex, &manifest)
@@ -190,16 +204,27 @@ impl CacheBackend for FsBackend {
 
             match policy {
                 CleanPolicy::All => {
-                    let manifest = self.read_manifest(dir_name).ok();
+                    // Read the manifest only to count the entries being removed. A
+                    // read failure does not stop the removal, but it is surfaced
+                    // rather than dropped: the count then falls back to 1.
+                    let manifest = self
+                        .read_manifest(dir_name)
+                        .inspect_err(|error| {
+                            warn!("cache: failed to read manifest for {dir_name}: {error}");
+                        })
+                        .ok();
                     let size = dir_size(&path);
                     fs::remove_dir_all(&path)?;
                     stats.bytes_freed += size;
                     stats.entries_removed += manifest.map(|m| m.entries.len() as u64).unwrap_or(1);
                 }
                 CleanPolicy::OlderThan(cutoff) => {
-                    let manifest = match self.read_manifest(dir_name) {
-                        Ok(m) => m,
-                        Err(_) => continue,
+                    // Skip a directory whose manifest cannot be read, but surface
+                    // why rather than skipping silently.
+                    let Ok(manifest) = self.read_manifest(dir_name).inspect_err(|error| {
+                        warn!("cache: skipping {dir_name}: failed to read manifest: {error}");
+                    }) else {
+                        continue;
                     };
 
                     let mut remaining = Manifest::empty();
@@ -213,11 +238,14 @@ impl CacheBackend for FsBackend {
 
                     if remaining.entries.is_empty() {
                         let size = dir_size(&path);
-                        if fs::remove_dir_all(&path).is_ok() {
-                            stats.bytes_freed += size;
+                        match fs::remove_dir_all(&path) {
+                            Ok(()) => stats.bytes_freed += size,
+                            Err(error) => {
+                                warn!("cache: failed to remove {}: {error}", path.display());
+                            }
                         }
-                    } else {
-                        let _ = self.write_manifest(dir_name, &remaining);
+                    } else if let Err(error) = self.write_manifest(dir_name, &remaining) {
+                        warn!("cache: failed to rewrite manifest for {dir_name}: {error}");
                     }
                 }
             }
