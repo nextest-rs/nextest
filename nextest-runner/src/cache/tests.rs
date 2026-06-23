@@ -269,6 +269,37 @@ fn clean_older_than_keeps_recent_entries() {
 }
 
 #[test]
+fn clean_tolerates_a_corrupt_manifest() {
+    let dir = Utf8TempDir::new().unwrap();
+    let backend = FsBackend::new(dir.path().join("cache"));
+
+    // A good binary alongside one whose manifest is corrupt. `clean` is a
+    // management command, so a corrupt manifest must not abort the whole clean:
+    // `All` still removes the directory (counting it as one entry), and
+    // `OlderThan` skips it while continuing with the rest.
+    backend
+        .store(&key(hash_bytes(b"good"), "t"), &entry_at(1))
+        .unwrap();
+
+    let corrupt_dir = dir.path().join("cache").join("corrupt");
+    std::fs::create_dir_all(&corrupt_dir).unwrap();
+    std::fs::write(corrupt_dir.join("results.json"), b"not json").unwrap();
+
+    let stats = backend
+        .clean(&CleanPolicy::OlderThan(at_secs(1000)))
+        .unwrap();
+    // Only the good binary's single old entry is counted; the corrupt directory
+    // is skipped and left in place.
+    assert_eq!(stats.entries_removed, 1);
+    assert!(corrupt_dir.exists());
+
+    // `All` clears everything, including the corrupt directory (counted as one).
+    let stats = backend.clean(&CleanPolicy::All).unwrap();
+    assert_eq!(stats.entries_removed, 1);
+    assert!(!corrupt_dir.exists());
+}
+
+#[test]
 fn info_counts_entries_and_binaries() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("cache"));

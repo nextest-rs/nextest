@@ -69,6 +69,12 @@ pub trait CacheBackend: Send + Sync {
     fn invalidate(&self, key: &CacheKey) -> Result<(), CacheError>;
 
     /// Removes cache entries according to the given policy.
+    ///
+    /// Unlike the run-path methods, `clean` is a management command that never
+    /// runs during a test execution, so it does not treat failures as cache
+    /// misses: an I/O error is fatal and returned to the caller. A corrupt
+    /// manifest is tolerated so that a cache whose data has gone bad can still be
+    /// cleared.
     fn clean(&self, policy: &CleanPolicy) -> Result<CleanStats, CacheError>;
 
     /// Returns summary information about the cache.

@@ -212,29 +212,42 @@ impl CacheBackend for FsBackend {
                 continue;
             };
 
+            // Unlike the run-path methods, `clean` is a management command that
+            // never runs during a test execution, so it has no reason to treat
+            // I/O failures as cache misses: an I/O error here is fatal. A corrupt
+            // manifest ([`CacheError::InvalidData`]) stays tolerant, since clean
+            // should still be able to clear a cache whose data has gone bad.
             match policy {
                 CleanPolicy::All => {
-                    // Read the manifest only to count the entries being removed. A
-                    // read failure does not stop the removal, but it is surfaced
-                    // rather than dropped: the count then falls back to 1.
-                    let manifest = self
-                        .read_manifest(dir_name)
-                        .inspect_err(|error| {
-                            warn!("cache: failed to read manifest for {dir_name}: {error}");
-                        })
-                        .ok();
+                    // The manifest is read only to count the entries being
+                    // removed, so a corrupt one falls back to a count of 1 rather
+                    // than blocking removal of the directory.
+                    let entry_count = match self.read_manifest(dir_name) {
+                        Ok(manifest) => manifest.entries.len() as u64,
+                        Err(CacheError::InvalidData(error)) => {
+                            warn!(
+                                "cache: corrupt manifest for {dir_name}, counting as 1 entry: {error}"
+                            );
+                            1
+                        }
+                        Err(error @ CacheError::Io(_)) => return Err(error),
+                    };
                     let size = dir_size(&path);
                     fs::remove_dir_all(&path)?;
                     stats.bytes_freed += size;
-                    stats.entries_removed += manifest.map(|m| m.entries.len() as u64).unwrap_or(1);
+                    stats.entries_removed += entry_count;
                 }
                 CleanPolicy::OlderThan(cutoff) => {
-                    // Skip a directory whose manifest cannot be read, but surface
-                    // why rather than skipping silently.
-                    let Ok(manifest) = self.read_manifest(dir_name).inspect_err(|error| {
-                        warn!("cache: skipping {dir_name}: failed to read manifest: {error}");
-                    }) else {
-                        continue;
+                    // A corrupt manifest gives no hit times to compare against the
+                    // cutoff, so skip that directory rather than fail the whole
+                    // clean; surface why rather than skipping silently.
+                    let manifest = match self.read_manifest(dir_name) {
+                        Ok(manifest) => manifest,
+                        Err(CacheError::InvalidData(error)) => {
+                            warn!("cache: skipping {dir_name}: corrupt manifest: {error}");
+                            continue;
+                        }
+                        Err(error @ CacheError::Io(_)) => return Err(error),
                     };
 
                     let mut remaining = Manifest::empty();
@@ -248,14 +261,10 @@ impl CacheBackend for FsBackend {
 
                     if remaining.entries.is_empty() {
                         let size = dir_size(&path);
-                        match fs::remove_dir_all(&path) {
-                            Ok(()) => stats.bytes_freed += size,
-                            Err(error) => {
-                                warn!("cache: failed to remove {}: {error}", path.display());
-                            }
-                        }
-                    } else if let Err(error) = self.write_manifest(dir_name, &remaining) {
-                        warn!("cache: failed to rewrite manifest for {dir_name}: {error}");
+                        fs::remove_dir_all(&path)?;
+                        stats.bytes_freed += size;
+                    } else {
+                        self.write_manifest(dir_name, &remaining)?;
                     }
                 }
             }
