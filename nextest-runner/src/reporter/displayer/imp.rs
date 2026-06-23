@@ -3595,6 +3595,7 @@ mod tests {
                     leaky_failed: 0,
                     exec_failed: 0,
                     skipped: 0,
+                    skipped_cached: 0,
                     cancel_reason: None,
                 };
 
@@ -3633,6 +3634,7 @@ mod tests {
                     leaky_failed: 0,
                     exec_failed: 1,
                     skipped: 2,
+                    skipped_cached: 0,
                     cancel_reason: Some(CancelReason::Signal),
                 };
 
@@ -3724,6 +3726,7 @@ mod tests {
                     leaky_failed: 0,
                     exec_failed: 0,
                     skipped: 0,
+                    skipped_cached: 0,
                     cancel_reason: None,
                 };
 
@@ -3791,6 +3794,7 @@ mod tests {
                                 leaky_failed: 2,
                                 exec_failed: 1,
                                 skipped: 5,
+                                skipped_cached: 0,
                                 cancel_reason: None,
                             },
                         },

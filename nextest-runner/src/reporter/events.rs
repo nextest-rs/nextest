@@ -645,7 +645,16 @@ pub struct RunStats {
     pub exec_failed: usize,
 
     /// The number of tests that were skipped.
+    ///
+    /// Includes `skipped_cached`.
     pub skipped: usize,
+
+    /// The number of tests that were skipped because their result is cached as
+    /// passing and the test binary is unchanged since it was cached.
+    ///
+    /// Included in `skipped`.
+    #[serde(default)]
+    pub skipped_cached: usize,
 
     /// If the run is cancelled, the reason the cancellation is happening.
     pub cancel_reason: Option<CancelReason>,

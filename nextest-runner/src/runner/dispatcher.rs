@@ -848,6 +848,9 @@ where
                 // of it internally).
                 if !matches!(reason, MismatchReason::NotBenchmark) {
                     self.run_stats.skipped += 1;
+                    if matches!(reason, MismatchReason::UnchangedSinceCached) {
+                        self.run_stats.skipped_cached += 1;
+                    }
                 }
                 self.callback_none_response(TestEventKind::TestSkipped {
                     stress_index,

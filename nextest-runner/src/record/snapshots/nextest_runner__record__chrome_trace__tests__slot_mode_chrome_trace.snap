@@ -298,6 +298,7 @@ expression: json_str
           "leaky-failed": 0,
           "exec-failed": 0,
           "skipped": 0,
+          "skipped-cached": 0,
           "cancel-reason": null
         }
       }

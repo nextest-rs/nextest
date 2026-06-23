@@ -625,6 +625,7 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         leaky_failed,
         exec_failed,
         skipped,
+        skipped_cached,
         cancel_reason: _,
     } = run_stats;
 
@@ -704,6 +705,23 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         skipped.style(styles.count),
         "skipped".style(styles.skip),
     );
+
+    // Break out the cache-skipped subset, since those tests were skipped because
+    // their result is already known rather than filtered out. When every skip is
+    // a cache hit, a bare count would just repeat `skipped`, so say "all cached"
+    // instead.
+    if skipped_cached > 0 {
+        if skipped_cached == skipped {
+            swrite!(out, " (all {})", "cached".style(styles.skip));
+        } else {
+            swrite!(
+                out,
+                " ({} {})",
+                skipped_cached.style(styles.count),
+                "cached".style(styles.skip),
+            );
+        }
+    }
 }
 
 fn progress_bar_cancel_prefix(reason: Option<CancelReason>, styles: &Styles) -> String {
@@ -893,6 +911,32 @@ mod tests {
                 "{name} matches"
             );
         }
+    }
+
+    #[test]
+    fn summary_str_distinguishes_cached_skips() {
+        let styles = Styles::default();
+        let summary = |skipped, skipped_cached| {
+            let mut out = String::new();
+            write_summary_str(
+                &RunStats {
+                    passed: 1,
+                    skipped,
+                    skipped_cached,
+                    ..RunStats::default()
+                },
+                &styles,
+                &mut out,
+            );
+            out
+        };
+
+        // No cache hits: the summary is unchanged.
+        assert_eq!(summary(3, 0), "1 passed, 3 skipped");
+        // Some, but not all, skips are cache hits: break out the subset.
+        assert_eq!(summary(3, 2), "1 passed, 3 skipped (2 cached)");
+        // Every skip is a cache hit: a bare count would repeat `skipped`.
+        assert_eq!(summary(3, 3), "1 passed, 3 skipped (all cached)");
     }
 
     #[test]
