@@ -1359,6 +1359,66 @@ mod tests {
     }
 
     #[test]
+    fn reference_documents_all_predicates() {
+        fn predicate_name(leaf: &ParsedLeaf) -> &'static str {
+            // This is an exhaustive match to ensure that the reference
+            // documents all known predicates.
+            match leaf {
+                ParsedLeaf::All => "all",
+                ParsedLeaf::None => "none",
+                ParsedLeaf::Test(..) => "test",
+                ParsedLeaf::Group(..) => "group",
+                ParsedLeaf::Package(..) => "package",
+                ParsedLeaf::Deps(..) => "deps",
+                ParsedLeaf::Rdeps(..) => "rdeps",
+                ParsedLeaf::BinaryId(..) => "binary_id",
+                ParsedLeaf::Kind(..) => "kind",
+                ParsedLeaf::Binary(..) => "binary",
+                ParsedLeaf::Platform(..) => "platform",
+                ParsedLeaf::Default(..) => "default",
+            }
+        }
+
+        // Whenever a new `ParsedLeaf` variant is added, add to this list as
+        // well.
+        let samples = [
+            "all()",
+            "none()",
+            "test(x)",
+            "group(x)",
+            "package(x)",
+            "deps(x)",
+            "rdeps(x)",
+            "binary_id(x)",
+            "kind(lib)",
+            "binary(x)",
+            "platform(host)",
+            "default()",
+        ];
+
+        let mut variants = std::collections::HashSet::new();
+        for sample in samples {
+            let ParsedExpr::Set(leaf) = parse(sample) else {
+                panic!("`{sample}` should parse to a single set predicate");
+            };
+            variants.insert(std::mem::discriminant(&leaf));
+
+            let name = predicate_name(&leaf);
+            assert!(
+                crate::FILTERSET_REFERENCE_MD.contains(&format!("`{name}(")),
+                "predicate `{name}()` is accepted by the parser but not documented in the \
+                 filterset reference (nextest-filtering/reference.md)",
+            );
+        }
+
+        assert_eq!(
+            variants.len(),
+            samples.len(),
+            "samples should each use a distinct predicate",
+        );
+    }
+
+    #[test]
     fn test_parse_expr_set() {
         let expr = ParsedExpr::all();
         assert_eq!(expr, parse("all()"));

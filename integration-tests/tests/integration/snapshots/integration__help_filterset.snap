@@ -1,0 +1,217 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: plain_stdout
+---
+Filterset DSL reference
+
+This section contains the full set of operators supported by the filterset DSL.
+
+Basic predicates
+
+all()
+    Include all tests.
+
+none()
+    Include no tests.
+
+test(name-matcher)
+    Include all tests matching name-matcher.
+
+group(name-matcher) (since 0.9.133)
+    Include all tests in test groups
+    <https://nexte.st/docs/configuration/test-groups/> matching name-matcher.
+    This predicate can only be used on the command line.
+
+package(name-matcher)
+    Include all tests in packages (crates) matching name-matcher.
+
+deps(name-matcher)
+    Include all tests in crates matching name-matcher, and all of their
+    (possibly transitive) dependencies.
+
+rdeps(name-matcher)
+    Include all tests in crates matching name-matcher, and all the crates that
+    (possibly transitively) depend on name-matcher.
+
+binary_id(name-matcher)
+    Include all tests in binary IDs <https://nexte.st/docs/glossary/#binary-id>
+    matching name-matcher. Covers all of package(), kind() and binary().
+
+kind(name-matcher)
+    Include all tests in binary kinds matching name-matcher. See Binary kinds
+    below.
+
+binary(name-matcher)
+    Include all tests in binary names matching name-matcher. For unit tests, the
+    binary name is the same as the name of the crate. Otherwise, it's the name
+    of the integration test, benchmark, or binary target.
+
+platform(host) or platform(target)
+    Include all tests that are built for the host or target platform
+    <https://nexte.st/docs/selecting/#filtering-by-build-platform>,
+    respectively.
+
+default() (since 0.9.75)
+    The default set of tests to run; see Running a subset of tests by default
+    <https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default> for
+    more information.
+
+│ Tip: Binary exclusions
+│
+│ If a filterset always excludes a particular binary, it will not be run, even
+│ to get the list of tests within it. This means that a command like:
+│
+│     cargo nextest list -E 'platform(host)'
+│
+│ will not execute any test binaries built for the target platform.
+│
+│ This is generally what you want, but if you would like to list tests anyway,
+│ include a test() predicate. For example, to list test binaries for the target
+│ platform (using, for example, a target runner
+│ <https://nexte.st/docs/features/target-runners/>), but skip running them:
+│
+│     cargo nextest list -E 'platform(host) + not test(/.*/)' --verbose
+
+Operators
+
+set1 & set2, set1 and set2
+    The intersection of set1 and set2.
+
+set1 | set2, set1 + set2, set1 or set2
+    The union of set1 or set2.
+
+not set, !set
+    Include everything not included in set
+
+set1 - set2
+    Everything in set1 that isn't in set2. Equivalent to set1 and not set2.
+
+(set)
+    Include everything in set.
+
+Operator precedence
+
+In order from highest to lowest, or in other words from tightest to loosest
+binding:
+
+1. ()
+2. not, !
+3. and, &, -
+4. or, |, +
+
+Within a precedence group, operators bind from left to right.
+
+│ Info: Examples
+│
+│ - test(a) & test(b) | test(c) is equivalent to (test(a) & test(b)) | test(c).
+│ - test(a) | test(b) & test(c) is equivalent to test(a) | (test(b) & test(c)).
+│ - test(a) & test(b) - test(c) is equivalent to (test(a) & test(b)) - test(c).
+│ - not test(a) | test(b) is equivalent to (not test(a)) | test(b).
+
+Binary kinds
+
+Accepted by the kind() operator, these binary kinds match the ones defined by
+Cargo.
+
+lib
+    Unit tests for regular crates, typically in the src/ directory under
+    #[cfg(test)].
+
+test
+    Integration tests, typically in the tests/ directory.
+
+bench
+    Benchmark tests. For example, see Criterion benchmarks
+    <https://nexte.st/docs/integrations/criterion/>.
+
+proc-macro
+    Unit tests for proc-macro crates, in the src/ directory under #[cfg(test)].
+
+bin
+    Tests within [[bin]] targets (uncommon).
+
+example
+    Tests within examples (uncommon).
+
+Name matchers
+
+This defines the general syntax for matching against names.
+
+=string
+    Equality matcher—match a package or test name that's equal to string.
+
+~string
+    Contains matcher—match a package or test name containing string.
+
+/regex/
+    Regex matcher—match a package or test name if any part of it matches the
+    regular expression regex. To match the entire string against a regular
+    expression, use /^regex$/. The implementation uses the regex
+    <https://github.com/rust-lang/regex> crate.
+
+#glob
+    Glob matcher—match a package or test name if the full name matches the glob
+    expression glob. The implementation uses the globset crate
+    <https://docs.rs/globset>.
+
+string
+    Default matching strategy for the predicate.
+
+Default matchers
+
+For test() predicates, the default matching strategy is the contains matcher,
+equivalent to ~string.
+
+For group() predicates, the default matching strategy is the glob matcher,
+equivalent to #string.
+
+For package-related predicates (package(), deps(), and rdeps()), this is the
+glob matcher, equivalent to #string.
+
+For binary-related predicates (binary() and binary_id()), this is also the glob
+matcher.
+
+For kind() and platform(), this is the equality matcher, equivalent to =string.
+
+│ Warning
+│
+│ If you're constructing an expression string programmatically, always use a
+│ prefix to avoid ambiguity.
+
+Escape sequences
+
+The equality, contains, and glob matchers can contain escape sequences, preceded
+by a backslash (\).
+
+\n
+    line feed
+
+\r
+    carriage return
+
+\t
+    tab
+
+\\
+    backslash
+
+\/
+    forward slash
+
+\)
+    closing parenthesis
+
+\,
+    comma
+
+\u{7FFF}
+    24-bit Unicode character code (up to 6 hex digits)
+
+For the glob matcher, to match against a literal glob metacharacter such as * or
+?, enclose it in square brackets: [*] or [?].
+
+All other escape sequences are invalid.
+
+The regular expression matcher supports the same escape sequences that the regex
+crate does <https://docs.rs/regex/latest/regex/#escape-sequences>. This includes
+character classes like \d. Additionally, \/ is interpreted as an escaped /.

@@ -116,6 +116,112 @@ fn test_version_info() {
 }
 
 #[test]
+fn test_help_topics() {
+    let env_info = set_env_vars_for_test();
+
+    // A snapshot of the real rendered reference without color or hyperlinks.
+    let plain = CargoNextestCli::for_test(&env_info)
+        .args(["--color", "never", "help", "filterset"])
+        .output();
+    let plain_stdout = plain.stdout_as_str().into_owned();
+    insta::assert_snapshot!("help_filterset", plain_stdout);
+
+    // color + hyperlinks.
+    let colored = CargoNextestCli::for_test(&env_info)
+        .args(["--color", "always", "help", "filterset"])
+        .env("FORCE_HYPERLINK", "1")
+        .output();
+    insta::assert_snapshot!("help_filterset_color", colored.stdout_as_str().into_owned());
+
+    // `help filtersets` is the same as `help filterset`.
+    let alias = CargoNextestCli::for_test(&env_info)
+        .args(["--color", "never", "help", "filtersets"])
+        .output();
+    assert_eq!(
+        alias.stdout_as_str(),
+        plain_stdout,
+        "the `filtersets` alias matches `filterset`"
+    );
+
+    // Ensure that extra segments after a known topic are dropped.
+    let extra = CargoNextestCli::for_test(&env_info)
+        .args(["--color", "never", "help", "filterset", "extra"])
+        .output();
+    assert_eq!(
+        extra.stdout_as_str(),
+        plain_stdout,
+        "extra segments after a topic are dropped"
+    );
+
+    // Snapshot `cargo nextest --help`, but only the "Help topics" section that
+    // this feature adds (not the whole root help) to avoid churn as other
+    // options change.
+    let root = CargoNextestCli::for_test(&env_info)
+        .args(["--color", "never", "--help"])
+        .output();
+    let root_stdout = root.stdout_as_str();
+    let topics_idx = root_stdout
+        .find("Help topics")
+        .expect("root help contains a Help topics section");
+    insta::assert_snapshot!("help_root_topics", &root_stdout[topics_idx..]);
+
+    // If an unknown topic is printed, append the topic hint to clap's error, and
+    // exit with clap's usage-error exit code (2).
+    let unknown = CargoNextestCli::for_test(&env_info)
+        .args(["--color", "never", "help", "bogus"])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        unknown.exit_status.code(),
+        Some(2),
+        "unknown topic exits with clap's usage-error code: {unknown}"
+    );
+    insta::assert_snapshot!("help_unknown_topic", unknown.to_snapshot());
+
+    // Ensure that a known subcommand forwards to its `--help` with no topic
+    // hint.
+    let run_help = CargoNextestCli::for_test(&env_info)
+        .args(["help", "run"])
+        .output();
+    let run_stdout = run_help.stdout_as_str();
+    assert!(
+        run_stdout.contains("Build and run tests"),
+        "forwards to `run --help`: {run_stdout}"
+    );
+    assert!(
+        !run_stdout.contains("Help topics"),
+        "subcommand help has no topics section: {run_stdout}"
+    );
+
+    let bare = CargoNextestCli::for_test(&env_info)
+        .args(["--color", "never", "help"])
+        .output();
+    assert_eq!(
+        bare.exit_status.code(),
+        Some(0),
+        "bare `help` exits 0: {bare}"
+    );
+    assert!(
+        bare.stdout_as_str().contains("Usage: cargo nextest"),
+        "bare `help` prints the root help: {bare}"
+    );
+
+    let known_error = CargoNextestCli::for_test(&env_info)
+        .args(["--color", "never", "help", "self", "bogus"])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        known_error.exit_status.code(),
+        Some(2),
+        "unknown subcommand under a known subcommand exits with code 2: {known_error}"
+    );
+    assert!(
+        !known_error.stderr_as_str().contains("Help topics"),
+        "a real error under a known subcommand has no topics hint: {known_error}"
+    );
+}
+
+#[test]
 fn test_list_default() {
     let env_info = set_env_vars_for_test();
     let p = TempProject::new(&env_info).unwrap();

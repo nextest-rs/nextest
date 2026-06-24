@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import os
 import posixpath
 import re
 
@@ -50,11 +51,31 @@ def on_page_markdown(
         # Otherwise, raise an error
         raise RuntimeError(f"Unknown shortcode: {type}")
 
+    # Inline `<!-- include: <path> -->` references first, so that md:* shortcodes
+    # inside the included file are processed by the substitution below. This runs
+    # here (not via pymdownx.snippets) because snippets expand after on_page_markdown.
+    markdown = _expand_includes(markdown, config)
+
     # Find and replace all external asset URLs in current page
     return re.sub(
         r"<!-- md:(\w+)(.*?) -->",
         replace, markdown, flags = re.I | re.M
     )
+
+# Inline files referenced via `<!-- include: <path> -->`, resolved relative to the
+# repository root (the parent of the MkDocs project directory).
+def _expand_includes(markdown: str, config: MkDocsConfig):
+    repo_root = os.path.dirname(os.path.dirname(config["config_file_path"]))
+
+    def repl(match: Match):
+        rel = match.group(1).strip()
+        path = os.path.join(repo_root, rel)
+        if not os.path.isfile(path):
+            raise RuntimeError(f"include file not found: {rel}")
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+
+    return re.sub(r"<!-- include:\s*(.*?)\s*-->", repl, markdown)
 
 # -----------------------------------------------------------------------------
 # Helper functions

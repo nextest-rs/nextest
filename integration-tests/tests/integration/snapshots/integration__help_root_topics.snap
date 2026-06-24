@@ -1,0 +1,6 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: "&root_stdout[topics_idx..]"
+---
+Help topics (try cargo nextest help <topic>):
+  filterset  the filterset DSL: predicates, operators, and matchers

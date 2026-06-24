@@ -49,6 +49,8 @@ pub(crate) struct TestBuildFilter {
         alias = "filter-expr",
         short = 'E',
         value_name = "EXPR",
+        long_help = "Test filterset.\n\nRun `cargo nextest help filterset` for the full reference, \
+            or see <https://nexte.st/docs/filtersets>.",
         action(ArgAction::Append)
     )]
     pub(crate) filterset: Vec<String>,

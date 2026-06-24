@@ -40,8 +40,10 @@ semver.workspace = true
 serde_json.workspace = true
 shell-words.workspace = true
 supports-color.workspace = true
+supports-hyperlinks.workspace = true
 supports-unicode.workspace = true
 swrite.workspace = true
+terminal_size.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, default-features = false }

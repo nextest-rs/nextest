@@ -174,6 +174,14 @@ impl PagedOutput {
         }
     }
 
+    /// Returns true if output is being routed through a pager.
+    pub fn is_paged(&self) -> bool {
+        match self {
+            Self::Terminal { .. } => false,
+            Self::ExternalPager { .. } | Self::BuiltinPager { .. } => true,
+        }
+    }
+
     /// Finalizes the pager output.
     ///
     /// For terminal output, this is a no-op.

@@ -1,0 +1,1088 @@
+// Copyright (c) The nextest Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! Renders MkDocs help-topic documents (help topics) to the terminal.
+
+use crate::helpers::RESET_COLOR;
+use owo_colors::Style;
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use smallvec::SmallVec;
+use swrite::{SWrite, swrite};
+use tracing::warn;
+use unicode_width::UnicodeWidthStr;
+
+const SITE_BASE: &str = "https://nexte.st";
+
+/// A help topic document.
+pub struct HelpDoc {
+    /// The raw markdown content of the document.
+    ///
+    /// This is transformed by the renderer.
+    pub markdown: &'static str,
+    /// The doc's directory within the site, e.g. `["docs", "filtersets"]`.
+    ///
+    /// This is used to resolve relative links within the document.
+    pub site_dir: &'static [&'static str],
+}
+
+/// Rendering options for help topic output.
+pub struct RenderOptions {
+    /// Whether to emit ANSI color and style codes.
+    pub color: bool,
+    /// Whether to emit OSC-8 hyperlinks for links.
+    pub hyperlinks: bool,
+    /// The maximum width, in columns, to wrap output to.
+    pub width: usize,
+}
+
+/// Renders a help topic document to terminal-ready text.
+pub fn render(doc: &HelpDoc, opts: RenderOptions) -> String {
+    let preprocessed = preprocess(doc.markdown);
+    let rendered = render_markdown(&preprocessed, doc.site_dir, opts);
+    if !rendered.dropped.is_empty() {
+        warn!(
+            "help renderer dropped unsupported markdown events: {:?}",
+            rendered.dropped
+        );
+    }
+    rendered.output
+}
+
+/// Preprocesses MkDocs markdown into a plain CommonMark subset.
+fn preprocess(input: &str) -> String {
+    let lines: Vec<&str> = input.lines().collect();
+    let mut out: Vec<String> = Vec::with_capacity(lines.len());
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        let trimmed = line.trim_start();
+
+        // Drop raw <div> wrappers -- no real way to support them in terminal
+        // output.
+        if trimmed.starts_with("<div") || trimmed == "</div>" {
+            i += 1;
+            continue;
+        }
+
+        // Convert admonitions into block quotes.
+        if let Some(header) = admonition_header(trimmed) {
+            let indent = line.len() - trimmed.len();
+            let body_indent = indent + 4;
+            i += 1;
+
+            let mut body_lines: Vec<String> = Vec::new();
+            while i < lines.len() {
+                let l = lines[i];
+                if l.trim().is_empty() {
+                    body_lines.push(String::new());
+                    i += 1;
+                } else if leading_spaces(l) >= body_indent {
+                    body_lines.push(l[l.ceil_char_boundary(body_indent)..].to_string());
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+            while body_lines.last().is_some_and(|s| s.is_empty()) {
+                body_lines.pop();
+            }
+
+            out.push(header);
+            out.push(">".to_string());
+            for b in body_lines {
+                if b.is_empty() {
+                    out.push(">".to_string());
+                } else {
+                    out.push(format!("> {b}"));
+                }
+            }
+            out.push(String::new());
+            continue;
+        }
+
+        out.push(line.to_string());
+        i += 1;
+    }
+
+    let joined = out.join("\n");
+    apply_shortcodes(&joined)
+}
+
+fn leading_spaces(line: &str) -> usize {
+    line.len() - line.trim_start().len()
+}
+
+/// Parses a `!!! kind "Title"` admonition header into a block-quote header
+/// line.
+fn admonition_header(trimmed: &str) -> Option<String> {
+    let rest = trimmed.strip_prefix("!!! ")?;
+    let (kind, title) = match rest.split_once(' ') {
+        Some((kind, title)) => (kind, Some(title.trim())),
+        None => (rest, None),
+    };
+    let label = capitalize(kind);
+    let title = title.and_then(|t| t.strip_prefix('"').and_then(|t| t.strip_suffix('"')));
+    Some(match title {
+        Some(title) => format!("> **{label}: {title}**"),
+        None => format!("> **{label}**"),
+    })
+}
+
+fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
+/// Replaces `<!-- md:version X -->` with inline text, and strips other HTML
+/// comments.
+fn apply_shortcodes(input: &str) -> String {
+    let mut out = String::new();
+    let mut rest = input;
+    while let Some(start) = rest.find("<!--") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + "<!--".len()..];
+        let Some(end) = after.find("-->") else {
+            out.push_str(&rest[start..]);
+            return out;
+        };
+        let inner = after[..end].trim();
+        let version = inner
+            .strip_prefix("md:version")
+            .filter(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace));
+        if let Some(version) = version {
+            let version = version.trim();
+            if !version.is_empty() {
+                swrite!(out, "*(since {version})*");
+            }
+        }
+        rest = &after[end + "-->".len()..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Rewrites a relative URL to an absolute `nexte.st` URL.
+///
+/// Returns `None` for same-page anchors, which are not rewritten.
+fn rewrite_url(url: &str, site_dir: &[&str]) -> Option<String> {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        return Some(url.to_string());
+    }
+
+    let (path, anchor) = match url.split_once('#') {
+        Some((path, anchor)) => (path, Some(anchor)),
+        None => (url, None),
+    };
+
+    // The target is a same-page anchor (e.g. [foo](#foo)). The content it
+    // points to is already on screen, so drop the link.
+    if path.is_empty() {
+        return None;
+    }
+
+    let mut segments: Vec<String> = site_dir.iter().map(|s| s.to_string()).collect();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                // mkdocs would warn about this as well.
+                assert!(
+                    !segments.is_empty(),
+                    "relative link in help doc escapes the site root: {url:?}"
+                );
+                segments.pop();
+            }
+            other => segments.push(other.trim_end_matches(".md").to_string()),
+        }
+    }
+    let resolved = format!("{SITE_BASE}/{}/", segments.join("/"));
+
+    Some(match anchor {
+        Some(anchor) => format!("{resolved}#{anchor}"),
+        None => resolved,
+    })
+}
+
+const DEFINITION_INDENT: &str = "    ";
+const QUOTE_PREFIX: &str = "│ ";
+const CODE_INDENT: &str = "    ";
+
+/// A stack of desired or currently-applied styles.
+///
+/// A capacity of 4 should cover all body text and headings in practice, and
+/// most of them in theory.
+type StyleStack = SmallVec<[Style; 4]>;
+
+/// A styled run of text.
+struct Span {
+    text: String,
+    styles: StyleStack,
+    link: Option<String>,
+}
+
+/// A single word to be rendered.
+#[derive(Default)]
+struct Word {
+    /// The sequence of styled spans that make up this word.
+    spans: Vec<Span>,
+    /// The current width of this word, in display columns.
+    width: usize,
+}
+
+impl Word {
+    fn is_empty(&self) -> bool {
+        self.spans.is_empty()
+    }
+
+    fn push(&mut self, text: &str, styles: &[Style], link: Option<&str>) {
+        self.spans.push(Span {
+            text: text.to_string(),
+            styles: StyleStack::from_slice(styles),
+            link: link.map(str::to_string),
+        });
+        self.width += display_width(text);
+    }
+
+    fn take(&mut self) -> Vec<Span> {
+        self.width = 0;
+        std::mem::take(&mut self.spans)
+    }
+}
+
+/// The set of styles for the help topic renderer.
+#[derive(Default)]
+struct Styles {
+    heading: Style,
+    emphasis: Style,
+    strong: Style,
+    strikethrough: Style,
+    code: Style,
+    term: Style,
+    link: Style,
+}
+
+impl Styles {
+    fn colorize(&mut self) {
+        self.heading = Style::new().bold().underline();
+        self.emphasis = Style::new().italic();
+        self.strong = Style::new().bold();
+        self.strikethrough = Style::new().strikethrough();
+        self.code = Style::new().cyan();
+        self.term = Style::new().green().bold();
+        self.link = Style::new().blue().underline();
+    }
+}
+
+/// The prefix written at the start of each line.
+#[derive(Default)]
+struct LinePrefix {
+    // The stack of prefix segments, concatenated to form the prefix applied to
+    // every line, unless the next line has an override.
+    segments: SmallVec<[String; 4]>,
+    // A one-shot override for the next line, if set.
+    next_override: Option<String>,
+}
+
+impl LinePrefix {
+    /// Pushes a prefix segment.
+    fn push(&mut self, prefix: &str) {
+        self.segments.push(prefix.to_string());
+    }
+
+    /// Pops the most recently pushed prefix segment.
+    ///
+    /// Panics if no segment has been pushed.
+    fn pop(&mut self) {
+        self.segments
+            .pop()
+            .expect("a prefix segment was pushed before this pop");
+    }
+
+    /// Sets an override for the next prefix by appending `marker` to the base
+    /// prefix.
+    fn set_next_override(&mut self, marker: &str) {
+        let mut prefix = self.base();
+        prefix.push_str(marker);
+        self.next_override = Some(prefix);
+    }
+
+    /// Consumes the prefix for the next line.
+    fn take_next(&mut self) -> String {
+        self.next_override.take().unwrap_or_else(|| self.base())
+    }
+
+    fn base(&self) -> String {
+        self.segments.concat()
+    }
+}
+
+/// A line emitter.
+///
+/// This is the lower-level line-writing component. It is unaware of markdown.
+struct LineWriter {
+    out: String,
+    color: bool,
+    hyperlinks: bool,
+    width: usize,
+
+    prefix: LinePrefix,
+    /// The state of the current line being written.
+    line: LineState,
+
+    /// The current word, plus a pending styled break.
+    word: Word,
+    pending_space: Option<StyleStack>,
+}
+
+/// The mutable state of a line that is currently open.
+#[derive(Clone, Debug)]
+struct OpenLine {
+    /// The number of visible columns used so far in this line.
+    column: usize,
+    /// The active styles emitted so far in this line.
+    emitted: StyleStack,
+}
+
+#[derive(Clone, Debug)]
+enum LineState {
+    /// The line has been opened: its prefix has been emitted, and content may
+    /// follow.
+    Open(OpenLine),
+    /// The line is empty. Opening it writes the line prefix override if
+    /// present, otherwise the prefix.
+    AtStart,
+    /// The line is empty.
+    AfterBlock {
+        /// The prefix to trim and write out on the blank line.
+        prefix: String,
+    },
+}
+
+impl LineWriter {
+    fn new(color: bool, hyperlinks: bool, width: usize) -> Self {
+        LineWriter {
+            out: String::new(),
+            color,
+            hyperlinks,
+            width,
+            prefix: LinePrefix::default(),
+            line: LineState::AtStart,
+            word: Word::default(),
+            pending_space: None,
+        }
+    }
+
+    /// Adds a styled segment into the current word.
+    fn add_segment(&mut self, text: &str, styles: &[Style], link: Option<&str>) {
+        if text.is_empty() {
+            return;
+        }
+        self.word.push(text, styles, link);
+    }
+
+    /// Adds a breakable space, styled by the surrounding context.
+    fn add_space(&mut self, styles: &[Style]) {
+        self.flush_word();
+        self.pending_space = Some(StyleStack::from_slice(styles));
+    }
+
+    /// Emits the buffered word, wrapping to the provided width with a hanging
+    /// indent.
+    fn flush_word(&mut self) {
+        if self.word.is_empty() {
+            return;
+        }
+        let pending = self.pending_space.take();
+        match &self.line {
+            LineState::Open(open) => {
+                if let Some(space_styles) = pending {
+                    if open.column + 1 + self.word.width > self.width {
+                        self.end_line();
+                        self.open_line();
+                    } else {
+                        self.emit_space(&space_styles);
+                    }
+                }
+            }
+            LineState::AtStart | LineState::AfterBlock { .. } => self.open_line(),
+        }
+        self.emit_word();
+    }
+
+    fn emit_word(&mut self) {
+        let spans = self.word.take();
+        let Self {
+            out,
+            line,
+            color,
+            hyperlinks,
+            ..
+        } = self;
+        let LineState::Open(open) = line else {
+            return;
+        };
+        for span in spans {
+            if *color {
+                write_style_diff(out, open, &span.styles);
+            }
+            let linked = *hyperlinks && span.link.is_some();
+            if linked {
+                let url = span.link.as_deref().expect("link is present");
+                swrite!(out, "\x1b]8;;{url}\x1b\\");
+            }
+            out.push_str(&span.text);
+            if linked {
+                out.push_str("\x1b]8;;\x1b\\");
+            }
+            open.column += display_width(&span.text);
+        }
+    }
+
+    fn emit_space(&mut self, styles: &[Style]) {
+        self.write_open(" ", styles);
+    }
+
+    /// Writes styled text to the current open line, syncing styles and advancing
+    /// the column.
+    fn write_open(&mut self, text: &str, styles: &[Style]) {
+        let Self {
+            out, line, color, ..
+        } = self;
+        let LineState::Open(open) = line else {
+            return;
+        };
+        if *color {
+            write_style_diff(out, open, styles);
+        }
+        out.push_str(text);
+        open.column += display_width(text);
+    }
+
+    /// Writes text verbatim (without wrapping), preserving newlines.
+    ///
+    /// Used for code blocks.
+    fn verbatim(&mut self, s: &str, styles: &[Style]) {
+        let lines: Vec<&str> = s.split('\n').collect();
+        let last = lines.len() - 1;
+        for (i, &line) in lines.iter().enumerate() {
+            if i != 0 {
+                self.end_line();
+            }
+            if line.is_empty() {
+                // Materialize this interior blank line so the next line's
+                // end_line emits it; skip the last line to avoid a trailing
+                // blank.
+                if i != last {
+                    self.open_line();
+                }
+            } else {
+                self.open_line();
+                self.write_open(line, styles);
+            }
+        }
+    }
+
+    fn hard_break(&mut self) {
+        self.flush_word();
+        self.end_line();
+    }
+
+    fn push_prefix(&mut self, prefix: &str) {
+        self.prefix.push(prefix);
+    }
+
+    fn pop_prefix(&mut self) {
+        self.prefix.pop();
+    }
+
+    fn set_item_marker(&mut self, marker: &str) {
+        self.prefix.set_next_override(marker);
+    }
+
+    fn open_line(&mut self) {
+        match &self.line {
+            LineState::Open(_) => return,
+            LineState::AtStart => {}
+            LineState::AfterBlock { prefix } => {
+                // Preserve the block-quote border across blank lines.
+                if !self.out.is_empty() {
+                    self.out.push_str(prefix.trim_end());
+                    self.out.push('\n');
+                }
+            }
+        }
+        let prefix = self.prefix.take_next();
+        self.out.push_str(&prefix);
+        self.line = LineState::Open(OpenLine {
+            column: display_width(&prefix),
+            emitted: StyleStack::new(),
+        });
+    }
+
+    fn end_line(&mut self) {
+        let LineState::Open(open) = &self.line else {
+            return;
+        };
+        let reset = self.color && !open.emitted.is_empty();
+        // Drop trailing spaces so that blank and prefix-only lines don't carry
+        // any whitespace. We use trim_end_matches rather than trim_end to avoid
+        // eating newlines. If we used trim_end, we'd potentially end up
+        // consuming the `\n` from the previous line.
+        self.out.truncate(self.out.trim_end_matches(' ').len());
+        if reset {
+            self.out.push_str(RESET_COLOR);
+        }
+        self.out.push('\n');
+        self.line = LineState::AtStart;
+    }
+
+    fn end_block(&mut self) {
+        self.end_line();
+        self.line = LineState::AfterBlock {
+            prefix: self.prefix.base(),
+        };
+    }
+
+    /// Finishes the renderer, flushing any pending word and returning the
+    /// accumulated output.
+    fn finish(mut self) -> String {
+        self.flush_word();
+        self.end_line();
+        self.out
+    }
+}
+
+/// Diffs the currently-emitted stack of styles with the desired set of styles,
+/// emitting the minimum number of style changes to match the target.
+fn write_style_diff(out: &mut String, open: &mut OpenLine, desired: &[Style]) {
+    if open.emitted.as_slice() == desired {
+        return;
+    }
+    let common = open.emitted.len();
+    if desired.len() > common && &desired[..common] == open.emitted.as_slice() {
+        for style in &desired[common..] {
+            out.push_str(&style.prefix_formatter().to_string());
+        }
+    } else {
+        if !open.emitted.is_empty() {
+            out.push_str(RESET_COLOR);
+        }
+        for style in desired {
+            out.push_str(&style.prefix_formatter().to_string());
+        }
+    }
+    open.emitted = StyleStack::from_slice(desired);
+}
+
+struct Rendered {
+    output: String,
+    dropped: Vec<String>,
+}
+
+fn render_markdown(
+    markdown: &str,
+    site_dir: &'static [&'static str],
+    opts: RenderOptions,
+) -> Rendered {
+    let parser_options = Options::ENABLE_DEFINITION_LIST | Options::ENABLE_STRIKETHROUGH;
+    let mut palette = Styles::default();
+    if opts.color {
+        palette.colorize();
+    }
+    let mut renderer = Renderer {
+        writer: LineWriter::new(opts.color, opts.hyperlinks, opts.width),
+        palette,
+        site_dir,
+        styles: StyleStack::new(),
+        context: InlineContext::Normal,
+        list_stack: Vec::new(),
+        link_url: None,
+        dropped: Vec::new(),
+    };
+
+    for event in Parser::new_ext(markdown, parser_options) {
+        renderer.handle(event);
+    }
+    Rendered {
+        output: renderer.writer.finish(),
+        dropped: renderer.dropped,
+    }
+}
+
+/// The current inline context the renderer is in.
+///
+/// This controls rendering of `Text` and `Code` events.
+#[derive(Clone, Copy)]
+enum InlineContext {
+    Normal,
+    Term,
+    CodeBlock,
+}
+
+/// State maintained for a single open list.
+struct ListFrame {
+    /// The ordinal counter for ordered lists, or `None` for unordered lists.
+    ordinal: Option<u64>,
+}
+
+/// A renderer that translates pulldown events into `LineWriter` operations.
+struct Renderer {
+    writer: LineWriter,
+    palette: Styles,
+    site_dir: &'static [&'static str],
+    /// The desired style stack.
+    styles: StyleStack,
+    context: InlineContext,
+    // The stack of open lists.
+    list_stack: Vec<ListFrame>,
+    link_url: Option<String>,
+    dropped: Vec<String>,
+}
+
+impl Renderer {
+    fn handle(&mut self, event: Event<'_>) {
+        match event {
+            Event::Start(Tag::Paragraph) => {}
+            Event::End(TagEnd::Paragraph) => {
+                self.writer.flush_word();
+                self.writer.end_block();
+            }
+
+            Event::Start(Tag::Heading { .. }) => {
+                self.writer.end_block();
+                self.push_style(self.palette.heading);
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                self.writer.flush_word();
+                self.pop_style();
+                self.writer.end_block();
+            }
+
+            Event::Start(Tag::BlockQuote(_)) => self.writer.push_prefix(QUOTE_PREFIX),
+            Event::End(TagEnd::BlockQuote(_)) => {
+                self.writer.flush_word();
+                self.writer.pop_prefix();
+                self.writer.end_block();
+            }
+
+            Event::Start(Tag::CodeBlock(_)) => {
+                self.writer.end_line();
+                self.writer.push_prefix(CODE_INDENT);
+                self.push_style(self.palette.code);
+                self.context = InlineContext::CodeBlock;
+            }
+            Event::End(TagEnd::CodeBlock) => {
+                self.context = InlineContext::Normal;
+                self.pop_style();
+                self.writer.pop_prefix();
+                self.writer.end_block();
+            }
+
+            Event::Start(Tag::List(start)) => {
+                self.list_stack.push(ListFrame { ordinal: start });
+            }
+            Event::End(TagEnd::List(_)) => {
+                self.list_stack.pop();
+                self.writer.end_block();
+            }
+            Event::Start(Tag::Item) => {
+                // Flush any inline content buffered by the parent item before a
+                // nested item starts. (This is relevant for tight nested lists
+                // to avoid lines running into each other.)
+                self.writer.flush_word();
+                self.writer.end_line();
+                let frame = self
+                    .list_stack
+                    .last_mut()
+                    .expect("a list item is inside a list");
+                let marker = match &mut frame.ordinal {
+                    Some(index) => {
+                        let marker = format!("{index}. ");
+                        *index += 1;
+                        marker
+                    }
+                    None => "- ".to_string(),
+                };
+                let indent = " ".repeat(display_width(&marker));
+                self.writer.set_item_marker(&marker);
+                self.writer.push_prefix(&indent);
+            }
+            Event::End(TagEnd::Item) => {
+                self.writer.flush_word();
+                self.writer.pop_prefix();
+                self.writer.end_line();
+            }
+
+            Event::Start(Tag::DefinitionList) => {}
+            Event::End(TagEnd::DefinitionList) => {}
+            Event::Start(Tag::DefinitionListTitle) => {
+                self.writer.end_block();
+                self.push_style(self.palette.term);
+                self.context = InlineContext::Term;
+            }
+            Event::End(TagEnd::DefinitionListTitle) => {
+                self.writer.flush_word();
+                self.context = InlineContext::Normal;
+                self.pop_style();
+                self.writer.end_line();
+            }
+            Event::Start(Tag::DefinitionListDefinition) => {
+                self.writer.push_prefix(DEFINITION_INDENT);
+            }
+            Event::End(TagEnd::DefinitionListDefinition) => {
+                self.writer.flush_word();
+                self.writer.pop_prefix();
+                self.writer.end_block();
+            }
+
+            Event::Start(Tag::Emphasis) => self.push_style(self.palette.emphasis),
+            Event::End(TagEnd::Emphasis) => self.pop_style(),
+            Event::Start(Tag::Strong) => self.push_style(self.palette.strong),
+            Event::End(TagEnd::Strong) => self.pop_style(),
+            Event::Start(Tag::Strikethrough) => self.push_style(self.palette.strikethrough),
+            Event::End(TagEnd::Strikethrough) => self.pop_style(),
+
+            Event::Start(Tag::Link { dest_url, .. }) => {
+                // None means this is a same-page anchor -- drop it and render
+                // text only.
+                if let Some(url) = rewrite_url(&dest_url, self.site_dir) {
+                    if self.writer.hyperlinks {
+                        self.push_style(self.palette.link);
+                    }
+                    self.link_url = Some(url);
+                }
+            }
+            Event::End(TagEnd::Link) => {
+                // (None was a same-page anchor -- see Event::Start(Tag::Link {
+                // .. }) above.)
+                if let Some(url) = self.link_url.take() {
+                    if self.writer.hyperlinks {
+                        self.pop_style();
+                    } else {
+                        // The terminal doesn't support hyperlinks, so show the
+                        // URL inline in the surrounding style.
+                        self.writer.add_space(&self.styles);
+                        self.writer
+                            .add_segment(&format!("<{url}>"), &self.styles, None);
+                    }
+                }
+            }
+
+            Event::Text(text) => match self.context {
+                InlineContext::CodeBlock => self.writer.verbatim(&text, &self.styles),
+                InlineContext::Normal | InlineContext::Term => self.push_text(&text),
+            },
+            Event::Code(code) => match self.context {
+                InlineContext::Term => {
+                    self.writer
+                        .add_segment(&code, &self.styles, self.link_url.as_deref());
+                }
+                InlineContext::Normal | InlineContext::CodeBlock => {
+                    self.push_style(self.palette.code);
+                    self.writer
+                        .add_segment(&code, &self.styles, self.link_url.as_deref());
+                    self.pop_style();
+                }
+            },
+            Event::SoftBreak => self.writer.add_space(&self.styles),
+            Event::HardBreak => self.writer.hard_break(),
+
+            // Ignore other events such as images, raw HTML, tables, footnotes,
+            // etc. We may want to add support for these in the future, but
+            // they're not necessary for the current set of things we render.
+            other => self.dropped.push(format!("{other:?}")),
+        }
+    }
+
+    /// Pushes text into the word buffer, splitting it into words and breakable
+    /// spaces.
+    fn push_text(&mut self, s: &str) {
+        let mut run_start = 0;
+        // A little state machine to track whether we're in a whitespace run.
+        let mut run_is_ws: Option<bool> = None;
+        for (i, c) in s.char_indices() {
+            let ws = c.is_whitespace();
+            match run_is_ws {
+                None => {
+                    run_is_ws = Some(ws);
+                    run_start = i;
+                }
+                Some(prev) if prev == ws => {}
+                Some(prev) => {
+                    self.emit_run(&s[run_start..i], prev);
+                    run_is_ws = Some(ws);
+                    run_start = i;
+                }
+            }
+        }
+        if let Some(prev) = run_is_ws {
+            self.emit_run(&s[run_start..], prev);
+        }
+    }
+
+    fn emit_run(&mut self, run: &str, is_ws: bool) {
+        if is_ws {
+            self.writer.add_space(&self.styles);
+        } else {
+            self.writer
+                .add_segment(run, &self.styles, self.link_url.as_deref());
+        }
+    }
+
+    fn push_style(&mut self, style: Style) {
+        self.styles.push(style);
+    }
+
+    fn pop_style(&mut self) {
+        self.styles.pop();
+    }
+}
+
+fn display_width(s: &str) -> usize {
+    UnicodeWidthStr::width(s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nextest_filtering::FILTERSET_REFERENCE_MD;
+
+    fn filterset_doc() -> HelpDoc {
+        HelpDoc {
+            markdown: FILTERSET_REFERENCE_MD,
+            site_dir: &["docs", "filtersets"],
+        }
+    }
+
+    #[test]
+    fn hyperlinks_gate_osc8() {
+        let with = render(
+            &filterset_doc(),
+            RenderOptions {
+                color: false,
+                hyperlinks: true,
+                width: 80,
+            },
+        );
+        assert!(
+            with.contains("\x1b]8;;https://nexte.st/"),
+            "emits OSC-8 hyperlinks"
+        );
+        assert!(
+            !with.contains("<https://nexte.st/"),
+            "no inline URL fallback"
+        );
+
+        let without = render(
+            &filterset_doc(),
+            RenderOptions {
+                color: false,
+                hyperlinks: false,
+                width: 80,
+            },
+        );
+        assert!(!without.contains("\x1b]8;;"), "no OSC-8 when unsupported");
+        assert!(
+            without.contains("<https://nexte.st/"),
+            "inline URL fallback"
+        );
+    }
+
+    #[test]
+    fn color_nested_styles() {
+        let doc = HelpDoc {
+            markdown: "**bold _and italic_** then `code`.\n",
+            site_dir: &[],
+        };
+        let rendered = render(
+            &doc,
+            RenderOptions {
+                color: true,
+                hyperlinks: false,
+                width: 80,
+            },
+        );
+        insta::assert_snapshot!(rendered);
+    }
+
+    #[test]
+    fn ordered_list_indent_matches_marker_width() {
+        let doc = HelpDoc {
+            markdown: "1. aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii\n",
+            site_dir: &[],
+        };
+        let rendered = render(
+            &doc,
+            RenderOptions {
+                color: false,
+                hyperlinks: false,
+                width: 20,
+            },
+        );
+        let lines: Vec<&str> = rendered.lines().collect();
+        assert!(lines[0].starts_with("1. "), "first line: {:?}", lines[0]);
+        for cont in &lines[1..] {
+            assert!(
+                cont.starts_with("   ") && !cont.starts_with("    "),
+                "continuation indented to marker width (3): {cont:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn nested_list_preserves_outer_ordinal() {
+        let doc = HelpDoc {
+            markdown: "1. first\n2. second\n   - nested a\n   - nested b\n3. third\n",
+            site_dir: &[],
+        };
+        let rendered = render(
+            &doc,
+            RenderOptions {
+                color: false,
+                hyperlinks: false,
+                width: 80,
+            },
+        );
+        insta::assert_snapshot!(rendered);
+    }
+
+    #[test]
+    fn code_block_preserves_blank_lines() {
+        let doc = HelpDoc {
+            markdown: "```\nfirst\n\nsecond\n```\n",
+            site_dir: &[],
+        };
+        let rendered = render(
+            &doc,
+            RenderOptions {
+                color: false,
+                hyperlinks: false,
+                width: 80,
+            },
+        );
+        assert!(
+            rendered.contains("first\n\n") && rendered.contains("second"),
+            "interior blank line preserved: {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn blockquote_code_block_blank_line_keeps_border() {
+        let doc = HelpDoc {
+            markdown: "> ```\n> a\n>\n> b\n> ```\n",
+            site_dir: &[],
+        };
+        let rendered = render(
+            &doc,
+            RenderOptions {
+                color: false,
+                hyperlinks: false,
+                width: 80,
+            },
+        );
+        insta::assert_snapshot!(rendered);
+    }
+
+    #[test]
+    fn admonition_with_unicode_indent_does_not_panic() {
+        let doc = HelpDoc {
+            markdown: "!!! note\n   \u{a0}body text\n",
+            site_dir: &[],
+        };
+        let _ = render(
+            &doc,
+            RenderOptions {
+                color: false,
+                hyperlinks: false,
+                width: 80,
+            },
+        );
+    }
+
+    #[test]
+    fn rewrite_url_resolves_relative_links() {
+        let site_dir: &[&str] = &["docs", "filtersets"];
+        assert_eq!(
+            rewrite_url("https://example.com/x", site_dir).as_deref(),
+            Some("https://example.com/x"),
+        );
+        assert_eq!(
+            rewrite_url("http://example.com/x", site_dir).as_deref(),
+            Some("http://example.com/x"),
+        );
+        assert_eq!(rewrite_url("#binary-kinds", site_dir), None);
+        assert_eq!(
+            rewrite_url("../glossary.md#binary-id", site_dir).as_deref(),
+            Some("https://nexte.st/docs/glossary/#binary-id"),
+        );
+        assert_eq!(
+            rewrite_url("../configuration/test-groups.md", site_dir).as_deref(),
+            Some("https://nexte.st/docs/configuration/test-groups/"),
+        );
+        assert_eq!(
+            rewrite_url("../selecting.md", site_dir).as_deref(),
+            Some("https://nexte.st/docs/selecting/"),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "relative link in help doc escapes the site root")]
+    fn rewrite_url_panics_on_escaping_links() {
+        let site_dir: &[&str] = &["docs", "filtersets"];
+        rewrite_url("../../../../foo.md", site_dir);
+    }
+
+    #[test]
+    fn apply_shortcodes_handles_versions_and_comments() {
+        assert_eq!(
+            apply_shortcodes("a <!-- md:version 0.9.1 --> b"),
+            "a *(since 0.9.1)* b",
+        );
+        assert_eq!(apply_shortcodes("a <!-- md:version --> b"), "a  b");
+        assert_eq!(apply_shortcodes("a <!-- md:versionfoo --> b"), "a  b");
+        assert_eq!(apply_shortcodes("a <!-- random comment --> b"), "a  b");
+        assert_eq!(
+            apply_shortcodes("a <!-- unterminated"),
+            "a <!-- unterminated"
+        );
+    }
+
+    #[test]
+    fn reference_stays_within_supported_subset() {
+        let markdown = FILTERSET_REFERENCE_MD;
+
+        let mut rest = markdown;
+        while let Some(idx) = rest.find("<!-- md:") {
+            let after = &rest[idx + "<!-- md:".len()..];
+            let name: String = after
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            assert_eq!(
+                name, "version",
+                "unsupported `md:{name}` shortcode in the filterset reference; \
+                 the CLI help renderer only handles `md:version` (see apply_shortcodes)"
+            );
+            rest = after;
+        }
+
+        let preprocessed = preprocess(markdown);
+        let rendered = render_markdown(
+            &preprocessed,
+            &["docs", "filtersets"],
+            RenderOptions {
+                color: false,
+                hyperlinks: false,
+                width: 80,
+            },
+        );
+        assert!(
+            rendered.dropped.is_empty(),
+            "filterset reference uses markdown the CLI help renderer silently drops: {:?}",
+            rendered.dropped,
+        );
+    }
+}
