@@ -7,6 +7,7 @@ mod app;
 mod clap_error;
 mod common;
 mod core;
+mod help;
 mod helpers;
 mod imp;
 mod utility;

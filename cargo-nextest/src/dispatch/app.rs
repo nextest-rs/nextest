@@ -91,6 +91,7 @@ enum NextestSubcommand {
     version = crate::version::short(),
     long_version = crate::version::long(),
     display_name = "cargo-nextest",
+    disable_help_subcommand = true,
 )]
 pub(crate) struct AppOpts {
     #[clap(flatten)]
@@ -202,6 +203,7 @@ impl AppOpts {
                 let user_config = resolve_user_config(early_args.user_config_location())?;
                 command.exec(&early_args, self.common.manifest_path, &user_config, output)
             }
+            Command::Help { path } => super::help::exec_help(path, &early_args, output),
         }
     }
 }
@@ -290,6 +292,12 @@ pub(crate) enum Command {
     Store {
         #[clap(subcommand)]
         command: StoreCommand,
+    },
+    /// Show help for a command or topic.
+    Help {
+        /// The command path or help topic to show help for.
+        #[arg(value_name = "COMMAND_OR_TOPIC")]
+        path: Vec<String>,
     },
 }
 
