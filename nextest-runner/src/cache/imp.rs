@@ -42,9 +42,7 @@ pub fn default_cache_dir() -> Option<Utf8PathBuf> {
 /// depending on the host's environment.
 pub(super) fn cache_dir_from_base(base: Utf8PathBuf) -> Utf8PathBuf {
     let mut dir = base;
-    for component in CACHE_SUBDIR {
-        dir.push(component);
-    }
+    dir.extend(CACHE_SUBDIR);
     dir
 }
 
