@@ -360,9 +360,15 @@ fn info_on_missing_dir_is_empty() {
 }
 
 #[test]
-fn cache_dir_appends_layout_to_base() {
-    let dir = cache_dir_from_base(Utf8PathBuf::from("/some/cache"));
-    assert_eq!(dir, "/some/cache/nextest/result-cache/v1");
+fn cache_dir_partitions_per_workspace() {
+    // The layout mirrors the records store (`nextest/projects/<encoded>/`) but
+    // ends in `result-cache` with no version component: the format is versioned
+    // inside each manifest, not in the path.
+    let dir = cache_dir_from_base(Utf8PathBuf::from("/some/cache"), "_shome_suser_sproj");
+    assert_eq!(
+        dir,
+        "/some/cache/nextest/projects/_shome_suser_sproj/result-cache"
+    );
 }
 
 #[test]

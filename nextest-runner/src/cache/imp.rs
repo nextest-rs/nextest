@@ -3,9 +3,12 @@
 
 //! Computed cache information consulted by the test filter.
 
-use crate::cache::{
-    backend::CacheBackend,
-    key::{ContentHash, hash_file},
+use crate::{
+    cache::{
+        backend::CacheBackend,
+        key::{ContentHash, hash_file},
+    },
+    record::encode_workspace_path,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use etcetera::{BaseStrategy, choose_base_strategy};
@@ -18,32 +21,48 @@ use std::{
 };
 use tracing::warn;
 
-/// The leaf path appended to the platform cache directory for result-cache
-/// storage. The `v1` component lets an incompatible future layout move to a
-/// fresh directory without colliding with old data.
-const CACHE_SUBDIR: &[&str] = &["nextest", "result-cache", "v1"];
-
-/// Returns the default directory for the local test result cache.
+/// The leaf directory holding result-cache storage for a single workspace.
 ///
-/// This uses the platform-native cache directory (via [`etcetera`]), matching
-/// how nextest resolves other cache locations: `$XDG_CACHE_HOME` or
-/// `$HOME/.cache` on Unix, `%LOCALAPPDATA%` on Windows, and the appropriate
-/// directory on macOS. Returns `None` only if no base directory can be
-/// determined, in which case caching is disabled rather than guessed.
-pub fn default_cache_dir() -> Option<Utf8PathBuf> {
+/// Unlike the records store, this layout carries no version component: the cache
+/// format is versioned inside each manifest (see `CACHE_FORMAT_VERSION` in the
+/// filesystem backend), so an incompatible future format is recognized on read
+/// and treated as a miss rather than colliding with old data.
+const CACHE_LEAF: &str = "result-cache";
+
+/// Returns the default result-cache directory for the given workspace.
+///
+/// This mirrors how recordings resolve their state directory (see
+/// [`records_state_dir`](crate::record::records_state_dir)): the cache is
+/// partitioned per workspace under `nextest/projects/<encoded-workspace>/`, with
+/// the workspace root canonicalized so the same workspace reached via a symlink
+/// maps to the same directory.
+///
+/// The difference is the base: results are regenerable cache data, so this uses
+/// the platform-native *cache* directory (via [`etcetera`]) — `$XDG_CACHE_HOME`
+/// or `$HOME/.cache` on Unix, `%LOCALAPPDATA%` on Windows, and the appropriate
+/// directory on macOS — rather than the state directory recordings use.
+///
+/// Returns `None` if no base cache directory can be determined or the workspace
+/// root cannot be canonicalized, in which case caching is disabled rather than
+/// guessed. Cache resolution is best-effort and must never fail a run.
+pub fn default_cache_dir(workspace_root: &Utf8Path) -> Option<Utf8PathBuf> {
     let strategy = choose_base_strategy().ok()?;
     let base = Utf8PathBuf::from_path_buf(strategy.cache_dir()).ok()?;
-    Some(cache_dir_from_base(base))
+    let canonical_workspace = workspace_root.canonicalize_utf8().ok()?;
+    let encoded_workspace = encode_workspace_path(&canonical_workspace);
+    Some(cache_dir_from_base(base, &encoded_workspace))
 }
 
-/// Appends the result-cache layout components to a platform cache directory.
+/// Builds the per-workspace result-cache directory from a base cache directory
+/// and an already-encoded workspace path.
 ///
 /// Factored out from [`default_cache_dir`] so the layout can be tested without
 /// depending on the host's environment.
-pub(super) fn cache_dir_from_base(base: Utf8PathBuf) -> Utf8PathBuf {
-    let mut dir = base;
-    dir.extend(CACHE_SUBDIR);
-    dir
+pub(super) fn cache_dir_from_base(base: Utf8PathBuf, encoded_workspace: &str) -> Utf8PathBuf {
+    base.join("nextest")
+        .join("projects")
+        .join(encoded_workspace)
+        .join(CACHE_LEAF)
 }
 
 /// The set of tests known to be passing in the cache, keyed by binary ID.

@@ -1021,7 +1021,7 @@ impl App {
             std::env::var("NEXTEST_EXPERIMENTAL_RESULT_CACHE").as_deref() == Ok("1");
         let is_rerun = rerun_state.is_some();
         let cache_backend = if cache_enabled && !runner_opts.no_cache && !is_rerun {
-            match default_cache_dir() {
+            match default_cache_dir(&self.base.workspace_root) {
                 Some(dir) => Some(FsBackend::new(dir)),
                 None => {
                     warn!(
