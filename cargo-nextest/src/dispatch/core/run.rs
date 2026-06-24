@@ -1663,10 +1663,6 @@ fn final_result(
         // outstanding-tests check below, so this shortcut is only taken for
         // non-rerun runs.
         if cached_skipped > 0 && !is_rerun {
-            info!(
-                "all {} skipped via the result cache",
-                plural::tests_plural(mode)
-            );
             return Ok(());
         }
 
