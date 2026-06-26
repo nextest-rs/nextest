@@ -20,7 +20,7 @@ ahash = { version = "0.8.12", features = ["serde"] }
 aho-corasick = { version = "1.1.4" }
 bit-set = { version = "0.8.0" }
 bit-vec = { version = "0.8.0" }
-camino = { version = "1.2.2", default-features = false, features = ["serde1"] }
+camino = { version = "1.2.3", default-features = false, features = ["serde1"] }
 clap = { version = "4.6.1", features = ["derive", "env", "unicode", "unstable-markdown", "wrap_help"] }
 clap_builder = { version = "4.6.0", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
 either = { version = "1.15.0", features = ["use_std"] }
@@ -52,7 +52,7 @@ ucd-trie = { version = "0.1.7" }
 uuid = { version = "1.18.1", features = ["serde", "v1", "v4"] }
 
 [build-dependencies]
-camino = { version = "1.2.2", default-features = false, features = ["serde1"] }
+camino = { version = "1.2.3", default-features = false, features = ["serde1"] }
 memchr = { version = "2.7.6" }
 once_cell = { version = "1.21.3" }
 phf_shared = { version = "0.11.3" }

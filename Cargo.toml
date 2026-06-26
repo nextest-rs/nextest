@@ -26,7 +26,7 @@ bitflags = "2.13.0"
 bstr = { version = "1.12.1", default-features = false, features = ["std"] }
 bytesize = { version = "2.3.1", features = ["serde"] }
 bytes = "1.11.1"
-camino = "1.2.2"
+camino = "1.2.3"
 camino-tempfile = "1.4.1"
 camino-tempfile-ext = "0.3.3"
 # We specify default-no-update here because if users just run:
