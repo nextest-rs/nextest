@@ -1,0 +1,210 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: colored.stdout_as_str().into_owned()
+---
+[1;4mFilterset DSL reference[0m
+
+This section contains the full set of operators supported by the filterset DSL.
+
+[1;4mBasic predicates[0m
+
+[32;1mall()[0m
+    Include all tests.
+
+[32;1mnone()[0m
+    Include no tests.
+
+[32;1mtest(name-matcher)[0m
+    Include all tests matching [36mname-matcher[0m.
+
+[32;1mgroup(name-matcher) [3m(since 0.9.133)[0m
+    Include all tests in [34;4m]8;;https://nexte.st/docs/configuration/test-groups/\test]8;;\ ]8;;https://nexte.st/docs/configuration/test-groups/\groups]8;;\[0m matching [36mname-matcher[0m. This predicate can
+    only be used on the command line.
+
+[32;1mpackage(name-matcher)[0m
+    Include all tests in packages (crates) matching [36mname-matcher[0m.
+
+[32;1mdeps(name-matcher)[0m
+    Include all tests in crates matching [36mname-matcher[0m, and all of their
+    (possibly transitive) dependencies.
+
+[32;1mrdeps(name-matcher)[0m
+    Include all tests in crates matching [36mname-matcher[0m, and all the crates that
+    (possibly transitively) depend on [36mname-matcher[0m.
+
+[32;1mbinary_id(name-matcher)[0m
+    Include all tests in [34;4m]8;;https://nexte.st/docs/glossary/#binary-id\binary]8;;\ ]8;;https://nexte.st/docs/glossary/#binary-id\IDs]8;;\[0m matching [36mname-matcher[0m. Covers all of
+    [36mpackage()[0m, [36mkind()[0m and [36mbinary()[0m.
+
+[32;1mkind(name-matcher)[0m
+    Include all tests in binary kinds matching [36mname-matcher[0m. See [3mBinary kinds[0m
+    below.
+
+[32;1mbinary(name-matcher)[0m
+    Include all tests in binary names matching [36mname-matcher[0m. For unit tests, the
+    binary name is the same as the name of the crate. Otherwise, it's the name
+    of the integration test, benchmark, or binary target.
+
+[32;1mplatform(host) or platform(target)[0m
+    Include all tests that are [34;4m]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\built]8;;\ ]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\for]8;;\ ]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\the]8;;\ ]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\host]8;;\ ]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\or]8;;\ ]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\target]8;;\ ]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\platform]8;;\[0m,
+    respectively.
+
+[32;1mdefault() [3m(since 0.9.75)[0m
+    The default set of tests to run; see [34;4m[3m]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\Running]8;;\ ]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\a]8;;\ ]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\subset]8;;\ ]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\of]8;;\ ]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\tests]8;;\ ]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\by]8;;\ ]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\default]8;;\[0m
+    for more information.
+
+│ [1mTip: Binary exclusions[0m
+│
+│ If a filterset always excludes a particular binary, it will not be run, even
+│ to get the list of tests within it. This means that a command like:
+│
+│     [36mcargo nextest list -E 'platform(host)'[0m
+│
+│ will not execute any test binaries built for the target platform.
+│
+│ This is generally what you want, but if you would like to list tests anyway,
+│ include a [36mtest()[0m predicate. For example, to list test binaries for the target
+│ platform (using, for example, a [34;4m]8;;https://nexte.st/docs/features/target-runners/\target]8;;\ ]8;;https://nexte.st/docs/features/target-runners/\runner]8;;\[0m), but skip running them:
+│
+│     [36mcargo nextest list -E 'platform(host) + not test(/.*/)' --verbose[0m
+
+[1;4mOperators[0m
+
+[32;1mset1 & set2, set1 and set2[0m
+    The intersection of [36mset1[0m and [36mset2[0m.
+
+[32;1mset1 | set2, set1 + set2, set1 or set2[0m
+    The union of [36mset1[0m or [36mset2[0m.
+
+[32;1mnot set, !set[0m
+    Include everything not included in [36mset[0m
+
+[32;1mset1 - set2[0m
+    Everything in [36mset1[0m that isn't in [36mset2[0m. Equivalent to [36mset1 and not set2[0m.
+
+[32;1m(set)[0m
+    Include everything in [36mset[0m.
+
+[1;4mOperator precedence[0m
+
+In order from highest to lowest, or in other words from tightest to loosest
+binding:
+
+1. [36m()[0m
+2. [36mnot[0m, [36m![0m
+3. [36mand[0m, [36m&[0m, [36m-[0m
+4. [36mor[0m, [36m|[0m, [36m+[0m
+
+Within a precedence group, operators bind from left to right.
+
+│ [1mInfo: Examples[0m
+│
+│ - [36mtest(a) & test(b) | test(c)[0m is equivalent to [36m(test(a) & test(b)) | test(c)[0m.
+│ - [36mtest(a) | test(b) & test(c)[0m is equivalent to [36mtest(a) | (test(b) & test(c))[0m.
+│ - [36mtest(a) & test(b) - test(c)[0m is equivalent to [36m(test(a) & test(b)) - test(c)[0m.
+│ - [36mnot test(a) | test(b)[0m is equivalent to [36m(not test(a)) | test(b)[0m.
+
+[1;4mBinary kinds[0m
+
+Accepted by the [36mkind()[0m operator, these binary kinds match the ones defined by
+Cargo.
+
+[32;1mlib[0m
+    Unit tests for regular crates, typically in the [36msrc/[0m directory under
+    [36m#[cfg(test)][0m.
+
+[32;1mtest[0m
+    Integration tests, typically in the [36mtests/[0m directory.
+
+[32;1mbench[0m
+    Benchmark tests. For example, see [34;4m[3m]8;;https://nexte.st/docs/integrations/criterion/\Criterion]8;;\ ]8;;https://nexte.st/docs/integrations/criterion/\benchmarks]8;;\[0m.
+
+[32;1mproc-macro[0m
+    Unit tests for proc-macro crates, in the [36msrc/[0m directory under [36m#[cfg(test)][0m.
+
+[32;1mbin[0m
+    Tests within [36m[[bin]][0m targets (uncommon).
+
+[32;1mexample[0m
+    Tests within examples (uncommon).
+
+[1;4mName matchers[0m
+
+This defines the general syntax for matching against names.
+
+[32;1m=string[0m
+    [3mEquality matcher[0m—match a package or test name that's equal to [36mstring[0m.
+
+[32;1m~string[0m
+    [3mContains matcher[0m—match a package or test name containing [36mstring[0m.
+
+[32;1m/regex/[0m
+    [3mRegex matcher[0m—match a package or test name if any part of it matches the
+    regular expression [36mregex[0m. To match the entire string against a regular
+    expression, use [36m/^regex$/[0m. The implementation uses the [34;4m]8;;https://github.com/rust-lang/regex\regex]8;;\[0m crate.
+
+[32;1m#glob[0m
+    [3mGlob matcher[0m—match a package or test name if the full name matches the glob
+    expression [36mglob[0m. The implementation uses the [34;4m]8;;https://docs.rs/globset\globset]8;;\ ]8;;https://docs.rs/globset\crate]8;;\[0m.
+
+[32;1mstring[0m
+    Default matching strategy for the predicate.
+
+[1;4mDefault matchers[0m
+
+For [36mtest()[0m predicates, the default matching strategy is the [3mcontains matcher[0m,
+equivalent to [36m~string[0m.
+
+For [36mgroup()[0m predicates, the default matching strategy is the [3mglob matcher[0m,
+equivalent to [36m#string[0m.
+
+For package-related predicates ([36mpackage()[0m, [36mdeps()[0m, and [36mrdeps()[0m), this is the
+[3mglob matcher[0m, equivalent to [36m#string[0m.
+
+For binary-related predicates ([36mbinary()[0m and [36mbinary_id()[0m), this is also the [3mglob[0m
+[3mmatcher[0m.
+
+For [36mkind()[0m and [36mplatform()[0m, this is the [3mequality matcher[0m, equivalent to [36m=string[0m.
+
+│ [1mWarning[0m
+│
+│ If you're constructing an expression string programmatically, [1malways use a[0m
+│ [1mprefix[0m to avoid ambiguity.
+
+[1;4mEscape sequences[0m
+
+The [3mequality[0m, [3mcontains[0m, and [3mglob[0m matchers can contain escape sequences, preceded
+by a backslash ([36m\[0m).
+
+[32;1m\n[0m
+    line feed
+
+[32;1m\r[0m
+    carriage return
+
+[32;1m\t[0m
+    tab
+
+[32;1m\\[0m
+    backslash
+
+[32;1m\/[0m
+    forward slash
+
+[32;1m\)[0m
+    closing parenthesis
+
+[32;1m\,[0m
+    comma
+
+[32;1m\u{7FFF}[0m
+    24-bit Unicode character code (up to 6 hex digits)
+
+For the [3mglob matcher[0m, to match against a literal glob metacharacter such as [36m*[0m or
+[36m?[0m, enclose it in square brackets: [36m[*][0m or [36m[?][0m.
+
+All other escape sequences are invalid.
+
+The [3mregular expression[0m matcher supports the same escape sequences that [34;4m]8;;https://docs.rs/regex/latest/regex/#escape-sequences\the]8;;\ ]8;;https://docs.rs/regex/latest/regex/#escape-sequences\regex]8;;\[0m
+[34;4m]8;;https://docs.rs/regex/latest/regex/#escape-sequences\crate]8;;\ ]8;;https://docs.rs/regex/latest/regex/#escape-sequences\does]8;;\[0m. This includes character classes like [36m\d[0m. Additionally, [36m\/[0m is
+interpreted as an escaped [36m/[0m.

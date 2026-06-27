@@ -1,0 +1,10 @@
+---
+source: nextest-runner/src/help_render.rs
+expression: rendered
+---
+1. first
+2. second
+   - nested a
+   - nested b
+
+3. third

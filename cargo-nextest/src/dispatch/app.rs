@@ -26,7 +26,7 @@ use clap::{Args, Subcommand};
     long_version = crate::version::long(),
     bin_name = "cargo",
     styles = crate::output::clap_styles::style(),
-    max_term_width = 100,
+    max_term_width = crate::output::MAX_TERM_WIDTH,
 )]
 pub struct CargoNextestApp {
     /// Early args (color, no_pager) flattened at root for early extraction.
@@ -92,6 +92,7 @@ enum NextestSubcommand {
     long_version = crate::version::long(),
     display_name = "cargo-nextest",
     disable_help_subcommand = true,
+    after_help = super::help::topics_after_help(),
 )]
 pub(crate) struct AppOpts {
     #[clap(flatten)]

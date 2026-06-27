@@ -53,6 +53,7 @@ nextest-workspace-hack.workspace = true
 owo-colors.workspace = true
 pin-project-lite.workspace = true
 petgraph.workspace = true
+pulldown-cmark.workspace = true
 quick-junit.workspace = true
 rand.workspace = true
 regex.workspace = true

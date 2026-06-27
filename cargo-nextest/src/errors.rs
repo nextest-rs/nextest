@@ -238,6 +238,8 @@ pub enum ExpectedError {
         #[from]
         err: WriteTestListError,
     },
+    #[error("writing help output failed")]
+    WriteHelpError { err: std::io::Error },
     #[error("writing event failed")]
     WriteEventError {
         #[from]
@@ -651,6 +653,7 @@ impl ExpectedError {
             | Self::TracerNoTests { .. } | Self::TracerTooManyTests { .. } => NextestExitCode::SETUP_ERROR,
             Self::ArchiveCreateError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
             Self::WriteTestListError { .. }
+            | Self::WriteHelpError { .. }
             | Self::WriteEventError { .. }
             // TestRunnerExecuteErrors isn't _quite_ a WRITE_OUTPUT_ERROR, but
             // we keep this for backwards compatibility.
@@ -1075,6 +1078,10 @@ impl ExpectedError {
             }
             Self::WriteTestListError { err } => {
                 error!("failed to write test list to output");
+                Some(err as &dyn Error)
+            }
+            Self::WriteHelpError { err } => {
+                error!("failed to write help output");
                 Some(err as &dyn Error)
             }
             Self::WriteEventError { err } => {

@@ -15,3 +15,9 @@ pub use expression::{
     KnownGroups, NameMatcher, ParseContext, TestQuery,
 };
 pub use parsing::ParsedExpr;
+
+/// The canonical filterset DSL reference.
+///
+/// This is used by the CLI to render `cargo nextest help filterset`. The
+/// nextest website also renders it via an `<!-- include -->` snippet.
+pub const FILTERSET_REFERENCE_MD: &str = include_str!("../reference.md");

@@ -1,0 +1,5 @@
+---
+source: nextest-runner/src/help_render.rs
+expression: rendered
+---
+[1mbold [3mand italic[0m then [36mcode[0m.

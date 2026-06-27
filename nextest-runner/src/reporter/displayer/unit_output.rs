@@ -7,6 +7,7 @@ use super::DisplayerKind;
 use crate::{
     config::elements::{LeakTimeoutResult, SlowTimeoutResult},
     errors::DisplayErrorChain,
+    helpers::RESET_COLOR,
     indenter::indented,
     output_spec::{LiveSpec, OutputSpec},
     reporter::{
@@ -355,8 +356,6 @@ impl UnitOutputReporter {
         Ok(())
     }
 }
-
-const RESET_COLOR: &str = "\x1b[0m";
 
 fn write_output_with_highlight(
     output: &str,

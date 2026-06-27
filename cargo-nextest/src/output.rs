@@ -12,6 +12,7 @@ use std::{
     io::{self, BufWriter, Stderr, Stdout, Write},
     marker::PhantomData,
 };
+use terminal_size::{Width, terminal_size};
 use tracing::{
     Event, Level, Subscriber,
     field::{Field, Visit},
@@ -25,6 +26,18 @@ use tracing_subscriber::{
     registry::LookupSpan,
     util::SubscriberInitExt,
 };
+
+/// The width cap for clap and help topic output.
+pub(crate) const MAX_TERM_WIDTH: usize = 100;
+
+/// Returns the detected terminal width, clamped to `[40, MAX_TERM_WIDTH]` so that
+/// output matches clap's while staying readable on very narrow terminals.
+pub(crate) fn terminal_width() -> usize {
+    terminal_size()
+        .map(|(Width(w), _)| usize::from(w))
+        .unwrap_or(80)
+        .clamp(40, MAX_TERM_WIDTH)
+}
 
 pub(crate) mod clap_styles {
     use clap::builder::{

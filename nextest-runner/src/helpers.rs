@@ -23,6 +23,9 @@ use unicode_width::UnicodeWidthChar;
 /// Environment variable to force a specific run ID (for testing).
 const FORCE_RUN_ID_ENV: &str = "__NEXTEST_FORCE_RUN_ID";
 
+/// ANSI code to reset color formatting.
+pub const RESET_COLOR: &str = "\x1b[0m";
+
 /// Returns a forced run ID from the environment, or generates a new one.
 pub fn force_or_new_run_id() -> ReportUuid {
     if let Ok(id_str) = std::env::var(FORCE_RUN_ID_ENV) {
