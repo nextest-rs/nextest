@@ -226,11 +226,36 @@ const CODE_INDENT: &str = "    ";
 /// most of them in theory.
 type StyleStack = SmallVec<[Style; 4]>;
 
+/// The target of a hyperlink for a run of text.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+enum LinkTarget {
+    /// The text is not linked.
+    #[default]
+    Unlinked,
+    /// The text is linked to the given URL.
+    Linked(String),
+}
+
+impl LinkTarget {
+    fn is_linked(&self) -> bool {
+        match self {
+            LinkTarget::Unlinked => false,
+            LinkTarget::Linked(_) => true,
+        }
+    }
+}
+
+/// The presentation attributes of a run of text.
+#[derive(Clone, Debug, Default)]
+struct RunAttrs {
+    styles: StyleStack,
+    link: LinkTarget,
+}
+
 /// A styled run of text.
 struct Span {
     text: String,
-    styles: StyleStack,
-    link: Option<String>,
+    desired: RunAttrs,
 }
 
 /// A single word to be rendered.
@@ -247,11 +272,10 @@ impl Word {
         self.spans.is_empty()
     }
 
-    fn push(&mut self, text: &str, styles: &[Style], link: Option<&str>) {
+    fn push(&mut self, text: &str, desired: &RunAttrs) {
         self.spans.push(Span {
             text: text.to_string(),
-            styles: StyleStack::from_slice(styles),
-            link: link.map(str::to_string),
+            desired: desired.clone(),
         });
         self.width += display_width(text);
     }
@@ -342,9 +366,14 @@ struct LineWriter {
     /// The state of the current line being written.
     line: LineState,
 
-    /// The current word, plus a pending styled break.
+    /// The current word, plus a pending space that can act as a line break.
     word: Word,
-    pending_space: Option<StyleStack>,
+    pending_space: Option<PendingSpace>,
+}
+
+/// A pending space that can also act as a line break.
+struct PendingSpace {
+    desired: RunAttrs,
 }
 
 /// The mutable state of a line that is currently open.
@@ -353,7 +382,7 @@ struct OpenLine {
     /// The number of visible columns used so far in this line.
     column: usize,
     /// The active styles emitted so far in this line.
-    emitted: StyleStack,
+    emitted: RunAttrs,
 }
 
 #[derive(Clone, Debug)]
@@ -386,17 +415,19 @@ impl LineWriter {
     }
 
     /// Adds a styled segment into the current word.
-    fn add_segment(&mut self, text: &str, styles: &[Style], link: Option<&str>) {
+    fn add_segment(&mut self, text: &str, desired: &RunAttrs) {
         if text.is_empty() {
             return;
         }
-        self.word.push(text, styles, link);
+        self.word.push(text, desired);
     }
 
     /// Adds a breakable space, styled by the surrounding context.
-    fn add_space(&mut self, styles: &[Style]) {
+    fn add_space(&mut self, desired: &RunAttrs) {
         self.flush_word();
-        self.pending_space = Some(StyleStack::from_slice(styles));
+        self.pending_space = Some(PendingSpace {
+            desired: desired.clone(),
+        });
     }
 
     /// Emits the buffered word, wrapping to the provided width with a hanging
@@ -408,12 +439,12 @@ impl LineWriter {
         let pending = self.pending_space.take();
         match &self.line {
             LineState::Open(open) => {
-                if let Some(space_styles) = pending {
+                if let Some(space) = pending {
                     if open.column + 1 + self.word.width > self.width {
                         self.end_line();
                         self.open_line();
                     } else {
-                        self.emit_space(&space_styles);
+                        self.emit_space(&space.desired);
                     }
                 }
             }
@@ -436,36 +467,38 @@ impl LineWriter {
         };
         for span in spans {
             if *color {
-                write_style_diff(out, open, &span.styles);
+                write_style_diff(out, open, &span.desired.styles);
             }
-            let linked = *hyperlinks && span.link.is_some();
-            if linked {
-                let url = span.link.as_deref().expect("link is present");
-                swrite!(out, "\x1b]8;;{url}\x1b\\");
+            if *hyperlinks {
+                sync_link(out, open, &span.desired.link);
             }
             out.push_str(&span.text);
-            if linked {
-                out.push_str("\x1b]8;;\x1b\\");
-            }
             open.column += display_width(&span.text);
         }
     }
 
-    fn emit_space(&mut self, styles: &[Style]) {
-        self.write_open(" ", styles);
+    fn emit_space(&mut self, desired: &RunAttrs) {
+        self.write_open(" ", desired);
     }
 
     /// Writes styled text to the current open line, syncing styles and advancing
     /// the column.
-    fn write_open(&mut self, text: &str, styles: &[Style]) {
+    fn write_open(&mut self, text: &str, desired: &RunAttrs) {
         let Self {
-            out, line, color, ..
+            out,
+            line,
+            color,
+            hyperlinks,
+            ..
         } = self;
         let LineState::Open(open) = line else {
             return;
         };
         if *color {
-            write_style_diff(out, open, styles);
+            write_style_diff(out, open, &desired.styles);
+        }
+        if *hyperlinks {
+            sync_link(out, open, &desired.link);
         }
         out.push_str(text);
         open.column += display_width(text);
@@ -474,7 +507,7 @@ impl LineWriter {
     /// Writes text verbatim (without wrapping), preserving newlines.
     ///
     /// Used for code blocks.
-    fn verbatim(&mut self, s: &str, styles: &[Style]) {
+    fn verbatim(&mut self, s: &str, desired: &RunAttrs) {
         let lines: Vec<&str> = s.split('\n').collect();
         let last = lines.len() - 1;
         for (i, &line) in lines.iter().enumerate() {
@@ -490,7 +523,7 @@ impl LineWriter {
                 }
             } else {
                 self.open_line();
-                self.write_open(line, styles);
+                self.write_open(line, desired);
             }
         }
     }
@@ -528,7 +561,7 @@ impl LineWriter {
         self.out.push_str(&prefix);
         self.line = LineState::Open(OpenLine {
             column: display_width(&prefix),
-            emitted: StyleStack::new(),
+            emitted: RunAttrs::default(),
         });
     }
 
@@ -536,12 +569,16 @@ impl LineWriter {
         let LineState::Open(open) = &self.line else {
             return;
         };
-        let reset = self.color && !open.emitted.is_empty();
+        let reset = self.color && !open.emitted.styles.is_empty();
+        let close_link = open.emitted.link.is_linked();
         // Drop trailing spaces so that blank and prefix-only lines don't carry
         // any whitespace. We use trim_end_matches rather than trim_end to avoid
         // eating newlines. If we used trim_end, we'd potentially end up
         // consuming the `\n` from the previous line.
         self.out.truncate(self.out.trim_end_matches(' ').len());
+        if close_link {
+            self.out.push_str("\x1b]8;;\x1b\\");
+        }
         if reset {
             self.out.push_str(RESET_COLOR);
         }
@@ -568,23 +605,42 @@ impl LineWriter {
 /// Diffs the currently-emitted stack of styles with the desired set of styles,
 /// emitting the minimum number of style changes to match the target.
 fn write_style_diff(out: &mut String, open: &mut OpenLine, desired: &[Style]) {
-    if open.emitted.as_slice() == desired {
+    if open.emitted.styles.as_slice() == desired {
         return;
     }
-    let common = open.emitted.len();
-    if desired.len() > common && &desired[..common] == open.emitted.as_slice() {
+    let common = open.emitted.styles.len();
+    if desired.len() > common && &desired[..common] == open.emitted.styles.as_slice() {
         for style in &desired[common..] {
             out.push_str(&style.prefix_formatter().to_string());
         }
     } else {
-        if !open.emitted.is_empty() {
+        if !open.emitted.styles.is_empty() {
             out.push_str(RESET_COLOR);
         }
         for style in desired {
             out.push_str(&style.prefix_formatter().to_string());
         }
     }
-    open.emitted = StyleStack::from_slice(desired);
+    open.emitted.styles = StyleStack::from_slice(desired);
+}
+
+/// When displaying OSC 8 hyperlinks, sync the open hyperlink with the desired
+/// target.
+///
+/// This closes the current link and/or opens a new one as needed.
+fn sync_link(out: &mut String, open: &mut OpenLine, desired: &LinkTarget) {
+    if open.emitted.link == *desired {
+        // We're already displaying this link, so there's no need to change the
+        // link target.
+        return;
+    }
+    if open.emitted.link.is_linked() {
+        out.push_str("\x1b]8;;\x1b\\");
+    }
+    if let LinkTarget::Linked(url) = desired {
+        swrite!(out, "\x1b]8;;{url}\x1b\\");
+    }
+    open.emitted.link = desired.clone();
 }
 
 struct Rendered {
@@ -606,10 +662,9 @@ fn render_markdown(
         writer: LineWriter::new(opts.color, opts.hyperlinks, opts.width),
         palette,
         site_dir,
-        styles: StyleStack::new(),
+        desired_attrs: RunAttrs::default(),
         context: InlineContext::Normal,
         list_stack: Vec::new(),
-        link_url: None,
         dropped: Vec::new(),
     };
 
@@ -643,12 +698,10 @@ struct Renderer {
     writer: LineWriter,
     palette: Styles,
     site_dir: &'static [&'static str],
-    /// The desired style stack.
-    styles: StyleStack,
+    desired_attrs: RunAttrs,
     context: InlineContext,
     // The stack of open lists.
     list_stack: Vec<ListFrame>,
-    link_url: Option<String>,
     dropped: Vec<String>,
 }
 
@@ -762,42 +815,40 @@ impl Renderer {
                     if self.writer.hyperlinks {
                         self.push_style(self.palette.link);
                     }
-                    self.link_url = Some(url);
+                    self.desired_attrs.link = LinkTarget::Linked(url);
                 }
             }
             Event::End(TagEnd::Link) => {
                 // (None was a same-page anchor -- see Event::Start(Tag::Link {
                 // .. }) above.)
-                if let Some(url) = self.link_url.take() {
+                if let LinkTarget::Linked(url) = std::mem::take(&mut self.desired_attrs.link) {
                     if self.writer.hyperlinks {
                         self.pop_style();
                     } else {
                         // The terminal doesn't support hyperlinks, so show the
                         // URL inline in the surrounding style.
-                        self.writer.add_space(&self.styles);
+                        self.writer.add_space(&self.desired_attrs);
                         self.writer
-                            .add_segment(&format!("<{url}>"), &self.styles, None);
+                            .add_segment(&format!("<{url}>"), &self.desired_attrs);
                     }
                 }
             }
 
             Event::Text(text) => match self.context {
-                InlineContext::CodeBlock => self.writer.verbatim(&text, &self.styles),
+                InlineContext::CodeBlock => self.writer.verbatim(&text, &self.desired_attrs),
                 InlineContext::Normal | InlineContext::Term => self.push_text(&text),
             },
             Event::Code(code) => match self.context {
                 InlineContext::Term => {
-                    self.writer
-                        .add_segment(&code, &self.styles, self.link_url.as_deref());
+                    self.writer.add_segment(&code, &self.desired_attrs);
                 }
                 InlineContext::Normal | InlineContext::CodeBlock => {
                     self.push_style(self.palette.code);
-                    self.writer
-                        .add_segment(&code, &self.styles, self.link_url.as_deref());
+                    self.writer.add_segment(&code, &self.desired_attrs);
                     self.pop_style();
                 }
             },
-            Event::SoftBreak => self.writer.add_space(&self.styles),
+            Event::SoftBreak => self.writer.add_space(&self.desired_attrs),
             Event::HardBreak => self.writer.hard_break(),
 
             // Ignore other events such as images, raw HTML, tables, footnotes,
@@ -835,19 +886,18 @@ impl Renderer {
 
     fn emit_run(&mut self, run: &str, is_ws: bool) {
         if is_ws {
-            self.writer.add_space(&self.styles);
+            self.writer.add_space(&self.desired_attrs);
         } else {
-            self.writer
-                .add_segment(run, &self.styles, self.link_url.as_deref());
+            self.writer.add_segment(run, &self.desired_attrs);
         }
     }
 
     fn push_style(&mut self, style: Style) {
-        self.styles.push(style);
+        self.desired_attrs.styles.push(style);
     }
 
     fn pop_style(&mut self) {
-        self.styles.pop();
+        self.desired_attrs.styles.pop();
     }
 }
 
@@ -892,6 +942,40 @@ mod tests {
             without.contains("<https://nexte.st/"),
             "inline URL fallback"
         );
+    }
+
+    #[test]
+    fn multi_word_link_is_one_continuous_hyperlink() {
+        let doc = HelpDoc {
+            markdown: "[click here](https://example.com/page) and more text\n".into(),
+            site_dir: &[],
+        };
+        let rendered = render(
+            &doc,
+            RenderOptions {
+                color: false,
+                hyperlinks: true,
+                width: 80,
+            },
+        );
+        insta::assert_snapshot!(rendered);
+    }
+
+    #[test]
+    fn wrapped_link_does_not_span_a_newline() {
+        let doc = HelpDoc {
+            markdown: "[alpha beta gamma](https://example.com/x)\n".into(),
+            site_dir: &[],
+        };
+        let rendered = render(
+            &doc,
+            RenderOptions {
+                color: false,
+                hyperlinks: true,
+                width: 12,
+            },
+        );
+        insta::assert_snapshot!(rendered);
     }
 
     #[test]
