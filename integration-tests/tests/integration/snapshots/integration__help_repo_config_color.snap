@@ -1,0 +1,666 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: "colored_reference.trim_end_matches('\\n')"
+---
+[1;4mConfiguration reference[0m
+
+This topic contains the full repository configuration reference for nextest.
+
+This reference is also available [34;4m]8;;https://nexte.st/docs/configuration/reference/\on the nextest site[0m]8;;\.
+
+For more information about how repository configuration works, see the [34;4m]8;;https://nexte.st/docs/configuration/\main]8;;\[0m
+[34;4m]8;;https://nexte.st/docs/configuration/\configuration page[0m]8;;\.
+
+[1;4mConfiguration file locations[0m
+
+Configuration is loaded in the following order (higher priority overrides
+lower):
+
+1. Repository config ([36m.config/nextest.toml[0m)
+2. Tool-specific configs (specified via [36m--tool-config-file[0m)
+3. Default embedded config
+
+Tool-specific configs allow tools to provide their own nextest configuration
+that integrates with repository settings.
+
+For more information about configuration hierarchy, see [34;4m[3m]8;;https://nexte.st/docs/configuration/#hierarchical-configuration\Hierarchical]8;;\[0m
+[34;4m[3m]8;;https://nexte.st/docs/configuration/#hierarchical-configuration\configuration[0m]8;;\.
+
+[1;4mRepository configuration schema[0m
+
+[3m(since 0.9.134)[0m
+
+A JSON Schema is available for nextest's repository configuration. The schema
+can be obtained through:
+
+- For the latest released version of nextest, at
+  [34;4m[36m]8;;https://nexte.st/schemas/repo-config.json\https://nexte.st/schemas/repo-config.json[0m]8;;\. This URL is updated with new
+  nextest releases.
+- For the schema corresponding to a particular version of nextest, by running
+  [36mcargo nextest self schema repo-config[0m.
+
+The schema can be used:
+
+- To validate a repository configuration file.
+- With the [34;4m]8;;https://tombi-toml.github.io/tombi\Tombi[0m]8;;\ language server for TOML or [34;4m]8;;https://nexte.st/docs/integrations/rustrover/\RustRover[0m]8;;\, to provide autocomplete
+  in supported IDEs and editors. (The taplo language server is not supported due
+  to a [34;4m]8;;https://github.com/tamasfe/taplo/pull/779\crash bug[0m]8;;\.)
+
+Note that the schema is somewhat stricter than nextest's own config parser:
+unknown configuration items will fail schema validation, while nextest itself
+will only print out a warning.
+
+The schema is part of the [34;4m]8;;https://www.schemastore.org/\JSON Schema Store[0m]8;;\, so both Tombi and RustRover will
+automatically download it for you. Because nextest's configuration (outside of
+experimental configuration) is [34;4m]8;;https://nexte.st/docs/stability/\append-only[0m]8;;\, the schema will automatically be
+updated as new nextest versions are released.
+
+[1;4mTop-level configuration[0m
+
+These parameters are specified at the root level of the configuration file.
+
+[1;4m[36mnextest-version[0m
+
+[3m(since 0.9.55)[0m
+
+- [1mType[0m: String or object
+- [1mDescription[0m: The minimum required (and optionally recommended) version of
+  nextest for this configuration.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/minimum-versions/\Minimum nextest versions]8;;\[0m
+- [1mDefault[0m: Unset (the minimum version check is disabled)
+- [1mExamples[0m:
+      nextest-version = [32m"0.9.50"[0m
+      [2m# or[0m
+      nextest-version = { required = [32m"0.9.20"[0m, recommended = [32m"0.9.30"[0m }
+
+[1;4m[36mexperimental[0m
+
+- [1mType[0m: Array of strings
+- [1mDescription[0m: Enables experimental, non-stable features.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/setup-scripts/\Setup scripts[0m]8;;\, [34;4m[3m]8;;https://nexte.st/docs/configuration/wrapper-scripts/\wrapper scripts]8;;\[0m
+- [1mDefault[0m: [36m[][0m (no experimental features enabled)
+- [1mValid values[0m:
+  - [36m"setup-scripts"[0m [3m(since 0.9.98)[0m (originally [3m(since 0.9.59)[0m)
+  - [36m"wrapper-scripts"[0m [3m(since 0.9.98)[0m
+
+- [1mExample[0m:
+      experimental = [[32m"setup-scripts"[0m]
+
+[1;4m[36mstore[0m
+
+- [1mType[0m: Object
+- [1mDescription[0m: Configuration for the nextest store directory.
+
+[1;4m[36mstore.dir[0m
+
+- [1mType[0m: String (path)
+- [1mDescription[0m: Directory where nextest stores its data.
+- [1mDefault[0m: [36mtarget/nextest[0m
+
+[1;4mProfile configuration[0m
+
+Profiles are configured under [36m[profile.<name>][0m. The default profile is called
+[36m[profile.default][0m.
+
+[1;4mGeneral configuration[0m
+
+[1;4m[36mprofile.<name>.inherits[0m
+
+[3m(since 0.9.115)[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: The profile to inherit settings from.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/#profile-inheritance\Profile inheritance]8;;\[0m
+- [1mDefault[0m: [36m"default"[0m
+
+[1;4mCore test execution[0m
+
+[1;4m[36mprofile.<name>.default-filter[0m
+
+- [1mType[0m: String (filterset expression)
+- [1mDescription[0m: The default set of tests run by [36mcargo nextest run[0m, as a filterset
+  expression.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\Running a subset of tests by default]8;;\[0m
+- [1mDefault[0m: [36m"all()"[0m (all tests are run)
+- [1mExample[0m: [36mdefault-filter = "not test(very_slow_tests)"[0m
+
+[1;4m[36mprofile.<name>.global-timeout[0m
+
+[3m(since 0.9.100)[0m
+
+- [1mType[0m: String (duration)
+- [1mDescription[0m: A global timeout for the entire test run.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/features/slow-tests/#setting-a-global-timeout\Setting a global timeout]8;;\[0m
+- [1mDefault[0m: Unset (no global timeout)
+- [1mExample[0m: [36mglobal-timeout = "2h"[0m
+
+[1;4m[36mprofile.<name>.test-threads[0m
+
+- [1mType[0m: Integer or string
+- [1mDescription[0m: Number of threads to run tests with.
+- [1mValid values[0m: Positive integer, negative integer (relative to CPU count), or
+  [36m"num-cpus"[0m
+- [1mDefault[0m: [36m"num-cpus"[0m
+- [1mExample[0m: [36mtest-threads = 4[0m or [36mtest-threads = "num-cpus"[0m
+
+[1;4m[36mprofile.<name>.threads-required[0m
+
+- [1mType[0m: Integer or string
+- [1mDescription[0m: Number of threads each test reserves from the pool.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/threads-required/\Heavy tests and [36mthreads-required]8;;\[0m
+- [1mValid values[0m: Positive integer, [36m"num-cpus"[0m, or [36m"num-test-threads"[0m
+- [1mDefault[0m: [36m1[0m
+
+[1;4m[36mprofile.<name>.run-extra-args[0m
+
+[3m(since 0.9.86)[0m
+
+- [1mType[0m: Array of strings
+- [1mDescription[0m: Extra arguments to pass to test binaries.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/extra-args/\Extra arguments]8;;\[0m
+- [1mDefault[0m: [36m[][0m
+- [1mExample[0m: [36mrun-extra-args = ["--test-threads", "1"][0m
+
+[1;4mRetry configuration[0m
+
+[1;4m[36mprofile.<name>.retries[0m
+
+- [1mType[0m: Integer or object
+- [1mDescription[0m: Retry policy for failed tests.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/features/retries/\Retries and flaky tests]8;;\[0m
+- [1mDefault[0m: [36m0[0m
+- [1mExamples[0m:
+      retries = [33m3[0m
+      [2m# or[0m
+      retries = { backoff = [32m"fixed"[0m, count = [33m3[0m, delay = [32m"1s"[0m }
+      [2m# or[0m
+      retries = { backoff = [32m"exponential"[0m, count = [33m4[0m, delay = [32m"2s"[0m, max-delay = [32m"10s"[0m, jitter = [33mtrue[0m }
+
+[1;4m[36mprofile.<name>.flaky-result[0m
+
+[3m(since 0.9.131)[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: Whether to treat flaky tests as passing or failing.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/features/retries/#failing-flaky-tests\Failing flaky tests]8;;\[0m
+- [1mValid values[0m: [36m"pass"[0m, [36m"fail"[0m
+- [1mDefault[0m: [36m"pass"[0m
+- [1mExample[0m: [36mflaky-result = "fail"[0m
+
+[1;4mTimeout configuration[0m
+
+[1;4m[36mprofile.<name>.slow-timeout[0m
+
+- [1mType[0m: String (duration) or object
+- [1mDescription[0m: Time after which tests are considered slow, plus optional
+  termination policy.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/features/slow-tests/\Slow tests and timeouts]8;;\[0m
+- [1mDefault[0m: [36m60s[0m with no termination on timeout
+- [1mExamples[0m:
+      slow-timeout = [32m"60s"[0m
+      [2m# or[0m
+      slow-timeout = { period = [32m"120s"[0m, terminate-after = [33m2[0m, grace-period = [32m"10s"[0m }
+      [2m# or[0m
+      slow-timeout = { period = [32m"30s"[0m, terminate-after = [33m4[0m, on-timeout = [32m"pass"[0m }
+
+The [36mslow-timeout[0m object accepts the following parameters:
+
+- [36mperiod[0m: Time period after which a test is considered slow (required)
+- [36mterminate-after[0m: Number of periods after which to terminate the test (default:
+  do not terminate)
+- [36mgrace-period[0m: Time to wait for graceful shutdown before force termination
+  (default: 10s)
+- [36mon-timeout[0m: [3m(since 0.9.115)[0m What to do when a test times out: [36m"fail"[0m (default)
+  or [36m"pass"[0m
+
+[1;4m[36mprofile.<name>.leak-timeout[0m
+
+- [1mType[0m: String (duration) or object
+- [1mDescription[0m: Time to wait for child processes to exit after a test completes.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/features/leaky-tests/\Leaky tests]8;;\[0m
+- [1mExamples[0m:
+      leak-timeout = [32m"100ms"[0m
+      [2m# or[0m
+      leak-timeout = { period = [32m"500ms"[0m, result = [32m"fail"[0m }
+
+[1;4mBenchmark configuration[0m
+
+[1;4m[36mprofile.<name>.bench.global-timeout[0m
+
+[3m(since 0.9.117)[0m
+
+- [1mType[0m: String (duration)
+- [1mDescription[0m: Global timeout for the entire benchmark run. Replaces
+  [36mglobal-timeout[0m when running [36mcargo nextest bench[0m.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/features/benchmarks/\Running benchmarks]8;;\[0m
+- [1mDefault[0m: Unset (no global timeout)
+- [1mExample[0m: [36mbench.global-timeout = "2h"[0m
+
+[1;4m[36mprofile.<name>.bench.slow-timeout[0m
+
+[3m(since 0.9.117)[0m
+
+- [1mType[0m: String (duration) or object
+- [1mDescription[0m: Time after which benchmarks are considered slow, plus optional
+  termination policy. Replaces [36mslow-timeout[0m when running [36mcargo nextest bench[0m.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/features/benchmarks/\Running benchmarks]8;;\[0m
+- [1mDefault[0m: Unset
+- [1mExamples[0m:
+      bench.slow-timeout = [32m"120s"[0m
+      [2m# or[0m
+      bench.slow-timeout = { period = [32m"60s"[0m, terminate-after = [33m10[0m, grace-period = [32m"10s"[0m }
+
+The [36mbench.slow-timeout[0m object accepts the same parameters as [36mslow-timeout[0m:
+
+- [36mperiod[0m: Time period after which a benchmark is considered slow (required)
+- [36mterminate-after[0m: Number of periods after which to terminate the benchmark
+  (default: do not terminate)
+- [36mgrace-period[0m: Time to wait for graceful shutdown before force termination
+  (default: 10s)
+
+[1;4mReporter options[0m
+
+[1;4m[36mprofile.<name>.status-level[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: Level of status information to display during test runs.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/reporting/\Reporting test results]8;;\[0m
+- [1mValid values[0m (incremental; each level includes those above it):
+  - [36m"none"[0m: no output.
+  - [36m"fail"[0m: only output test failures.
+  - [36m"retry"[0m: output test retries; includes [36mfail[0m.
+  - [36m"slow"[0m: output slow tests; includes [36mretry[0m.
+  - [36m"leak"[0m: output leaky tests; includes [36mslow[0m.
+  - [36m"pass"[0m: output passing tests; includes [36mleak[0m.
+  - [36m"skip"[0m: output skipped tests; includes [36mpass[0m.
+  - [36m"all"[0m: equivalent to [36m"skip"[0m today; reserved for future expansion.
+
+- [1mDefault[0m: [36m"pass"[0m
+
+[1;4m[36mprofile.<name>.final-status-level[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: Level of status information to display in the final summary.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/reporting/\Reporting test results]8;;\[0m
+- [1mValid values[0m (incremental; each level includes those above it):
+  - [36m"none"[0m: no output.
+  - [36m"fail"[0m: only output test failures.
+  - [36m"flaky"[0m: output flaky tests; includes [36mfail[0m. Accepts [36m"retry"[0m as an alias.
+  - [36m"slow"[0m: output slow tests; includes [36mflaky[0m.
+  - [36m"skip"[0m: output skipped tests; includes [36mslow[0m.
+  - [36m"leak"[0m: output leaky tests; includes [36mskip[0m.
+  - [36m"pass"[0m: output passing tests; includes [36mleak[0m.
+  - [36m"all"[0m: equivalent to [36m"pass"[0m today; reserved for future expansion.
+
+- [1mDefault[0m: [36m"flaky"[0m
+
+[1;4m[36mprofile.<name>.failure-output[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: When to display output for failed tests.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/reporting/\Reporting test results]8;;\[0m
+- [1mValid values[0m:
+  - [36m"immediate"[0m: show captured output as soon as the test completes.
+  - [36m"immediate-final"[0m: show captured output when the test completes [3mand[0m again at
+    the end of the run.
+  - [36m"final"[0m: show captured output only at the end of the run.
+  - [36m"never"[0m: never show captured output.
+
+- [1mDefault[0m: [36m"immediate"[0m
+
+[1;4m[36mprofile.<name>.success-output[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: When to display output for successful tests.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/reporting/\Reporting test results]8;;\[0m
+- [1mValid values[0m: same as [36mfailure-output[0m
+- [1mDefault[0m: [36m"never"[0m
+
+[1;4mFailure handling[0m
+
+[1;4m[36mprofile.<name>.fail-fast[0m
+
+- [1mType[0m: Boolean or object
+- [1mDescription[0m: Controls when to stop running tests after failures.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/running/#failing-fast\Failing fast]8;;\[0m
+- [1mDefault[0m: [36mtrue[0m (stop after first failure, wait for running tests to complete)
+- [1mExamples[0m:
+      fail-fast = [33mtrue[0m  [2m# Stop after first failure (waits for running tests)[0m
+      fail-fast = [33mfalse[0m [2m# Run all tests[0m
+      fail-fast = { max-fail = [33m5[0m }  [2m# Stop after 5 failures (waits for running tests)[0m
+      fail-fast = { max-fail = [32m"all"[0m }  [2m# Run all tests[0m
+
+      [2m# With termination mode (since 0.9.111)[0m
+      fail-fast = { max-fail = [33m1[0m, terminate = [32m"wait"[0m }  [2m# Wait for running tests (default)[0m
+      fail-fast = { max-fail = [33m1[0m, terminate = [32m"immediate"[0m }  [2m# Terminate running tests immediately[0m
+
+When [36mmax-fail[0m is exceeded:
+
+- [1m[36mterminate = "wait"[0m (default): nextest stops scheduling new tests but waits for
+  currently running tests to finish naturally.
+- [1m[36mterminate = "immediate"[0m [3m(since 0.9.111)[0m: nextest sends termination signals to
+  running tests (respecting the grace period configured via
+  [36mslow-timeout.terminate-after[0m).
+
+[1;4mTest grouping[0m
+
+[1;4m[36mprofile.<name>.test-group[0m
+
+[3m(since 0.9.48)[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: Assigns matching tests to a custom test group for resource
+  management.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/test-groups/\Test groups for mutual exclusion]8;;\[0m
+- [1mValid values[0m: Custom group name or [36m"@global"[0m
+- [1mDefault[0m: [36m"@global"[0m
+
+[1;4mJUnit configuration[0m
+
+[1;4m[36mprofile.<name>.junit.path[0m
+
+- [1mType[0m: String (path)
+- [1mDescription[0m: Path to write the JUnit XML report to. If unset, JUnit reporting
+  is disabled.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/machine-readable/junit/\JUnit support]8;;\[0m
+- [1mDefault[0m: Unset
+- [1mExample[0m: [36mjunit.path = "target/nextest/junit.xml"[0m
+
+[1;4m[36mprofile.<name>.junit.report-name[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: Name for the JUnit XML report.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/machine-readable/junit/\JUnit support]8;;\[0m
+- [1mDefault[0m: [36m"nextest-run"[0m
+
+[1;4m[36mprofile.<name>.junit.store-success-output[0m
+
+- [1mType[0m: Boolean
+- [1mDescription[0m: Whether to store successful test output in the JUnit XML report.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/machine-readable/junit/\JUnit support]8;;\[0m
+- [1mDefault[0m: [36mfalse[0m
+
+[1;4m[36mprofile.<name>.junit.store-failure-output[0m
+
+- [1mType[0m: Boolean
+- [1mDescription[0m: Whether to store failed test output in the JUnit XML report.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/machine-readable/junit/\JUnit support]8;;\[0m
+- [1mDefault[0m: [36mtrue[0m
+
+[1;4m[36mprofile.<name>.junit.flaky-fail-status[0m
+
+[3m(since 0.9.131)[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: How flaky-fail tests are reported in the JUnit XML report.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/machine-readable/junit/\JUnit support]8;;\[0m
+- [1mValid values[0m: [36m"failure"[0m or [36m"success"[0m
+- [1mDefault[0m: [36m"failure"[0m
+
+[1;4mArchive configuration[0m
+
+[3m(since 0.9.70)[0m
+
+[1;4m[36mprofile.<name>.archive.include[0m
+
+- [1mType[0m: Array of objects
+- [1mDescription[0m: Extra paths to include in the archive.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/ci-features/archiving/\Archiving and reusing builds]8;;\[0m
+- [1mExample[0m:
+      [35;1m[[profile.default.archive.include]][0m
+      path = [32m"fixtures"[0m
+      relative-to = [32m"target"[0m
+      depth = [33m2[0m
+      on-missing = [32m"warn"[0m
+
+[1;4mArchive include parameters[0m
+
+- [36mpath[0m: Path to include, relative to [36mrelative-to[0m.
+- [36mrelative-to[0m: Base directory [36mpath[0m is interpreted relative to. Valid values:
+  [36m"target"[0m.
+- [36mdepth[0m: Maximum recursion depth (non-negative integer or [36m"infinite"[0m).
+- [36mon-missing[0m: What to do if [36mpath[0m is missing. Valid values: [36m"ignore"[0m, [36m"warn"[0m,
+  [36m"error"[0m.
+
+[1;4mOverride configuration[0m
+
+Overrides allow you to customize settings for specific tests or platforms using
+[36m[[profile.<name>.overrides]][0m sections.
+
+For detailed information, see [34;4m[3m]8;;https://nexte.st/docs/configuration/per-test-overrides/\Per-test settings[0m]8;;\.
+
+[1;4mOverride filters[0m
+
+At least one of these filters must be specified.
+
+[1;4m[36mfilter[0m
+
+- [1mType[0m: String (filterset expression)
+- [1mDescription[0m: Filterset expression selecting tests this override applies to.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/filtersets/\Filterset DSL]8;;\[0m
+- [1mDefault[0m: Override applies to all tests
+- [1mExample[0m: [36mfilter = 'test(integration_test)'[0m
+
+[1;4m[36mplatform[0m
+
+[3m(since 0.9.58)[0m
+
+- [1mType[0m: String or Object
+- [1mDescription[0m: Host and/or target platforms this override applies to.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/specifying-platforms/\Specifying platforms]8;;\[0m
+- [1mDefault[0m: Override applies to all platforms
+- [1mExamples[0m:
+      platform = [32m"x86_64-unknown-linux-gnu"[0m
+      [2m# or[0m
+      platform = { host = [32m"cfg(unix)"[0m, target = [32m"aarch64-apple-darwin"[0m }
+
+[1;4mOverride settings[0m
+
+[1;4m[36mdefault-filter[0m
+
+[3m(since 0.9.84)[0m
+
+- [1mType[0m: String (filterset expression)
+- [1mDescription[0m: Replaces [36mdefault-filter[0m for matching platforms. Requires [36mplatform[0m
+  and must not be combined with [36mfilter[0m.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\Running a subset of tests by default]8;;\[0m
+
+[1;4m[36mpriority[0m
+
+[3m(since 0.9.91)[0m
+
+- [1mType[0m: Integer (-100 to 100)
+- [1mDescription[0m: Priority for matching tests; higher values run sooner.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/test-priorities/\Test priorities]8;;\[0m
+- [1mDefault[0m: [36m0[0m
+
+[1;4mOther settings[0m
+
+All profile-level settings can be overridden:
+
+- [36mthreads-required[0m
+- [36mrun-extra-args[0m
+- [36mretries[0m
+- [36mflaky-result[0m
+- [36mslow-timeout[0m
+- [36mbench.slow-timeout[0m
+- [36mleak-timeout[0m
+- [36mtest-group[0m
+- [36msuccess-output[0m
+- [36mfailure-output[0m
+- [36mjunit.store-success-output[0m
+- [36mjunit.store-failure-output[0m
+
+[1;4mTest group configuration[0m
+
+[3m(since 0.9.48)[0m
+
+Custom test groups are defined under [36m[test-groups.<name>][0m sections.
+
+For detailed information, see [34;4m[3m]8;;https://nexte.st/docs/configuration/test-groups/\Test groups for mutual exclusion[0m]8;;\.
+
+[1;4m[36mtest-groups.<name>.max-threads[0m
+
+- [1mType[0m: Integer or string
+- [1mDescription[0m: Maximum number of threads this test group may use concurrently.
+- [1mValid values[0m: Positive integer or [36m"num-cpus"[0m
+
+[1;4mScript configuration[0m
+
+[3m(since 0.9.59)[0m
+
+Scripts are configured under [36m[scripts.setup.<name>][0m and [36m[scripts.wrapper.<name>][0m
+sections.
+
+[1;4mSetup scripts[0m
+
+[3m(since 0.9.98)[0m
+
+For detailed information, see [34;4m[3m]8;;https://nexte.st/docs/configuration/setup-scripts/\Setup scripts[0m]8;;\.
+
+[1;4m[36mscripts.setup.<name>.command[0m
+
+- [1mType[0m: String, array, or object
+- [1mDescription[0m: The command to run for this setup script.
+- [1mExamples[0m:
+      command = [32m"echo hello"[0m
+      [2m# or[0m
+      command = [[32m"cargo"[0m, [32m"run"[0m, [32m"--bin"[0m, [32m"setup"[0m]
+      [2m# or[0m
+      command = { command-line = [32m"debug/my-setup"[0m, relative-to = [32m"target"[0m }
+
+[1;4m[36mscripts.setup.<name>.slow-timeout[0m
+
+- [1mType[0m: String (duration) or object
+- [1mDescription[0m: Slow-timeout configuration for this setup script.
+- [1mDefault[0m: No timeout
+- [1mExamples[0m:
+      slow-timeout = [32m"30s"[0m
+      [2m# or[0m
+      slow-timeout = { period = [32m"60s"[0m, terminate-after = [33m1[0m, grace-period = [32m"5s"[0m }
+
+[1;4m[36mscripts.setup.<name>.leak-timeout[0m
+
+- [1mType[0m: String (duration) or object
+- [1mDescription[0m: Leak-timeout configuration for this setup script.
+- [1mDefault[0m: [36m200ms[0m
+- [1mExamples[0m:
+      leak-timeout = [32m"500ms"[0m
+      [2m# or[0m
+      leak-timeout = { period = [32m"1s"[0m, result = [32m"fail"[0m }
+
+[1;4m[36mscripts.setup.<name>.capture-stdout[0m
+
+- [1mType[0m: Boolean
+- [1mDescription[0m: Whether to capture stdout from this setup script.
+- [1mDefault[0m: [36mfalse[0m
+
+[1;4m[36mscripts.setup.<name>.capture-stderr[0m
+
+- [1mType[0m: Boolean
+- [1mDescription[0m: Whether to capture stderr from this setup script.
+- [1mDefault[0m: [36mfalse[0m
+
+[1;4m[36mscripts.setup.<name>.junit.store-success-output[0m
+
+- [1mType[0m: Boolean
+- [1mDescription[0m: Whether to store this setup script's output on success in the
+  JUnit XML report.
+- [1mDefault[0m: [36mtrue[0m
+
+[1;4m[36mscripts.setup.<name>.junit.store-failure-output[0m
+
+- [1mType[0m: Boolean
+- [1mDescription[0m: Whether to store this setup script's output on failure in the
+  JUnit XML report.
+- [1mDefault[0m: [36mtrue[0m
+
+[1;4mWrapper scripts[0m
+
+[3m(since 0.9.98)[0m
+
+For detailed information, see [34;4m[3m]8;;https://nexte.st/docs/configuration/wrapper-scripts/\Wrapper scripts[0m]8;;\.
+
+[1;4m[36mscripts.wrapper.<name>.command[0m
+
+- [1mType[0m: String, array, or object
+- [1mDescription[0m: The command to run as the wrapper.
+- [1mExamples[0m:
+      command = [32m"my-script.sh"[0m
+      [2m# or[0m
+      command = [[32m"cargo"[0m, [32m"run"[0m, [32m"--bin"[0m, [32m"setup"[0m, [32m"--"[0m]
+      [2m# or[0m
+      command = { command-line = [32m"debug/my-setup"[0m, relative-to = [32m"target"[0m }
+
+[1;4m[36mscripts.wrapper.<name>.target-runner[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: How this wrapper composes with a configured target runner.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/features/target-runners/\Target runners]8;;\[0m
+- [1mValid values[0m:
+  - [36m"ignore"[0m: the target runner is ignored.
+  - [36m"overrides-wrapper"[0m: when a target runner is configured, it replaces the
+    wrapper; otherwise the wrapper runs as usual.
+  - [36m"within-wrapper"[0m: the target runner runs within the wrapper script (command
+    line: [36m<wrapper> <target-runner> <test-binary> <args>[0m).
+  - [36m"around-wrapper"[0m: the target runner runs around the wrapper script (command
+    line: [36m<target-runner> <wrapper> <test-binary> <args>[0m).
+
+- [1mDefault[0m: [36m"ignore"[0m
+
+[1;4mProfile script configuration[0m
+
+[3m(since 0.9.59)[0m
+
+Profile-specific script configuration under [36m[[profile.<name>.scripts]][0m sections.
+
+[1;4mProfile script filters[0m
+
+At least one of these filters must be specified.
+
+[1;4m[36mplatform[0m
+
+- [1mType[0m: String or object
+- [1mDescription[0m: Host and/or target platforms these scripts apply to.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/specifying-platforms/\Specifying platforms]8;;\[0m
+- [1mDefault[0m: Scripts apply to all platforms
+- [1mExamples[0m:
+      platform = [32m"x86_64-unknown-linux-gnu"[0m
+      [2m# or[0m
+      platform = { host = [32m"cfg(unix)"[0m, target = [32m"aarch64-apple-darwin"[0m }
+
+[1;4m[36mfilter[0m
+
+- [1mType[0m: String (filterset expression)
+- [1mDescription[0m: Filterset expression selecting tests these scripts apply to.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/filtersets/\Filterset DSL]8;;\[0m
+- [1mDefault[0m: Scripts apply to all tests
+- [1mExample[0m: [36mfilter = 'test(integration_test)'[0m
+
+[1;4mProfile script instructions[0m
+
+At least one instruction must be specified.
+
+[1;4m[36msetup[0m
+
+- [1mType[0m: String or array of strings
+- [1mDescription[0m: Names of setup scripts to run (single name or array).
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/setup-scripts/\Setup scripts]8;;\[0m
+- [1mExamples[0m:
+      setup = [32m"my-setup"[0m
+      [2m# or[0m
+      setup = [[32m"setup1"[0m, [32m"setup2"[0m]
+
+[1;4m[36mlist-wrapper[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: Name of the wrapper script used during test listing.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/wrapper-scripts/\Wrapper scripts]8;;\[0m
+- [1mExample[0m: [36mlist-wrapper = "my-list-wrapper"[0m
+
+[1;4m[36mrun-wrapper[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: Name of the wrapper script used during test execution.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/wrapper-scripts/\Wrapper scripts]8;;\[0m
+- [1mExample[0m: [36mrun-wrapper = "my-run-wrapper"[0m

@@ -25,10 +25,11 @@ use std::io::Write as _;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum HelpTopic {
     Filterset,
+    RepoConfig,
 }
 
 impl HelpTopic {
-    const ALL: &[Self] = &[Self::Filterset];
+    const ALL: &[Self] = &[Self::Filterset, Self::RepoConfig];
 
     /// Returns all names that match a topic.
     ///
@@ -36,6 +37,7 @@ impl HelpTopic {
     fn names(self) -> &'static [&'static str] {
         match self {
             Self::Filterset => &["filterset", "filtersets"],
+            Self::RepoConfig => &["repo-config"],
         }
     }
 
@@ -61,6 +63,7 @@ impl HelpTopic {
     fn description(self) -> &'static str {
         match self {
             Self::Filterset => "the filterset DSL: predicates, operators, and matchers",
+            Self::RepoConfig => "repository configuration reference",
         }
     }
 
@@ -72,6 +75,7 @@ impl HelpTopic {
     pub(super) fn doc(self) -> HelpDoc {
         match self {
             Self::Filterset => HelpDoc::filterset(),
+            Self::RepoConfig => HelpDoc::repo_config(),
         }
     }
 }
@@ -237,6 +241,12 @@ mod tests {
     fn topic_names_resolve() {
         assert!(HelpTopic::from_name("filterset").is_some());
         assert!(HelpTopic::from_name("filtersets").is_some());
+        assert_eq!(
+            HelpTopic::from_name("repo-config"),
+            Some(HelpTopic::RepoConfig)
+        );
+        assert_eq!(HelpTopic::RepoConfig.name(), "repo-config");
+        assert!(HelpTopic::from_name("config").is_none());
         assert!(HelpTopic::from_name("run").is_none());
         assert!(HelpTopic::from_name("").is_none());
     }
@@ -249,5 +259,7 @@ mod tests {
         assert!(!is_nextest_subcommand("bogus"));
         // Topics are not subcommands.
         assert!(!is_nextest_subcommand("filterset"));
+        assert!(!is_nextest_subcommand("repo-config"));
+        assert!(!is_nextest_subcommand("filtersets"));
     }
 }

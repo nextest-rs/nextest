@@ -3,14 +3,15 @@
 
 //! Renders MkDocs help-topic documents (help topics) to the terminal.
 
-use crate::helpers::RESET_COLOR;
+use crate::{config::core::NextestConfig, helpers::RESET_COLOR};
 use indoc::formatdoc;
 use nextest_filtering::FILTERSET_REFERENCE_MD;
 use owo_colors::Style;
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use smallvec::SmallVec;
 use std::borrow::Cow;
 use swrite::{SWrite, swrite};
+use synoptic::{TokOpt, from_extension};
 use tracing::warn;
 use unicode_width::UnicodeWidthStr;
 
@@ -44,6 +45,37 @@ impl HelpDoc {
             markdown: Cow::Owned(markdown),
             site_dir: &["docs", "filtersets"],
         }
+    }
+
+    /// The repository configuration reference document.
+    pub fn repo_config() -> Self {
+        Self {
+            markdown: Cow::Owned(repo_config_markdown()),
+            site_dir: &["docs", "configuration"],
+        }
+    }
+}
+
+fn repo_config_markdown() -> String {
+    formatdoc! {"
+            # Configuration reference
+
+            This topic contains the full repository configuration reference for nextest.
+
+            This reference is also available [on the nextest site](https://nexte.st/docs/configuration/reference/).
+
+            {reference}
+
+            ## Default configuration
+
+            The default configuration shipped with cargo-nextest is:
+
+            ```toml
+            {default_config}
+            ```
+        ",
+        reference = NextestConfig::REFERENCE_MD.trim_end(),
+        default_config = NextestConfig::DEFAULT_CONFIG.trim_end(),
     }
 }
 
@@ -217,6 +249,9 @@ fn rewrite_url(url: &str, site_dir: &[&str]) -> Option<String> {
                 );
                 segments.pop();
             }
+            // With our configuration, mkdocs maps `index.md` to its containing
+            // directory's URL, so this should be ignored.
+            "index.md" => {}
             other => segments.push(other.trim_end_matches(".md").to_string()),
         }
     }
@@ -321,6 +356,11 @@ struct Styles {
     code: Style,
     term: Style,
     link: Style,
+    toml_comment: Style,
+    toml_table: Style,
+    toml_string: Style,
+    toml_number: Style,
+    toml_boolean: Style,
 }
 
 impl Styles {
@@ -332,6 +372,36 @@ impl Styles {
         self.code = Style::new().cyan();
         self.term = Style::new().green().bold();
         self.link = Style::new().blue().underline();
+        self.toml_comment = Style::new().dimmed();
+        self.toml_table = Style::new().magenta().bold();
+        self.toml_string = Style::new().green();
+        self.toml_number = Style::new().yellow();
+        self.toml_boolean = Style::new().yellow();
+    }
+
+    /// Maps synoptic's built-in toml token kinds onto our palette.
+    fn toml_style(&self, kind: &str) -> Style {
+        match kind {
+            "comment" => self.toml_comment,
+            "table" => self.toml_table,
+            "string" => self.toml_string,
+            "digit" | "keyword" => self.toml_number,
+            "boolean" => self.toml_boolean,
+            other => {
+                // We're choosing to panic on an unknown kind because we're
+                // targeting a small set of documents and we do snapshot tests
+                // for all of them. (synoptic really should return a structured
+                // enum rather than a string here!)
+                //
+                // Note that we use locked-tripwire to ensure cargo nextest
+                // cannot be installed without --locked, so a newer version of
+                // synoptic cannot come in and surprise us.
+                panic!(
+                    "unknown synoptic toml token kind {other:?} -- \
+                     the built-in toml highlighter's token kinds may have changed"
+                );
+            }
+        }
     }
 }
 
@@ -548,6 +618,37 @@ impl LineWriter {
         // Code blocks are never hyperlinked, but preserve the current styles.
         let mut desired = self.desired_attrs.clone();
         desired.link = LinkTarget::Unlinked;
+        self.for_each_verbatim_line(s, |w, _, line| w.write_open(line, &desired));
+    }
+
+    /// Writes verbatim text with TOML highlighting.
+    fn verbatim_toml(&mut self, s: &str, palette: &Styles) {
+        let lines: Vec<String> = s.split('\n').map(str::to_string).collect();
+        let mut highlighter =
+            from_extension("toml", 4).expect("synoptic provides a built-in toml highlighter");
+        highlighter.run(&lines);
+
+        self.for_each_verbatim_line(s, |w, i, line| {
+            for token in highlighter.line(i, line) {
+                match token {
+                    TokOpt::Some(text, kind) => {
+                        let desired = RunAttrs {
+                            styles: StyleStack::from_slice(&[palette.toml_style(&kind)]),
+                            link: LinkTarget::Unlinked,
+                        };
+                        w.write_open(&text, &desired);
+                    }
+                    TokOpt::None(text) => w.write_open(&text, &RunAttrs::default()),
+                }
+            }
+        });
+    }
+
+    fn for_each_verbatim_line(
+        &mut self,
+        s: &str,
+        mut write_line: impl FnMut(&mut Self, usize, &str),
+    ) {
         let lines: Vec<&str> = s.split('\n').collect();
         let last = lines.len() - 1;
         for (i, &line) in lines.iter().enumerate() {
@@ -555,15 +656,15 @@ impl LineWriter {
                 self.end_line();
             }
             if line.is_empty() {
-                // Materialize this interior blank line so the next line's
-                // end_line emits it; skip the last line to avoid a trailing
-                // blank.
+                // If i is not the very last line, insert a line that the next
+                // iteration will end (to insert a blank line). If i is the last
+                // line, then don't append a trailing line.
                 if i != last {
                     self.open_line();
                 }
             } else {
                 self.open_line();
-                self.write_open(line, &desired);
+                write_line(self, i, line);
             }
         }
     }
@@ -686,6 +787,14 @@ struct Rendered {
     dropped: Vec<String>,
 }
 
+/// The current code block being rendered.
+enum CodeBlockState {
+    /// A code block without highlighting.
+    Verbatim,
+    /// A TOML code block.
+    Toml { buffer: String },
+}
+
 fn render_markdown(
     markdown: &str,
     site_dir: &'static [&'static str],
@@ -700,7 +809,7 @@ fn render_markdown(
         writer: LineWriter::new(opts.color, opts.hyperlinks, opts.width),
         palette,
         site_dir,
-        context: InlineContext::Normal,
+        block: BlockContext::Normal(InlineContext::Normal),
         list_stack: Vec::new(),
         dropped: Vec::new(),
     };
@@ -715,13 +824,18 @@ fn render_markdown(
 }
 
 /// The current inline context the renderer is in.
-///
-/// This controls rendering of `Text` and `Code` events.
 #[derive(Clone, Copy)]
 enum InlineContext {
     Normal,
     Term,
-    CodeBlock,
+}
+
+/// Block-level context for the renderer.
+enum BlockContext {
+    /// The normal block context, with no code block open.
+    Normal(InlineContext),
+    /// A code block is open.
+    Code(CodeBlockState),
 }
 
 /// State maintained for a single open list.
@@ -735,7 +849,7 @@ struct Renderer {
     writer: LineWriter,
     palette: Styles,
     site_dir: &'static [&'static str],
-    context: InlineContext,
+    block: BlockContext,
     // The stack of open lists.
     list_stack: Vec<ListFrame>,
     dropped: Vec<String>,
@@ -767,14 +881,26 @@ impl Renderer {
                 self.writer.end_block();
             }
 
-            Event::Start(Tag::CodeBlock(_)) => {
+            Event::Start(Tag::CodeBlock(kind)) => {
+                // Flush inline text buffered by a tight list item (e.g. `-
+                // label:` before a fenced block), so the item marker stays on
+                // the label, not the first code line.
+                self.writer.flush_word();
                 self.writer.end_line();
                 self.writer.push_prefix(CODE_INDENT);
+                self.block = BlockContext::Code(self.code_block_state_for(&kind));
                 self.writer.push_style(self.palette.code);
-                self.context = InlineContext::CodeBlock;
             }
             Event::End(TagEnd::CodeBlock) => {
-                self.context = InlineContext::Normal;
+                // Reset the block context to normal, grabbing the TOML buffer
+                // if it exists.
+                if let BlockContext::Code(CodeBlockState::Toml { buffer }) =
+                    std::mem::replace(&mut self.block, BlockContext::Normal(InlineContext::Normal))
+                {
+                    // (Note that non-TOML contexts were being rendered
+                    // just-in-time, not buffered.)
+                    self.writer.verbatim_toml(&buffer, &self.palette);
+                }
                 self.writer.pop_style();
                 self.writer.pop_prefix();
                 self.writer.end_block();
@@ -820,11 +946,11 @@ impl Renderer {
             Event::Start(Tag::DefinitionListTitle) => {
                 self.writer.end_block();
                 self.writer.push_style(self.palette.term);
-                self.context = InlineContext::Term;
+                self.block = BlockContext::Normal(InlineContext::Term);
             }
             Event::End(TagEnd::DefinitionListTitle) => {
                 self.writer.flush_word();
-                self.context = InlineContext::Normal;
+                self.block = BlockContext::Normal(InlineContext::Normal);
                 self.writer.pop_style();
                 self.writer.end_line();
             }
@@ -869,20 +995,31 @@ impl Renderer {
                 }
             }
 
-            Event::Text(text) => match self.context {
-                InlineContext::CodeBlock => self.writer.verbatim(&text),
-                InlineContext::Normal | InlineContext::Term => self.push_text(&text),
-            },
-            Event::Code(code) => match self.context {
-                InlineContext::Term => {
-                    self.writer.add_segment(&code);
-                }
-                InlineContext::Normal | InlineContext::CodeBlock => {
-                    self.writer.push_style(self.palette.code);
-                    self.writer.add_segment(&code);
-                    self.writer.pop_style();
+            Event::Text(text) => match &mut self.block {
+                BlockContext::Code(CodeBlockState::Toml { buffer }) => buffer.push_str(&text),
+                BlockContext::Code(CodeBlockState::Verbatim) => self.writer.verbatim(&text),
+                BlockContext::Normal(InlineContext::Normal | InlineContext::Term) => {
+                    self.push_text(&text)
                 }
             },
+            Event::Code(code) => {
+                match self.block {
+                    BlockContext::Normal(InlineContext::Term) => {
+                        // A definition term is already fully styled, so don't
+                        // additionally style it with the code style. (Maybe we
+                        // want to revisit this later?)
+                        self.writer.add_segment(&code);
+                    }
+                    BlockContext::Normal(InlineContext::Normal) => {
+                        self.writer.push_style(self.palette.code);
+                        self.writer.add_segment(&code);
+                        self.writer.pop_style();
+                    }
+                    BlockContext::Code(_) => {
+                        unreachable!("inline code events cannot occur inside code blocks")
+                    }
+                }
+            }
             Event::SoftBreak => self.writer.add_space(),
             Event::HardBreak => self.writer.hard_break(),
 
@@ -926,6 +1063,21 @@ impl Renderer {
             self.writer.add_segment(run);
         }
     }
+
+    fn code_block_state_for(&self, kind: &CodeBlockKind) -> CodeBlockState {
+        if !self.writer.color {
+            return CodeBlockState::Verbatim;
+        }
+        let CodeBlockKind::Fenced(info) = kind else {
+            return CodeBlockState::Verbatim;
+        };
+        match info.split_whitespace().next() {
+            Some("toml") => CodeBlockState::Toml {
+                buffer: String::new(),
+            },
+            _ => CodeBlockState::Verbatim,
+        }
+    }
 }
 
 fn display_width(s: &str) -> usize {
@@ -935,6 +1087,7 @@ fn display_width(s: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::core::NextestConfig;
     use nextest_filtering::FILTERSET_REFERENCE_MD;
 
     #[test]
@@ -1084,6 +1237,23 @@ mod tests {
     }
 
     #[test]
+    fn list_item_label_before_code_block_keeps_marker_on_label() {
+        let doc = HelpDoc {
+            markdown: "- **Examples**:\n  ```\n  retries = 3\n  ```\n".into(),
+            site_dir: &[],
+        };
+        let rendered = render(
+            &doc,
+            RenderOptions {
+                color: false,
+                hyperlinks: false,
+                width: 80,
+            },
+        );
+        insta::assert_snapshot!(rendered);
+    }
+
+    #[test]
     fn blockquote_code_block_blank_line_keeps_border() {
         let doc = HelpDoc {
             markdown: "> ```\n> a\n>\n> b\n> ```\n".into(),
@@ -1139,6 +1309,25 @@ mod tests {
         assert_eq!(
             rewrite_url("../selecting.md", site_dir).as_deref(),
             Some("https://nexte.st/docs/selecting/"),
+        );
+
+        // index.md resolves to the corresponding directory URL.
+        let config_dir: &[&str] = &["docs", "configuration"];
+        assert_eq!(
+            rewrite_url("index.md", config_dir).as_deref(),
+            Some("https://nexte.st/docs/configuration/"),
+        );
+        assert_eq!(
+            rewrite_url("index.md#hierarchical-configuration", config_dir).as_deref(),
+            Some("https://nexte.st/docs/configuration/#hierarchical-configuration"),
+        );
+        assert_eq!(
+            rewrite_url("../user-config/index.md", config_dir).as_deref(),
+            Some("https://nexte.st/docs/user-config/"),
+        );
+        assert_eq!(
+            rewrite_url("../filtersets/index.md", config_dir).as_deref(),
+            Some("https://nexte.st/docs/filtersets/"),
         );
     }
 
@@ -1197,6 +1386,89 @@ mod tests {
             rendered.dropped.is_empty(),
             "filterset reference uses markdown the CLI help renderer silently drops: {:?}",
             rendered.dropped,
+        );
+    }
+
+    #[test]
+    fn repo_config_reference_stays_within_supported_subset() {
+        let markdown = NextestConfig::REFERENCE_MD;
+
+        let mut rest = markdown;
+        while let Some(idx) = rest.find("<!-- md:") {
+            let after = &rest[idx + "<!-- md:".len()..];
+            let name: String = after
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            assert_eq!(
+                name, "version",
+                "unsupported `md:{name}` shortcode in the repo-config reference; \
+                 the CLI help renderer only handles `md:version` (see apply_shortcodes)"
+            );
+            rest = after;
+        }
+
+        let preprocessed = preprocess(markdown);
+        let rendered = render_markdown(
+            &preprocessed,
+            &["docs", "configuration"],
+            RenderOptions {
+                color: false,
+                hyperlinks: false,
+                width: 80,
+            },
+        );
+        assert!(
+            rendered.dropped.is_empty(),
+            "repo-config reference uses markdown the CLI help renderer silently drops: {:?}",
+            rendered.dropped,
+        );
+    }
+
+    #[test]
+    fn repo_config_markdown_includes_reference_and_defaults() {
+        let markdown = repo_config_markdown();
+        assert!(
+            markdown.contains("# Configuration reference"),
+            "repo-config topic includes the reference body"
+        );
+        assert!(
+            markdown.contains("## Default configuration"),
+            "repo-config topic appends a default configuration section"
+        );
+        assert!(
+            markdown.contains(NextestConfig::DEFAULT_CONFIG.trim_end()),
+            "repo-config topic embeds the default config verbatim"
+        );
+    }
+
+    #[test]
+    fn toml_code_block_is_highlighted() {
+        let doc = HelpDoc {
+            markdown: "```toml\n[profile.ci]\n# run all tests\nfail-fast = false\nretries = 3\nslow-timeout = \"60s\"\n```\n".into(),
+            site_dir: &[],
+        };
+        let colored = render(
+            &doc,
+            RenderOptions {
+                color: true,
+                hyperlinks: false,
+                width: 80,
+            },
+        );
+        insta::assert_snapshot!("toml_highlight_color", colored);
+
+        let plain = render(
+            &doc,
+            RenderOptions {
+                color: false,
+                hyperlinks: false,
+                width: 80,
+            },
+        );
+        assert!(
+            !plain.contains('\x1b'),
+            "a toml block emits no ANSI when color is off: {plain:?}"
         );
     }
 }

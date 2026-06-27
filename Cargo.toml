@@ -138,6 +138,7 @@ supports-color = "3.0.2"
 supports-hyperlinks = "3.1.0"
 supports-unicode = "3.0.0"
 swrite = "0.1.0"
+synoptic = "2.2.9"
 tar = "0.4.46"
 target-spec = { version = "3.6.0", features = ["custom", "summaries"] }
 target-spec-miette = "0.4.8"

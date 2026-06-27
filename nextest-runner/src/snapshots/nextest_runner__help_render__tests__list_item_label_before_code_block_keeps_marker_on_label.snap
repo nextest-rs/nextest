@@ -1,0 +1,6 @@
+---
+source: nextest-runner/src/help_render.rs
+expression: rendered
+---
+- Examples:
+      retries = 3
