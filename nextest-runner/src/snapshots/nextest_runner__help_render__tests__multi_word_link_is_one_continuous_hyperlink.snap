@@ -1,0 +1,5 @@
+---
+source: nextest-runner/src/help_render.rs
+expression: rendered
+---
+]8;;https://example.com/page\click here]8;;\ and more text

@@ -18,7 +18,7 @@ This section contains the full set of operators supported by the filterset DSL.
     Include all tests matching [36mname-matcher[0m.
 
 [32;1mgroup(name-matcher) [3m(since 0.9.133)[0m
-    Include all tests in [34;4m]8;;https://nexte.st/docs/configuration/test-groups/\test]8;;\ ]8;;https://nexte.st/docs/configuration/test-groups/\groups]8;;\[0m matching [36mname-matcher[0m. This predicate can
+    Include all tests in [34;4m]8;;https://nexte.st/docs/configuration/test-groups/\test groups[0m]8;;\ matching [36mname-matcher[0m. This predicate can
     only be used on the command line.
 
 [32;1mpackage(name-matcher)[0m
@@ -33,7 +33,7 @@ This section contains the full set of operators supported by the filterset DSL.
     (possibly transitively) depend on [36mname-matcher[0m.
 
 [32;1mbinary_id(name-matcher)[0m
-    Include all tests in [34;4m]8;;https://nexte.st/docs/glossary/#binary-id\binary]8;;\ ]8;;https://nexte.st/docs/glossary/#binary-id\IDs]8;;\[0m matching [36mname-matcher[0m. Covers all of
+    Include all tests in [34;4m]8;;https://nexte.st/docs/glossary/#binary-id\binary IDs[0m]8;;\ matching [36mname-matcher[0m. Covers all of
     [36mpackage()[0m, [36mkind()[0m and [36mbinary()[0m.
 
 [32;1mkind(name-matcher)[0m
@@ -46,11 +46,11 @@ This section contains the full set of operators supported by the filterset DSL.
     of the integration test, benchmark, or binary target.
 
 [32;1mplatform(host) or platform(target)[0m
-    Include all tests that are [34;4m]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\built]8;;\ ]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\for]8;;\ ]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\the]8;;\ ]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\host]8;;\ ]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\or]8;;\ ]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\target]8;;\ ]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\platform]8;;\[0m,
+    Include all tests that are [34;4m]8;;https://nexte.st/docs/selecting/#filtering-by-build-platform\built for the host or target platform[0m]8;;\,
     respectively.
 
 [32;1mdefault() [3m(since 0.9.75)[0m
-    The default set of tests to run; see [34;4m[3m]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\Running]8;;\ ]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\a]8;;\ ]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\subset]8;;\ ]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\of]8;;\ ]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\tests]8;;\ ]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\by]8;;\ ]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\default]8;;\[0m
+    The default set of tests to run; see [34;4m[3m]8;;https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default\Running a subset of tests by default]8;;\[0m
     for more information.
 
 │ [1mTip: Binary exclusions[0m
@@ -64,7 +64,7 @@ This section contains the full set of operators supported by the filterset DSL.
 │
 │ This is generally what you want, but if you would like to list tests anyway,
 │ include a [36mtest()[0m predicate. For example, to list test binaries for the target
-│ platform (using, for example, a [34;4m]8;;https://nexte.st/docs/features/target-runners/\target]8;;\ ]8;;https://nexte.st/docs/features/target-runners/\runner]8;;\[0m), but skip running them:
+│ platform (using, for example, a [34;4m]8;;https://nexte.st/docs/features/target-runners/\target runner[0m]8;;\), but skip running them:
 │
 │     [36mcargo nextest list -E 'platform(host) + not test(/.*/)' --verbose[0m
 
@@ -117,7 +117,7 @@ Cargo.
     Integration tests, typically in the [36mtests/[0m directory.
 
 [32;1mbench[0m
-    Benchmark tests. For example, see [34;4m[3m]8;;https://nexte.st/docs/integrations/criterion/\Criterion]8;;\ ]8;;https://nexte.st/docs/integrations/criterion/\benchmarks]8;;\[0m.
+    Benchmark tests. For example, see [34;4m[3m]8;;https://nexte.st/docs/integrations/criterion/\Criterion benchmarks[0m]8;;\.
 
 [32;1mproc-macro[0m
     Unit tests for proc-macro crates, in the [36msrc/[0m directory under [36m#[cfg(test)][0m.
@@ -141,11 +141,11 @@ This defines the general syntax for matching against names.
 [32;1m/regex/[0m
     [3mRegex matcher[0m—match a package or test name if any part of it matches the
     regular expression [36mregex[0m. To match the entire string against a regular
-    expression, use [36m/^regex$/[0m. The implementation uses the [34;4m]8;;https://github.com/rust-lang/regex\regex]8;;\[0m crate.
+    expression, use [36m/^regex$/[0m. The implementation uses the [34;4m]8;;https://github.com/rust-lang/regex\regex[0m]8;;\ crate.
 
 [32;1m#glob[0m
     [3mGlob matcher[0m—match a package or test name if the full name matches the glob
-    expression [36mglob[0m. The implementation uses the [34;4m]8;;https://docs.rs/globset\globset]8;;\ ]8;;https://docs.rs/globset\crate]8;;\[0m.
+    expression [36mglob[0m. The implementation uses the [34;4m]8;;https://docs.rs/globset\globset crate[0m]8;;\.
 
 [32;1mstring[0m
     Default matching strategy for the predicate.
@@ -205,6 +205,6 @@ For the [3mglob matcher[0m, to match against a literal glob metacharacter such
 
 All other escape sequences are invalid.
 
-The [3mregular expression[0m matcher supports the same escape sequences that [34;4m]8;;https://docs.rs/regex/latest/regex/#escape-sequences\the]8;;\ ]8;;https://docs.rs/regex/latest/regex/#escape-sequences\regex]8;;\[0m
-[34;4m]8;;https://docs.rs/regex/latest/regex/#escape-sequences\crate]8;;\ ]8;;https://docs.rs/regex/latest/regex/#escape-sequences\does]8;;\[0m. This includes character classes like [36m\d[0m. Additionally, [36m\/[0m is
+The [3mregular expression[0m matcher supports the same escape sequences that [34;4m]8;;https://docs.rs/regex/latest/regex/#escape-sequences\the regex]8;;\[0m
+[34;4m]8;;https://docs.rs/regex/latest/regex/#escape-sequences\crate does[0m]8;;\. This includes character classes like [36m\d[0m. Additionally, [36m\/[0m is
 interpreted as an escaped [36m/[0m.

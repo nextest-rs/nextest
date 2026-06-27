@@ -1,0 +1,6 @@
+---
+source: nextest-runner/src/help_render.rs
+expression: rendered
+---
+]8;;https://example.com/x\alpha beta]8;;\
+]8;;https://example.com/x\gamma]8;;\
