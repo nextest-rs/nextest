@@ -4,7 +4,12 @@ expression: plain_stdout
 ---
 Filterset DSL reference
 
-This section contains the full set of operators supported by the filterset DSL.
+This topic contains the full set of operators supported by the filterset DSL.
+
+This reference is also available on the nextest site
+<https://nexte.st/docs/filtersets/reference/>.
+
+Reference
 
 Basic predicates
 

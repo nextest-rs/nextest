@@ -1,6 +1,4 @@
-# Filterset DSL reference
-
-This section contains the full set of operators supported by the filterset DSL.
+## Reference
 
 ### Basic predicates
 

@@ -4,6 +4,12 @@ sidebar_icon: false
 description: Reference documentation for nextest's filterset DSL operators and predicates.
 ---
 
+# Filterset DSL reference
+
+This section contains the full set of operators supported by the filterset DSL.
+
+<!-- md:version 0.9.139 --> This reference is also available locally by running `cargo nextest help filterset`.
+
 <!-- include: nextest-filtering/reference.md -->
 
 ## More information

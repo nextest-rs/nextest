@@ -43,6 +43,7 @@ humantime-serde.workspace = true
 iddqd.workspace = true
 indexmap = { workspace = true, features = ["serde"] }
 indicatif.workspace = true
+indoc.workspace = true
 is_ci.workspace = true
 itertools.workspace = true
 miette.workspace = true
