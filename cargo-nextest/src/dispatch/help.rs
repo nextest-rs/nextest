@@ -13,7 +13,6 @@ use crate::{
     output::{OutputContext, terminal_width},
 };
 use clap::{CommandFactory, builder::styling::Style, error::ErrorKind};
-use nextest_filtering::FILTERSET_REFERENCE_MD;
 use nextest_runner::{
     help_render::{self, HelpDoc, RenderOptions},
     pager::PagedOutput,
@@ -72,10 +71,7 @@ impl HelpTopic {
     /// Returns the [`HelpDoc`] for this topic.
     pub(super) fn doc(self) -> HelpDoc {
         match self {
-            Self::Filterset => HelpDoc {
-                markdown: FILTERSET_REFERENCE_MD,
-                site_dir: &["docs", "filtersets"],
-            },
+            Self::Filterset => HelpDoc::FILTERSET_DOC,
         }
     }
 }

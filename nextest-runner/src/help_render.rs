@@ -4,9 +4,11 @@
 //! Renders MkDocs help-topic documents (help topics) to the terminal.
 
 use crate::helpers::RESET_COLOR;
+use nextest_filtering::FILTERSET_REFERENCE_MD;
 use owo_colors::Style;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use smallvec::SmallVec;
+use std::borrow::Cow;
 use swrite::{SWrite, swrite};
 use tracing::warn;
 use unicode_width::UnicodeWidthStr;
@@ -18,11 +20,19 @@ pub struct HelpDoc {
     /// The raw markdown content of the document.
     ///
     /// This is transformed by the renderer.
-    pub markdown: &'static str,
+    pub markdown: Cow<'static, str>,
     /// The doc's directory within the site, e.g. `["docs", "filtersets"]`.
     ///
     /// This is used to resolve relative links within the document.
     pub site_dir: &'static [&'static str],
+}
+
+impl HelpDoc {
+    /// The filterset reference document.
+    pub const FILTERSET_DOC: Self = Self {
+        markdown: Cow::Borrowed(FILTERSET_REFERENCE_MD),
+        site_dir: &["docs", "filtersets"],
+    };
 }
 
 /// Rendering options for help topic output.
@@ -37,7 +47,7 @@ pub struct RenderOptions {
 
 /// Renders a help topic document to terminal-ready text.
 pub fn render(doc: &HelpDoc, opts: RenderOptions) -> String {
-    let preprocessed = preprocess(doc.markdown);
+    let preprocessed = preprocess(&doc.markdown);
     let rendered = render_markdown(&preprocessed, doc.site_dir, opts);
     if !rendered.dropped.is_empty() {
         warn!(
@@ -850,17 +860,10 @@ mod tests {
     use super::*;
     use nextest_filtering::FILTERSET_REFERENCE_MD;
 
-    fn filterset_doc() -> HelpDoc {
-        HelpDoc {
-            markdown: FILTERSET_REFERENCE_MD,
-            site_dir: &["docs", "filtersets"],
-        }
-    }
-
     #[test]
     fn hyperlinks_gate_osc8() {
         let with = render(
-            &filterset_doc(),
+            &HelpDoc::FILTERSET_DOC,
             RenderOptions {
                 color: false,
                 hyperlinks: true,
@@ -877,7 +880,7 @@ mod tests {
         );
 
         let without = render(
-            &filterset_doc(),
+            &HelpDoc::FILTERSET_DOC,
             RenderOptions {
                 color: false,
                 hyperlinks: false,
@@ -894,7 +897,7 @@ mod tests {
     #[test]
     fn color_nested_styles() {
         let doc = HelpDoc {
-            markdown: "**bold _and italic_** then `code`.\n",
+            markdown: "**bold _and italic_** then `code`.\n".into(),
             site_dir: &[],
         };
         let rendered = render(
@@ -911,7 +914,7 @@ mod tests {
     #[test]
     fn ordered_list_indent_matches_marker_width() {
         let doc = HelpDoc {
-            markdown: "1. aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii\n",
+            markdown: "1. aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii\n".into(),
             site_dir: &[],
         };
         let rendered = render(
@@ -935,7 +938,7 @@ mod tests {
     #[test]
     fn nested_list_preserves_outer_ordinal() {
         let doc = HelpDoc {
-            markdown: "1. first\n2. second\n   - nested a\n   - nested b\n3. third\n",
+            markdown: "1. first\n2. second\n   - nested a\n   - nested b\n3. third\n".into(),
             site_dir: &[],
         };
         let rendered = render(
@@ -952,7 +955,7 @@ mod tests {
     #[test]
     fn code_block_preserves_blank_lines() {
         let doc = HelpDoc {
-            markdown: "```\nfirst\n\nsecond\n```\n",
+            markdown: "```\nfirst\n\nsecond\n```\n".into(),
             site_dir: &[],
         };
         let rendered = render(
@@ -972,7 +975,7 @@ mod tests {
     #[test]
     fn blockquote_code_block_blank_line_keeps_border() {
         let doc = HelpDoc {
-            markdown: "> ```\n> a\n>\n> b\n> ```\n",
+            markdown: "> ```\n> a\n>\n> b\n> ```\n".into(),
             site_dir: &[],
         };
         let rendered = render(
@@ -989,7 +992,7 @@ mod tests {
     #[test]
     fn admonition_with_unicode_indent_does_not_panic() {
         let doc = HelpDoc {
-            markdown: "!!! note\n   \u{a0}body text\n",
+            markdown: "!!! note\n   \u{a0}body text\n".into(),
             site_dir: &[],
         };
         let _ = render(
@@ -1004,7 +1007,7 @@ mod tests {
 
     #[test]
     fn rewrite_url_resolves_relative_links() {
-        let site_dir: &[&str] = &["docs", "filtersets"];
+        let site_dir = HelpDoc::FILTERSET_DOC.site_dir;
         assert_eq!(
             rewrite_url("https://example.com/x", site_dir).as_deref(),
             Some("https://example.com/x"),
@@ -1031,7 +1034,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "relative link in help doc escapes the site root")]
     fn rewrite_url_panics_on_escaping_links() {
-        let site_dir: &[&str] = &["docs", "filtersets"];
+        let site_dir = HelpDoc::FILTERSET_DOC.site_dir;
         rewrite_url("../../../../foo.md", site_dir);
     }
 
@@ -1072,7 +1075,7 @@ mod tests {
         let preprocessed = preprocess(markdown);
         let rendered = render_markdown(
             &preprocessed,
-            &["docs", "filtersets"],
+            HelpDoc::FILTERSET_DOC.site_dir,
             RenderOptions {
                 color: false,
                 hyperlinks: false,
