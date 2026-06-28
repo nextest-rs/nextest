@@ -1,0 +1,418 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: "&user_config_stdout[..default_idx]"
+---
+User config reference
+
+This topic contains the full user configuration reference for nextest.
+
+This reference is also available on the nextest site
+<https://nexte.st/docs/user-config/reference/>.
+
+For more information about how user configuration works, see the user
+configuration overview <https://nexte.st/docs/user-config/>.
+
+Configuration file location
+
+User configuration is loaded from one of the following platform-specific
+locations:
+
+1. On Linux, macOS, and other Unix platforms:
+   $XDG_CONFIG_HOME/nextest/config.toml, or ~/.config/nextest/config.toml if
+   $XDG_CONFIG_HOME is unset or empty.
+2. On Windows: %APPDATA%\nextest\config.toml, falling back to
+   %XDG_CONFIG_HOME%\nextest\config.toml, then
+   %HOME%\.config\nextest\config.toml.
+
+For more information about configuration hierarchy, see Configuration hierarchy
+<https://nexte.st/docs/user-config/#configuration-hierarchy>.
+
+User configuration schema
+
+(since 0.9.136)
+
+A JSON Schema is available for nextest's user configuration. The schema can be
+obtained through:
+
+- For the latest released version of nextest, at
+  https://nexte.st/schemas/user-config.json
+  <https://nexte.st/schemas/user-config.json>. This URL is updated with new
+  nextest releases.
+- For the schema corresponding to a particular version of nextest, by running
+  cargo nextest self schema user-config.
+
+The schema can be used:
+
+- To validate a user configuration file.
+- With the Tombi <https://tombi-toml.github.io/tombi> language server for TOML
+  or RustRover <https://nexte.st/docs/integrations/rustrover/>, to provide
+  autocomplete in supported IDEs and editors. (The taplo language server is not
+  supported due to a crash bug <https://github.com/tamasfe/taplo/pull/779>.)
+
+Note that the schema is somewhat stricter than nextest's own config parser:
+unknown configuration items will fail schema validation, while nextest itself
+will only print out a warning.
+
+The schema is part of the JSON Schema Store <https://www.schemastore.org/>, so
+both Tombi and RustRover will automatically download it for you. Because
+nextest's user configuration (outside of experimental configuration) is
+append-only <https://nexte.st/docs/stability/>, the schema will automatically be
+updated as new nextest versions are released.
+
+Experimental features
+
+(since 0.9.123)
+
+Experimental features are configured under [experimental].
+
+experimental.record
+
+- Type: Boolean
+- Description: Enables the record-replay-rerun feature: stores test run results
+  on disk for replay or selective rerun.
+- Documentation: Record, replay, and rerun
+  <https://nexte.st/docs/features/record-replay-rerun/>
+- Default: false
+- Environment variable: NEXTEST_EXPERIMENTAL_RECORD=1
+- Example:
+      [experimental]
+      record = true
+
+Record configuration
+
+(since 0.9.123)
+
+Record configuration is specified under [record]. Recording requires both
+[experimental] record = true and [record] enabled = true.
+
+For detailed information, see Record, replay, and rerun
+<https://nexte.st/docs/features/record-replay-rerun/>.
+
+record.enabled
+
+- Type: Boolean
+- Description: Whether to record test runs. Has no effect unless
+  [experimental] record = true.
+- Default: false
+- Example:
+      [record]
+      enabled = true
+
+record.max-output-size
+
+- Type: String (size)
+- Description: Maximum size of a single captured stdout or stderr stream before
+  truncation (e.g. "10MB").
+- Default: "10MB"
+
+record.max-records
+
+- Type: Integer
+- Description: Maximum number of recorded runs to retain before eviction.
+- Default: 100
+
+record.max-total-size
+
+- Type: String (size)
+- Description: Maximum combined size of all retained recordings before eviction
+  (e.g. "1GB").
+- Default: "1GB"
+
+record.max-age
+
+- Type: String (duration)
+- Description: Maximum age of a recorded run before eviction (e.g. "30d").
+- Default: "30d"
+
+UI configuration
+
+UI settings are configured under [ui].
+
+ui.show-progress
+
+(since 0.9.118)
+
+- Type: String
+- Description: Style of progress display shown during test runs.
+- Valid values:
+  - "auto": picks a display based on terminal capabilities — a progress bar in
+    interactive terminals, a counter otherwise.
+  - "none": disables progress display entirely.
+  - "bar": shows a progress bar listing the currently running tests.
+  - "counter": shows a single-line counter (e.g. (1/10)).
+  - "only": like "bar" in interactive terminals, but additionally hides
+    successful test output (sets status-level to slow and final-status-level to
+    none). Falls back to "auto" in non-interactive contexts (e.g. piped output,
+    CI).
+
+- Default: "auto"
+- CLI equivalent: --show-progress
+- Environment variable: NEXTEST_SHOW_PROGRESS
+- Example:
+      [ui]
+      show-progress = "bar"
+
+ui.max-progress-running
+
+(since 0.9.118)
+
+- Type: Integer or string
+
+- Description: Maximum number of running tests to list in the progress bar.
+  Excess running tests are collapsed into a summary line.
+
+- Valid values:
+
+  - Positive integer (e.g. 8): display up to this many running tests.
+  - 0: hide the list of running tests entirely (the bar still tracks progress).
+  - "infinite": display all running tests, no limit.
+
+- Default: 8
+
+- CLI equivalent: --max-progress-running
+
+- Environment variable: NEXTEST_MAX_PROGRESS_RUNNING
+
+- Examples:
+
+      [ui]
+      # Show up to 16 running tests.
+      max-progress-running = 16
+
+      [ui]
+      # Show all running tests.
+      max-progress-running = "infinite"
+
+ui.input-handler
+
+(since 0.9.118)
+
+- Type: Boolean
+- Description: Enables the interactive keyboard input handler
+  <https://nexte.st/docs/reporting/#live-output> (e.g. t to dump test status,
+  Enter to print a summary line).
+- Valid values: true or false
+- Default: true (input handler enabled)
+- CLI equivalent: --no-input-handler (to disable)
+- Environment variable: NEXTEST_NO_INPUT_HANDLER=1 (to disable)
+- Example:
+      [ui]
+      # Disable keyboard input handling.
+      input-handler = false
+
+ui.output-indent
+
+(since 0.9.118)
+
+- Type: Boolean
+- Description: Indents captured test output for visual clarity. Applies to
+  output produced by --failure-output and --success-output.
+- Valid values: true or false
+- Default: true
+- CLI equivalent: --no-output-indent (to disable)
+- Environment variable: NEXTEST_NO_OUTPUT_INDENT=1 (to disable)
+- Example:
+      [ui]
+      # Disable output indentation.
+      output-indent = false
+
+ui.pager
+
+(since 0.9.120)
+
+- Type: String, array, or table
+
+- Description: Pager command for output that benefits from scrolling (e.g.
+  nextest list, help output). Use ":builtin" for the builtin pager. See Pager
+  support <https://nexte.st/docs/user-config/pager/> for details.
+
+- Valid values:
+
+  - String: "less -FRX" (split on whitespace)
+  - Array: ["less", "-FRX"]
+  - Table: { command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }
+  - ":builtin": use the builtin pager.
+
+- Default: { command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } } on
+  Unix, ":builtin" on Windows (specified via an override)
+
+- CLI equivalent: --no-pager (to disable paging)
+
+- Examples:
+
+      [ui]
+      # Use less with custom flags.
+      pager = "less -FRX"
+
+      [ui]
+      # Use the builtin pager.
+      pager = ":builtin"
+
+      [ui]
+      # Use less with environment variables.
+      pager = { command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }
+
+ui.paginate
+
+(since 0.9.120)
+
+- Type: String
+- Description: When to send output through the pager.
+- Valid values:
+  - "auto": pages output from supported commands when stdout is a terminal.
+  - "never": disables pagination entirely.
+
+- Default: "auto"
+- CLI equivalent: --no-pager (equivalent to paginate = "never")
+- Example:
+      [ui]
+      # Never use a pager.
+      paginate = "never"
+
+Builtin pager configuration
+
+(since 0.9.120)
+
+When pager = ":builtin" is set, the builtin pager's behavior can be customized
+under [ui.streampager]. See Pager support
+<https://nexte.st/docs/user-config/pager/#builtin-pager-options> for details.
+
+ui.streampager.interface
+
+- Type: String
+- Description: How the builtin pager uses the alternate screen and when it
+  exits.
+- Valid values:
+  - "quit-if-one-page": exits immediately if the output fits on one page;
+    otherwise switches to full-screen and clears on exit.
+  - "full-screen-clear-output": always uses full-screen mode and clears the
+    screen on exit.
+  - "quit-quickly-or-clear-output": waits briefly before entering full-screen
+    mode; clears on exit only if it switched to full-screen.
+
+- Default: "quit-if-one-page"
+- Example:
+      [ui.streampager]
+      interface = "full-screen-clear-output"
+
+ui.streampager.wrapping
+
+- Type: String
+- Description: How the builtin pager wraps long lines.
+- Valid values:
+  - "none": disables wrapping; long lines extend off-screen and can be scrolled
+    horizontally.
+  - "word": wraps at word boundaries.
+  - "anywhere": wraps at any character (grapheme) boundary.
+
+- Default: "word"
+- Example:
+      [ui.streampager]
+      wrapping = "none"
+
+ui.streampager.show-ruler
+
+- Type: Boolean
+- Description: Whether to show a ruler at the bottom of the builtin pager.
+- Valid values: true or false
+- Default: true
+- Example:
+      [ui.streampager]
+      show-ruler = false
+
+Platform-specific overrides
+
+(since 0.9.120)
+
+You can customize UI settings for specific platforms using [[overrides]]
+sections. This is useful when different platforms need different defaults (e.g.,
+different progress display settings).
+
+Override structure
+
+    [[overrides]]
+    platform = "cfg(windows)"
+    ui.show-progress = "bar"
+    ui.max-progress-running = 4
+
+Each override has a required platform filter and optional settings in the ui
+section. Overrides are evaluated in order. For each setting, the first matching
+override provides the value. If no override matches, the base [ui] section value
+is used.
+
+Override filter
+
+overrides.platform
+
+- Type: String (target spec expression)
+- Description: Target-spec expression selecting which platforms this override
+  applies to (target triple or cfg() expression). Matched against the platform
+  nextest was built for. This is distinct from the platform field in per-test
+  overrides
+  <https://nexte.st/docs/configuration/per-test-overrides/#selecting-tests>,
+  which is matched against the host or target platform of the tests being run.
+- Required: Yes
+- Documentation: Specifying platforms
+  <https://nexte.st/docs/configuration/specifying-platforms/>
+- Valid formats:
+  - Target triple: "x86_64-unknown-linux-gnu"
+  - cfg() expression: "cfg(windows)", "cfg(unix)", "cfg(target_os = \"macos\")"
+
+- Examples:
+      [[overrides]]
+      platform = "cfg(windows)"
+      ui.show-progress = "bar"
+
+      [[overrides]]
+      platform = "cfg(target_os = \"macos\")"
+      ui.max-progress-running = 16
+
+Overridable settings
+
+All [ui], [ui.streampager], and [record] settings can be overridden within
+[[overrides]]:
+
+- ui.show-progress
+- ui.max-progress-running
+- ui.input-handler
+- ui.output-indent
+- ui.pager
+- ui.paginate
+- ui.streampager.interface
+- ui.streampager.wrapping
+- ui.streampager.show-ruler
+- record.enabled
+- record.max-output-size
+- record.max-records
+- record.max-total-size
+- record.max-age
+
+Each setting in an override is optional. The first matching override is applied
+on a per-setting basis.
+
+Example: platform-specific configuration
+
+    [ui]
+    # Base configuration for all platforms.
+    show-progress = "auto"
+    max-progress-running = 8
+
+    [[overrides]]
+    # Windows often has narrower terminals.
+    platform = "cfg(windows)"
+    ui.max-progress-running = 4
+
+    [[overrides]]
+    # macOS users might prefer a specific setting.
+    platform = "cfg(target_os = \"macos\")"
+    ui.show-progress = "bar"
+
+Resolution order
+
+Settings are resolved with the following precedence (highest priority first):
+
+1. CLI arguments (e.g., --show-progress=bar)
+2. Environment variables (e.g., NEXTEST_SHOW_PROGRESS=bar)
+3. User overrides (first matching [[overrides]] for each setting)
+4. User base config ([ui] section)
+5. Built-in defaults
