@@ -71,7 +71,7 @@ impl HelpTopic {
     /// Returns the [`HelpDoc`] for this topic.
     pub(super) fn doc(self) -> HelpDoc {
         match self {
-            Self::Filterset => HelpDoc::FILTERSET_DOC,
+            Self::Filterset => HelpDoc::filterset(),
         }
     }
 }

@@ -4,7 +4,11 @@ expression: colored.stdout_as_str().into_owned()
 ---
 [1;4mFilterset DSL reference[0m
 
-This section contains the full set of operators supported by the filterset DSL.
+This topic contains the full set of operators supported by the filterset DSL.
+
+This reference is also available [34;4m]8;;https://nexte.st/docs/filtersets/reference/\on the nextest site[0m]8;;\.
+
+[1;4mReference[0m
 
 [1;4mBasic predicates[0m
 

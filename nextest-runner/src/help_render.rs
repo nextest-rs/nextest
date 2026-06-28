@@ -4,6 +4,7 @@
 //! Renders MkDocs help-topic documents (help topics) to the terminal.
 
 use crate::helpers::RESET_COLOR;
+use indoc::formatdoc;
 use nextest_filtering::FILTERSET_REFERENCE_MD;
 use owo_colors::Style;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
@@ -29,10 +30,21 @@ pub struct HelpDoc {
 
 impl HelpDoc {
     /// The filterset reference document.
-    pub const FILTERSET_DOC: Self = Self {
-        markdown: Cow::Borrowed(FILTERSET_REFERENCE_MD),
-        site_dir: &["docs", "filtersets"],
-    };
+    pub fn filterset() -> Self {
+        let markdown = formatdoc! {"
+                # Filterset DSL reference
+
+                This topic contains the full set of operators supported by the filterset DSL.
+
+                This reference is also available [on the nextest site](https://nexte.st/docs/filtersets/reference/).
+
+                {FILTERSET_REFERENCE_MD}
+            "};
+        Self {
+            markdown: Cow::Owned(markdown),
+            site_dir: &["docs", "filtersets"],
+        }
+    }
 }
 
 /// Rendering options for help topic output.
@@ -913,7 +925,7 @@ mod tests {
     #[test]
     fn hyperlinks_gate_osc8() {
         let with = render(
-            &HelpDoc::FILTERSET_DOC,
+            &HelpDoc::filterset(),
             RenderOptions {
                 color: false,
                 hyperlinks: true,
@@ -930,7 +942,7 @@ mod tests {
         );
 
         let without = render(
-            &HelpDoc::FILTERSET_DOC,
+            &HelpDoc::filterset(),
             RenderOptions {
                 color: false,
                 hyperlinks: false,
@@ -1091,7 +1103,7 @@ mod tests {
 
     #[test]
     fn rewrite_url_resolves_relative_links() {
-        let site_dir = HelpDoc::FILTERSET_DOC.site_dir;
+        let site_dir = HelpDoc::filterset().site_dir;
         assert_eq!(
             rewrite_url("https://example.com/x", site_dir).as_deref(),
             Some("https://example.com/x"),
@@ -1118,7 +1130,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "relative link in help doc escapes the site root")]
     fn rewrite_url_panics_on_escaping_links() {
-        let site_dir = HelpDoc::FILTERSET_DOC.site_dir;
+        let site_dir = HelpDoc::filterset().site_dir;
         rewrite_url("../../../../foo.md", site_dir);
     }
 
@@ -1159,7 +1171,7 @@ mod tests {
         let preprocessed = preprocess(markdown);
         let rendered = render_markdown(
             &preprocessed,
-            HelpDoc::FILTERSET_DOC.site_dir,
+            HelpDoc::filterset().site_dir,
             RenderOptions {
                 color: false,
                 hyperlinks: false,
