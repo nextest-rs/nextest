@@ -226,6 +226,9 @@ impl NextestConfig {
     /// Repository-specific configuration is layered on top of the default config.
     pub const DEFAULT_CONFIG: &'static str = include_str!("../../../default-config.toml");
 
+    /// Contains the canonical repository config reference markdown.
+    pub const REFERENCE_MD: &'static str = include_str!("../../../repo-config-reference.md");
+
     /// The pregenerated JSON Schema for `.config/nextest.toml`.
     ///
     /// The schema is checked into the repository at

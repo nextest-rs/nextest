@@ -1,0 +1,9 @@
+---
+source: nextest-runner/src/help_render.rs
+expression: colored
+---
+    [35;1m[profile.ci][0m
+    [2m# run all tests[0m
+    fail-fast = [33mfalse[0m
+    retries = [33m3[0m
+    slow-timeout = [32m"60s"[0m

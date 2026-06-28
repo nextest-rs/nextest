@@ -15,10 +15,6 @@ default-filter = "all()"
 # Retry policy for failed tests. A non-zero value causes tests that pass on a
 # subsequent attempt to be marked as flaky. Can be overridden through the
 # `--retries` option.
-# Examples:
-# * retries = 3
-# * retries = { backoff = "fixed", count = 2, delay = "1s" }
-# * retries = { backoff = "exponential", count = 10, delay = "1s", jitter = true, max-delay = "10s" }
 retries = 0
 
 # Whether to treat flaky tests as passing or failing.
@@ -39,19 +35,6 @@ run-extra-args = []
 
 # Level of status information to display during test runs.
 #
-# Status levels are incremental: each level includes all levels above it. For
-# example, "slow" implies "retry" and "fail".
-#
-# Valid values:
-# * "none": no output.
-# * "fail": only output test failures.
-# * "retry": output test retries; includes "fail".
-# * "slow": output slow tests; includes "retry".
-# * "leak": output leaky tests; includes "slow".
-# * "pass": output passing tests; includes "leak".
-# * "skip": output skipped tests; includes "pass".
-# * "all": equivalent to "skip" today; reserved for future expansion.
-#
 # Can be overridden through the `--status-level` flag.
 status-level = "pass"
 
@@ -63,55 +46,25 @@ final-status-level = "flaky"
 
 # When to display output for failed tests.
 #
-# Valid values:
-# * "immediate": show captured output as soon as the test completes.
-# * "final": show captured output only at the end of the run.
-# * "immediate-final": show captured output when the test completes and again
-#   at the end of the run.
-# * "never": never show captured output.
-#
-# For large test suites and CI it is generally useful to use "immediate-final".
-#
 # Can be overridden through the `--failure-output` option.
 failure-output = "immediate"
 
 # When to display output for successful tests. Generally best left as "never".
 success-output = "never"
 
-# Failure handling for the test run. Accepted values:
-# * true: stop running tests after the first failure (waits for running tests
-#   to complete).
-# * false: run all tests regardless of failures.
-# * { max-fail = 10 }: stop after 10 failures (waits for running tests).
-# * { max-fail = 10, terminate = "wait" }: same as above (explicit).
-# * { max-fail = 10, terminate = "immediate" }: stop and terminate running
-#   tests immediately.
-# * { max-fail = "all" }: run all tests regardless of failures.
+# Failure handling for the test run.
 #
 # For CI runs, consider setting this to false.
 fail-fast = true
 
-# Treat a test that takes longer than the configured 'period' as slow, and print a message.
-# See <https://nexte.st/docs/features/slow-tests> for more information.
-#
-# Optional: specify the parameter 'terminate-after' with a non-zero integer,
-# which will cause slow tests to be terminated after the specified number of
-# periods have passed.
-# Example: slow-timeout = { period = "60s", terminate-after = 2 }
-#
-# The 'on-timeout' parameter controls whether timeouts are treated as failures (the default)
-# or successes.
-# Example: slow-timeout = { period = "60s", on-timeout = "pass" }
+# Treat a test that takes longer than the configured 'period' as slow, and print
+# a message. See <https://nexte.st/docs/features/slow-tests> for more
+# information.
 slow-timeout = { period = "60s", on-timeout = "fail" }
 
 # Time after which benchmarks are considered slow, plus optional termination
 # policy. Replaces `slow-timeout` when running `cargo nextest bench`.
 # See <https://nexte.st/docs/features/slow-tests> for more information.
-#
-# Optional: specify the parameter 'terminate-after' with a non-zero integer,
-# which will cause slow benchmarks to be terminated after the specified number of
-# periods have passed.
-# Example: bench.slow-timeout = { period = "60s", terminate-after = 2 }
 #
 # Benchmarks have a separate configuration because they are often expected to
 # take longer than tests. Defaults to 30 years, which is a large enough value
@@ -126,11 +79,12 @@ bench.slow-timeout = { period = "30y" }
 # to feel "infinite" without running into overflows on various platforms.
 bench.global-timeout = "30y"
 
-# Treat a test as leaky if after the process is shut down, standard output and standard error
-# aren't closed within this duration.
+# Treat a test as leaky if after the process is shut down, standard output and
+# standard error aren't closed within this duration.
 #
-# This usually happens in case of a test that creates a child process and lets it inherit those
-# handles, but doesn't clean the child process up (especially when it fails).
+# This usually happens in case of a test that creates a child process and lets
+# it inherit those handles, but doesn't clean the child process up (especially
+# when it fails).
 #
 # See <https://nexte.st/docs/features/leaky-tests> for more information.
 leak-timeout = "200ms"
@@ -144,18 +98,7 @@ global-timeout = "30y"
 # Extra paths to include in `nextest archive`. The standard build output is
 # included automatically; use this to add any non-standard files the tests
 # need at runtime.
-archive.include = [
-    # Examples:
-    #
-    # { path = "application-data", relative-to = "target" },
-    # { path = "data-from-some-dependency/file.txt", relative-to = "target" },
-    #
-    # In the above example:
-    # * the directory and its contents at "target/application-data" are
-    #   included recursively in the archive.
-    # * the file "target/data-from-some-dependency/file.txt" is included in
-    #   the archive.
-]
+archive.include = []
 
 [profile.default.junit]
 # Path to write the JUnit XML report to, relative to 'store.dir/<profile-name>'.
