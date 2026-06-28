@@ -6,11 +6,11 @@ use crate::{
     config::{
         core::ConfigExperimental,
         elements::{
-            ArchiveConfig, BenchConfig, CustomTestGroup, DefaultBenchConfig, DefaultJunitImpl,
-            FlakyResult, GlobalTimeout, Inherits, JunitConfig, JunitImpl, JunitSettings,
-            LeakTimeout, MaxFail, RetryPolicy, SlowTimeout, TestGroup, TestGroupConfig,
-            TestThreads, ThreadsRequired, deserialize_fail_fast, deserialize_leak_timeout,
-            deserialize_retry_policy, deserialize_slow_timeout,
+            ArchiveConfig, BenchConfig, CpuPriority, CustomTestGroup, DefaultBenchConfig,
+            DefaultJunitImpl, FlakyResult, GlobalTimeout, Inherits, JunitConfig, JunitImpl,
+            JunitSettings, LeakTimeout, MaxFail, RetryPolicy, SlowTimeout, TestGroup,
+            TestGroupConfig, TestThreads, ThreadsRequired, deserialize_fail_fast,
+            deserialize_leak_timeout, deserialize_retry_policy, deserialize_slow_timeout,
         },
         overrides::{
             CompiledByProfile, CompiledData, CompiledDefaultFilter, DeserializedOverride,
@@ -1177,6 +1177,16 @@ impl<'cfg> EvaluatableProfile<'cfg> {
         profile_field!(self.leak_timeout)
     }
 
+    /// Returns the default CPU priority for this profile.
+    pub fn cpu_priority(&self) -> CpuPriority {
+        profile_field!(self.cpu_priority)
+    }
+
+    // TODO-RAINCLAUDE: true if this profile could apply a CPU priority to any test (via the default or an override); platform-neutral config query used as a cheap guard so the pre-run probe (on both platforms) avoids a per-test settings pass when cpu-priority is unconfigured.
+    pub fn may_set_cpu_priority(&self) -> bool {
+        self.cpu_priority().level().is_some() || self.compiled_data.any_override_sets_cpu_priority()
+    }
+
     /// Returns the test status level.
     pub fn status_level(&self) -> StatusLevel {
         profile_field!(self.status_level)
@@ -1631,6 +1641,7 @@ pub(in crate::config) struct DefaultProfileImpl {
     slow_timeout: SlowTimeout,
     global_timeout: GlobalTimeout,
     leak_timeout: LeakTimeout,
+    cpu_priority: CpuPriority,
     overrides: Vec<DeserializedOverride>,
     scripts: Vec<DeserializedProfileScriptConfig>,
     junit: DefaultJunitImpl,
@@ -1680,6 +1691,9 @@ impl DefaultProfileImpl {
             leak_timeout: p
                 .leak_timeout
                 .expect("leak-timeout present in default profile"),
+            cpu_priority: p
+                .cpu_priority
+                .expect("cpu-priority present in default profile"),
             overrides: p.overrides,
             scripts: p.scripts,
             junit: DefaultJunitImpl::for_default_profile(p.junit),
@@ -1775,6 +1789,9 @@ pub(in crate::config) struct CustomProfileImpl {
     /// Time to wait for child processes to exit after a test completes.
     #[serde(default, deserialize_with = "deserialize_leak_timeout")]
     leak_timeout: Option<LeakTimeout>,
+    /// OS scheduling priority for test processes.
+    #[serde(default)]
+    cpu_priority: Option<CpuPriority>,
     /// Per-test setting overrides, evaluated in order.
     #[serde(default)]
     overrides: Vec<DeserializedOverride>,

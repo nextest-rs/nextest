@@ -5,19 +5,24 @@ use super::{
     ChildPid, InternalTerminateReason, ShutdownRequest, TerminateChildResult, UnitContext,
 };
 use crate::{
+    config::elements::CpuPriorityLevel,
+    double_spawn::DoubleSpawnInfo,
     errors::ConfigureHandleInheritanceError,
     reporter::events::{
         UnitState, UnitTerminateMethod, UnitTerminateReason, UnitTerminateSignal,
         UnitTerminatingState,
     },
-    runner::{RunUnitQuery, RunUnitRequest, SignalRequest},
+    run_mode::NextestRunMode,
+    runner::{Interceptor, RunUnitQuery, RunUnitRequest, SignalRequest},
     signal::{JobControlEvent, ShutdownEvent, ShutdownSignalEvent},
-    test_command::ChildAccumulator,
+    test_command::{ChildAccumulator, CpuPriorityRequest, spawns_via_double_spawn},
     time::StopwatchStart,
 };
 use libc::{SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGSTOP, SIGTERM, SIGTSTP};
-use std::{convert::Infallible, os::unix::process::CommandExt, time::Duration};
-use tokio::{process::Child, sync::mpsc::UnboundedReceiver};
+use std::{
+    collections::BTreeMap, convert::Infallible, os::unix::process::CommandExt, time::Duration,
+};
+use tokio::{process::Child, runtime::Runtime, sync::mpsc::UnboundedReceiver};
 
 // This is a no-op on non-windows platforms.
 pub(super) fn configure_handle_inheritance_impl(
@@ -33,10 +38,59 @@ pub(super) fn set_process_group(cmd: &mut std::process::Command) {
     cmd.process_group(0);
 }
 
+/// Determines the manner in which CPU priority is applied.
+pub(super) fn resolve_cpu_priority(
+    priority: CpuPriorityLevel,
+    interceptor: &Interceptor,
+    double_spawn: &DoubleSpawnInfo,
+) -> CpuPriorityRequest {
+    if spawns_via_double_spawn(interceptor, double_spawn) {
+        CpuPriorityRequest::DoubleSpawn(priority)
+    } else {
+        CpuPriorityRequest::PreExec(priority)
+    }
+}
+
+/// Sets a `pre_exec` hook to set the CPU priority.
+pub(super) fn set_cpu_priority_pre_exec(
+    cmd: &mut std::process::Command,
+    cpu_priority: Option<CpuPriorityRequest>,
+) {
+    let Some(nice) = cpu_priority.and_then(|req| req.pre_exec_nice()) else {
+        return;
+    };
+
+    // TODO-RAINCLAUDE: SAFETY — the closure runs between fork and exec in a potentially multithreaded parent, so it must only do fork-safe work. try_set_nice is a bare setpriority syscall plus an errno read, with no locks or allocation (POSIX does not list setpriority as async-signal-safe, but on our target platforms it is a bare syscall), and the closure does nothing else.
+    unsafe {
+        cmd.pre_exec(move || {
+            // TODO-RAINCLAUDE: failures such as EACCES are deliberately ignored here; the up-front probe warning covers them.
+            let _ = crate::cpu_priority_probe::try_set_nice(nice);
+            Ok(())
+        });
+    }
+}
+
+// TODO-RAINCLAUDE: probe whether the tallied CPU priority levels can be applied and warn once; delegates to the Unix probe module, keeping the call site free of cfg().
+pub(super) fn maybe_warn_cpu_priority(
+    level_counts: BTreeMap<CpuPriorityLevel, usize>,
+    mode: NextestRunMode,
+    double_spawn: &DoubleSpawnInfo,
+    runtime: &Runtime,
+) {
+    crate::cpu_priority_probe::maybe_warn_cpu_priority(&level_counts, mode, double_spawn, runtime);
+}
+
+// TODO-RAINCLAUDE: no-op on Unix — assign_process_to_job is infallible here, so there is no assignment failure to surface. Present for a uniform interface with Windows, where the job object is the only vehicle for cpu-priority.
+pub(super) fn warn_on_cpu_priority_assign_error(
+    _cpu_priority: Option<CpuPriorityRequest>,
+    _error: Infallible,
+) {
+}
+
 #[derive(Debug)]
 pub(super) struct Job(());
 
-pub(super) fn create_job() -> Result<Job, Infallible> {
+pub(super) fn create_job(_cpu_priority: Option<CpuPriorityRequest>) -> Result<Job, Infallible> {
     Ok(Job(()))
 }
 
@@ -242,5 +296,57 @@ impl UnitTerminateSignal {
             UnitTerminateSignal::Quit => SIGQUIT,
             UnitTerminateSignal::Kill => SIGKILL,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{config::elements::CpuPriorityLevel, cpu_priority_probe::current_nice};
+    use std::process::{Child, Command};
+
+    fn child_nice(child: &Child) -> i32 {
+        // SAFETY: getpriority is always safe to call. The child is alive (not
+        // yet reaped), so PRIO_PROCESS/pid is expected to work.
+        unsafe { libc::getpriority(libc::PRIO_PROCESS as _, child.id() as _) }
+    }
+
+    #[test]
+    fn set_cpu_priority_pre_exec_applies_nice() {
+        let mut cmd = Command::new("sleep");
+        cmd.arg("30");
+        set_cpu_priority_pre_exec(
+            &mut cmd,
+            Some(CpuPriorityRequest::PreExec(CpuPriorityLevel::Low)),
+        );
+
+        let mut child = cmd.spawn().expect("sleep spawns");
+        let nice = child_nice(&child);
+        let _ = child.kill();
+        let _ = child.wait();
+
+        assert_eq!(
+            nice, 19,
+            "low maps to setpriority nice 19 (max niceness when NZERO == 20)",
+        );
+    }
+
+    #[test]
+    fn set_cpu_priority_pre_exec_none_is_a_noop() {
+        let parent_nice = current_nice();
+
+        let mut cmd = Command::new("sleep");
+        cmd.arg("30");
+        set_cpu_priority_pre_exec(&mut cmd, None);
+
+        let mut child = cmd.spawn().expect("sleep spawns");
+        let nice = child_nice(&child);
+        let _ = child.kill();
+        let _ = child.wait();
+
+        assert_eq!(
+            nice, parent_nice,
+            "the child inherits the parent's nice value"
+        );
     }
 }

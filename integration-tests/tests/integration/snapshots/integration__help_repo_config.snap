@@ -238,6 +238,37 @@ profile.<name>.leak-timeout
       # or
       leak-timeout = { period = "500ms", result = "fail" }
 
+profile.<name>.cpu-priority
+
+(since 0.9.139)
+
+- Type: String
+
+- Description: OS scheduling priority for test processes. Maps to nice values on
+  Unix and to a priority class
+  <https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling-priorities>
+  on Windows.
+
+- Valid values:
+
+  - "unset": Do not alter the priority, instead inheriting nextest's own
+    priority. This is the default.
+  - "high": nice -10 / HIGH_PRIORITY_CLASS.
+  - "above-normal": nice -5 / ABOVE_NORMAL_PRIORITY_CLASS.
+  - "normal": nice 0 / NORMAL_PRIORITY_CLASS.
+  - "below-normal": nice 5 / BELOW_NORMAL_PRIORITY_CLASS.
+  - "low": nice 19 / IDLE_PRIORITY_CLASS.
+
+- Default: "unset"
+
+- Example: cpu-priority = "below-normal"
+
+Lowering priority always succeeds, while raising it is best-effort and may
+require elevated privileges: root (or CAP_SYS_NICE on Linux) on Unix platforms,
+and the SeIncreaseBasePriorityPrivilege privilege for "high" on Windows, which
+nextest attempts to enable automatically. If a requested priority cannot be
+applied, nextest warns at the start of the run.
+
 Benchmark configuration
 
 profile.<name>.bench.global-timeout
@@ -506,6 +537,7 @@ All profile-level settings can be overridden:
 - slow-timeout
 - bench.slow-timeout
 - leak-timeout
+- cpu-priority
 - test-group
 - success-output
 - failure-output

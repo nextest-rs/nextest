@@ -3,6 +3,7 @@
 
 use crate::{
     errors::{ChildFdError, ErrorList},
+    test_command::os,
     test_output::{CaptureStrategy, ChildExecutionOutput, ChildOutput, ChildSplitOutput},
 };
 use bytes::BytesMut;
@@ -16,20 +17,6 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncRead, BufReader},
     process::{Child as TokioChild, ChildStderr, ChildStdout},
 };
-
-cfg_if::cfg_if! {
-    if #[cfg(unix)] {
-        #[path = "unix.rs"]
-        mod unix;
-        use unix as os;
-    } else if #[cfg(windows)] {
-        #[path = "windows.rs"]
-        mod windows;
-        use windows as os;
-    } else {
-        compile_error!("unsupported target platform");
-    }
-}
 
 /// A spawned child process along with its file descriptors.
 pub(crate) struct Child {

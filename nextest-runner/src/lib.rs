@@ -13,6 +13,8 @@ pub mod cargo_config;
 pub mod config;
 #[cfg(feature = "experimental-tokio-console")]
 pub mod console;
+#[cfg(unix)]
+pub mod cpu_priority_probe;
 pub mod double_spawn;
 pub mod errors;
 pub mod help_render;

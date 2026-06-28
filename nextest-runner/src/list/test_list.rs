@@ -21,7 +21,7 @@ use crate::{
     run_mode::NextestRunMode,
     runner::{Interceptor, VersionEnvVars},
     target_runner::{PlatformRunner, TargetRunner},
-    test_command::{LocalExecuteContext, TestCommand, TestCommandPhase},
+    test_command::{CpuPriorityRequest, LocalExecuteContext, TestCommand, TestCommandPhase},
     test_filter::{BinaryMismatchReason, FilterBinaryMatch, FilterBound, TestFilter},
     write_str::WriteStr,
 };
@@ -1389,6 +1389,7 @@ impl RustTestArtifact<'_> {
             &self.package,
             &self.non_test_binaries,
             &Interceptor::None, // Interceptors are not used during the test list phase.
+            None,               // CPU priority does not apply to the test list phase.
         );
 
         // Expose a subset of environment variables to the list phase.
@@ -1611,6 +1612,7 @@ impl<'a> TestInstance<'a> {
         wrapper_script: Option<&WrapperScriptConfig>,
         extra_args: &[String],
         interceptor: &Interceptor,
+        cpu_priority: Option<CpuPriorityRequest>,
     ) -> TestCommand {
         // TODO: non-rust tests
         let cli = self.compute_cli(ctx, test_list, wrapper_script, extra_args);
@@ -1638,6 +1640,7 @@ impl<'a> TestInstance<'a> {
             &self.suite_info.package,
             &self.suite_info.non_test_binaries,
             interceptor,
+            cpu_priority,
         )
     }
 

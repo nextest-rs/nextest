@@ -223,6 +223,35 @@ The [36mslow-timeout[0m object accepts the following parameters:
       [2m# or[0m
       leak-timeout = { period = [32m"500ms"[0m, result = [32m"fail"[0m }
 
+[1;4m[36mprofile.<name>.cpu-priority[0m
+
+[3m(since 0.9.139)[0m
+
+- [1mType[0m: String
+
+- [1mDescription[0m: OS scheduling priority for test processes. Maps to [36mnice[0m values on
+  Unix and to a [34;4m]8;;https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling-priorities\priority class[0m]8;;\ on Windows.
+
+- [1mValid values[0m:
+
+  - [36m"unset"[0m: Do not alter the priority, instead inheriting nextest's own
+    priority. This is the default.
+  - [36m"high"[0m: [36mnice -10[0m / [36mHIGH_PRIORITY_CLASS[0m.
+  - [36m"above-normal"[0m: [36mnice -5[0m / [36mABOVE_NORMAL_PRIORITY_CLASS[0m.
+  - [36m"normal"[0m: [36mnice 0[0m / [36mNORMAL_PRIORITY_CLASS[0m.
+  - [36m"below-normal"[0m: [36mnice 5[0m / [36mBELOW_NORMAL_PRIORITY_CLASS[0m.
+  - [36m"low"[0m: [36mnice 19[0m / [36mIDLE_PRIORITY_CLASS[0m.
+
+- [1mDefault[0m: [36m"unset"[0m
+
+- [1mExample[0m: [36mcpu-priority = "below-normal"[0m
+
+Lowering priority always succeeds, while raising it is best-effort and may
+require elevated privileges: root (or [36mCAP_SYS_NICE[0m on Linux) on Unix platforms,
+and the [36mSeIncreaseBasePriorityPrivilege[0m privilege for [36m"high"[0m on Windows, which
+nextest attempts to enable automatically. If a requested priority cannot be
+applied, nextest warns at the start of the run.
+
 [1;4mBenchmark configuration[0m
 
 [1;4m[36mprofile.<name>.bench.global-timeout[0m
@@ -485,6 +514,7 @@ All profile-level settings can be overridden:
 - [36mslow-timeout[0m
 - [36mbench.slow-timeout[0m
 - [36mleak-timeout[0m
+- [36mcpu-priority[0m
 - [36mtest-group[0m
 - [36msuccess-output[0m
 - [36mfailure-output[0m

@@ -13,6 +13,58 @@ fn test_success() {
 }
 
 #[test]
+fn test_cpu_priority() {
+    // The nextest config sets cpu-priority = "below-normal" for this test.
+    // Verify the OS actually applied it.
+    #[cfg(unix)]
+    {
+        let nice = unsafe { libc::getpriority(libc::PRIO_PROCESS as _, 0) };
+        // TODO-RAINCLAUDE: below-normal is an absolute nice 5. If nextest itself runs above nice 5, lowering to 5 is a priority raise: unprivileged it fails (leaving us at nextest's nice), while a privileged process (root, CAP_SYS_NICE, or RLIMIT_NICE headroom) lands at 5. Accept both outcomes so the test holds under any baseline/privilege combination; reading another process's priority needs no privilege.
+        let parent_nice =
+            unsafe { libc::getpriority(libc::PRIO_PROCESS as _, libc::getppid() as _) };
+        assert!(
+            nice == 5 || nice == parent_nice.max(5),
+            "below-normal maps to nice 5 (got nice {nice}, nextest's own nice {parent_nice}; \
+             expected 5, or {} if the raise was denied)",
+            parent_nice.max(5),
+        );
+    }
+    #[cfg(windows)]
+    {
+        use std::time::{Duration, Instant};
+        use windows_sys::Win32::System::Threading::{
+            BELOW_NORMAL_PRIORITY_CLASS, GetCurrentProcess, GetPriorityClass,
+        };
+
+        // Unlike Unix, where setpriority runs before the test starts executing,
+        // on Windows we only apply the priority class after nextest assigns
+        // this process to its job object. This happens just after spawn rather
+        // than before the process starts.
+        //
+        // Ordinarily, on Windows, one would use `CREATE_SUSPENDED` to configure
+        // a process before it starts, but we can't use that here because
+        // `std::process::Command` doesn't expose a way to resume the primary
+        // thread after CREATE_SUSPENDED (rust-lang/rust#96723). So there's a
+        // brief startup window where this process still runs at the default
+        // class, and there's no synchronization point across the
+        // nextest/test-process boundary to wait on. We do expect that nextest
+        // will be able to set the priority class within 5 seconds, though.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let class = loop {
+            let class = unsafe { GetPriorityClass(GetCurrentProcess()) };
+            if class == BELOW_NORMAL_PRIORITY_CLASS || Instant::now() >= deadline {
+                break class;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        assert_eq!(
+            class, BELOW_NORMAL_PRIORITY_CLASS,
+            "below-normal maps to BELOW_NORMAL_PRIORITY_CLASS on Windows (waited up to 5s)"
+        );
+    }
+}
+
+#[test]
 fn test_failure_assert() {
     assert_eq!(2 + 2, 5, "this is an assertion")
 }

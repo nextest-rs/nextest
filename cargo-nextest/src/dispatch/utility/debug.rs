@@ -25,6 +25,13 @@ use nextest_runner::{
     redact::Redactor,
     user_config::elements::MAX_MAX_OUTPUT_SIZE,
 };
+#[cfg(unix)]
+use nextest_runner::{
+    config::elements::CpuPriorityLevel,
+    cpu_priority_probe::{
+        CpuPriorityProbeReport, format_probe_report_human, run_cpu_priority_probe,
+    },
+};
 use std::{collections::HashSet, fmt, fs};
 use tracing::{error, warn};
 
@@ -79,6 +86,10 @@ pub(crate) enum DebugCommand {
     /// This is useful for testing how filterset expressions are validated in
     /// different contexts.
     ParseFilterset(ParseFiltersetOpts),
+
+    // TODO-RAINCLAUDE: doc — probe whether CPU priority levels (the default) or specific --nice values can be applied on this system. Unix-only.
+    #[cfg(unix)]
+    ProbeNice(ProbeNiceOpts),
 }
 
 impl DebugCommand {
@@ -178,6 +189,10 @@ impl DebugCommand {
                 return opts.exec();
             }
             DebugCommand::ParseFilterset(opts) => {
+                return opts.exec();
+            }
+            #[cfg(unix)]
+            DebugCommand::ProbeNice(opts) => {
                 return opts.exec();
             }
         }
@@ -492,5 +507,112 @@ fn print_extraction_result(
             redactor.redact_size(claimed_size),
             redactor.redact_size(MAX_MAX_OUTPUT_SIZE.as_u64()),
         );
+    }
+}
+
+// TODO-RAINCLAUDE: options for `nextest debug probe-nice`, which measures whether CPU priorities can be applied on this system.
+#[cfg(unix)]
+#[derive(Debug, Args)]
+pub(crate) struct ProbeNiceOpts {
+    // TODO-RAINCLAUDE: a specific nice value to probe; may be repeated. When omitted, every CPU priority level is probed.
+    #[arg(long = "nice", value_name = "NICE")]
+    nice_values: Vec<i32>,
+
+    // TODO-RAINCLAUDE: output format.
+    #[arg(long, value_enum, default_value_t)]
+    output_format: ProbeNiceOutputFormat,
+}
+
+#[cfg(unix)]
+impl ProbeNiceOpts {
+    fn exec(self) -> Result<i32> {
+        // TODO-RAINCLAUDE: default to probing every CPU priority level when no explicit --nice was passed.
+        let nice_values: Vec<i32> = if self.nice_values.is_empty() {
+            CpuPriorityLevel::ALL
+                .iter()
+                .map(|&level| level.to_nice())
+                .collect()
+        } else {
+            self.nice_values
+        };
+
+        let report = run_cpu_priority_probe(&nice_values);
+
+        match self.output_format {
+            ProbeNiceOutputFormat::Human => print!("{}", format_probe_report_human(&report)),
+            ProbeNiceOutputFormat::Json => {
+                print_probe_report_json(&report, SerializableFormat::Json);
+            }
+            ProbeNiceOutputFormat::JsonPretty => {
+                print_probe_report_json(&report, SerializableFormat::JsonPretty);
+            }
+        }
+
+        Ok(0)
+    }
+}
+
+#[cfg(unix)]
+fn print_probe_report_json(report: &CpuPriorityProbeReport, format: SerializableFormat) {
+    let mut buf = String::new();
+    format
+        .to_writer(report, &mut buf)
+        .expect("probe report serializes to JSON into a String");
+    println!("{buf}");
+}
+
+// TODO-RAINCLAUDE: output format for `nextest debug probe-nice`.
+#[cfg(unix)]
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+pub enum ProbeNiceOutputFormat {
+    // TODO-RAINCLAUDE: human-readable, level-labeled report.
+    #[default]
+    Human,
+
+    // TODO-RAINCLAUDE: the raw probe report as a single JSON line (used internally by nextest itself).
+    Json,
+
+    // TODO-RAINCLAUDE: the raw probe report as pretty-printed JSON.
+    JsonPretty,
+}
+
+#[cfg(all(test, unix))]
+mod probe_nice_tests {
+    use super::*;
+    use clap::Parser;
+
+    #[derive(Debug, Parser)]
+    struct TestApp {
+        #[command(subcommand)]
+        command: DebugCommand,
+    }
+
+    #[test]
+    fn parses_repeated_negative_nice_values() {
+        let app = TestApp::try_parse_from([
+            "debug",
+            "probe-nice",
+            "--nice=-10",
+            "--nice=-5",
+            "--output-format",
+            "json",
+        ])
+        .expect("repeated negative --nice values parse");
+        let DebugCommand::ProbeNice(opts) = app.command else {
+            panic!("expected the probe-nice subcommand");
+        };
+        assert_eq!(opts.nice_values, vec![-10, -5]);
+        assert!(matches!(opts.output_format, ProbeNiceOutputFormat::Json));
+    }
+
+    #[test]
+    fn nice_values_default_to_empty_and_human_format() {
+        let app = TestApp::try_parse_from(["debug", "probe-nice"])
+            .expect("probe-nice parses with no arguments");
+        let DebugCommand::ProbeNice(opts) = app.command else {
+            panic!("expected the probe-nice subcommand");
+        };
+        assert!(opts.nice_values.is_empty());
+        assert!(matches!(opts.output_format, ProbeNiceOutputFormat::Human));
     }
 }

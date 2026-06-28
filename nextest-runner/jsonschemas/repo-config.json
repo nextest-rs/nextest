@@ -175,6 +175,41 @@
       "description": "An identifier used in configuration.\n\nThe identifier goes through some basic validation:\n* conversion to NFC\n* ensuring that it is of the form (XID_Start)(XID_Continue | -)*\n\nIdentifiers can also be tool identifiers, which are of the form \"@tool:tool-name:identifier\".",
       "type": "string"
     },
+    "CpuPriority": {
+      "description": "OS scheduling priority for test processes. Maps to `nice` values on Unix and to a [priority class](https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling-priorities) on Windows.",
+      "oneOf": [
+        {
+          "description": "Do not alter the priority, instead inheriting nextest's own priority.",
+          "type": "string",
+          "const": "unset"
+        },
+        {
+          "description": "High priority: `nice -10` on Unix, `HIGH_PRIORITY_CLASS` on Windows.",
+          "type": "string",
+          "const": "high"
+        },
+        {
+          "description": "Above normal priority: `nice -5` on Unix, `ABOVE_NORMAL_PRIORITY_CLASS`\non Windows.",
+          "type": "string",
+          "const": "above-normal"
+        },
+        {
+          "description": "Normal priority: `nice 0` on Unix, `NORMAL_PRIORITY_CLASS` on Windows.",
+          "type": "string",
+          "const": "normal"
+        },
+        {
+          "description": "Below normal priority: `nice +5` on Unix, `BELOW_NORMAL_PRIORITY_CLASS`\non Windows.",
+          "type": "string",
+          "const": "below-normal"
+        },
+        {
+          "description": "Low priority: `nice +19` on Unix, `IDLE_PRIORITY_CLASS` on Windows.",
+          "type": "string",
+          "const": "low"
+        }
+      ]
+    },
     "CustomProfileImpl": {
       "type": "object",
       "properties": {
@@ -199,6 +234,18 @@
               "type": "null"
             }
           ]
+        },
+        "cpu-priority": {
+          "description": "OS scheduling priority for test processes.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CpuPriority"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "default-filter": {
           "description": "The default set of tests run by `cargo nextest run`, as a filterset\nexpression.",
@@ -421,6 +468,18 @@
         "bench": {
           "description": "Benchmark-specific overrides for matching tests.",
           "$ref": "#/$defs/DeserializedOverrideBench"
+        },
+        "cpu-priority": {
+          "description": "OS scheduling priority for matching tests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CpuPriority"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "default-filter": {
           "description": "Replaces `default-filter` for matching platforms. Requires `platform`\nand must not be combined with `filter`.",

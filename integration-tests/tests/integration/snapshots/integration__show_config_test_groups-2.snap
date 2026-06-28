@@ -19,6 +19,7 @@ group: @global
           tests::unit_test_success
       fixture-project::basic:
           test_cargo_env_vars
+          test_cpu_priority
           test_cwd
           test_execute_bin
           test_failure_assert

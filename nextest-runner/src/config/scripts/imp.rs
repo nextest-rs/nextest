@@ -311,6 +311,8 @@ impl SetupScriptCommand {
             ),
             &config.command.args,
             double_spawn,
+            // Setup scripts don't support CPU priority at the moment.
+            None,
         );
 
         // Apply Cargo's config.toml env first (workspace-wide), then the
