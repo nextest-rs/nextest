@@ -189,6 +189,42 @@ fn test_help_topics() {
         colored_reference.trim_end_matches('\n')
     );
 
+    let user_config = CargoNextestCli::for_test(&env_info)
+        .args(["--color", "never", "help", "user-config"])
+        .output();
+    let user_config_stdout = user_config.stdout_as_str().into_owned();
+    // Snapshot the user-config reference up to the appended default config so
+    // the snapshot stays decoupled from default-user-config.toml.
+    let default_idx = user_config_stdout
+        .find("\nDefault configuration\n")
+        .expect("user-config help has a Default configuration section");
+    insta::assert_snapshot!("help_user_config", &user_config_stdout[..default_idx]);
+    assert!(
+        user_config_stdout[default_idx..].contains("[ui]"),
+        "user-config help embeds the default config: {user_config_stdout}"
+    );
+
+    // Test with color + hyperlinks. (This also acts as a test for TOML output.)
+    let user_config_colored = CargoNextestCli::for_test(&env_info)
+        .args(["--color", "always", "help", "user-config"])
+        .env("FORCE_HYPERLINK", "1")
+        .output();
+    let user_config_colored_stdout = user_config_colored.stdout_as_str().into_owned();
+    // Snapshot the user-config reference up to the appended default config so
+    // the snapshot stays decoupled from default-user-config.toml.
+    let colored_default_idx = user_config_colored_stdout
+        .find("Default configuration")
+        .expect("user-config help has a Default configuration section");
+    let colored_reference = match user_config_colored_stdout[..colored_default_idx].rfind('\u{1b}')
+    {
+        Some(esc) => &user_config_colored_stdout[..esc],
+        None => &user_config_colored_stdout[..colored_default_idx],
+    };
+    insta::assert_snapshot!(
+        "help_user_config_color",
+        colored_reference.trim_end_matches('\n')
+    );
+
     // Snapshot `cargo nextest --help`, but only the "Help topics" section that
     // this feature adds (not the whole root help) to avoid churn as other
     // options change.

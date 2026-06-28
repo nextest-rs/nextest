@@ -81,6 +81,9 @@ impl UserConfig {
     /// User-specific configuration is layered on top of this default config.
     pub const DEFAULT_CONFIG: &'static str = include_str!("../../default-user-config.toml");
 
+    /// Contains the canonical user config reference markdown.
+    pub const REFERENCE_MD: &'static str = include_str!("../../user-config-reference.md");
+
     /// Loads and resolves user configuration.
     ///
     /// Platform overrides in the user config are evaluated against the build

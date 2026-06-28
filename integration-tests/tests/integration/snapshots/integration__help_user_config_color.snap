@@ -1,0 +1,407 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: "colored_reference.trim_end_matches('\\n')"
+---
+[1;4mUser config reference[0m
+
+This topic contains the full user configuration reference for nextest.
+
+This reference is also available [34;4m]8;;https://nexte.st/docs/user-config/reference/\on the nextest site[0m]8;;\.
+
+For more information about how user configuration works, see the [34;4m]8;;https://nexte.st/docs/user-config/\user]8;;\[0m
+[34;4m]8;;https://nexte.st/docs/user-config/\configuration overview[0m]8;;\.
+
+[1;4mConfiguration file location[0m
+
+User configuration is loaded from one of the following platform-specific
+locations:
+
+1. On Linux, macOS, and other Unix platforms:
+   [36m$XDG_CONFIG_HOME/nextest/config.toml[0m, or [36m~/.config/nextest/config.toml[0m if
+   [36m$XDG_CONFIG_HOME[0m is unset or empty.
+2. On Windows: [36m%APPDATA%\nextest\config.toml[0m, falling back to
+   [36m%XDG_CONFIG_HOME%\nextest\config.toml[0m, then
+   [36m%HOME%\.config\nextest\config.toml[0m.
+
+For more information about configuration hierarchy, see [34;4m[3m]8;;https://nexte.st/docs/user-config/#configuration-hierarchy\Configuration hierarchy[0m]8;;\.
+
+[1;4mUser configuration schema[0m
+
+[3m(since 0.9.136)[0m
+
+A JSON Schema is available for nextest's user configuration. The schema can be
+obtained through:
+
+- For the latest released version of nextest, at
+  [34;4m[36m]8;;https://nexte.st/schemas/user-config.json\https://nexte.st/schemas/user-config.json[0m]8;;\. This URL is updated with new
+  nextest releases.
+- For the schema corresponding to a particular version of nextest, by running
+  [36mcargo nextest self schema user-config[0m.
+
+The schema can be used:
+
+- To validate a user configuration file.
+- With the [34;4m]8;;https://tombi-toml.github.io/tombi\Tombi[0m]8;;\ language server for TOML or [34;4m]8;;https://nexte.st/docs/integrations/rustrover/\RustRover[0m]8;;\, to provide autocomplete
+  in supported IDEs and editors. (The taplo language server is not supported due
+  to a [34;4m]8;;https://github.com/tamasfe/taplo/pull/779\crash bug[0m]8;;\.)
+
+Note that the schema is somewhat stricter than nextest's own config parser:
+unknown configuration items will fail schema validation, while nextest itself
+will only print out a warning.
+
+The schema is part of the [34;4m]8;;https://www.schemastore.org/\JSON Schema Store[0m]8;;\, so both Tombi and RustRover will
+automatically download it for you. Because nextest's user configuration (outside
+of experimental configuration) is [34;4m]8;;https://nexte.st/docs/stability/\append-only[0m]8;;\, the schema will automatically be
+updated as new nextest versions are released.
+
+[1;4mExperimental features[0m
+
+[3m(since 0.9.123)[0m
+
+Experimental features are configured under [36m[experimental][0m.
+
+[1;4m[36mexperimental.record[0m
+
+- [1mType[0m: Boolean
+- [1mDescription[0m: Enables the record-replay-rerun feature: stores test run results
+  on disk for replay or selective rerun.
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/features/record-replay-rerun/\Record, replay, and rerun]8;;\[0m
+- [1mDefault[0m: [36mfalse[0m
+- [1mEnvironment variable[0m: [36mNEXTEST_EXPERIMENTAL_RECORD=1[0m
+- [1mExample[0m:
+      [35;1m[experimental][0m
+      record = [33mtrue[0m
+
+[1;4mRecord configuration[0m
+
+[3m(since 0.9.123)[0m
+
+Record configuration is specified under [36m[record][0m. Recording requires both
+[36m[experimental] record = true[0m and [36m[record] enabled = true[0m.
+
+For detailed information, see [34;4m[3m]8;;https://nexte.st/docs/features/record-replay-rerun/\Record, replay, and rerun[0m]8;;\.
+
+[1;4m[36mrecord.enabled[0m
+
+- [1mType[0m: Boolean
+- [1mDescription[0m: Whether to record test runs. Has no effect unless
+  [36m[experimental] record = true[0m.
+- [1mDefault[0m: [36mfalse[0m
+- [1mExample[0m:
+      [35;1m[record][0m
+      enabled = [33mtrue[0m
+
+[1;4m[36mrecord.max-output-size[0m
+
+- [1mType[0m: String (size)
+- [1mDescription[0m: Maximum size of a single captured stdout or stderr stream before
+  truncation (e.g. [36m"10MB"[0m).
+- [1mDefault[0m: [36m"10MB"[0m
+
+[1;4m[36mrecord.max-records[0m
+
+- [1mType[0m: Integer
+- [1mDescription[0m: Maximum number of recorded runs to retain before eviction.
+- [1mDefault[0m: [36m100[0m
+
+[1;4m[36mrecord.max-total-size[0m
+
+- [1mType[0m: String (size)
+- [1mDescription[0m: Maximum combined size of all retained recordings before eviction
+  (e.g. [36m"1GB"[0m).
+- [1mDefault[0m: [36m"1GB"[0m
+
+[1;4m[36mrecord.max-age[0m
+
+- [1mType[0m: String (duration)
+- [1mDescription[0m: Maximum age of a recorded run before eviction (e.g. [36m"30d"[0m).
+- [1mDefault[0m: [36m"30d"[0m
+
+[1;4mUI configuration[0m
+
+UI settings are configured under [36m[ui][0m.
+
+[1;4m[36mui.show-progress[0m
+
+[3m(since 0.9.118)[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: Style of progress display shown during test runs.
+- [1mValid values[0m:
+  - [36m"auto"[0m: picks a display based on terminal capabilities — a progress bar in
+    interactive terminals, a counter otherwise.
+  - [36m"none"[0m: disables progress display entirely.
+  - [36m"bar"[0m: shows a progress bar listing the currently running tests.
+  - [36m"counter"[0m: shows a single-line counter (e.g. [36m(1/10)[0m).
+  - [36m"only"[0m: like [36m"bar"[0m in interactive terminals, but additionally hides
+    successful test output (sets [36mstatus-level[0m to [36mslow[0m and [36mfinal-status-level[0m to
+    [36mnone[0m). Falls back to [36m"auto"[0m in non-interactive contexts (e.g. piped output,
+    CI).
+
+- [1mDefault[0m: [36m"auto"[0m
+- [1mCLI equivalent[0m: [36m--show-progress[0m
+- [1mEnvironment variable[0m: [36mNEXTEST_SHOW_PROGRESS[0m
+- [1mExample[0m:
+      [35;1m[ui][0m
+      show-progress = [32m"bar"[0m
+
+[1;4m[36mui.max-progress-running[0m
+
+[3m(since 0.9.118)[0m
+
+- [1mType[0m: Integer or string
+
+- [1mDescription[0m: Maximum number of running tests to list in the progress bar.
+  Excess running tests are collapsed into a summary line.
+
+- [1mValid values[0m:
+
+  - Positive integer (e.g. [36m8[0m): display up to this many running tests.
+  - [36m0[0m: hide the list of running tests entirely (the bar still tracks progress).
+  - [36m"infinite"[0m: display all running tests, no limit.
+
+- [1mDefault[0m: [36m8[0m
+
+- [1mCLI equivalent[0m: [36m--max-progress-running[0m
+
+- [1mEnvironment variable[0m: [36mNEXTEST_MAX_PROGRESS_RUNNING[0m
+
+- [1mExamples[0m:
+
+      [35;1m[ui][0m
+      [2m# Show up to 16 running tests.[0m
+      max-progress-running = [33m16[0m
+
+      [35;1m[ui][0m
+      [2m# Show all running tests.[0m
+      max-progress-running = [32m"infinite"[0m
+
+[1;4m[36mui.input-handler[0m
+
+[3m(since 0.9.118)[0m
+
+- [1mType[0m: Boolean
+- [1mDescription[0m: Enables the interactive [34;4m]8;;https://nexte.st/docs/reporting/#live-output\keyboard input handler[0m]8;;\ (e.g. [36mt[0m to dump
+  test status, [36mEnter[0m to print a summary line).
+- [1mValid values[0m: [36mtrue[0m or [36mfalse[0m
+- [1mDefault[0m: [36mtrue[0m (input handler enabled)
+- [1mCLI equivalent[0m: [36m--no-input-handler[0m (to disable)
+- [1mEnvironment variable[0m: [36mNEXTEST_NO_INPUT_HANDLER=1[0m (to disable)
+- [1mExample[0m:
+      [35;1m[ui][0m
+      [2m# Disable keyboard input handling.[0m
+      input-handler = [33mfalse[0m
+
+[1;4m[36mui.output-indent[0m
+
+[3m(since 0.9.118)[0m
+
+- [1mType[0m: Boolean
+- [1mDescription[0m: Indents captured test output for visual clarity. Applies to
+  output produced by [36m--failure-output[0m and [36m--success-output[0m.
+- [1mValid values[0m: [36mtrue[0m or [36mfalse[0m
+- [1mDefault[0m: [36mtrue[0m
+- [1mCLI equivalent[0m: [36m--no-output-indent[0m (to disable)
+- [1mEnvironment variable[0m: [36mNEXTEST_NO_OUTPUT_INDENT=1[0m (to disable)
+- [1mExample[0m:
+      [35;1m[ui][0m
+      [2m# Disable output indentation.[0m
+      output-indent = [33mfalse[0m
+
+[1;4m[36mui.pager[0m
+
+[3m(since 0.9.120)[0m
+
+- [1mType[0m: String, array, or table
+
+- [1mDescription[0m: Pager command for output that benefits from scrolling (e.g.
+  [36mnextest list[0m, help output). Use [36m":builtin"[0m for the builtin pager. See [34;4m[3m]8;;https://nexte.st/docs/user-config/pager/\Pager]8;;\[0m
+  [34;4m[3m]8;;https://nexte.st/docs/user-config/pager/\support[0m]8;;\ for details.
+
+- [1mValid values[0m:
+
+  - String: [36m"less -FRX"[0m (split on whitespace)
+  - Array: [36m["less", "-FRX"][0m
+  - Table: [36m{ command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }[0m
+  - [36m":builtin"[0m: use the builtin pager.
+
+- [1mDefault[0m: [36m{ command = ["less", "-FRX"], env = { LESSCHARSET = "utf-8" } }[0m on
+  Unix, [36m":builtin"[0m on Windows (specified via an override)
+
+- [1mCLI equivalent[0m: [36m--no-pager[0m (to disable paging)
+
+- [1mExamples[0m:
+
+      [35;1m[ui][0m
+      [2m# Use less with custom flags.[0m
+      pager = [32m"less -FRX"[0m
+
+      [35;1m[ui][0m
+      [2m# Use the builtin pager.[0m
+      pager = [32m":builtin"[0m
+
+      [35;1m[ui][0m
+      [2m# Use less with environment variables.[0m
+      pager = { command = [[32m"less"[0m, [32m"-FRX"[0m], env = { LESSCHARSET = [32m"utf-8"[0m } }
+
+[1;4m[36mui.paginate[0m
+
+[3m(since 0.9.120)[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: When to send output through the pager.
+- [1mValid values[0m:
+  - [36m"auto"[0m: pages output from supported commands when stdout is a terminal.
+  - [36m"never"[0m: disables pagination entirely.
+
+- [1mDefault[0m: [36m"auto"[0m
+- [1mCLI equivalent[0m: [36m--no-pager[0m (equivalent to [36mpaginate = "never"[0m)
+- [1mExample[0m:
+      [35;1m[ui][0m
+      [2m# Never use a pager.[0m
+      paginate = [32m"never"[0m
+
+[1;4mBuiltin pager configuration[0m
+
+[3m(since 0.9.120)[0m
+
+When [36mpager = ":builtin"[0m is set, the builtin pager's behavior can be customized
+under [36m[ui.streampager][0m. See [34;4m[3m]8;;https://nexte.st/docs/user-config/pager/#builtin-pager-options\Pager support[0m]8;;\ for details.
+
+[1;4m[36mui.streampager.interface[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: How the builtin pager uses the alternate screen and when it
+  exits.
+- [1mValid values[0m:
+  - [36m"quit-if-one-page"[0m: exits immediately if the output fits on one page;
+    otherwise switches to full-screen and clears on exit.
+  - [36m"full-screen-clear-output"[0m: always uses full-screen mode and clears the
+    screen on exit.
+  - [36m"quit-quickly-or-clear-output"[0m: waits briefly before entering full-screen
+    mode; clears on exit only if it switched to full-screen.
+
+- [1mDefault[0m: [36m"quit-if-one-page"[0m
+- [1mExample[0m:
+      [35;1m[ui.streampager][0m
+      interface = [32m"full-screen-clear-output"[0m
+
+[1;4m[36mui.streampager.wrapping[0m
+
+- [1mType[0m: String
+- [1mDescription[0m: How the builtin pager wraps long lines.
+- [1mValid values[0m:
+  - [36m"none"[0m: disables wrapping; long lines extend off-screen and can be scrolled
+    horizontally.
+  - [36m"word"[0m: wraps at word boundaries.
+  - [36m"anywhere"[0m: wraps at any character (grapheme) boundary.
+
+- [1mDefault[0m: [36m"word"[0m
+- [1mExample[0m:
+      [35;1m[ui.streampager][0m
+      wrapping = [32m"none"[0m
+
+[1;4m[36mui.streampager.show-ruler[0m
+
+- [1mType[0m: Boolean
+- [1mDescription[0m: Whether to show a ruler at the bottom of the builtin pager.
+- [1mValid values[0m: [36mtrue[0m or [36mfalse[0m
+- [1mDefault[0m: [36mtrue[0m
+- [1mExample[0m:
+      [35;1m[ui.streampager][0m
+      show-ruler = [33mfalse[0m
+
+[1;4mPlatform-specific overrides[0m
+
+[3m(since 0.9.120)[0m
+
+You can customize UI settings for specific platforms using [36m[[overrides]][0m
+sections. This is useful when different platforms need different defaults (e.g.,
+different progress display settings).
+
+[1;4mOverride structure[0m
+
+    [35;1m[[overrides]][0m
+    platform = [32m"cfg(windows)"[0m
+    ui.show-progress = [32m"bar"[0m
+    ui.max-progress-running = [33m4[0m
+
+Each override has a required [36mplatform[0m filter and optional settings in the [36mui[0m
+section. Overrides are evaluated in order. For each setting, the first matching
+override provides the value. If no override matches, the base [36m[ui][0m section value
+is used.
+
+[1;4mOverride filter[0m
+
+[1;4m[36moverrides.platform[0m
+
+- [1mType[0m: String (target spec expression)
+- [1mDescription[0m: Target-spec expression selecting which platforms this override
+  applies to (target triple or [36mcfg()[0m expression). Matched against the platform
+  nextest was built for. This is distinct from the [36mplatform[0m field in [34;4m]8;;https://nexte.st/docs/configuration/per-test-overrides/#selecting-tests\per-test]8;;\[0m
+  [34;4m]8;;https://nexte.st/docs/configuration/per-test-overrides/#selecting-tests\overrides[0m]8;;\, which is matched against the host or target platform of the tests
+  being run.
+- [1mRequired[0m: Yes
+- [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/configuration/specifying-platforms/\Specifying platforms]8;;\[0m
+- [1mValid formats[0m:
+  - Target triple: [36m"x86_64-unknown-linux-gnu"[0m
+  - [36mcfg()[0m expression: [36m"cfg(windows)"[0m, [36m"cfg(unix)"[0m, [36m"cfg(target_os = \"macos\")"[0m
+
+- [1mExamples[0m:
+      [35;1m[[overrides]][0m
+      platform = [32m"cfg(windows)"[0m
+      ui.show-progress = [32m"bar"[0m
+
+      [35;1m[[overrides]][0m
+      platform = [32m"cfg(target_os = \"macos\")"[0m
+      ui.max-progress-running = [33m16[0m
+
+[1;4mOverridable settings[0m
+
+All [36m[ui][0m, [36m[ui.streampager][0m, and [36m[record][0m settings can be overridden within
+[36m[[overrides]][0m:
+
+- [36mui.show-progress[0m
+- [36mui.max-progress-running[0m
+- [36mui.input-handler[0m
+- [36mui.output-indent[0m
+- [36mui.pager[0m
+- [36mui.paginate[0m
+- [36mui.streampager.interface[0m
+- [36mui.streampager.wrapping[0m
+- [36mui.streampager.show-ruler[0m
+- [36mrecord.enabled[0m
+- [36mrecord.max-output-size[0m
+- [36mrecord.max-records[0m
+- [36mrecord.max-total-size[0m
+- [36mrecord.max-age[0m
+
+Each setting in an override is optional. The first matching override is applied
+on a per-setting basis.
+
+[1;4mExample: platform-specific configuration[0m
+
+    [35;1m[ui][0m
+    [2m# Base configuration for all platforms.[0m
+    show-progress = [32m"auto"[0m
+    max-progress-running = [33m8[0m
+
+    [35;1m[[overrides]][0m
+    [2m# Windows often has narrower terminals.[0m
+    platform = [32m"cfg(windows)"[0m
+    ui.max-progress-running = [33m4[0m
+
+    [35;1m[[overrides]][0m
+    [2m# macOS users might prefer a specific setting.[0m
+    platform = [32m"cfg(target_os = \"macos\")"[0m
+    ui.show-progress = [32m"bar"[0m
+
+[1;4mResolution order[0m
+
+Settings are resolved with the following precedence (highest priority first):
+
+1. [1mCLI arguments[0m (e.g., [36m--show-progress=bar[0m)
+2. [1mEnvironment variables[0m (e.g., [36mNEXTEST_SHOW_PROGRESS=bar[0m)
+3. [1mUser overrides[0m (first matching [36m[[overrides]][0m for each setting)
+4. [1mUser base config[0m ([36m[ui][0m section)
+5. [1mBuilt-in defaults[0m

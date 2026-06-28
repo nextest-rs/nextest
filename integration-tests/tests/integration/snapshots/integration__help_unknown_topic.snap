@@ -18,3 +18,4 @@ For more information, try '--help'.
 Help topics (try cargo nextest help <topic>):
   filterset    the filterset DSL: predicates, operators, and matchers
   repo-config  repository configuration reference
+  user-config  user configuration reference

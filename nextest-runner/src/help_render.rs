@@ -3,7 +3,7 @@
 
 //! Renders MkDocs help-topic documents (help topics) to the terminal.
 
-use crate::{config::core::NextestConfig, helpers::RESET_COLOR};
+use crate::{config::core::NextestConfig, helpers::RESET_COLOR, user_config::UserConfig};
 use indoc::formatdoc;
 use nextest_filtering::FILTERSET_REFERENCE_MD;
 use owo_colors::Style;
@@ -54,6 +54,14 @@ impl HelpDoc {
             site_dir: &["docs", "configuration"],
         }
     }
+
+    /// The user configuration reference document.
+    pub fn user_config() -> Self {
+        Self {
+            markdown: Cow::Owned(user_config_markdown()),
+            site_dir: &["docs", "user-config"],
+        }
+    }
 }
 
 fn repo_config_markdown() -> String {
@@ -76,6 +84,40 @@ fn repo_config_markdown() -> String {
         ",
         reference = NextestConfig::REFERENCE_MD.trim_end(),
         default_config = NextestConfig::DEFAULT_CONFIG.trim_end(),
+    }
+}
+
+fn user_config_markdown() -> String {
+    formatdoc! {r#"
+            # User config reference
+
+            This topic contains the full user configuration reference for nextest.
+
+            This reference is also available [on the nextest site](https://nexte.st/docs/user-config/reference/).
+
+            For more information about how user configuration works, see the [user configuration overview](index.md).
+
+            ## Configuration file location
+
+            User configuration is loaded from one of the following platform-specific locations:
+
+            1. On Linux, macOS, and other Unix platforms: `$XDG_CONFIG_HOME/nextest/config.toml`, or `~/.config/nextest/config.toml` if `$XDG_CONFIG_HOME` is unset or empty.
+            2. On Windows: `%APPDATA%\nextest\config.toml`, falling back to `%XDG_CONFIG_HOME%\nextest\config.toml`, then `%HOME%\.config\nextest\config.toml`.
+
+            For more information about configuration hierarchy, see [_Configuration hierarchy_](index.md#configuration-hierarchy).
+
+            {reference}
+
+            ## Default configuration
+
+            The default user configuration is:
+
+            ```toml
+            {default_config}
+            ```
+        "#,
+        reference = UserConfig::REFERENCE_MD.trim_end(),
+        default_config = UserConfig::DEFAULT_CONFIG.trim_end(),
     }
 }
 
@@ -1439,6 +1481,59 @@ mod tests {
         assert!(
             markdown.contains(NextestConfig::DEFAULT_CONFIG.trim_end()),
             "repo-config topic embeds the default config verbatim"
+        );
+    }
+
+    #[test]
+    fn user_config_reference_stays_within_supported_subset() {
+        let markdown = UserConfig::REFERENCE_MD;
+
+        let mut rest = markdown;
+        while let Some(idx) = rest.find("<!-- md:") {
+            let after = &rest[idx + "<!-- md:".len()..];
+            let name: String = after
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            assert_eq!(
+                name, "version",
+                "unsupported `md:{name}` shortcode in the user-config reference; \
+                 the CLI help renderer only handles `md:version` (see apply_shortcodes)"
+            );
+            rest = after;
+        }
+
+        let preprocessed = preprocess(&user_config_markdown());
+        let rendered = render_markdown(
+            &preprocessed,
+            &["docs", "user-config"],
+            RenderOptions {
+                color: false,
+                hyperlinks: false,
+                width: 80,
+            },
+        );
+        assert!(
+            rendered.dropped.is_empty(),
+            "user-config reference uses markdown the CLI help renderer silently drops: {:?}",
+            rendered.dropped,
+        );
+    }
+
+    #[test]
+    fn user_config_markdown_includes_reference_and_defaults() {
+        let markdown = user_config_markdown();
+        assert!(
+            markdown.contains("# User config reference"),
+            "user-config topic includes the reference body"
+        );
+        assert!(
+            markdown.contains("## Default configuration"),
+            "user-config topic appends a default configuration section"
+        );
+        assert!(
+            markdown.contains(UserConfig::DEFAULT_CONFIG.trim_end()),
+            "user-config topic embeds the default config verbatim"
         );
     }
 
