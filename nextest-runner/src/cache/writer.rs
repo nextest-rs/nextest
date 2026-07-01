@@ -7,6 +7,7 @@ use crate::{
     cache::{
         backend::CacheBackend,
         key::{CacheKey, ContentHash, hash_file},
+        parallel::parallel_filter_map,
         result::CacheEntry,
     },
     list::{RustTestSuite, TestList},
@@ -14,11 +15,7 @@ use crate::{
 };
 use chrono::Utc;
 use nextest_metadata::RustBinaryId;
-use std::{
-    collections::HashMap,
-    sync::atomic::{AtomicUsize, Ordering},
-    thread,
-};
+use std::collections::HashMap;
 use tracing::warn;
 
 /// Observes test events and stores passing results in the cache.
@@ -131,52 +128,20 @@ impl<'a> CacheWriter<'a> {
 /// Hashes every test suite's binary in parallel, returning a map from binary ID
 /// to content hash. A binary that cannot be hashed is simply omitted: its
 /// results will never be cached, which never fails the run.
-///
-/// Work is distributed across a bounded thread pool via a shared atomic cursor,
-/// so threads pull the next binary as they finish rather than being assigned a
-/// fixed slice — this keeps every core busy even when binaries vary widely in
-/// size.
 fn hash_binaries(suites: &[&RustTestSuite<'_>]) -> HashMap<RustBinaryId, ContentHash> {
-    if suites.is_empty() {
-        return HashMap::new();
-    }
-
-    let parallelism = thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1);
-    let num_threads = parallelism.min(suites.len());
-
-    let next = AtomicUsize::new(0);
-    let mut binary_hashes = HashMap::new();
-    thread::scope(|scope| {
-        let handles: Vec<_> = (0..num_threads)
-            .map(|_| {
-                scope.spawn(|| {
-                    let mut local = Vec::new();
-                    loop {
-                        let idx = next.fetch_add(1, Ordering::Relaxed);
-                        let Some(suite) = suites.get(idx) else {
-                            break;
-                        };
-                        let hash = hash_file(&suite.binary_path).inspect_err(|error| {
-                            warn!(
-                                "cache: not caching results for {}: failed to hash {}: {error}",
-                                suite.binary_id, suite.binary_path,
-                            );
-                        });
-                        if let Ok(hash) = hash {
-                            local.push((suite.binary_id.clone(), hash));
-                        }
-                    }
-                    local
-                })
+    parallel_filter_map(suites, |suite| {
+        hash_file(&suite.binary_path)
+            .inspect_err(|error| {
+                warn!(
+                    "cache: not caching results for {}: failed to hash {}: {error}",
+                    suite.binary_id, suite.binary_path,
+                );
             })
-            .collect();
-        for handle in handles {
-            binary_hashes.extend(handle.join().expect("cache hashing thread panicked"));
-        }
-    });
-    binary_hashes
+            .ok()
+            .map(|hash| (suite.binary_id.clone(), hash))
+    })
+    .into_iter()
+    .collect()
 }
 
 /// Returns true if a finished test's result may be cached.

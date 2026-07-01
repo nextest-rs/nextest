@@ -7,6 +7,7 @@ use crate::{
     cache::{
         backend::CacheBackend,
         key::{ContentHash, hash_file},
+        parallel::parallel_filter_map,
     },
     record::encode_workspace_path,
 };
@@ -14,11 +15,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use etcetera::{BaseStrategy, choose_base_strategy};
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_metadata::{RustBinaryId, TestCaseName};
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::atomic::{AtomicUsize, Ordering},
-    thread,
-};
+use std::collections::{BTreeSet, HashMap};
 use tracing::warn;
 
 /// The leaf directory holding result-cache storage for a single workspace.
@@ -151,11 +148,8 @@ impl ComputedCacheInfo {
             })
             .collect();
 
-        // Process each binary independently. A scoped thread pool lets the
-        // worker closures borrow `work`, `backend`, and the `'a` references
-        // without `'static` bounds, because the scope joins all threads before
-        // returning.
-        let outcomes = process_work(backend, &work);
+        // Process each binary independently across a bounded thread pool.
+        let outcomes = parallel_filter_map(&work, |binary| consult_binary(backend, binary));
 
         let mut test_suites = IdOrdMap::new();
         let mut binary_hashes = HashMap::with_capacity(outcomes.len());
@@ -189,51 +183,6 @@ struct BinaryWork<'a> {
     binary_id: &'a RustBinaryId,
     binary_path: &'a Utf8Path,
     requested: BTreeSet<TestCaseName>,
-}
-
-/// Hashes and looks up every binary in `work`, returning one [`BinaryOutcome`]
-/// per binary that could be hashed. Work is distributed across a bounded thread
-/// pool via a shared atomic cursor (work-stealing by index), which keeps every
-/// thread busy even when binaries differ wildly in size.
-fn process_work(backend: &dyn CacheBackend, work: &[BinaryWork<'_>]) -> Vec<BinaryOutcome> {
-    if work.is_empty() {
-        return Vec::new();
-    }
-
-    // Cap the pool at the number of binaries and at the available parallelism;
-    // there is no point spawning more threads than there is work or hardware.
-    let parallelism = thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1);
-    let num_threads = parallelism.min(work.len());
-
-    let next = AtomicUsize::new(0);
-    let mut all = Vec::new();
-    thread::scope(|scope| {
-        let handles: Vec<_> = (0..num_threads)
-            .map(|_| {
-                scope.spawn(|| {
-                    let mut local = Vec::new();
-                    loop {
-                        let idx = next.fetch_add(1, Ordering::Relaxed);
-                        let Some(binary) = work.get(idx) else {
-                            break;
-                        };
-                        if let Some(outcome) = consult_binary(backend, binary) {
-                            local.push(outcome);
-                        }
-                    }
-                    local
-                })
-            })
-            .collect();
-        for handle in handles {
-            // A worker only panics if the closure itself panics; propagate it
-            // rather than silently dropping cache results.
-            all.extend(handle.join().expect("cache worker thread panicked"));
-        }
-    });
-    all
 }
 
 /// Hashes a single binary and queries the backend for its cached-passing tests.
