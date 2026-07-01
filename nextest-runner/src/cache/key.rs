@@ -12,16 +12,13 @@ use std::{
 };
 use xxhash_rust::xxh3::Xxh3;
 
-/// A cache key identifying a specific test result.
+/// A cache key identifying a specific test result: the test binary's content
+/// hash and the test name. The hash changes on recompile, so a cached result is
+/// automatically invalidated when the binary changes.
 ///
-/// The key captures most of what determines whether a test should produce
-/// the same result: the content of the test binary and the test name. Because
-/// the binary hash changes whenever the test code is recompiled, a cached
-/// result is automatically invalidated when the binary changes.
-///
-/// However, tests are not sandboxed, so environment variables and other system state
-/// may also affect a test's result. Some of these should be included in the key
-/// in the future, though it's impossible to cover every case.
+/// Tests are not sandboxed, so environment variables and other system state can
+/// also affect a result; some of these may be added to the key in the future,
+/// though not every case can be covered.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CacheKey {
     binary_hash: ContentHash,
@@ -75,32 +72,23 @@ impl fmt::Display for ContentHash {
     }
 }
 
-/// The buffer size used when streaming a file through the hasher.
-///
-/// Test binaries can be many gigabytes, so the file is hashed incrementally in
-/// chunks rather than read into memory all at once. 256 KiB is large enough to
-/// amortize syscall overhead while staying within the CPU cache.
+/// Buffer size for streaming a file through the hasher. 256 KiB amortizes
+/// syscall overhead while staying within the CPU cache.
 const HASH_CHUNK_SIZE: usize = 256 * 1024;
 
-/// Computes a [`ContentHash`] for the file at the given path.
-///
-/// The file is streamed through the hasher in fixed-size chunks rather than read
-/// fully into memory: test binaries are routinely multiple gigabytes, and slurping
-/// each one would allocate that much RAM per binary.
+/// Computes a [`ContentHash`] for the file at the given path, streaming it in
+/// chunks so a multi-gigabyte binary hashes in constant memory.
 pub fn hash_file(path: &Utf8Path) -> io::Result<ContentHash> {
     let file = File::open(path)?;
     hash_reader(BufReader::with_capacity(HASH_CHUNK_SIZE, file))
 }
 
-/// Computes a [`ContentHash`] by streaming a reader through the hasher.
+/// Computes a [`ContentHash`] by streaming a reader through the hasher in chunks.
 ///
-/// This uses XXH3, a fast non-cryptographic hash. Collision resistance is not a
-/// security property here: a collision would only ever cause nextest to skip a
-/// test that should have run, and the inputs (locally built test binaries) are
-/// not adversarial. The 128-bit width makes accidental collisions negligible.
-///
-/// The reader is consumed in fixed-size chunks so that arbitrarily large inputs
-/// hash in constant memory; see [`hash_file`] for why that matters.
+/// Uses XXH3, a fast non-cryptographic hash. Collision resistance is not needed:
+/// a collision would at worst skip a test that should have run, and locally built
+/// test binaries are not adversarial. 128 bits makes accidental collisions
+/// negligible.
 pub fn hash_reader<R: Read>(mut reader: R) -> io::Result<ContentHash> {
     let mut hasher = Xxh3::new();
     let mut buf = [0u8; HASH_CHUNK_SIZE];

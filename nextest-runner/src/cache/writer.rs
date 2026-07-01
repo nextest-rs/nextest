@@ -20,19 +20,14 @@ use tracing::warn;
 
 /// Observes test events and stores passing results in the cache.
 ///
-/// A result is cached only when the test cleanly passed on its first attempt:
-/// flaky tests (failed then passed on retry) and tests run under stress are
-/// never cached, because their outcome is not a deterministic function of the
-/// binary. This mirrors nextest's retry model — a cached failure would defeat
-/// retries, so only unambiguous passes are recorded.
+/// A result is cached only when the test cleanly passed on its first attempt.
+/// Flaky (failed then passed on retry) and stress results are never cached,
+/// since they are not a deterministic function of the binary — a cached failure
+/// would also defeat retries.
 ///
-/// A pass that also *leaked handles* or *timed out but was tolerated* is
-/// likewise not cached: those outcomes depend on subprocess and timing behavior
-/// rather than binary content, so caching them would silently suppress leak and
-/// timeout detection on subsequent runs.
-///
-/// Binary hashes are computed once, up front, from the test list. A binary that
-/// cannot be hashed is simply never cached; this never fails the run.
+/// A pass that *leaked handles* or *timed out but was tolerated* is likewise not
+/// cached: those depend on subprocess and timing behavior, so caching them would
+/// suppress leak and timeout detection on later runs.
 pub struct CacheWriter<'a> {
     backend: &'a dyn CacheBackend,
     binary_hashes: HashMap<RustBinaryId, ContentHash>,
@@ -41,29 +36,22 @@ pub struct CacheWriter<'a> {
 impl<'a> CacheWriter<'a> {
     /// Creates a writer that stores passing results for the given test list.
     ///
-    /// The content hashes were already computed while consulting the cache
-    /// before the run (see [`ComputedCacheInfo`]), so they are reused here rather
-    /// than recomputed: hashing reads every byte of each (multi-gigabyte) binary,
-    /// and doing it a second time would roughly double the cache's overhead. Only
-    /// binaries missing from the precomputed set — which should not normally
-    /// happen — are hashed as a fallback, in parallel.
+    /// Reuses the hashes computed while consulting the cache (see
+    /// [`ComputedCacheInfo`]) rather than re-hashing every multi-gigabyte binary.
+    /// Binaries missing from that set — which should not normally happen — are
+    /// hashed as a fallback.
     ///
     /// [`ComputedCacheInfo`]: crate::cache::ComputedCacheInfo
     pub fn new(backend: &'a dyn CacheBackend, test_list: &TestList<'_>) -> Self {
         let mut binary_hashes = test_list.binary_hashes().clone();
 
-        // Fallback: hash any suite whose hash was not carried over from the
-        // consult pass. In practice the consult pass hashes every binary, so
-        // this is empty; it exists so the writer is correct even if the two
-        // sets ever diverge.
         let missing: Vec<_> = test_list
             .iter()
             .filter(|suite| !binary_hashes.contains_key(&suite.binary_id))
             .collect();
         if !missing.is_empty() {
-            // The consult pass is expected to hash every binary, so a non-empty
-            // set here means the two passes diverged. That is not fatal — the
-            // fallback below hashes the stragglers — but it is unexpected, so
+            // A non-empty set means the consult pass diverged from the test list.
+            // Not fatal (the stragglers are hashed below), but unexpected, so
             // surface it while the feature is experimental.
             warn!(
                 "cache: {} binaries were not covered by the consult pass; hashing them now",
@@ -80,10 +68,9 @@ impl<'a> CacheWriter<'a> {
 
     /// Inspects an event and, if it reports a clean pass, stores it in the cache.
     ///
-    /// Storage errors do not fail the run — a failing cache never turns a passing
-    /// run into a failure — but they are surfaced as warnings rather than silently
-    /// dropped: while this feature is experimental, a store failure most likely
-    /// indicates a bug we want to see, not a benign condition.
+    /// Storage errors only warn — a failing cache never fails a passing run — but
+    /// are surfaced rather than dropped, since one likely indicates a bug while
+    /// this feature is experimental.
     pub fn observe(&self, event: &ReporterEvent<'_>) {
         let ReporterEvent::Test(event) = event else {
             return;
@@ -144,19 +131,10 @@ fn hash_binaries(suites: &[&RustTestSuite<'_>]) -> HashMap<RustBinaryId, Content
     .collect()
 }
 
-/// Returns true if a finished test's result may be cached.
-///
-/// A result is cacheable only when all of the following hold:
-///
-/// - It was not observed under stress (`under_stress` is false): a stress run
-///   executes the same test many times and its outcome is not a stable result.
-/// - It ran exactly once (`attempt_count == 1`): more than one attempt means the
-///   test was retried and is therefore flaky.
-/// - Its result is a clean [`Pass`](ExecutionResultDescription::Pass). We
-///   deliberately do not accept every `is_success()` outcome: a leaky or
-///   timeout-but-tolerated pass counts as success for reporting, but its outcome
-///   depends on subprocess and timing behavior rather than binary content, so
-///   caching it would suppress leak and timeout detection on later runs.
+/// Returns true if a finished test's result may be cached: a clean
+/// [`Pass`](ExecutionResultDescription::Pass), run exactly once (not retried),
+/// outside a stress run. See [`CacheWriter`] for why leaky and tolerated-timeout
+/// passes are excluded even though they report as success.
 fn is_cacheable(
     under_stress: bool,
     attempt_count: usize,

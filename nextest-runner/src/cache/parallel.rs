@@ -17,24 +17,14 @@ use std::{
     thread,
 };
 
-/// Runs `f` over every item in `items` across a bounded thread pool, collecting
-/// the `Some` results into a `Vec` in unspecified order.
+/// Runs `f` over every item across a bounded scoped thread pool, collecting the
+/// `Some` results in unspecified order.
 ///
-/// This backs both cache passes that hash test binaries: consulting the cache
-/// before a run and storing results after it. Hashing a test binary reads every
-/// byte of a file that is routinely several gigabytes, so the work is I/O- and
-/// CPU-bound and scales well across cores.
-///
-/// Threads pull the next index from a shared atomic cursor as they finish rather
-/// than being handed a fixed slice, so every worker stays busy even when items
-/// differ wildly in size. The pool is capped at the smaller of the available
-/// parallelism and the number of items — there is no point spawning more threads
-/// than there is work or hardware.
-///
-/// A scoped thread pool lets the workers borrow `items` and `f` without
-/// `'static` bounds, because the scope joins every thread before returning;
-/// `f` is shared across workers (hence `Sync`) and its output crosses the thread
-/// boundary (hence `Send`).
+/// Backs both cache passes that hash test binaries (consult and store). Workers
+/// pull the next index from a shared cursor rather than taking a fixed slice, so
+/// none idles while others hash multi-gigabyte binaries; the pool is capped at
+/// `min(parallelism, items.len())`. The scope lets workers borrow `items` and
+/// `f` without `'static` bounds.
 pub(super) fn parallel_filter_map<T, R, F>(items: &[T], f: F) -> Vec<R>
 where
     T: Sync,
@@ -72,8 +62,7 @@ where
             })
             .collect();
         for handle in handles {
-            // A worker only panics if `f` itself panics; propagate it rather
-            // than silently dropping the results computed so far.
+            // Propagate a worker panic rather than dropping results silently.
             all.extend(handle.join().expect("cache worker thread panicked"));
         }
     });

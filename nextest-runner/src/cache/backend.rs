@@ -14,48 +14,39 @@ use std::collections::BTreeSet;
 ///
 /// # Contract
 ///
-/// Methods are split into reads, which never mutate stored state, and writes,
-/// which do. Reads ([`lookup`](Self::lookup), [`passing`](Self::passing)) and
-/// writes ([`store`](Self::store), [`record_access`](Self::record_access),
-/// [`invalidate`](Self::invalidate)) are separate so that callers express
-/// whether they intend to mutate the cache, rather than a read silently writing.
+/// Methods are split into reads ([`lookup`](Self::lookup),
+/// [`passing`](Self::passing)) and writes ([`store`](Self::store),
+/// [`record_access`](Self::record_access), [`invalidate`](Self::invalidate)) so
+/// callers express intent rather than a read silently writing.
 ///
-/// - **Reads must be safe to call concurrently** from multiple threads, and never
-///   mutate stored state.
-/// - **Store is called after test execution completes,** and only for tests that passed on their
-///   first attempt.
-/// - **`last_hit_at` is refreshed** on store and by [`record_access`](Self::record_access), the
-///   write the pre-run path issues after [`passing`](Self::passing) so eviction policies see
-///   recently-consulted entries as recently used.
-/// - **Errors are non-fatal but not silent.** The caller treats cache failures
-///   as misses and never fails a run because of them, but surfaces them as
-///   warnings rather than dropping them: while this feature is experimental, an
-///   error most likely indicates a bug worth seeing.
+/// - Reads must be safe to call concurrently and never mutate stored state.
+/// - `last_hit_at` is refreshed on store and by
+///   [`record_access`](Self::record_access) so eviction sees consulted entries
+///   as recently used.
+/// - Errors are non-fatal but not silent: the caller treats them as misses and
+///   never fails a run, but warns rather than dropping them, since one likely
+///   indicates a bug while this feature is experimental.
 pub trait CacheBackend: Send + Sync {
-    /// Looks up a cached result for the given key. Read-only.
-    ///
-    /// This never refreshes `last_hit_at`; the pre-run path uses
-    /// [`record_access`](Self::record_access) for that.
+    /// Looks up a cached result for the given key. Read-only; does not refresh
+    /// `last_hit_at` (that is [`record_access`](Self::record_access)'s job).
     fn lookup(&self, key: &CacheKey) -> Result<Option<CacheEntry>, CacheError>;
 
-    /// Returns the subset of `test_names` cached as passing for `binary_hash`. Read-only.
+    /// Returns the subset of `test_names` cached as passing for `binary_hash`.
+    /// Read-only; the pre-run caller follows it with
+    /// [`record_access`](Self::record_access).
     ///
-    /// This is the batch read path used before a run; the caller follows it with
-    /// [`record_access`](Self::record_access) to record the consultation. Backends should read each
-    /// binary's storage once rather than once per test name, so that consulting a binary with N
-    /// cached tests costs O(1) reads rather than O(N).
+    /// Backends must read each binary's storage once, not once per name, so
+    /// consulting a binary with N cached tests costs O(1) reads.
     fn passing(
         &self,
         binary_hash: ContentHash,
         test_names: &BTreeSet<TestCaseName>,
     ) -> Result<BTreeSet<TestCaseName>, CacheError>;
 
-    /// Records that the given cached tests were just consulted, refreshing the `last_hit_at` time
-    /// of each one present for `binary_hash`. Names with no cached entry are ignored.
-    ///
-    /// This is the write the pre-run path issues after [`passing`](Self::passing), so that eviction
-    /// policies treat recently-consulted entries as recently used. Refreshing hit times only affects
-    /// eviction ordering, never correctness.
+    /// Refreshes `last_hit_at` for each of `test_names` present under
+    /// `binary_hash`, so eviction treats consulted entries as recently used.
+    /// Absent names are ignored. Affects eviction ordering only, never
+    /// correctness.
     fn record_access(
         &self,
         binary_hash: ContentHash,
@@ -70,11 +61,9 @@ pub trait CacheBackend: Send + Sync {
 
     /// Removes cache entries according to the given policy.
     ///
-    /// Unlike the run-path methods, `clean` is a management command that never
-    /// runs during a test execution, so it does not treat failures as cache
-    /// misses: an I/O error is fatal and returned to the caller. A corrupt
-    /// manifest is tolerated so that a cache whose data has gone bad can still be
-    /// cleared.
+    /// As a management command, `clean` never runs during test execution, so an
+    /// I/O error is fatal rather than treated as a miss. A corrupt manifest is
+    /// tolerated so a cache whose data has gone bad can still be cleared.
     fn clean(&self, policy: &CleanPolicy) -> Result<CleanStats, CacheError>;
 
     /// Returns summary information about the cache.

@@ -1001,22 +1001,12 @@ impl App {
             None => (None, None),
         };
 
-        // Resolve the test result cache backend, if enabled. This is gated
-        // behind an experimental env var while the feature is in development.
-        // Cache failures must never fail a run, so an unresolvable cache
-        // directory disables caching rather than erroring.
-        //
-        // The cache is disabled when:
-        //
-        // - `--no-cache` (or `NEXTEST_NO_CACHE`) is set: tests run as normal and
-        //   no results are stored or consulted.
-        // - This is a rerun (`-R`/`--rerun`): the rerun's outstanding set is the
-        //   authoritative description of what must run. A test the rerun wants
-        //   to run is, by definition, one that did not pass last time, so
-        //   consulting the cache could only wrongly skip it (a stale cached pass
-        //   from before it started failing) — silently dropping a test the user
-        //   explicitly asked to rerun. Reruns already skip prior passes via
-        //   their own mechanism, so the cache adds nothing here.
+        // Resolve the cache backend, if enabled (gated behind an experimental
+        // env var). An unresolvable cache dir disables caching rather than
+        // erroring, since the cache must never fail a run. Also disabled by
+        // `--no-cache`/`NEXTEST_NO_CACHE`, and for reruns: a test a rerun wants to
+        // run is one that did not pass last time, so a stale cached pass could
+        // only wrongly skip it — and reruns already skip prior passes themselves.
         let cache_enabled =
             std::env::var("NEXTEST_EXPERIMENTAL_RESULT_CACHE").as_deref() == Ok("1");
         let is_rerun = rerun_state.is_some();
@@ -1656,12 +1646,8 @@ fn final_result(
 
     // Handle no-tests-run case first.
     if matches!(final_stats, FinalRunStats::NoTestsRun) {
-        // A run in which every test was skipped because it is cached as passing
-        // is a successful no-op, not a "no tests to run" error: the tests exist
-        // and are known to pass for the current binaries. This mirrors how a
-        // rerun treats tests that already passed. Reruns still defer to the
-        // outstanding-tests check below, so this shortcut is only taken for
-        // non-rerun runs.
+        // Every test skipped as cached-passing is a successful no-op, not a "no
+        // tests to run" error. Reruns defer to the outstanding-tests check below.
         if cached_skipped > 0 && !is_rerun {
             return Ok(());
         }

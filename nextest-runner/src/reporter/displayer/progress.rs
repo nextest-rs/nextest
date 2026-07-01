@@ -706,10 +706,9 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         "skipped".style(styles.skip),
     );
 
-    // Break out the cache-skipped subset, since those tests were skipped because
-    // their result is already known rather than filtered out. When every skip is
-    // a cache hit, a bare count would just repeat `skipped`, so say "all cached"
-    // instead.
+    // Break out the cache-skipped subset (skipped because their result is known,
+    // not filtered out). When every skip is a cache hit, "all cached" reads
+    // better than a count that just repeats `skipped`.
     if skipped_cached > 0 {
         if skipped_cached == skipped {
             swrite!(out, " (all {})", "cached".style(styles.skip));

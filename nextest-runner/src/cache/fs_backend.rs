@@ -76,9 +76,8 @@ impl FsBackend {
         let dir = path.parent().expect("manifest path always has a parent");
         fs::create_dir_all(dir)?;
 
-        // Write atomically (temp file + rename) so a concurrent reader, or a
-        // second nextest process sharing this cache directory, never observes a
-        // half-written manifest.
+        // Atomic (temp file + rename) so a concurrent reader or second nextest
+        // process never observes a half-written manifest.
         AtomicFile::new(&path, OverwriteBehavior::AllowOverwrite)
             .write(|f| {
                 let mut writer = BufWriter::new(f);
@@ -115,10 +114,7 @@ impl CacheBackend for FsBackend {
         let binary_hash_hex = binary_hash.to_hex();
         let manifest = self.read_manifest(&binary_hash_hex)?;
 
-        // Read the manifest once and intersect with the requested names, rather
-        // than reading once per name. Only names actually present in the
-        // manifest are returned, so the result is the set of cached-passing
-        // tests for this binary.
+        // One manifest read, intersected with the requested names.
         Ok(test_names
             .iter()
             .filter(|name| manifest.entries.contains_key(name.as_str()))
@@ -134,8 +130,8 @@ impl CacheBackend for FsBackend {
         let binary_hash_hex = binary_hash.to_hex();
         let mut manifest = self.read_manifest(&binary_hash_hex)?;
 
-        // Refresh the hit time of every requested name present in the manifest,
-        // in a single read-modify-write. Names with no cached entry are ignored.
+        // Refresh present names in a single read-modify-write; absent ones are
+        // ignored.
         let now = Utc::now();
         let mut refreshed = false;
         for name in test_names {
@@ -174,17 +170,14 @@ impl CacheBackend for FsBackend {
         manifest.entries.remove(key.test_name());
 
         if manifest.entries.is_empty() {
-            // The manifest is the only persistent file under this directory, so
-            // removing the directory removes the cache entry. A failure here only
-            // leaves a stale empty directory behind, never affecting correctness,
-            // so it does not fail the call — but it is surfaced as a warning
-            // rather than dropped, since while the feature is experimental such a
-            // failure most likely indicates a bug.
+            // The manifest is the only file here, so drop the whole directory. A
+            // failure only leaves a stale empty dir behind (no correctness
+            // impact), so it warns rather than failing the call.
             let dir = self.cache_dir.join(&binary_hash_hex);
             match fs::remove_dir_all(&dir) {
                 Ok(()) => {}
-                // The directory legitimately may not exist: invalidating a key
-                // that was never cached reads an empty manifest and lands here.
+                // Invalidating a never-cached key reads an empty manifest and
+                // lands here.
                 Err(error) if error.kind() == io::ErrorKind::NotFound => {}
                 Err(error) => {
                     warn!("cache: failed to remove empty cache directory {dir}: {error}");
@@ -212,16 +205,12 @@ impl CacheBackend for FsBackend {
                 continue;
             };
 
-            // Unlike the run-path methods, `clean` is a management command that
-            // never runs during a test execution, so it has no reason to treat
-            // I/O failures as cache misses: an I/O error here is fatal. A corrupt
-            // manifest ([`CacheError::InvalidData`]) stays tolerant, since clean
-            // should still be able to clear a cache whose data has gone bad.
+            // I/O errors are fatal here; corrupt manifests stay tolerant (see
+            // the trait). The two policies differ in how they handle corruption.
             match policy {
                 CleanPolicy::All => {
-                    // The manifest is read only to count the entries being
-                    // removed, so a corrupt one falls back to a count of 1 rather
-                    // than blocking removal of the directory.
+                    // The manifest is read only to count entries removed, so a
+                    // corrupt one counts as 1 rather than blocking removal.
                     let entry_count = match self.read_manifest(dir_name) {
                         Ok(manifest) => manifest.entries.len() as u64,
                         Err(CacheError::InvalidData(error)) => {
@@ -238,9 +227,8 @@ impl CacheBackend for FsBackend {
                     stats.entries_removed += entry_count;
                 }
                 CleanPolicy::OlderThan(cutoff) => {
-                    // A corrupt manifest gives no hit times to compare against the
-                    // cutoff, so skip that directory rather than fail the whole
-                    // clean; surface why rather than skipping silently.
+                    // A corrupt manifest has no hit times to compare, so skip
+                    // that directory (with a warning) rather than fail the clean.
                     let manifest = match self.read_manifest(dir_name) {
                         Ok(manifest) => manifest,
                         Err(CacheError::InvalidData(error)) => {

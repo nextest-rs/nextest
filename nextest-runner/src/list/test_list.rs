@@ -342,16 +342,11 @@ impl<'g> TestList<'g> {
         // (can be an issue on Windows).
         runtime.shutdown_background();
 
-        // If a cache backend is configured, consult it now that the test names
-        // are known. Tests cached as passing for their binary's current hash
-        // are recorded on the filter so that `filter_match` skips them. We
-        // clone the filter to attach this information because the caller holds
-        // it by shared reference; the clone is cheap relative to listing.
-        //
-        // Consulting also computes the content hash of every binary. We hold on
-        // to those hashes and store them on the `TestList` so the post-run
-        // `CacheWriter` can reuse them instead of re-hashing every (multi-
-        // gigabyte) binary a second time.
+        // Consult the cache now that test names are known: cached-passing tests
+        // are recorded on the filter (cloned, since the caller holds it shared)
+        // so `filter_match` skips them. Consulting also hashes every binary; we
+        // keep those hashes on the `TestList` for the post-run `CacheWriter` to
+        // reuse instead of re-hashing every multi-gigabyte binary.
         let mut binary_hashes = HashMap::new();
         let cache_filter = cache_backend.map(|backend| {
             let mut cache_info = Self::collect_cache_info(backend, &parsed_binaries);
@@ -722,11 +717,8 @@ impl<'g> TestList<'g> {
         self.rust_suites.get(binary_id)
     }
 
-    /// Returns the content hashes computed for each test binary while consulting
-    /// the result cache, keyed by binary ID.
-    ///
-    /// This is empty when the cache is disabled. When populated, the post-run
-    /// `CacheWriter` reuses these instead of hashing every binary a second time.
+    /// Returns the content hash of each test binary, keyed by binary ID, as
+    /// computed while consulting the cache. Empty when the cache is disabled.
     pub fn binary_hashes(&self) -> &HashMap<RustBinaryId, ContentHash> {
         &self.binary_hashes
     }
@@ -846,20 +838,9 @@ impl<'g> TestList<'g> {
         })
     }
 
-    /// Converts parsed binaries into filtered test suites.
-    ///
-    /// This is separated from [`Self::parse_output`] so that callers can
-    /// insert processing between parsing and filtering (e.g. precomputing
-    /// group memberships).
-    ///
-    /// `groups` should be `Some` when the CLI filter contains `group()`
-    /// predicates (see [`TestFilter::has_group_predicates`]), and `None`
-    /// otherwise. When `None`, encountering a `group()` predicate in the
-    /// expression panics.
-    /// Consults the cache backend for each listed binary, returning the set of
-    /// tests cached as passing for each binary's current hash.
-    ///
-    /// Skipped binaries are ignored: they have no test cases to cache.
+    /// Consults the cache backend for each listed binary, returning the tests
+    /// cached as passing for each binary's current hash. Skipped binaries have
+    /// no test cases to cache and are ignored.
     fn collect_cache_info(
         backend: &dyn CacheBackend,
         parsed: &[ParsedTestBinary<'g>],
@@ -878,6 +859,14 @@ impl<'g> TestList<'g> {
         ComputedCacheInfo::collect(backend, binaries)
     }
 
+    /// Converts parsed binaries into filtered test suites.
+    ///
+    /// Separated from [`Self::parse_output`] so callers can insert processing
+    /// between parsing and filtering (e.g. precomputing group memberships).
+    ///
+    /// `groups` should be `Some` when the CLI filter contains `group()`
+    /// predicates (see [`TestFilter::has_group_predicates`]), and `None`
+    /// otherwise. When `None`, encountering a `group()` predicate panics.
     fn build_suites(
         parsed: impl IntoIterator<Item = ParsedTestBinary<'g>>,
         filter: &TestFilter,

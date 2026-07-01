@@ -130,10 +130,9 @@ pub(super) fn write_skip_counts(
         } else {
             write!(writer, " {}", "skipped".style(styles.skip))?;
 
-            // Show an "including" clause that breaks down the categories
-            // contributing to the skip count: rerun, cached, and default
-            // filter. Any subset may be present, so the clauses are joined with
-            // commas and a trailing "and" before the last one.
+            // "including" clause breaking down the skip count into rerun, cached,
+            // and default-filter categories. Any subset may be present, joined
+            // with commas and a trailing "and" before the last.
             let has_rerun = skip_counts.skipped_tests_rerun > 0;
             let has_cached = skip_counts.skipped_tests_cached > 0;
             let has_default_filter = skip_counts.skipped_binaries_default_filter > 0
@@ -145,9 +144,8 @@ pub(super) fn write_skip_counts(
             if clause_count > 0 {
                 write!(writer, ", including ")?;
 
-                // Tracks how many clauses remain to be written, so the
-                // appropriate separator (", " or ", and ") can be inserted
-                // before each one after the first.
+                // Clauses left to write, so the right separator (", " or
+                // ", and ") precedes each one after the first.
                 let mut remaining = clause_count;
                 let write_separator =
                     |writer: &mut dyn WriteStr, remaining: usize| -> io::Result<()> {
