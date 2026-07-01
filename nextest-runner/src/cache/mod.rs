@@ -30,7 +30,7 @@ mod writer;
 
 pub use backend::{CacheBackend, CacheError};
 pub use fs_backend::FsBackend;
-pub use imp::{CacheBinaryInput, CacheTestSuiteInfo, ComputedCacheInfo, default_cache_dir};
+pub use imp::{CacheBinaryInput, ComputedCacheInfo, default_cache_dir};
 pub use key::{CacheKey, ContentHash, hash_file};
 pub use result::{CacheEntry, CacheInfo, CleanPolicy, CleanStats};
 pub use writer::CacheWriter;

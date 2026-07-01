@@ -1,16 +1,15 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! A small work-stealing helper for the cache's parallel binary passes.
+//! A small work-stealing helper for hashing test binaries in parallel.
 //!
 //! Hashing test binaries is blocking, CPU/IO-bound work, so this uses
 //! `std::thread::scope` rather than the tokio-based `async-scoped` used
-//! elsewhere in nextest. Both cache call sites run outside a live runtime (the
-//! listing runtime is shut down before the consult pass; the writer runs before
-//! the runner starts its own), and `async-scoped`'s scoped `spawn_blocking`
-//! requires a multi-threaded runtime context. There is nothing to await here, so
-//! plain scoped threads are both simpler and a better fit than borrowing tokio's
-//! blocking pool through its unsafe lifetime glue.
+//! elsewhere in nextest. The cache consult runs outside a live runtime (the
+//! listing runtime is shut down first), and `async-scoped`'s scoped
+//! `spawn_blocking` requires a multi-threaded runtime context. There is nothing
+//! to await here, so plain scoped threads are both simpler and a better fit than
+//! borrowing tokio's blocking pool through its unsafe lifetime glue.
 
 use std::{
     sync::atomic::{AtomicUsize, Ordering},
@@ -20,11 +19,10 @@ use std::{
 /// Runs `f` over every item across a bounded scoped thread pool, collecting the
 /// `Some` results in unspecified order.
 ///
-/// Backs both cache passes that hash test binaries (consult and store). Workers
-/// pull the next index from a shared cursor rather than taking a fixed slice, so
-/// none idles while others hash multi-gigabyte binaries; the pool is capped at
-/// `min(parallelism, items.len())`. The scope lets workers borrow `items` and
-/// `f` without `'static` bounds.
+/// Workers pull the next index from a shared cursor rather than taking a fixed
+/// slice, so none idles while others hash multi-gigabyte binaries; the pool is
+/// capped at `min(parallelism, items.len())`. The scope lets workers borrow
+/// `items` and `f` without `'static` bounds.
 pub(super) fn parallel_filter_map<T, R, F>(items: &[T], f: F) -> Vec<R>
 where
     T: Sync,

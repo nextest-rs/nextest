@@ -6,11 +6,10 @@
 use crate::{
     cache::{
         backend::CacheBackend,
-        key::{CacheKey, ContentHash, hash_file},
-        parallel::parallel_filter_map,
+        key::{CacheKey, ContentHash},
         result::CacheEntry,
     },
-    list::{RustTestSuite, TestList},
+    list::TestList,
     reporter::events::{ExecutionResultDescription, ReporterEvent, TestEventKind},
 };
 use chrono::Utc;
@@ -30,39 +29,18 @@ use tracing::warn;
 /// suppress leak and timeout detection on later runs.
 pub struct CacheWriter<'a> {
     backend: &'a dyn CacheBackend,
-    binary_hashes: HashMap<RustBinaryId, ContentHash>,
+    binary_hashes: &'a HashMap<RustBinaryId, ContentHash>,
 }
 
 impl<'a> CacheWriter<'a> {
     /// Creates a writer that stores passing results for the given test list.
     ///
-    /// Reuses the hashes computed while consulting the cache (see
-    /// [`ComputedCacheInfo`]) rather than re-hashing every multi-gigabyte binary.
-    /// Binaries missing from that set — which should not normally happen — are
-    /// hashed as a fallback.
-    ///
-    /// [`ComputedCacheInfo`]: crate::cache::ComputedCacheInfo
-    pub fn new(backend: &'a dyn CacheBackend, test_list: &TestList<'_>) -> Self {
-        let mut binary_hashes = test_list.binary_hashes().clone();
-
-        let missing: Vec<_> = test_list
-            .iter()
-            .filter(|suite| !binary_hashes.contains_key(&suite.binary_id))
-            .collect();
-        if !missing.is_empty() {
-            // A non-empty set means the consult pass diverged from the test list.
-            // Not fatal (the stragglers are hashed below), but unexpected, so
-            // surface it while the feature is experimental.
-            warn!(
-                "cache: {} binaries were not covered by the consult pass; hashing them now",
-                missing.len(),
-            );
-            binary_hashes.extend(hash_binaries(&missing));
-        }
-
+    /// Reuses the hashes computed while consulting the cache; every binary a test
+    /// can run in was hashed then, so no binary is ever re-hashed here.
+    pub fn new(backend: &'a dyn CacheBackend, test_list: &'a TestList<'_>) -> Self {
         Self {
             backend,
-            binary_hashes,
+            binary_hashes: test_list.binary_hashes(),
         }
     }
 
@@ -110,25 +88,6 @@ impl<'a> CacheWriter<'a> {
             );
         }
     }
-}
-
-/// Hashes every test suite's binary in parallel, returning a map from binary ID
-/// to content hash. A binary that cannot be hashed is simply omitted: its
-/// results will never be cached, which never fails the run.
-fn hash_binaries(suites: &[&RustTestSuite<'_>]) -> HashMap<RustBinaryId, ContentHash> {
-    parallel_filter_map(suites, |suite| {
-        hash_file(&suite.binary_path)
-            .inspect_err(|error| {
-                warn!(
-                    "cache: not caching results for {}: failed to hash {}: {error}",
-                    suite.binary_id, suite.binary_path,
-                );
-            })
-            .ok()
-            .map(|hash| (suite.binary_id.clone(), hash))
-    })
-    .into_iter()
-    .collect()
 }
 
 /// Returns true if a finished test's result may be cached: a clean

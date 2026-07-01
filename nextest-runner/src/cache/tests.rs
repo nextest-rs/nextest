@@ -419,7 +419,7 @@ fn collect_retains_hashes_for_every_binary() {
         Some(&hash_file(&uncached_path).unwrap()),
     );
 
-    // ...but only the binary with a stored pass appears in the suites.
-    assert!(info.test_suites.get(&cached_id).is_some());
-    assert!(info.test_suites.get(&uncached_id).is_none());
+    // ...and only the binary with a stored pass has any passing tests.
+    assert_eq!(info.passing.get(&cached_id), Some(&names(&["tests::a"])));
+    assert_eq!(info.passing.get(&uncached_id), Some(&BTreeSet::new()));
 }

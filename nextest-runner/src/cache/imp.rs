@@ -13,7 +13,6 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use etcetera::{BaseStrategy, choose_base_strategy};
-use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_metadata::{RustBinaryId, TestCaseName};
 use std::collections::{BTreeSet, HashMap};
 use tracing::warn;
@@ -56,45 +55,24 @@ pub(super) fn cache_dir_from_base(base: Utf8PathBuf, encoded_workspace: &str) ->
         .join(CACHE_LEAF)
 }
 
-/// The set of tests known to be passing in the cache, keyed by binary ID.
+/// The cached-passing tests of every consulted binary, plus each binary's hash.
 ///
 /// Computed once, before test-level filtering, by hashing each binary and
-/// querying the backend. The hash is resolved here, so a test name appears only
-/// if it was cached for the binary's *current* hash; [`TestFilter`] can then
-/// consult this with a pure name lookup, never re-hashing or touching the
-/// backend. The hashes are kept in [`binary_hashes`] so the post-run
-/// [`CacheWriter`] can reuse them instead of re-hashing every binary.
+/// querying the backend. The hash is resolved here, so a name appears in
+/// `passing` only if it was cached for the binary's *current* hash; [`TestFilter`]
+/// then consults it with a pure name lookup, never re-hashing or touching the
+/// backend. `binary_hashes` covers every binary that could be hashed (including
+/// those with no cached passes) so the post-run [`CacheWriter`] can reuse them.
 ///
 /// [`TestFilter`]: crate::test_filter::TestFilter
 /// [`CacheWriter`]: crate::cache::CacheWriter
-/// [`binary_hashes`]: Self::binary_hashes
 #[derive(Clone, Debug, Default)]
 pub struct ComputedCacheInfo {
-    /// Cached-passing tests, keyed by binary ID.
-    pub test_suites: IdOrdMap<CacheTestSuiteInfo>,
+    /// Cached-passing test names, keyed by binary ID.
+    pub passing: HashMap<RustBinaryId, BTreeSet<TestCaseName>>,
 
-    /// The content hash of every binary that could be hashed, keyed by binary
-    /// ID. Covers binaries with no cached passes too, so the writer can reuse
-    /// them; a binary that failed to hash is absent.
+    /// Content hash of each binary that could be hashed, keyed by binary ID.
     pub binary_hashes: HashMap<RustBinaryId, ContentHash>,
-}
-
-/// Cached-passing tests for a single test binary.
-#[derive(Clone, Debug)]
-pub struct CacheTestSuiteInfo {
-    /// The binary ID.
-    pub binary_id: RustBinaryId,
-
-    /// The set of tests that are cached as passing for the binary's current hash.
-    pub passing: BTreeSet<TestCaseName>,
-}
-
-impl IdOrdItem for CacheTestSuiteInfo {
-    type Key<'a> = &'a RustBinaryId;
-    fn key(&self) -> Self::Key<'_> {
-        &self.binary_id
-    }
-    id_upcast!();
 }
 
 impl ComputedCacheInfo {
@@ -127,28 +105,25 @@ impl ComputedCacheInfo {
 
         let outcomes = parallel_filter_map(&work, |binary| consult_binary(backend, binary));
 
-        let mut test_suites = IdOrdMap::new();
+        let mut passing = HashMap::new();
         let mut binary_hashes = HashMap::with_capacity(outcomes.len());
         for outcome in outcomes {
-            // Retain every hash, even when the binary had no cached passes.
             binary_hashes.insert(outcome.binary_id.clone(), outcome.hash);
-            if let Some(suite) = outcome.suite {
-                test_suites.insert_overwrite(suite);
-            }
+            passing.insert(outcome.binary_id, outcome.passing);
         }
         Self {
-            test_suites,
+            passing,
             binary_hashes,
         }
     }
 }
 
-/// The result of consulting one binary: its content hash (always present) and
-/// the cached-passing tests, if any.
+/// The result of consulting one binary: its content hash, and the names of its
+/// cached-passing tests (empty when nothing is cached).
 struct BinaryOutcome {
     binary_id: RustBinaryId,
     hash: ContentHash,
-    suite: Option<CacheTestSuiteInfo>,
+    passing: BTreeSet<TestCaseName>,
 }
 
 /// One binary's unit of work, with test names materialized into an owned set so
@@ -162,8 +137,8 @@ struct BinaryWork<'a> {
 /// Hashes a single binary and queries the backend for its cached-passing tests.
 ///
 /// Returns `None` only when the binary can't be hashed, so its tests run
-/// normally. The hash is always returned (for the writer to reuse); `suite` is
-/// `None` when nothing is cached or the lookup failed.
+/// normally. The hash is always returned (for the writer to reuse); `passing` is
+/// empty when nothing is cached or the lookup failed.
 fn consult_binary(backend: &dyn CacheBackend, binary: &BinaryWork<'_>) -> Option<BinaryOutcome> {
     let binary_hash = hash_file(binary.binary_path)
         .inspect_err(|error| {
@@ -197,14 +172,10 @@ fn consult_binary(backend: &dyn CacheBackend, binary: &BinaryWork<'_>) -> Option
         );
     }
 
-    let suite = (!passing.is_empty()).then(|| CacheTestSuiteInfo {
-        binary_id: binary.binary_id.clone(),
-        passing,
-    });
     Some(BinaryOutcome {
         binary_id: binary.binary_id.clone(),
         hash: binary_hash,
-        suite,
+        passing,
     })
 }
 

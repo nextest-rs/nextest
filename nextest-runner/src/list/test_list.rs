@@ -349,10 +349,10 @@ impl<'g> TestList<'g> {
         // reuse instead of re-hashing every multi-gigabyte binary.
         let mut binary_hashes = HashMap::new();
         let cache_filter = cache_backend.map(|backend| {
-            let mut cache_info = Self::collect_cache_info(backend, &parsed_binaries);
-            binary_hashes = std::mem::take(&mut cache_info.binary_hashes);
+            let cache_info = Self::collect_cache_info(backend, &parsed_binaries);
+            binary_hashes = cache_info.binary_hashes;
             let mut filter = filter.clone();
-            filter.set_cache_info(cache_info);
+            filter.set_cached_passing(cache_info.passing);
             filter
         });
         let filter = cache_filter.as_ref().unwrap_or(filter);
