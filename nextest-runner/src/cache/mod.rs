@@ -14,9 +14,11 @@
 //!   consulted by the test filter to skip already-cached tests.
 //! - [`CacheWriter`]: observes test events and stores passing results.
 //!
-//! The `cargo nextest cache` management CLI (clean, info) is not yet wired up,
-//! so the corresponding backend methods (`clean`, `info`, `invalidate`) are
-//! currently exercised only by tests.
+//! The cache prunes itself: at the end of a run, [`FsBackend::prune_if_needed`]
+//! evicts results for binaries not seen in a while (see its docs for the
+//! policy), so it never grows without bound and needs no manual cleanup command.
+//! [`CacheBackend::info`] exists for a future read-only `cargo nextest cache
+//! info` but is not yet wired to the CLI.
 
 mod backend;
 mod fs_backend;
@@ -32,5 +34,5 @@ pub use backend::{CacheBackend, CacheError};
 pub use fs_backend::FsBackend;
 pub use imp::{CacheBinaryInput, ComputedCacheInfo, default_cache_dir};
 pub use key::{CacheKey, ContentHash, hash_file};
-pub use result::{CacheEntry, CacheInfo, CleanPolicy, CleanStats};
+pub use result::{CacheEntry, CacheInfo, PruneStats};
 pub use writer::CacheWriter;

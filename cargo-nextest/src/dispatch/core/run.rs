@@ -18,6 +18,7 @@ use crate::{
     reuse_build::ReuseBuildOpts,
 };
 use camino::Utf8Path;
+use chrono::Utc;
 use clap::{Args, builder::BoolishValueParser};
 use nextest_filtering::{FiltersetKind, ParseContext};
 use nextest_runner::{
@@ -1235,6 +1236,13 @@ impl App {
             reporter.report_event(event)
         })?;
         let reporter_stats = reporter.finish();
+
+        // Self-prune the result cache so it never grows without bound. Binaries
+        // consulted this run had their access times refreshed, so pruning by age
+        // leaves them alone. Best-effort and rate-limited internally.
+        if let Some(backend) = &cache_backend {
+            backend.prune_if_needed(Utc::now());
+        }
 
         let outstanding_not_seen_count = reporter_stats
             .run_finished

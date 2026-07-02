@@ -16,7 +16,8 @@ pub struct CacheEntry {
 
     /// When this cache entry was last accessed, either stored or looked up.
     ///
-    /// Used by eviction policies (e.g., `cargo nextest cache clean --older-than 7d`).
+    /// Drives eviction: a binary whose most recent `last_hit_at` is older than
+    /// the prune cutoff (and not consulted this run) has its results removed.
     pub last_hit_at: DateTime<Utc>,
 }
 
@@ -33,21 +34,13 @@ pub struct CacheInfo {
     pub disk_bytes: u64,
 }
 
-/// Policy for cleaning cache entries.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum CleanPolicy {
-    /// Remove all cache entries.
-    All,
-
-    /// Remove entries whose `last_hit_at` is older than the given time.
-    OlderThan(DateTime<Utc>),
-}
-
-/// Statistics returned after a clean operation.
+/// Statistics returned after a prune operation.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct CleanStats {
-    /// Number of entries removed.
+pub struct PruneStats {
+    /// Number of binaries (cache directories) removed.
+    pub dirs_removed: u64,
+
+    /// Number of individual cached entries removed across those binaries.
     pub entries_removed: u64,
 
     /// Number of bytes freed.

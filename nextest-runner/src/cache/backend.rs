@@ -5,19 +5,24 @@
 
 use crate::cache::{
     key::{CacheKey, ContentHash},
-    result::{CacheEntry, CacheInfo, CleanPolicy, CleanStats},
+    result::{CacheEntry, CacheInfo},
 };
 use nextest_metadata::TestCaseName;
 use std::collections::BTreeSet;
 
 /// Trait abstracting cache storage for test results.
 ///
+/// This holds only storage operations (lookup, batch query, touch, store, stats)
+/// and assumes nothing about the underlying medium. Filesystem-specific cleanup,
+/// such as directory eviction, is an inherent method on
+/// [`FsBackend`](super::FsBackend) instead.
+///
 /// # Contract
 ///
 /// Methods are split into reads ([`lookup`](Self::lookup),
 /// [`passing`](Self::passing)) and writes ([`store`](Self::store),
-/// [`record_access`](Self::record_access), [`invalidate`](Self::invalidate)) so
-/// callers express intent rather than a read silently writing.
+/// [`record_access`](Self::record_access)) so callers express intent rather than
+/// a read silently writing.
 ///
 /// - Reads must be safe to call concurrently and never mutate stored state.
 /// - `last_hit_at` is refreshed on store and by
@@ -55,16 +60,6 @@ pub trait CacheBackend: Send + Sync {
 
     /// Stores a test result in the cache.
     fn store(&self, key: &CacheKey, entry: &CacheEntry) -> Result<(), CacheError>;
-
-    /// Removes a specific entry from the cache.
-    fn invalidate(&self, key: &CacheKey) -> Result<(), CacheError>;
-
-    /// Removes cache entries according to the given policy.
-    ///
-    /// As a management command, `clean` never runs during test execution, so an
-    /// I/O error is fatal rather than treated as a miss. A corrupt manifest is
-    /// tolerated so a cache whose data has gone bad can still be cleared.
-    fn clean(&self, policy: &CleanPolicy) -> Result<CleanStats, CacheError>;
 
     /// Returns summary information about the cache.
     fn info(&self) -> Result<CacheInfo, CacheError>;

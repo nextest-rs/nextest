@@ -9,11 +9,10 @@ use crate::cache::{
     fs_backend::FsBackend,
     imp::cache_dir_from_base,
     key::{hash_file, hash_reader},
-    result::{CleanPolicy, CleanStats},
 };
 use camino::Utf8PathBuf;
 use camino_tempfile::Utf8TempDir;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use nextest_metadata::{RustBinaryId, TestCaseName};
 use std::collections::BTreeSet;
 
@@ -199,104 +198,101 @@ fn different_binary_hashes_are_independent() {
     );
 }
 
-#[test]
-fn invalidate_removes_entry() {
-    let dir = Utf8TempDir::new().unwrap();
-    let backend = FsBackend::new(dir.path().join("cache"));
-    let k = key(hash_bytes(b"bin"), "tests::gone");
-
-    backend.store(&k, &entry_at(1)).unwrap();
-    assert!(backend.lookup(&k).unwrap().is_some());
-
-    backend.invalidate(&k).unwrap();
-    assert!(backend.lookup(&k).unwrap().is_none());
+/// Returns true if a binary's cache directory (and thus its stored results)
+/// still exists on disk.
+fn is_cached(backend: &FsBackend, binary_hash: ContentHash) -> bool {
+    backend
+        .cache_dir()
+        .join(binary_hash.to_hex())
+        .join("results.json")
+        .exists()
 }
 
 #[test]
-fn clean_all_empties_the_cache() {
-    let dir = Utf8TempDir::new().unwrap();
-    let backend = FsBackend::new(dir.path().join("cache"));
-    backend
-        .store(&key(hash_bytes(b"a"), "t1"), &entry_at(1))
-        .unwrap();
-    backend
-        .store(&key(hash_bytes(b"b"), "t2"), &entry_at(1))
-        .unwrap();
-
-    let stats = backend.clean(&CleanPolicy::All).unwrap();
-    assert_eq!(stats.entries_removed, 2);
-
-    let info = backend.info().unwrap();
-    assert_eq!(info.entry_count, 0);
-    assert_eq!(info.binary_count, 0);
-}
-
-#[test]
-fn clean_older_than_keeps_recent_entries() {
+fn prune_evicts_stale_but_keeps_recent() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("cache"));
 
-    // An old entry (last hit at second 100) under one binary, and a recent one
-    // (last hit "now") under another.
-    let old = entry_at(100);
-    backend.store(&key(hash_bytes(b"old"), "t"), &old).unwrap();
+    // A recently-hit binary and an old one. The cutoff falls between them.
+    let recent = hash_bytes(b"recent");
+    let old = hash_bytes(b"old");
+    backend.store(&key(recent, "t"), &entry_at(1500)).unwrap();
+    backend.store(&key(old, "t"), &entry_at(10)).unwrap();
 
-    let now = Utc::now();
-    let recent = CacheEntry {
-        created_at: now,
-        last_hit_at: now,
-    };
-    backend
-        .store(&key(hash_bytes(b"recent"), "t"), &recent)
-        .unwrap();
+    let stats = backend.prune(at_secs(1000));
 
-    let cutoff = at_secs(1000);
-    let stats = backend.clean(&CleanPolicy::OlderThan(cutoff)).unwrap();
+    assert_eq!(stats.dirs_removed, 1);
     assert_eq!(stats.entries_removed, 1);
-
-    assert!(
-        backend
-            .lookup(&key(hash_bytes(b"old"), "t"))
-            .unwrap()
-            .is_none()
-    );
-    assert!(
-        backend
-            .lookup(&key(hash_bytes(b"recent"), "t"))
-            .unwrap()
-            .is_some()
-    );
+    assert!(is_cached(&backend, recent), "recently-hit binary kept");
+    assert!(!is_cached(&backend, old), "old binary evicted");
 }
 
 #[test]
-fn clean_tolerates_a_corrupt_manifest() {
+fn prune_keeps_binary_refreshed_by_record_access() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("cache"));
 
-    // A good binary alongside one whose manifest is corrupt. `clean` is a
-    // management command, so a corrupt manifest must not abort the whole clean:
-    // `All` still removes the directory (counting it as one entry), and
-    // `OlderThan` skips it while continuing with the rest.
-    backend
-        .store(&key(hash_bytes(b"good"), "t"), &entry_at(1))
-        .unwrap();
+    // A binary stored with an old hit time, then consulted this run: consulting
+    // calls `record_access`, refreshing its hit time to "now".
+    let consulted = hash_bytes(b"consulted");
+    backend.store(&key(consulted, "t"), &entry_at(1)).unwrap();
+    backend.record_access(consulted, &names(&["t"])).unwrap();
 
-    let corrupt_dir = dir.path().join("cache").join("corrupt");
+    // A prune with an old cutoff keeps it, since the refresh moved its hit time
+    // (to roughly "now") well past the cutoff.
+    let stats = backend.prune(at_secs(1000));
+    assert_eq!(stats, Default::default());
+    assert!(is_cached(&backend, consulted));
+}
+
+#[test]
+fn prune_tolerates_corrupt_and_missing() {
+    // A missing cache directory prunes to nothing without error.
+    let dir = Utf8TempDir::new().unwrap();
+    let missing = FsBackend::new(dir.path().join("does-not-exist"));
+    assert_eq!(missing.prune(at_secs(1000)), Default::default());
+
+    // A corrupt manifest is left in place rather than deleted: we cannot read its
+    // hit times, so we cannot know it is safe to evict.
+    let backend = FsBackend::new(dir.path().join("cache"));
+    let good = hash_bytes(b"good");
+    backend.store(&key(good, "t"), &entry_at(1)).unwrap();
+
+    // Name the corrupt directory with a valid hash so it is treated as a cache
+    // dir (a non-hash name would just be skipped as a stray file).
+    let corrupt_hash = hash_bytes(b"corrupt").to_hex();
+    let corrupt_dir = dir.path().join("cache").join(&corrupt_hash);
     std::fs::create_dir_all(&corrupt_dir).unwrap();
     std::fs::write(corrupt_dir.join("results.json"), b"not json").unwrap();
 
-    let stats = backend
-        .clean(&CleanPolicy::OlderThan(at_secs(1000)))
-        .unwrap();
-    // Only the good binary's single old entry is counted; the corrupt directory
-    // is skipped and left in place.
-    assert_eq!(stats.entries_removed, 1);
+    let stats = backend.prune(at_secs(1000));
+    // Only the good (stale) binary is evicted; the corrupt dir stays.
+    assert_eq!(stats.dirs_removed, 1);
+    assert!(!is_cached(&backend, good));
     assert!(corrupt_dir.exists());
+}
 
-    // `All` clears everything, including the corrupt directory (counted as one).
-    let stats = backend.clean(&CleanPolicy::All).unwrap();
-    assert_eq!(stats.entries_removed, 1);
-    assert!(!corrupt_dir.exists());
+#[test]
+fn prune_if_needed_respects_interval() {
+    let dir = Utf8TempDir::new().unwrap();
+    let backend = FsBackend::new(dir.path().join("cache"));
+
+    let old = hash_bytes(b"old");
+    backend.store(&key(old, "t"), &entry_at(1)).unwrap();
+
+    // First prune: no prior metadata, so it runs and evicts the stale binary.
+    let now = at_secs(1_000_000);
+    let first = backend.prune_if_needed(now);
+    assert_eq!(first.map(|s| s.dirs_removed), Some(1));
+    assert!(!is_cached(&backend, old));
+
+    // A second call a minute later is within the 1-day interval, so it is skipped.
+    let soon = now + TimeDelta::minutes(1);
+    assert!(backend.prune_if_needed(soon).is_none());
+
+    // A call more than a day later runs again (nothing to remove now).
+    let later = now + TimeDelta::days(2);
+    assert_eq!(backend.prune_if_needed(later), Some(Default::default()),);
 }
 
 #[test]
@@ -349,14 +345,39 @@ fn hash_bytes_is_deterministic_and_content_sensitive() {
 }
 
 #[test]
+fn from_hex_round_trips_and_rejects_non_hashes() {
+    // A real hash round-trips through its hex form.
+    let hash = hash_bytes(b"bin");
+    let hex = hash.to_hex();
+    assert_eq!(hex.len(), 32, "a 16-byte hash is 32 hex digits");
+    assert_eq!(ContentHash::from_hex(&hex), Some(hash));
+
+    // Anything that is not exactly 32 hex digits is rejected: this is what lets
+    // pruning tell cache directories apart from `meta.json` and stray files.
+    assert_eq!(ContentHash::from_hex(""), None);
+    assert_eq!(ContentHash::from_hex("meta.json"), None);
+    assert_eq!(ContentHash::from_hex(&hex[..31]), None, "too short");
+    assert_eq!(
+        ContentHash::from_hex(&hex[..30]),
+        None,
+        "even but too short"
+    );
+    assert_eq!(ContentHash::from_hex(&format!("{hex}00")), None, "too long");
+    assert_eq!(
+        ContentHash::from_hex(&"g".repeat(32)),
+        None,
+        "right length but not hex"
+    );
+    // Uppercase is not produced by `to_hex`, but `decode_to_slice` accepts it;
+    // that is harmless since directories are always created via `to_hex`.
+    assert_eq!(ContentHash::from_hex(&hex.to_uppercase()), Some(hash));
+}
+
+#[test]
 fn info_on_missing_dir_is_empty() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("does-not-exist"));
     assert_eq!(backend.info().unwrap(), Default::default());
-    assert_eq!(
-        backend.clean(&CleanPolicy::All).unwrap(),
-        CleanStats::default()
-    );
 }
 
 #[test]
