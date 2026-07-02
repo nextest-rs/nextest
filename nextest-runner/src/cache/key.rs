@@ -12,6 +12,10 @@ use std::{
 };
 use xxhash_rust::xxh3::Xxh3;
 
+/// The width of a [`ContentHash`] in bytes. This and [`hash_reader`] are the
+/// only places that depend on the hash algorithm.
+const HASH_LEN: usize = 16;
+
 /// A cache key identifying a specific test result: the test binary's content
 /// hash and the test name. The hash changes on recompile, so a cached result is
 /// automatically invalidated when the binary changes.
@@ -45,30 +49,40 @@ impl CacheKey {
     }
 }
 
-/// A 128-bit content hash used as a compact digest of arbitrary content.
+/// A content hash used as a compact digest of arbitrary content.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ContentHash {
-    bytes: [u8; 16],
+    bytes: [u8; HASH_LEN],
 }
 
 impl ContentHash {
     /// Creates a `ContentHash` from raw bytes.
-    pub fn new(bytes: [u8; 16]) -> Self {
+    pub fn new(bytes: [u8; HASH_LEN]) -> Self {
         Self { bytes }
     }
 
     /// Returns the hash as a lowercase hexadecimal string.
     pub fn to_hex(self) -> String {
-        self.to_string()
+        hex::encode(self.bytes)
+    }
+
+    /// Parses a hash from its hex form, the inverse of [`to_hex`].
+    ///
+    /// Returns `None` unless the string is exactly `2 * HASH_LEN` hex digits.
+    /// Used to tell cache directories (named by hash) apart from other
+    /// filesystem entries.
+    ///
+    /// [`to_hex`]: Self::to_hex
+    pub fn from_hex(s: &str) -> Option<Self> {
+        let mut bytes = [0u8; HASH_LEN];
+        hex::decode_to_slice(s, &mut bytes).ok()?;
+        Some(Self { bytes })
     }
 }
 
 impl fmt::Display for ContentHash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for byte in &self.bytes {
-            write!(f, "{byte:02x}")?;
-        }
-        Ok(())
+        f.write_str(&self.to_hex())
     }
 }
 
@@ -99,7 +113,5 @@ pub fn hash_reader<R: Read>(mut reader: R) -> io::Result<ContentHash> {
         }
         hasher.update(&buf[..n]);
     }
-    Ok(ContentHash {
-        bytes: hasher.digest128().to_le_bytes(),
-    })
+    Ok(ContentHash::new(hasher.digest128().to_le_bytes()))
 }

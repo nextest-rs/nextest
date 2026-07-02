@@ -40,6 +40,7 @@ guppy.workspace = true
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
 home.workspace = true
+hex.workspace = true
 humantime-serde.workspace = true
 iddqd.workspace = true
 indexmap = { workspace = true, features = ["serde"] }
@@ -104,7 +105,6 @@ zstd.workspace = true
 ###
 ### Update-related features, optionally enabled
 ###
-hex = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 mukti-metadata = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
@@ -188,7 +188,6 @@ tracing-subscriber.workspace = true
 [features]
 config-schema = ["dep:schemars"]
 self-update = [
-    "dep:hex",
     "dep:self_update",
     "dep:http",
     "dep:mukti-metadata",
