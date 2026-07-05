@@ -10,6 +10,23 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.139] - 2026-07-05
+
+### Added
+
+- A new `cargo nextest help <topic>` subcommand renders reference documentation directly in the terminal. The available topics are:
+
+  - `filterset` (alias `filtersets`): the [filterset DSL](https://nexte.st/docs/filtersets/reference) reference
+  - `repo-config`: the [repository configuration](https://nexte.st/docs/configuration/reference) reference
+  - `user-config`: the [user configuration](https://nexte.st/docs/user-config/reference) reference
+
+  `cargo nextest help` lists the available topics. ([#3419], [#3424], [#3432], [#3433])
+
+[#3419]: https://github.com/nextest-rs/nextest/pull/3419
+[#3424]: https://github.com/nextest-rs/nextest/pull/3424
+[#3432]: https://github.com/nextest-rs/nextest/pull/3432
+[#3433]: https://github.com/nextest-rs/nextest/pull/3433
+
 ## [0.9.138] - 2026-06-21
 
 ### Added
@@ -2206,6 +2223,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.139]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.139
 [0.9.138]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.138
 [0.9.137]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.137
 [0.9.136]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.136

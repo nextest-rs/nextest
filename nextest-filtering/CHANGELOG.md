@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.21.2] - 2026-07-05
+
+### Added
+
+A top-level `FILTERSET_REFERENCE_MD` constant contains a filterset reference in Markdown format.
+
 ## [0.21.1] - 2026-05-26
 
 ### Fixed
@@ -213,6 +219,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.21.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.21.2
 [0.21.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.21.1
 [0.21.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.21.0
 [0.20.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.20.0
