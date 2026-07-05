@@ -114,11 +114,12 @@ fn render_topic(topic: &HelpTopic, early_args: &EarlyArgs, output: OutputContext
     let mut paged =
         PagedOutput::request_pager(&early_config.pager, paginate, &early_config.streampager);
 
-    // TODO: it would be nice to support hyperlinks through pagers in the
-    // future. less started supporting them around version 566, but many systems
-    // are still on older versions.
     let hyperlinks = force_hyperlink().unwrap_or_else(|| {
-        !paged.is_paged() && supports_hyperlinks::on(supports_hyperlinks::Stream::Stdout)
+        // Check if standard out supports hyperlinks. Note that even when the
+        // output is paged, Stream::Stdout is not a pipe to the pager! Rather,
+        // it is the usual terminal.
+        supports_hyperlinks::on(supports_hyperlinks::Stream::Stdout)
+            && paged.forwards_osc8_hyperlinks()
     });
 
     let rendered = topic.render(RenderOptions {

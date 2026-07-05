@@ -11,12 +11,13 @@ use crate::{
     user_config::elements::{PagerSetting, PaginateSetting, StreampagerConfig},
     write_str::WriteStr,
 };
+use camino::Utf8Path;
 use std::{
     io::{self, IsTerminal, PipeWriter, Stdout, Write},
-    process::{Child, ChildStdin, Stdio},
+    process::{Child, ChildStdin, Command, Stdio},
     thread::{self, JoinHandle},
 };
-use tracing::warn;
+use tracing::{debug, warn};
 
 /// Output wrapper that optionally pages output through a pager.
 ///
@@ -37,6 +38,8 @@ pub enum PagedOutput {
     },
     /// Output through an external pager process.
     ExternalPager {
+        /// The program name of the spawned pager.
+        command_name: String,
         /// The pager child process.
         child: Child,
         /// Stdin pipe to the pager (for writing output).
@@ -105,6 +108,7 @@ impl PagedOutput {
                             .take()
                             .expect("child stdin should be present when piped");
                         Self::ExternalPager {
+                            command_name: command_and_args.command_name().to_owned(),
                             child,
                             child_stdin: Some(child_stdin),
                         }
@@ -174,11 +178,20 @@ impl PagedOutput {
         }
     }
 
-    /// Returns true if output is being routed through a pager.
-    pub fn is_paged(&self) -> bool {
+    /// Returns true if OSC 8 hyperlinks can be written out to the terminal.
+    ///
+    /// For the `less` pager, this invokes `less --version` to ensure that the
+    /// `less` version is new enough. To avoid this extra process spawn when it
+    /// is unnecessary, only call this after verifying that the terminal
+    /// supports hyperlinks.
+    pub fn forwards_osc8_hyperlinks(&self) -> bool {
         match self {
-            Self::Terminal { .. } => false,
-            Self::ExternalPager { .. } | Self::BuiltinPager { .. } => true,
+            Self::Terminal { .. } => true,
+            Self::BuiltinPager { .. } => {
+                // sapling-streampager always forwards OSC 8 hyperlinks.
+                true
+            }
+            Self::ExternalPager { command_name, .. } => external_pager_forwards_osc8(command_name),
         }
     }
 
@@ -217,7 +230,9 @@ impl PagedOutput {
             Self::Terminal { .. } => {
                 // Nothing to do.
             }
-            Self::ExternalPager { child, child_stdin } => {
+            Self::ExternalPager {
+                child, child_stdin, ..
+            } => {
                 // If stdin is already taken, we've already finalized.
                 let Some(stdin) = child_stdin.take() else {
                     return;
@@ -304,10 +319,133 @@ fn squelch_broken_pipe(res: io::Result<()>) -> io::Result<()> {
     }
 }
 
+/// The first stable `less` version to handle OSC 8 hyperlinks.
+const LESS_MIN_OSC8_VERSION: u32 = 581;
+
+fn external_pager_forwards_osc8(command_name: &str) -> bool {
+    if command_is_less(command_name) {
+        // Trying to figure out whether less is being invoked with -r/-R is too
+        // bothersome, so we don't try and do that.
+        version_forwards_osc8(probe_less_major_version(command_name))
+    } else {
+        // Allowlist a couple other pagers in common use.
+        //
+        // * All modern versions of moor (formerly moar) support hyperlinks.
+        // * bat supports hyperlinks but uses a system pager (default less) to
+        //   do its paging. We assume that the system pager is modern enough
+        //   to forward OSC 8 hyperlinks.
+        command_is_moor(command_name) || command_is_bat(command_name)
+    }
+}
+
+fn version_forwards_osc8(major_version: Option<u32>) -> bool {
+    major_version.is_some_and(|v| v >= LESS_MIN_OSC8_VERSION)
+}
+
+fn command_is_less(command_name: &str) -> bool {
+    pager_basename_matches(command_name, &["less"])
+}
+
+fn command_is_moor(command_name: &str) -> bool {
+    // moor was formerly known as moar.
+    pager_basename_matches(command_name, &["moor", "moar"])
+}
+
+fn command_is_bat(command_name: &str) -> bool {
+    // batcat is the binary name on Debian/Ubuntu.
+    pager_basename_matches(command_name, &["bat", "batcat"])
+}
+
+fn pager_basename_matches(command_name: &str, names: &[&str]) -> bool {
+    let basename = pager_basename(command_name);
+    names.iter().any(|&name| {
+        if cfg!(windows) {
+            basename.eq_ignore_ascii_case(name)
+        } else {
+            basename == name
+        }
+    })
+}
+
+fn pager_basename(command_name: &str) -> &str {
+    let basename = Utf8Path::new(command_name)
+        .file_name()
+        .unwrap_or(command_name);
+    if cfg!(windows) {
+        let bytes = basename.as_bytes();
+        if bytes.len() > 4 && bytes[bytes.len() - 4..].eq_ignore_ascii_case(b".exe") {
+            return &basename[..basename.len() - 4];
+        }
+    }
+    basename
+}
+
+fn probe_less_major_version(command_name: &str) -> Option<u32> {
+    let output = match Command::new(command_name)
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+    {
+        Ok(output) => output,
+        Err(error) => {
+            debug!("failed to run `{command_name} --version` to detect hyperlink support: {error}");
+            return None;
+        }
+    };
+    if !output.status.success() {
+        debug!(
+            "`{command_name} --version` exited with {}; assuming no hyperlink support",
+            output.status
+        );
+        return None;
+    }
+    let stdout = match String::from_utf8(output.stdout) {
+        Ok(stdout) => stdout,
+        Err(error) => {
+            debug!("`{command_name} --version` produced non-UTF-8 output: {error}");
+            return None;
+        }
+    };
+    match parse_less_major_version(&stdout) {
+        Some(version) => Some(version),
+        None => {
+            debug!(
+                "could not parse a `less` version from `{command_name} --version` output: {stdout:?}"
+            );
+            None
+        }
+    }
+}
+
+/// Parses the major version from a `less` `--version` output line, e.g. `less
+/// 581.2` -> 581.
+fn parse_less_major_version(version_output: &str) -> Option<u32> {
+    let first_line = version_output.lines().next()?;
+    let mut tokens = first_line.split_whitespace();
+    if tokens.next()? != "less" {
+        return None;
+    }
+    let version_token = tokens.next()?;
+    let digits_end = version_token
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(version_token.len());
+    version_token[..digits_end].parse().ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::user_config::elements::{StreampagerInterface, StreampagerWrapping};
+
+    #[cfg(unix)]
+    fn external_pager(child: Child, child_stdin: ChildStdin, name: &str) -> PagedOutput {
+        PagedOutput::ExternalPager {
+            child,
+            child_stdin: Some(child_stdin),
+            command_name: name.to_owned(),
+        }
+    }
 
     #[test]
     fn test_terminal_output() {
@@ -350,10 +488,7 @@ mod tests {
 
         let child_stdin = child.stdin.take().expect("stdin should be piped");
 
-        let mut output = PagedOutput::ExternalPager {
-            child,
-            child_stdin: Some(child_stdin),
-        };
+        let mut output = external_pager(child, child_stdin, "cat");
 
         // Write some data.
         writeln!(output.stdout(), "hello pager").expect("write should succeed");
@@ -373,10 +508,7 @@ mod tests {
 
         let child_stdin = child.stdin.take().expect("stdin should be piped");
 
-        let mut output = PagedOutput::ExternalPager {
-            child,
-            child_stdin: Some(child_stdin),
-        };
+        let mut output = external_pager(child, child_stdin, "cat");
 
         writeln!(output.stdout(), "hello pager").expect("write should succeed");
 
@@ -395,10 +527,7 @@ mod tests {
 
         let child_stdin = child.stdin.take().expect("stdin should be piped");
 
-        let mut output = PagedOutput::ExternalPager {
-            child,
-            child_stdin: Some(child_stdin),
-        };
+        let mut output = external_pager(child, child_stdin, "cat");
 
         // Call finalize_inner twice - second call should be a no-op.
         output.finalize_inner();
@@ -420,10 +549,7 @@ mod tests {
         // Wait for the process to exit before constructing PagedOutput.
         let _ = child.wait();
 
-        let mut output = PagedOutput::ExternalPager {
-            child,
-            child_stdin: Some(child_stdin),
-        };
+        let mut output = external_pager(child, child_stdin, "true");
 
         output
             .write_str("hello\n")
@@ -437,5 +563,148 @@ mod tests {
             .write_str_flush()
             .expect("BrokenPipe should be squelched for write_str_flush");
         output.finalize();
+    }
+
+    #[test]
+    fn terminal_forwards_osc8_hyperlinks() {
+        assert!(PagedOutput::terminal().forwards_osc8_hyperlinks());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn external_non_less_pager_does_not_forward_osc8() {
+        let mut child = std::process::Command::new("cat")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .spawn()
+            .expect("failed to spawn cat");
+        let child_stdin = child.stdin.take().expect("stdin should be piped");
+        let output = external_pager(child, child_stdin, "cat");
+        assert!(!output.forwards_osc8_hyperlinks());
+        output.finalize();
+    }
+
+    #[test]
+    fn parse_less_major_version_cases() {
+        assert_eq!(
+            parse_less_major_version("less 668 (GNU regular expressions)\nCopyright (C) ...\n"),
+            Some(668)
+        );
+        assert_eq!(parse_less_major_version("less 581.2\n"), Some(581));
+        assert_eq!(parse_less_major_version("less 590"), Some(590));
+        assert_eq!(
+            parse_less_major_version("less 551 (POSIX regular expressions)"),
+            Some(551)
+        );
+        assert_eq!(
+            parse_less_major_version("BusyBox v1.36.1 (2023-01-01) multi-call binary."),
+            None
+        );
+        assert_eq!(parse_less_major_version(""), None);
+        assert_eq!(parse_less_major_version("less\n"), None);
+        assert_eq!(parse_less_major_version("less version"), None);
+        assert_eq!(parse_less_major_version("less 99999999999"), None);
+        assert_eq!(parse_less_major_version("  less 643 (extra)"), Some(643));
+        assert_eq!(parse_less_major_version("less\t643"), Some(643));
+    }
+
+    #[test]
+    fn command_is_less_cases() {
+        assert!(command_is_less("less"));
+        assert!(command_is_less("/usr/bin/less"));
+        assert!(!command_is_less("most"));
+        assert!(!command_is_less("lesspipe"));
+        assert!(!command_is_less("/usr/bin/most"));
+        assert!(!command_is_less("moor"));
+    }
+
+    #[test]
+    fn command_is_moor_cases() {
+        assert!(command_is_moor("moor"));
+        assert!(command_is_moor("moar"));
+        assert!(command_is_moor("/usr/local/bin/moor"));
+        assert!(command_is_moor("/opt/homebrew/bin/moar"));
+        assert!(!command_is_moor("less"));
+        assert!(!command_is_moor("most"));
+        assert!(!command_is_moor("moors"));
+        assert!(!command_is_moor("mo"));
+    }
+
+    #[test]
+    fn command_is_bat_cases() {
+        assert!(command_is_bat("bat"));
+        assert!(command_is_bat("batcat"));
+        assert!(command_is_bat("/usr/bin/bat"));
+        assert!(command_is_bat("/usr/bin/batcat"));
+        assert!(!command_is_bat("less"));
+        assert!(!command_is_bat("moor"));
+        assert!(!command_is_bat("bats"));
+        assert!(!command_is_bat("combat"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn command_is_less_windows() {
+        assert!(command_is_less("less.exe"));
+        assert!(command_is_less("LESS.EXE"));
+        assert!(command_is_less(r"C:\tools\less.exe"));
+        assert!(!command_is_less("most.exe"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn command_is_moor_windows() {
+        assert!(command_is_moor("moor.exe"));
+        assert!(command_is_moor("moar.exe"));
+        assert!(command_is_moor(r"C:\tools\moor.exe"));
+        assert!(!command_is_moor("most.exe"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn command_is_bat_windows() {
+        assert!(command_is_bat("bat.exe"));
+        assert!(command_is_bat("batcat.exe"));
+        assert!(command_is_bat(r"C:\tools\bat.exe"));
+        assert!(!command_is_bat("combat.exe"));
+    }
+
+    #[test]
+    fn version_forwards_osc8_threshold() {
+        assert!(!version_forwards_osc8(None));
+        assert!(!version_forwards_osc8(Some(LESS_MIN_OSC8_VERSION - 1)));
+        assert!(version_forwards_osc8(Some(LESS_MIN_OSC8_VERSION)));
+        assert!(version_forwards_osc8(Some(668)));
+    }
+
+    #[test]
+    fn version_forwards_osc8_composed_with_version_parse() {
+        assert!(!version_forwards_osc8(parse_less_major_version(
+            "less 551 (POSIX regular expressions)"
+        )));
+        assert!(version_forwards_osc8(parse_less_major_version(
+            "less 581 (GNU regular expressions)"
+        )));
+        assert!(version_forwards_osc8(parse_less_major_version(
+            "less 668 (GNU regular expressions)"
+        )));
+        assert!(!version_forwards_osc8(parse_less_major_version(
+            "BusyBox v1.36.1 (2023-01-01) multi-call binary."
+        )));
+    }
+
+    #[test]
+    fn other_external_pagers_forward_osc8() {
+        assert!(external_pager_forwards_osc8("moor"));
+        assert!(external_pager_forwards_osc8("moar"));
+        assert!(external_pager_forwards_osc8("/usr/local/bin/moor"));
+        assert!(external_pager_forwards_osc8("bat"));
+        assert!(external_pager_forwards_osc8("batcat"));
+        assert!(external_pager_forwards_osc8("/usr/bin/batcat"));
+
+        assert!(!external_pager_forwards_osc8("most"));
+        assert!(!external_pager_forwards_osc8("lesspipe"));
+        assert!(!external_pager_forwards_osc8("/usr/bin/most"));
+        assert!(!external_pager_forwards_osc8("ov"));
     }
 }
