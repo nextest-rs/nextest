@@ -2512,7 +2512,7 @@ dependencies = [
 
 [[package]]
 name = "nextest-filtering"
-version = "0.21.2"
+version = "0.21.3"
 dependencies = [
  "camino",
  "clap",
