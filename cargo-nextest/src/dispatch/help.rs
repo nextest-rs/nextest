@@ -117,8 +117,9 @@ fn render_topic(topic: &HelpTopic, early_args: &EarlyArgs, output: OutputContext
     // TODO: it would be nice to support hyperlinks through pagers in the
     // future. less started supporting them around version 566, but many systems
     // are still on older versions.
-    let hyperlinks =
-        !paged.is_paged() && supports_hyperlinks::on(supports_hyperlinks::Stream::Stdout);
+    let hyperlinks = force_hyperlink().unwrap_or_else(|| {
+        !paged.is_paged() && supports_hyperlinks::on(supports_hyperlinks::Stream::Stdout)
+    });
 
     let rendered = topic.render(RenderOptions {
         color,
@@ -134,6 +135,16 @@ fn render_topic(topic: &HelpTopic, early_args: &EarlyArgs, output: OutputContext
         .map_err(|err| ExpectedError::WriteHelpError { err })?;
     paged.finalize();
     Ok(0)
+}
+
+/// Returns `Some(_)` if the `FORCE_HYPERLINK` environment variable is set.
+///
+/// We duplicate the check in `supports_hyperlinks` to allow paged output to be
+/// hyperlinked.
+fn force_hyperlink() -> Option<bool> {
+    std::env::var("FORCE_HYPERLINK")
+        .ok()
+        .map(|arg| arg.trim() != "0")
 }
 
 /// Forwards `[..path, --help]` to clap.
@@ -271,5 +282,35 @@ mod tests {
         assert!(!is_nextest_subcommand("repo-config"));
         assert!(!is_nextest_subcommand("user-config"));
         assert!(!is_nextest_subcommand("filtersets"));
+    }
+
+    #[test]
+    fn force_hyperlink_parses_env() {
+        // SAFETY:
+        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+        unsafe {
+            std::env::remove_var("FORCE_HYPERLINK");
+        }
+        assert_eq!(force_hyperlink(), None);
+
+        unsafe {
+            std::env::set_var("FORCE_HYPERLINK", "1");
+        }
+        assert_eq!(force_hyperlink(), Some(true));
+
+        unsafe {
+            std::env::set_var("FORCE_HYPERLINK", "0");
+        }
+        assert_eq!(force_hyperlink(), Some(false));
+
+        unsafe {
+            std::env::set_var("FORCE_HYPERLINK", "");
+        }
+        assert_eq!(force_hyperlink(), Some(true));
+
+        unsafe {
+            std::env::set_var("FORCE_HYPERLINK", " 0 ");
+        }
+        assert_eq!(force_hyperlink(), Some(false));
     }
 }
