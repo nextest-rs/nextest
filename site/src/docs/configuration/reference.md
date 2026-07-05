@@ -8,7 +8,7 @@ description: Reference documentation for all nextest configuration parameters an
 
 This page provides the full repository configuration reference for nextest.
 
-<!-- md:version 0.9.139 --> This reference is also available locally by running `cargo nextest help repo-config`.
+<!-- md:version 0.9.140 --> This reference is also available locally by running `cargo nextest help repo-config`.
 
 <!-- include: nextest-runner/repo-config-reference.md -->
 

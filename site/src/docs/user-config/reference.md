@@ -8,7 +8,7 @@ description: Reference documentation for all user configuration parameters.
 
 This page provides the full user configuration reference for nextest.
 
-<!-- md:version 0.9.139 --> This reference is also available locally by running `cargo nextest help user-config`.
+<!-- md:version 0.9.140 --> This reference is also available locally by running `cargo nextest help user-config`.
 
 For more information about how user configuration works, see the [user configuration overview](index.md).
 

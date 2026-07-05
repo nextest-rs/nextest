@@ -140,22 +140,39 @@ jobs:
     strategy:
       matrix:
         include:
-          # Native builds
-
+          # Linux (glibc): built with cargo-zigbuild, which bundles its own
+          # glibc and so decouples the binaries' glibc floor from the runner or
+          # any container. We pin glibc to 2.27, the minimum of:
+          #
+          # - Ubuntu 18.04 (glibc 2.27)
+          # - CentOS 8 (glibc 2.28)
+          # - Debian 10 (glibc 2.28)
+          #
+          # 2.27 is also the floor for riscv64, which glibc first supported in
+          # that release. See https://repology.org/project/glibc/versions.
+          #
+          # We used to use an Ubuntu 18.04 container, but that became untenable
+          # over time: https://github.com/nextest-rs/nextest/issues/1055.
+          # 
+          # These targets all use rustls + aws-lc-rs with no OpenSSL, so they
+          # don't need system libraries from a container.
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
-            # On Linux, we use glibc 2.27, as the minimum of
-            # - Ubuntu 18.04 (glibc 2.27)
-            # - CentOS 8 (glibc 2.28)
-            # - Debian 10 (glibc 2.28)
-            #
-            # See https://repology.org/project/glibc/versions.
-            #
-            # We used to use an Ubuntu 18.04 container, but that became untenable over time:
-            # https://github.com/nextest-rs/nextest/issues/1055
             build-target: x86_64-unknown-linux-gnu.2.27
             build-tool: cargo-zigbuild
             dry-run: false
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            build-target: aarch64-unknown-linux-gnu.2.27
+            build-tool: cargo-zigbuild
+            dry-run: false
+          - target: riscv64gc-unknown-linux-gnu
+            os: ubuntu-22.04
+            build-target: riscv64gc-unknown-linux-gnu.2.27
+            build-tool: cargo-zigbuild
+            dry-run: false
+
+          # Windows and macOS: built natively with cargo.
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             build-target: x86_64-pc-windows-msvc
@@ -180,32 +197,16 @@ jobs:
             build-tool: cargo
             dry-run: false
 
-          # Builds using cross
+          # Builds using cross: musl (statically linked, so no glibc floor to
+          # pin), plus FreeBSD and illumos.
           - target: x86_64-unknown-linux-musl
             os: ubuntu-22.04
             build-target: x86_64-unknown-linux-musl
-            # musl is statically linked and uses cross
             build-tool: cross
-            dry-run: false
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-22.04
-            # Pin glibc to 2.27 via cargo-zigbuild, matching the x86_64 target
-            # above. Using cross here would link against whatever glibc the
-            # cross container ships, which is a moving target. aarch64 uses
-            # rustls + aws-lc-rs, with no OpenSSL, so it doesn't need to use
-            # cross.
-            build-target: aarch64-unknown-linux-gnu.2.27
-            build-tool: cargo-zigbuild
             dry-run: false
           - target: aarch64-unknown-linux-musl
             os: ubuntu-22.04
             build-target: aarch64-unknown-linux-musl
-            # musl is statically linked and uses cross
-            build-tool: cross
-            dry-run: false
-          - target: riscv64gc-unknown-linux-gnu
-            os: ubuntu-22.04
-            build-target: riscv64gc-unknown-linux-gnu
             build-tool: cross
             dry-run: false
           - target: x86_64-unknown-freebsd

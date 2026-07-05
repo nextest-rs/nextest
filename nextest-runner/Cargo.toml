@@ -148,17 +148,21 @@ win32job.workspace = true
 
 # Use rustls with aws-lc-rs by default, OpenSSL on platforms where rustls
 # isn't available:
-# RISC-V: https://github.com/nextest-rs/nextest/issues/820
-[target.'cfg(not(any(target_arch = "riscv32", target_arch = "riscv64")))'.dependencies]
+#
+# * RISC-V (32-bit only): https://github.com/nextest-rs/nextest/issues/820
+#
+# aws-lc-rs gained riscv64gc support in 2025 (aws/aws-lc-rs#774), so riscv64
+# uses the default rustls path. Only riscv32 still needs native-tls.
+[target.'cfg(not(target_arch = "riscv32"))'.dependencies]
 self_update = { workspace = true, optional = true, default-features = false }
 # self_update's "rustls" feature hardcodes ureq's ring crypto provider. To use
 # aws-lc-rs instead, activate ureq's TLS and rustls's provider separately.
 ureq = { workspace = true, optional = true, features = ["rustls-no-provider", "rustls-webpki-roots"] }
 rustls = { workspace = true, optional = true, features = ["aws-lc-rs"] }
 
-[target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
+[target.'cfg(target_arch = "riscv32")'.dependencies]
 self_update = { workspace = true, optional = true, default-features = false }
-# On RISC-V, rustls/aws-lc-rs aren't available, so use native-tls instead.
+# On 32-bit RISC-V, rustls/aws-lc-rs aren't available, so use native-tls instead.
 ureq = { workspace = true, optional = true, features = ["native-tls"] }
 
 
