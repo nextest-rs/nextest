@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.21.3] - 2026-07-05
+
+### Changed
+
+Minor updates to the filterset reference.
+
 ## [0.21.2] - 2026-07-05
 
 ### Added
@@ -219,6 +225,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.21.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.21.3
 [0.21.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.21.2
 [0.21.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.21.1
 [0.21.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.21.0

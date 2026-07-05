@@ -10,11 +10,7 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.140-b.2] - 2026-07-05
-
-This is a test release.
-
-## [0.9.139] - 2026-07-05
+## [0.9.140] - 2026-07-05
 
 ### Added
 
@@ -26,10 +22,19 @@ This is a test release.
 
   `cargo nextest help` lists the available topics. ([#3419], [#3424], [#3432], [#3433])
 
+### Changed
+
+- The glibc requirement for pre-built `aarch64-unknown-linux-gnu` and `riscv64-unknown-linux-gnu` builds has been lowered to glibc 2.27.
+- `riscv64-unknown-linux-gnu` now uses rustls + aws-lc-rs rather than OpenSSL.
+
 [#3419]: https://github.com/nextest-rs/nextest/pull/3419
 [#3424]: https://github.com/nextest-rs/nextest/pull/3424
 [#3432]: https://github.com/nextest-rs/nextest/pull/3432
 [#3433]: https://github.com/nextest-rs/nextest/pull/3433
+
+## [0.9.139] - 2026-07-05
+
+This version was not released due to a publishing issue.
 
 ## [0.9.138] - 2026-06-21
 
@@ -2227,6 +2232,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.140]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.140
 [0.9.139]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.139
 [0.9.138]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.138
 [0.9.137]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.137
