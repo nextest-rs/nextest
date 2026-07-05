@@ -8,9 +8,16 @@ image = "ghcr.io/cross-rs/x86_64-unknown-freebsd:edge"
 
 [target.riscv64gc-unknown-linux-gnu]
 # The default cross image is based on Ubuntu 18.04, which doesn't have riscv64
-# packages. The edge image is newer and does.
+# packages. The edge image is newer (Ubuntu 24.04) and does.
+#
+# On 24.04, apt sources use the deb822 format with explicit per-source
+# Architectures lists. riscv64 packages live only on ports.ubuntu.com, whose
+# stanza is restricted to arm64/armhf by default, so `dpkg --add-architecture`
+# alone isn't enough: apt never fetches a riscv64 index. Add riscv64 to that
+# stanza before updating.
 image = "ghcr.io/cross-rs/riscv64gc-unknown-linux-gnu:edge"
 pre-build = [
     "dpkg --add-architecture riscv64",
+    "sed -i 's/^Architectures: arm64 armhf/Architectures: arm64 armhf riscv64/' /etc/apt/sources.list.d/ubuntu.sources",
     "apt-get update && apt-get install --assume-yes libssl-dev:riscv64",
 ]

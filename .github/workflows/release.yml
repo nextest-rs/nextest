@@ -189,8 +189,13 @@ jobs:
             dry-run: false
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
-            build-target: aarch64-unknown-linux-gnu
-            build-tool: cross
+            # Pin glibc to 2.27 via cargo-zigbuild, matching the x86_64 target
+            # above. Using cross here would link against whatever glibc the
+            # cross container ships, which is a moving target. aarch64 uses
+            # rustls + aws-lc-rs, with no OpenSSL, so it doesn't need to use
+            # cross.
+            build-target: aarch64-unknown-linux-gnu.2.27
+            build-tool: cargo-zigbuild
             dry-run: false
           - target: aarch64-unknown-linux-musl
             os: ubuntu-22.04
