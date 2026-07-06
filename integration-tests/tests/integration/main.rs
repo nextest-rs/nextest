@@ -39,6 +39,7 @@ mod cargo_message_format;
 mod fixtures;
 mod interceptor;
 mod large_alloc;
+mod list_progress;
 mod record_replay;
 #[cfg(unix)]
 mod sigttou;

@@ -26,9 +26,9 @@ use nextest_runner::{
         core::ConfigExperimental,
         elements::{MaxFail, RetryPolicy, TestThreads},
     },
-    helpers::{ShowTerminalProgress, force_or_new_run_id, plural},
+    helpers::{ShowTerminalProgress, ThemeCharacters, force_or_new_run_id, plural},
     input::InputHandlerKind,
-    list::{BinaryList, TestExecuteContext, TestList},
+    list::{BinaryList, ListProgressOptions, TestExecuteContext, TestList},
     record::{
         ComputedRerunInfo, PortableRecording, RecordOpts, RecordReader, RecordRetentionPolicy,
         RecordSession, RecordSessionConfig, RerunRootInfo, RunIdOrRecordingSelector, RunIdSelector,
@@ -712,15 +712,10 @@ impl ReporterOpts {
         }
 
         // Determine show_progress with precedence: CLI/env > resolved config.
-        let show_progress = match (self.show_progress, self.hide_progress_bar) {
-            (Some(show_progress), true) => {
-                warn!("ignoring --hide-progress-bar because --show-progress is specified");
-                show_progress.into()
-            }
-            (Some(show_progress), false) => show_progress.into(),
-            (None, true) => ShowProgress::None,
-            (None, false) => resolved_ui.show_progress.into(),
-        };
+        if self.show_progress.is_some() && self.hide_progress_bar {
+            warn!("ignoring --hide-progress-bar because --show-progress is specified");
+        }
+        let show_progress = self.resolved_show_progress(resolved_ui);
 
         // Determine max_progress_running with precedence: CLI/env > resolved config.
         let max_progress_running = self
@@ -755,6 +750,14 @@ impl ReporterOpts {
         }
         builder
     }
+
+    fn resolved_show_progress(&self, resolved_ui: &UiConfig) -> ShowProgress {
+        match (self.show_progress, self.hide_progress_bar) {
+            (Some(show_progress), _) => show_progress.into(),
+            (None, true) => ShowProgress::None,
+            (None, false) => resolved_ui.show_progress.into(),
+        }
+    }
 }
 
 /// Benchmark reporter options.
@@ -780,6 +783,12 @@ pub(crate) struct BenchReporterOpts {
 }
 
 impl BenchReporterOpts {
+    fn resolved_show_progress(&self, resolved_ui: &UiConfig) -> ShowProgress {
+        self.show_progress
+            .map(ShowProgress::from)
+            .unwrap_or_else(|| resolved_ui.show_progress.into())
+    }
+
     pub(crate) fn to_builder(
         &self,
         should_colorize: bool,
@@ -789,11 +798,7 @@ impl BenchReporterOpts {
         builder.set_no_capture(true);
         builder.set_colorize(should_colorize);
         // Determine show_progress with precedence: CLI/env > resolved config.
-        let show_progress = self
-            .show_progress
-            .map(ShowProgress::from)
-            .unwrap_or(resolved_ui.show_progress.into());
-        builder.set_show_progress(show_progress);
+        builder.set_show_progress(self.resolved_show_progress(resolved_ui));
         if crate::output::should_redact() {
             builder.set_redactor(Redactor::for_snapshot_testing());
         }
@@ -851,6 +856,7 @@ impl App {
         binary_list: Arc<BinaryList>,
         test_filter: &TestFilter,
         profile: &nextest_runner::config::core::EvaluatableProfile<'_>,
+        show_progress: ShowProgress,
     ) -> Result<TestList<'_>> {
         let env = EnvironmentMap::new(&self.base.cargo_configs);
         self.build_filter.compute_test_list(
@@ -862,6 +868,24 @@ impl App {
             env,
             profile,
             &self.base.reuse_build,
+            self.list_progress_options(show_progress),
+        )
+    }
+
+    fn list_progress_options(&self, show_progress: ShowProgress) -> ListProgressOptions {
+        let is_terminal = std::io::stderr().is_terminal();
+        let show_terminal_progress =
+            ShowTerminalProgress::from_cargo_configs(&self.base.cargo_configs, is_terminal);
+        let should_colorize = self
+            .base
+            .output
+            .color
+            .should_colorize(supports_color::Stream::Stderr);
+        ListProgressOptions::new(
+            show_progress,
+            show_terminal_progress,
+            ThemeCharacters::detect(supports_unicode::Stream::Stderr),
+            should_colorize,
         )
     }
 
@@ -1014,7 +1038,13 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
+        let test_list = self.build_test_list(
+            &ctx,
+            binary_list,
+            &test_filter,
+            &profile,
+            reporter_opts.resolved_show_progress(&resolved_user_config.ui),
+        )?;
 
         // Validate interceptor mode requirements.
         if runner_opts.interceptor.is_active() {
@@ -1285,7 +1315,13 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
+        let test_list = self.build_test_list(
+            &ctx,
+            binary_list,
+            &test_filter,
+            &profile,
+            reporter_opts.resolved_show_progress(&resolved_user_config.ui),
+        )?;
 
         // Validate interceptor mode requirements.
         if runner_opts.interceptor.is_active() {
