@@ -38,7 +38,7 @@ reporter/
 │   ├── imp.rs                # DisplayReporter, DisplayReporterImpl (~1200 lines)
 │   ├── status_level.rs       # StatusLevel, FinalStatusLevel, output decision logic
 │   ├── unit_output.rs        # TestOutputDisplay, ChildOutputSpec, ANSI handling
-│   ├── progress.rs           # ProgressBarState, OSC 9;4 terminal progress
+│   ├── progress.rs           # ProgressBarState, event → OSC 9;4 mapping (terminal_progress_value)
 │   └── formatters.rs         # Duration formatters, skip counts, final warnings
 │
 ├── aggregator/               # Disk-based metadata output
@@ -136,7 +136,7 @@ This logic accounts for cancellation scenarios (interrupt, signal, test failure 
 - **Stacked hide states**: `hidden_no_capture`, `hidden_run_paused`, `hidden_info_response`.
 - **Running test tracking**: `Vec<RunningTest>` with status (Running, Slow, Delay, Retry).
 - **Chunked output**: `print_lines_in_chunks()` prevents terminal overwhelm during large output bursts.
-- **OSC 9;4 progress**: Terminal progress codes for supported terminals (Windows Terminal, iTerm, WezTerm, Ghostty).
+- **OSC 9;4 progress**: `terminal_progress_value()` (this file) maps each event to a progress state; emission and terminal detection live in the shared `crate::helpers::progress` module via the `anstyle-progress` crate, which decides which terminals advertise support.
 
 The refresh rate is intentionally set to 1 Hz (`PROGRESS_REFRESH_RATE_HZ`) to batch updates efficiently.
 
@@ -315,7 +315,7 @@ When adding a new `TestEventKind` variant:
 1. Add the variant to `TestEventKind` in `events.rs`.
 2. Update `DisplayReporterImpl::write_event_impl()` in `displayer/imp.rs`.
 3. Update `ProgressBarState::update_progress_bar()` in `displayer/progress.rs` if it affects progress.
-4. Update `TerminalProgress::update_progress()` if it affects OSC 9;4 reporting.
+4. Update `terminal_progress_value()` in `displayer/progress.rs` if it affects OSC 9;4 reporting.
 5. Update `LibtestReporter::write_event()` in `structured/libtest.rs` if it maps to libtest output.
 6. Consider whether it should be recorded (update `TestEventSummary::from_test_event()`).
 7. Add snapshot tests for the new output.

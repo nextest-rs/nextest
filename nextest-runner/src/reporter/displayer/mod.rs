@@ -14,6 +14,6 @@ pub(crate) use config::*;
 pub(crate) use formatters::DisplayUnitKind;
 pub use imp::OutputLoadDecider;
 pub(crate) use imp::*;
-pub use progress::{MaxProgressRunning, ShowProgress, ShowTerminalProgress};
+pub use progress::{MaxProgressRunning, ShowProgress};
 pub use status_level::*;
 pub use unit_output::*;

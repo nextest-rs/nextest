@@ -14,7 +14,8 @@ use super::{
         write_final_warnings, write_skip_counts,
     },
     progress::{
-        MaxProgressRunning, ProgressBarState, progress_bar_msg, progress_str, write_summary_str,
+        MaxProgressRunning, ProgressBarState, progress_bar_msg, progress_str,
+        terminal_progress_value, write_summary_str,
     },
     unit_output::{OutputDisplayOverrides, TestOutputDisplay},
 };
@@ -28,18 +29,14 @@ use crate::{
     helpers::{
         DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, DurationRounding,
         ThemeCharacters, decimal_char_width, plural,
+        progress::{ShowTerminalProgress, TerminalProgress},
     },
     indenter::indented,
     list::TestInstanceId,
     output_spec::{LiveSpec, RecordingSpec},
     record::{LoadOutput, OutputEventKind, ReplayHeader, ShortestRunIdPrefix},
     redact::Redactor,
-    reporter::{
-        displayer::progress::{ShowTerminalProgress, TerminalProgress},
-        events::*,
-        helpers::Styles,
-        imp::ReporterOutput,
-    },
+    reporter::{events::*, helpers::Styles, imp::ReporterOutput},
     run_mode::NextestRunMode,
     runner::StressCount,
     write_str::WriteStr,
@@ -191,7 +188,7 @@ impl<'a> DisplayReporter<'a> {
                 term_progress,
             } => {
                 if let Some(term_progress) = term_progress {
-                    term_progress.update_progress(event);
+                    term_progress.set(terminal_progress_value(event));
                 }
 
                 if let Some(state) = progress_bar {
@@ -449,7 +446,7 @@ impl ReporterOutputImpl<'_> {
                     // text, so it can be directly written out to stderr without
                     // going through the progress bar (which screws up
                     // indicatif's calculations).
-                    eprint!("{}", term_progress.last_value())
+                    term_progress.emit()
                 }
             }
             ReporterOutputImpl::Writer(_) => {
@@ -469,7 +466,7 @@ impl ReporterOutputImpl<'_> {
                 }
                 if let Some(term_progress) = term_progress {
                     // The last value is expected to be Remove.
-                    eprint!("{}", term_progress.last_value())
+                    term_progress.emit()
                 }
             }
             ReporterOutputImpl::Writer(_) => {
