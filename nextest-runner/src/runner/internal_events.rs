@@ -130,6 +130,9 @@ pub(super) enum ExecutorEvent<'a> {
         test_instance: TestInstance<'a>,
         reason: MismatchReason,
     },
+    Cached {
+        test_instance: TestInstance<'a>,
+    },
 }
 
 #[derive(Clone, Copy)]

@@ -272,6 +272,15 @@ pub enum CoreEventKind {
         reason: MismatchReason,
     },
 
+    /// A test had a valid cached result that was reused.
+    #[serde(rename_all = "kebab-case")]
+    TestCached {
+        /// The test instance whose cached result was reused.
+        test_instance: OwnedTestInstanceId,
+        /// The current run statistics.
+        current_stats: RunStats,
+    },
+
     /// A run began being cancelled.
     #[serde(rename_all = "kebab-case")]
     RunBeginCancel {
@@ -586,6 +595,13 @@ impl TestEventKindSummary<LiveSpec> {
                     not_seen: t.not_seen,
                     total_not_seen: t.total_not_seen,
                 }),
+            }),
+            TestEventKind::TestCached {
+                test_instance,
+                current_stats,
+            } => Self::Core(CoreEventKind::TestCached {
+                test_instance: test_instance.to_owned(),
+                current_stats,
             }),
 
             TestEventKind::SetupScriptFinished {

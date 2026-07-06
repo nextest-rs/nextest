@@ -310,6 +310,18 @@ pub enum TestEventKind<'a> {
         running: usize,
     },
 
+    /// A test had a valid cached result that was reused instead of being run.
+    ///
+    /// The result cache is disabled for stress runs, so this event never
+    /// carries a stress index.
+    TestCached {
+        /// The test instance whose cached result was reused.
+        test_instance: TestInstanceId<'a>,
+
+        /// Current statistics for number of tests so far.
+        current_stats: RunStats,
+    },
+
     /// A test was skipped.
     TestSkipped {
         /// If a stress test is being run, the stress index, starting from 0.
@@ -613,6 +625,12 @@ pub struct RunStats {
     /// `leaky`.
     pub passed: usize,
 
+    /// The number of tests that passed because their result is cached as
+    /// passing and the test binary is unchanged since it was cached.
+    ///
+    /// Included in `passed`.
+    pub passed_cached: usize,
+
     /// The number of slow tests that passed.
     pub passed_slow: usize,
 
@@ -645,16 +663,7 @@ pub struct RunStats {
     pub exec_failed: usize,
 
     /// The number of tests that were skipped.
-    ///
-    /// Includes `skipped_cached`.
     pub skipped: usize,
-
-    /// The number of tests that were skipped because their result is cached as
-    /// passing and the test binary is unchanged since it was cached.
-    ///
-    /// Included in `skipped`.
-    #[serde(default)]
-    pub skipped_cached: usize,
 
     /// If the run is cancelled, the reason the cancellation is happening.
     pub cancel_reason: Option<CancelReason>,
@@ -873,6 +882,20 @@ impl RunStats {
             }
             ExecutionResultDescription::ExecFail => self.exec_failed += 1,
         }
+    }
+
+    /// Records a test whose passing result was reused from the result cache,
+    /// rather than being executed.
+    ///
+    /// A cache hit is a passing test that did not need to run, so it counts
+    /// toward both `finished_count` and `passed` (with `passed_cached` tracking
+    /// the cached subset). Keeping this parallel to `on_test_finished` ensures
+    /// the `initial_run_count == finished_count` invariant that
+    /// [`Self::summarize_final`] relies on.
+    pub(crate) fn on_test_cached(&mut self) {
+        self.finished_count += 1;
+        self.passed += 1;
+        self.passed_cached += 1;
     }
 }
 

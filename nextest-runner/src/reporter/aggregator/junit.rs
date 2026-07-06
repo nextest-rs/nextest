@@ -253,6 +253,9 @@ impl<'cfg> MetadataJunit<'cfg> {
                 //
                 // testsuite.add_testcase(testcase);
             }
+            TestEventKind::TestCached { .. } => {
+                // TODO: report cached tests as successes
+            }
             TestEventKind::RunBeginCancel { .. } | TestEventKind::RunBeginKill { .. } => {}
             TestEventKind::RunFinished {
                 run_id,

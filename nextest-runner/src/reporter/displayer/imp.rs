@@ -1070,6 +1070,18 @@ impl<'a> DisplayReporterImpl<'a> {
                     });
                 }
             }
+            TestEventKind::TestCached {
+                test_instance,
+                current_stats,
+            } => {
+                if self.status_levels.status_level >= StatusLevel::Pass {
+                    let counter = TestInstanceCounter::Counter {
+                        current: current_stats.finished_count,
+                        total: current_stats.initial_run_count,
+                    };
+                    self.write_cached_line(counter, *test_instance, writer)?;
+                }
+            }
             TestEventKind::RunBeginCancel {
                 setup_scripts_running,
                 current_stats,
@@ -1558,6 +1570,25 @@ impl<'a> DisplayReporterImpl<'a> {
             writer,
             "[         ] {}",
             self.display_test_instance(stress_index, TestInstanceCounter::Padded, test_instance)
+        )?;
+
+        Ok(())
+    }
+
+    fn write_cached_line(
+        &self,
+        counter: TestInstanceCounter,
+        test_instance: TestInstanceId<'a>,
+        writer: &mut dyn WriteStr,
+    ) -> io::Result<()> {
+        write!(writer, "{:>12} ", "CACHED".style(self.styles.pass))?;
+        // A cached test did not run, so there's no duration to show. Match the
+        // blank-duration spacing used by the SKIP line. The result cache is
+        // disabled for stress runs, so there's never a stress index to show.
+        writeln!(
+            writer,
+            "[         ] {}",
+            self.display_test_instance(None, counter, test_instance)
         )?;
 
         Ok(())
@@ -3585,6 +3616,7 @@ mod tests {
                     setup_scripts_exec_failed: 0,
                     setup_scripts_timed_out: 0,
                     passed: 5,
+                    passed_cached: 0,
                     passed_slow: 0,
                     passed_timed_out: 0,
                     flaky: 0,
@@ -3595,7 +3627,6 @@ mod tests {
                     leaky_failed: 0,
                     exec_failed: 0,
                     skipped: 0,
-                    skipped_cached: 0,
                     cancel_reason: None,
                 };
 
@@ -3624,6 +3655,7 @@ mod tests {
                     setup_scripts_exec_failed: 0,
                     setup_scripts_timed_out: 0,
                     passed: 5,
+                    passed_cached: 0,
                     passed_slow: 1,
                     passed_timed_out: 2,
                     flaky: 1,
@@ -3634,7 +3666,6 @@ mod tests {
                     leaky_failed: 0,
                     exec_failed: 1,
                     skipped: 2,
-                    skipped_cached: 0,
                     cancel_reason: Some(CancelReason::Signal),
                 };
 
@@ -3716,6 +3747,7 @@ mod tests {
                     setup_scripts_exec_failed: 0,
                     setup_scripts_timed_out: 0,
                     passed: 0,
+                    passed_cached: 0,
                     passed_slow: 0,
                     passed_timed_out: 0,
                     flaky: 0,
@@ -3726,7 +3758,6 @@ mod tests {
                     leaky_failed: 0,
                     exec_failed: 0,
                     skipped: 0,
-                    skipped_cached: 0,
                     cancel_reason: None,
                 };
 
@@ -3784,6 +3815,7 @@ mod tests {
                                 setup_scripts_exec_failed: 0,
                                 setup_scripts_timed_out: 0,
                                 passed: 17,
+                                passed_cached: 0,
                                 passed_slow: 4,
                                 passed_timed_out: 3,
                                 flaky: 2,
@@ -3794,7 +3826,6 @@ mod tests {
                                 leaky_failed: 2,
                                 exec_failed: 1,
                                 skipped: 5,
-                                skipped_cached: 0,
                                 cancel_reason: None,
                             },
                         },

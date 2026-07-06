@@ -656,6 +656,9 @@ impl ChromeTraceConverter {
             }
             // Skipped tests don't produce trace spans (they have no duration).
             CoreEventKind::TestSkipped { .. } => {}
+            // Cached tests are served from a prior result and don't execute, so
+            // they have no duration and produce no trace span.
+            CoreEventKind::TestCached { .. } => {}
         }
         Ok(())
     }

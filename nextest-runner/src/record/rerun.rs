@@ -116,7 +116,7 @@ pub(crate) fn compute_outstanding_pure(
                 let mut curr = RerunTestSuiteInfo::new(binary_id.clone());
                 for (test_name, filter_match) in test_cases {
                     match filter_match {
-                        FilterMatch::Matches => {
+                        FilterMatch::Matches { cached: _ } => {
                             // This test should have been run.
                             let key = OwnedTestInstanceId {
                                 binary_id: binary_id.clone(),
@@ -319,11 +319,9 @@ fn handle_skipped(
     curr: &mut RerunTestSuiteInfo,
 ) {
     match skipped {
-        TestOutcomeSkipped::Rerun | TestOutcomeSkipped::Cached => {
-            // This test was skipped because it is known to have passed: either
-            // it passed in a prior run in this rerun chain, or its result was
-            // cached for the binary's current hash. Either way, add it to
-            // passing.
+        TestOutcomeSkipped::Rerun => {
+            // This test was skipped due to having passed in a prior run in this
+            // rerun chain. Add it to passing.
             //
             // Note that if a test goes from passing to not being present in the
             // list at all, and then back to being present, it becomes
@@ -366,9 +364,6 @@ pub(crate) enum TestOutcomeSkipped {
 
     /// Test was skipped due to this being a rerun.
     Rerun,
-
-    /// Test was skipped because its result was cached and the binary is unchanged.
-    Cached,
 }
 
 impl TestOutcomeSkipped {
@@ -382,7 +377,6 @@ impl TestOutcomeSkipped {
             | MismatchReason::Partition
             | MismatchReason::DefaultFilter => TestOutcomeSkipped::Explicit,
             MismatchReason::RerunAlreadyPassed => TestOutcomeSkipped::Rerun,
-            MismatchReason::UnchangedSinceCached => TestOutcomeSkipped::Cached,
             other => unreachable!("all known match arms are covered, found {other:?}"),
         }
     }
@@ -564,7 +558,7 @@ mod tests {
                 let rust_binary_id = binary_id.rust_binary_id();
 
                 for (test_name, filter_match) in tests {
-                    if matches!(filter_match, FilterMatch::Matches) {
+                    if matches!(filter_match, FilterMatch::Matches { .. }) {
                         let key = (*binary_id, *test_name);
                         let outcome = final_step.outcomes.get(&key);
 
@@ -575,9 +569,7 @@ mod tests {
                         let should_be_tracked = match outcome {
                             Some(TestOutcome::Passed)
                             | Some(TestOutcome::Failed)
-                            | Some(TestOutcome::Skipped(
-                                TestOutcomeSkipped::Rerun | TestOutcomeSkipped::Cached,
-                            ))
+                            | Some(TestOutcome::Skipped(TestOutcomeSkipped::Rerun))
                             | None => true,
                             Some(TestOutcome::Skipped(TestOutcomeSkipped::Explicit)) => false,
                         };
@@ -651,7 +643,7 @@ mod tests {
         );
 
         // FilterMatch::Matches with various outcomes.
-        let matches = F::HasMatch(FilterMatch::Matches);
+        let matches = F::HasMatch(FilterMatch::Matches { cached: false });
 
         // Passed -> Passing.
         assert_eq!(
@@ -787,7 +779,9 @@ mod tests {
 
     /// All HasMatch filter results (test is in the list).
     fn all_in_list_filter_results() -> Vec<FilterMatchResult> {
-        let mut results = vec![FilterMatchResult::HasMatch(FilterMatch::Matches)];
+        let mut results = vec![FilterMatchResult::HasMatch(FilterMatch::Matches {
+            cached: false,
+        })];
         for &reason in MismatchReason::ALL_VARIANTS {
             results.push(FilterMatchResult::HasMatch(FilterMatch::Mismatch {
                 reason,
@@ -840,7 +834,7 @@ mod tests {
         for outcome in passing_outcomes {
             let decision = decide_test_outcome(
                 PrevStatus::Outstanding,
-                FilterMatchResult::HasMatch(FilterMatch::Matches),
+                FilterMatchResult::HasMatch(FilterMatch::Matches { cached: false }),
                 outcome,
             );
             assert_eq!(
@@ -864,7 +858,7 @@ mod tests {
             for outcome in failing_outcomes {
                 let decision = decide_test_outcome(
                     prev,
-                    FilterMatchResult::HasMatch(FilterMatch::Matches),
+                    FilterMatchResult::HasMatch(FilterMatch::Matches { cached: false }),
                     outcome,
                 );
                 assert_eq!(
@@ -1087,7 +1081,7 @@ mod tests {
 
     fn arb_filter_match() -> impl Strategy<Value = FilterMatch> {
         prop_oneof![
-            4 => Just(FilterMatch::Matches),
+            4 => Just(FilterMatch::Matches { cached: false }),
             1 => any::<MismatchReason>().prop_map(|reason| FilterMatch::Mismatch { reason }),
         ]
     }
@@ -1146,7 +1140,7 @@ mod tests {
                 BinaryModel::Listed { tests } => Some(
                     tests
                         .iter()
-                        .filter(|(_, fm)| matches!(fm, FilterMatch::Matches))
+                        .filter(|(_, fm)| matches!(fm, FilterMatch::Matches { .. }))
                         .map(move |(tn, _)| (*binary_id, *tn)),
                 ),
                 BinaryModel::Skipped => None,
@@ -1286,7 +1280,7 @@ mod tests {
                     PrevStatus::Passing | PrevStatus::Unknown => Decision::NotTracked,
                 }
             }
-            FilterMatchResult::HasMatch(FilterMatch::Matches) => {
+            FilterMatchResult::HasMatch(FilterMatch::Matches { .. }) => {
                 match outcome {
                     Some(TestOutcome::Passed) => Decision::Passing,
                     Some(TestOutcome::Failed) => Decision::Outstanding,
@@ -1294,9 +1288,7 @@ mod tests {
                         // Test was scheduled but not seen in event log: outstanding.
                         Decision::Outstanding
                     }
-                    Some(TestOutcome::Skipped(
-                        TestOutcomeSkipped::Rerun | TestOutcomeSkipped::Cached,
-                    )) => Decision::Passing,
+                    Some(TestOutcome::Skipped(TestOutcomeSkipped::Rerun)) => Decision::Passing,
                     Some(TestOutcome::Skipped(TestOutcomeSkipped::Explicit)) => {
                         // Carry forward, or not tracked if unknown.
                         match prev {
@@ -1309,7 +1301,7 @@ mod tests {
             }
             FilterMatchResult::HasMatch(FilterMatch::Mismatch { reason }) => {
                 match TestOutcomeSkipped::from_mismatch_reason(reason) {
-                    TestOutcomeSkipped::Rerun | TestOutcomeSkipped::Cached => Decision::Passing,
+                    TestOutcomeSkipped::Rerun => Decision::Passing,
                     TestOutcomeSkipped::Explicit => {
                         // Carry forward, or not tracked if unknown.
                         match prev {

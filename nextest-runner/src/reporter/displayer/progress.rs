@@ -392,6 +392,20 @@ impl ProgressBarState {
                 self.bar.set_length(current_stats.initial_run_count as u64);
                 self.bar.set_position(current_stats.finished_count as u64);
             }
+            TestEventKind::TestCached { current_stats, .. } => {
+                // A cached test never started running, so the running count is
+                // unchanged and there's no running test to remove -- but it does
+                // advance the finished count.
+                self.stats = *current_stats;
+
+                self.bar.set_prefix(progress_bar_prefix(
+                    current_stats,
+                    current_stats.cancel_reason,
+                    styles,
+                ));
+                self.bar.set_length(current_stats.initial_run_count as u64);
+                self.bar.set_position(current_stats.finished_count as u64);
+            }
             TestEventKind::TestAttemptFailedWillRetry {
                 test_instance,
                 delay_before_next_attempt,
@@ -546,6 +560,7 @@ pub(super) fn terminal_progress_value(event: &TestEvent<'_>) -> TermProgress {
         | TestEventKind::TestAttemptFailedWillRetry { .. }
         | TestEventKind::TestRetryStarted { .. }
         | TestEventKind::TestSkipped { .. }
+        | TestEventKind::TestCached { .. }
         | TestEventKind::InfoStarted { .. }
         | TestEventKind::InfoResponse { .. }
         | TestEventKind::InfoFinished { .. }
@@ -615,6 +630,7 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         setup_scripts_exec_failed: _,
         setup_scripts_timed_out: _,
         passed,
+        passed_cached,
         passed_slow,
         passed_timed_out: _,
         flaky,
@@ -625,7 +641,6 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         leaky_failed,
         exec_failed,
         skipped,
-        skipped_cached,
         cancel_reason: _,
     } = run_stats;
 
@@ -636,8 +651,15 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         "passed".style(styles.pass)
     );
 
-    if passed_slow > 0 || flaky > 0 || leaky > 0 {
-        let mut text = Vec::with_capacity(3);
+    if passed_cached > 0 || passed_slow > 0 || flaky > 0 || leaky > 0 {
+        let mut text = Vec::with_capacity(4);
+        if passed_cached > 0 {
+            text.push(format!(
+                "{} {}",
+                passed_cached.style(styles.count),
+                "cached".style(styles.skip)
+            ));
+        }
         if passed_slow > 0 {
             text.push(format!(
                 "{} {}",
@@ -705,22 +727,6 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         skipped.style(styles.count),
         "skipped".style(styles.skip),
     );
-
-    // Break out the cache-skipped subset (skipped because their result is known,
-    // not filtered out). When every skip is a cache hit, "all cached" reads
-    // better than a count that just repeats `skipped`.
-    if skipped_cached > 0 {
-        if skipped_cached == skipped {
-            swrite!(out, " (all {})", "cached".style(styles.skip));
-        } else {
-            swrite!(
-                out,
-                " ({} {})",
-                skipped_cached.style(styles.count),
-                "cached".style(styles.skip),
-            );
-        }
-    }
 }
 
 fn progress_bar_cancel_prefix(reason: Option<CancelReason>, styles: &Styles) -> String {
@@ -913,15 +919,14 @@ mod tests {
     }
 
     #[test]
-    fn summary_str_distinguishes_cached_skips() {
+    fn summary_str_reports_cached_passes() {
         let styles = Styles::default();
-        let summary = |skipped, skipped_cached| {
+        let summary = |passed, passed_cached| {
             let mut out = String::new();
             write_summary_str(
                 &RunStats {
-                    passed: 1,
-                    skipped,
-                    skipped_cached,
+                    passed,
+                    passed_cached,
                     ..RunStats::default()
                 },
                 &styles,
@@ -930,12 +935,13 @@ mod tests {
             out
         };
 
-        // No cache hits: the summary is unchanged.
-        assert_eq!(summary(3, 0), "1 passed, 3 skipped");
-        // Some, but not all, skips are cache hits: break out the subset.
-        assert_eq!(summary(3, 2), "1 passed, 3 skipped (2 cached)");
-        // Every skip is a cache hit: a bare count would repeat `skipped`.
-        assert_eq!(summary(3, 3), "1 passed, 3 skipped (all cached)");
+        // No cache hits: the summary has no parenthetical breakdown.
+        assert_eq!(summary(3, 0), "3 passed, 0 skipped");
+        // Some passes served from cache: break out the subset. `passed_cached`
+        // is a subset of `passed`, so the total stays 3.
+        assert_eq!(summary(3, 2), "3 passed (2 cached), 0 skipped");
+        // Every pass served from cache.
+        assert_eq!(summary(3, 3), "3 passed (3 cached), 0 skipped");
     }
 
     #[test]

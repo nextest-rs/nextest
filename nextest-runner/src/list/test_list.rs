@@ -217,10 +217,6 @@ pub struct SkipCounts {
     /// already passing.
     pub skipped_tests_rerun: usize,
 
-    /// The number of tests skipped because their result is cached as passing
-    /// and the test binary is unchanged since it was cached.
-    pub skipped_tests_cached: usize,
-
     /// The number of tests skipped because they are not benchmarks.
     ///
     /// This is used when running in benchmark mode.
@@ -564,7 +560,6 @@ impl<'g> TestList<'g> {
     pub fn skip_counts(&self) -> &SkipCounts {
         self.skip_counts.get_or_init(|| {
             let mut skipped_tests_rerun = 0;
-            let mut skipped_tests_cached = 0;
             let mut skipped_tests_non_benchmark = 0;
             let mut skipped_tests_default_filter = 0;
             let skipped_tests = self
@@ -574,12 +569,6 @@ impl<'g> TestList<'g> {
                         reason: MismatchReason::RerunAlreadyPassed,
                     } => {
                         skipped_tests_rerun += 1;
-                        true
-                    }
-                    FilterMatch::Mismatch {
-                        reason: MismatchReason::UnchangedSinceCached,
-                    } => {
-                        skipped_tests_cached += 1;
                         true
                     }
                     FilterMatch::Mismatch {
@@ -595,7 +584,7 @@ impl<'g> TestList<'g> {
                         true
                     }
                     FilterMatch::Mismatch { .. } => true,
-                    FilterMatch::Matches => false,
+                    FilterMatch::Matches { .. } => false,
                 })
                 .count();
 
@@ -618,7 +607,6 @@ impl<'g> TestList<'g> {
             SkipCounts {
                 skipped_tests,
                 skipped_tests_rerun,
-                skipped_tests_cached,
                 skipped_tests_non_benchmark,
                 skipped_tests_default_filter,
                 skipped_binaries,
@@ -1213,7 +1201,7 @@ fn apply_partitioner_to_tests(
 ///   the partitioner.
 fn apply_partition_to_test(test_case: &mut RustTestCase, partitioner: &mut dyn Partitioner) {
     match test_case.test_info.filter_match {
-        FilterMatch::Matches => {
+        FilterMatch::Matches { cached: _ } => {
             if !partitioner.test_matches(test_case.name.as_str()) {
                 test_case.test_info.filter_match = FilterMatch::Mismatch {
                     reason: MismatchReason::Partition,
@@ -2138,7 +2126,7 @@ mod tests {
                                 test_info: RustTestCaseSummary {
                                     kind: Some(RustTestKind::TEST),
                                     ignored: false,
-                                    filter_match: FilterMatch::Matches,
+                                    filter_match: FilterMatch::Matches { cached: false },
                                 },
                             },
                             RustTestCase {
@@ -2146,7 +2134,7 @@ mod tests {
                                 test_info: RustTestCaseSummary {
                                     kind: Some(RustTestKind::TEST),
                                     ignored: false,
-                                    filter_match: FilterMatch::Matches,
+                                    filter_match: FilterMatch::Matches { cached: false },
                                 },
                             },
                             RustTestCase {
@@ -2154,7 +2142,7 @@ mod tests {
                                 test_info: RustTestCaseSummary {
                                     kind: Some(RustTestKind::BENCH),
                                     ignored: false,
-                                    filter_match: FilterMatch::Matches,
+                                    filter_match: FilterMatch::Matches { cached: false },
                                 },
                             },
                             RustTestCase {
@@ -2291,7 +2279,8 @@ mod tests {
                       "kind": "bench",
                       "ignored": false,
                       "filter-match": {
-                        "status": "matches"
+                        "status": "matches",
+                        "cached": false
                       }
                     },
                     "benches::ignored_bench_foo": {
@@ -2314,14 +2303,16 @@ mod tests {
                       "kind": "test",
                       "ignored": false,
                       "filter-match": {
-                        "status": "matches"
+                        "status": "matches",
+                        "cached": false
                       }
                     },
                     "tests::foo::test_bar": {
                       "kind": "test",
                       "ignored": false,
                       "filter-match": {
-                        "status": "matches"
+                        "status": "matches",
+                        "cached": false
                       }
                     },
                     "tests::ignored::test_bar": {
@@ -3050,7 +3041,7 @@ mod tests {
         for case in suite.status.test_cases() {
             assert_eq!(
                 case.test_info.filter_match,
-                FilterMatch::Matches,
+                FilterMatch::Matches { cached: false },
                 "{} should match with serial group lookup",
                 case.name,
             );

@@ -941,7 +941,10 @@ impl RustTestKind {
 #[serde(rename_all = "kebab-case", tag = "status")]
 pub enum FilterMatch {
     /// This test matches this filter.
-    Matches,
+    Matches {
+        /// This test has a valid entry in the result cache.
+        cached: bool,
+    },
 
     /// This test does not match this filter.
     Mismatch {
@@ -953,7 +956,7 @@ pub enum FilterMatch {
 impl FilterMatch {
     /// Returns true if the filter doesn't match.
     pub fn is_match(&self) -> bool {
-        matches!(self, FilterMatch::Matches)
+        matches!(self, FilterMatch::Matches { .. })
     }
 }
 
@@ -980,10 +983,6 @@ pub enum MismatchReason {
     /// This is a rerun and the test already passed.
     RerunAlreadyPassed,
 
-    /// This test's result is cached and the test binary is unchanged since it
-    /// was cached, so the cached passing result is reused.
-    UnchangedSinceCached,
-
     /// This test is filtered out by the default-filter.
     ///
     /// This is the lowest-priority reason for skipping a test.
@@ -1002,7 +1001,6 @@ impl MismatchReason {
         Self::Expression,
         Self::Partition,
         Self::RerunAlreadyPassed,
-        Self::UnchangedSinceCached,
         Self::DefaultFilter,
     ];
 }
@@ -1018,9 +1016,6 @@ impl fmt::Display for MismatchReason {
             }
             MismatchReason::Partition => write!(f, "is in a different partition"),
             MismatchReason::RerunAlreadyPassed => write!(f, "already passed"),
-            MismatchReason::UnchangedSinceCached => {
-                write!(f, "binary unchanged since last cached result")
-            }
             MismatchReason::DefaultFilter => {
                 write!(f, "is filtered out by the profile's default-filter")
             }
@@ -1165,7 +1160,6 @@ mod tests {
                 | MismatchReason::Expression
                 | MismatchReason::Partition
                 | MismatchReason::RerunAlreadyPassed
-                | MismatchReason::UnchangedSinceCached
                 | MismatchReason::DefaultFilter => {}
             }
         }
@@ -1175,6 +1169,6 @@ mod tests {
         }
 
         // If you add a variant, update ALL_VARIANTS and this count.
-        assert_eq!(MismatchReason::ALL_VARIANTS.len(), 8);
+        assert_eq!(MismatchReason::ALL_VARIANTS.len(), 7);
     }
 }

@@ -271,6 +271,22 @@ impl<'a> ReplayContext<'a> {
                 })
             }
 
+            CoreEventKind::TestCached {
+                test_instance,
+                current_stats,
+            } => {
+                let instance_id = self.lookup_test_instance_id(test_instance).ok_or_else(|| {
+                    ReplayConversionError::TestNotFound {
+                        binary_id: test_instance.binary_id.clone(),
+                        test_name: test_instance.test_name.clone(),
+                    }
+                })?;
+                Ok(TestEventKind::TestCached {
+                    test_instance: instance_id,
+                    current_stats: *current_stats,
+                })
+            }
+
             CoreEventKind::RunBeginCancel {
                 setup_scripts_running,
                 running,

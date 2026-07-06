@@ -563,12 +563,6 @@ impl TestFilter {
             };
         }
 
-        if self.is_unchanged_since_cached(binary_query.binary_id, test_name) {
-            return FilterMatch::Mismatch {
-                reason: MismatchReason::UnchangedSinceCached,
-            };
-        }
-
         self.filter_match_base(binary_query, test_name, ecx, bound, ignored, groups)
     }
 
@@ -628,7 +622,8 @@ impl TestFilter {
             }
         }
 
-        FilterMatch::Matches
+        let cached = self.is_unchanged_since_cached(binary_query.binary_id, test_name);
+        FilterMatch::Matches { cached }
     }
 
     /// Returns true if this test already passed in a prior rerun.

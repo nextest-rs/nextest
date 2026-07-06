@@ -288,6 +288,7 @@ expression: json_str
           "setup-scripts-exec-failed": 0,
           "setup-scripts-timed-out": 0,
           "passed": 0,
+          "passed-cached": 0,
           "passed-slow": 0,
           "passed-timed-out": 0,
           "flaky": 0,
@@ -298,7 +299,6 @@ expression: json_str
           "leaky-failed": 0,
           "exec-failed": 0,
           "skipped": 0,
-          "skipped-cached": 0,
           "cancel-reason": null
         }
       }
