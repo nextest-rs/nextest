@@ -1354,7 +1354,9 @@ impl App {
 
         // Benchmark results are not cached: their value is the measured time,
         // not a pass/fail outcome.
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile, None)?;
+        let cache_backend = None;
+        let test_list =
+            self.build_test_list(&ctx, binary_list, &test_filter, &profile, cache_backend)?;
 
         // Validate interceptor mode requirements.
         if runner_opts.interceptor.is_active() {

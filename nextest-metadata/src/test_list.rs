@@ -1018,7 +1018,9 @@ impl fmt::Display for MismatchReason {
             }
             MismatchReason::Partition => write!(f, "is in a different partition"),
             MismatchReason::RerunAlreadyPassed => write!(f, "already passed"),
-            MismatchReason::UnchangedSinceCached => write!(f, "unchanged"),
+            MismatchReason::UnchangedSinceCached => {
+                write!(f, "binary unchanged since last cached result")
+            }
             MismatchReason::DefaultFilter => {
                 write!(f, "is filtered out by the profile's default-filter")
             }
