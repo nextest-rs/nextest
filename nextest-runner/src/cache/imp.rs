@@ -7,13 +7,13 @@ use crate::{
     cache::{
         backend::CacheBackend,
         key::{ContentHash, hash_file},
-        parallel::parallel_filter_map,
     },
     record::encode_workspace_path,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use etcetera::{BaseStrategy, choose_base_strategy};
 use nextest_metadata::{RustBinaryId, TestCaseName};
+use rayon::prelude::*;
 use std::collections::{BTreeSet, HashMap};
 use tracing::warn;
 
@@ -103,7 +103,13 @@ impl ComputedCacheInfo {
             })
             .collect();
 
-        let outcomes = parallel_filter_map(&work, |binary| consult_binary(backend, binary));
+        // Use rayon's thread pool: the work is blocking and CPU/IO-bound, and the
+        // cache consult runs outside a live tokio runtime, so a thread pool fits
+        // better than async here.
+        let outcomes: Vec<BinaryOutcome> = work
+            .par_iter()
+            .filter_map(|binary| consult_binary(backend, binary))
+            .collect();
 
         let mut passing = HashMap::new();
         let mut binary_hashes = HashMap::with_capacity(outcomes.len());

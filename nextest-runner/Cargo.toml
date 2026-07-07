@@ -59,6 +59,7 @@ petgraph.workspace = true
 pulldown-cmark.workspace = true
 quick-junit.workspace = true
 rand.workspace = true
+rayon.workspace = true
 regex.workspace = true
 sapling-streampager.workspace = true
 semver.workspace = true

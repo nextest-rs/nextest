@@ -24,7 +24,6 @@ mod backend;
 mod fs_backend;
 mod imp;
 mod key;
-mod parallel;
 mod result;
 #[cfg(test)]
 mod tests;
