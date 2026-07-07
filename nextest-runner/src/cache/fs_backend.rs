@@ -20,10 +20,11 @@ use crate::cache::{
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use camino::{Utf8Path, Utf8PathBuf};
 use chrono::{DateTime, TimeDelta, Utc};
+use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_metadata::TestCaseName;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
     fs,
     io::{self, BufWriter, Write},
 };
@@ -205,7 +206,7 @@ impl FsBackend {
             };
 
             // An empty manifest has no accesses, so `None` counts as stale.
-            let latest_hit = manifest.entries.values().map(|e| e.last_hit_at).max();
+            let latest_hit = manifest.entries.iter().map(|e| e.last_hit_at).max();
             if latest_hit.is_some_and(|hit| hit >= older_than) {
                 continue;
             }
@@ -280,7 +281,7 @@ impl CacheBackend for FsBackend {
         // One manifest read, intersected with the requested names.
         Ok(test_names
             .iter()
-            .filter(|name| manifest.entries.contains_key(name.as_str()))
+            .filter(|name| manifest.entries.contains_key(name))
             .cloned()
             .collect())
     }
@@ -298,7 +299,7 @@ impl CacheBackend for FsBackend {
         let now = Utc::now();
         let mut refreshed = false;
         for name in test_names {
-            if let Some(entry) = manifest.entries.get_mut(name.as_str()) {
+            if let Some(mut entry) = manifest.entries.get_mut(name) {
                 entry.last_hit_at = now;
                 refreshed = true;
             }
@@ -315,13 +316,11 @@ impl CacheBackend for FsBackend {
         let binary_hash_hex = key.binary_hash_hex();
         let mut manifest = self.read_manifest(&binary_hash_hex)?;
 
-        manifest.entries.insert(
-            key.test_name().to_owned(),
-            ManifestEntry {
-                created_at: entry.created_at,
-                last_hit_at: entry.last_hit_at,
-            },
-        );
+        manifest.entries.insert_overwrite(ManifestEntry {
+            test_name: key.test_name().clone(),
+            created_at: entry.created_at,
+            last_hit_at: entry.last_hit_at,
+        });
 
         self.write_manifest(&binary_hash_hex, &manifest)
     }
@@ -371,22 +370,31 @@ struct CacheMeta {
 #[derive(Debug, Serialize, Deserialize)]
 struct Manifest {
     version: u32,
-    entries: BTreeMap<String, ManifestEntry>,
+    entries: IdOrdMap<ManifestEntry>,
 }
 
 impl Manifest {
     fn empty() -> Self {
         Self {
             version: CACHE_FORMAT_VERSION,
-            entries: BTreeMap::new(),
+            entries: IdOrdMap::new(),
         }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ManifestEntry {
+    test_name: TestCaseName,
     created_at: DateTime<Utc>,
     last_hit_at: DateTime<Utc>,
+}
+
+impl IdOrdItem for ManifestEntry {
+    type Key<'a> = &'a TestCaseName;
+    fn key(&self) -> Self::Key<'_> {
+        &self.test_name
+    }
+    id_upcast!();
 }
 
 fn dir_size(path: &std::path::Path) -> u64 {

@@ -44,8 +44,8 @@ impl CacheKey {
     }
 
     /// Returns the test name component.
-    pub fn test_name(&self) -> &str {
-        self.test_name.as_str()
+    pub fn test_name(&self) -> &TestCaseName {
+        &self.test_name
     }
 }
 

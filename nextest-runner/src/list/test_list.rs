@@ -346,9 +346,16 @@ impl<'g> TestList<'g> {
         let mut binary_hashes = HashMap::new();
         let cache_filter = cache_backend.map(|backend| {
             let cache_info = Self::collect_cache_info(backend, &parsed_binaries);
-            binary_hashes = cache_info.binary_hashes;
+            // Split the merged per-binary info into the hash map kept on the list
+            // (for the post-run writer) and the passing-name map handed to the
+            // filter.
+            let mut cached_passing = HashMap::new();
+            for binary in cache_info.binaries {
+                binary_hashes.insert(binary.binary_id.clone(), binary.hash);
+                cached_passing.insert(binary.binary_id, binary.passing);
+            }
             let mut filter = filter.clone();
-            filter.set_cached_passing(cache_info.passing);
+            filter.set_cached_passing(cached_passing);
             filter
         });
         let filter = cache_filter.as_ref().unwrap_or(filter);

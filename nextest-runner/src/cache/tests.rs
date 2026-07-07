@@ -434,13 +434,22 @@ fn collect_retains_hashes_for_every_binary() {
     );
 
     // Both binaries' hashes are retained, matching their on-disk content...
-    assert_eq!(info.binary_hashes.get(&cached_id), Some(&cached_hash));
     assert_eq!(
-        info.binary_hashes.get(&uncached_id),
-        Some(&hash_file(&uncached_path).unwrap()),
+        info.binaries.get(&cached_id).map(|b| b.hash),
+        Some(cached_hash)
+    );
+    assert_eq!(
+        info.binaries.get(&uncached_id).map(|b| b.hash),
+        Some(hash_file(&uncached_path).unwrap()),
     );
 
     // ...and only the binary with a stored pass has any passing tests.
-    assert_eq!(info.passing.get(&cached_id), Some(&names(&["tests::a"])));
-    assert_eq!(info.passing.get(&uncached_id), Some(&BTreeSet::new()));
+    assert_eq!(
+        info.binaries.get(&cached_id).map(|b| &b.passing),
+        Some(&names(&["tests::a"])),
+    );
+    assert_eq!(
+        info.binaries.get(&uncached_id).map(|b| &b.passing),
+        Some(&BTreeSet::new()),
+    );
 }
