@@ -96,17 +96,6 @@ impl App {
         let should_page =
             !matches!(paginate, PaginateSetting::Never) && message_format.is_human_readable();
 
-        let mut paged_output = if should_page {
-            PagedOutput::request_pager(
-                &pager_setting,
-                paginate,
-                &resolved_user_config.ui.streampager,
-            )
-        } else {
-            PagedOutput::terminal()
-        };
-
-        let is_interactive = paged_output.is_interactive();
         let should_colorize = self
             .base
             .output
@@ -115,11 +104,22 @@ impl App {
 
         match list_type {
             ListType::BinariesOnly => {
-                binary_list.write(
-                    message_format.to_output_format(self.base.output.verbose, is_interactive),
-                    &mut paged_output,
-                    should_colorize,
-                )?;
+                let mut paged_output = if should_page {
+                    PagedOutput::request_pager(
+                        &pager_setting,
+                        paginate,
+                        &resolved_user_config.ui.streampager,
+                    )
+                } else {
+                    PagedOutput::terminal()
+                };
+                let output_format = message_format
+                    .to_output_format(self.base.output.verbose, paged_output.is_interactive());
+                binary_list.write(output_format, &mut paged_output, should_colorize)?;
+                paged_output
+                    .write_str_flush()
+                    .map_err(WriteTestListError::Io)?;
+                paged_output.finalize();
             }
             ListType::Full => {
                 let double_spawn = self.base.load_double_spawn();
@@ -144,18 +144,28 @@ impl App {
 
                 let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
 
-                test_list.write(
-                    message_format.to_output_format(self.base.output.verbose, is_interactive),
-                    &mut paged_output,
-                    should_colorize,
-                )?;
+                // Spawn the pager after building the list. (In an upcoming
+                // change we're going to add a progress bar to the list display
+                // -- we want to ensure the pager doesn't collide with the
+                // progress bar.)
+                let mut paged_output = if should_page {
+                    PagedOutput::request_pager(
+                        &pager_setting,
+                        paginate,
+                        &resolved_user_config.ui.streampager,
+                    )
+                } else {
+                    PagedOutput::terminal()
+                };
+                let output_format = message_format
+                    .to_output_format(self.base.output.verbose, paged_output.is_interactive());
+                test_list.write(output_format, &mut paged_output, should_colorize)?;
+                paged_output
+                    .write_str_flush()
+                    .map_err(WriteTestListError::Io)?;
+                paged_output.finalize();
             }
         }
-
-        paged_output
-            .write_str_flush()
-            .map_err(WriteTestListError::Io)?;
-        paged_output.finalize();
 
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
