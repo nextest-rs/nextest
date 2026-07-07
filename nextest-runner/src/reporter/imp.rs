@@ -8,11 +8,12 @@
 use super::{
     DisplayConfig, DisplayerKind, FinalStatusLevel, MaxProgressRunning, StatusLevel,
     TestOutputDisplay,
-    displayer::{DisplayReporter, DisplayReporterBuilder, ShowTerminalProgress},
+    displayer::{DisplayReporter, DisplayReporterBuilder},
 };
 use crate::{
     config::core::EvaluatableProfile,
     errors::WriteEventError,
+    helpers::progress::ShowTerminalProgress,
     list::TestList,
     record::{ShortestRunIdPrefix, StoreSizes},
     redact::Redactor,

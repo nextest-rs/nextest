@@ -16,6 +16,7 @@ exclude.workspace = true
 
 [dependencies]
 aho-corasick.workspace = true
+anstyle-progress.workspace = true
 async-scoped.workspace = true
 atomicwrites.workspace = true
 bstr.workspace = true

@@ -5,7 +5,7 @@
 
 use crate::{
     errors::{UpdateError, UpdateVersionParseError},
-    helpers::ThemeCharacters,
+    helpers::{ThemeCharacters, progress::progress_bar_style},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -454,22 +454,17 @@ impl MuktiUpdateContext<'_> {
         let progress_bar = match content_length {
             Some(size) => {
                 let pb = ProgressBar::new(size);
-                pb.set_style(
-                    ProgressStyle::default_bar()
-                        .template(
-                            "  {prefix:>10} [{elapsed_precise:>9}] {wide_bar} \
-                             {bytes:>9}/{total_bytes:>9}",
-                        )
-                        .expect("valid progress bar template")
-                        .progress_chars(styles.theme_characters.progress_chars()),
-                );
+                pb.set_style(progress_bar_style(
+                    styles.theme_characters.progress_chars(),
+                    "{bytes:>9}/{total_bytes:>9}",
+                ));
                 pb
             }
             None => {
                 let pb = ProgressBar::new_spinner();
                 pb.set_style(
                     ProgressStyle::default_spinner()
-                        .template("  {prefix:>10} [{elapsed_precise:>9}] {bytes}")
+                        .template("{prefix:>12} [{elapsed_precise:>9}] {bytes}")
                         .expect("valid progress spinner template"),
                 );
                 pb

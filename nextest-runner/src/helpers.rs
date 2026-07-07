@@ -3,6 +3,8 @@
 
 //! General support code for nextest-runner.
 
+pub(crate) mod progress;
+
 use crate::{
     config::scripts::ScriptId,
     list::{OwnedTestInstanceId, Styles, TestInstanceId},
@@ -14,6 +16,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use console::AnsiCodeIterator;
 use nextest_metadata::TestCaseName;
 use owo_colors::{OwoColorize, Style};
+pub use progress::ShowTerminalProgress;
 use quick_junit::ReportUuid;
 use std::{fmt, io, ops::ControlFlow, path::PathBuf, process::ExitStatus, time::Duration};
 use swrite::{SWrite, swrite};

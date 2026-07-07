@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    cargo_config::{CargoConfigs, DiscoveredConfig},
-    helpers::{DisplayTestInstance, plural},
+    helpers::{
+        DisplayTestInstance, plural,
+        progress::{PROGRESS_REFRESH_RATE_HZ, progress_bar_style, term_progress_percent},
+    },
     list::TestInstanceId,
     reporter::{
         displayer::formatters::DisplayBracketedHhMmSs,
@@ -12,7 +14,8 @@ use crate::{
     },
     run_mode::NextestRunMode,
 };
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use anstyle_progress::TermProgress;
+use indicatif::{ProgressBar, ProgressDrawTarget};
 use nextest_metadata::{RustBinaryId, TestCaseName};
 use owo_colors::OwoColorize;
 use std::{
@@ -22,20 +25,6 @@ use std::{
     time::{Duration, Instant},
 };
 use swrite::{SWrite, swrite};
-use tracing::debug;
-
-/// The refresh rate for the progress bar, set to a minimal value.
-///
-/// For progress, during each tick, two things happen:
-///
-/// - We update the message, calling self.bar.set_message.
-/// - We print any buffered output.
-///
-/// We want both of these updates to be combined into one terminal flush, so we
-/// set *this* to a minimal value (so self.bar.set_message doesn't do a redraw),
-/// and rely on ProgressBar::print_and_flush_buffer to always flush the
-/// terminal.
-const PROGRESS_REFRESH_RATE_HZ: u8 = 1;
 
 /// The maximum number of running tests to display with
 /// `--show-progress=running` or `only`.
@@ -235,20 +224,8 @@ impl ProgressBarState {
     ) -> Self {
         let bar = ProgressBar::new(run_count as u64);
         let run_count_width = format!("{run_count}").len();
-        // Create the template using the width as input. This is a
-        // little confusing -- {{foo}} is what's passed into the
-        // ProgressBar, while {bar} is inserted by the format!()
-        // statement.
-        let template = format!(
-            "{{prefix:>12}} [{{elapsed_precise:>9}}] {{wide_bar}} \
-            {{pos:>{run_count_width}}}/{{len:{run_count_width}}}: {{msg}}"
-        );
-        bar.set_style(
-            ProgressStyle::default_bar()
-                .progress_chars(progress_chars)
-                .template(&template)
-                .expect("template is known to be valid"),
-        );
+        let suffix = format!("{{pos:>{run_count_width}}}/{{len:{run_count_width}}}: {{msg}}");
+        bar.set_style(progress_bar_style(progress_chars, &suffix));
 
         let running_tests =
             (!matches!(max_progress_running, MaxProgressRunning::Count(0))).then(Vec::new);
@@ -549,212 +526,58 @@ impl ProgressBarState {
     }
 }
 
-/// Whether to show OSC 9;4 terminal progress.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ShowTerminalProgress {
-    /// Show terminal progress.
-    Yes,
-
-    /// Do not show terminal progress.
-    No,
-}
-
-impl ShowTerminalProgress {
-    const ENV: &str = "CARGO_TERM_PROGRESS_TERM_INTEGRATION";
-
-    /// Determines whether to show terminal progress based on Cargo configs and
-    /// whether the output is a terminal.
-    pub fn from_cargo_configs(configs: &CargoConfigs, is_terminal: bool) -> Self {
-        // See whether terminal integration is enabled in Cargo.
-        for config in configs.discovered_configs() {
-            match config {
-                DiscoveredConfig::CliOption { config, source } => {
-                    if let Some(v) = config.term.progress.term_integration {
-                        if v {
-                            debug!("enabling terminal progress reporting based on {source:?}");
-                            return Self::Yes;
-                        } else {
-                            debug!("disabling terminal progress reporting based on {source:?}");
-                            return Self::No;
-                        }
-                    }
-                }
-                DiscoveredConfig::Env => {
-                    if let Some(v) = env::var_os(Self::ENV) {
-                        if v == "true" {
-                            debug!(
-                                "enabling terminal progress reporting based on \
-                                 CARGO_TERM_PROGRESS_TERM_INTEGRATION environment variable"
-                            );
-                            return Self::Yes;
-                        } else if v == "false" {
-                            debug!(
-                                "disabling terminal progress reporting based on \
-                                 CARGO_TERM_PROGRESS_TERM_INTEGRATION environment variable"
-                            );
-                            return Self::No;
-                        } else {
-                            debug!(
-                                "invalid value for CARGO_TERM_PROGRESS_TERM_INTEGRATION \
-                                 environment variable: {v:?}, ignoring"
-                            );
-                        }
-                    }
-                }
-                DiscoveredConfig::File { config, source } => {
-                    if let Some(v) = config.term.progress.term_integration {
-                        if v {
-                            debug!("enabling terminal progress reporting based on {source:?}");
-                            return Self::Yes;
-                        } else {
-                            debug!("disabling terminal progress reporting based on {source:?}");
-                            return Self::No;
-                        }
-                    }
-                }
+pub(super) fn terminal_progress_value(event: &TestEvent<'_>) -> TermProgress {
+    match &event.kind {
+        TestEventKind::RunStarted { .. }
+        | TestEventKind::StressSubRunStarted { .. }
+        | TestEventKind::StressSubRunFinished { .. }
+        | TestEventKind::SetupScriptStarted { .. }
+        | TestEventKind::SetupScriptSlow { .. }
+        | TestEventKind::SetupScriptFinished { .. } => TermProgress::none(),
+        TestEventKind::TestStarted { current_stats, .. }
+        | TestEventKind::TestFinished { current_stats, .. } => {
+            if current_stats.has_failures() || current_stats.cancel_reason.is_some() {
+                term_progress_errored(current_stats)
+            } else {
+                term_progress_running(current_stats)
             }
         }
-
-        if supports_osc_9_4(is_terminal) {
-            Self::Yes
-        } else {
-            Self::No
+        TestEventKind::TestSlow { .. }
+        | TestEventKind::TestAttemptFailedWillRetry { .. }
+        | TestEventKind::TestRetryStarted { .. }
+        | TestEventKind::TestSkipped { .. }
+        | TestEventKind::InfoStarted { .. }
+        | TestEventKind::InfoResponse { .. }
+        | TestEventKind::InfoFinished { .. }
+        | TestEventKind::InputEnter { .. } => TermProgress::none(),
+        TestEventKind::RunBeginCancel { current_stats, .. }
+        | TestEventKind::RunBeginKill { current_stats, .. } => term_progress_errored(current_stats),
+        TestEventKind::RunPaused { .. }
+        | TestEventKind::RunContinued { .. }
+        | TestEventKind::RunFinished { .. } => {
+            // Reset the terminal state to nothing, since nextest is giving up
+            // control of the terminal at this point. (We don't use the paused
+            // terminal state here because the user might run other programs
+            // with their own progress bars while nextest is paused.)
+            TermProgress::remove()
         }
     }
 }
 
-/// OSC 9 terminal progress reporting.
-#[derive(Default)]
-pub(super) struct TerminalProgress {
-    last_value: TerminalProgressValue,
+fn term_progress_running(current_stats: &RunStats) -> TermProgress {
+    let percent = term_progress_percent(
+        current_stats.finished_count,
+        current_stats.initial_run_count,
+    );
+    TermProgress::start().percent(percent)
 }
 
-impl TerminalProgress {
-    pub(super) fn new(show: ShowTerminalProgress) -> Option<Self> {
-        match show {
-            ShowTerminalProgress::Yes => Some(Self::default()),
-            ShowTerminalProgress::No => None,
-        }
-    }
-
-    pub(super) fn update_progress(&mut self, event: &TestEvent<'_>) {
-        let value = match &event.kind {
-            TestEventKind::RunStarted { .. }
-            | TestEventKind::StressSubRunStarted { .. }
-            | TestEventKind::StressSubRunFinished { .. }
-            | TestEventKind::SetupScriptStarted { .. }
-            | TestEventKind::SetupScriptSlow { .. }
-            | TestEventKind::SetupScriptFinished { .. } => TerminalProgressValue::None,
-            TestEventKind::TestStarted { current_stats, .. }
-            | TestEventKind::TestFinished { current_stats, .. } => {
-                let percentage = (current_stats.finished_count as f64
-                    / current_stats.initial_run_count as f64)
-                    * 100.0;
-                if current_stats.has_failures() || current_stats.cancel_reason.is_some() {
-                    TerminalProgressValue::Error(percentage)
-                } else {
-                    TerminalProgressValue::Value(percentage)
-                }
-            }
-            TestEventKind::TestSlow { .. }
-            | TestEventKind::TestAttemptFailedWillRetry { .. }
-            | TestEventKind::TestRetryStarted { .. }
-            | TestEventKind::TestSkipped { .. }
-            | TestEventKind::InfoStarted { .. }
-            | TestEventKind::InfoResponse { .. }
-            | TestEventKind::InfoFinished { .. }
-            | TestEventKind::InputEnter { .. } => TerminalProgressValue::None,
-            TestEventKind::RunBeginCancel { current_stats, .. }
-            | TestEventKind::RunBeginKill { current_stats, .. } => {
-                // In this case, always indicate an error.
-                let percentage = (current_stats.finished_count as f64
-                    / current_stats.initial_run_count as f64)
-                    * 100.0;
-                TerminalProgressValue::Error(percentage)
-            }
-            TestEventKind::RunPaused { .. }
-            | TestEventKind::RunContinued { .. }
-            | TestEventKind::RunFinished { .. } => {
-                // Reset the terminal state to nothing, since nextest is giving
-                // up control of the terminal at this point.
-                TerminalProgressValue::Remove
-            }
-        };
-
-        self.last_value = value;
-    }
-
-    pub(super) fn last_value(&self) -> &TerminalProgressValue {
-        &self.last_value
-    }
-}
-
-/// Determines whether the terminal supports ANSI OSC 9;4.
-fn supports_osc_9_4(is_terminal: bool) -> bool {
-    if !is_terminal {
-        debug!(
-            "autodetect terminal progress reporting: disabling since \
-             passed-in stream (usually stderr) is not a terminal"
-        );
-        return false;
-    }
-    if std::env::var_os("WT_SESSION").is_some() {
-        debug!("autodetect terminal progress reporting: enabling since WT_SESSION is set");
-        return true;
-    };
-    if std::env::var_os("ConEmuANSI").is_some_and(|term| term == "ON") {
-        debug!("autodetect terminal progress reporting: enabling since ConEmuANSI is ON");
-        return true;
-    }
-    if let Ok(term) = std::env::var("TERM_PROGRAM")
-        && (term == "WezTerm" || term == "ghostty" || term == "iTerm.app")
-    {
-        debug!("autodetect terminal progress reporting: enabling since TERM_PROGRAM is {term}");
-        return true;
-    }
-
-    false
-}
-
-/// A progress status value printable as an ANSI OSC 9;4 escape code.
-///
-/// Adapted from Cargo 1.87.
-#[derive(PartialEq, Debug, Default)]
-pub(super) enum TerminalProgressValue {
-    /// No output.
-    #[default]
-    None,
-    /// Remove progress.
-    Remove,
-    /// Progress value (0-100).
-    Value(f64),
-    /// Indeterminate state (no bar, just animation)
-    ///
-    /// We don't use this yet, but might in the future.
-    #[expect(dead_code)]
-    Indeterminate,
-    /// Progress value in an error state (0-100).
-    Error(f64),
-}
-
-impl fmt::Display for TerminalProgressValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // From https://conemu.github.io/en/AnsiEscapeCodes.html#ConEmu_specific_OSC
-        // ESC ] 9 ; 4 ; st ; pr ST
-        // When st is 0: remove progress.
-        // When st is 1: set progress value to pr (number, 0-100).
-        // When st is 2: set error state in taskbar, pr is optional.
-        // When st is 3: set indeterminate state, pr is ignored.
-        // When st is 4: set paused state, pr is optional.
-        let (state, progress) = match self {
-            Self::None => return Ok(()), // No output
-            Self::Remove => (0, 0.0),
-            Self::Value(v) => (1, *v),
-            Self::Indeterminate => (3, 0.0),
-            Self::Error(v) => (2, *v),
-        };
-        write!(f, "\x1b]9;4;{state};{progress:.0}\x1b\\")
-    }
+fn term_progress_errored(current_stats: &RunStats) -> TermProgress {
+    let percent = term_progress_percent(
+        current_stats.finished_count,
+        current_stats.initial_run_count,
+    );
+    TermProgress::error().percent(percent)
 }
 
 /// Returns a summary of current progress.
@@ -937,6 +760,93 @@ mod tests {
     };
     use bytes::Bytes;
     use chrono::Local;
+
+    #[test]
+    fn terminal_progress_value_escape_codes() {
+        let binary_id = RustBinaryId::new("test-binary");
+        let test_name = TestCaseName::new("test_name");
+
+        let normal = TestEvent {
+            timestamp: Local::now().fixed_offset(),
+            elapsed: Duration::ZERO,
+            kind: TestEventKind::TestStarted {
+                stress_index: None,
+                test_instance: TestInstanceId {
+                    binary_id: &binary_id,
+                    test_name: &test_name,
+                },
+                slot_assignment: global_slot_assignment(0),
+                current_stats: RunStats {
+                    initial_run_count: 10,
+                    finished_count: 3,
+                    ..RunStats::default()
+                },
+                running: 1,
+                command_line: vec![],
+            },
+        };
+        assert_eq!(
+            terminal_progress_value(&normal).to_string(),
+            "\x1b]9;4;1;30\x1b\\"
+        );
+
+        let failing = TestEvent {
+            timestamp: Local::now().fixed_offset(),
+            elapsed: Duration::ZERO,
+            kind: TestEventKind::TestStarted {
+                stress_index: None,
+                test_instance: TestInstanceId {
+                    binary_id: &binary_id,
+                    test_name: &test_name,
+                },
+                slot_assignment: global_slot_assignment(0),
+                current_stats: RunStats {
+                    initial_run_count: 10,
+                    finished_count: 3,
+                    failed: 1,
+                    ..RunStats::default()
+                },
+                running: 1,
+                command_line: vec![],
+            },
+        };
+        assert_eq!(
+            terminal_progress_value(&failing).to_string(),
+            "\x1b]9;4;2;30\x1b\\"
+        );
+
+        let cancelling = TestEvent {
+            timestamp: Local::now().fixed_offset(),
+            elapsed: Duration::ZERO,
+            kind: TestEventKind::RunBeginCancel {
+                setup_scripts_running: 0,
+                current_stats: RunStats {
+                    initial_run_count: 4,
+                    finished_count: 1,
+                    cancel_reason: Some(CancelReason::Signal),
+                    ..RunStats::default()
+                },
+                running: 3,
+            },
+        };
+        assert_eq!(
+            terminal_progress_value(&cancelling).to_string(),
+            "\x1b]9;4;2;25\x1b\\"
+        );
+
+        let paused = TestEvent {
+            timestamp: Local::now().fixed_offset(),
+            elapsed: Duration::ZERO,
+            kind: TestEventKind::RunPaused {
+                setup_scripts_running: 0,
+                running: 2,
+            },
+        };
+        assert_eq!(
+            terminal_progress_value(&paused).to_string(),
+            "\x1b]9;4;0;\x1b\\"
+        );
+    }
 
     #[test]
     fn test_progress_bar_prefix() {

@@ -598,6 +598,7 @@ fn read_output_file(
 use crate::{
     config::overrides::CompiledDefaultFilter,
     errors::WriteEventError,
+    helpers::progress::ShowTerminalProgress,
     record::{
         run_id_index::{RunIdIndex, ShortestRunIdPrefix},
         store::{RecordedRunInfo, RecordedRunStatus},
@@ -605,8 +606,8 @@ use crate::{
     redact::Redactor,
     reporter::{
         DisplayConfig, DisplayReporter, DisplayReporterBuilder, DisplayerKind, FinalStatusLevel,
-        MaxProgressRunning, OutputLoadDecider, ReporterOutput, ShowProgress, ShowTerminalProgress,
-        StatusLevel, TestOutputDisplay,
+        MaxProgressRunning, OutputLoadDecider, ReporterOutput, ShowProgress, StatusLevel,
+        TestOutputDisplay,
     },
 };
 use chrono::{DateTime, FixedOffset};

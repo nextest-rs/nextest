@@ -26,7 +26,7 @@ use nextest_runner::{
         core::ConfigExperimental,
         elements::{MaxFail, RetryPolicy, TestThreads},
     },
-    helpers::{force_or_new_run_id, plural},
+    helpers::{ShowTerminalProgress, force_or_new_run_id, plural},
     input::InputHandlerKind,
     list::{BinaryList, TestExecuteContext, TestList},
     record::{
@@ -36,7 +36,7 @@ use nextest_runner::{
     },
     redact::Redactor,
     reporter::{
-        MaxProgressRunning, ReporterBuilder, ShowProgress, ShowTerminalProgress, TestOutputDisplay,
+        MaxProgressRunning, ReporterBuilder, ShowProgress, TestOutputDisplay,
         events::{FinalRunStats, RunStats},
         structured,
     },
