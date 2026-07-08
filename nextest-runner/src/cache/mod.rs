@@ -22,8 +22,10 @@
 
 mod backend;
 mod fs_backend;
+mod handle;
 mod imp;
 mod key;
+mod policy;
 mod result;
 #[cfg(test)]
 mod tests;
@@ -31,7 +33,9 @@ mod writer;
 
 pub use backend::{CacheBackend, CacheError, CacheWrite};
 pub use fs_backend::FsBackend;
+pub use handle::CacheHandle;
 pub use imp::{BinaryCacheInfo, CacheBinaryInput, ComputedCacheInfo, default_cache_dir};
 pub use key::{CacheKey, ContentHash, hash_file};
+pub use policy::{CachePolicy, GlobalContext, TestCacheDecision, TestExecuteResult};
 pub use result::{CacheEntry, CacheInfo, PruneStats};
 pub use writer::CacheWriter;

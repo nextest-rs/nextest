@@ -22,7 +22,9 @@ use chrono::Utc;
 use clap::{Args, builder::BoolishValueParser};
 use nextest_filtering::{FiltersetKind, ParseContext};
 use nextest_runner::{
-    cache::{CacheBackend, CacheWriter, FsBackend, default_cache_dir},
+    cache::{
+        self, CacheBackend, CacheHandle, CachePolicy, CacheWriter, GlobalContext, default_cache_dir,
+    },
     cargo_config::EnvironmentMap,
     config::{
         core::ConfigExperimental,
@@ -865,7 +867,7 @@ impl App {
         binary_list: Arc<BinaryList>,
         test_filter: &TestFilter,
         profile: &nextest_runner::config::core::EvaluatableProfile<'_>,
-        cache_backend: Option<&dyn CacheBackend>,
+        cache: CacheHandle,
     ) -> Result<TestList<'_>> {
         let env = EnvironmentMap::new(&self.base.cargo_configs);
         self.build_filter.compute_test_list(
@@ -877,7 +879,7 @@ impl App {
             env,
             profile,
             &self.base.reuse_build,
-            cache_backend,
+            cache,
         )
     }
 
@@ -1005,22 +1007,16 @@ impl App {
         // Resolve the cache backend, if enabled (gated behind an experimental
         // env var). An unresolvable cache dir disables caching rather than
         // erroring, since the cache must never fail a run. Also disabled by
-        // `--no-cache`/`NEXTEST_NO_CACHE`, for reruns, and for stress runs:
+        // `--no-cache`/`NEXTEST_NO_CACHE`.
         //
-        // * For reruns: a test a rerun wants to run is one that did not pass
-        //   last time, so a stale cached pass could only wrongly skip it — and
-        //   reruns already skip prior passes themselves.
-        // * For stress runs: the point is to run each test repeatedly, so
-        //   serving a cached pass (skipping execution entirely) would defeat the
-        //   purpose. Stress results are never written to the cache either (see
-        //   `is_cacheable`).
-        let cache_enabled =
-            std::env::var("NEXTEST_EXPERIMENTAL_RESULT_CACHE").as_deref() == Ok("1");
-        let is_rerun = rerun_state.is_some();
-        let is_stress = runner_opts.stress.condition.is_some();
-        let cache_backend = if cache_enabled && !runner_opts.no_cache && !is_rerun && !is_stress {
+        // The backend, when present, is always constructed so it can self-prune;
+        // whether this run consults or records is decided by the policy below.
+        let cache_enabled = std::env::var("NEXTEST_EXPERIMENTAL_RESULT_CACHE").as_deref()
+            == Ok("1")
+            && !runner_opts.no_cache;
+        let cache_backend = if cache_enabled {
             match default_cache_dir(&self.base.workspace_root) {
-                Some(dir) => Some(Arc::new(FsBackend::new(dir))),
+                Some(dir) => Some(Arc::new(cache::FsBackend::new(dir))),
                 None => {
                     warn!(
                         "result cache enabled but no cache directory could be determined; disabling"
@@ -1029,14 +1025,22 @@ impl App {
                 }
             }
         } else {
-            if cache_enabled && is_rerun {
-                debug!("result cache disabled for this run because it is a rerun");
-            }
-            if cache_enabled && is_stress {
-                debug!("result cache disabled for this run because it is a stress run");
-            }
             None
         };
+        // Keep the concrete `Arc<FsBackend>` for the post-run prune (an inherent,
+        // filesystem-specific operation), and hand the run a `CacheHandle` over
+        // the `dyn` view for consulting and recording.
+        let cache_policy = CachePolicy::compute(GlobalContext {
+            is_stress: runner_opts.stress.condition.is_some(),
+            is_with_debugger: runner_opts.interceptor.debugger.is_some(),
+            is_with_tracer: runner_opts.interceptor.tracer.is_some(),
+            is_bench: false,
+            is_rerun: rerun_state.is_some(),
+        });
+        let cache = CacheHandle::new(
+            cache_backend.clone().map(|c| c as Arc<dyn CacheBackend>),
+            cache_policy,
+        );
 
         // Start running Cargo commands at this point, once all initial
         // validation is complete.
@@ -1066,13 +1070,8 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(
-            &ctx,
-            binary_list,
-            &test_filter,
-            &profile,
-            cache_backend.as_deref().map(|b| b as &dyn CacheBackend),
-        )?;
+        let test_list =
+            self.build_test_list(&ctx, binary_list, &test_filter, &profile, cache.clone())?;
 
         // Validate interceptor mode requirements.
         if runner_opts.interceptor.is_active() {
@@ -1233,10 +1232,10 @@ impl App {
             reporter.set_run_id_unique_prefix(prefix);
         }
 
-        // If caching is enabled, observe events to store passing results.
-        let cache_writer = cache_backend
-            .clone()
-            .map(|backend| CacheWriter::new(backend, &test_list));
+        // Whenever a cache backend exists, observe events to write updates:
+        // stores for recorded passes and touches for consulted entries. The
+        // per-test record decision is made inside the writer from the policy.
+        let cache_writer = CacheWriter::new(cache, &test_list);
 
         configure_handle_inheritance(no_capture)?;
         let run_stats = runner.try_execute(|event| {
@@ -1246,7 +1245,7 @@ impl App {
             reporter.report_event(event)
         })?;
         if let Some(writer) = cache_writer {
-            writer.finish()
+            writer.finish();
         }
         let reporter_stats = reporter.finish();
 
@@ -1365,9 +1364,13 @@ impl App {
 
         // Benchmark results are not cached: their value is the measured time,
         // not a pass/fail outcome.
-        let cache_backend = None;
-        let test_list =
-            self.build_test_list(&ctx, binary_list, &test_filter, &profile, cache_backend)?;
+        let test_list = self.build_test_list(
+            &ctx,
+            binary_list,
+            &test_filter,
+            &profile,
+            CacheHandle::disabled(),
+        )?;
 
         // Validate interceptor mode requirements.
         if runner_opts.interceptor.is_active() {

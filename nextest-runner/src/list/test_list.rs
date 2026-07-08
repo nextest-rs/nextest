@@ -3,7 +3,7 @@
 
 use super::{DisplayFilterMatcher, TestListDisplayFilter};
 use crate::{
-    cache::{CacheBackend, CacheBinaryInput, ComputedCacheInfo, ContentHash},
+    cache::{CacheBackend, CacheBinaryInput, CacheHandle, ComputedCacheInfo, ContentHash},
     cargo_config::EnvironmentMap,
     config::{
         core::EvaluatableProfile,
@@ -265,7 +265,7 @@ impl<'g> TestList<'g> {
         profile: &impl ListProfile,
         bound: FilterBound,
         list_threads: usize,
-        cache_backend: Option<&dyn CacheBackend>,
+        cache: CacheHandle,
     ) -> Result<Self, CreateTestListError>
     where
         I: IntoIterator<Item = RustTestArtifact<'g>>,
@@ -344,8 +344,8 @@ impl<'g> TestList<'g> {
         // keep those hashes on the `TestList` for the post-run `CacheWriter` to
         // reuse instead of re-hashing every multi-gigabyte binary.
         let mut binary_hashes = HashMap::new();
-        let cache_filter = cache_backend.map(|backend| {
-            let cache_info = Self::collect_cache_info(backend, &parsed_binaries);
+        let cache_filter = cache.consult().map(|backend| {
+            let cache_info = Self::collect_cache_info(&*backend, &parsed_binaries);
             // Split the merged per-binary info into the hash map kept on the list
             // (for the post-run writer) and the passing-name map handed to the
             // filter.

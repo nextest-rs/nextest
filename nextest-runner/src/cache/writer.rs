@@ -6,11 +6,17 @@
 use crate::{
     cache::{
         backend::{CacheBackend, CacheWrite},
+        handle::CacheHandle,
         key::{CacheKey, ContentHash},
+        policy::{CachePolicy, TestCacheDecision, TestExecuteResult},
     },
+    config::elements::{LeakTimeoutResult, SlowTimeoutResult},
     helpers::panic_payload_to_string,
     list::{TestInstanceId, TestList},
-    reporter::events::{ExecutionResultDescription, ReporterEvent, TestEventKind},
+    output_spec::OutputSpec,
+    reporter::events::{
+        ExecutionResultDescription, ExecutionStatuses, ReporterEvent, TestEventKind,
+    },
 };
 use nextest_metadata::RustBinaryId;
 use std::{
@@ -20,29 +26,45 @@ use std::{
 };
 use tracing::warn;
 
-/// Observes test events and stores passing results in the cache.
+/// Observes test events and writes cache updates: [`Store`](CacheWrite::Store)s
+/// for clean passes this run recorded, and [`Touch`](CacheWrite::Touch)es for
+/// entries it consulted.
+///
+/// The writer is created whenever a backend exists, regardless of policy: a run
+/// that consults but does not record still touches consulted entries so eviction
+/// treats them as used. Whether a finished test is stored is decided per-test by
+/// the [`CachePolicy`] via [`TestCacheDecision`].
 pub struct CacheWriter<'a> {
     sender: mpsc::Sender<CacheWrite>,
     handle: JoinHandle<()>,
+    policy: CachePolicy,
     binary_hashes: &'a HashMap<RustBinaryId, ContentHash>,
 }
 
 impl<'a> CacheWriter<'a> {
-    /// Creates a writer that stores passing results for the given test list.
+    /// Creates a writer for `cache`, or `None` if the cache is disabled (no
+    /// backend).
+    ///
+    /// A writer is created whenever a backend exists, regardless of policy: a run
+    /// that only consults still touches consulted entries. The handle's
+    /// [`CachePolicy`] then decides, per finished test, whether to record it.
     ///
     /// Reuses the hashes computed while consulting the cache; every binary a test
     /// can run in was hashed then, so no binary is ever re-hashed here.
-    pub fn new(backend: Arc<dyn CacheBackend>, test_list: &'a TestList<'_>) -> Self {
+    pub fn new(cache: CacheHandle, test_list: &'a TestList<'_>) -> Option<Self> {
+        let policy = cache.policy();
+        let backend = cache.backend()?;
         let (sender, receiver) = mpsc::channel();
         let handle = std::thread::spawn(move || actor(backend, receiver));
-        Self {
+        Some(Self {
             sender,
             handle,
+            policy,
             binary_hashes: test_list.binary_hashes(),
-        }
+        })
     }
 
-    /// Inspects an event and, if it reports a clean pass, stores it in the cache.
+    /// Inspects an event and writes the corresponding cache update, if any.
     ///
     /// Storage errors only warn — a failing cache never fails a passing run — but
     /// are surfaced rather than dropped, since one likely indicates a bug while
@@ -54,16 +76,13 @@ impl<'a> CacheWriter<'a> {
 
         match &event.kind {
             TestEventKind::TestFinished {
-                stress_index,
                 test_instance,
                 run_statuses,
                 ..
             } => {
-                if is_cacheable(
-                    stress_index.is_some(),
-                    run_statuses.len(),
-                    &run_statuses.last_status().result,
-                ) && let Some(key) = self.key_from_test_instance(test_instance)
+                let result = execute_result(run_statuses);
+                if TestCacheDecision::compute(self.policy, result) == TestCacheDecision::RecordPass
+                    && let Some(key) = self.key_from_test_instance(test_instance)
                 {
                     // Ignore send errors.
                     _ = self.sender.send(CacheWrite::Store { key });
@@ -72,7 +91,7 @@ impl<'a> CacheWriter<'a> {
             TestEventKind::TestCached { test_instance, .. } => {
                 let key = self
                     .key_from_test_instance(test_instance)
-                    .expect("test must be in cache");
+                    .expect("consulted test's binary was hashed, so its key is present");
                 // Ignore send errors.
                 _ = self.sender.send(CacheWrite::Touch { key });
             }
@@ -112,24 +131,38 @@ fn actor(backend: Arc<dyn CacheBackend>, receiver: mpsc::Receiver<CacheWrite>) {
     }
 }
 
-/// Returns true if a finished test's result may be cached: a clean
-/// [`Pass`](ExecutionResultDescription::Pass), run exactly once (not retried),
-/// outside a stress run.
-fn is_cacheable(
-    under_stress: bool,
-    attempt_count: usize,
-    result: &ExecutionResultDescription,
-) -> bool {
-    !under_stress && attempt_count == 1 && matches!(result, ExecutionResultDescription::Pass)
+/// Classifies a finished test's attempts into the [`TestExecuteResult`] the
+/// caching policy reasons about.
+fn execute_result<S: OutputSpec>(run_statuses: &ExecutionStatuses<S>) -> TestExecuteResult {
+    classify_result(&run_statuses.last_status().result, run_statuses.len() > 1)
+}
+
+/// Classifies a test's final result, given whether it was retried.
+///
+/// Only a single clean [`Pass`](ExecutionResultDescription::Pass) is a
+/// [`CleanPass`](TestExecuteResult::CleanPass). A retried (flaky) pass, a leaky
+/// pass, or a tolerated timeout is a [`TaintedPass`](TestExecuteResult::TaintedPass):
+/// a success for reporting, but not a deterministic function of the binary, so
+/// caching it would suppress re-detection. Everything else is a
+/// [`Fail`](TestExecuteResult::Fail).
+fn classify_result(result: &ExecutionResultDescription, retried: bool) -> TestExecuteResult {
+    match result {
+        ExecutionResultDescription::Pass if !retried => TestExecuteResult::CleanPass,
+        ExecutionResultDescription::Pass
+        | ExecutionResultDescription::Leak {
+            result: LeakTimeoutResult::Pass,
+        }
+        | ExecutionResultDescription::Timeout {
+            result: SlowTimeoutResult::Pass,
+        } => TestExecuteResult::TaintedPass,
+        _ => TestExecuteResult::Fail,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        config::elements::{LeakTimeoutResult, SlowTimeoutResult},
-        reporter::events::FailureDescription,
-    };
+    use crate::reporter::events::FailureDescription;
 
     fn fail() -> ExecutionResultDescription {
         ExecutionResultDescription::Fail {
@@ -139,49 +172,71 @@ mod tests {
     }
 
     #[test]
-    fn only_clean_single_pass_is_cacheable() {
-        // The one cacheable case: a clean, single-attempt, non-stress pass.
-        assert!(is_cacheable(false, 1, &ExecutionResultDescription::Pass));
+    fn clean_single_pass_is_clean() {
+        assert_eq!(
+            classify_result(&ExecutionResultDescription::Pass, false),
+            TestExecuteResult::CleanPass,
+        );
+    }
 
-        // Stress runs are never cached, even on a clean pass.
-        assert!(!is_cacheable(true, 1, &ExecutionResultDescription::Pass));
+    #[test]
+    fn retried_pass_is_tainted() {
+        // A flaky pass (passed only after a retry) is not a deterministic
+        // function of the binary, so it is tainted rather than clean.
+        assert_eq!(
+            classify_result(&ExecutionResultDescription::Pass, true),
+            TestExecuteResult::TaintedPass,
+        );
+    }
 
-        // Retried (flaky) passes are never cached.
-        assert!(!is_cacheable(false, 2, &ExecutionResultDescription::Pass));
-        assert!(!is_cacheable(false, 3, &ExecutionResultDescription::Pass));
+    #[test]
+    fn leaky_and_tolerated_timeout_passes_are_tainted() {
+        // Successes for reporting, but caching them would suppress leak and
+        // timeout re-detection on later runs.
+        assert_eq!(
+            classify_result(
+                &ExecutionResultDescription::Leak {
+                    result: LeakTimeoutResult::Pass,
+                },
+                false,
+            ),
+            TestExecuteResult::TaintedPass,
+        );
+        assert_eq!(
+            classify_result(
+                &ExecutionResultDescription::Timeout {
+                    result: SlowTimeoutResult::Pass,
+                },
+                false,
+            ),
+            TestExecuteResult::TaintedPass,
+        );
+    }
 
-        // A leaky pass is a success for reporting but is not cached: the leak
-        // must be re-detected on the next run.
-        assert!(!is_cacheable(
-            false,
-            1,
-            &ExecutionResultDescription::Leak {
-                result: LeakTimeoutResult::Pass,
-            },
-        ));
-
-        // A tolerated timeout (treated as a pass) is likewise not cached.
-        assert!(!is_cacheable(
-            false,
-            1,
-            &ExecutionResultDescription::Timeout {
-                result: SlowTimeoutResult::Pass,
-            },
-        ));
-
-        // Failures of every kind are not cached.
-        assert!(!is_cacheable(false, 1, &fail()));
-        assert!(!is_cacheable(
-            false,
-            1,
-            &ExecutionResultDescription::ExecFail
-        ));
-        assert!(!is_cacheable(
-            false,
-            1,
-            &ExecutionResultDescription::Leak {
-                result: LeakTimeoutResult::Fail,
-            },
-        ));
+    #[test]
+    fn failures_of_every_kind_are_fail() {
+        assert_eq!(classify_result(&fail(), false), TestExecuteResult::Fail);
+        assert_eq!(
+            classify_result(&ExecutionResultDescription::ExecFail, false),
+            TestExecuteResult::Fail,
+        );
+        assert_eq!(
+            classify_result(
+                &ExecutionResultDescription::Leak {
+                    result: LeakTimeoutResult::Fail,
+                },
+                false,
+            ),
+            TestExecuteResult::Fail,
+        );
+        assert_eq!(
+            classify_result(
+                &ExecutionResultDescription::Timeout {
+                    result: SlowTimeoutResult::Fail,
+                },
+                false,
+            ),
+            TestExecuteResult::Fail,
+        );
     }
 }
