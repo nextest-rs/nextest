@@ -1020,7 +1020,7 @@ impl App {
         let is_stress = runner_opts.stress.condition.is_some();
         let cache_backend = if cache_enabled && !runner_opts.no_cache && !is_rerun && !is_stress {
             match default_cache_dir(&self.base.workspace_root) {
-                Some(dir) => Some(FsBackend::new(dir)),
+                Some(dir) => Some(Arc::new(FsBackend::new(dir))),
                 None => {
                     warn!(
                         "result cache enabled but no cache directory could be determined; disabling"
@@ -1071,7 +1071,7 @@ impl App {
             binary_list,
             &test_filter,
             &profile,
-            cache_backend.as_ref().map(|b| b as &dyn CacheBackend),
+            cache_backend.as_deref().map(|b| b as &dyn CacheBackend),
         )?;
 
         // Validate interceptor mode requirements.
@@ -1235,7 +1235,7 @@ impl App {
 
         // If caching is enabled, observe events to store passing results.
         let cache_writer = cache_backend
-            .as_ref()
+            .clone()
             .map(|backend| CacheWriter::new(backend, &test_list));
 
         configure_handle_inheritance(no_capture)?;
@@ -1245,6 +1245,9 @@ impl App {
             }
             reporter.report_event(event)
         })?;
+        if let Some(writer) = cache_writer {
+            writer.finish()
+        }
         let reporter_stats = reporter.finish();
 
         // Self-prune the result cache so it never grows without bound. Binaries

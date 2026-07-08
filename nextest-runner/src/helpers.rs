@@ -18,7 +18,9 @@ use nextest_metadata::TestCaseName;
 use owo_colors::{OwoColorize, Style};
 pub use progress::ShowTerminalProgress;
 use quick_junit::ReportUuid;
-use std::{fmt, io, ops::ControlFlow, path::PathBuf, process::ExitStatus, time::Duration};
+use std::{
+    any::Any, fmt, io, ops::ControlFlow, path::PathBuf, process::ExitStatus, time::Duration,
+};
 use swrite::{SWrite, swrite};
 use tracing::warn;
 use unicode_width::UnicodeWidthChar;
@@ -995,6 +997,17 @@ pub(crate) fn statically_unreachable() -> ! {
         __nextest_external_symbol_that_does_not_exist();
     }
     unreachable!("linker symbol above cannot be resolved")
+}
+
+/// Extracts a string message from a panic payload.
+pub(crate) fn panic_payload_to_string(payload: Box<dyn Any + Send + 'static>) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        (*s).to_owned()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "(unknown panic payload)".to_owned()
+    }
 }
 
 #[cfg(test)]
