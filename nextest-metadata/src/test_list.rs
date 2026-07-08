@@ -943,6 +943,7 @@ pub enum FilterMatch {
     /// This test matches this filter.
     Matches {
         /// This test has a valid entry in the result cache.
+        #[serde(default)]
         cached: bool,
     },
 
