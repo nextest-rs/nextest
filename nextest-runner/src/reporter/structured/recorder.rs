@@ -22,14 +22,12 @@ use std::{
 /// channel. Events are converted to serializable form and written to the
 /// archive asynchronously.
 #[derive(Debug)]
-pub struct RecordReporter<'a> {
-    // Invariant: sender is always Some while the reporter is alive.
-    sender: Option<mpsc::SyncSender<RecordEvent>>,
+pub struct RecordReporter {
+    sender: mpsc::SyncSender<RecordEvent>,
     handle: JoinHandle<Result<StoreSizes, RecordReporterError>>,
-    _marker: std::marker::PhantomData<&'a ()>,
 }
 
-impl<'a> RecordReporter<'a> {
+impl RecordReporter {
     /// Creates a new `RecordReporter` with the given recorder.
     pub fn new(run_recorder: RunRecorder) -> Self {
         // Spawn a thread to do the writing. Use a bounded channel with backpressure.
@@ -44,11 +42,7 @@ impl<'a> RecordReporter<'a> {
             writer.finish()
         });
 
-        Self {
-            sender: Some(sender),
-            handle,
-            _marker: std::marker::PhantomData,
-        }
+        Self { sender, handle }
     }
 
     /// Writes metadata to the recorder.
@@ -67,11 +61,7 @@ impl<'a> RecordReporter<'a> {
         };
         // Ignore send errors because they indicate that the receiver has exited
         // (likely due to an error, which is dealt with in finish()).
-        _ = self
-            .sender
-            .as_ref()
-            .expect("sender is always Some")
-            .send(event);
+        _ = self.sender.send(event);
     }
 
     /// Writes a test event to the recorder.
@@ -86,11 +76,7 @@ impl<'a> RecordReporter<'a> {
         let event = RecordEvent::TestEvent(summary);
         // Ignore send errors because they indicate that the receiver has exited
         // (likely due to an error, which is dealt with in finish()).
-        _ = self
-            .sender
-            .as_ref()
-            .expect("sender is always Some")
-            .send(event);
+        _ = self.sender.send(event);
     }
 
     /// Finishes writing and waits for the recorder thread to exit.
@@ -99,10 +85,9 @@ impl<'a> RecordReporter<'a> {
     /// failed.
     ///
     /// This must be called before the reporter is dropped.
-    pub fn finish(mut self) -> Result<StoreSizes, RecordReporterError> {
+    pub fn finish(self) -> Result<StoreSizes, RecordReporterError> {
         // Drop the sender, which signals the receiver to exit.
-        let sender = self.sender.take();
-        std::mem::drop(sender);
+        std::mem::drop(self.sender);
 
         // Wait for the thread to finish writing and exit.
         match self.handle.join() {

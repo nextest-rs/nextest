@@ -23,7 +23,7 @@ pub struct StructuredReporter<'a> {
     /// Libtest-compatible output written to stdout.
     libtest: Option<LibtestReporter<'a>>,
     /// Recording reporter for writing to disk.
-    record: Option<RecordReporter<'a>>,
+    record: Option<RecordReporter>,
 }
 
 impl<'a> StructuredReporter<'a> {
@@ -39,7 +39,7 @@ impl<'a> StructuredReporter<'a> {
     }
 
     /// Sets the record reporter for the `StructuredReporter`.
-    pub fn set_record(&mut self, record: RecordReporter<'a>) -> &mut Self {
+    pub fn set_record(&mut self, record: RecordReporter) -> &mut Self {
         self.record = Some(record);
         self
     }
