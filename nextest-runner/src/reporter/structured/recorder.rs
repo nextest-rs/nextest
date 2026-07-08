@@ -22,14 +22,13 @@ use std::{
 /// channel. Events are converted to serializable form and written to the
 /// archive asynchronously.
 #[derive(Debug)]
-pub struct RecordReporter<'a> {
+pub struct RecordReporter {
     // Invariant: sender is always Some while the reporter is alive.
     sender: Option<mpsc::SyncSender<RecordEvent>>,
     handle: JoinHandle<Result<StoreSizes, RecordReporterError>>,
-    _marker: std::marker::PhantomData<&'a ()>,
 }
 
-impl<'a> RecordReporter<'a> {
+impl RecordReporter {
     /// Creates a new `RecordReporter` with the given recorder.
     pub fn new(run_recorder: RunRecorder) -> Self {
         // Spawn a thread to do the writing. Use a bounded channel with backpressure.
@@ -47,7 +46,6 @@ impl<'a> RecordReporter<'a> {
         Self {
             sender: Some(sender),
             handle,
-            _marker: std::marker::PhantomData,
         }
     }
 
