@@ -23,8 +23,7 @@ use std::{
 /// archive asynchronously.
 #[derive(Debug)]
 pub struct RecordReporter {
-    // Invariant: sender is always Some while the reporter is alive.
-    sender: Option<mpsc::SyncSender<RecordEvent>>,
+    sender: mpsc::SyncSender<RecordEvent>,
     handle: JoinHandle<Result<StoreSizes, RecordReporterError>>,
 }
 
@@ -43,10 +42,7 @@ impl RecordReporter {
             writer.finish()
         });
 
-        Self {
-            sender: Some(sender),
-            handle,
-        }
+        Self { sender, handle }
     }
 
     /// Writes metadata to the recorder.
@@ -65,11 +61,7 @@ impl RecordReporter {
         };
         // Ignore send errors because they indicate that the receiver has exited
         // (likely due to an error, which is dealt with in finish()).
-        _ = self
-            .sender
-            .as_ref()
-            .expect("sender is always Some")
-            .send(event);
+        _ = self.sender.send(event);
     }
 
     /// Writes a test event to the recorder.
@@ -84,11 +76,7 @@ impl RecordReporter {
         let event = RecordEvent::TestEvent(summary);
         // Ignore send errors because they indicate that the receiver has exited
         // (likely due to an error, which is dealt with in finish()).
-        _ = self
-            .sender
-            .as_ref()
-            .expect("sender is always Some")
-            .send(event);
+        _ = self.sender.send(event);
     }
 
     /// Finishes writing and waits for the recorder thread to exit.
@@ -97,10 +85,9 @@ impl RecordReporter {
     /// failed.
     ///
     /// This must be called before the reporter is dropped.
-    pub fn finish(mut self) -> Result<StoreSizes, RecordReporterError> {
+    pub fn finish(self) -> Result<StoreSizes, RecordReporterError> {
         // Drop the sender, which signals the receiver to exit.
-        let sender = self.sender.take();
-        std::mem::drop(sender);
+        std::mem::drop(self.sender);
 
         // Wait for the thread to finish writing and exit.
         match self.handle.join() {
