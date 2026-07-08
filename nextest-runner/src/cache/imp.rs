@@ -5,8 +5,8 @@
 
 use crate::{
     cache::{
-        backend::{CacheBackend, CacheWrite},
-        key::{CacheKey, ContentHash, hash_file},
+        backend::CacheBackend,
+        key::{ContentHash, hash_file},
     },
     record::encode_workspace_path,
 };
@@ -175,23 +175,6 @@ fn consult_binary(backend: &dyn CacheBackend, binary: &BinaryWork<'_>) -> Option
             );
         })
         .unwrap_or_default();
-
-    // Best-effort: refresh hit times for eviction. A failure never changes what
-    // is reported as cached, so it only warns.
-    if !passing.is_empty() {
-        let touches: Vec<CacheWrite> = passing
-            .iter()
-            .map(|name| CacheWrite::Touch {
-                key: CacheKey::new(binary_hash, name.clone()),
-            })
-            .collect();
-        if let Err(error) = backend.write(&touches) {
-            warn!(
-                "cache: failed to record access for {}: {error}",
-                binary.binary_id,
-            );
-        }
-    }
 
     Some(BinaryCacheInfo {
         binary_id: binary.binary_id.clone(),

@@ -9,7 +9,7 @@ use crate::{
         key::{CacheKey, ContentHash},
     },
     helpers::panic_payload_to_string,
-    list::TestList,
+    list::{TestInstanceId, TestList},
     reporter::events::{ExecutionResultDescription, ReporterEvent, TestEventKind},
 };
 use nextest_metadata::RustBinaryId;
@@ -51,31 +51,38 @@ impl<'a> CacheWriter<'a> {
         let ReporterEvent::Test(event) = event else {
             return;
         };
-        let TestEventKind::TestFinished {
-            stress_index,
-            test_instance,
-            run_statuses,
-            ..
-        } = &event.kind
-        else {
-            return;
-        };
 
-        if !is_cacheable(
-            stress_index.is_some(),
-            run_statuses.len(),
-            &run_statuses.last_status().result,
-        ) {
-            return;
+        match &event.kind {
+            TestEventKind::TestFinished {
+                stress_index,
+                test_instance,
+                run_statuses,
+                ..
+            } => {
+                if is_cacheable(
+                    stress_index.is_some(),
+                    run_statuses.len(),
+                    &run_statuses.last_status().result,
+                ) && let Some(key) = self.key_from_test_instance(test_instance)
+                {
+                    // Ignore send errors.
+                    _ = self.sender.send(CacheWrite::Store { key });
+                }
+            }
+            TestEventKind::TestCached { test_instance, .. } => {
+                let key = self
+                    .key_from_test_instance(test_instance)
+                    .expect("test must be in cache");
+                // Ignore send errors.
+                _ = self.sender.send(CacheWrite::Touch { key });
+            }
+            _ => {}
         }
+    }
 
-        let Some(binary_hash) = self.binary_hashes.get(test_instance.binary_id) else {
-            return;
-        };
-
-        let key = CacheKey::new(*binary_hash, test_instance.test_name.clone());
-        // Ignore send errors.
-        _ = self.sender.send(CacheWrite::Store { key });
+    fn key_from_test_instance(&self, test_instance: &TestInstanceId<'_>) -> Option<CacheKey> {
+        let binary_hash = self.binary_hashes.get(test_instance.binary_id)?;
+        Some(CacheKey::new(*binary_hash, test_instance.test_name.clone()))
     }
 
     /// Flush the buffered writes to the cache.
