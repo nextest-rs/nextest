@@ -4,7 +4,7 @@
 //! Tests for the cache module.
 
 use crate::cache::{
-    CacheBinaryInput, CacheEntry, CacheKey, ComputedCacheInfo, ContentHash,
+    CacheBinaryInput, CacheKey, CacheWrite, ComputedCacheInfo, ContentHash,
     backend::CacheBackend,
     fs_backend::FsBackend,
     imp::cache_dir_from_base,
@@ -36,12 +36,24 @@ fn at_secs(secs: i64) -> DateTime<Utc> {
     DateTime::from_timestamp(secs, 0).expect("timestamp is in range")
 }
 
-fn entry_at(secs: i64) -> CacheEntry {
-    let time = at_secs(secs);
-    CacheEntry {
-        created_at: time,
-        last_hit_at: time,
-    }
+/// Stores a clean pass for `key`, stamped at `secs` (both `created_at` and
+/// `last_hit_at`).
+fn store_at(backend: &FsBackend, key: CacheKey, secs: i64) {
+    backend
+        .write_at(&[CacheWrite::Store { key }], at_secs(secs))
+        .unwrap();
+}
+
+/// Refreshes `last_hit_at` for `test_names` under `binary_hash`, stamped at
+/// `secs`. Mirrors the pre-run consult's batch of touch writes.
+fn touch_at(backend: &FsBackend, binary_hash: ContentHash, test_names: &[&str], secs: i64) {
+    let writes: Vec<CacheWrite> = test_names
+        .iter()
+        .map(|name| CacheWrite::Touch {
+            key: key(binary_hash, name),
+        })
+        .collect();
+    backend.write_at(&writes, at_secs(secs)).unwrap();
 }
 
 #[test]
@@ -59,17 +71,17 @@ fn store_and_lookup_round_trips() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("cache"));
     let k = key(hash_bytes(b"bin"), "tests::bar");
-    let entry = entry_at(1000);
 
-    backend.store(&k, &entry).unwrap();
+    store_at(&backend, k.clone(), 1000);
 
     let cached = backend
         .lookup(&k)
         .unwrap()
         .expect("entry should be present");
-    assert_eq!(cached.created_at, entry.created_at);
+    // A store stamps both timestamps with the write's `now`.
+    assert_eq!(cached.created_at, at_secs(1000));
     // `lookup` is read-only: it returns the stored hit time unchanged.
-    assert_eq!(cached.last_hit_at, entry.last_hit_at);
+    assert_eq!(cached.last_hit_at, at_secs(1000));
 }
 
 #[test]
@@ -77,9 +89,7 @@ fn lookup_does_not_mutate_the_cache() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("cache"));
     let bin = hash_bytes(b"bin");
-    backend
-        .store(&key(bin, "tests::a"), &entry_at(1000))
-        .unwrap();
+    store_at(&backend, key(bin, "tests::a"), 1000);
 
     let manifest_path = dir
         .path()
@@ -101,8 +111,8 @@ fn passing_returns_only_cached_names() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("cache"));
     let bin = hash_bytes(b"bin");
-    backend.store(&key(bin, "tests::a"), &entry_at(1)).unwrap();
-    backend.store(&key(bin, "tests::c"), &entry_at(1)).unwrap();
+    store_at(&backend, key(bin, "tests::a"), 1);
+    store_at(&backend, key(bin, "tests::c"), 1);
 
     // Request a, b, and c; only a and c are cached.
     let passing = backend
@@ -122,10 +132,10 @@ fn passing_does_not_refresh_last_hit_at() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("cache"));
     let bin = hash_bytes(b"bin");
-    backend.store(&key(bin, "tests::a"), &entry_at(1)).unwrap();
+    store_at(&backend, key(bin, "tests::a"), 1);
 
     // A pure read must leave the stored hit time untouched: refreshing is the job
-    // of `record_access`, not `passing`.
+    // of a `Touch` write, not `passing`.
     backend.passing(bin, &names(&["tests::a"])).unwrap();
 
     let entry = backend
@@ -140,24 +150,29 @@ fn passing_does_not_refresh_last_hit_at() {
 }
 
 #[test]
-fn record_access_refreshes_last_hit_at() {
+fn touch_refreshes_last_hit_at() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("cache"));
     let bin = hash_bytes(b"bin");
     // Stored with an ancient hit time.
-    backend.store(&key(bin, "tests::a"), &entry_at(1)).unwrap();
+    store_at(&backend, key(bin, "tests::a"), 1);
 
-    backend.record_access(bin, &names(&["tests::a"])).unwrap();
+    // A touch stamped later moves the hit time forward.
+    touch_at(&backend, bin, &["tests::a"], 1000);
 
-    // After recording access, the hit time should be refreshed to roughly now,
-    // well after the stored second-1 value.
     let refreshed = backend
         .lookup(&key(bin, "tests::a"))
         .unwrap()
         .expect("entry should be present");
-    assert!(
-        refreshed.last_hit_at > at_secs(1),
-        "last_hit_at should be refreshed past the stored value"
+    assert_eq!(
+        refreshed.last_hit_at,
+        at_secs(1000),
+        "last_hit_at should be refreshed to the touch's timestamp"
+    );
+    assert_eq!(
+        refreshed.created_at,
+        at_secs(1),
+        "a touch must not disturb created_at"
     );
 }
 
@@ -167,7 +182,7 @@ fn different_test_names_are_independent() {
     let backend = FsBackend::new(dir.path().join("cache"));
     let bin = hash_bytes(b"bin");
 
-    backend.store(&key(bin, "tests::a"), &entry_at(1)).unwrap();
+    store_at(&backend, key(bin, "tests::a"), 1);
 
     assert!(backend.lookup(&key(bin, "tests::a")).unwrap().is_some());
     assert!(backend.lookup(&key(bin, "tests::b")).unwrap().is_none());
@@ -180,9 +195,7 @@ fn different_binary_hashes_are_independent() {
 
     // The same test name under one binary hash must not be found under another:
     // this is what makes a recompiled binary a cache miss.
-    backend
-        .store(&key(hash_bytes(b"old"), "tests::a"), &entry_at(1))
-        .unwrap();
+    store_at(&backend, key(hash_bytes(b"old"), "tests::a"), 1);
 
     assert!(
         backend
@@ -216,8 +229,8 @@ fn prune_evicts_stale_but_keeps_recent() {
     // A recently-hit binary and an old one. The cutoff falls between them.
     let recent = hash_bytes(b"recent");
     let old = hash_bytes(b"old");
-    backend.store(&key(recent, "t"), &entry_at(1500)).unwrap();
-    backend.store(&key(old, "t"), &entry_at(10)).unwrap();
+    store_at(&backend, key(recent, "t"), 1500);
+    store_at(&backend, key(old, "t"), 10);
 
     let stats = backend.prune(at_secs(1000));
 
@@ -228,18 +241,17 @@ fn prune_evicts_stale_but_keeps_recent() {
 }
 
 #[test]
-fn prune_keeps_binary_refreshed_by_record_access() {
+fn prune_keeps_binary_refreshed_by_touch() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("cache"));
 
     // A binary stored with an old hit time, then consulted this run: consulting
-    // calls `record_access`, refreshing its hit time to "now".
+    // issues a touch, refreshing its hit time well past the prune cutoff.
     let consulted = hash_bytes(b"consulted");
-    backend.store(&key(consulted, "t"), &entry_at(1)).unwrap();
-    backend.record_access(consulted, &names(&["t"])).unwrap();
+    store_at(&backend, key(consulted, "t"), 1);
+    touch_at(&backend, consulted, &["t"], 2000);
 
-    // A prune with an old cutoff keeps it, since the refresh moved its hit time
-    // (to roughly "now") well past the cutoff.
+    // A prune whose cutoff falls below the refreshed hit time keeps it.
     let stats = backend.prune(at_secs(1000));
     assert_eq!(stats, Default::default());
     assert!(is_cached(&backend, consulted));
@@ -256,7 +268,7 @@ fn prune_tolerates_corrupt_and_missing() {
     // hit times, so we cannot know it is safe to evict.
     let backend = FsBackend::new(dir.path().join("cache"));
     let good = hash_bytes(b"good");
-    backend.store(&key(good, "t"), &entry_at(1)).unwrap();
+    store_at(&backend, key(good, "t"), 1);
 
     // Name the corrupt directory with a valid hash so it is treated as a cache
     // dir (a non-hash name would just be skipped as a stray file).
@@ -278,7 +290,7 @@ fn prune_if_needed_respects_interval() {
     let backend = FsBackend::new(dir.path().join("cache"));
 
     let old = hash_bytes(b"old");
-    backend.store(&key(old, "t"), &entry_at(1)).unwrap();
+    store_at(&backend, key(old, "t"), 1);
 
     // First prune: no prior metadata, so it runs and evicts the stale binary.
     let now = at_secs(1_000_000);
@@ -300,11 +312,9 @@ fn info_counts_entries_and_binaries() {
     let dir = Utf8TempDir::new().unwrap();
     let backend = FsBackend::new(dir.path().join("cache"));
     let bin = hash_bytes(b"bin");
-    backend.store(&key(bin, "t1"), &entry_at(1)).unwrap();
-    backend.store(&key(bin, "t2"), &entry_at(1)).unwrap();
-    backend
-        .store(&key(hash_bytes(b"other"), "t3"), &entry_at(1))
-        .unwrap();
+    store_at(&backend, key(bin, "t1"), 1);
+    store_at(&backend, key(bin, "t2"), 1);
+    store_at(&backend, key(hash_bytes(b"other"), "t3"), 1);
 
     let info = backend.info().unwrap();
     assert_eq!(info.entry_count, 3);
@@ -412,9 +422,7 @@ fn collect_retains_hashes_for_every_binary() {
 
     // Seed the cache so `cached`'s test is a hit under its real content hash.
     let cached_hash = hash_file(&cached_path).unwrap();
-    backend
-        .store(&key(cached_hash, "tests::a"), &entry_at(1))
-        .unwrap();
+    store_at(&backend, key(cached_hash, "tests::a"), 1);
 
     let a = TestCaseName::new("tests::a");
     let info = ComputedCacheInfo::collect(

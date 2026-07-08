@@ -13,7 +13,7 @@
 //! ```
 
 use crate::cache::{
-    backend::{CacheBackend, CacheError},
+    backend::{CacheBackend, CacheError, CacheWrite},
     key::{CacheKey, ContentHash},
     result::{CacheEntry, CacheInfo, PruneStats},
 };
@@ -24,7 +24,7 @@ use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_metadata::TestCaseName;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs,
     io::{self, BufWriter, Write},
 };
@@ -227,6 +227,53 @@ impl FsBackend {
         stats
     }
 
+    /// Applies a batch of writes, stamping every entry with `now`.
+    ///
+    /// Takes `now` explicitly so tests can drive timestamps deterministically;
+    /// the [`write`](CacheBackend::write) trait method supplies `Utc::now()`.
+    pub(super) fn write_at(
+        &self,
+        writes: &[CacheWrite],
+        now: DateTime<Utc>,
+    ) -> Result<(), CacheError> {
+        // Group by binary so each manifest is read, modified, and written once,
+        // no matter how many of its tests appear in the batch.
+        let mut by_binary: BTreeMap<String, Vec<&CacheWrite>> = BTreeMap::new();
+        for write in writes {
+            by_binary
+                .entry(write.key().binary_hash_hex())
+                .or_default()
+                .push(write);
+        }
+
+        for (binary_hash_hex, binary_writes) in by_binary {
+            let mut manifest = self.read_manifest(&binary_hash_hex)?;
+
+            for write in binary_writes {
+                match write {
+                    // A pass: create or overwrite the entry, stamping both times.
+                    CacheWrite::Store { key } => {
+                        manifest.entries.insert_overwrite(ManifestEntry {
+                            test_name: key.test_name().clone(),
+                            created_at: now,
+                            last_hit_at: now,
+                        });
+                    }
+                    // A hit: refresh the existing entry; a missing one no-ops.
+                    CacheWrite::Touch { key } => {
+                        if let Some(mut entry) = manifest.entries.get_mut(key.test_name()) {
+                            entry.last_hit_at = now;
+                        }
+                    }
+                }
+            }
+
+            self.write_manifest(&binary_hash_hex, &manifest)?;
+        }
+
+        Ok(())
+    }
+
     fn meta_path(&self) -> Utf8PathBuf {
         self.cache_dir.join(META_FILE)
     }
@@ -286,43 +333,8 @@ impl CacheBackend for FsBackend {
             .collect())
     }
 
-    fn record_access(
-        &self,
-        binary_hash: ContentHash,
-        test_names: &BTreeSet<TestCaseName>,
-    ) -> Result<(), CacheError> {
-        let binary_hash_hex = binary_hash.to_hex();
-        let mut manifest = self.read_manifest(&binary_hash_hex)?;
-
-        // Refresh present names in a single read-modify-write; absent ones are
-        // ignored.
-        let now = Utc::now();
-        let mut refreshed = false;
-        for name in test_names {
-            if let Some(mut entry) = manifest.entries.get_mut(name) {
-                entry.last_hit_at = now;
-                refreshed = true;
-            }
-        }
-
-        if refreshed {
-            self.write_manifest(&binary_hash_hex, &manifest)?;
-        }
-
-        Ok(())
-    }
-
-    fn store(&self, key: &CacheKey, entry: &CacheEntry) -> Result<(), CacheError> {
-        let binary_hash_hex = key.binary_hash_hex();
-        let mut manifest = self.read_manifest(&binary_hash_hex)?;
-
-        manifest.entries.insert_overwrite(ManifestEntry {
-            test_name: key.test_name().clone(),
-            created_at: entry.created_at,
-            last_hit_at: entry.last_hit_at,
-        });
-
-        self.write_manifest(&binary_hash_hex, &manifest)
+    fn write(&self, writes: &[CacheWrite]) -> Result<(), CacheError> {
+        self.write_at(writes, Utc::now())
     }
 
     fn info(&self) -> Result<CacheInfo, CacheError> {

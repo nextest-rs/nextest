@@ -5,14 +5,12 @@
 
 use crate::{
     cache::{
-        backend::CacheBackend,
+        backend::{CacheBackend, CacheWrite},
         key::{CacheKey, ContentHash},
-        result::CacheEntry,
     },
     list::TestList,
     reporter::events::{ExecutionResultDescription, ReporterEvent, TestEventKind},
 };
-use chrono::Utc;
 use nextest_metadata::RustBinaryId;
 use std::collections::HashMap;
 use tracing::warn;
@@ -76,12 +74,8 @@ impl<'a> CacheWriter<'a> {
         };
 
         let key = CacheKey::new(*binary_hash, test_instance.test_name.clone());
-        let now = Utc::now();
-        let entry = CacheEntry {
-            created_at: now,
-            last_hit_at: now,
-        };
-        if let Err(error) = self.backend.store(&key, &entry) {
+        let write = CacheWrite::Store { key };
+        if let Err(error) = self.backend.write(&[write]) {
             warn!(
                 "cache: failed to store result for {} in {}: {error}",
                 test_instance.test_name, test_instance.binary_id,

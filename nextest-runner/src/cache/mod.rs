@@ -29,7 +29,7 @@ mod result;
 mod tests;
 mod writer;
 
-pub use backend::{CacheBackend, CacheError};
+pub use backend::{CacheBackend, CacheError, CacheWrite};
 pub use fs_backend::FsBackend;
 pub use imp::{BinaryCacheInfo, CacheBinaryInput, ComputedCacheInfo, default_cache_dir};
 pub use key::{CacheKey, ContentHash, hash_file};
