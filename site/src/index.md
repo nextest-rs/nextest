@@ -39,7 +39,7 @@ hide:
 
     ---
 
-    Treat tests as cattle, not pets. Detect and terminate [slow tests](docs/features/slow-tests.md). Loop over tests many times with [stress testing](docs/features/stress-tests.md).
+    Treat tests as cattle, not pets. Detect and handle [slow tests](docs/features/slow-tests.md). Loop over tests many times with [stress testing](docs/features/stress-tests.md).
 
     [:octicons-arrow-right-24: Slow tests and timeouts](docs/features/slow-tests.md)
 
