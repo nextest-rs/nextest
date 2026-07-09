@@ -142,9 +142,8 @@ fn execute_result<S: OutputSpec>(run_statuses: &ExecutionStatuses<S>) -> TestExe
 /// Only a single clean [`Pass`](ExecutionResultDescription::Pass) is a
 /// [`CleanPass`](TestExecuteResult::CleanPass). A retried (flaky) pass, a leaky
 /// pass, or a tolerated timeout is a [`TaintedPass`](TestExecuteResult::TaintedPass):
-/// a success for reporting, but not a deterministic function of the binary, so
-/// caching it would suppress re-detection. Everything else is a
-/// [`Fail`](TestExecuteResult::Fail).
+/// a success for reporting, but caching it would suppress re-detection since we assume
+/// cached passes are clean. Everything else is a [`Fail`](TestExecuteResult::Fail).
 fn classify_result(result: &ExecutionResultDescription, retried: bool) -> TestExecuteResult {
     match result {
         ExecutionResultDescription::Pass if !retried => TestExecuteResult::CleanPass,
@@ -155,7 +154,14 @@ fn classify_result(result: &ExecutionResultDescription, retried: bool) -> TestEx
         | ExecutionResultDescription::Timeout {
             result: SlowTimeoutResult::Pass,
         } => TestExecuteResult::TaintedPass,
-        _ => TestExecuteResult::Fail,
+        ExecutionResultDescription::Fail { .. }
+        | ExecutionResultDescription::ExecFail
+        | ExecutionResultDescription::Leak {
+            result: LeakTimeoutResult::Fail,
+        }
+        | ExecutionResultDescription::Timeout {
+            result: SlowTimeoutResult::Fail,
+        } => TestExecuteResult::Fail,
     }
 }
 
