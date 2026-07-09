@@ -867,6 +867,15 @@ pub enum UserConfigError {
         #[source]
         error: Box<target_spec::Error>,
     },
+
+    /// A `[result-cache]` duration is out of the supported range.
+    #[error("result-cache.{field} ({value:?}) is out of the supported range")]
+    ResultCacheDuration {
+        /// The setting whose value is out of range (e.g. `prune-grace`).
+        field: &'static str,
+        /// The offending duration.
+        value: std::time::Duration,
+    },
 }
 
 /// Error returned while parsing a [`MaxFail`](crate::config::elements::MaxFail) input.

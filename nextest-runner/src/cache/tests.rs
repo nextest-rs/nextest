@@ -301,19 +301,25 @@ fn prune_if_needed_respects_interval() {
     let old = hash_bytes(b"old");
     store_at(&backend, key(old, "t"), 1);
 
+    let grace = TimeDelta::days(7);
+    let interval = TimeDelta::days(1);
+
     // First prune: no prior metadata, so it runs and evicts the stale binary.
     let now = at_secs(1_000_000);
-    let first = backend.prune_if_needed(now);
+    let first = backend.prune_if_needed(now, grace, interval);
     assert_eq!(first.map(|s| s.dirs_removed), Some(1));
     assert!(!is_cached(&backend, old));
 
-    // A second call a minute later is within the 1-day interval, so it is skipped.
+    // A second call a minute later is within the interval, so it is skipped.
     let soon = now + TimeDelta::minutes(1);
-    assert!(backend.prune_if_needed(soon).is_none());
+    assert!(backend.prune_if_needed(soon, grace, interval).is_none());
 
-    // A call more than a day later runs again (nothing to remove now).
+    // A call more than an interval later runs again (nothing to remove now).
     let later = now + TimeDelta::days(2);
-    assert_eq!(backend.prune_if_needed(later), Some(Default::default()),);
+    assert_eq!(
+        backend.prune_if_needed(later, grace, interval),
+        Some(Default::default()),
+    );
 }
 
 #[test]

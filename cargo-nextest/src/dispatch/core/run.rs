@@ -52,7 +52,7 @@ use nextest_runner::{
     signal::SignalHandlerKind,
     test_filter::TestFilter,
     test_output::CaptureStrategy,
-    user_config::{UserConfigExperimental, elements::UiConfig},
+    user_config::{UserConfig, UserConfigExperimental, elements::UiConfig},
 };
 use quick_junit::ReportUuid;
 use std::{collections::BTreeMap, io::IsTerminal, sync::Arc, time::Duration};
@@ -885,17 +885,20 @@ impl App {
 
     /// Resolves the result cache backend, or `None` if caching is disabled.
     ///
-    /// Caching is gated behind an experimental env var and disabled by
-    /// `--no-cache`/`NEXTEST_NO_CACHE`. An unresolvable cache directory disables
-    /// caching rather than erroring, since the cache must never fail a run.
+    /// Caching is gated behind the `result-cache` experimental feature and
+    /// disabled by `--no-cache`/`NEXTEST_NO_CACHE`. An unresolvable cache
+    /// directory disables caching rather than erroring, since the cache must
+    /// never fail a run.
     ///
     /// The backend is always constructed when enabled — independent of whether a
     /// given run consults or records — so it can self-prune. That policy is
     /// decided separately, in [`CachePolicy`].
-    fn resolve_cache_backend(&self, no_cache: bool) -> Option<Arc<cache::FsBackend>> {
-        let cache_enabled =
-            std::env::var("NEXTEST_EXPERIMENTAL_RESULT_CACHE").as_deref() == Ok("1") && !no_cache;
-        if !cache_enabled {
+    fn resolve_cache_backend(
+        &self,
+        config: &UserConfig,
+        no_cache: bool,
+    ) -> Option<Arc<cache::FsBackend>> {
+        if no_cache || !config.is_experimental_enabled(UserConfigExperimental::ResultCache) {
             return None;
         }
         match default_cache_dir(&self.base.workspace_root) {
@@ -1032,7 +1035,7 @@ impl App {
         // the post-run prune (an inherent, filesystem-specific operation) and
         // handing the run a `CacheHandle` over the `dyn` view for consulting and
         // recording.
-        let cache_backend = self.resolve_cache_backend(runner_opts.no_cache);
+        let cache_backend = self.resolve_cache_backend(&resolved_user_config, runner_opts.no_cache);
         let cache_policy = CachePolicy::compute(GlobalContext {
             is_stress: runner_opts.stress.condition.is_some(),
             is_with_debugger: runner_opts.interceptor.debugger.is_some(),
@@ -1255,7 +1258,12 @@ impl App {
         // consulted this run had their access times refreshed, so pruning by age
         // leaves them alone. Best-effort and rate-limited internally.
         if let Some(backend) = &cache_backend {
-            backend.prune_if_needed(Utc::now());
+            let result_cache = &resolved_user_config.result_cache;
+            backend.prune_if_needed(
+                Utc::now(),
+                result_cache.prune_grace,
+                result_cache.prune_interval,
+            );
         }
 
         let outstanding_not_seen_count = reporter_stats

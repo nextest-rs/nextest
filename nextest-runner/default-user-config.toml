@@ -56,6 +56,15 @@ max-age = "30d"
 # Maximum size of a single captured stdout or stderr stream before truncation.
 max-output-size = "10MB"
 
+# Settings for the result cache. Has no effect unless [experimental]
+# result-cache = true.
+[result-cache]
+# How long a binary's cached results are kept after it was last used. Long
+# enough that editing a file and reverting it still finds the old results.
+prune-grace = "7d"
+# Minimum time between automatic prunes of the result cache.
+prune-interval = "1d"
+
 # Windows uses the builtin pager by default because external pagers are
 # unreliable on Windows.
 [[overrides]]

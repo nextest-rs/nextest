@@ -38,23 +38,6 @@ const CACHE_FORMAT_VERSION: u32 = 1;
 /// The name of the top-level metadata file holding `last_pruned_at`.
 const META_FILE: &str = "meta.json";
 
-/// How long a binary's cached results are kept after it was last seen. Long
-/// enough that editing a file and reverting it (which recompiles back to the old
-/// binary hash) still finds the old results; beyond it, results for binaries
-/// that have gone untouched are pruned.
-const PRUNE_GRACE: TimeDelta = match TimeDelta::try_days(7) {
-    Some(d) => d,
-    None => panic!("7 days is a valid TimeDelta"),
-};
-
-/// Minimum time between automatic prunes. Mirrors the record store's cadence so
-/// pruning stays off the hot path — a prune walks every cache directory, which
-/// is cheap but pointless to repeat on every run.
-const PRUNE_INTERVAL: TimeDelta = match TimeDelta::try_days(1) {
-    Some(d) => d,
-    None => panic!("1 day is a valid TimeDelta"),
-};
-
 /// A local filesystem cache backend.
 pub struct FsBackend {
     cache_dir: Utf8PathBuf,
@@ -136,12 +119,12 @@ impl FsBackend {
             })
     }
 
-    /// Prunes stale binaries, but only if enough time has passed since the last
-    /// prune. Called at the end of a run; returns `None` when the prune was
-    /// skipped, `Some(stats)` when it ran.
+    /// Prunes stale binaries, but only if at least `interval` has passed since
+    /// the last prune. Called at the end of a run; returns `None` when the prune
+    /// was skipped, `Some(stats)` when it ran.
     ///
-    /// A binary is stale when its most recent access predates `now -
-    /// PRUNE_GRACE`. Consulting a binary this run refreshes its access times via
+    /// A binary is stale when its most recent access predates `now - grace`.
+    /// Consulting a binary this run refreshes its access times via
     /// [`Touch`](CacheWrite::Touch) writes, so anything actively used stays well
     /// clear of the cutoff. `now` is threaded in (rather than read from the
     /// clock) so tests can drive the interval and cutoff deterministically.
@@ -149,16 +132,21 @@ impl FsBackend {
     /// Best-effort throughout: a failure to read or write `meta.json` degrades to
     /// "prune anyway" or "skip", never an error, since pruning must not fail a
     /// run.
-    pub fn prune_if_needed(&self, now: DateTime<Utc>) -> Option<PruneStats> {
+    pub fn prune_if_needed(
+        &self,
+        now: DateTime<Utc>,
+        grace: TimeDelta,
+        interval: TimeDelta,
+    ) -> Option<PruneStats> {
         // A missing or corrupt meta reads as "never pruned", so the first run
         // (or a run after corruption) prunes and rewrites it.
         if let Some(meta) = self.read_meta()
-            && now.signed_duration_since(meta.last_pruned_at) < PRUNE_INTERVAL
+            && now.signed_duration_since(meta.last_pruned_at) < interval
         {
             return None;
         }
 
-        let stats = self.prune(now - PRUNE_GRACE);
+        let stats = self.prune(now - grace);
 
         // Record the prune time even when nothing was removed, so the interval
         // gate holds. A write failure is non-fatal: the next run simply reads a

@@ -19,6 +19,10 @@
       "description": "Retention settings for the record-replay-rerun feature.",
       "$ref": "#/$defs/DeserializedRecordConfig"
     },
+    "result-cache": {
+      "description": "Settings for the result cache.",
+      "$ref": "#/$defs/DeserializedResultCacheConfig"
+    },
     "ui": {
       "description": "Display, progress, and pager settings.",
       "$ref": "#/$defs/DeserializedUiConfig"
@@ -177,6 +181,29 @@
         },
         "max-total-size": {
           "description": "Maximum combined size of all retained recordings before eviction (e.g.\n`\"1GB\"`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeserializedResultCacheConfig": {
+      "description": "User-provided `[result-cache]` settings. All fields are optional and fall\nback to the embedded defaults.",
+      "type": "object",
+      "properties": {
+        "prune-grace": {
+          "description": "How long a binary's cached results are kept after it was last used\n(e.g. `\"7d\"`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "prune-interval": {
+          "description": "Minimum time between automatic prunes (e.g. `\"1d\"`).",
           "type": [
             "string",
             "null"
@@ -366,6 +393,11 @@
       "properties": {
         "record": {
           "description": "Enables the record-replay-rerun feature: stores test run results on\ndisk for replay or selective rerun.",
+          "type": "boolean",
+          "default": false
+        },
+        "result-cache": {
+          "description": "Enables the result cache: skips re-running tests that passed on an\nunchanged binary.",
           "type": "boolean",
           "default": false
         }
