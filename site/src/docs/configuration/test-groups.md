@@ -34,7 +34,7 @@ If the limit is set to 1, this is similar to `cargo test` with [the `serial_test
 
     - **Use a randomly assigned port.** On all platforms you can do this by binding to port 0. Once your test creates the service, you'll need a way to communicate the actual port assigned back to your test.
       - If your service is in the same process as your test, you can expose an API to retrieve the actual port assigned.
-      - If your service is in another process, you'll need a way to communicate the port assigned back to the test. One approach is to pass in a temporary directory as an environment variable, then arrange for the service to write the port number in a file within the temporary directory.
+      - If your service is in another process, you'll need a way to communicate the port assigned back to the test. Consider using the [`port-file`](https://docs.rs/port-file) crate which takes care of most of the details for you.
     - **Rather than using TCP/IP, bind to a [Unix domain socket](https://en.wikipedia.org/wiki/Unix_domain_socket)** in a temporary directory. This approach also [works on Windows](https://devblogs.microsoft.com/commandline/windowswsl-interop-with-af_unix/).
 
 ## Configuring test groups
