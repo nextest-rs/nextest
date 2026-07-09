@@ -17,8 +17,6 @@
 //! The cache prunes itself: at the end of a run, [`FsBackend::prune_if_needed`]
 //! evicts results for binaries not seen in a while (see its docs for the
 //! policy), so it never grows without bound and needs no manual cleanup command.
-//! [`CacheBackend::info`] exists for a future read-only `cargo nextest cache
-//! info` but is not yet wired to the CLI.
 
 mod backend;
 mod fs_backend;
@@ -37,5 +35,5 @@ pub use handle::CacheHandle;
 pub use imp::{BinaryCacheInfo, CacheBinaryInput, ComputedCacheInfo, default_cache_dir};
 pub use key::{CacheKey, ContentHash, hash_file};
 pub use policy::{CachePolicy, GlobalContext, TestCacheDecision, TestExecuteResult};
-pub use result::{CacheEntry, CacheInfo, PruneStats};
+pub use result::{CacheEntry, PruneStats};
 pub use writer::CacheWriter;

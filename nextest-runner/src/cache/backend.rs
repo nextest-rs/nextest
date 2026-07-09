@@ -3,10 +3,7 @@
 
 //! The cache backend trait and error types.
 
-use crate::cache::{
-    key::{CacheKey, ContentHash},
-    result::{CacheEntry, CacheInfo},
-};
+use crate::cache::key::{CacheKey, ContentHash};
 use nextest_metadata::TestCaseName;
 use std::collections::BTreeSet;
 
@@ -63,10 +60,6 @@ impl CacheWrite {
 ///   never fails a run, but warns rather than dropping them, since one likely
 ///   indicates a bug while this feature is experimental.
 pub trait CacheBackend: Send + Sync {
-    /// Looks up a cached result for the given key. Read-only; does not refresh
-    /// `last_hit_at` (that is a [`Touch`](CacheWrite::Touch) write's job).
-    fn lookup(&self, key: &CacheKey) -> Result<Option<CacheEntry>, CacheError>;
-
     /// Returns the subset of `test_names` cached as passing for `binary_hash`.
     /// Read-only; the pre-run caller follows it with a batch of
     /// [`Touch`](CacheWrite::Touch) writes.
@@ -82,9 +75,6 @@ pub trait CacheBackend: Send + Sync {
     /// Applies a batch of writes. The backend stamps timestamps and groups by
     /// binary so many writes cost few storage operations.
     fn write(&self, writes: &[CacheWrite]) -> Result<(), CacheError>;
-
-    /// Returns summary information about the cache.
-    fn info(&self) -> Result<CacheInfo, CacheError>;
 }
 
 /// Errors that can occur during cache operations.

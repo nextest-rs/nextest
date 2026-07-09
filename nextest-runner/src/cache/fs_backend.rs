@@ -14,9 +14,12 @@
 
 use crate::cache::{
     backend::{CacheBackend, CacheError, CacheWrite},
-    key::{CacheKey, ContentHash},
-    result::{CacheEntry, CacheInfo, PruneStats},
+    key::ContentHash,
+    result::PruneStats,
 };
+// Used only by the test-only `lookup`.
+#[cfg(test)]
+use crate::cache::{key::CacheKey, result::CacheEntry};
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use camino::{Utf8Path, Utf8PathBuf};
 use chrono::{DateTime, TimeDelta, Utc};
@@ -301,10 +304,16 @@ impl FsBackend {
                 }
             })
     }
-}
 
-impl CacheBackend for FsBackend {
-    fn lookup(&self, key: &CacheKey) -> Result<Option<CacheEntry>, CacheError> {
+    /// Looks up a single cached entry, including its timestamps. Read-only.
+    ///
+    /// Not part of [`CacheBackend`]: the run path never inspects individual
+    /// entries or their timestamps (it consults by binary via
+    /// [`passing`](CacheBackend::passing)). This exists for tests to observe what
+    /// a [`write`](CacheBackend::write) produced; a future single-key inspection
+    /// command would lift the `cfg(test)` gate.
+    #[cfg(test)]
+    pub(super) fn lookup(&self, key: &CacheKey) -> Result<Option<CacheEntry>, CacheError> {
         let binary_hash_hex = key.binary_hash_hex();
         let manifest = self.read_manifest(&binary_hash_hex)?;
 
@@ -316,7 +325,9 @@ impl CacheBackend for FsBackend {
                 last_hit_at: entry.last_hit_at,
             }))
     }
+}
 
+impl CacheBackend for FsBackend {
     fn passing(
         &self,
         binary_hash: ContentHash,
@@ -335,37 +346,6 @@ impl CacheBackend for FsBackend {
 
     fn write(&self, writes: &[CacheWrite]) -> Result<(), CacheError> {
         self.write_at(writes, Utc::now())
-    }
-
-    fn info(&self) -> Result<CacheInfo, CacheError> {
-        let mut info = CacheInfo::default();
-
-        let read_dir = match fs::read_dir(&self.cache_dir) {
-            Ok(dir) => dir,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(info),
-            Err(e) => return Err(CacheError::Io(e)),
-        };
-
-        for dir_entry in read_dir {
-            let dir_entry = dir_entry?;
-            let path = dir_entry.path();
-            let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) else {
-                continue;
-            };
-
-            // Only count hash directories; skip meta.json and other stray files.
-            if ContentHash::from_hex(dir_name).is_none() {
-                continue;
-            }
-
-            if let Ok(manifest) = self.read_manifest(dir_name) {
-                info.binary_count += 1;
-                info.entry_count += manifest.entries.len() as u64;
-            }
-            info.disk_bytes += dir_size(&path);
-        }
-
-        Ok(info)
     }
 }
 

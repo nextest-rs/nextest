@@ -308,20 +308,6 @@ fn prune_if_needed_respects_interval() {
 }
 
 #[test]
-fn info_counts_entries_and_binaries() {
-    let dir = Utf8TempDir::new().unwrap();
-    let backend = FsBackend::new(dir.path().join("cache"));
-    let bin = hash_bytes(b"bin");
-    store_at(&backend, key(bin, "t1"), 1);
-    store_at(&backend, key(bin, "t2"), 1);
-    store_at(&backend, key(hash_bytes(b"other"), "t3"), 1);
-
-    let info = backend.info().unwrap();
-    assert_eq!(info.entry_count, 3);
-    assert_eq!(info.binary_count, 2);
-}
-
-#[test]
 fn hash_file_matches_hash_bytes() {
     // Streaming a file through the hasher must produce the same digest as
     // hashing the equivalent in-memory slice. Use content larger than the
@@ -381,13 +367,6 @@ fn from_hex_round_trips_and_rejects_non_hashes() {
     // Uppercase is not produced by `to_hex`, but `decode_to_slice` accepts it;
     // that is harmless since directories are always created via `to_hex`.
     assert_eq!(ContentHash::from_hex(&hex.to_uppercase()), Some(hash));
-}
-
-#[test]
-fn info_on_missing_dir_is_empty() {
-    let dir = Utf8TempDir::new().unwrap();
-    let backend = FsBackend::new(dir.path().join("does-not-exist"));
-    assert_eq!(backend.info().unwrap(), Default::default());
 }
 
 #[test]

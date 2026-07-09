@@ -27,19 +27,6 @@ pub struct CacheEntry {
     pub last_hit_at: DateTime<Utc>,
 }
 
-/// Summary statistics about the cache.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct CacheInfo {
-    /// Total number of cached entries.
-    pub entry_count: u64,
-
-    /// Total number of distinct binaries with cached results.
-    pub binary_count: u64,
-
-    /// Total size of the cache on disk, in bytes.
-    pub disk_bytes: u64,
-}
-
 /// Statistics returned after a prune operation.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PruneStats {
