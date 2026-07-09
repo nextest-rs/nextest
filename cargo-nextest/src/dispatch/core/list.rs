@@ -17,7 +17,7 @@ use crate::{
 use clap::Args;
 use nextest_filtering::{FiltersetKind, ParseContext};
 use nextest_runner::{
-    cache::{CacheHandle, CachePolicy},
+    cache::CacheHandle,
     errors::WriteTestListError,
     helpers::force_or_new_run_id,
     list::TestExecuteContext,
@@ -145,9 +145,13 @@ impl App {
 
                 // Listing never consults the result cache: it enumerates tests
                 // rather than running them.
-                let cache = CacheHandle::new(None, CachePolicy::default());
-                let test_list =
-                    self.build_test_list(&ctx, binary_list, &test_filter, &profile, cache)?;
+                let test_list = self.build_test_list(
+                    &ctx,
+                    binary_list,
+                    &test_filter,
+                    &profile,
+                    CacheHandle::disabled(),
+                )?;
 
                 // Spawn the pager after building the list. (In an upcoming
                 // change we're going to add a progress bar to the list display
@@ -230,8 +234,13 @@ impl App {
 
         // Listing never consults the result cache: it enumerates tests rather
         // than running them.
-        let cache = CacheHandle::new(None, CachePolicy::default());
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile, cache)?;
+        let test_list = self.build_test_list(
+            &ctx,
+            binary_list,
+            &test_filter,
+            &profile,
+            CacheHandle::disabled(),
+        )?;
 
         let resolved_user_config =
             resolve_user_config(self.base.early_args.user_config_location())?;

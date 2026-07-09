@@ -883,6 +883,30 @@ impl App {
         )
     }
 
+    /// Resolves the result cache backend, or `None` if caching is disabled.
+    ///
+    /// Caching is gated behind an experimental env var and disabled by
+    /// `--no-cache`/`NEXTEST_NO_CACHE`. An unresolvable cache directory disables
+    /// caching rather than erroring, since the cache must never fail a run.
+    ///
+    /// The backend is always constructed when enabled — independent of whether a
+    /// given run consults or records — so it can self-prune. That policy is
+    /// decided separately, in [`CachePolicy`].
+    fn resolve_cache_backend(&self, no_cache: bool) -> Option<Arc<cache::FsBackend>> {
+        let cache_enabled =
+            std::env::var("NEXTEST_EXPERIMENTAL_RESULT_CACHE").as_deref() == Ok("1") && !no_cache;
+        if !cache_enabled {
+            return None;
+        }
+        match default_cache_dir(&self.base.workspace_root) {
+            Some(dir) => Some(Arc::new(cache::FsBackend::new(dir))),
+            None => {
+                warn!("result cache enabled but no cache directory could be determined; disabling");
+                None
+            }
+        }
+    }
+
     pub(crate) fn exec_run(
         &self,
         no_capture: bool,
@@ -1004,37 +1028,15 @@ impl App {
             None => (None, None),
         };
 
-        // Resolve the cache backend, if enabled (gated behind an experimental
-        // env var). An unresolvable cache dir disables caching rather than
-        // erroring, since the cache must never fail a run. Also disabled by
-        // `--no-cache`/`NEXTEST_NO_CACHE`.
-        //
-        // The backend, when present, is always constructed so it can self-prune;
-        // whether this run consults or records is decided by the policy below.
-        let cache_enabled = std::env::var("NEXTEST_EXPERIMENTAL_RESULT_CACHE").as_deref()
-            == Ok("1")
-            && !runner_opts.no_cache;
-        let cache_backend = if cache_enabled {
-            match default_cache_dir(&self.base.workspace_root) {
-                Some(dir) => Some(Arc::new(cache::FsBackend::new(dir))),
-                None => {
-                    warn!(
-                        "result cache enabled but no cache directory could be determined; disabling"
-                    );
-                    None
-                }
-            }
-        } else {
-            None
-        };
-        // Keep the concrete `Arc<FsBackend>` for the post-run prune (an inherent,
-        // filesystem-specific operation), and hand the run a `CacheHandle` over
-        // the `dyn` view for consulting and recording.
+        // Resolve the cache backend, keeping the concrete `Arc<FsBackend>` for
+        // the post-run prune (an inherent, filesystem-specific operation) and
+        // handing the run a `CacheHandle` over the `dyn` view for consulting and
+        // recording.
+        let cache_backend = self.resolve_cache_backend(runner_opts.no_cache);
         let cache_policy = CachePolicy::compute(GlobalContext {
             is_stress: runner_opts.stress.condition.is_some(),
             is_with_debugger: runner_opts.interceptor.debugger.is_some(),
             is_with_tracer: runner_opts.interceptor.tracer.is_some(),
-            is_bench: false,
             is_rerun: rerun_state.is_some(),
         });
         let cache = CacheHandle::new(

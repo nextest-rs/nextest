@@ -32,7 +32,6 @@ impl CachePolicy {
             is_stress,
             is_with_debugger,
             is_with_tracer,
-            is_bench,
             is_rerun,
         } = global_context;
 
@@ -41,10 +40,9 @@ impl CachePolicy {
         //   (skipping execution) would defeat the purpose.
         // - Debugger and tracer runs target specific tests interactively;
         //   skipping them is never wanted.
-        // - Benchmarks measure time, not pass/fail, so caching does not apply.
         // - Reruns only run tests that did not pass last time, so a cached pass
         //   could only wrongly skip one.
-        let unusable = is_stress || is_with_debugger || is_with_tracer || is_bench;
+        let unusable = is_stress || is_with_debugger || is_with_tracer;
         Self {
             consult: !unusable && !is_rerun,
             // A rerun still records passes it produces, but never consults.
@@ -62,8 +60,6 @@ pub struct GlobalContext {
     pub is_with_debugger: bool,
     /// Whether a syscall tracer is attached to the run.
     pub is_with_tracer: bool,
-    /// Whether this is a benchmark run.
-    pub is_bench: bool,
     /// Whether this is a rerun of a previous recorded run.
     pub is_rerun: bool,
 }
@@ -116,7 +112,6 @@ mod tests {
             is_stress: false,
             is_with_debugger: false,
             is_with_tracer: false,
-            is_bench: false,
             is_rerun: false,
         }
     }
@@ -155,10 +150,6 @@ mod tests {
             },
             GlobalContext {
                 is_with_tracer: true,
-                ..permissive()
-            },
-            GlobalContext {
-                is_bench: true,
                 ..permissive()
             },
         ] {
