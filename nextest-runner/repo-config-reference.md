@@ -283,7 +283,7 @@ The `bench.slow-timeout` object accepts the same parameters as `slow-timeout`:
 - **Type**: String
 - **Description**: When to display output for successful tests.
 - **Documentation**: [_Reporting test results_](../reporting.md)
-- **Valid values**: same as [`failure-output`](#profilenamefailure-output)
+- **Valid values**: same as [`failure-output`](#profilefailure-output)
 - **Default**: `"never"`
 
 ### Failure handling

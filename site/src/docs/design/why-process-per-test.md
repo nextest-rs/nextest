@@ -51,7 +51,7 @@ Process-per-test is not free, though. It's worth acknowledging some costs:
 
 * Tests might want to share in-memory state. They might have an in-memory semaphore for rate-limiting, a shared in-memory immutable cache that is primed on first access, or an in-memory server to which tests communicate via message passing. Process-per-test makes these valuable patterns **harder to achieve**: semaphores must [be managed by](../configuration/test-groups.md) the test runner, in-memory state must be stored on disk, and shared servers must live out-of-process. Adapting existing tests to process-per-test may require a significant engineering effort.
 
-* Another downside that's noticeable in some situations is process creation **performance**. Creating processes is very fast on Linux and most other Unix-like systems. It is quite slow on Windows, though, and it can be slow on macOS [if anti-malware protections are interfering](../installation/macos.md#gatekeeper).
+* Another downside that's noticeable in some situations is process creation **performance**. Creating processes is very fast on Linux and most other Unix-like systems. It is quite slow on Windows, though, and it can be slow on macOS [if anti-malware protections are interfering](../installation/macos.md#xprotect).
 
   How much this is an issue in practice depends on how long individual tests take to run. For many projects on Windows, nextest is overall faster than `cargo test` anyway because it [handles long-pole tests](how-it-works.md) better.
 

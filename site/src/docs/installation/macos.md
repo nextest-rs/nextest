@@ -1,18 +1,24 @@
 ---
 icon: material/apple
 title: macOS
-description: "Performance tips for nextest on macOS: Gatekeeper and Developer Tools."
+description: "Performance tips for nextest on macOS: XProtect/Gatekeeper and Developer Tools."
 ---
 
 # Nextest on macOS
 
 While macOS is generally similar to other Unix platforms, there are some notably unique aspects to it that are relevant to nextest.
 
-## Gatekeeper
+## XProtect
 
-macOS has a system called **Gatekeeper** which performs checks on binaries. Gatekeeper can cause nextest runs to be significantly slower. A typical sign of this happening is even the simplest of tests in `cargo nextest run` taking more than 0.2 seconds.
+macOS has a system called **XProtect** which performs checks on binaries. XProtect can cause nextest runs to be significantly slower. A typical sign of this happening is even the simplest of tests in `cargo nextest run` taking more than 0.2 seconds.
 
-Adding your terminal to Developer Tools will cause any processes run by it to be excluded from Gatekeeper. **For optimal performance, add your terminal to Developer Tools.** You may also need to run `cargo clean` afterwards.
+!!! note
+
+    XProtect is closely related to another security feature, **Gatekeeper**. Gatekeeper verifies signed code while XProtect does generic malware scans. The Developer Tools instructions below affect both Gatekeeper and XProtect.
+
+    For more, see [this blog post](https://nnethercote.github.io/2025/09/04/faster-rust-builds-on-mac.html) by Nicholas Nethercote.
+
+Adding your terminal to Developer Tools will cause any processes run by it to be excluded from XProtect. **For optimal performance, add your terminal to Developer Tools.** You may also need to run `cargo clean` afterwards.
 
 ### How to add your terminal to Developer Tools
 
