@@ -77,21 +77,41 @@ impl FsBackend {
         self.cache_dir.join(binary_hash_hex).join("results.json")
     }
 
+    /// Reads a binary's manifest, self-healing on any unreadable manifest.
+    ///
+    /// A manifest that cannot be read and parsed at the current format version —
+    /// an I/O error, corrupt contents, or a version mismatch — discards the whole
+    /// cache and reads as empty. Such errors are rare, so there is no need to
+    /// salvage other binaries; discarding is always safe, and unlike leaving the
+    /// file in place this lets the current run regenerate what it needs. A
+    /// discard failure is pathological (broken filesystem or permissions) and
+    /// surfaces as a hard error.
     fn read_manifest(&self, binary_hash_hex: &str) -> Result<Manifest, CacheError> {
         let path = self.manifest_path(binary_hash_hex);
-        match fs::read(&path) {
-            Ok(data) => {
-                let manifest: Manifest = serde_json::from_slice(&data)
-                    .map_err(|e| CacheError::InvalidData(e.to_string()))?;
-                if manifest.version != CACHE_FORMAT_VERSION {
-                    return Err(CacheError::InvalidData(format!(
-                        "unsupported cache format version: expected {CACHE_FORMAT_VERSION}, got {}",
-                        manifest.version
-                    )));
-                }
-                Ok(manifest)
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Manifest::empty()),
+        let reason = match fs::read(&path) {
+            Ok(data) => match serde_json::from_slice::<Manifest>(&data) {
+                Ok(manifest) if manifest.version == CACHE_FORMAT_VERSION => return Ok(manifest),
+                Ok(manifest) => format!(
+                    "unsupported format version: expected {CACHE_FORMAT_VERSION}, got {}",
+                    manifest.version
+                ),
+                Err(error) => format!("corrupt manifest: {error}"),
+            },
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Manifest::empty()),
+            Err(error) => format!("read error: {error}"),
+        };
+
+        warn!("cache: discarding cache at {}: {reason}", self.cache_dir);
+        self.discard()?;
+        Ok(Manifest::empty())
+    }
+
+    /// Removes the entire cache directory. A missing directory is not an error;
+    /// any other failure is (see [`read_manifest`](Self::read_manifest)).
+    fn discard(&self) -> Result<(), CacheError> {
+        match fs::remove_dir_all(&self.cache_dir) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(CacheError::Io(e)),
         }
     }
@@ -121,11 +141,10 @@ impl FsBackend {
     /// skipped, `Some(stats)` when it ran.
     ///
     /// A binary is stale when its most recent access predates `now -
-    /// PRUNE_GRACE`. Consulting a binary this run refreshes its access times (see
-    /// [`record_access`](CacheBackend::record_access)), so anything actively used
-    /// stays well clear of the cutoff. `now` is threaded in (rather than read
-    /// from the clock) so tests can drive the interval and cutoff
-    /// deterministically.
+    /// PRUNE_GRACE`. Consulting a binary this run refreshes its access times via
+    /// [`Touch`](CacheWrite::Touch) writes, so anything actively used stays well
+    /// clear of the cutoff. `now` is threaded in (rather than read from the
+    /// clock) so tests can drive the interval and cutoff deterministically.
     ///
     /// Best-effort throughout: a failure to read or write `meta.json` degrades to
     /// "prune anyway" or "skip", never an error, since pruning must not fail a
@@ -133,9 +152,8 @@ impl FsBackend {
     pub fn prune_if_needed(&self, now: DateTime<Utc>) -> Option<PruneStats> {
         // A missing or corrupt meta reads as "never pruned", so the first run
         // (or a run after corruption) prunes and rewrites it.
-        let last_pruned_at = self.read_meta().and_then(|meta| meta.last_pruned_at);
-        if let Some(last) = last_pruned_at
-            && now.signed_duration_since(last) < PRUNE_INTERVAL
+        if let Some(meta) = self.read_meta()
+            && now.signed_duration_since(meta.last_pruned_at) < PRUNE_INTERVAL
         {
             return None;
         }
@@ -147,7 +165,7 @@ impl FsBackend {
         // stale (or absent) time and prunes again.
         if let Err(error) = self.write_meta(&CacheMeta {
             version: CACHE_FORMAT_VERSION,
-            last_pruned_at: Some(now),
+            last_pruned_at: now,
         }) {
             warn!("cache: failed to update prune metadata: {error}");
         }
@@ -194,15 +212,13 @@ impl FsBackend {
                 continue;
             }
 
-            // Leave a corrupt manifest in place: without hit times we cannot know
-            // it is safe to evict.
+            // An unreadable manifest self-heals inside `read_manifest` (the whole
+            // cache is discarded), leaving this run's prune stats meaningless;
+            // that is fine, since it is rare. An `Err` here means even the
+            // discard failed, so skip this directory.
             let manifest = match self.read_manifest(dir_name) {
                 Ok(manifest) => manifest,
-                Err(CacheError::InvalidData(error)) => {
-                    warn!("cache: skipping {dir_name} while pruning: corrupt manifest: {error}");
-                    continue;
-                }
-                Err(CacheError::Io(error)) => {
+                Err(error) => {
                     warn!("cache: skipping {dir_name} while pruning: {error}");
                     continue;
                 }
@@ -356,7 +372,7 @@ impl CacheBackend for FsBackend {
 #[derive(Debug, Serialize, Deserialize)]
 struct CacheMeta {
     version: u32,
-    last_pruned_at: Option<DateTime<Utc>>,
+    last_pruned_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

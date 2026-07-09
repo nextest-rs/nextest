@@ -258,30 +258,39 @@ fn prune_keeps_binary_refreshed_by_touch() {
 }
 
 #[test]
-fn prune_tolerates_corrupt_and_missing() {
+fn prune_missing_dir_is_empty() {
     // A missing cache directory prunes to nothing without error.
     let dir = Utf8TempDir::new().unwrap();
     let missing = FsBackend::new(dir.path().join("does-not-exist"));
     assert_eq!(missing.prune(at_secs(1000)), Default::default());
+}
 
-    // A corrupt manifest is left in place rather than deleted: we cannot read its
-    // hit times, so we cannot know it is safe to evict.
-    let backend = FsBackend::new(dir.path().join("cache"));
+#[test]
+fn corrupt_manifest_discards_whole_cache() {
+    // A corrupt manifest self-heals by discarding the entire cache directory:
+    // reading it (here via `passing`) removes the cache so the current run
+    // regenerates what it needs, rather than leaving a file that can be neither
+    // consulted nor refreshed.
+    let dir = Utf8TempDir::new().unwrap();
+    let cache_dir = dir.path().join("cache");
+    let backend = FsBackend::new(cache_dir.clone());
+
+    // A healthy binary alongside a corrupt one.
     let good = hash_bytes(b"good");
     store_at(&backend, key(good, "t"), 1);
 
-    // Name the corrupt directory with a valid hash so it is treated as a cache
-    // dir (a non-hash name would just be skipped as a stray file).
-    let corrupt_hash = hash_bytes(b"corrupt").to_hex();
-    let corrupt_dir = dir.path().join("cache").join(&corrupt_hash);
+    // Name the corrupt directory with a valid hash so it is read as a cache dir.
+    let corrupt = hash_bytes(b"corrupt");
+    let corrupt_dir = cache_dir.join(corrupt.to_hex());
     std::fs::create_dir_all(&corrupt_dir).unwrap();
     std::fs::write(corrupt_dir.join("results.json"), b"not json").unwrap();
 
-    let stats = backend.prune(at_secs(1000));
-    // Only the good (stale) binary is evicted; the corrupt dir stays.
-    assert_eq!(stats.dirs_removed, 1);
+    backend.passing(corrupt, &names(&["t"])).unwrap();
+
+    // The whole cache directory is gone, healthy binary included.
+    assert!(!cache_dir.exists());
     assert!(!is_cached(&backend, good));
-    assert!(corrupt_dir.exists());
+    assert!(!is_cached(&backend, corrupt));
 }
 
 #[test]
