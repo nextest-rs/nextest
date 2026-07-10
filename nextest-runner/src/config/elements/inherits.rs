@@ -214,7 +214,7 @@ mod tests {
                 let default_profile = default_profile.apply_build_platforms(&build_platforms());
                 let profile = config
                     .profile(&custom_profile.name)
-                    .unwrap_or_else(|_| panic!("{} profile is known", &custom_profile.name));
+                    .unwrap_or_else(|_| panic!("{} profile is known", custom_profile.name));
                 let profile = profile.apply_build_platforms(&build_platforms());
                 assert_eq!(default_profile.inherits(), None);
                 assert_eq!(profile.inherits(), custom_profile.inherits.as_deref());
