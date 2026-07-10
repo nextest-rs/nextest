@@ -107,7 +107,13 @@ pub fn hash_reader<R: Read>(mut reader: R) -> io::Result<ContentHash> {
     let mut hasher = Xxh3::new();
     let mut buf = [0u8; HASH_CHUNK_SIZE];
     loop {
-        let n = reader.read(&mut buf)?;
+        let n = match reader.read(&mut buf) {
+            Ok(n) => n,
+            // `Interrupted` means the read was interrupted by a signal (EINTR)
+            // before transferring any data; retry rather than fail the hash.
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
         if n == 0 {
             break;
         }

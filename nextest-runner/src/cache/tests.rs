@@ -356,6 +356,42 @@ fn hash_bytes_is_deterministic_and_content_sensitive() {
 }
 
 #[test]
+fn hash_reader_retries_on_interrupted() {
+    use std::io::{self, Read};
+
+    /// A reader that yields `Interrupted` before each real read, simulating a
+    /// signal (EINTR) landing repeatedly mid-hash.
+    struct InterruptingReader<'a> {
+        remaining: &'a [u8],
+        interrupt_next: bool,
+    }
+
+    impl Read for InterruptingReader<'_> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.interrupt_next {
+                self.interrupt_next = false;
+                return Err(io::Error::from(io::ErrorKind::Interrupted));
+            }
+            self.interrupt_next = true;
+            let n = self.remaining.len().min(buf.len());
+            buf[..n].copy_from_slice(&self.remaining[..n]);
+            self.remaining = &self.remaining[n..];
+            Ok(n)
+        }
+    }
+
+    let data = b"interrupted read should not fail the hash";
+    let interrupted = hash_reader(InterruptingReader {
+        remaining: data,
+        interrupt_next: true,
+    })
+    .expect("interrupted reads are retried, not propagated");
+
+    // Retrying past the interrupts must yield the same hash as a clean read.
+    assert_eq!(interrupted, hash_bytes(data));
+}
+
+#[test]
 fn from_hex_round_trips_and_rejects_non_hashes() {
     // A real hash round-trips through its hex form.
     let hash = hash_bytes(b"bin");
