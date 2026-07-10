@@ -8,6 +8,7 @@ use crate::{
         backend::CacheBackend,
         key::{ContentHash, hash_file},
     },
+    errors::CacheDirError,
     record::encode_workspace_path,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -33,15 +34,23 @@ const CACHE_LEAF: &str = "result-cache";
 /// difference is the base: results are regenerable, so this uses the platform
 /// *cache* directory (via [`etcetera`]) rather than the state directory.
 ///
-/// Returns `None` if the base cache dir or canonical workspace root can't be
-/// resolved; caching is then disabled rather than guessed, since it must never
-/// fail a run.
-pub fn default_cache_dir(workspace_root: &Utf8Path) -> Option<Utf8PathBuf> {
-    let strategy = choose_base_strategy().ok()?;
-    let base = Utf8PathBuf::from_path_buf(strategy.cache_dir()).ok()?;
-    let canonical_workspace = workspace_root.canonicalize_utf8().ok()?;
+/// Returns an error if the platform base strategy can't be determined, the cache
+/// directory isn't valid UTF-8, or the workspace root can't be canonicalized. The
+/// caller disables caching rather than failing the run, but surfaces the reason.
+pub fn default_cache_dir(workspace_root: &Utf8Path) -> Result<Utf8PathBuf, CacheDirError> {
+    let strategy = choose_base_strategy().map_err(CacheDirError::BaseDirStrategy)?;
+    let cache_dir = strategy.cache_dir();
+    let base = Utf8PathBuf::from_path_buf(cache_dir)
+        .map_err(|path| CacheDirError::CacheDirNotUtf8 { path })?;
+    let canonical_workspace =
+        workspace_root
+            .canonicalize_utf8()
+            .map_err(|error| CacheDirError::Canonicalize {
+                workspace_root: workspace_root.to_owned(),
+                error,
+            })?;
     let encoded_workspace = encode_workspace_path(&canonical_workspace);
-    Some(cache_dir_from_base(base, &encoded_workspace))
+    Ok(cache_dir_from_base(base, &encoded_workspace))
 }
 
 /// Builds the per-workspace result-cache directory from a base cache directory

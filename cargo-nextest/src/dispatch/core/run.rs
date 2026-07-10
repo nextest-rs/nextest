@@ -30,6 +30,7 @@ use nextest_runner::{
         core::ConfigExperimental,
         elements::{MaxFail, RetryPolicy, TestThreads},
     },
+    errors::DisplayErrorChain,
     helpers::{ShowTerminalProgress, force_or_new_run_id, plural},
     input::InputHandlerKind,
     list::{BinaryList, TestExecuteContext, TestList},
@@ -902,9 +903,12 @@ impl App {
             return None;
         }
         match default_cache_dir(&self.base.workspace_root) {
-            Some(dir) => Some(Arc::new(cache::FsBackend::new(dir))),
-            None => {
-                warn!("result cache enabled but no cache directory could be determined; disabling");
+            Ok(dir) => Some(Arc::new(cache::FsBackend::new(dir))),
+            Err(error) => {
+                warn!(
+                    "result cache enabled but disabled for this run: {}",
+                    DisplayErrorChain::new(&error)
+                );
                 None
             }
         }

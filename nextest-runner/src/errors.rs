@@ -2307,6 +2307,33 @@ pub enum StateDirError {
     },
 }
 
+/// An error determining the result-cache directory for a workspace.
+#[derive(Debug, Error)]
+pub enum CacheDirError {
+    /// The platform base strategy could not be determined.
+    ///
+    /// This typically means the platform doesn't support standard directory layouts.
+    #[error("could not determine platform base directory strategy")]
+    BaseDirStrategy(#[source] HomeDirError),
+
+    /// The platform cache directory path is not valid UTF-8.
+    #[error("platform cache directory is not valid UTF-8: {path:?}")]
+    CacheDirNotUtf8 {
+        /// The path that was not valid UTF-8.
+        path: PathBuf,
+    },
+
+    /// The workspace path could not be canonicalized.
+    #[error("could not canonicalize workspace path `{workspace_root}`")]
+    Canonicalize {
+        /// The workspace root that could not be canonicalized.
+        workspace_root: Utf8PathBuf,
+        /// The underlying I/O error.
+        #[source]
+        error: std::io::Error,
+    },
+}
+
 /// An error during recording session setup.
 #[derive(Debug, Error)]
 pub enum RecordSetupError {
