@@ -1263,11 +1263,18 @@ impl App {
         // leaves them alone. Best-effort and rate-limited internally.
         if let Some(backend) = &cache_backend {
             let result_cache = &resolved_user_config.result_cache;
-            backend.prune_if_needed(
+            if let Some(stats) = backend.prune_if_needed(
                 Utc::now(),
                 result_cache.prune_grace,
                 result_cache.prune_interval,
-            );
+            ) {
+                debug!(
+                    dirs_removed = stats.dirs_removed,
+                    entries_removed = stats.entries_removed,
+                    bytes_freed = stats.bytes_freed,
+                    "pruned result cache",
+                );
+            }
         }
 
         let outstanding_not_seen_count = reporter_stats
