@@ -109,7 +109,7 @@ pretty_assertions = "1.4.1"
 proptest = "1.11.0"
 pulldown-cmark = { version = "0.13.4", default-features = false }
 quick-junit = "0.6.1"
-rand = "0.10.1"
+rand = "0.10.2"
 recursion = "0.5.4"
 regex = "1.12.4"
 regex-syntax = "0.8.11"
