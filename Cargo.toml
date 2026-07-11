@@ -65,7 +65,7 @@ eazip = { version = "0.2.4", default-features = false, features = ["deflate", "s
 enable-ansi-support = "0.3.1"
 etcetera = "0.11.0"
 fixture-data = { path = "fixture-data" }
-fs-err = "3.3.0"
+fs-err = "3.3.1"
 future-queue = "0.4.0"
 futures = "0.3.32"
 globset = "0.4.18"
