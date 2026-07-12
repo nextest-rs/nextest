@@ -105,6 +105,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                     || (junit_store_failure_output && !is_success);
 
                 set_execute_status_props(
+                    UnitKind::Script,
                     &run_status.output,
                     store_stdout_stderr,
                     TestcaseOrRerun::Testcase(&mut testcase),
@@ -205,6 +206,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                         .set_type(ty);
 
                     set_execute_status_props(
+                        UnitKind::Test,
                         &rerun.output,
                         junit_store_failure_output,
                         TestcaseOrRerun::Rerun(&mut test_rerun),
@@ -234,6 +236,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                     || (junit_store_failure_output && !is_success_for_output);
 
                 set_execute_status_props(
+                    UnitKind::Test,
                     &main_status.output,
                     store_stdout_stderr,
                     TestcaseOrRerun::Testcase(&mut testcase),
@@ -495,15 +498,23 @@ impl TestcaseOrRerun<'_> {
 }
 
 fn set_execute_status_props(
+    kind: UnitKind,
     exec_output: &ChildExecutionOutputDescription<LiveSpec>,
     store_stdout_stderr: bool,
     mut out: TestcaseOrRerun<'_>,
 ) {
-    // Currently we only aggregate test results, so always specify UnitKind::Test.
+    // Preserve the existing JUnit behavior of extracting test-style panic and
+    // error output for both tests and setup scripts.
     let description = UnitErrorDescription::new(UnitKind::Test, exec_output);
     if let Some(errors) = description.all_error_list() {
         out.set_message(errors.short_message());
         out.set_description(DisplayErrorChain::new(errors).to_string());
+    } else if exec_output.has_errors() {
+        let message = match kind {
+            UnitKind::Test => "test failed",
+            UnitKind::Script => "setup script failed",
+        };
+        out.set_message(message);
     }
 
     if store_stdout_stderr {
@@ -566,6 +577,7 @@ mod tests {
         let cases = [
             ExecuteStatusPropsCase {
                 comment: "success + combined + store",
+                kind: UnitKind::Test,
                 status: TestCaseStatus::success(),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Pass),
@@ -583,6 +595,7 @@ mod tests {
             },
             ExecuteStatusPropsCase {
                 comment: "success + combined + no store",
+                kind: UnitKind::Test,
                 status: TestCaseStatus::success(),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Pass),
@@ -600,6 +613,7 @@ mod tests {
             },
             ExecuteStatusPropsCase {
                 comment: "success + split + store",
+                kind: UnitKind::Test,
                 status: TestCaseStatus::success(),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Pass),
@@ -620,6 +634,7 @@ mod tests {
             // it's just another combination of the above.
             ExecuteStatusPropsCase {
                 comment: "failure + combined + store",
+                kind: UnitKind::Test,
                 status: TestCaseStatus::non_success(NonSuccessKind::Failure),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Fail {
@@ -647,6 +662,7 @@ mod tests {
             },
             ExecuteStatusPropsCase {
                 comment: "failure + split + no store",
+                kind: UnitKind::Test,
                 status: TestCaseStatus::non_success(NonSuccessKind::Failure),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Fail {
@@ -675,9 +691,68 @@ mod tests {
                 system_out: None,
                 system_err: None,
             },
+            ExecuteStatusPropsCase {
+                comment: "failure + no extracted error + no store",
+                kind: UnitKind::Test,
+                status: TestCaseStatus::non_success(NonSuccessKind::Failure),
+                output: failed_split_output(Some("ordinary output"), None),
+                store_stdout_stderr: false,
+                message: Some("test failed"),
+                description: None,
+                system_out: None,
+                system_err: None,
+            },
+            ExecuteStatusPropsCase {
+                comment: "flaky failure message + successful final attempt",
+                kind: UnitKind::Test,
+                status: {
+                    let mut status = TestCaseStatus::non_success(NonSuccessKind::Failure);
+                    status.set_message("flaky failure");
+                    status
+                },
+                output: ChildExecutionOutput::Output {
+                    result: Some(ExecutionResult::Pass),
+                    output: ChildOutput::Combined {
+                        output: Bytes::new().into(),
+                    },
+                    errors: None,
+                }
+                .into(),
+                store_stdout_stderr: false,
+                message: Some("flaky failure"),
+                description: None,
+                system_out: None,
+                system_err: None,
+            },
+            ExecuteStatusPropsCase {
+                comment: "setup script failure + no extracted error + no store",
+                kind: UnitKind::Script,
+                status: TestCaseStatus::non_success(NonSuccessKind::Failure),
+                output: failed_split_output(None, Some("ordinary error output")),
+                store_stdout_stderr: false,
+                message: Some("setup script failed"),
+                description: None,
+                system_out: None,
+                system_err: None,
+            },
+            ExecuteStatusPropsCase {
+                comment: "setup script failure + extracted panic + no store",
+                kind: UnitKind::Script,
+                status: TestCaseStatus::non_success(NonSuccessKind::Failure),
+                output: failed_split_output(
+                    None,
+                    Some("thread 'setup' panicked at setup.rs:10:\nbad setup"),
+                ),
+                store_stdout_stderr: false,
+                message: Some("thread 'setup' panicked at setup.rs:10"),
+                description: Some("thread 'setup' panicked at setup.rs:10:\nbad setup"),
+                system_out: None,
+                system_err: None,
+            },
             #[cfg(unix)]
             ExecuteStatusPropsCase {
                 comment: "abort + split + store (unix)",
+                kind: UnitKind::Test,
                 status: TestCaseStatus::non_success(NonSuccessKind::Failure),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Fail {
@@ -700,6 +775,7 @@ mod tests {
             #[cfg(unix)]
             ExecuteStatusPropsCase {
                 comment: "abort + multiple errors + no store (unix)",
+                kind: UnitKind::Test,
                 status: TestCaseStatus::non_success(NonSuccessKind::Failure),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Fail {
@@ -735,6 +811,7 @@ mod tests {
             },
             ExecuteStatusPropsCase {
                 comment: "multiple errors + store",
+                kind: UnitKind::Test,
                 status: TestCaseStatus::non_success(NonSuccessKind::Failure),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Fail {
@@ -769,6 +846,7 @@ mod tests {
             },
             ExecuteStatusPropsCase {
                 comment: "exec fail + combined + store (exec fail means nothing to store)",
+                kind: UnitKind::Test,
                 status: TestCaseStatus::non_success(NonSuccessKind::Error),
                 output: ChildExecutionOutput::StartError(ChildStartError::Spawn(Arc::new(
                     io::Error::other("start error"),
@@ -791,6 +869,7 @@ mod tests {
 
             let mut testcase = TestCase::new("test", case.status);
             set_execute_status_props(
+                case.kind,
                 &case.output,
                 case.store_stdout_stderr,
                 TestcaseOrRerun::Testcase(&mut testcase),
@@ -816,11 +895,22 @@ mod tests {
                 "system_err matches"
             );
         }
+
+        let output = failed_split_output(Some("ordinary retry output"), None);
+        let mut rerun = TestRerun::new(NonSuccessKind::Failure);
+        set_execute_status_props(
+            UnitKind::Test,
+            &output,
+            false,
+            TestcaseOrRerun::Rerun(&mut rerun),
+        );
+        assert_eq!(rerun.message.as_deref(), Some("test failed"));
     }
 
     #[derive(Debug)]
     struct ExecuteStatusPropsCase<'a> {
         comment: &'a str,
+        kind: UnitKind,
         status: TestCaseStatus,
         output: ChildExecutionOutputDescription<LiveSpec>,
         store_stdout_stderr: bool,
@@ -828,6 +918,24 @@ mod tests {
         description: Option<&'a str>,
         system_out: Option<&'a str>,
         system_err: Option<&'a str>,
+    }
+
+    fn failed_split_output(
+        stdout: Option<&str>,
+        stderr: Option<&str>,
+    ) -> ChildExecutionOutputDescription<LiveSpec> {
+        ChildExecutionOutput::Output {
+            result: Some(ExecutionResult::Fail {
+                failure_status: FailureStatus::ExitCode(1),
+                leaked: false,
+            }),
+            output: ChildOutput::Split(ChildSplitOutput {
+                stdout: stdout.map(|output| Bytes::copy_from_slice(output.as_bytes()).into()),
+                stderr: stderr.map(|output| Bytes::copy_from_slice(output.as_bytes()).into()),
+            }),
+            errors: None,
+        }
+        .into()
     }
 
     fn get_message(status: &TestCaseStatus) -> Option<&str> {
