@@ -27,6 +27,8 @@ The instructions below are suitable for both end users and CI. These links will 
 
         If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
 
+        If you installed Rust via `snap install rustup`, the `~/.cargo/bin` directory may not exist by default. Extract the binary to a different directory in your PATH, for example `~/.local/bin`.
+
     Run in a terminal:
 
     ```
@@ -46,6 +48,8 @@ The instructions below are suitable for both end users and CI. These links will 
         The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
 
         If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
+
+        If you installed Rust via `snap install rustup`, the `~/.cargo/bin` directory may not exist by default. Extract the binary to a different directory in your PATH, for example `~/.local/bin`.
 
     Run in a terminal:
 
