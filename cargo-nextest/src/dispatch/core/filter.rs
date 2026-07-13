@@ -11,7 +11,7 @@ use guppy::graph::PackageGraph;
 use nextest_runner::{
     cargo_config::EnvironmentMap,
     config::core::{EvaluatableProfile, get_num_cpus},
-    list::{BinaryList, RustTestArtifact, TestExecuteContext, TestList},
+    list::{BinaryList, ListProgressOptions, RustTestArtifact, TestExecuteContext, TestList},
     partition::PartitionerBuilder,
     reuse_build::ReuseBuildInfo,
     run_mode::NextestRunMode,
@@ -104,6 +104,7 @@ impl TestBuildFilter {
         env: EnvironmentMap,
         profile: &EvaluatableProfile<'_>,
         reuse_build: &ReuseBuildInfo,
+        list_progress_options: ListProgressOptions,
     ) -> Result<TestList<'g>> {
         let path_mapper = make_path_mapper(
             reuse_build,
@@ -144,6 +145,7 @@ impl TestBuildFilter {
             },
             // TODO: do we need to allow customizing this?
             get_num_cpus(),
+            list_progress_options,
         )
         .map_err(|err| ExpectedError::CreateTestListError { err })
     }

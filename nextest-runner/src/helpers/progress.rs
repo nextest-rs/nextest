@@ -124,6 +124,11 @@ impl TerminalProgress {
         self.last_value = value;
     }
 
+    #[cfg(test)]
+    pub(crate) fn last_value(&self) -> TermProgress {
+        self.last_value
+    }
+
     pub(crate) fn emit(&self) {
         // Use the write! macro rather than eprint! so that we ignore errors
         // rather than panicking. Terminal progress reporting is cosmetic and
@@ -157,6 +162,9 @@ mod tests {
         // We round away from zero (12.5 -> 13, 37.5 -> 38).
         assert_eq!(term_progress_percent(1, 8), 13);
         assert_eq!(term_progress_percent(3, 8), 38);
+        assert_eq!(term_progress_percent(1, 40), 3);
+        assert_eq!(term_progress_percent(1, 3), 33);
+        assert_eq!(term_progress_percent(2, 3), 67);
 
         // We stay within 0..=100 for the percentage.
         assert_eq!(term_progress_percent(11, 10), 100);

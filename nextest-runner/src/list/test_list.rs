@@ -15,7 +15,10 @@ use crate::{
     },
     helpers::{convert_build_platform, dylib_path, dylib_path_envvar, write_test_name},
     indenter::indented,
-    list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
+    list::{
+        BinaryList, ListProgressEvent, ListProgressOptions, ListProgressReporter, OutputFormat,
+        RustBuildMeta, Styles, TestListState,
+    },
     partition::{Partitioner, PartitionerBuilder, PartitionerScope},
     reuse_build::PathMapper,
     run_mode::NextestRunMode,
@@ -53,7 +56,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 use swrite::{SWrite, swrite};
-use tokio::runtime::Runtime;
+use tokio::{runtime::Runtime, time::MissedTickBehavior};
 use tracing::debug;
 
 /// A Rust test binary built by Cargo. This artifact hasn't been run yet so there's no information
@@ -259,6 +262,7 @@ impl<'g> TestList<'g> {
         profile: &impl ListProfile,
         bound: FilterBound,
         list_threads: usize,
+        list_progress_options: ListProgressOptions,
     ) -> Result<Self, CreateTestListError>
     where
         I: IntoIterator<Item = RustTestArtifact<'g>>,
@@ -286,50 +290,84 @@ impl<'g> TestList<'g> {
 
         let ecx = profile.filterset_ecx();
 
-        let runtime = Runtime::new().map_err(CreateTestListError::TokioRuntimeCreate)?;
+        let test_artifacts: Vec<RustTestArtifact<'g>> = test_artifacts.into_iter().collect();
+        let parsed_binaries: Vec<ParsedTestBinary<'g>> = if test_artifacts.is_empty() {
+            // No binaries to list, so skip all the fancy setup and progress
+            // reporting done in the event loop below.
+            Vec::new()
+        } else {
+            let mut list_progress =
+                ListProgressReporter::new(test_artifacts.len(), &list_progress_options);
 
-        // Phase 1: run test binaries and parse their output. Binary-level
-        // filtering decides which binaries to execute; test-level filtering is
-        // deferred to a separate sequential phase below.
-        let stream = futures::stream::iter(test_artifacts).map(|test_binary| {
-            async {
-                let binary_query = test_binary.to_binary_query();
-                let binary_match = filter.filter_binary_match(&binary_query, &ecx, bound);
-                match binary_match {
-                    FilterBinaryMatch::Definite | FilterBinaryMatch::Possible => {
-                        debug!(
-                            "executing test binary to obtain test list \
+            let runtime = Runtime::new().map_err(CreateTestListError::TokioRuntimeCreate)?;
+
+            // Phase 1: run test binaries and parse their output. Binary-level
+            // filtering decides which binaries to execute; test-level filtering is
+            // deferred to a separate sequential phase below.
+            let stream = futures::stream::iter(test_artifacts).map(|test_binary| {
+                async {
+                    let binary_query = test_binary.to_binary_query();
+                    let binary_match = filter.filter_binary_match(&binary_query, &ecx, bound);
+                    match binary_match {
+                        FilterBinaryMatch::Definite | FilterBinaryMatch::Possible => {
+                            debug!(
+                                "executing test binary to obtain test list \
                             (match result is {binary_match:?}): {}",
-                            test_binary.binary_id,
-                        );
-                        // Run the binary to obtain the test list.
-                        let list_settings = profile.list_settings_for(&binary_query);
-                        let (non_ignored, ignored) = test_binary
-                            .exec(&lctx, &list_settings, ctx.target_runner)
-                            .await?;
-                        let parsed = Self::parse_output(
-                            test_binary,
-                            non_ignored.as_str(),
-                            ignored.as_str(),
-                        )?;
-                        Ok::<_, CreateTestListError>(parsed)
-                    }
-                    FilterBinaryMatch::Mismatch { reason } => {
-                        debug!("skipping test binary: {reason}: {}", test_binary.binary_id,);
-                        Ok(Self::make_skipped(test_binary, reason))
+                                test_binary.binary_id,
+                            );
+                            // Run the binary to obtain the test list.
+                            let list_settings = profile.list_settings_for(&binary_query);
+                            let (non_ignored, ignored) = test_binary
+                                .exec(&lctx, &list_settings, ctx.target_runner)
+                                .await?;
+                            let parsed = Self::parse_output(
+                                test_binary,
+                                non_ignored.as_str(),
+                                ignored.as_str(),
+                            )?;
+                            Ok::<_, CreateTestListError>(parsed)
+                        }
+                        FilterBinaryMatch::Mismatch { reason } => {
+                            debug!("skipping test binary: {reason}: {}", test_binary.binary_id,);
+                            Ok(Self::make_skipped(test_binary, reason))
+                        }
                     }
                 }
-            }
-        });
-        let fut = stream
-            .buffer_unordered(list_threads)
-            .try_collect::<Vec<_>>();
+            });
+            let tick_interval = list_progress.tick_interval();
 
-        let parsed_binaries: Vec<ParsedTestBinary<'g>> = runtime.block_on(fut)?;
+            let result: Result<Vec<ParsedTestBinary<'g>>, CreateTestListError> =
+                runtime.block_on(async {
+                    let buffered = stream.buffer_unordered(list_threads);
+                    futures::pin_mut!(buffered);
+                    let mut interval = tokio::time::interval(tick_interval);
+                    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+                    let mut parsed = Vec::new();
+                    loop {
+                        tokio::select! {
+                            item = buffered.next() => match item {
+                                Some(res) => {
+                                    parsed.push(res?);
+                                    list_progress.handle_event(ListProgressEvent::BinaryProcessed);
+                                }
+                                None => break,
+                            },
+                            _ = interval.tick() => {
+                                list_progress.handle_event(ListProgressEvent::Tick);
+                            }
+                        }
+                    }
+                    Ok(parsed)
+                });
 
-        // Ensure that the runtime doesn't stay hanging even if a custom test framework misbehaves
-        // (can be an issue on Windows).
-        runtime.shutdown_background();
+            // Ensure that the runtime doesn't stay hanging even if a custom test framework misbehaves
+            // (can be an issue on Windows).
+            runtime.shutdown_background();
+            // Dropping clears the list progress bar.
+            drop(list_progress);
+
+            result?
+        };
 
         // Phase 2: apply test-level filters and build suites.
         //

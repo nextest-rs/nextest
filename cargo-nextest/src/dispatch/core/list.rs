@@ -6,7 +6,7 @@
 use super::{
     filter::TestBuildFilter,
     run::App,
-    value_enums::{ListType, MessageFormatOpts},
+    value_enums::{ListType, MessageFormatOpts, ShowProgressOpt},
 };
 use crate::{
     Result,
@@ -21,6 +21,7 @@ use nextest_runner::{
     helpers::force_or_new_run_id,
     list::TestExecuteContext,
     pager::PagedOutput,
+    reporter::ShowProgress,
     run_mode::NextestRunMode,
     runner::VersionEnvVars,
     show_config::{ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
@@ -59,6 +60,16 @@ pub(crate) struct ListOpts {
     )]
     pub(crate) list_type: ListType,
 
+    /// Show list progress in the specified manner.
+    ///
+    /// List progress is only shown if building the test list takes more than 2
+    /// seconds.
+    ///
+    /// This can also be set via user config at `~/.config/nextest/config.toml`.
+    /// See <https://nexte.st/docs/user-config>.
+    #[arg(long, env = "NEXTEST_SHOW_PROGRESS", help_heading = "Output options")]
+    pub(crate) show_progress: Option<ShowProgressOpt>,
+
     #[clap(flatten)]
     pub(crate) reuse_build: ReuseBuildOpts,
 }
@@ -68,6 +79,7 @@ impl App {
         &self,
         message_format: MessageFormatOpts,
         list_type: ListType,
+        show_progress: Option<ShowProgressOpt>,
     ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
 
@@ -142,12 +154,22 @@ impl App {
                     target_runner,
                 };
 
-                let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
+                // The precedence for showing progress during listing is CLI ->
+                // env -> resolved config, same as the run path.
+                let list_show_progress = show_progress
+                    .map(ShowProgress::from)
+                    .unwrap_or_else(|| resolved_user_config.ui.show_progress.into());
+                let test_list = self.build_test_list(
+                    &ctx,
+                    binary_list,
+                    &test_filter,
+                    &profile,
+                    list_show_progress,
+                )?;
 
-                // Spawn the pager after building the list. (In an upcoming
-                // change we're going to add a progress bar to the list display
-                // -- we want to ensure the pager doesn't collide with the
-                // progress bar.)
+                // Spawn the pager after building the list. (We sometimes
+                // display a progress bar during the list phase -- we want to
+                // ensure the pager doesn't collide with the progress bar.)
                 let mut paged_output = if should_page {
                     PagedOutput::request_pager(
                         &pager_setting,
@@ -223,10 +245,17 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
-
         let resolved_user_config =
             resolve_user_config(self.base.early_args.user_config_location())?;
+
+        let test_list = self.build_test_list(
+            &ctx,
+            binary_list,
+            &test_filter,
+            &profile,
+            resolved_user_config.ui.show_progress.into(),
+        )?;
+
         let (pager_setting, paginate) =
             self.base.early_args.resolve_pager(&resolved_user_config.ui);
 

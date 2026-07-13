@@ -12,6 +12,7 @@ mod display_filter;
 mod output_format;
 #[cfg(test)]
 mod partition_tests;
+mod progress;
 mod rust_build_meta;
 #[cfg(test)]
 mod test_helpers;
@@ -20,6 +21,8 @@ mod test_list;
 pub use binary_list::*;
 pub(crate) use display_filter::*;
 pub use output_format::*;
+pub use progress::ListProgressOptions;
+pub(crate) use progress::{ListProgressEvent, ListProgressReporter};
 pub use rust_build_meta::*;
 pub use test_list::*;
 

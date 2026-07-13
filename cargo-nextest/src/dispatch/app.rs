@@ -125,7 +125,11 @@ impl AppOpts {
                     output_writer,
                 )?;
                 let app = App::new(base, list_opts.build_filter)?;
-                app.exec_list(list_opts.message_format, list_opts.list_type)?;
+                app.exec_list(
+                    list_opts.message_format,
+                    list_opts.list_type,
+                    list_opts.show_progress,
+                )?;
                 Ok(0)
             }
             Command::Run(run_opts) => {
