@@ -35,6 +35,20 @@ Experimental features are configured under `[experimental]`.
   record = true
   ```
 
+### `experimental.result-cache`
+
+<!-- md:version 0.9.140 -->
+
+- **Type**: Boolean
+- **Description**: Enables the result cache: skips re-running tests that passed on an unchanged binary.
+- **Default**: `false`
+- **Environment variable**: `NEXTEST_EXPERIMENTAL_RESULT_CACHE=1`
+- **Example**:
+  ```toml
+  [experimental]
+  result-cache = true
+  ```
+
 ## Record configuration
 
 <!-- md:version 0.9.123 -->
@@ -77,6 +91,24 @@ For detailed information, see [_Record, replay, and rerun_](../features/record-r
 - **Type**: String (duration)
 - **Description**: Maximum age of a recorded run before eviction (e.g. `"30d"`).
 - **Default**: `"30d"`
+
+## Result cache configuration
+
+<!-- md:version 0.9.140 -->
+
+Result-cache settings are configured under `[result-cache]`. The cache requires `[experimental] result-cache = true`.
+
+### `result-cache.prune-grace`
+
+- **Type**: String (duration)
+- **Description**: How long a binary's cached results are kept after it was last used (e.g. `"7d"`).
+- **Default**: `"7d"`
+
+### `result-cache.prune-interval`
+
+- **Type**: String (duration)
+- **Description**: Minimum time between automatic prunes of the result cache (e.g. `"1d"`).
+- **Default**: `"1d"`
 
 ## UI configuration
 

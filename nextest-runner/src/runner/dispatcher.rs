@@ -855,6 +855,14 @@ where
                     reason,
                 })
             }
+            InternalEvent::Executor(ExecutorEvent::Cached { test_instance }) => {
+                // A cache hit is a passing test that didn't need to run.
+                self.run_stats.on_test_cached();
+                self.callback_none_response(TestEventKind::TestCached {
+                    test_instance: test_instance.id(),
+                    current_stats: self.run_stats,
+                })
+            }
             InternalEvent::Signal(event) => self.handle_signal_event(event),
             InternalEvent::GlobalTimeout => {
                 self.begin_cancel(CancelReason::GlobalTimeout, CancelEvent::GlobalTimeout)

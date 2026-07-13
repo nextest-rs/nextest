@@ -23,15 +23,26 @@ pub struct ExperimentalConfig {
     /// disk for replay or selective rerun.
     #[serde(default)]
     pub record: bool,
+
+    /// Enables the result cache: skips re-running tests that passed on an
+    /// unchanged binary.
+    #[serde(default)]
+    pub result_cache: bool,
 }
 
 impl ExperimentalConfig {
     /// Converts to a set of enabled experimental features.
     pub fn to_set(self) -> BTreeSet<UserConfigExperimental> {
-        let Self { record } = self;
+        let Self {
+            record,
+            result_cache,
+        } = self;
         let mut set = BTreeSet::new();
         if record {
             set.insert(UserConfigExperimental::Record);
+        }
+        if result_cache {
+            set.insert(UserConfigExperimental::ResultCache);
         }
         set
     }
@@ -47,6 +58,9 @@ impl ExperimentalConfig {
 pub enum UserConfigExperimental {
     /// Enable recording of test runs.
     Record,
+
+    /// Enable the result cache.
+    ResultCache,
 }
 
 impl UserConfigExperimental {
@@ -54,6 +68,7 @@ impl UserConfigExperimental {
     pub fn env_var(&self) -> &'static str {
         match self {
             Self::Record => "NEXTEST_EXPERIMENTAL_RECORD",
+            Self::ResultCache => "NEXTEST_EXPERIMENTAL_RESULT_CACHE",
         }
     }
 
@@ -61,12 +76,13 @@ impl UserConfigExperimental {
     pub fn name(&self) -> &'static str {
         match self {
             Self::Record => "record",
+            Self::ResultCache => "result-cache",
         }
     }
 
     /// Returns all known experimental features.
     pub fn all() -> &'static [Self] {
-        &[Self::Record]
+        &[Self::Record, Self::ResultCache]
     }
 
     /// Returns the set of experimental features enabled via environment variables.
@@ -93,6 +109,7 @@ impl FromStr for UserConfigExperimental {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "record" => Ok(Self::Record),
+            "result-cache" => Ok(Self::ResultCache),
             _ => Err(UnknownUserExperimentalError {
                 feature: s.to_owned(),
             }),
@@ -134,6 +151,10 @@ mod tests {
             "record".parse::<UserConfigExperimental>().unwrap(),
             UserConfigExperimental::Record
         );
+        assert_eq!(
+            "result-cache".parse::<UserConfigExperimental>().unwrap(),
+            UserConfigExperimental::ResultCache
+        );
 
         assert!("unknown".parse::<UserConfigExperimental>().is_err());
     }
@@ -141,6 +162,10 @@ mod tests {
     #[test]
     fn test_display() {
         assert_eq!(UserConfigExperimental::Record.to_string(), "record");
+        assert_eq!(
+            UserConfigExperimental::ResultCache.to_string(),
+            "result-cache"
+        );
     }
 
     #[test]
@@ -149,5 +174,20 @@ mod tests {
             UserConfigExperimental::Record.env_var(),
             "NEXTEST_EXPERIMENTAL_RECORD"
         );
+        assert_eq!(
+            UserConfigExperimental::ResultCache.env_var(),
+            "NEXTEST_EXPERIMENTAL_RESULT_CACHE"
+        );
+    }
+
+    #[test]
+    fn test_result_cache_to_set() {
+        let config = ExperimentalConfig {
+            record: false,
+            result_cache: true,
+        };
+        let set = config.to_set();
+        assert!(set.contains(&UserConfigExperimental::ResultCache));
+        assert!(!set.contains(&UserConfigExperimental::Record));
     }
 }

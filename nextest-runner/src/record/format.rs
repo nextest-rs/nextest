@@ -251,8 +251,9 @@ pub(super) const RUNS_JSON_FORMAT_VERSION: RunsJsonFormatVersion = RunsJsonForma
 /// - 1.1: Addition of the `flaky_result` field to `ExecutionStatuses`.
 /// - 2.0: `slot_assignment` is now mandatory in `TestStarted` and
 ///   `TestRetryStarted` events.
+/// - 3.0: Addition of the `cached` field to `FilterMatch::Matches`.
 pub const STORE_FORMAT_VERSION: StoreFormatVersion = StoreFormatVersion::new(
-    StoreFormatMajorVersion::new(2),
+    StoreFormatMajorVersion::new(3),
     StoreFormatMinorVersion::new(0),
 );
 

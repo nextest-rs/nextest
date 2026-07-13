@@ -18,14 +18,19 @@ use crate::{
     reuse_build::ReuseBuildOpts,
 };
 use camino::Utf8Path;
+use chrono::Utc;
 use clap::{Args, builder::BoolishValueParser};
 use nextest_filtering::{FiltersetKind, ParseContext};
 use nextest_runner::{
+    cache::{
+        self, CacheBackend, CacheHandle, CachePolicy, CacheWriter, GlobalContext, default_cache_dir,
+    },
     cargo_config::EnvironmentMap,
     config::{
         core::ConfigExperimental,
         elements::{MaxFail, RetryPolicy, TestThreads},
     },
+    errors::DisplayErrorChain,
     helpers::{ShowTerminalProgress, force_or_new_run_id, plural},
     input::InputHandlerKind,
     list::{BinaryList, TestExecuteContext, TestList},
@@ -48,7 +53,7 @@ use nextest_runner::{
     signal::SignalHandlerKind,
     test_filter::TestFilter,
     test_output::CaptureStrategy,
-    user_config::{UserConfigExperimental, elements::UiConfig},
+    user_config::{UserConfig, UserConfigExperimental, elements::UiConfig},
 };
 use quick_junit::ReportUuid;
 use std::{collections::BTreeMap, io::IsTerminal, sync::Arc, time::Duration};
@@ -137,6 +142,18 @@ pub struct TestRunnerOpts {
     /// Compile, but don't run tests.
     #[arg(long, name = "no-run")]
     pub(crate) no_run: bool,
+
+    /// Don't consult or update the test result cache for this run.
+    ///
+    /// Has no effect unless the experimental result cache is enabled. When the
+    /// cache is enabled, every test runs as normal and no results are stored.
+    #[arg(
+        long,
+        name = "no-cache",
+        env = "NEXTEST_NO_CACHE",
+        value_parser = BoolishValueParser::new(),
+    )]
+    pub(crate) no_cache: bool,
 
     /// Number of tests to run simultaneously [possible values: integer or "num-cpus"]
     /// [default: from profile].
@@ -851,6 +868,7 @@ impl App {
         binary_list: Arc<BinaryList>,
         test_filter: &TestFilter,
         profile: &nextest_runner::config::core::EvaluatableProfile<'_>,
+        cache: CacheHandle,
     ) -> Result<TestList<'_>> {
         let env = EnvironmentMap::new(&self.base.cargo_configs);
         self.build_filter.compute_test_list(
@@ -862,7 +880,38 @@ impl App {
             env,
             profile,
             &self.base.reuse_build,
+            cache,
         )
+    }
+
+    /// Resolves the result cache backend, or `None` if caching is disabled.
+    ///
+    /// Caching is gated behind the `result-cache` experimental feature and
+    /// disabled by `--no-cache`/`NEXTEST_NO_CACHE`. An unresolvable cache
+    /// directory disables caching rather than erroring, since the cache must
+    /// never fail a run.
+    ///
+    /// The backend is always constructed when enabled — independent of whether a
+    /// given run consults or records — so it can self-prune. That policy is
+    /// decided separately, in [`CachePolicy`].
+    fn resolve_cache_backend(
+        &self,
+        config: &UserConfig,
+        no_cache: bool,
+    ) -> Option<Arc<cache::FsBackend>> {
+        if no_cache || !config.is_experimental_enabled(UserConfigExperimental::ResultCache) {
+            return None;
+        }
+        match default_cache_dir(&self.base.workspace_root) {
+            Ok(dir) => Some(Arc::new(cache::FsBackend::new(dir))),
+            Err(error) => {
+                warn!(
+                    "result cache enabled but disabled for this run: {}",
+                    DisplayErrorChain::new(&error)
+                );
+                None
+            }
+        }
     }
 
     pub(crate) fn exec_run(
@@ -986,6 +1035,22 @@ impl App {
             None => (None, None),
         };
 
+        // Resolve the cache backend, keeping the concrete `Arc<FsBackend>` for
+        // the post-run prune (an inherent, filesystem-specific operation) and
+        // handing the run a `CacheHandle` over the `dyn` view for consulting and
+        // recording.
+        let cache_backend = self.resolve_cache_backend(&resolved_user_config, runner_opts.no_cache);
+        let cache_policy = CachePolicy::compute(GlobalContext {
+            is_stress: runner_opts.stress.condition.is_some(),
+            is_with_debugger: runner_opts.interceptor.debugger.is_some(),
+            is_with_tracer: runner_opts.interceptor.tracer.is_some(),
+            is_rerun: rerun_state.is_some(),
+        });
+        let cache = CacheHandle::new(
+            cache_backend.clone().map(|c| c as Arc<dyn CacheBackend>),
+            cache_policy,
+        );
+
         // Start running Cargo commands at this point, once all initial
         // validation is complete.
         let rerun_build_scope = rerun_state
@@ -1014,7 +1079,8 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
+        let test_list =
+            self.build_test_list(&ctx, binary_list, &test_filter, &profile, cache.clone())?;
 
         // Validate interceptor mode requirements.
         if runner_opts.interceptor.is_active() {
@@ -1175,9 +1241,41 @@ impl App {
             reporter.set_run_id_unique_prefix(prefix);
         }
 
+        // Whenever a cache backend exists, observe events to write updates:
+        // stores for recorded passes and touches for consulted entries. The
+        // per-test record decision is made inside the writer from the policy.
+        let cache_writer = CacheWriter::new(cache, &test_list);
+
         configure_handle_inheritance(no_capture)?;
-        let run_stats = runner.try_execute(|event| reporter.report_event(event))?;
+        let run_stats = runner.try_execute(|event| {
+            if let Some(writer) = &cache_writer {
+                writer.observe(&event);
+            }
+            reporter.report_event(event)
+        })?;
+        if let Some(writer) = cache_writer {
+            writer.finish();
+        }
         let reporter_stats = reporter.finish();
+
+        // Self-prune the result cache so it never grows without bound. Binaries
+        // consulted this run had their access times refreshed, so pruning by age
+        // leaves them alone. Best-effort and rate-limited internally.
+        if let Some(backend) = &cache_backend {
+            let result_cache = &resolved_user_config.result_cache;
+            if let Some(stats) = backend.prune_if_needed(
+                Utc::now(),
+                result_cache.prune_grace,
+                result_cache.prune_interval,
+            ) {
+                debug!(
+                    dirs_removed = stats.dirs_removed,
+                    entries_removed = stats.entries_removed,
+                    bytes_freed = stats.bytes_freed,
+                    "pruned result cache",
+                );
+            }
+        }
 
         let outstanding_not_seen_count = reporter_stats
             .run_finished
@@ -1285,7 +1383,15 @@ impl App {
             target_runner,
         };
 
-        let test_list = self.build_test_list(&ctx, binary_list, &test_filter, &profile)?;
+        // Benchmark results are not cached: their value is the measured time,
+        // not a pass/fail outcome.
+        let test_list = self.build_test_list(
+            &ctx,
+            binary_list,
+            &test_filter,
+            &profile,
+            CacheHandle::disabled(),
+        )?;
 
         // Validate interceptor mode requirements.
         if runner_opts.interceptor.is_active() {

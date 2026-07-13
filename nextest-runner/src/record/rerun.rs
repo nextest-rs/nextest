@@ -116,7 +116,7 @@ pub(crate) fn compute_outstanding_pure(
                 let mut curr = RerunTestSuiteInfo::new(binary_id.clone());
                 for (test_name, filter_match) in test_cases {
                     match filter_match {
-                        FilterMatch::Matches => {
+                        FilterMatch::Matches { cached: _ } => {
                             // This test should have been run.
                             let key = OwnedTestInstanceId {
                                 binary_id: binary_id.clone(),
@@ -558,7 +558,7 @@ mod tests {
                 let rust_binary_id = binary_id.rust_binary_id();
 
                 for (test_name, filter_match) in tests {
-                    if matches!(filter_match, FilterMatch::Matches) {
+                    if matches!(filter_match, FilterMatch::Matches { .. }) {
                         let key = (*binary_id, *test_name);
                         let outcome = final_step.outcomes.get(&key);
 
@@ -643,7 +643,7 @@ mod tests {
         );
 
         // FilterMatch::Matches with various outcomes.
-        let matches = F::HasMatch(FilterMatch::Matches);
+        let matches = F::HasMatch(FilterMatch::Matches { cached: false });
 
         // Passed -> Passing.
         assert_eq!(
@@ -779,7 +779,9 @@ mod tests {
 
     /// All HasMatch filter results (test is in the list).
     fn all_in_list_filter_results() -> Vec<FilterMatchResult> {
-        let mut results = vec![FilterMatchResult::HasMatch(FilterMatch::Matches)];
+        let mut results = vec![FilterMatchResult::HasMatch(FilterMatch::Matches {
+            cached: false,
+        })];
         for &reason in MismatchReason::ALL_VARIANTS {
             results.push(FilterMatchResult::HasMatch(FilterMatch::Mismatch {
                 reason,
@@ -832,7 +834,7 @@ mod tests {
         for outcome in passing_outcomes {
             let decision = decide_test_outcome(
                 PrevStatus::Outstanding,
-                FilterMatchResult::HasMatch(FilterMatch::Matches),
+                FilterMatchResult::HasMatch(FilterMatch::Matches { cached: false }),
                 outcome,
             );
             assert_eq!(
@@ -856,7 +858,7 @@ mod tests {
             for outcome in failing_outcomes {
                 let decision = decide_test_outcome(
                     prev,
-                    FilterMatchResult::HasMatch(FilterMatch::Matches),
+                    FilterMatchResult::HasMatch(FilterMatch::Matches { cached: false }),
                     outcome,
                 );
                 assert_eq!(
@@ -1079,7 +1081,7 @@ mod tests {
 
     fn arb_filter_match() -> impl Strategy<Value = FilterMatch> {
         prop_oneof![
-            4 => Just(FilterMatch::Matches),
+            4 => Just(FilterMatch::Matches { cached: false }),
             1 => any::<MismatchReason>().prop_map(|reason| FilterMatch::Mismatch { reason }),
         ]
     }
@@ -1138,7 +1140,7 @@ mod tests {
                 BinaryModel::Listed { tests } => Some(
                     tests
                         .iter()
-                        .filter(|(_, fm)| matches!(fm, FilterMatch::Matches))
+                        .filter(|(_, fm)| matches!(fm, FilterMatch::Matches { .. }))
                         .map(move |(tn, _)| (*binary_id, *tn)),
                 ),
                 BinaryModel::Skipped => None,
@@ -1278,7 +1280,7 @@ mod tests {
                     PrevStatus::Passing | PrevStatus::Unknown => Decision::NotTracked,
                 }
             }
-            FilterMatchResult::HasMatch(FilterMatch::Matches) => {
+            FilterMatchResult::HasMatch(FilterMatch::Matches { .. }) => {
                 match outcome {
                     Some(TestOutcome::Passed) => Decision::Passing,
                     Some(TestOutcome::Failed) => Decision::Outstanding,

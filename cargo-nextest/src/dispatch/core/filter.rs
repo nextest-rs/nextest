@@ -9,6 +9,7 @@ use camino::Utf8PathBuf;
 use clap::{ArgAction, Args};
 use guppy::graph::PackageGraph;
 use nextest_runner::{
+    cache::CacheHandle,
     cargo_config::EnvironmentMap,
     config::core::{EvaluatableProfile, get_num_cpus},
     list::{BinaryList, RustTestArtifact, TestExecuteContext, TestList},
@@ -104,6 +105,7 @@ impl TestBuildFilter {
         env: EnvironmentMap,
         profile: &EvaluatableProfile<'_>,
         reuse_build: &ReuseBuildInfo,
+        cache: CacheHandle,
     ) -> Result<TestList<'g>> {
         let path_mapper = make_path_mapper(
             reuse_build,
@@ -144,6 +146,7 @@ impl TestBuildFilter {
             },
             // TODO: do we need to allow customizing this?
             get_num_cpus(),
+            cache,
         )
         .map_err(|err| ExpectedError::CreateTestListError { err })
     }

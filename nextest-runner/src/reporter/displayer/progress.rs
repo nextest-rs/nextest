@@ -392,6 +392,20 @@ impl ProgressBarState {
                 self.bar.set_length(current_stats.initial_run_count as u64);
                 self.bar.set_position(current_stats.finished_count as u64);
             }
+            TestEventKind::TestCached { current_stats, .. } => {
+                // A cached test never started running, so the running count is
+                // unchanged and there's no running test to remove -- but it does
+                // advance the finished count.
+                self.stats = *current_stats;
+
+                self.bar.set_prefix(progress_bar_prefix(
+                    current_stats,
+                    current_stats.cancel_reason,
+                    styles,
+                ));
+                self.bar.set_length(current_stats.initial_run_count as u64);
+                self.bar.set_position(current_stats.finished_count as u64);
+            }
             TestEventKind::TestAttemptFailedWillRetry {
                 test_instance,
                 delay_before_next_attempt,
@@ -546,6 +560,7 @@ pub(super) fn terminal_progress_value(event: &TestEvent<'_>) -> TermProgress {
         | TestEventKind::TestAttemptFailedWillRetry { .. }
         | TestEventKind::TestRetryStarted { .. }
         | TestEventKind::TestSkipped { .. }
+        | TestEventKind::TestCached { .. }
         | TestEventKind::InfoStarted { .. }
         | TestEventKind::InfoResponse { .. }
         | TestEventKind::InfoFinished { .. }
@@ -615,6 +630,7 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         setup_scripts_exec_failed: _,
         setup_scripts_timed_out: _,
         passed,
+        passed_cached,
         passed_slow,
         passed_timed_out: _,
         flaky,
@@ -635,8 +651,15 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         "passed".style(styles.pass)
     );
 
-    if passed_slow > 0 || flaky > 0 || leaky > 0 {
-        let mut text = Vec::with_capacity(3);
+    if passed_cached > 0 || passed_slow > 0 || flaky > 0 || leaky > 0 {
+        let mut text = Vec::with_capacity(4);
+        if passed_cached > 0 {
+            text.push(format!(
+                "{} {}",
+                passed_cached.style(styles.count),
+                "cached".style(styles.skip)
+            ));
+        }
         if passed_slow > 0 {
             text.push(format!(
                 "{} {}",
@@ -893,6 +916,32 @@ mod tests {
                 "{name} matches"
             );
         }
+    }
+
+    #[test]
+    fn summary_str_reports_cached_passes() {
+        let styles = Styles::default();
+        let summary = |passed, passed_cached| {
+            let mut out = String::new();
+            write_summary_str(
+                &RunStats {
+                    passed,
+                    passed_cached,
+                    ..RunStats::default()
+                },
+                &styles,
+                &mut out,
+            );
+            out
+        };
+
+        // No cache hits: the summary has no parenthetical breakdown.
+        assert_eq!(summary(3, 0), "3 passed, 0 skipped");
+        // Some passes served from cache: break out the subset. `passed_cached`
+        // is a subset of `passed`, so the total stays 3.
+        assert_eq!(summary(3, 2), "3 passed (2 cached), 0 skipped");
+        // Every pass served from cache.
+        assert_eq!(summary(3, 3), "3 passed (3 cached), 0 skipped");
     }
 
     #[test]

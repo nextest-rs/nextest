@@ -221,18 +221,30 @@ impl<'a> ExecutorContext<'a> {
         let total_attempts = retry_policy.count() + 1;
         let mut backoff_iter = BackoffIter::new(retry_policy);
 
-        if let FilterMatch::Mismatch { reason } = test.instance.test_info.filter_match {
-            debug_assert!(
-                false,
-                "this test should already have been skipped in a filter step"
-            );
-            // Failure to send means the receiver was dropped.
-            let _ = resp_tx.send(ExecutorEvent::Skipped {
-                stress_index,
-                test_instance: test.instance,
-                reason,
-            });
-            return;
+        match test.instance.test_info.filter_match {
+            FilterMatch::Mismatch { reason } => {
+                debug_assert!(
+                    false,
+                    "this test should already have been skipped in a filter step"
+                );
+                // Failure to send means the receiver was dropped.
+                let _ = resp_tx.send(ExecutorEvent::Skipped {
+                    stress_index,
+                    test_instance: test.instance,
+                    reason,
+                });
+                return;
+            }
+            FilterMatch::Matches { cached: true } => {
+                // This test's passing result was reused from the result cache,
+                // so there's nothing to run: report the cache hit and return
+                // before spawning a process.
+                let _ = resp_tx.send(ExecutorEvent::Cached {
+                    test_instance: test.instance,
+                });
+                return;
+            }
+            FilterMatch::Matches { cached: false } => {}
         }
 
         let (req_rx_tx, req_rx_rx) = oneshot::channel();

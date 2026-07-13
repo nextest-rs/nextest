@@ -867,6 +867,15 @@ pub enum UserConfigError {
         #[source]
         error: Box<target_spec::Error>,
     },
+
+    /// A `[result-cache]` duration is out of the supported range.
+    #[error("result-cache.{field} ({value:?}) is out of the supported range")]
+    ResultCacheDuration {
+        /// The setting whose value is out of range (e.g. `prune-grace`).
+        field: &'static str,
+        /// The offending duration.
+        value: std::time::Duration,
+    },
 }
 
 /// Error returned while parsing a [`MaxFail`](crate::config::elements::MaxFail) input.
@@ -2283,6 +2292,33 @@ pub enum StateDirError {
     /// The platform state directory path is not valid UTF-8.
     #[error("platform state directory is not valid UTF-8: {path:?}")]
     StateDirNotUtf8 {
+        /// The path that was not valid UTF-8.
+        path: PathBuf,
+    },
+
+    /// The workspace path could not be canonicalized.
+    #[error("could not canonicalize workspace path `{workspace_root}`")]
+    Canonicalize {
+        /// The workspace root that could not be canonicalized.
+        workspace_root: Utf8PathBuf,
+        /// The underlying I/O error.
+        #[source]
+        error: std::io::Error,
+    },
+}
+
+/// An error determining the result-cache directory for a workspace.
+#[derive(Debug, Error)]
+pub enum CacheDirError {
+    /// The platform base strategy could not be determined.
+    ///
+    /// This typically means the platform doesn't support standard directory layouts.
+    #[error("could not determine platform base directory strategy")]
+    BaseDirStrategy(#[source] HomeDirError),
+
+    /// The platform cache directory path is not valid UTF-8.
+    #[error("platform cache directory is not valid UTF-8: {path:?}")]
+    CacheDirNotUtf8 {
         /// The path that was not valid UTF-8.
         path: PathBuf,
     },

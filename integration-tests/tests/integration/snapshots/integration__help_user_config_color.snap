@@ -72,6 +72,19 @@ Experimental features are configured under [36m[experimental][0m.
       [35;1m[experimental][0m
       record = [33mtrue[0m
 
+[1;4m[36mexperimental.result-cache[0m
+
+[3m(since 0.9.140)[0m
+
+- [1mType[0m: Boolean
+- [1mDescription[0m: Enables the result cache: skips re-running tests that passed on
+  an unchanged binary.
+- [1mDefault[0m: [36mfalse[0m
+- [1mEnvironment variable[0m: [36mNEXTEST_EXPERIMENTAL_RESULT_CACHE=1[0m
+- [1mExample[0m:
+      [35;1m[experimental][0m
+      result-cache = [33mtrue[0m
+
 [1;4mRecord configuration[0m
 
 [3m(since 0.9.123)[0m
@@ -116,6 +129,27 @@ For detailed information, see [34;4m[3m]8;;https://nexte.st/docs/features/rec
 - [1mType[0m: String (duration)
 - [1mDescription[0m: Maximum age of a recorded run before eviction (e.g. [36m"30d"[0m).
 - [1mDefault[0m: [36m"30d"[0m
+
+[1;4mResult cache configuration[0m
+
+[3m(since 0.9.140)[0m
+
+Result-cache settings are configured under [36m[result-cache][0m. The cache requires
+[36m[experimental] result-cache = true[0m.
+
+[1;4m[36mresult-cache.prune-grace[0m
+
+- [1mType[0m: String (duration)
+- [1mDescription[0m: How long a binary's cached results are kept after it was last
+  used (e.g. [36m"7d"[0m).
+- [1mDefault[0m: [36m"7d"[0m
+
+[1;4m[36mresult-cache.prune-interval[0m
+
+- [1mType[0m: String (duration)
+- [1mDescription[0m: Minimum time between automatic prunes of the result cache (e.g.
+  [36m"1d"[0m).
+- [1mDefault[0m: [36m"1d"[0m
 
 [1;4mUI configuration[0m
 

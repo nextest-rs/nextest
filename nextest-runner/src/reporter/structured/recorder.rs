@@ -5,13 +5,13 @@
 
 use crate::{
     errors::RecordReporterError,
+    helpers::panic_payload_to_string,
     output_spec::LiveSpec,
     record::{RecordOpts, RunRecorder, StoreSizes, TestEventSummary},
     reporter::events::TestEvent,
 };
 use nextest_metadata::TestListSummary;
 use std::{
-    any::Any,
     sync::{Arc, mpsc},
     thread::JoinHandle,
 };
@@ -96,17 +96,6 @@ impl RecordReporter {
                 message: panic_payload_to_string(panic_payload),
             }),
         }
-    }
-}
-
-/// Extracts a string message from a panic payload.
-fn panic_payload_to_string(payload: Box<dyn Any + Send + 'static>) -> String {
-    if let Some(s) = payload.downcast_ref::<&str>() {
-        (*s).to_owned()
-    } else if let Some(s) = payload.downcast_ref::<String>() {
-        s.clone()
-    } else {
-        "(unknown panic payload)".to_owned()
     }
 }
 

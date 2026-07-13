@@ -3,6 +3,7 @@
 
 use super::{DisplayFilterMatcher, TestListDisplayFilter};
 use crate::{
+    cache::{CacheBackend, CacheBinaryInput, CacheHandle, ComputedCacheInfo, ContentHash},
     cargo_config::EnvironmentMap,
     config::{
         core::EvaluatableProfile,
@@ -44,7 +45,7 @@ use quick_junit::ReportUuid;
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::{Borrow, Cow},
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     ffi::{OsStr, OsString},
     fmt,
     hash::{Hash, Hasher},
@@ -241,6 +242,11 @@ pub struct TestList<'g> {
     workspace_root: Utf8PathBuf,
     env: EnvironmentMap,
     updated_dylib_path: OsString,
+    /// Content hashes of the test binaries, computed while consulting the cache.
+    ///
+    /// Empty when the result cache is disabled. When populated, the post-run
+    /// `CacheWriter` reuses these instead of re-hashing every binary.
+    binary_hashes: HashMap<RustBinaryId, ContentHash>,
     // Computed on first access.
     skip_counts: OnceLock<SkipCounts>,
 }
@@ -259,6 +265,7 @@ impl<'g> TestList<'g> {
         profile: &impl ListProfile,
         bound: FilterBound,
         list_threads: usize,
+        cache: CacheHandle,
     ) -> Result<Self, CreateTestListError>
     where
         I: IntoIterator<Item = RustTestArtifact<'g>>,
@@ -331,6 +338,28 @@ impl<'g> TestList<'g> {
         // (can be an issue on Windows).
         runtime.shutdown_background();
 
+        // Consult the cache now that test names are known: cached-passing tests
+        // are recorded on the filter (cloned, since the caller holds it shared)
+        // so `filter_match` skips them. Consulting also hashes every binary; we
+        // keep those hashes on the `TestList` for the post-run `CacheWriter` to
+        // reuse instead of re-hashing every multi-gigabyte binary.
+        let mut binary_hashes = HashMap::new();
+        let cache_filter = cache.consult().map(|backend| {
+            let cache_info = Self::collect_cache_info(&*backend, &parsed_binaries);
+            // Split the merged per-binary info into the hash map kept on the list
+            // (for the post-run writer) and the passing-name map handed to the
+            // filter.
+            let mut cached_passing = HashMap::new();
+            for binary in cache_info.binaries {
+                binary_hashes.insert(binary.binary_id.clone(), binary.hash);
+                cached_passing.insert(binary.binary_id, binary.passing);
+            }
+            let mut filter = filter.clone();
+            filter.set_cached_passing(cached_passing);
+            filter
+        });
+        let filter = cache_filter.as_ref().unwrap_or(filter);
+
         // Phase 2: apply test-level filters and build suites.
         //
         // If the CLI filter uses group() predicates, precompute group
@@ -360,6 +389,7 @@ impl<'g> TestList<'g> {
             rust_build_meta,
             updated_dylib_path,
             test_count,
+            binary_hashes,
             skip_counts: OnceLock::new(),
         })
     }
@@ -420,6 +450,7 @@ impl<'g> TestList<'g> {
             rust_build_meta,
             updated_dylib_path,
             test_count,
+            binary_hashes: HashMap::new(),
             skip_counts: OnceLock::new(),
         })
     }
@@ -512,6 +543,7 @@ impl<'g> TestList<'g> {
             rust_build_meta,
             updated_dylib_path,
             test_count,
+            binary_hashes: HashMap::new(),
             skip_counts: OnceLock::new(),
         })
     }
@@ -559,7 +591,7 @@ impl<'g> TestList<'g> {
                         true
                     }
                     FilterMatch::Mismatch { .. } => true,
-                    FilterMatch::Matches => false,
+                    FilterMatch::Matches { .. } => false,
                 })
                 .count();
 
@@ -680,6 +712,12 @@ impl<'g> TestList<'g> {
         self.rust_suites.get(binary_id)
     }
 
+    /// Returns the content hash of each test binary, keyed by binary ID, as
+    /// computed while consulting the cache. Empty when the cache is disabled.
+    pub fn binary_hashes(&self) -> &HashMap<RustBinaryId, ContentHash> {
+        &self.binary_hashes
+    }
+
     /// Iterates over the list of tests, returning the path and test name.
     pub fn iter_tests(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
         self.rust_suites.iter().flat_map(|test_suite| {
@@ -721,6 +759,7 @@ impl<'g> TestList<'g> {
             env: EnvironmentMap::empty(),
             updated_dylib_path: OsString::new(),
             rust_suites: IdOrdMap::new(),
+            binary_hashes: HashMap::new(),
             skip_counts: OnceLock::new(),
         }
     }
@@ -794,16 +833,35 @@ impl<'g> TestList<'g> {
         })
     }
 
+    /// Consults the cache backend for each listed binary, returning the tests
+    /// cached as passing for each binary's current hash. Skipped binaries have
+    /// no test cases to cache and are ignored.
+    fn collect_cache_info(
+        backend: &dyn CacheBackend,
+        parsed: &[ParsedTestBinary<'g>],
+    ) -> ComputedCacheInfo {
+        let binaries = parsed.iter().filter_map(|binary| match binary {
+            ParsedTestBinary::Listed {
+                artifact,
+                test_cases,
+            } => Some(CacheBinaryInput {
+                binary_id: &artifact.binary_id,
+                binary_path: &artifact.binary_path,
+                test_names: test_cases.iter().map(|tc| &tc.name),
+            }),
+            ParsedTestBinary::Skipped { .. } => None,
+        });
+        ComputedCacheInfo::collect(backend, binaries)
+    }
+
     /// Converts parsed binaries into filtered test suites.
     ///
-    /// This is separated from [`Self::parse_output`] so that callers can
-    /// insert processing between parsing and filtering (e.g. precomputing
-    /// group memberships).
+    /// Separated from [`Self::parse_output`] so callers can insert processing
+    /// between parsing and filtering (e.g. precomputing group memberships).
     ///
     /// `groups` should be `Some` when the CLI filter contains `group()`
     /// predicates (see [`TestFilter::has_group_predicates`]), and `None`
-    /// otherwise. When `None`, encountering a `group()` predicate in the
-    /// expression panics.
+    /// otherwise. When `None`, encountering a `group()` predicate panics.
     fn build_suites(
         parsed: impl IntoIterator<Item = ParsedTestBinary<'g>>,
         filter: &TestFilter,
@@ -1150,7 +1208,7 @@ fn apply_partitioner_to_tests(
 ///   the partitioner.
 fn apply_partition_to_test(test_case: &mut RustTestCase, partitioner: &mut dyn Partitioner) {
     match test_case.test_info.filter_match {
-        FilterMatch::Matches => {
+        FilterMatch::Matches { cached: _ } => {
             if !partitioner.test_matches(test_case.name.as_str()) {
                 test_case.test_info.filter_match = FilterMatch::Mismatch {
                     reason: MismatchReason::Partition,
@@ -2075,7 +2133,7 @@ mod tests {
                                 test_info: RustTestCaseSummary {
                                     kind: Some(RustTestKind::TEST),
                                     ignored: false,
-                                    filter_match: FilterMatch::Matches,
+                                    filter_match: FilterMatch::Matches { cached: false },
                                 },
                             },
                             RustTestCase {
@@ -2083,7 +2141,7 @@ mod tests {
                                 test_info: RustTestCaseSummary {
                                     kind: Some(RustTestKind::TEST),
                                     ignored: false,
-                                    filter_match: FilterMatch::Matches,
+                                    filter_match: FilterMatch::Matches { cached: false },
                                 },
                             },
                             RustTestCase {
@@ -2091,7 +2149,7 @@ mod tests {
                                 test_info: RustTestCaseSummary {
                                     kind: Some(RustTestKind::BENCH),
                                     ignored: false,
-                                    filter_match: FilterMatch::Matches,
+                                    filter_match: FilterMatch::Matches { cached: false },
                                 },
                             },
                             RustTestCase {
@@ -2228,7 +2286,8 @@ mod tests {
                       "kind": "bench",
                       "ignored": false,
                       "filter-match": {
-                        "status": "matches"
+                        "status": "matches",
+                        "cached": false
                       }
                     },
                     "benches::ignored_bench_foo": {
@@ -2251,14 +2310,16 @@ mod tests {
                       "kind": "test",
                       "ignored": false,
                       "filter-match": {
-                        "status": "matches"
+                        "status": "matches",
+                        "cached": false
                       }
                     },
                     "tests::foo::test_bar": {
                       "kind": "test",
                       "ignored": false,
                       "filter-match": {
-                        "status": "matches"
+                        "status": "matches",
+                        "cached": false
                       }
                     },
                     "tests::ignored::test_bar": {
@@ -2987,7 +3048,7 @@ mod tests {
         for case in suite.status.test_cases() {
             assert_eq!(
                 case.test_info.filter_match,
-                FilterMatch::Matches,
+                FilterMatch::Matches { cached: false },
                 "{} should match with serial group lookup",
                 case.name,
             );

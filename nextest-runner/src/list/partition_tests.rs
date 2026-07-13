@@ -260,14 +260,14 @@ fn test_partition_rerun_already_passed() {
     assert_eq!(
         rerun_results,
         vec![
-            ("alpha", FilterMatch::Matches),
+            ("alpha", FilterMatch::Matches { cached: false }),
             (
                 "beta",
                 FilterMatch::Mismatch {
                     reason: MismatchReason::RerunAlreadyPassed,
                 }
             ),
-            ("delta", FilterMatch::Matches),
+            ("delta", FilterMatch::Matches { cached: false }),
             (
                 "gamma",
                 FilterMatch::Mismatch {
@@ -301,14 +301,14 @@ fn test_partition_rerun_already_passed() {
     assert_eq!(
         no_rerun_results,
         vec![
-            ("alpha", FilterMatch::Matches),
+            ("alpha", FilterMatch::Matches { cached: false }),
             (
                 "beta",
                 FilterMatch::Mismatch {
                     reason: MismatchReason::Partition,
                 }
             ),
-            ("delta", FilterMatch::Matches),
+            ("delta", FilterMatch::Matches { cached: false }),
             (
                 "gamma",
                 FilterMatch::Mismatch {
@@ -694,14 +694,14 @@ fn test_slice_rerun_already_passed_cross_binary() {
     assert_eq!(
         binary1_results,
         vec![
-            ("delta", FilterMatch::Matches),
+            ("delta", FilterMatch::Matches { cached: false }),
             (
                 "epsilon",
                 FilterMatch::Mismatch {
                     reason: MismatchReason::RerunAlreadyPassed,
                 }
             ),
-            ("zeta", FilterMatch::Matches),
+            ("zeta", FilterMatch::Matches { cached: false }),
         ]
     );
 
@@ -724,14 +724,14 @@ fn test_slice_rerun_already_passed_cross_binary() {
                     reason: MismatchReason::Partition,
                 }
             ),
-            ("beta", FilterMatch::Matches),
+            ("beta", FilterMatch::Matches { cached: false }),
             (
                 "delta",
                 FilterMatch::Mismatch {
                     reason: MismatchReason::Partition,
                 }
             ),
-            ("gamma", FilterMatch::Matches),
+            ("gamma", FilterMatch::Matches { cached: false }),
         ]
     );
 

@@ -6,9 +6,10 @@
 use super::{
     discovery::user_config_paths,
     elements::{
-        CompiledRecordOverride, CompiledUiOverride, DefaultRecordConfig, DefaultUiConfig,
-        DeserializedRecordConfig, DeserializedRecordOverrideData, DeserializedUiConfig,
-        DeserializedUiOverrideData, RecordConfig, UiConfig,
+        CompiledRecordOverride, CompiledUiOverride, DefaultRecordConfig, DefaultResultCacheConfig,
+        DefaultUiConfig, DeserializedRecordConfig, DeserializedRecordOverrideData,
+        DeserializedResultCacheConfig, DeserializedUiConfig, DeserializedUiOverrideData,
+        RecordConfig, ResultCacheConfig, UiConfig,
     },
     experimental::{ExperimentalConfig, UserConfigExperimental},
 };
@@ -64,6 +65,8 @@ pub struct UserConfig {
     pub ui: UiConfig,
     /// Resolved record configuration.
     pub record: RecordConfig,
+    /// Resolved result-cache configuration.
+    pub result_cache: ResultCacheConfig,
 }
 
 impl UserConfig {
@@ -128,10 +131,16 @@ impl UserConfig {
             &build_target,
         );
 
+        let resolved_result_cache = ResultCacheConfig::resolve(
+            &default_user_config.result_cache,
+            user_config.as_ref().map(|c| &c.result_cache),
+        )?;
+
         Ok(Self {
             experimental,
             ui: resolved_ui,
             record: resolved_record,
+            result_cache: resolved_result_cache,
         })
     }
 
@@ -201,6 +210,10 @@ struct DeserializedUserConfig {
     /// Retention settings for the record-replay-rerun feature.
     #[serde(default)]
     record: DeserializedRecordConfig,
+
+    /// Settings for the result cache.
+    #[serde(default)]
+    result_cache: DeserializedResultCacheConfig,
 
     /// Platform-specific overrides applied on top of `[ui]` and `[record]`.
     /// The first matching override per setting wins.
@@ -321,6 +334,7 @@ impl DeserializedUserConfig {
             experimental,
             ui: self.ui,
             record: self.record,
+            result_cache: self.result_cache,
             ui_overrides,
             record_overrides,
         })
@@ -339,6 +353,8 @@ pub(super) struct CompiledUserConfig {
     pub(super) ui: DeserializedUiConfig,
     /// Record configuration.
     pub(super) record: DeserializedRecordConfig,
+    /// Result-cache configuration.
+    pub(super) result_cache: DeserializedResultCacheConfig,
     /// Compiled UI overrides with parsed platform specs.
     pub(super) ui_overrides: Vec<CompiledUiOverride>,
     /// Compiled record overrides with parsed platform specs.
@@ -428,6 +444,9 @@ struct DeserializedDefaultUserConfig {
     /// Record configuration (base settings, all required).
     record: DefaultRecordConfig,
 
+    /// Result-cache configuration (base settings, all required).
+    result_cache: DefaultResultCacheConfig,
+
     /// Configuration overrides.
     #[serde(default)]
     overrides: Vec<DeserializedOverride>,
@@ -444,6 +463,9 @@ pub(super) struct DefaultUserConfig {
 
     /// Base record configuration.
     pub(super) record: DefaultRecordConfig,
+
+    /// Base result-cache configuration.
+    pub(super) result_cache: DefaultResultCacheConfig,
 
     /// Compiled UI overrides with parsed platform specs.
     pub(super) ui_overrides: Vec<CompiledUiOverride>,
@@ -495,6 +517,7 @@ impl DefaultUserConfig {
         Self {
             ui: config.ui,
             record: config.record,
+            result_cache: config.result_cache,
             ui_overrides,
             record_overrides,
         }

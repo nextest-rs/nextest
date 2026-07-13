@@ -4,7 +4,9 @@
 //! User config elements.
 
 mod record;
+mod result_cache;
 mod ui;
 
 pub use record::*;
+pub use result_cache::*;
 pub use ui::*;

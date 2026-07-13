@@ -941,7 +941,11 @@ impl RustTestKind {
 #[serde(rename_all = "kebab-case", tag = "status")]
 pub enum FilterMatch {
     /// This test matches this filter.
-    Matches,
+    Matches {
+        /// This test has a valid entry in the result cache.
+        #[serde(default)]
+        cached: bool,
+    },
 
     /// This test does not match this filter.
     Mismatch {
@@ -953,7 +957,7 @@ pub enum FilterMatch {
 impl FilterMatch {
     /// Returns true if the filter doesn't match.
     pub fn is_match(&self) -> bool {
-        matches!(self, FilterMatch::Matches)
+        matches!(self, FilterMatch::Matches { .. })
     }
 }
 
