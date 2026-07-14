@@ -23,58 +23,63 @@ The instructions below are suitable for both end users and CI. These links will 
 
     !!! info
 
-        The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+        The commands below assume your Rust installation is managed via [rustup](https://rustup.rs),
+        which creates `~/.cargo/bin`. If you used a different installation method
+        (e.g. snap, homebrew, nix) the directory may not exist — create it first with
+        `mkdir -p ${CARGO_HOME:-~/.cargo}/bin`, or extract to a different directory in your PATH.
 
         If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
-
-        If you installed Rust via `snap install rustup`, the `~/.cargo/bin` directory may not exist by default. Extract the binary to a different directory in your PATH, for example `~/.local/bin`.
 
     Run in a terminal:
 
     ```
-    curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+    mkdir -p ${CARGO_HOME:-~/.cargo}/bin && curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
     ```
 
     For a statically-linked binary with no runtime library dependencies, based on [musl](https://musl.libc.org/):
 
     ```
-    curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+    mkdir -p ${CARGO_HOME:-~/.cargo}/bin && curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
     ```
 
 === ":material-linux: Linux aarch64"
 
     !!! info
 
-        The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+        The commands below assume your Rust installation is managed via [rustup](https://rustup.rs),
+        which creates `~/.cargo/bin`. If you used a different installation method
+        (e.g. snap, homebrew, nix) the directory may not exist — create it first with
+        `mkdir -p ${CARGO_HOME:-~/.cargo}/bin`, or extract to a different directory in your PATH.
 
         If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
-
-        If you installed Rust via `snap install rustup`, the `~/.cargo/bin` directory may not exist by default. Extract the binary to a different directory in your PATH, for example `~/.local/bin`.
 
     Run in a terminal:
 
     ```
-    curl -LsSf https://get.nexte.st/latest/linux-arm | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+    mkdir -p ${CARGO_HOME:-~/.cargo}/bin && curl -LsSf https://get.nexte.st/latest/linux-arm | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
     ```
 
     For a statically-linked binary with no runtime library dependencies, based on [musl](https://musl.libc.org/):
 
     ```
-    curl -LsSf https://get.nexte.st/latest/linux-arm-musl | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+    mkdir -p ${CARGO_HOME:-~/.cargo}/bin && curl -LsSf https://get.nexte.st/latest/linux-arm-musl | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
     ```
 
 === ":material-apple: macOS universal"
 
     !!! info
 
-        The command below assumes that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+        The commands below assume your Rust installation is managed via [rustup](https://rustup.rs),
+        which creates `~/.cargo/bin`. If you used a different installation method
+        (e.g. snap, homebrew, nix) the directory may not exist — create it first with
+        `mkdir -p ${CARGO_HOME:-~/.cargo}/bin`, or extract to a different directory in your PATH.
 
         If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
 
     Run in a terminal:
 
     ```
-    curl -LsSf https://get.nexte.st/latest/mac | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+    mkdir -p ${CARGO_HOME:-~/.cargo}/bin && curl -LsSf https://get.nexte.st/latest/mac | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
     ```
 
     This will download a universal binary that works on both Intel and Apple Silicon Macs.
@@ -111,14 +116,17 @@ The instructions below are suitable for both end users and CI. These links will 
 
         !!! info
 
-            The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+            The commands below assume your Rust installation is managed via [rustup](https://rustup.rs),
+            which creates `~/.cargo/bin`. If you used a different installation method
+            (e.g. snap, homebrew, nix) the directory may not exist — create it first with
+            `mkdir -p ${CARGO_HOME:-~/.cargo}/bin`, or extract to a different directory in your PATH.
 
             If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
 
         Using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions, or Git Bash):
 
         ```
-        curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        mkdir -p ${CARGO_HOME:-~/.cargo}/bin && curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
         ```
 
     Windows Subsystem for Linux (WSL) users should follow the **Linux x86_64** instructions.
@@ -157,14 +165,17 @@ The instructions below are suitable for both end users and CI. These links will 
 
             !!! info
 
-                The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+                The commands below assume your Rust installation is managed via [rustup](https://rustup.rs),
+                which creates `~/.cargo/bin`. If you used a different installation method
+                (e.g. snap, homebrew, nix) the directory may not exist — create it first with
+                `mkdir -p ${CARGO_HOME:-~/.cargo}/bin`, or extract to a different directory in your PATH.
 
                 If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
 
             Using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions, or Git Bash):
 
             ```
-            curl -LsSf https://get.nexte.st/latest/windows-arm-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+            mkdir -p ${CARGO_HOME:-~/.cargo}/bin && curl -LsSf https://get.nexte.st/latest/windows-arm-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
             ```
 
     === ":material-microsoft-windows: Windows i686"
@@ -199,14 +210,17 @@ The instructions below are suitable for both end users and CI. These links will 
 
             !!! info
 
-                The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+                The commands below assume your Rust installation is managed via [rustup](https://rustup.rs),
+                which creates `~/.cargo/bin`. If you used a different installation method
+                (e.g. snap, homebrew, nix) the directory may not exist — create it first with
+                `mkdir -p ${CARGO_HOME:-~/.cargo}/bin`, or extract to a different directory in your PATH.
 
                 If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
 
             Using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions, or Git Bash):
 
             ```
-            curl -LsSf https://get.nexte.st/latest/windows-x86-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+            mkdir -p ${CARGO_HOME:-~/.cargo}/bin && curl -LsSf https://get.nexte.st/latest/windows-x86-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
             ```
 
     === ":material-linux: Linux riscv64"
@@ -214,19 +228,19 @@ The instructions below are suitable for both end users and CI. These links will 
         Run in a terminal:
 
         ```
-        curl -LsSf https://get.nexte.st/latest/linux-riscv64 | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        mkdir -p ${CARGO_HOME:-~/.cargo}/bin && curl -LsSf https://get.nexte.st/latest/linux-riscv64 | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
         ```
 
     === ":material-freebsd: FreeBSD x86_64"
 
         ```
-        curl -LsSf https://get.nexte.st/latest/freebsd | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        mkdir -p ${CARGO_HOME:-~/.cargo}/bin && curl -LsSf https://get.nexte.st/latest/freebsd | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
         ```
 
     === ":material-bird: illumos x86_64"
 
         ```
-        curl -LsSf https://get.nexte.st/latest/illumos | gunzip | tar xf - -C ${CARGO_HOME:-~/.cargo}/bin
+        mkdir -p ${CARGO_HOME:-~/.cargo}/bin && curl -LsSf https://get.nexte.st/latest/illumos | gunzip | tar xf - -C ${CARGO_HOME:-~/.cargo}/bin
         ```
 
         As of 2025-04, the current version of illumos tar has [a bug](https://www.illumos.org/issues/15228) where `tar zxf` doesn't work over standard input.
