@@ -26,7 +26,7 @@ clap_builder = { version = "4.6.0", default-features = false, features = ["color
 either = { version = "1.15.0", features = ["use_std"] }
 foldhash = { version = "0.2.0" }
 getrandom = { version = "0.3.4", default-features = false, features = ["std"] }
-hashbrown = { version = "0.16.1" }
+hashbrown = { version = "0.17.0" }
 idna_adapter = { version = "1.0.0", default-features = false, features = ["compiled_data"] }
 indexmap = { version = "2.14.0", features = ["serde"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
