@@ -135,7 +135,9 @@ mod tests {
             .wrap_err("converting to cargo target arg")?;
         let extracted = match &arg {
             CargoTargetArg::Extracted(extracted) => extracted,
-            _ => bail!("expected CargoTargetArg::Extracted, found {:?}", arg),
+            _ => {
+                bail!("expected CargoTargetArg::Extracted, found {:?}", arg);
+            }
         };
 
         // Generally ensure that Cargo will work with the extracted path.
