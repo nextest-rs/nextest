@@ -93,7 +93,9 @@ mod tests {
 
         for &input in invalid {
             let error = match de_relative_path(input.into_deserializer()) {
-                Ok(path) => bail!("successfully deserialized an invalid path: {:?}", path),
+                Ok(path) => {
+                    bail!("successfully deserialized an invalid path: {:?}", path);
+                }
                 Err(error) => error,
             };
             assert_eq!(
