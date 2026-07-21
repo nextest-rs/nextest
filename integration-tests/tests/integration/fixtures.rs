@@ -1310,8 +1310,8 @@ const ABORT_MESSAGE_PREFIXES: &[&str] = &["process was terminated"];
 /// How to verify the JUnit message field for a non-success test case.
 #[derive(Clone, Debug)]
 enum JunitExpectedMessage<'a> {
-    /// Don't verify the message.
-    None,
+    /// The message must equal the given string.
+    Exact(&'a str),
     /// The message must be present and start with one of the given prefixes.
     /// This is used for failure types where the message format is known but
     /// the exact content is test-specific.
@@ -1334,7 +1334,15 @@ impl JunitExpectedMessage<'_> {
         properties: RunProperties,
     ) {
         match self {
-            JunitExpectedMessage::None => {}
+            JunitExpectedMessage::Exact(expected) => {
+                assert_eq!(
+                    actual_message,
+                    Some(*expected),
+                    "{test_name}: JUnit message mismatch (properties: {})\n\
+                     JUnit path: {junit_path}",
+                    debug_run_properties(properties),
+                );
+            }
             JunitExpectedMessage::StartsWithOneOf(prefixes) => {
                 let message = actual_message.unwrap_or_else(|| {
                     panic!(
@@ -1403,9 +1411,7 @@ fn expected_junit_for_result(
         CheckResult::LeakFail => Some(ExpectedJunit {
             kind: quick_junit::NonSuccessKind::Error,
             ty: "test exited with code 0, but leaked handles so was marked failed",
-            // LeakFail tests exit with code 0 (no panic), so there's no error
-            // output to extract a message from.
-            message: JunitExpectedMessage::None,
+            message: JunitExpectedMessage::Exact("failed: exited with code 0, but leaked handles"),
         }),
         CheckResult::Fail => Some(ExpectedJunit {
             kind: quick_junit::NonSuccessKind::Failure,
@@ -1439,10 +1445,7 @@ fn expected_junit_for_result(
             Some(ExpectedJunit {
                 kind: quick_junit::NonSuccessKind::Failure,
                 ty: timeout_kind,
-                // Timed-out tests are killed without producing panic output,
-                // and FailureDescription::Timeout doesn't generate an abort
-                // description, so there's no error to extract a message from.
-                message: JunitExpectedMessage::None,
+                message: JunitExpectedMessage::Exact("timed out"),
             })
         }
     }
