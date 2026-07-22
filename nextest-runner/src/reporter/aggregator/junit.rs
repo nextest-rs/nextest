@@ -30,7 +30,7 @@ use nextest_metadata::RustBinaryId;
 use quick_junit::{
     FlakyOrRerun, NonSuccessKind, Report, TestCase, TestCaseStatus, TestRerun, TestSuite, XmlString,
 };
-use std::{fmt, fs::File};
+use std::{fmt, fs::File, time::Duration};
 
 static STDOUT_STDERR_COMBINED: &str = "(stdout and stderr are combined)";
 static STDOUT_NOT_CAPTURED: &str = "(stdout not captured)";
@@ -241,17 +241,30 @@ impl<'cfg> MetadataJunit<'cfg> {
 
                 testsuite.add_test_case(testcase);
             }
-            TestEventKind::TestSkipped { .. } => {
-                // TODO: report skipped tests? causes issues if we want to aggregate runs across
-                // skipped and non-skipped tests. Probably needs to be made configurable.
+            TestEventKind::TestSkipped {
+                stress_index,
+                test_instance,
+                reason,
+                junit_report_skipped,
+            } => {
+                // Emit skipped tests as `<testcase>` elements with a `<skipped>`
+                // child only for the reasons selected by the per-test resolved
+                // `store-skipped` policy (which accounts for overrides). Skipped
+                // tests are omitted by default to keep the machine-readable
+                // output stable.
+                if junit_report_skipped.should_report(reason) {
+                    let testsuite = self.testsuite_for_test(stress_index, test_instance);
+                    let mut testcase_status = TestCaseStatus::skipped();
+                    testcase_status.set_message(format!("Skipped: test {reason}"));
 
-                // let testsuite = self.testsuite_for(test_instance);
-                //
-                // let mut testcase_status = TestcaseStatus::skipped();
-                // testcase_status.set_message(format!("Skipped: {}", reason));
-                // let testcase = Testcase::new(test_instance.name, testcase_status);
-                //
-                // testsuite.add_testcase(testcase);
+                    let mut testcase =
+                        TestCase::new(test_instance.test_name.as_str(), testcase_status);
+                    testcase.set_classname(test_instance.binary_id.as_str());
+                    // Skipped tests never execute, so report zero elapsed time.
+                    testcase.set_time(Duration::ZERO);
+
+                    testsuite.add_test_case(testcase);
+                }
             }
             TestEventKind::RunBeginCancel { .. } | TestEventKind::RunBeginKill { .. } => {}
             TestEventKind::RunFinished {
@@ -554,11 +567,14 @@ mod tests {
     #[cfg(unix)]
     use crate::reporter::events::{AbortStatus, SIGTERM};
     use crate::{
+        config::elements::ReportSkipPolicy,
         errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
         reporter::events::{ChildExecutionOutputDescription, ExecutionResult, FailureStatus},
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     };
     use bytes::Bytes;
+    use chrono::{DateTime, FixedOffset};
+    use nextest_metadata::{MismatchReason, TestCaseName};
     use std::{io, sync::Arc};
 
     #[test]
@@ -844,5 +860,107 @@ mod tests {
             TestCaseStatus::NonSuccess { description, .. } => description.as_deref(),
             TestCaseStatus::Skipped { description, .. } => description.as_deref(),
         }
+    }
+
+    fn skipped_test_event<'a>(
+        timestamp: DateTime<FixedOffset>,
+        test_instance: TestInstanceId<'a>,
+        junit_report_skipped: ReportSkipPolicy,
+    ) -> Box<TestEvent<'a>> {
+        Box::new(TestEvent {
+            timestamp,
+            elapsed: std::time::Duration::ZERO,
+            kind: TestEventKind::TestSkipped {
+                stress_index: None,
+                test_instance,
+                reason: MismatchReason::Ignored,
+                junit_report_skipped,
+            },
+        })
+    }
+
+    #[test]
+    fn test_skipped_store_skipped_true() {
+        let binary_id = RustBinaryId::new("my-crate::my-bin");
+        let test_name = TestCaseName::new("tests::my_skipped_test");
+        let test_instance = TestInstanceId {
+            binary_id: &binary_id,
+            test_name: &test_name,
+        };
+
+        let dir = camino_tempfile::tempdir().expect("tempdir created");
+        let path = dir.path().join("junit.xml");
+        let config = JunitConfig::new_for_test(path, "my-report", ReportSkipPolicy::Ignored);
+        let mut junit = MetadataJunit::new(NextestRunMode::Test, config);
+
+        let timestamp = chrono::Utc::now().fixed_offset();
+        junit
+            .write_event(skipped_test_event(
+                timestamp,
+                test_instance,
+                ReportSkipPolicy::Ignored,
+            ))
+            .expect("write_event for skipped test succeeds");
+
+        // The `store-skipped = "ignored"` policy should have added a single
+        // test suite with a single skipped testcase.
+        assert_eq!(junit.test_suites.len(), 1, "one test suite added");
+        let (_, suite) = junit
+            .test_suites
+            .get_index(0)
+            .expect("first test suite exists");
+        assert_eq!(suite.name.as_str(), "my-crate::my-bin", "suite name");
+        assert_eq!(suite.test_cases.len(), 1, "one testcase added");
+        let testcase = &suite.test_cases[0];
+        assert_eq!(
+            testcase.name.as_str(),
+            "tests::my_skipped_test",
+            "testcase name"
+        );
+        assert_eq!(
+            testcase.classname.as_ref().map(|s| s.as_str()),
+            Some("my-crate::my-bin"),
+            "classname is the binary id"
+        );
+        assert!(
+            matches!(testcase.status, TestCaseStatus::Skipped { .. }),
+            "testcase status is skipped"
+        );
+        assert_eq!(
+            get_message(&testcase.status),
+            Some(format!("Skipped: test {}", MismatchReason::Ignored).as_str()),
+            "skipped message"
+        );
+    }
+
+    #[test]
+    fn test_skipped_store_skipped_false() {
+        let binary_id = RustBinaryId::new("my-crate::my-bin");
+        let test_name = TestCaseName::new("tests::my_skipped_test");
+        let test_instance = TestInstanceId {
+            binary_id: &binary_id,
+            test_name: &test_name,
+        };
+
+        let dir = camino_tempfile::tempdir().expect("tempdir created");
+        let path = dir.path().join("junit.xml");
+        let config = JunitConfig::new_for_test(path, "my-report", ReportSkipPolicy::None);
+        let mut junit = MetadataJunit::new(NextestRunMode::Test, config);
+
+        let timestamp = chrono::Utc::now().fixed_offset();
+        junit
+            .write_event(skipped_test_event(
+                timestamp,
+                test_instance,
+                ReportSkipPolicy::None,
+            ))
+            .expect("write_event for skipped test succeeds");
+
+        // With store_skipped=false, no test suite or testcase should be added.
+        assert_eq!(
+            junit.test_suites.len(),
+            0,
+            "no test suite added when store_skipped is false"
+        );
     }
 }

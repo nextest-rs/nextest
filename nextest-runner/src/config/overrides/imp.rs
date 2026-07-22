@@ -7,8 +7,8 @@ use crate::{
             EvaluatableProfile, FinalConfig, NextestConfig, NextestConfigImpl, PreBuildPlatform,
         },
         elements::{
-            FlakyResult, JunitFlakyFailStatus, LeakTimeout, RetryPolicy, SlowTimeout, TestGroup,
-            TestPriority, ThreadsRequired,
+            FlakyResult, JunitFlakyFailStatus, LeakTimeout, ReportSkipPolicy, RetryPolicy,
+            SlowTimeout, TestGroup, TestPriority, ThreadsRequired,
         },
         scripts::{
             CompiledProfileScripts, DeserializedProfileScriptConfig, ScriptId, WrapperScriptConfig,
@@ -114,6 +114,7 @@ pub struct TestSettings<'p, Source = ()> {
     failure_output: (TestOutputDisplay, Source),
     junit_store_success_output: (bool, Source),
     junit_store_failure_output: (bool, Source),
+    junit_report_skipped: (ReportSkipPolicy, Source),
     junit_flaky_fail_status: (JunitFlakyFailStatus, Source),
 }
 
@@ -243,6 +244,11 @@ impl<'p> TestSettings<'p> {
         self.junit_store_failure_output.0
     }
 
+    /// Returns which skipped tests should be reported in JUnit.
+    pub fn junit_report_skipped(&self) -> ReportSkipPolicy {
+        self.junit_report_skipped.0
+    }
+
     /// Returns the JUnit flaky-fail status for this test.
     pub fn junit_flaky_fail_status(&self) -> JunitFlakyFailStatus {
         self.junit_flaky_fail_status.0
@@ -274,6 +280,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
         let mut failure_output = None;
         let mut junit_store_success_output = None;
         let mut junit_store_failure_output = None;
+        let mut junit_report_skipped = None;
         let mut junit_flaky_fail_status = None;
 
         for override_ in &profile.compiled_data.overrides {
@@ -347,6 +354,11 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             {
                 junit_store_failure_output = Some(Source::track_override(f, override_));
             }
+            if junit_report_skipped.is_none()
+                && let Some(s) = override_.data.junit.store_skipped
+            {
+                junit_report_skipped = Some(Source::track_override(s, override_));
+            }
             if junit_flaky_fail_status.is_none()
                 && let Some(s) = override_.data.junit.flaky_fail_status
             {
@@ -393,6 +405,14 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             // If the profile doesn't have JUnit enabled, failure output can just be false.
             Source::track_profile(profile.junit().is_some_and(|j| j.store_failure_output()))
         });
+        let junit_report_skipped = junit_report_skipped.unwrap_or_else(|| {
+            // If the profile doesn't have JUnit enabled, no skipped tests are reported.
+            Source::track_profile(
+                profile
+                    .junit()
+                    .map_or(ReportSkipPolicy::default(), |j| j.report_skipped()),
+            )
+        });
         let junit_flaky_fail_status = junit_flaky_fail_status.unwrap_or_else(|| {
             Source::track_profile(
                 profile
@@ -415,6 +435,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             failure_output,
             junit_store_success_output,
             junit_store_failure_output,
+            junit_report_skipped,
             junit_flaky_fail_status,
         }
     }
@@ -1058,6 +1079,8 @@ pub(in crate::config) struct DeserializedJunitOutput {
     /// Whether to store failed output for matching tests in the JUnit XML
     /// report.
     store_failure_output: Option<bool>,
+    /// Which skipped tests to emit for matching tests in the JUnit XML report.
+    store_skipped: Option<ReportSkipPolicy>,
     /// How flaky-fail tests are reported in the JUnit XML report.
     flaky_fail_status: Option<JunitFlakyFailStatus>,
 }

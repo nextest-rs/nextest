@@ -23,7 +23,7 @@
 //! using before
 
 use crate::{
-    config::elements::{FlakyResult, SlowTimeoutResult},
+    config::elements::{FlakyResult, ReportSkipPolicy, SlowTimeoutResult},
     errors::{DisplayErrorChain, FormatVersionError, FormatVersionErrorInner, WriteEventError},
     list::{RustTestSuite, TestList},
     output_spec::{LiveSpec, OutputSpec},
@@ -35,7 +35,7 @@ use crate::{
 };
 use bstr::ByteSlice;
 use iddqd::{IdOrdItem, IdOrdMap, id_ord_map, id_upcast};
-use nextest_metadata::{MismatchReason, RustBinaryId, TestCaseName};
+use nextest_metadata::{RustBinaryId, TestCaseName};
 use std::fmt::Write as _;
 
 /// To support pinning the version of the output, we just use this simple enum
@@ -254,8 +254,12 @@ impl<'cfg> LibtestReporter<'cfg> {
             TestEventKind::TestSkipped {
                 stress_index,
                 test_instance,
-                reason: MismatchReason::Ignored,
-            } => {
+                reason,
+                ..
+            } if ReportSkipPolicy::Ignored.should_report(*reason) => {
+                // libtest only reports ignored tests as skipped, so we match
+                // the `ReportSkipPolicy::Ignored` policy here.
+                //
                 // Note: unfortunately, libtest does not expose the message test in `#[ignore = "<message>"]`
                 // so we can't replicate the behavior of libtest exactly by emitting
                 // that message as additional metadata

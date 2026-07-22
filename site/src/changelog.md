@@ -10,6 +10,14 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## Unreleased
+
+### Added
+
+- A new `junit.store-skipped` configuration setting controls which skipped tests are emitted in the JUnit XML report as `<testcase>` elements with a `<skipped>` child. It accepts `"none"` (the default, keeping machine-readable output stable), `"ignored"` (only tests skipped via `#[ignore]`), and `"all"` (all skipped tests except non-benchmark skips). ([#885])
+
+[#885]: https://github.com/nextest-rs/nextest/issues/885
+
 ## [0.9.140] - 2026-07-05
 
 ### Added

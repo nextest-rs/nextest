@@ -167,6 +167,29 @@ retries = 3
 [profile.with-junit.junit]
 path = "junit.xml"
 
+# Profile used to verify junit.store-skipped emits <skipped> testcases in the
+# actual generated JUnit XML.
+[profile.with-junit-skipped]
+default-filter = "test(=test_success) | test(=test_ignored)"
+
+[profile.with-junit-skipped.junit]
+path = "junit.xml"
+store-skipped = "all"
+
+# Profile used to verify that a per-test [[overrides]] with junit.store-skipped
+# takes precedence over the profile-level default. The profile-level policy is
+# "none" (the default), but the override opts test_ignored into being reported
+# as skipped.
+[profile.with-junit-skipped-override]
+default-filter = "test(=test_success) | test(=test_ignored)"
+
+[profile.with-junit-skipped-override.junit]
+path = "junit.xml"
+
+[[profile.with-junit-skipped-override.overrides]]
+filter = "test(=test_ignored)"
+junit = { store-skipped = "all" }
+
 [profile.retries-with-backoff]
 retries = { backoff = "exponential", count = 2, jitter = true, delay = "1s" }
 

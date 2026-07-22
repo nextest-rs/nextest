@@ -10,7 +10,7 @@
 use super::{RunUnitRequest, RunnerTaskState, ShutdownRequest};
 use crate::{
     config::{
-        elements::{FlakyResult, MaxFail, TerminateMode},
+        elements::{FlakyResult, MaxFail, ReportSkipPolicy, TerminateMode},
         scripts::{ScriptId, SetupScriptConfig},
     },
     input::{InputEvent, InputHandler},
@@ -33,7 +33,6 @@ use chrono::Local;
 use debug_ignore::DebugIgnore;
 use futures::future::{Fuse, FusedFuture};
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
-use nextest_metadata::MismatchReason;
 use quick_junit::ReportUuid;
 use std::{collections::BTreeSet, env, mem, pin::Pin, time::Duration};
 use tokio::{
@@ -842,17 +841,19 @@ where
                 stress_index,
                 test_instance,
                 reason,
+                junit_report_skipped,
             }) => {
-                // If the mismatch reason is that this test isn't a benchmark,
-                // we don't display it in the skip counts (but still keep track
-                // of it internally).
-                if !matches!(reason, MismatchReason::NotBenchmark) {
+                // Tests skipped because they aren't benchmarks are tracked
+                // internally but not surfaced in the skip counts. This matches
+                // the `ReportSkipPolicy::All` policy used for reporting.
+                if ReportSkipPolicy::All.should_report(reason) {
                     self.run_stats.skipped += 1;
                 }
                 self.callback_none_response(TestEventKind::TestSkipped {
                     stress_index,
                     test_instance: test_instance.id(),
                     reason,
+                    junit_report_skipped,
                 })
             }
             InternalEvent::Signal(event) => self.handle_signal_event(event),
