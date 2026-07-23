@@ -14,7 +14,7 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
 ### Added
 
-- A new `junit.report-skipped` configuration setting controls which skipped tests are emitted in the JUnit XML report as `<testcase>` elements with a `<skipped>` child. It accepts `"none"` (the default, keeping machine-readable output stable), `"ignored"` (only tests whose ignore status did not match the run's run-ignored selection, which in a default run are the `#[ignore]` tests), and `"all"` (all skipped tests except those skipped for not being benchmarks). ([#885])
+- A new `junit.report-skipped` [configuration setting](https://nexte.st/docs/machine-readable/junit/#configuration) controls which skipped tests are emitted in the JUnit XML report as `<testcase>` elements with a `<skipped>` child. ([#885])
 
 [#885]: https://github.com/nextest-rs/nextest/issues/885
 
