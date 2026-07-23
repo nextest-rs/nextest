@@ -1004,8 +1004,8 @@ pub fn check_run_output_with_junit(
     );
 }
 
-///
-/// Verifies a JUnit report contains information about the provided run and skipped tests.
+/// Verifies a JUnit report contains information about the provided run and
+/// skipped tests.
 ///
 /// This is intended for scenarios like per-test overrides which the fixture
 /// model can't necessarily express at the moment. If the fixture model can

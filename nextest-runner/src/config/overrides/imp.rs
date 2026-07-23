@@ -406,7 +406,6 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             Source::track_profile(profile.junit().is_some_and(|j| j.store_failure_output()))
         });
         let junit_report_skipped = junit_report_skipped.unwrap_or_else(|| {
-            // If the profile doesn't have JUnit enabled, no skipped tests are reported.
             Source::track_profile(
                 profile
                     .junit()
