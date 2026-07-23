@@ -102,6 +102,38 @@ pub enum ExpectedReruns {
     SomeReruns,
 }
 
+/// The reason a test case is expected to be skipped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SkipReason {
+    /// The test is ignored, and the run doesn't include ignored tests.
+    Ignored,
+    /// The test is filtered out by the run's filterset, or isn't in the set of
+    /// test names a verifier was asked to check.
+    Filtered,
+    /// The run is benchmarks-only, and this test isn't a benchmark.
+    NotBenchmark,
+    /// The test's entire suite is excluded from the run.
+    SuiteNotInRun,
+    /// The test passed in the initial run of a rerun sequence.
+    RerunAlreadyPassed,
+}
+
+impl SkipReason {
+    /// Returns true if this test contributes to the "skipped" count in nextest's
+    /// summary line.
+    ///
+    /// Tests filtered out by filtersets, ignored tests, and tests that already
+    /// passed in a rerun all show up in nextest's skip count. Tests outside the
+    /// run's scope entirely (suites excluded from the run, and non-benchmark
+    /// tests in benchmark runs) don't appear in the counts at all.
+    pub fn counted_in_skip_summary(self) -> bool {
+        match self {
+            SkipReason::Ignored | SkipReason::Filtered | SkipReason::RerunAlreadyPassed => true,
+            SkipReason::NotBenchmark | SkipReason::SuiteNotInRun => false,
+        }
+    }
+}
+
 bitflags::bitflags! {
     /// Properties that control which tests should be run in integration test invocations.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -270,113 +302,6 @@ impl TestCaseFixture {
 
     pub fn has_property(&self, property: TestCaseFixtureProperties) -> bool {
         self.properties.contains(property)
-    }
-
-    /// Determines if this test should be skipped based on run properties and filters.
-    pub fn should_skip(&self, properties: RunProperties) -> bool {
-        // NotInDefaultSet filter.
-        if self.has_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET)
-            && properties.contains(RunProperties::WITH_DEFAULT_FILTER)
-        {
-            return true;
-        }
-
-        // NotInDefaultSetUnix filter (Unix-specific).
-        if cfg!(unix)
-            && self.has_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET_UNIX)
-            && properties.contains(RunProperties::WITH_DEFAULT_FILTER)
-        {
-            return true;
-        }
-
-        // MatchesCdylib + WithSkipCdylibFilter.
-        if self.has_property(TestCaseFixtureProperties::MATCHES_CDYLIB)
-            && properties.contains(RunProperties::WITH_SKIP_CDYLIB_FILTER)
-        {
-            return true;
-        }
-
-        // WithMultiplyTwoExactFilter - skip tests that don't match.
-        if !self.has_property(TestCaseFixtureProperties::MATCHES_TEST_MULTIPLY_TWO)
-            && properties.contains(RunProperties::WITH_MULTIPLY_TWO_EXACT_FILTER)
-        {
-            return true;
-        }
-
-        // CdyLibExamplePackageFilter - only run test_multiply_two_cdylib.
-        if properties.contains(RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER)
-            && self.name != TestCaseName::new("tests::test_multiply_two_cdylib")
-        {
-            return true;
-        }
-
-        // ExpectNoBinaries - all tests should be skipped.
-        if properties.contains(RunProperties::EXPECT_NO_BINARIES) {
-            return true;
-        }
-
-        // BenchOverrideTimeout - only run the specific benchmark that times out.
-        if properties.contains(RunProperties::BENCH_OVERRIDE_TIMEOUT) {
-            return !self.has_property(TestCaseFixtureProperties::BENCH_OVERRIDE_TIMEOUT);
-        }
-
-        // BenchTermination - only run the specific benchmark that times out.
-        if properties.contains(RunProperties::BENCH_TERMINATION) {
-            return !self.has_property(TestCaseFixtureProperties::BENCH_TERMINATION);
-        }
-
-        // BenchIgnoresTestTimeout - only run the specific benchmark that passes.
-        if properties.contains(RunProperties::BENCH_IGNORES_TEST_TIMEOUT) {
-            return !self.has_property(TestCaseFixtureProperties::BENCH_IGNORES_TEST_TIMEOUT);
-        }
-
-        // TIMEOUT_RETRIES_PASS - only run tests with the
-        // TEST_SLOW_TIMEOUT_SUBSTRING property (not benchmarks). These are the
-        // test_slow_timeout* tests that time out but pass.
-        if properties.contains(RunProperties::TIMEOUT_RETRIES_PASS) {
-            // Skip if not SLOW_TIMEOUT or if it's a benchmark.
-            return !self.has_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING)
-                || self.has_property(TestCaseFixtureProperties::IS_BENCHMARK);
-        }
-
-        // TIMEOUT_RETRIES_FLAKY - only run the flaky slow timeout test.
-        if properties.contains(RunProperties::TIMEOUT_RETRIES_FLAKY) {
-            return !self.has_property(TestCaseFixtureProperties::FLAKY_SLOW_TIMEOUT_SUBSTRING);
-        }
-
-        // WITH_TERMINATION - only run test_slow_timeout* tests (they time out).
-        if properties.contains(RunProperties::WITH_TERMINATION) {
-            return !self.has_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING)
-                || self.has_property(TestCaseFixtureProperties::IS_BENCHMARK);
-        }
-
-        // WITH_TIMEOUT_SUCCESS - only run test_slow_timeout* tests.
-        if properties.contains(RunProperties::WITH_TIMEOUT_SUCCESS) {
-            return !self.has_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING)
-                || self.has_property(TestCaseFixtureProperties::IS_BENCHMARK);
-        }
-
-        // RUN_IGNORED_ONLY: run only ignored tests, excluding slow timeout
-        // tests.
-        if properties.contains(RunProperties::RUN_IGNORED_ONLY) {
-            // Skip slow timeout tests (filtered out in the test).
-            if self.has_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING) {
-                return true;
-            }
-            // Skip non-ignored tests.
-            if !self.status.is_ignored() {
-                return true;
-            }
-            // Run other ignored tests.
-            return false;
-        }
-
-        // Ignored tests are skipped by this test suite.
-        if self.status.is_ignored() {
-            return true;
-        }
-
-        false
     }
 
     /// Determines the expected test result based on test status and run
@@ -570,6 +495,153 @@ impl TestCaseFixture {
 
         ExpectedReruns::None
     }
+}
+
+/// Determines the reason a test should be skipped.
+///
+/// The general algorithm is:
+///
+/// * If the suite is not part of the run, produce `SuiteNotInRun`.
+/// * If this is a benchmark run and the test is not a benchmark, produce
+///   `NotBenchmark`.
+/// * Otherwise, check that the test is filtered out.
+/// * Otherwise, check that the test is ignored.
+/// * Otherwise, produce `None`.
+///
+/// This assigns every skip reason that is derivable from the fixture model
+/// and the run properties. The verifier in the integration-tests crate
+/// assigns the rest: `RerunAlreadyPassed` depends on the outcome of a prior
+/// run, and the not-in-name-list `Filtered` case depends on the name set a
+/// specific check was asked to verify.
+pub fn expected_skip_reason(
+    suite: &TestSuiteFixture,
+    test: &TestCaseFixture,
+    properties: RunProperties,
+) -> Option<SkipReason> {
+    if (suite.has_property(TestSuiteFixtureProperties::NOT_IN_DEFAULT_SET)
+        && properties.contains(RunProperties::WITH_DEFAULT_FILTER))
+        || (!suite.has_property(TestSuiteFixtureProperties::MATCHES_CDYLIB_EXAMPLE)
+            && properties.contains(RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER))
+    {
+        return Some(SkipReason::SuiteNotInRun);
+    }
+
+    if properties.contains(RunProperties::BENCHMARKS)
+        && !test.has_property(TestCaseFixtureProperties::IS_BENCHMARK)
+    {
+        return Some(SkipReason::NotBenchmark);
+    }
+
+    // NotInDefaultSet filter.
+    if test.has_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET)
+        && properties.contains(RunProperties::WITH_DEFAULT_FILTER)
+    {
+        return Some(SkipReason::Filtered);
+    }
+
+    // NotInDefaultSetUnix filter (Unix-specific).
+    if cfg!(unix)
+        && test.has_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET_UNIX)
+        && properties.contains(RunProperties::WITH_DEFAULT_FILTER)
+    {
+        return Some(SkipReason::Filtered);
+    }
+
+    // MatchesCdylib + WithSkipCdylibFilter.
+    if test.has_property(TestCaseFixtureProperties::MATCHES_CDYLIB)
+        && properties.contains(RunProperties::WITH_SKIP_CDYLIB_FILTER)
+    {
+        return Some(SkipReason::Filtered);
+    }
+
+    // WithMultiplyTwoExactFilter - skip tests that don't match.
+    if !test.has_property(TestCaseFixtureProperties::MATCHES_TEST_MULTIPLY_TWO)
+        && properties.contains(RunProperties::WITH_MULTIPLY_TWO_EXACT_FILTER)
+    {
+        return Some(SkipReason::Filtered);
+    }
+
+    // CdyLibExamplePackageFilter - only run test_multiply_two_cdylib.
+    if properties.contains(RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER)
+        && test.name != TestCaseName::new("tests::test_multiply_two_cdylib")
+    {
+        return Some(SkipReason::Filtered);
+    }
+
+    // ExpectNoBinaries - all tests should be skipped.
+    if properties.contains(RunProperties::EXPECT_NO_BINARIES) {
+        return Some(SkipReason::Filtered);
+    }
+
+    // BenchOverrideTimeout - only run the specific benchmark that times out.
+    if properties.contains(RunProperties::BENCH_OVERRIDE_TIMEOUT) {
+        return (!test.has_property(TestCaseFixtureProperties::BENCH_OVERRIDE_TIMEOUT))
+            .then_some(SkipReason::Filtered);
+    }
+
+    // BenchTermination - only run the specific benchmark that times out.
+    if properties.contains(RunProperties::BENCH_TERMINATION) {
+        return (!test.has_property(TestCaseFixtureProperties::BENCH_TERMINATION))
+            .then_some(SkipReason::Filtered);
+    }
+
+    // BenchIgnoresTestTimeout - only run the specific benchmark that passes.
+    if properties.contains(RunProperties::BENCH_IGNORES_TEST_TIMEOUT) {
+        return (!test.has_property(TestCaseFixtureProperties::BENCH_IGNORES_TEST_TIMEOUT))
+            .then_some(SkipReason::Filtered);
+    }
+
+    // TIMEOUT_RETRIES_PASS - only run tests with the
+    // TEST_SLOW_TIMEOUT_SUBSTRING property (not benchmarks). These are the
+    // test_slow_timeout* tests that time out but pass.
+    if properties.contains(RunProperties::TIMEOUT_RETRIES_PASS) {
+        // Skip if not SLOW_TIMEOUT or if it's a benchmark.
+        return (!test.has_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING)
+            || test.has_property(TestCaseFixtureProperties::IS_BENCHMARK))
+        .then_some(SkipReason::Filtered);
+    }
+
+    // TIMEOUT_RETRIES_FLAKY - only run the flaky slow timeout test.
+    if properties.contains(RunProperties::TIMEOUT_RETRIES_FLAKY) {
+        return (!test.has_property(TestCaseFixtureProperties::FLAKY_SLOW_TIMEOUT_SUBSTRING))
+            .then_some(SkipReason::Filtered);
+    }
+
+    // WITH_TERMINATION - only run test_slow_timeout* tests (they time out).
+    if properties.contains(RunProperties::WITH_TERMINATION) {
+        return (!test.has_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING)
+            || test.has_property(TestCaseFixtureProperties::IS_BENCHMARK))
+        .then_some(SkipReason::Filtered);
+    }
+
+    // WITH_TIMEOUT_SUCCESS - only run test_slow_timeout* tests.
+    if properties.contains(RunProperties::WITH_TIMEOUT_SUCCESS) {
+        return (!test.has_property(TestCaseFixtureProperties::TEST_SLOW_TIMEOUT_SUBSTRING)
+            || test.has_property(TestCaseFixtureProperties::IS_BENCHMARK))
+        .then_some(SkipReason::Filtered);
+    }
+
+    // RUN_IGNORED_ONLY: run only ignored tests, excluding slow timeout
+    // tests.
+    if properties.contains(RunProperties::RUN_IGNORED_ONLY) {
+        // Skip slow timeout tests (filtered out in the test).
+        if test.has_property(TestCaseFixtureProperties::SLOW_TIMEOUT_SUBSTRING) {
+            return Some(SkipReason::Filtered);
+        }
+        // Skip non-ignored tests.
+        if !test.status.is_ignored() {
+            return Some(SkipReason::Filtered);
+        }
+        // Run other ignored tests.
+        return None;
+    }
+
+    // Ignored tests are skipped by this test suite.
+    if test.status.is_ignored() {
+        return Some(SkipReason::Ignored);
+    }
+
+    None
 }
 
 #[derive(Clone, Debug)]
