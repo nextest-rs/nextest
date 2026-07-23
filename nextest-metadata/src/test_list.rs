@@ -1015,8 +1015,14 @@ impl MismatchReason {
         }
     }
 
-    /// Returns true if this skip is included in skipped statistics.
-    pub fn is_counted_skip(self) -> bool {
+    /// Returns true if skip reflects a real filtering decision, rather than a
+    /// run-mode artifact such as a non-benchmark test excluded from a benchmark
+    /// run.
+    ///
+    /// This defines both nextest's displayed skipped count and the set emitted
+    /// under the JUnit `report-skipped = "all"` policy; the two are
+    /// intentionally identical.
+    pub fn is_substantive_skip(self) -> bool {
         match self {
             MismatchReason::NotBenchmark => false,
             MismatchReason::Ignored
@@ -1205,10 +1211,13 @@ mod tests {
             }
         }
 
-        assert!(!MismatchReason::NotBenchmark.is_counted_skip());
+        assert!(!MismatchReason::NotBenchmark.is_substantive_skip());
         for &reason in MismatchReason::ALL_VARIANTS {
             if reason != MismatchReason::NotBenchmark {
-                assert!(reason.is_counted_skip(), "{reason:?} is a counted skip");
+                assert!(
+                    reason.is_substantive_skip(),
+                    "{reason:?} is a substantive skip"
+                );
             }
         }
     }

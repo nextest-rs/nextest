@@ -249,11 +249,14 @@ pub(super) const RUNS_JSON_FORMAT_VERSION: RunsJsonFormatVersion = RunsJsonForma
 /// Changelog:
 ///
 /// - 1.1: Addition of the `flaky_result` field to `ExecutionStatuses`.
+///
 /// - 2.0: `slot_assignment` is now mandatory in `TestStarted` and
 ///   `TestRetryStarted` events.
+///
+/// - 2.1: `junit_report_skipped` field added to `TestSkipped` events.
 pub const STORE_FORMAT_VERSION: StoreFormatVersion = StoreFormatVersion::new(
     StoreFormatMajorVersion::new(2),
-    StoreFormatMinorVersion::new(0),
+    StoreFormatMinorVersion::new(1),
 );
 
 /// Testing-only environment variable to force a specific store format version

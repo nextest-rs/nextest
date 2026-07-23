@@ -19,8 +19,9 @@ pub enum ReportSkipPolicy {
     #[default]
     None,
 
-    /// Only emit tests that were skipped because they are ignored (via
-    /// `#[ignore]` and not selected by the run-ignored option).
+    /// Only emit tests whose ignore status did not match the run's run-ignored
+    /// selection. In a default run these are the tests marked `#[ignore]`;
+    /// under `--run-ignored only` these are the tests that are not ignored.
     Ignored,
 
     /// Emit all skipped tests, regardless of why they were skipped, except
@@ -43,7 +44,7 @@ impl ReportSkipPolicy {
         match self {
             ReportSkipPolicy::None => false,
             ReportSkipPolicy::Ignored => reason.is_ignored(),
-            ReportSkipPolicy::All => reason.is_counted_skip(),
+            ReportSkipPolicy::All => reason.is_substantive_skip(),
         }
     }
 }
@@ -65,5 +66,25 @@ mod tests {
         assert!(ReportSkipPolicy::All.should_report(MismatchReason::Ignored));
         assert!(ReportSkipPolicy::All.should_report(MismatchReason::DefaultFilter));
         assert!(!ReportSkipPolicy::All.should_report(MismatchReason::NotBenchmark));
+    }
+
+    #[test]
+    fn should_report_mirrors_reason_predicates() {
+        for &reason in MismatchReason::ALL_VARIANTS {
+            assert!(
+                !ReportSkipPolicy::None.should_report(reason),
+                "None never reports {reason:?}"
+            );
+            assert_eq!(
+                ReportSkipPolicy::Ignored.should_report(reason),
+                reason.is_ignored(),
+                "Ignored policy must mirror is_ignored for {reason:?}"
+            );
+            assert_eq!(
+                ReportSkipPolicy::All.should_report(reason),
+                reason.is_substantive_skip(),
+                "All policy must mirror is_substantive_skip for {reason:?}"
+            );
+        }
     }
 }

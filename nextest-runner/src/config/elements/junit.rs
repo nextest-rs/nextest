@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn report_skipped_defaults_to_none() {
-        // When only a path is set, store-skipped must default to "none" to keep
+        // When only a path is set, report-skipped must default to "none" to keep
         // machine-readable output stable.
         let config = indoc! {r#"
             [profile.default.junit]

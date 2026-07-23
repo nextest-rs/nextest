@@ -843,7 +843,7 @@ where
                 reason,
                 junit_report_skipped,
             }) => {
-                if reason.is_counted_skip() {
+                if reason.is_substantive_skip() {
                     self.run_stats.skipped += 1;
                 }
                 self.callback_none_response(TestEventKind::TestSkipped {

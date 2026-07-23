@@ -249,7 +249,7 @@ impl<'cfg> MetadataJunit<'cfg> {
             } => {
                 // Emit skipped tests as `<testcase>` elements with a `<skipped>`
                 // child only for the reasons selected by the per-test resolved
-                // `store-skipped` policy (which accounts for overrides). Skipped
+                // `report-skipped` policy (which accounts for overrides). Skipped
                 // tests are omitted by default to keep the machine-readable
                 // output stable.
                 if junit_report_skipped.should_report(reason) {

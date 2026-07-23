@@ -265,7 +265,7 @@ impl TestInstanceId {
 struct ExpectedTestResults {
     tests: IdOrdMap<ExpectedTest>,
     /// Tests that should appear as `<skipped>` testcases in the JUnit report
-    /// (for example, under a `store-skipped` policy). Every id here has a
+    /// (for example, under a `report-skipped` policy). Every id here has a
     /// `Skipped` disposition in `tests`.
     junit_skipped: BTreeSet<TestInstanceId>,
 }
@@ -358,7 +358,7 @@ impl ExpectedTestResults {
     /// Marks the skipped tests among the given names as expected to appear as
     /// `<skipped>` testcases in the JUnit report.
     ///
-    /// Used to validate a `store-skipped` policy: those tests are still absent
+    /// Used to validate a `report-skipped` policy: those tests are still absent
     /// from the human-readable output but must appear as skipped testcases in
     /// the JUnit XML.
     fn with_junit_skipped(mut self, test_names: &[&str]) -> Self {
@@ -395,7 +395,11 @@ impl ExpectedTestResults {
                         test.status.is_ignored()
                             && !matches!(
                                 reason,
-                                Some(SkipReason::SuiteNotInRun) | Some(SkipReason::NotBenchmark)
+                                None | Some(
+                                    SkipReason::SuiteNotInRun
+                                        | SkipReason::NotBenchmark
+                                        | SkipReason::RerunAlreadyPassed
+                                )
                             )
                     }
                 };
@@ -1031,7 +1035,6 @@ pub enum JunitSkippedExpectation {
     IgnoredOnly,
 }
 
-
 /// Verifies the output of a test run against fixture data, including
 /// `<skipped>` testcases.
 #[track_caller]
@@ -1054,7 +1057,12 @@ pub fn check_run_output_with_junit_skipped(
 /// Use this for verifying replay output where JUnit files aren't available.
 #[track_caller]
 pub fn check_run_output(stderr: &[u8], properties: RunProperties) {
-    check_run_output_impl(stderr, None, properties, JunitSkippedExpectation::NoneReported);
+    check_run_output_impl(
+        stderr,
+        None,
+        properties,
+        JunitSkippedExpectation::NoneReported,
+    );
 }
 
 /// Checks the output of a test run that used a filter expression.
@@ -1365,7 +1373,7 @@ impl ActualJunitResults {
                     ),
                     quick_junit::TestCaseStatus::Skipped { .. } => {
                         // Skipped tests appear in the JUnit report only under a
-                        // `store-skipped` policy. Record them separately so
+                        // `report-skipped` policy. Record them separately so
                         // that tests can assert on exactly which tests were
                         // reported as skipped.
                         skipped.insert(id.clone());
