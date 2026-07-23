@@ -6,8 +6,8 @@ use camino::Utf8Path;
 use fixture_data::{
     fixture_project::EXPECTED_TEST_SUITES,
     models::{
-        CheckResult, ExpectedReruns, ExpectedTestResult, RunProperties, TerminalCheckResult,
-        TestCaseFixtureProperties, TestSuiteFixtureProperties,
+        CheckResult, ExpectedReruns, ExpectedTestResult, RunProperties, SkipReason,
+        TerminalCheckResult, TestCaseFixture, TestSuiteFixture, expected_skip_reason,
     },
 };
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
@@ -263,124 +263,102 @@ impl TestInstanceId {
 /// The expected test execution results for a particular nextest invocation.
 #[derive(Clone, Debug)]
 struct ExpectedTestResults {
-    /// Tests that should be run, mapped to their expected outcome.
-    should_run: IdOrdMap<ExpectedOutcome>,
-    /// Tests that should not appear in output.
-    should_not_run: BTreeSet<TestInstanceId>,
-    /// Summary counts derived from should_run.
-    summary: ExpectedSummary,
+    tests: IdOrdMap<ExpectedTest>,
 }
 
 impl ExpectedTestResults {
-    /// Builds expected test results by applying filters to fixture data based on properties.
     fn new(properties: RunProperties) -> Self {
-        let mut should_run = IdOrdMap::new();
-        let mut should_not_run = BTreeSet::new();
-        let mut summary = ExpectedSummary::default();
+        let mut tests = IdOrdMap::new();
 
         for fixture in &*EXPECTED_TEST_SUITES {
             let binary_id = &fixture.binary_id;
 
-            // Check if the entire test suite should be skipped.
-            let skip_suite = (fixture.has_property(TestSuiteFixtureProperties::NOT_IN_DEFAULT_SET)
-                && properties.contains(RunProperties::WITH_DEFAULT_FILTER))
-                || (!fixture.has_property(TestSuiteFixtureProperties::MATCHES_CDYLIB_EXAMPLE)
-                    && properties.contains(RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER));
+            for test in &fixture.test_cases {
+                let id = TestInstanceId::new(binary_id.as_str(), &test.name);
+                let disposition = Self::ran_or_skipped(fixture, test, properties);
 
-            if skip_suite {
-                // The entire suite should not appear in output.
-                for test in &fixture.test_cases {
-                    let identifier = TestInstanceId::new(binary_id.as_str(), &test.name);
-                    should_not_run.insert(identifier);
-                }
-                continue;
+                tests
+                    .insert_unique(ExpectedTest { id, disposition })
+                    .expect("duplicate ids should not be seen");
             }
+        }
+
+        Self { tests }
+    }
+
+    fn for_test_names(test_names: &[&str], properties: RunProperties) -> Self {
+        let mut tests = IdOrdMap::new();
+
+        // Guard against typos: every requested name must exist in the fixture model.
+        let mut unmatched: BTreeSet<&str> = test_names.iter().copied().collect();
+
+        for fixture in &*EXPECTED_TEST_SUITES {
+            let binary_id = &fixture.binary_id;
 
             for test in &fixture.test_cases {
                 let id = TestInstanceId::new(binary_id.as_str(), &test.name);
 
-                if properties.contains(RunProperties::BENCHMARKS) {
-                    // We don't consider skipped tests while running benchmarks.
-                    if !test.has_property(TestCaseFixtureProperties::IS_BENCHMARK) {
-                        continue;
+                let disposition = if test_names.contains(&test.name.as_str()) {
+                    unmatched.remove(test.name.as_str());
+                    Self::ran_or_skipped(fixture, test, properties)
+                } else {
+                    ExpectedDisposition::Skipped(SkipReason::Filtered)
+                };
+
+                tests
+                    .insert_unique(ExpectedTest { id, disposition })
+                    .expect("duplicate ids should not be seen");
+            }
+        }
+
+        assert!(
+            unmatched.is_empty(),
+            "test names not found in fixture data: {unmatched:?}"
+        );
+
+        Self { tests }
+    }
+
+    fn ran_or_skipped(
+        fixture: &TestSuiteFixture,
+        test: &TestCaseFixture,
+        properties: RunProperties,
+    ) -> ExpectedDisposition {
+        match expected_skip_reason(fixture, test, properties) {
+            Some(reason) => ExpectedDisposition::Skipped(reason),
+            None => ExpectedDisposition::Ran(test.expected_result(properties)),
+        }
+    }
+
+    fn summary(&self) -> ExpectedSummary {
+        let mut summary = ExpectedSummary::default();
+        for test in &self.tests {
+            match &test.disposition {
+                ExpectedDisposition::Ran(result) => summary.update(result.result),
+                ExpectedDisposition::Skipped(reason) => {
+                    if reason.counted_in_skip_summary() {
+                        summary.skip_count += 1;
                     }
                 }
-
-                // Determine if this specific test should be filtered out.
-                if test.should_skip(properties) {
-                    should_not_run.insert(id);
-                    summary.skip_count += 1;
-                    continue;
-                }
-
-                // Determine the expected result for this test.
-                let expected = test.expected_result(properties);
-
-                summary.update(expected.result);
-                should_run
-                    .insert_unique(ExpectedOutcome { id, expected })
-                    .expect("duplicate ids should not be seen");
             }
         }
-
-        Self {
-            should_run,
-            should_not_run,
-            summary,
-        }
-    }
-
-    /// Builds expected test results for only the specified test names.
-    ///
-    /// This is useful for testing scenarios with specific filter expressions
-    /// like `test(=test_success) | test(=test_failure_assert)`.
-    fn for_test_names(test_names: &[&str], properties: RunProperties) -> Self {
-        let mut should_run = IdOrdMap::new();
-        let mut should_not_run = BTreeSet::new();
-        let mut summary = ExpectedSummary::default();
-
-        for fixture in &*EXPECTED_TEST_SUITES {
-            let binary_id = &fixture.binary_id;
-
-            for test in &fixture.test_cases {
-                let id = TestInstanceId::new(binary_id.as_str(), &test.name);
-
-                if !test_names.contains(&test.name.as_str()) {
-                    should_not_run.insert(id);
-                    continue;
-                }
-
-                if test.should_skip(properties) {
-                    should_not_run.insert(id);
-                    summary.skip_count += 1;
-                    continue;
-                }
-
-                let expected = test.expected_result(properties);
-
-                summary.update(expected.result);
-                should_run
-                    .insert_unique(ExpectedOutcome { id, expected })
-                    .expect("duplicate ids should not be seen");
-            }
-        }
-
-        Self {
-            should_run,
-            should_not_run,
-            summary,
-        }
+        summary
     }
 }
 
-/// The expected outcome for a test that should be run.
 #[derive(Clone, Debug)]
-struct ExpectedOutcome {
+struct ExpectedTest {
     id: TestInstanceId,
-    expected: ExpectedTestResult,
+    disposition: ExpectedDisposition,
 }
 
-impl IdOrdItem for ExpectedOutcome {
+#[derive(Clone, Copy, Debug)]
+enum ExpectedDisposition {
+    Ran(ExpectedTestResult),
+    Skipped(SkipReason),
+}
+
+impl IdOrdItem for ExpectedTest {
     type Key<'a> = &'a TestInstanceId;
     fn key(&self) -> Self::Key<'_> {
         &self.id
@@ -741,106 +719,99 @@ fn verify_expected_in_actual(
     output: &str,
     properties: RunProperties,
 ) {
-    // Check that all tests that should run are present with correct result.
-    for expected_outcome in &expected.should_run {
-        let actual_outcome = actual.tests.get(&expected_outcome.id);
+    for expected_test in &expected.tests {
+        match &expected_test.disposition {
+            ExpectedDisposition::Ran(result) => {
+                let actual_outcome = actual.tests.get(&expected_test.id);
 
-        match actual_outcome {
-            Some(actual) => {
-                // Test is present, verify the final result matches.
-                // With retries, a test may have multiple attempts — we check the last one.
-                // Use to_terminal() because terminal output cannot distinguish
-                // between some CheckResult variants (e.g., FlakyFailJunitSuccess
-                // and FlakyFail both display as FLKY-FL).
-                let actual_result = actual.final_result();
-                let expected_terminal = expected_outcome.expected.result.to_terminal();
-                assert_eq!(
-                    expected_terminal,
-                    actual_result,
-                    "{}: expected result {:?} but got {:?} (attempts: {:?})\n\n\
-                     --- output ---\n{}\n--- end output ---",
-                    expected_outcome.id.full_name(),
-                    expected_terminal,
-                    actual_result,
-                    actual.attempts,
-                    output
-                );
-
-                // Verify the number of retry attempts matches expectations.
-                // The number of non-final attempts (retries) is attempts.len() - 1.
-                let actual_rerun_count = actual.attempts.len() - 1;
-                match expected_outcome.expected.expected_reruns {
-                    ExpectedReruns::None => {
+                match actual_outcome {
+                    Some(actual) => {
+                        let actual_result = actual.final_result();
+                        let expected_terminal = result.result.to_terminal();
                         assert_eq!(
-                            actual_rerun_count,
-                            0,
-                            "{}: expected no reruns but found {} (properties: {})\n\n\
+                            expected_terminal,
+                            actual_result,
+                            "{}: expected result {:?} but got {:?} (attempts: {:?})\n\n\
                              --- output ---\n{}\n--- end output ---",
-                            expected_outcome.id.full_name(),
-                            actual_rerun_count,
-                            debug_run_properties(properties),
+                            expected_test.id.full_name(),
+                            expected_terminal,
+                            actual_result,
+                            actual.attempts,
                             output
                         );
+
+                        // The rerun count excludes the final attempt.
+                        let actual_rerun_count = actual.attempts.len() - 1;
+                        match result.expected_reruns {
+                            ExpectedReruns::None => {
+                                assert_eq!(
+                                    actual_rerun_count,
+                                    0,
+                                    "{}: expected no reruns but found {} (properties: {})\n\n\
+                                     --- output ---\n{}\n--- end output ---",
+                                    expected_test.id.full_name(),
+                                    actual_rerun_count,
+                                    debug_run_properties(properties),
+                                    output
+                                );
+                            }
+                            ExpectedReruns::FlakyRunCount(expected_count) => {
+                                assert_eq!(
+                                    actual_rerun_count,
+                                    expected_count,
+                                    "{}: expected {} reruns but found {} (properties: {})\n\n\
+                                     --- output ---\n{}\n--- end output ---",
+                                    expected_test.id.full_name(),
+                                    expected_count,
+                                    actual_rerun_count,
+                                    debug_run_properties(properties),
+                                    output
+                                );
+                            }
+                            ExpectedReruns::SomeReruns => {
+                                assert!(
+                                    actual_rerun_count > 0,
+                                    "{}: expected reruns but found none (properties: {})\n\n\
+                                     --- output ---\n{}\n--- end output ---",
+                                    expected_test.id.full_name(),
+                                    debug_run_properties(properties),
+                                    output
+                                );
+                            }
+                        }
                     }
-                    ExpectedReruns::FlakyRunCount(expected_count) => {
-                        assert_eq!(
-                            actual_rerun_count,
-                            expected_count,
-                            "{}: expected {} reruns but found {} (properties: {})\n\n\
+                    None => {
+                        panic!(
+                            "{}: expected to run with result {:?} but was not found in output\n\n\
                              --- output ---\n{}\n--- end output ---",
-                            expected_outcome.id.full_name(),
-                            expected_count,
-                            actual_rerun_count,
-                            debug_run_properties(properties),
-                            output
-                        );
-                    }
-                    ExpectedReruns::SomeReruns => {
-                        assert!(
-                            actual_rerun_count > 0,
-                            "{}: expected reruns but found none (properties: {})\n\n\
-                             --- output ---\n{}\n--- end output ---",
-                            expected_outcome.id.full_name(),
-                            debug_run_properties(properties),
+                            expected_test.id.full_name(),
+                            result.result,
                             output
                         );
                     }
                 }
             }
-            None => {
-                panic!(
-                    "{}: expected to run with result {:?} but was not found in output\n\n\
-                     --- output ---\n{}\n--- end output ---",
-                    expected_outcome.id.full_name(),
-                    expected_outcome.expected.result,
-                    output
-                );
+            ExpectedDisposition::Skipped(_) => {
+                if actual.tests.contains_key(&expected_test.id) {
+                    panic!(
+                        "{}: should not be run but appeared in output\n\n\
+                         --- output ---\n{}\n--- end output ---",
+                        expected_test.id.full_name(),
+                        output
+                    );
+                }
+
+                if !properties.contains(RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT) {
+                    let full_name = expected_test.id.full_name();
+                    assert!(
+                        !output.contains(&full_name),
+                        "{}: should not be run but name appears in output\n\n\
+                         --- output ---\n{}\n--- end output ---",
+                        full_name,
+                        output
+                    );
+                }
             }
-        }
-    }
-
-    // Check that all tests that should not run are absent.
-    for id in &expected.should_not_run {
-        if actual.tests.contains_key(id) {
-            panic!(
-                "{}: should not be run but appeared in output\n\n\
-                 --- output ---\n{}\n--- end output ---",
-                id.full_name(),
-                output
-            );
-        }
-
-        // Also check that the test name doesn't appear anywhere in the output,
-        // unless ALLOW_SKIPPED_NAMES_IN_OUTPUT is set (e.g., for replay which shows SKIP lines).
-        if !properties.contains(RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT) {
-            let full_name = id.full_name();
-            assert!(
-                !output.contains(&full_name),
-                "{}: should not be run but name appears in output\n\n\
-                 --- output ---\n{}\n--- end output ---",
-                full_name,
-                output
-            );
         }
     }
 }
@@ -853,19 +824,24 @@ fn verify_actual_in_expected(
     output: &str,
 ) {
     for outcome in &actual.tests {
-        if !expected.should_run.contains_key(&outcome.id) {
-            // Check if it's in should_not_run to provide a better error message.
-            if expected.should_not_run.contains(&outcome.id) {
+        match expected
+            .tests
+            .get(&outcome.id)
+            .map(|test| &test.disposition)
+        {
+            Some(ExpectedDisposition::Ran(_)) => {}
+            Some(ExpectedDisposition::Skipped(_)) => {
                 panic!(
                     "{}: appeared in output but should not have been run\n\n\
                      --- output ---\n{}\n--- end output ---",
                     outcome.id.full_name(),
                     output
                 );
-            } else {
+            }
+            None => {
                 panic!(
                     "{}: appeared in output but was not in expected test set \
-                     (not in fixture data or should_not_run)\n\n\
+                     (not in fixture data)\n\n\
                      --- output ---\n{}\n--- end output ---",
                     outcome.id.full_name(),
                     output
@@ -878,7 +854,7 @@ fn verify_actual_in_expected(
 /// Verifies that the summary line matches expected counts.
 #[track_caller]
 fn verify_summary(
-    expected_summary: &ExpectedSummary,
+    expected: &ExpectedTestResults,
     actual_summary: Option<&ActualSummary>,
     output: &str,
     properties: RunProperties,
@@ -887,6 +863,8 @@ fn verify_summary(
     if properties.contains(RunProperties::SKIP_SUMMARY_CHECK) {
         return;
     }
+
+    let expected_summary = expected.summary();
 
     let actual = match actual_summary {
         Some(s) => s,
@@ -973,7 +951,8 @@ pub fn check_run_output(stderr: &[u8], properties: RunProperties) {
 /// (e.g., using `-E 'test(=test_name)'`). It:
 /// - Verifies the specified tests are present with correct results.
 /// - Does NOT check for the full test suite.
-/// - Skips summary verification since counts won't match full fixture model.
+/// - Verifies that summary counts match expectations (to skip it, pass in
+///   `RunProperties::SKIP_SUMMARY_CHECK`).
 ///
 /// This is useful for replay tests and other scenarios where only a subset
 /// of tests were executed.
@@ -995,7 +974,7 @@ pub fn check_run_output_for_test_names(
 
     verify_expected_in_actual(&expected, &actual, &output_str, properties);
     verify_actual_in_expected(&actual, &expected, &output_str);
-    // Skip summary verification since a filtered run won't match fixture model counts.
+    verify_summary(&expected, actual.summary.as_ref(), &output_str, properties);
 }
 
 /// Checks the output of a rerun against fixture data.
@@ -1005,8 +984,9 @@ pub fn check_run_output_for_test_names(
 ///
 /// The function:
 /// 1. Builds expected results from fixture data for `properties`.
-/// 2. Filters to only include tests that failed (outstanding tests).
-/// 3. Verifies the rerun output against the filtered expectations.
+/// 2. Re-marks tests that passed in the initial run as expected to be skipped
+///    (`SkipReason::RerunAlreadyPassed`).
+/// 3. Verifies the rerun output against those expectations.
 ///
 /// Use `RunProperties::SKIP_SUMMARY_CHECK` if the summary counts don't match
 /// exactly due to additional skipped tests.
@@ -1017,7 +997,7 @@ pub fn check_rerun_output(rerun_stderr: &[u8], properties: RunProperties) {
     println!("{rerun_output}");
 
     let initial_expected = ExpectedTestResults::new(properties);
-    let rerun_expected = filter_for_rerun(&initial_expected);
+    let rerun_expected = expected_for_rerun(&initial_expected);
     let actual = ActualTestResults::parse(&rerun_output);
 
     eprintln!("rerun_expected: {rerun_expected:?}");
@@ -1026,7 +1006,7 @@ pub fn check_rerun_output(rerun_stderr: &[u8], properties: RunProperties) {
     verify_expected_in_actual(&rerun_expected, &actual, &rerun_output, properties);
     verify_actual_in_expected(&actual, &rerun_expected, &rerun_output);
     verify_summary(
-        &rerun_expected.summary,
+        &rerun_expected,
         actual.summary.as_ref(),
         &rerun_output,
         properties,
@@ -1050,18 +1030,51 @@ pub fn check_rerun_expanded_output(
     println!("{rerun_output}");
 
     let initial_expected = ExpectedTestResults::for_test_names(initial_test_names, properties);
-    let mut rerun_expected = filter_for_rerun(&initial_expected);
+    let mut rerun_expected = expected_for_rerun(&initial_expected);
 
     let expanded_expected = ExpectedTestResults::for_test_names(expanded_test_names, properties);
 
-    for outcome in &expanded_expected.should_run {
-        rerun_expected.should_not_run.remove(&outcome.id);
-        rerun_expected
-            .should_run
-            .insert_unique(outcome.clone())
-            .expect("expanded tests should not overlap with initial run tests");
-        rerun_expected.summary.update(outcome.expected.result);
+    // Guard against typos and unrunnable requests: every expanded name must
+    // resolve to at least one test that is expected to run.
+    let mut names_without_runnable: BTreeSet<&str> = expanded_test_names.iter().copied().collect();
+
+    for expanded in &expanded_expected.tests {
+        let ExpectedDisposition::Ran(_) = expanded.disposition else {
+            continue;
+        };
+        names_without_runnable.remove(expanded.id.test_name.as_str());
+        let previous = rerun_expected.tests.insert_overwrite(ExpectedTest {
+            id: expanded.id.clone(),
+            disposition: expanded.disposition,
+        });
+        match previous {
+            Some(ExpectedTest {
+                disposition: ExpectedDisposition::Ran(_),
+                ..
+            }) => {
+                panic!(
+                    "expanded tests should not overlap with initial run tests: {}",
+                    expanded.id.full_name()
+                );
+            }
+            Some(ExpectedTest {
+                disposition: ExpectedDisposition::Skipped(_),
+                ..
+            }) => {}
+            None => {
+                panic!(
+                    "expanded test {} not present in rerun expectations \
+                     (for_test_names should cover the full fixture model)",
+                    expanded.id.full_name()
+                );
+            }
+        }
     }
+
+    assert!(
+        names_without_runnable.is_empty(),
+        "expanded test names with no runnable fixture test: {names_without_runnable:?}"
+    );
 
     // The fixture model includes tests (like benchmarks) that the actual run
     // may not see, so skip summary verification for expanded reruns.
@@ -1075,59 +1088,43 @@ pub fn check_rerun_expanded_output(
     verify_expected_in_actual(&rerun_expected, &actual, &rerun_output, properties);
     verify_actual_in_expected(&actual, &rerun_expected, &rerun_output);
     verify_summary(
-        &rerun_expected.summary,
+        &rerun_expected,
         actual.summary.as_ref(),
         &rerun_output,
         properties,
     );
 }
 
-/// Filters ExpectedTestResults to only include tests that should run in a
-/// rerun.
+/// Derives the expected results for a rerun from the expected results of the
+/// initial run.
 ///
-/// This returns a new ExpectedTestResults where:
-/// - `should_run` contains only tests that failed (outstanding tests).
-/// - `should_not_run` contains tests that passed (already passed, skip in
-///   rerun).
-fn filter_for_rerun(expected: &ExpectedTestResults) -> ExpectedTestResults {
-    let mut rerun_should_run = IdOrdMap::new();
-    let mut rerun_should_not_run = expected.should_not_run.clone();
-    let mut rerun_summary = ExpectedSummary {
-        skip_count: expected.summary.skip_count,
-        ..Default::default()
-    };
+/// Tests that failed in the initial run are still expected to run. Tests that
+/// passed become skipped with `SkipReason::RerunAlreadyPassed`, and tests that
+/// were already skipped keep their original reason.
+fn expected_for_rerun(expected: &ExpectedTestResults) -> ExpectedTestResults {
+    let mut tests = IdOrdMap::new();
 
-    for outcome in &expected.should_run {
-        match outcome.expected.result {
-            // Failed tests are still outstanding and should run.
-            CheckResult::Fail
-            | CheckResult::FlakyFail
-            | CheckResult::FlakyFailJunitSuccess
-            | CheckResult::Abort
-            | CheckResult::Timeout
-            | CheckResult::LeakFail
-            | CheckResult::FailLeak => {
-                rerun_should_run
-                    .insert_unique(ExpectedOutcome {
-                        id: outcome.id.clone(),
-                        expected: outcome.expected,
-                    })
-                    .expect("no duplicates");
-                rerun_summary.update(outcome.expected.result);
+    for test in &expected.tests {
+        let disposition = match test.disposition {
+            ExpectedDisposition::Skipped(_) => test.disposition,
+            ExpectedDisposition::Ran(result) => {
+                if result.result.is_failure() {
+                    test.disposition
+                } else {
+                    ExpectedDisposition::Skipped(SkipReason::RerunAlreadyPassed)
+                }
             }
-            // Passed tests become skipped in the rerun.
-            CheckResult::Pass | CheckResult::Leak => {
-                rerun_should_not_run.insert(outcome.id.clone());
-                rerun_summary.skip_count += 1;
-            }
-        }
+        };
+
+        tests
+            .insert_unique(ExpectedTest {
+                id: test.id.clone(),
+                disposition,
+            })
+            .expect("ids copied from a unique map are unique");
     }
 
-    ExpectedTestResults {
-        should_run: rerun_should_run,
-        should_not_run: rerun_should_not_run,
-        summary: rerun_summary,
-    }
+    ExpectedTestResults { tests }
 }
 
 #[track_caller]
@@ -1144,12 +1141,7 @@ fn check_run_output_impl(stderr: &[u8], junit_path: Option<&Utf8Path>, propertie
 
     verify_expected_in_actual(&expected, &actual, &output, properties);
     verify_actual_in_expected(&actual, &expected, &output);
-    verify_summary(
-        &expected.summary,
-        actual.summary.as_ref(),
-        &output,
-        properties,
-    );
+    verify_summary(&expected, actual.summary.as_ref(), &output, properties);
 
     if let Some(path) = junit_path {
         verify_junit(&expected, path, properties);
@@ -1474,206 +1466,208 @@ fn verify_expected_in_junit(
     junit_path: &Utf8Path,
     properties: RunProperties,
 ) {
-    for expected_outcome in &expected.should_run {
-        let actual_outcome = actual.tests.get(&expected_outcome.id);
+    for expected_test in &expected.tests {
+        match &expected_test.disposition {
+            ExpectedDisposition::Ran(result) => {
+                let actual_outcome = actual.tests.get(&expected_test.id);
 
-        match actual_outcome {
-            Some(actual) => {
-                // Verify the JUnit status matches our expected CheckResult.
-                let expected_junit =
-                    expected_junit_for_result(expected_outcome.expected.result, properties);
+                match actual_outcome {
+                    Some(actual) => {
+                        // Verify the JUnit status matches our expected CheckResult.
+                        let expected_junit = expected_junit_for_result(result.result, properties);
 
-                match (&expected_junit, &actual.non_success) {
-                    (None, None) => {
-                        // Both expected and actual were successful.
-                    }
-                    (Some(expected), Some(actual_ns)) => {
-                        if expected.kind != actual_ns.kind {
-                            panic!(
-                                "{}: expected JUnit kind {:?} but got {:?} (properties: {})\n\
+                        match (&expected_junit, &actual.non_success) {
+                            (None, None) => {
+                                // Both expected and actual were successful.
+                            }
+                            (Some(expected), Some(actual_ns)) => {
+                                if expected.kind != actual_ns.kind {
+                                    panic!(
+                                        "{}: expected JUnit kind {:?} but got {:?} (properties: {})\n\
                                  JUnit path: {}\n\
                                  Expected result: {:?}, actual type: {:?}",
-                                expected_outcome.id.full_name(),
-                                expected.kind,
-                                actual_ns.kind,
-                                debug_run_properties(properties),
-                                junit_path,
-                                expected_outcome.expected.result,
-                                actual_ns.ty,
-                            );
-                        }
+                                        expected_test.id.full_name(),
+                                        expected.kind,
+                                        actual_ns.kind,
+                                        debug_run_properties(properties),
+                                        junit_path,
+                                        result.result,
+                                        actual_ns.ty,
+                                    );
+                                }
 
-                        if expected.ty != actual_ns.ty {
-                            panic!(
-                                "{}: expected JUnit type {:?} but got {:?} \
+                                if expected.ty != actual_ns.ty {
+                                    panic!(
+                                        "{}: expected JUnit type {:?} but got {:?} \
                                  (properties: {})\n\
                                  JUnit path: {}\n\
                                  Expected result: {:?}",
-                                expected_outcome.id.full_name(),
-                                expected.ty,
-                                actual_ns.ty,
-                                debug_run_properties(properties),
-                                junit_path,
-                                expected_outcome.expected.result,
-                            );
-                        }
+                                        expected_test.id.full_name(),
+                                        expected.ty,
+                                        actual_ns.ty,
+                                        debug_run_properties(properties),
+                                        junit_path,
+                                        result.result,
+                                    );
+                                }
 
-                        expected.message.verify(
-                            actual_ns.message.as_deref(),
-                            &expected_outcome.id.full_name(),
-                            junit_path,
-                            properties,
-                        );
-                    }
-                    (None, Some(actual_ns)) => {
-                        panic!(
-                            "{}: expected success, but JUnit shows {:?} with type {:?} \
+                                expected.message.verify(
+                                    actual_ns.message.as_deref(),
+                                    &expected_test.id.full_name(),
+                                    junit_path,
+                                    properties,
+                                );
+                            }
+                            (None, Some(actual_ns)) => {
+                                panic!(
+                                    "{}: expected success, but JUnit shows {:?} with type {:?} \
                              (properties: {})\n\
                              JUnit path: {}\n\
                              Expected result: {:?}",
-                            expected_outcome.id.full_name(),
-                            actual_ns.kind,
-                            actual_ns.ty,
-                            debug_run_properties(properties),
-                            junit_path,
-                            expected_outcome.expected.result,
-                        );
-                    }
-                    (Some(expected), None) => {
-                        panic!(
-                            "{}: expected JUnit {:?} but got success (properties: {})\n\
+                                    expected_test.id.full_name(),
+                                    actual_ns.kind,
+                                    actual_ns.ty,
+                                    debug_run_properties(properties),
+                                    junit_path,
+                                    result.result,
+                                );
+                            }
+                            (Some(expected), None) => {
+                                panic!(
+                                    "{}: expected JUnit {:?} but got success (properties: {})\n\
                              JUnit path: {}\n\
                              Expected result: {:?}",
-                            expected_outcome.id.full_name(),
-                            expected.kind,
-                            debug_run_properties(properties),
-                            junit_path,
-                            expected_outcome.expected.result,
-                        );
-                    }
-                }
+                                    expected_test.id.full_name(),
+                                    expected.kind,
+                                    debug_run_properties(properties),
+                                    junit_path,
+                                    result.result,
+                                );
+                            }
+                        }
 
-                // Verify rerun information: count and kind.
-                let actual_rerun_count = match &actual.rerun_info {
-                    JunitRerunInfo::Success { rerun_count }
-                    | JunitRerunInfo::NonSuccess { rerun_count, .. } => *rerun_count,
-                };
-                match expected_outcome.expected.expected_reruns {
-                    ExpectedReruns::None => {
-                        assert_eq!(
-                            actual_rerun_count,
-                            0,
-                            "{}: expected no reruns but found {} (properties: {})\n\
+                        // Verify rerun information: count and kind.
+                        let actual_rerun_count = match &actual.rerun_info {
+                            JunitRerunInfo::Success { rerun_count }
+                            | JunitRerunInfo::NonSuccess { rerun_count, .. } => *rerun_count,
+                        };
+                        match result.expected_reruns {
+                            ExpectedReruns::None => {
+                                assert_eq!(
+                                    actual_rerun_count,
+                                    0,
+                                    "{}: expected no reruns but found {} (properties: {})\n\
                              JUnit path: {}",
-                            expected_outcome.id.full_name(),
-                            actual_rerun_count,
-                            debug_run_properties(properties),
-                            junit_path,
-                        );
-                    }
-                    ExpectedReruns::FlakyRunCount(expected_count) => {
-                        assert_eq!(
-                            actual_rerun_count,
-                            expected_count,
-                            "{}: expected {} flaky runs but found {} (properties: {})\n\
+                                    expected_test.id.full_name(),
+                                    actual_rerun_count,
+                                    debug_run_properties(properties),
+                                    junit_path,
+                                );
+                            }
+                            ExpectedReruns::FlakyRunCount(expected_count) => {
+                                assert_eq!(
+                                    actual_rerun_count,
+                                    expected_count,
+                                    "{}: expected {} flaky runs but found {} (properties: {})\n\
                              JUnit path: {}",
-                            expected_outcome.id.full_name(),
-                            expected_count,
-                            actual_rerun_count,
-                            debug_run_properties(properties),
-                            junit_path,
-                        );
-                    }
-                    ExpectedReruns::SomeReruns => {
-                        assert!(
-                            actual_rerun_count > 0,
-                            "{}: expected reruns but found none (properties: {})\n\
+                                    expected_test.id.full_name(),
+                                    expected_count,
+                                    actual_rerun_count,
+                                    debug_run_properties(properties),
+                                    junit_path,
+                                );
+                            }
+                            ExpectedReruns::SomeReruns => {
+                                assert!(
+                                    actual_rerun_count > 0,
+                                    "{}: expected reruns but found none (properties: {})\n\
                              JUnit path: {}",
-                            expected_outcome.id.full_name(),
-                            debug_run_properties(properties),
-                            junit_path,
-                        );
-                    }
-                }
+                                    expected_test.id.full_name(),
+                                    debug_run_properties(properties),
+                                    junit_path,
+                                );
+                            }
+                        }
 
-                // Verify rerun kind matches expectations derived from the
-                // check result.
-                match (
-                    expected_rerun_kind_for_result(expected_outcome.expected.result),
-                    &actual.rerun_info,
-                ) {
-                    (
-                        Some(expected_rerun_kind),
-                        JunitRerunInfo::NonSuccess {
-                            rerun_kind,
-                            rerun_count,
-                        },
-                    ) => {
-                        assert_eq!(
-                            *rerun_kind,
-                            expected_rerun_kind,
-                            "{}: expected rerun kind {:?} but got {:?} \
+                        // Verify rerun kind matches expectations derived from the
+                        // check result.
+                        match (
+                            expected_rerun_kind_for_result(result.result),
+                            &actual.rerun_info,
+                        ) {
+                            (
+                                Some(expected_rerun_kind),
+                                JunitRerunInfo::NonSuccess {
+                                    rerun_kind,
+                                    rerun_count,
+                                },
+                            ) => {
+                                assert_eq!(
+                                    *rerun_kind,
+                                    expected_rerun_kind,
+                                    "{}: expected rerun kind {:?} but got {:?} \
                              (rerun_count: {}, properties: {})\n\
                              JUnit path: {}",
-                            expected_outcome.id.full_name(),
-                            expected_rerun_kind,
-                            rerun_kind,
-                            rerun_count,
-                            debug_run_properties(properties),
-                            junit_path,
-                        );
-                    }
-                    (Some(expected_rerun_kind), JunitRerunInfo::Success { .. }) => {
-                        panic!(
-                            "{}: expected NonSuccess rerun info (rerun kind {:?}) \
+                                    expected_test.id.full_name(),
+                                    expected_rerun_kind,
+                                    rerun_kind,
+                                    rerun_count,
+                                    debug_run_properties(properties),
+                                    junit_path,
+                                );
+                            }
+                            (Some(expected_rerun_kind), JunitRerunInfo::Success { .. }) => {
+                                panic!(
+                                    "{}: expected NonSuccess rerun info (rerun kind {:?}) \
                              but got Success (properties: {})\n\
                              JUnit path: {}",
-                            expected_outcome.id.full_name(),
-                            expected_rerun_kind,
-                            debug_run_properties(properties),
-                            junit_path,
-                        );
-                    }
-                    (None, JunitRerunInfo::Success { .. }) => {
-                        // Success result with Success rerun info — expected.
-                    }
-                    (None, JunitRerunInfo::NonSuccess { rerun_kind, .. }) => {
-                        panic!(
-                            "{}: expected Success rerun info but got NonSuccess \
+                                    expected_test.id.full_name(),
+                                    expected_rerun_kind,
+                                    debug_run_properties(properties),
+                                    junit_path,
+                                );
+                            }
+                            (None, JunitRerunInfo::Success { .. }) => {
+                                // Success result with Success rerun info — expected.
+                            }
+                            (None, JunitRerunInfo::NonSuccess { rerun_kind, .. }) => {
+                                panic!(
+                                    "{}: expected Success rerun info but got NonSuccess \
                              (rerun kind {:?}, properties: {})\n\
                              JUnit path: {}",
-                            expected_outcome.id.full_name(),
-                            rerun_kind,
+                                    expected_test.id.full_name(),
+                                    rerun_kind,
+                                    debug_run_properties(properties),
+                                    junit_path,
+                                );
+                            }
+                        }
+                    }
+                    None => {
+                        panic!(
+                            "{}: expected to run with result {:?} but was not found in JUnit output \
+                     (properties: {})\n\
+                     JUnit path: {}",
+                            expected_test.id.full_name(),
+                            result.result,
                             debug_run_properties(properties),
                             junit_path,
                         );
                     }
                 }
             }
-            None => {
-                panic!(
-                    "{}: expected to run with result {:?} but was not found in JUnit output \
-                     (properties: {})\n\
-                     JUnit path: {}",
-                    expected_outcome.id.full_name(),
-                    expected_outcome.expected.result,
-                    debug_run_properties(properties),
-                    junit_path,
-                );
+            ExpectedDisposition::Skipped(_) => {
+                // Check that all tests that should not run are absent from JUnit.
+                if actual.tests.contains_key(&expected_test.id) {
+                    panic!(
+                        "{}: should not be run but appeared in JUnit output (properties: {})\n\
+                         JUnit path: {}",
+                        expected_test.id.full_name(),
+                        debug_run_properties(properties),
+                        junit_path,
+                    );
+                }
             }
-        }
-    }
-
-    // Check that all tests that should not run are absent from JUnit.
-    for id in &expected.should_not_run {
-        if actual.tests.contains_key(id) {
-            panic!(
-                "{}: should not be run but appeared in JUnit output (properties: {})\n\
-                 JUnit path: {}",
-                id.full_name(),
-                debug_run_properties(properties),
-                junit_path,
-            );
         }
     }
 }
@@ -1687,9 +1681,13 @@ fn verify_junit_in_expected(
     properties: RunProperties,
 ) {
     for outcome in &actual.tests {
-        if !expected.should_run.contains_key(&outcome.id) {
-            // Check if it's in should_not_run to provide a better error message.
-            if expected.should_not_run.contains(&outcome.id) {
+        match expected
+            .tests
+            .get(&outcome.id)
+            .map(|test| &test.disposition)
+        {
+            Some(ExpectedDisposition::Ran(_)) => {}
+            Some(ExpectedDisposition::Skipped(_)) => {
                 panic!(
                     "{}: appeared in JUnit output but should not have been run (properties: {})\n\
                      JUnit path: {}",
@@ -1697,10 +1695,11 @@ fn verify_junit_in_expected(
                     debug_run_properties(properties),
                     junit_path,
                 );
-            } else {
+            }
+            None => {
                 panic!(
                     "{}: appeared in JUnit output but was not in expected test set \
-                     (not in fixture data or should_not_run) (properties: {})\n\
+                     (not in fixture data) (properties: {})\n\
                      JUnit path: {}",
                     outcome.id.full_name(),
                     debug_run_properties(properties),

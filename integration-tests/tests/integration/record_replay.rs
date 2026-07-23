@@ -1417,10 +1417,16 @@ fn test_portable_recording_read() {
         replay_output.exit_status.success(),
         "replay from archive should succeed: {replay_output}"
     );
+    // Pass in SKIP_SUMMARY_CHECK here because the recorded run lists only
+    // default-scope binaries, so the fixture model's expected skip count
+    // doesn't account for test suites that aren't listed.
+    //
+    // TODO: In the future, we should be able to teach the fixture model to do
+    // this.
     check_run_output_for_test_names(
         &replay_output.stdout,
         &["test_success", "test_cwd"],
-        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT | RunProperties::SKIP_SUMMARY_CHECK,
     );
 
     // Replay from the archive outside the workspace (no manifest).
@@ -1441,10 +1447,12 @@ fn test_portable_recording_read() {
         external_replay_output.exit_status.success(),
         "replay from archive outside workspace should succeed: {external_replay_output}"
     );
+    // Pass in SKIP_SUMMARY_CHECK here -- see the similar comment above within
+    // the function.
     check_run_output_for_test_names(
         &external_replay_output.stdout,
         &["test_success", "test_cwd"],
-        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT | RunProperties::SKIP_SUMMARY_CHECK,
     );
 
     // Test debug extract-portable-recording command.
