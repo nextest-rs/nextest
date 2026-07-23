@@ -578,25 +578,17 @@ impl<'g> TestList<'g> {
             let skipped_tests = self
                 .iter_tests()
                 .filter(|instance| match instance.test_info.filter_match {
-                    FilterMatch::Mismatch {
-                        reason: MismatchReason::RerunAlreadyPassed,
-                    } => {
-                        skipped_tests_rerun += 1;
+                    FilterMatch::Mismatch { reason } => {
+                        if !reason.is_substantive_skip() {
+                            skipped_tests_non_benchmark += 1;
+                        }
+                        match reason {
+                            MismatchReason::RerunAlreadyPassed => skipped_tests_rerun += 1,
+                            MismatchReason::DefaultFilter => skipped_tests_default_filter += 1,
+                            _ => {}
+                        }
                         true
                     }
-                    FilterMatch::Mismatch {
-                        reason: MismatchReason::NotBenchmark,
-                    } => {
-                        skipped_tests_non_benchmark += 1;
-                        true
-                    }
-                    FilterMatch::Mismatch {
-                        reason: MismatchReason::DefaultFilter,
-                    } => {
-                        skipped_tests_default_filter += 1;
-                        true
-                    }
-                    FilterMatch::Mismatch { .. } => true,
                     FilterMatch::Matches => false,
                 })
                 .count();
