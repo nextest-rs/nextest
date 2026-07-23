@@ -1218,7 +1218,7 @@ mod tests {
             leak-timeout = "300ms"
             test-group = "my-group"
             failure-output = "final"
-            junit = { store-failure-output = false }
+            junit = { store-failure-output = false, report-skipped = "none" }
 
             # Override 3
             [[profile.default.overrides]]
@@ -1244,6 +1244,7 @@ mod tests {
 
             [profile.default.junit]
             path = "my-path.xml"
+            report-skipped = "all"
 
             [test-groups.my-group]
             max-threads = 20
@@ -1306,6 +1307,8 @@ mod tests {
             assert_eq!(overrides.junit_store_success_output(), false);
             assert_eq!(overrides.junit_store_failure_output(), false);
         }
+        // TODO-RAINCLAUDE: override 2 sets report-skipped = "none", lowering it from the profile default of "all"; an explicit Some(None) must win, not fall back to the profile.
+        assert_eq!(overrides.junit_report_skipped(), ReportSkipPolicy::None);
 
         // This query matches override 1 and 2.
         let target_binary_query = binary_query(
@@ -1404,6 +1407,8 @@ mod tests {
         };
         let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(0));
+        // TODO-RAINCLAUDE: with no matching override, report-skipped falls back to the profile default of "all".
+        assert_eq!(overrides.junit_report_skipped(), ReportSkipPolicy::All);
     }
 
     /// Test that bench.slow-timeout works correctly in overrides.
