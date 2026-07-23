@@ -499,11 +499,14 @@ fn set_execute_status_props(
     store_stdout_stderr: bool,
     mut out: TestcaseOrRerun<'_>,
 ) {
-    // Currently we only aggregate test results, so always specify UnitKind::Test.
+    // Preserve the existing JUnit behavior of extracting test-style panic and
+    // error output for both tests and setup scripts.
     let description = UnitErrorDescription::new(UnitKind::Test, exec_output);
     if let Some(errors) = description.all_error_list() {
         out.set_message(errors.short_message());
         out.set_description(DisplayErrorChain::new(errors).to_string());
+    } else if exec_output.has_errors() {
+        out.set_message(exec_output.short_display());
     }
 
     if store_stdout_stderr {
@@ -675,6 +678,60 @@ mod tests {
                 system_out: None,
                 system_err: None,
             },
+            ExecuteStatusPropsCase {
+                comment: "failure + no extracted error + no store",
+                status: TestCaseStatus::non_success(NonSuccessKind::Failure),
+                output: failed_split_output(Some("ordinary output"), None),
+                store_stdout_stderr: false,
+                message: Some("failed with exit code 1"),
+                description: None,
+                system_out: None,
+                system_err: None,
+            },
+            ExecuteStatusPropsCase {
+                comment: "flaky failure message + successful final attempt",
+                status: {
+                    let mut status = TestCaseStatus::non_success(NonSuccessKind::Failure);
+                    status.set_message("flaky failure");
+                    status
+                },
+                output: ChildExecutionOutput::Output {
+                    result: Some(ExecutionResult::Pass),
+                    output: ChildOutput::Combined {
+                        output: Bytes::new().into(),
+                    },
+                    errors: None,
+                }
+                .into(),
+                store_stdout_stderr: false,
+                message: Some("flaky failure"),
+                description: None,
+                system_out: None,
+                system_err: None,
+            },
+            ExecuteStatusPropsCase {
+                comment: "setup script failure + no extracted error + no store",
+                status: TestCaseStatus::non_success(NonSuccessKind::Failure),
+                output: failed_split_output(None, Some("ordinary error output")),
+                store_stdout_stderr: false,
+                message: Some("failed with exit code 1"),
+                description: None,
+                system_out: None,
+                system_err: None,
+            },
+            ExecuteStatusPropsCase {
+                comment: "setup script failure + extracted panic + no store",
+                status: TestCaseStatus::non_success(NonSuccessKind::Failure),
+                output: failed_split_output(
+                    None,
+                    Some("thread 'setup' panicked at setup.rs:10:\nbad setup"),
+                ),
+                store_stdout_stderr: false,
+                message: Some("thread 'setup' panicked at setup.rs:10"),
+                description: Some("thread 'setup' panicked at setup.rs:10:\nbad setup"),
+                system_out: None,
+                system_err: None,
+            },
             #[cfg(unix)]
             ExecuteStatusPropsCase {
                 comment: "abort + split + store (unix)",
@@ -816,6 +873,70 @@ mod tests {
                 "system_err matches"
             );
         }
+
+        let output = failed_split_output(Some("ordinary retry output"), None);
+        let mut rerun = TestRerun::new(NonSuccessKind::Failure);
+        set_execute_status_props(&output, false, TestcaseOrRerun::Rerun(&mut rerun));
+        assert_eq!(rerun.message.as_deref(), Some("failed with exit code 1"));
+    }
+
+    #[test]
+    fn test_child_execution_output_short_display() {
+        let cases = [
+            (Some(ExecutionResult::Pass), "passed"),
+            (
+                Some(ExecutionResult::Leak {
+                    result: LeakTimeoutResult::Pass,
+                }),
+                "passed with leaked handles",
+            ),
+            (
+                Some(ExecutionResult::Leak {
+                    result: LeakTimeoutResult::Fail,
+                }),
+                "failed: exited with code 0, but leaked handles",
+            ),
+            (
+                Some(ExecutionResult::Fail {
+                    failure_status: FailureStatus::ExitCode(3),
+                    leaked: true,
+                }),
+                "failed with exit code 3 (leaked handles)",
+            ),
+            (Some(ExecutionResult::ExecFail), "failed to execute"),
+            (
+                Some(ExecutionResult::Timeout {
+                    result: SlowTimeoutResult::Pass,
+                }),
+                "passed with timeout",
+            ),
+            (
+                Some(ExecutionResult::Timeout {
+                    result: SlowTimeoutResult::Fail,
+                }),
+                "timed out",
+            ),
+            (None, "unknown status"),
+        ];
+
+        for (result, expected) in cases {
+            assert_eq!(output_for_result(result).short_display(), expected);
+        }
+
+        #[cfg(unix)]
+        assert_eq!(
+            output_for_result(Some(ExecutionResult::Fail {
+                failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(SIGTERM)),
+                leaked: false,
+            }))
+            .short_display(),
+            "aborted with signal 15 (SIGTERM)",
+        );
+
+        let start_error = ChildExecutionOutputDescription::<LiveSpec>::StartError(
+            ChildStartError::Spawn(Arc::new(io::Error::other("start error"))).into(),
+        );
+        assert_eq!(start_error.short_display(), "failed to start");
     }
 
     #[derive(Debug)]
@@ -828,6 +949,37 @@ mod tests {
         description: Option<&'a str>,
         system_out: Option<&'a str>,
         system_err: Option<&'a str>,
+    }
+
+    fn failed_split_output(
+        stdout: Option<&str>,
+        stderr: Option<&str>,
+    ) -> ChildExecutionOutputDescription<LiveSpec> {
+        ChildExecutionOutput::Output {
+            result: Some(ExecutionResult::Fail {
+                failure_status: FailureStatus::ExitCode(1),
+                leaked: false,
+            }),
+            output: ChildOutput::Split(ChildSplitOutput {
+                stdout: stdout.map(|output| Bytes::copy_from_slice(output.as_bytes()).into()),
+                stderr: stderr.map(|output| Bytes::copy_from_slice(output.as_bytes()).into()),
+            }),
+            errors: None,
+        }
+        .into()
+    }
+
+    fn output_for_result(
+        result: Option<ExecutionResult>,
+    ) -> ChildExecutionOutputDescription<LiveSpec> {
+        ChildExecutionOutput::Output {
+            result,
+            output: ChildOutput::Combined {
+                output: Bytes::new().into(),
+            },
+            errors: None,
+        }
+        .into()
     }
 
     fn get_message(status: &TestCaseStatus) -> Option<&str> {

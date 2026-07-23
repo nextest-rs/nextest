@@ -1459,6 +1459,44 @@ impl<S: OutputSpec> ChildExecutionOutputDescription<S> {
             Self::StartError(_) => true,
         }
     }
+
+    /// Returns a short, human-readable description of this output's result.
+    pub fn short_display(&self) -> String {
+        match self {
+            Self::Output { result, .. } => match result {
+                Some(ExecutionResultDescription::Pass) => "passed".to_owned(),
+                Some(ExecutionResultDescription::Leak {
+                    result: LeakTimeoutResult::Pass,
+                }) => "passed with leaked handles".to_owned(),
+                Some(ExecutionResultDescription::Leak {
+                    result: LeakTimeoutResult::Fail,
+                }) => "failed: exited with code 0, but leaked handles".to_owned(),
+                Some(ExecutionResultDescription::Fail {
+                    failure: FailureDescription::ExitCode { code },
+                    leaked,
+                }) => {
+                    let leaked = if *leaked { " (leaked handles)" } else { "" };
+                    format!("failed with exit code {code}{leaked}")
+                }
+                Some(ExecutionResultDescription::Fail {
+                    failure: FailureDescription::Abort { abort },
+                    leaked,
+                }) => {
+                    let leaked = if *leaked { " (leaked handles)" } else { "" };
+                    format!("{abort}{leaked}")
+                }
+                Some(ExecutionResultDescription::ExecFail) => "failed to execute".to_owned(),
+                Some(ExecutionResultDescription::Timeout {
+                    result: SlowTimeoutResult::Pass,
+                }) => "passed with timeout".to_owned(),
+                Some(ExecutionResultDescription::Timeout {
+                    result: SlowTimeoutResult::Fail,
+                }) => "timed out".to_owned(),
+                None => "unknown status".to_owned(),
+            },
+            Self::StartError(_) => "failed to start".to_owned(),
+        }
+    }
 }
 
 /// The output of a child process during live execution.
