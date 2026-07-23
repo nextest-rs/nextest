@@ -1000,6 +1000,21 @@ impl MismatchReason {
         Self::RerunAlreadyPassed,
         Self::DefaultFilter,
     ];
+
+    /// Returns true if the skip reflects a real filtering decision, rather than
+    /// a run-mode artifact such as a non-benchmark test excluded from a
+    /// benchmark run.
+    pub fn is_substantive_skip(self) -> bool {
+        match self {
+            MismatchReason::NotBenchmark => false,
+            MismatchReason::Ignored
+            | MismatchReason::String
+            | MismatchReason::Expression
+            | MismatchReason::Partition
+            | MismatchReason::RerunAlreadyPassed
+            | MismatchReason::DefaultFilter => true,
+        }
+    }
 }
 
 impl fmt::Display for MismatchReason {
@@ -1167,5 +1182,18 @@ mod tests {
 
         // If you add a variant, update ALL_VARIANTS and this count.
         assert_eq!(MismatchReason::ALL_VARIANTS.len(), 7);
+    }
+
+    #[test]
+    fn is_substantive_skip_only_excludes_not_benchmark() {
+        assert!(!MismatchReason::NotBenchmark.is_substantive_skip());
+        for &reason in MismatchReason::ALL_VARIANTS {
+            if reason != MismatchReason::NotBenchmark {
+                assert!(
+                    reason.is_substantive_skip(),
+                    "{reason:?} is a substantive skip"
+                );
+            }
+        }
     }
 }
