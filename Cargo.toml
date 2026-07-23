@@ -73,7 +73,7 @@ guppy = "0.17.26"
 hex = "0.4.3"
 home = "0.5.12"
 http = "1.4.2"
-humantime = "2.3.0"
+humantime = "2.4.0"
 humantime-serde = "1.1.1"
 iddqd = { version = "0.4.5", features = ["serde"] }
 # Disable punycode parsing since we only access well-known domains.
