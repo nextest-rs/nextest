@@ -40,36 +40,10 @@ impl ReportSkipPolicy {
     /// Tests skipped because they are not benchmarks
     /// ([`MismatchReason::NotBenchmark`]) are never reported.
     pub fn should_report(self, reason: MismatchReason) -> bool {
-        // Match `MismatchReason` variants explicitly (rather than a bare
-        // wildcard) so that the behavior for each known reason is spelled out.
-        //
-        // `MismatchReason` is `#[non_exhaustive]`, so the compiler requires a
-        // wildcard arm here; a new variant therefore will not produce a compile
-        // error in this crate. The `should_report_covers_all_variants` test
-        // below iterates `MismatchReason::ALL_VARIANTS` to guard against a new
-        // variant being handled unintentionally.
         match self {
             ReportSkipPolicy::None => false,
-            ReportSkipPolicy::Ignored => match reason {
-                MismatchReason::Ignored => true,
-                MismatchReason::NotBenchmark
-                | MismatchReason::String
-                | MismatchReason::Expression
-                | MismatchReason::Partition
-                | MismatchReason::RerunAlreadyPassed
-                | MismatchReason::DefaultFilter => false,
-                _ => false,
-            },
-            ReportSkipPolicy::All => match reason {
-                MismatchReason::NotBenchmark => false,
-                MismatchReason::Ignored
-                | MismatchReason::String
-                | MismatchReason::Expression
-                | MismatchReason::Partition
-                | MismatchReason::RerunAlreadyPassed
-                | MismatchReason::DefaultFilter => true,
-                _ => true,
-            },
+            ReportSkipPolicy::Ignored => reason.is_ignored(),
+            ReportSkipPolicy::All => reason.is_counted_skip(),
         }
     }
 }
@@ -79,27 +53,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_report_covers_all_variants() {
-        // Guard against a new `MismatchReason` variant being added without an
-        // explicit decision in `should_report`. `MismatchReason` is
-        // `#[non_exhaustive]`, so exhaustive matching cannot be enforced at
-        // compile time from this crate; this test iterates over the known
-        // variants instead.
-        for &reason in MismatchReason::ALL_VARIANTS {
-            // `None` never reports anything.
-            assert!(!ReportSkipPolicy::None.should_report(reason));
+    fn should_report_policy_behavior() {
+        assert!(!ReportSkipPolicy::None.should_report(MismatchReason::Ignored));
+        assert!(!ReportSkipPolicy::None.should_report(MismatchReason::DefaultFilter));
+        assert!(!ReportSkipPolicy::None.should_report(MismatchReason::NotBenchmark));
 
-            // `Ignored` reports only ignored tests.
-            assert_eq!(
-                ReportSkipPolicy::Ignored.should_report(reason),
-                matches!(reason, MismatchReason::Ignored),
-            );
+        assert!(ReportSkipPolicy::Ignored.should_report(MismatchReason::Ignored));
+        assert!(!ReportSkipPolicy::Ignored.should_report(MismatchReason::DefaultFilter));
+        assert!(!ReportSkipPolicy::Ignored.should_report(MismatchReason::NotBenchmark));
 
-            // `All` reports everything except non-benchmark skips.
-            assert_eq!(
-                ReportSkipPolicy::All.should_report(reason),
-                !matches!(reason, MismatchReason::NotBenchmark),
-            );
-        }
+        assert!(ReportSkipPolicy::All.should_report(MismatchReason::Ignored));
+        assert!(ReportSkipPolicy::All.should_report(MismatchReason::DefaultFilter));
+        assert!(!ReportSkipPolicy::All.should_report(MismatchReason::NotBenchmark));
     }
 }

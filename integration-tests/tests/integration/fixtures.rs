@@ -268,12 +268,6 @@ struct ExpectedTestResults {
     /// (for example, under a `store-skipped` policy). Every id here has a
     /// `Skipped` disposition in `tests`.
     junit_skipped: BTreeSet<TestInstanceId>,
-    /// If true, `junit_skipped` is the *exact* set of tests expected to appear
-    /// as skipped. If false (used for the `store-skipped = "all"` policy, where
-    /// which binaries are enumerated is environment-dependent), the check is
-    /// relaxed: every test in `junit_skipped` must appear as skipped, and every
-    /// actual skipped test must be a known non-run fixture test.
-    junit_skipped_exact: bool,
 }
 
 impl ExpectedTestResults {
@@ -296,7 +290,6 @@ impl ExpectedTestResults {
         Self {
             tests,
             junit_skipped: BTreeSet::new(),
-            junit_skipped_exact: true,
         }
     }
 
@@ -333,7 +326,6 @@ impl ExpectedTestResults {
         Self {
             tests,
             junit_skipped: BTreeSet::new(),
-            junit_skipped_exact: true,
         }
     }
 
@@ -385,24 +377,34 @@ impl ExpectedTestResults {
         self
     }
 
-    /// Marks every skipped test as expected to appear as a `<skipped>`
-    /// testcase in the JUnit report.
-    ///
-    /// Used to validate the `store-skipped = "all"` policy, under which every
-    /// skipped test (for example, those filtered out by an expression) is
-    /// reported.
-    fn with_all_junit_skipped(mut self) -> Self {
-        self.junit_skipped = self
-            .tests
-            .iter()
-            .filter_map(|test| {
-                let ExpectedDisposition::Skipped(_) = test.disposition else {
-                    return None;
+    fn expect_junit_skipped(
+        mut self,
+        properties: RunProperties,
+        expectation: JunitSkippedExpectation,
+    ) -> Self {
+        self.junit_skipped = BTreeSet::new();
+        for fixture in &*EXPECTED_TEST_SUITES {
+            for test in &fixture.test_cases {
+                let reason = expected_skip_reason(fixture, test, properties);
+                let include = match expectation {
+                    JunitSkippedExpectation::NoneReported => false,
+                    JunitSkippedExpectation::AllCounted => {
+                        reason.is_some_and(|reason| reason.counted_in_skip_summary())
+                    }
+                    JunitSkippedExpectation::IgnoredOnly => {
+                        test.status.is_ignored()
+                            && !matches!(
+                                reason,
+                                Some(SkipReason::SuiteNotInRun) | Some(SkipReason::NotBenchmark)
+                            )
+                    }
                 };
-                Some(test.id.clone())
-            })
-            .collect();
-        self.junit_skipped_exact = false;
+                if include {
+                    self.junit_skipped
+                        .insert(TestInstanceId::new(fixture.binary_id.as_str(), &test.name));
+                }
+            }
+        }
         self
     }
 }
@@ -990,18 +992,22 @@ pub fn check_run_output_with_junit(
     junit_path: &Utf8Path,
     properties: RunProperties,
 ) {
-    check_run_output_impl(stderr, Some(junit_path), properties);
+    check_run_output_impl(
+        stderr,
+        Some(junit_path),
+        properties,
+        JunitSkippedExpectation::NoneReported,
+    );
 }
 
-/// Verifies a JUnit report produced by a `store-skipped` run against the
-/// fixture model.
 ///
-/// `run_test_names` are the tests expected to have actually run (and passed),
-/// while `skipped_test_names` are the tests expected to appear as `<skipped>`
-/// testcases in the JUnit XML. This checks comprehensively that exactly the
-/// right tests passed and the right tests were reported as skipped.
+/// Verifies a JUnit report contains information about the provided run and skipped tests.
+///
+/// This is intended for scenarios like per-test overrides which the fixture
+/// model can't necessarily express at the moment. If the fixture model can
+/// express it, use `check_run_output_with_junit_skipped` instead.
 #[track_caller]
-pub fn check_junit_store_skipped(
+pub fn check_junit_skipped_by_name(
     junit_path: &Utf8Path,
     run_test_names: &[&str],
     skipped_test_names: &[&str],
@@ -1011,13 +1017,31 @@ pub fn check_junit_store_skipped(
     verify_junit(&expected, junit_path, RunProperties::empty());
 }
 
-/// Like [`check_junit_store_skipped`], but expects every non-run test to appear
-/// as a `<skipped>` testcase (the `store-skipped = "all"` policy).
+/// Which `<skipped>` testcases `check_run_output_with_junit_skipped` expects to be present.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JunitSkippedExpectation {
+    /// No `<skipped>` testcases are expected. This corresponds to
+    /// `report-skipped = none`.
+    NoneReported,
+    /// All counted skip testcases are expected to be `<skipped>`. This
+    /// corresponds to `report-skipped = all`.
+    AllCounted,
+    /// Only ignored tests are expected to be `<skipped>`. This corresponds to
+    /// `report-skipped = ignored`.
+    IgnoredOnly,
+}
+
+
+/// Verifies the output of a test run against fixture data, including
+/// `<skipped>` testcases.
 #[track_caller]
-pub fn check_junit_store_skipped_all(junit_path: &Utf8Path, run_test_names: &[&str]) {
-    let expected = ExpectedTestResults::for_test_names(run_test_names, RunProperties::empty())
-        .with_all_junit_skipped();
-    verify_junit(&expected, junit_path, RunProperties::empty());
+pub fn check_run_output_with_junit_skipped(
+    stderr: &[u8],
+    junit_path: &Utf8Path,
+    properties: RunProperties,
+    junit_skipped: JunitSkippedExpectation,
+) {
+    check_run_output_impl(stderr, Some(junit_path), properties, junit_skipped);
 }
 
 /// Checks the output of a test run against fixture data.
@@ -1030,7 +1054,7 @@ pub fn check_junit_store_skipped_all(junit_path: &Utf8Path, run_test_names: &[&s
 /// Use this for verifying replay output where JUnit files aren't available.
 #[track_caller]
 pub fn check_run_output(stderr: &[u8], properties: RunProperties) {
-    check_run_output_impl(stderr, None, properties);
+    check_run_output_impl(stderr, None, properties, JunitSkippedExpectation::NoneReported);
 }
 
 /// Checks the output of a test run that used a filter expression.
@@ -1215,17 +1239,22 @@ fn expected_for_rerun(expected: &ExpectedTestResults) -> ExpectedTestResults {
     ExpectedTestResults {
         tests,
         junit_skipped: BTreeSet::new(),
-        junit_skipped_exact: true,
     }
 }
 
 #[track_caller]
-fn check_run_output_impl(stderr: &[u8], junit_path: Option<&Utf8Path>, properties: RunProperties) {
+fn check_run_output_impl(
+    stderr: &[u8],
+    junit_path: Option<&Utf8Path>,
+    properties: RunProperties,
+    junit_skipped: JunitSkippedExpectation,
+) {
     let output = String::from_utf8(stderr.to_vec()).unwrap();
 
     println!("{output}");
 
-    let expected = ExpectedTestResults::new(properties);
+    let expected =
+        ExpectedTestResults::new(properties).expect_junit_skipped(properties, junit_skipped);
     let actual = ActualTestResults::parse(&output);
 
     eprintln!("expected: {expected:?}");
@@ -1381,14 +1410,6 @@ fn verify_junit_skipped(
     properties: RunProperties,
 ) {
     for id in &expected.junit_skipped {
-        // In non-exact (store-skipped = "all") mode, which binaries get
-        // enumerated is environment-dependent, so only require that the tests
-        // which *were* enumerated and skipped are reported. We still require
-        // that every actual skipped test is a known non-run fixture test
-        // (checked in the loop below).
-        if !expected.junit_skipped_exact && !actual.skipped.contains(id) {
-            continue;
-        }
         assert!(
             actual.skipped.contains(id),
             "{}: expected to appear as a skipped testcase in JUnit output but did not \

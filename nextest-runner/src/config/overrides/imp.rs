@@ -355,7 +355,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
                 junit_store_failure_output = Some(Source::track_override(f, override_));
             }
             if junit_report_skipped.is_none()
-                && let Some(s) = override_.data.junit.store_skipped
+                && let Some(s) = override_.data.junit.report_skipped
             {
                 junit_report_skipped = Some(Source::track_override(s, override_));
             }
@@ -1080,7 +1080,7 @@ pub(in crate::config) struct DeserializedJunitOutput {
     /// report.
     store_failure_output: Option<bool>,
     /// Which skipped tests to emit for matching tests in the JUnit XML report.
-    store_skipped: Option<ReportSkipPolicy>,
+    report_skipped: Option<ReportSkipPolicy>,
     /// How flaky-fail tests are reported in the JUnit XML report.
     flaky_fail_status: Option<JunitFlakyFailStatus>,
 }

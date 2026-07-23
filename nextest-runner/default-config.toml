@@ -134,7 +134,7 @@ store-failure-output = true
 #   benchmarks. Note that with partitioned runs, "all" causes each partition's
 #   report to include the tests skipped in that partition, so merging reports
 #   produces duplicate skipped entries.
-store-skipped = "none"
+report-skipped = "none"
 
 # How flaky-fail tests are reported in the JUnit XML report. "failure" reports
 # them as failures with <failure> and <flakyFailure> elements; "success"

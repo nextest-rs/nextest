@@ -1000,6 +1000,33 @@ impl MismatchReason {
         Self::RerunAlreadyPassed,
         Self::DefaultFilter,
     ];
+
+    /// Returns true if the test was skipped because its ignore status didn't
+    /// match the user-provided `--run-ignored` setting.
+    pub fn is_ignored(self) -> bool {
+        match self {
+            MismatchReason::Ignored => true,
+            MismatchReason::NotBenchmark
+            | MismatchReason::String
+            | MismatchReason::Expression
+            | MismatchReason::Partition
+            | MismatchReason::RerunAlreadyPassed
+            | MismatchReason::DefaultFilter => false,
+        }
+    }
+
+    /// Returns true if this skip is included in skipped statistics.
+    pub fn is_counted_skip(self) -> bool {
+        match self {
+            MismatchReason::NotBenchmark => false,
+            MismatchReason::Ignored
+            | MismatchReason::String
+            | MismatchReason::Expression
+            | MismatchReason::Partition
+            | MismatchReason::RerunAlreadyPassed
+            | MismatchReason::DefaultFilter => true,
+        }
+    }
 }
 
 impl fmt::Display for MismatchReason {
@@ -1167,5 +1194,22 @@ mod tests {
 
         // If you add a variant, update ALL_VARIANTS and this count.
         assert_eq!(MismatchReason::ALL_VARIANTS.len(), 7);
+    }
+
+    #[test]
+    fn mismatch_reason_predicates() {
+        assert!(MismatchReason::Ignored.is_ignored());
+        for &reason in MismatchReason::ALL_VARIANTS {
+            if reason != MismatchReason::Ignored {
+                assert!(!reason.is_ignored(), "{reason:?} is not ignored");
+            }
+        }
+
+        assert!(!MismatchReason::NotBenchmark.is_counted_skip());
+        for &reason in MismatchReason::ALL_VARIANTS {
+            if reason != MismatchReason::NotBenchmark {
+                assert!(reason.is_counted_skip(), "{reason:?} is a counted skip");
+            }
+        }
     }
 }

@@ -403,7 +403,7 @@ profile.<name>.junit.store-failure-output
 - Documentation: JUnit support <https://nexte.st/docs/machine-readable/junit/>
 - Default: true
 
-profile.<name>.junit.store-skipped
+profile.<name>.junit.report-skipped
 
 (since 0.9.141)
 
@@ -522,7 +522,7 @@ All profile-level settings can be overridden:
 - failure-output
 - junit.store-success-output
 - junit.store-failure-output
-- junit.store-skipped
+- junit.report-skipped
 
 Test group configuration
 

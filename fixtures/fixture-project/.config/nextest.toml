@@ -167,16 +167,37 @@ retries = 3
 [profile.with-junit.junit]
 path = "junit.xml"
 
-# Profile used to verify junit.store-skipped emits <skipped> testcases in the
-# actual generated JUnit XML.
+# Profile used to verify junit.report-skipped = "all" emits <skipped> testcases
+# in the generated JUnit XML. This mirrors with-default-filter (including its
+# platform-specific override) so the WITH_DEFAULT_FILTER fixture model predicts
+# the exact set of tests reported as skipped.
 [profile.with-junit-skipped]
-default-filter = "test(=test_success) | test(=test_ignored)"
+default-filter = "not (test(test_flaky) | package(cdylib-example))"
 
 [profile.with-junit-skipped.junit]
 path = "junit.xml"
-store-skipped = "all"
+report-skipped = "all"
 
-# Profile used to verify that a per-test [[overrides]] with junit.store-skipped
+[[profile.with-junit-skipped.overrides]]
+platform = 'cfg(unix)'
+default-filter = "not (test(test_flaky) | package(cdylib-example) | test(test_cargo_env_vars))"
+
+# Profile used to verify junit.report-skipped = "ignored" emits only ignored
+# (#[ignore]) tests as <skipped> testcases, never filter-skipped tests. Mirrors
+# with-default-filter (including its platform-specific override) so the
+# WITH_DEFAULT_FILTER fixture model predicts the exact set of ignored tests.
+[profile.with-junit-skipped-ignored]
+default-filter = "not (test(test_flaky) | package(cdylib-example))"
+
+[profile.with-junit-skipped-ignored.junit]
+path = "junit.xml"
+report-skipped = "ignored"
+
+[[profile.with-junit-skipped-ignored.overrides]]
+platform = 'cfg(unix)'
+default-filter = "not (test(test_flaky) | package(cdylib-example) | test(test_cargo_env_vars))"
+
+# Profile used to verify that a per-test [[overrides]] with junit.report-skipped
 # takes precedence over the profile-level default. The profile-level policy is
 # "none" (the default), but the override opts test_ignored into being reported
 # as skipped.
@@ -188,7 +209,7 @@ path = "junit.xml"
 
 [[profile.with-junit-skipped-override.overrides]]
 filter = "test(=test_ignored)"
-junit = { store-skipped = "all" }
+junit = { report-skipped = "all" }
 
 [profile.retries-with-backoff]
 retries = { backoff = "exponential", count = 2, jitter = true, delay = "1s" }

@@ -23,7 +23,7 @@
 //! using before
 
 use crate::{
-    config::elements::{FlakyResult, ReportSkipPolicy, SlowTimeoutResult},
+    config::elements::{FlakyResult, SlowTimeoutResult},
     errors::{DisplayErrorChain, FormatVersionError, FormatVersionErrorInner, WriteEventError},
     list::{RustTestSuite, TestList},
     output_spec::{LiveSpec, OutputSpec},
@@ -256,7 +256,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                 test_instance,
                 reason,
                 ..
-            } if ReportSkipPolicy::Ignored.should_report(*reason) => {
+            } if reason.is_ignored() => {
                 // libtest only reports ignored tests as skipped, so we match
                 // the `ReportSkipPolicy::Ignored` policy here.
                 //

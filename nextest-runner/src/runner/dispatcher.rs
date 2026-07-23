@@ -10,7 +10,7 @@
 use super::{RunUnitRequest, RunnerTaskState, ShutdownRequest};
 use crate::{
     config::{
-        elements::{FlakyResult, MaxFail, ReportSkipPolicy, TerminateMode},
+        elements::{FlakyResult, MaxFail, TerminateMode},
         scripts::{ScriptId, SetupScriptConfig},
     },
     input::{InputEvent, InputHandler},
@@ -843,10 +843,7 @@ where
                 reason,
                 junit_report_skipped,
             }) => {
-                // Tests skipped because they aren't benchmarks are tracked
-                // internally but not surfaced in the skip counts. This matches
-                // the `ReportSkipPolicy::All` policy used for reporting.
-                if ReportSkipPolicy::All.should_report(reason) {
+                if reason.is_counted_skip() {
                     self.run_stats.skipped += 1;
                 }
                 self.callback_none_response(TestEventKind::TestSkipped {

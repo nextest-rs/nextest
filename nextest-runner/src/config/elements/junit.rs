@@ -120,7 +120,7 @@ pub(in crate::config) struct DefaultJunitImpl {
     pub(in crate::config) report_name: String,
     pub(in crate::config) store_success_output: bool,
     pub(in crate::config) store_failure_output: bool,
-    pub(in crate::config) store_skipped: ReportSkipPolicy,
+    pub(in crate::config) report_skipped: ReportSkipPolicy,
     pub(in crate::config) flaky_fail_status: JunitFlakyFailStatus,
 }
 
@@ -138,9 +138,9 @@ impl DefaultJunitImpl {
             store_failure_output: data
                 .store_failure_output
                 .expect("junit.store-failure-output present in default profile"),
-            store_skipped: data
-                .store_skipped
-                .expect("junit.store-skipped present in default profile"),
+            report_skipped: data
+                .report_skipped
+                .expect("junit.report-skipped present in default profile"),
             flaky_fail_status: data
                 .flaky_fail_status
                 .expect("junit.flaky-fail-status present in default profile"),
@@ -173,7 +173,7 @@ pub(in crate::config) struct JunitImpl {
     /// Which skipped tests to emit as `<testcase>` elements with a `<skipped>`
     /// child in the JUnit XML report.
     #[serde(default)]
-    pub(in crate::config) store_skipped: Option<ReportSkipPolicy>,
+    pub(in crate::config) report_skipped: Option<ReportSkipPolicy>,
     /// How flaky-fail tests are reported in the JUnit XML report.
     #[serde(default)]
     pub(in crate::config) flaky_fail_status: Option<JunitFlakyFailStatus>,
@@ -227,7 +227,7 @@ mod tests {
         let config = indoc! {r#"
             [profile.default.junit]
             path = "junit.xml"
-            store-skipped = "ignored"
+            report-skipped = "ignored"
         "#};
         assert_eq!(
             report_skipped_for(config, "default"),
@@ -240,7 +240,7 @@ mod tests {
         let config = indoc! {r#"
             [profile.default.junit]
             path = "junit.xml"
-            store-skipped = "all"
+            report-skipped = "all"
         "#};
         assert_eq!(report_skipped_for(config, "default"), ReportSkipPolicy::All);
     }

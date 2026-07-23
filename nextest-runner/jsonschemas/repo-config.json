@@ -397,14 +397,7 @@
             }
           ]
         },
-        "store-failure-output": {
-          "description": "Whether to store failed output for matching tests in the JUnit XML\nreport.",
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "store-skipped": {
+        "report-skipped": {
           "description": "Which skipped tests to emit for matching tests in the JUnit XML report.",
           "anyOf": [
             {
@@ -413,6 +406,13 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "store-failure-output": {
+          "description": "Whether to store failed output for matching tests in the JUnit XML\nreport.",
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "store-success-output": {
@@ -783,15 +783,7 @@
           ],
           "default": null
         },
-        "store-failure-output": {
-          "description": "Whether to store failed test output in the JUnit XML report.",
-          "type": [
-            "boolean",
-            "null"
-          ],
-          "default": null
-        },
-        "store-skipped": {
+        "report-skipped": {
           "description": "Which skipped tests to emit as `<testcase>` elements with a `<skipped>`\nchild in the JUnit XML report.",
           "anyOf": [
             {
@@ -800,6 +792,14 @@
             {
               "type": "null"
             }
+          ],
+          "default": null
+        },
+        "store-failure-output": {
+          "description": "Whether to store failed test output in the JUnit XML report.",
+          "type": [
+            "boolean",
+            "null"
           ],
           "default": null
         },

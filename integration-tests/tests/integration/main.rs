@@ -900,50 +900,72 @@ fn test_run() {
     );
 }
 
-/// Verifies that `junit.store-skipped` actually emits `<skipped>` testcases in
-/// the generated JUnit XML, validated comprehensively against the fixture
-/// model.
 #[test]
-fn test_run_junit_store_skipped() {
+fn test_run_junit_report_skipped_all() {
     let env_info = set_env_vars_for_test();
 
     let p = TempProject::new(&env_info).unwrap();
 
-    // The with-junit-skipped profile has store-skipped = "all" and a
-    // default-filter selecting one passing test (test_success) and one ignored
-    // test (test_ignored). The ignored test should appear in the JUnit XML as a
-    // skipped testcase, and test_success should pass.
     let output = CargoNextestCli::for_test(&env_info)
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
             "run",
-            "-P",
-            "with-junit-skipped",
-            "-E",
-            "test(=test_success) | test(=test_ignored)",
+            "--profile=with-junit-skipped",
+            "--workspace",
+            "--all-targets",
         ])
+        .unchecked(true)
         .output();
 
-    // This run should succeed (test_success passes, test_ignored is skipped).
     assert_eq!(
         output.exit_status.code(),
-        Some(0),
-        "run with only a passing and an ignored test should succeed\n{output}"
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
     );
 
-    // The with-junit-skipped profile has store-skipped = "all". With the
-    // expression filter, only test_success runs (and passes); every other test
-    // is filtered out and — under the "all" policy — reported as a skipped
-    // testcase in the JUnit XML (including the ignored test_ignored).
-    check_junit_store_skipped_all(&p.junit_path("with-junit-skipped"), &["test_success"]);
+    check_run_output_with_junit_skipped(
+        &output.stderr,
+        &p.junit_path("with-junit-skipped"),
+        RunProperties::WITH_DEFAULT_FILTER,
+        JunitSkippedExpectation::AllCounted,
+    );
 }
 
-/// Verifies that a per-test `[[overrides]]` with `junit.store-skipped` takes
-/// precedence over the profile-level policy: even though the profile default is
-/// `none`, the override opts `test_ignored` into being reported as skipped.
 #[test]
-fn test_run_junit_store_skipped_override() {
+fn test_run_junit_report_skipped_ignored() {
+    let env_info = set_env_vars_for_test();
+
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--profile=with-junit-skipped-ignored",
+            "--workspace",
+            "--all-targets",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
+    );
+
+    check_run_output_with_junit_skipped(
+        &output.stderr,
+        &p.junit_path("with-junit-skipped-ignored"),
+        RunProperties::WITH_DEFAULT_FILTER,
+        JunitSkippedExpectation::IgnoredOnly,
+    );
+}
+
+#[test]
+fn test_run_junit_report_skipped_override() {
     let env_info = set_env_vars_for_test();
 
     let p = TempProject::new(&env_info).unwrap();
@@ -966,9 +988,7 @@ fn test_run_junit_store_skipped_override() {
         "run with only a passing and an ignored test should succeed\n{output}"
     );
 
-    // The profile-level store-skipped is "none", but the per-test override for
-    // test_ignored sets it to "all", so test_ignored must appear as skipped.
-    check_junit_store_skipped(
+    check_junit_skipped_by_name(
         &p.junit_path("with-junit-skipped-override"),
         &["test_success"],
         &["test_ignored"],

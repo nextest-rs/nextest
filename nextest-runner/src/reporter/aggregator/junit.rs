@@ -880,7 +880,7 @@ mod tests {
     }
 
     #[test]
-    fn test_skipped_store_skipped_true() {
+    fn test_skipped_emitted_when_policy_reports() {
         let binary_id = RustBinaryId::new("my-crate::my-bin");
         let test_name = TestCaseName::new("tests::my_skipped_test");
         let test_instance = TestInstanceId {
@@ -902,8 +902,6 @@ mod tests {
             ))
             .expect("write_event for skipped test succeeds");
 
-        // The `store-skipped = "ignored"` policy should have added a single
-        // test suite with a single skipped testcase.
         assert_eq!(junit.test_suites.len(), 1, "one test suite added");
         let (_, suite) = junit
             .test_suites
@@ -934,7 +932,7 @@ mod tests {
     }
 
     #[test]
-    fn test_skipped_store_skipped_false() {
+    fn test_skipped_omitted_when_policy_is_none() {
         let binary_id = RustBinaryId::new("my-crate::my-bin");
         let test_name = TestCaseName::new("tests::my_skipped_test");
         let test_instance = TestInstanceId {
@@ -956,11 +954,10 @@ mod tests {
             ))
             .expect("write_event for skipped test succeeds");
 
-        // With store_skipped=false, no test suite or testcase should be added.
         assert_eq!(
             junit.test_suites.len(),
             0,
-            "no test suite added when store_skipped is false"
+            "no test suite added when the policy is None"
         );
     }
 }

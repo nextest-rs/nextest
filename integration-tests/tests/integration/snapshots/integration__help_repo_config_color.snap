@@ -387,7 +387,7 @@ When [36mmax-fail[0m is exceeded:
 - [1mDocumentation[0m: [34;4m[3m]8;;https://nexte.st/docs/machine-readable/junit/\JUnit support]8;;\[0m
 - [1mDefault[0m: [36mtrue[0m
 
-[1;4m[36mprofile.<name>.junit.store-skipped[0m
+[1;4m[36mprofile.<name>.junit.report-skipped[0m
 
 [3m(since 0.9.141)[0m
 
@@ -501,7 +501,7 @@ All profile-level settings can be overridden:
 - [36mfailure-output[0m
 - [36mjunit.store-success-output[0m
 - [36mjunit.store-failure-output[0m
-- [36mjunit.store-skipped[0m
+- [36mjunit.report-skipped[0m
 
 [1;4mTest group configuration[0m
 

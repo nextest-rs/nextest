@@ -353,7 +353,7 @@ When `max-fail` is exceeded:
 - **Documentation**: [_JUnit support_](../machine-readable/junit.md)
 - **Default**: `true`
 
-#### `profile.<name>.junit.store-skipped`
+#### `profile.<name>.junit.report-skipped`
 
 <!-- md:version 0.9.141 -->
 
@@ -466,7 +466,7 @@ All profile-level settings can be overridden:
 - `failure-output`
 - `junit.store-success-output`
 - `junit.store-failure-output`
-- `junit.store-skipped`
+- `junit.report-skipped`
 
 ## Test group configuration
 
