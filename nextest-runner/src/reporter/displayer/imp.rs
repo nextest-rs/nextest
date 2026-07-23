@@ -1057,6 +1057,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 stress_index,
                 test_instance,
                 reason,
+                ..
             } => {
                 if self.status_levels.status_level >= StatusLevel::Skip {
                     self.write_skip_line(*stress_index, *test_instance, writer)?;

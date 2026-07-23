@@ -734,6 +734,7 @@ impl<'a> TestRunnerInner<'a> {
                                 stress_index,
                                 test_instance: test.instance,
                                 reason,
+                                junit_report_skipped: test.settings.junit_report_skipped(),
                             });
                             return None;
                         }

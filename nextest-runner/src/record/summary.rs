@@ -17,7 +17,10 @@
 #[cfg(test)]
 use crate::output_spec::ArbitraryOutputSpec;
 use crate::{
-    config::{elements::JunitFlakyFailStatus, scripts::ScriptId},
+    config::{
+        elements::{JunitFlakyFailStatus, ReportSkipPolicy},
+        scripts::ScriptId,
+    },
     list::OwnedTestInstanceId,
     output_spec::{LiveSpec, OutputSpec, SerializableOutputSpec},
     reporter::{
@@ -270,6 +273,10 @@ pub enum CoreEventKind {
         test_instance: OwnedTestInstanceId,
         /// The reason the test was skipped.
         reason: MismatchReason,
+        /// The per-test resolved policy controlling which skipped tests are
+        /// emitted in machine-readable reports such as JUnit.
+        #[serde(default)]
+        junit_report_skipped: ReportSkipPolicy,
     },
 
     /// A run began being cancelled.
@@ -532,10 +539,12 @@ impl TestEventKindSummary<LiveSpec> {
                 stress_index,
                 test_instance,
                 reason,
+                junit_report_skipped,
             } => Self::Core(CoreEventKind::TestSkipped {
                 stress_index: stress_index.map(StressIndexSummary::from),
                 test_instance: test_instance.to_owned(),
                 reason,
+                junit_report_skipped,
             }),
             TestEventKind::RunBeginCancel {
                 setup_scripts_running,

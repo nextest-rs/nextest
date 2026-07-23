@@ -10,7 +10,7 @@
 use super::{SetupScriptPacket, TestPacket};
 use crate::{
     config::{
-        elements::{FlakyResult, JunitFlakyFailStatus},
+        elements::{FlakyResult, JunitFlakyFailStatus, ReportSkipPolicy},
         scripts::{ScriptId, SetupScriptConfig},
     },
     errors::DisplayErrorChain,
@@ -129,6 +129,7 @@ pub(super) enum ExecutorEvent<'a> {
         stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
         reason: MismatchReason,
+        junit_report_skipped: ReportSkipPolicy,
     },
 }
 
