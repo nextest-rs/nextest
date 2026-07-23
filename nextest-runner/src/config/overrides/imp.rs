@@ -7,8 +7,8 @@ use crate::{
             EvaluatableProfile, FinalConfig, NextestConfig, NextestConfigImpl, PreBuildPlatform,
         },
         elements::{
-            FlakyResult, JunitFlakyFailStatus, LeakTimeout, RetryPolicy, SlowTimeout, TestGroup,
-            TestPriority, ThreadsRequired,
+            CpuPriority, FlakyResult, JunitFlakyFailStatus, LeakTimeout, RetryPolicy, SlowTimeout,
+            TestGroup, TestPriority, ThreadsRequired,
         },
         scripts::{
             CompiledProfileScripts, DeserializedProfileScriptConfig, ScriptId, WrapperScriptConfig,
@@ -109,6 +109,7 @@ pub struct TestSettings<'p, Source = ()> {
     flaky_result: (FlakyResult, Source),
     slow_timeout: (SlowTimeout, Source),
     leak_timeout: (LeakTimeout, Source),
+    cpu_priority: (CpuPriority, Source),
     test_group: (TestGroup, Source),
     success_output: (TestOutputDisplay, Source),
     failure_output: (TestOutputDisplay, Source),
@@ -218,6 +219,11 @@ impl<'p> TestSettings<'p> {
         self.leak_timeout.0
     }
 
+    /// Returns the CPU priority for this test.
+    pub fn cpu_priority(&self) -> CpuPriority {
+        self.cpu_priority.0
+    }
+
     /// Returns the test group for this test.
     pub fn test_group(&self) -> &TestGroup {
         &self.test_group.0
@@ -269,6 +275,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
         let mut flaky_result = None;
         let mut slow_timeout = None;
         let mut leak_timeout = None;
+        let mut cpu_priority = None;
         let mut test_group = None;
         let mut success_output = None;
         let mut failure_output = None;
@@ -321,6 +328,11 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
                 && let Some(l) = override_.data.leak_timeout
             {
                 leak_timeout = Some(Source::track_override(l, override_));
+            }
+            if cpu_priority.is_none()
+                && let Some(c) = override_.data.cpu_priority
+            {
+                cpu_priority = Some(Source::track_override(c, override_));
             }
             if test_group.is_none()
                 && let Some(t) = &override_.data.test_group
@@ -380,6 +392,8 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             slow_timeout.unwrap_or_else(|| Source::track_profile(profile.slow_timeout(run_mode)));
         let leak_timeout =
             leak_timeout.unwrap_or_else(|| Source::track_profile(profile.leak_timeout()));
+        let cpu_priority =
+            cpu_priority.unwrap_or_else(|| Source::track_profile(profile.cpu_priority()));
         let test_group = test_group.unwrap_or_else(|| Source::track_profile(TestGroup::Global));
         let success_output =
             success_output.unwrap_or_else(|| Source::track_profile(profile.success_output()));
@@ -410,6 +424,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             priority,
             slow_timeout,
             leak_timeout,
+            cpu_priority,
             test_group,
             success_output,
             failure_output,
@@ -599,6 +614,15 @@ pub(in crate::config) struct CompiledData<State> {
     pub(in crate::config) scripts: Vec<CompiledProfileScripts<State>>,
 }
 
+impl<State> CompiledData<State> {
+    // TODO-RAINCLAUDE: true if any override sets a concrete CPU priority level; used by may_set_cpu_priority.
+    pub(in crate::config) fn any_override_sets_cpu_priority(&self) -> bool {
+        self.overrides
+            .iter()
+            .any(|o| o.data.cpu_priority.is_some_and(|c| c.level().is_some()))
+    }
+}
+
 impl CompiledData<PreBuildPlatform> {
     fn new(
         pcx: &ParseContext<'_>,
@@ -740,6 +764,7 @@ pub(in crate::config) struct ProfileOverrideData {
     slow_timeout: Option<SlowTimeout>,
     bench_slow_timeout: Option<SlowTimeout>,
     leak_timeout: Option<LeakTimeout>,
+    cpu_priority: Option<CpuPriority>,
     pub(in crate::config) test_group: Option<TestGroup>,
     success_output: Option<TestOutputDisplay>,
     failure_output: Option<TestOutputDisplay>,
@@ -831,6 +856,7 @@ impl CompiledOverride<PreBuildPlatform> {
                         slow_timeout: source.slow_timeout,
                         bench_slow_timeout: source.bench.slow_timeout,
                         leak_timeout: source.leak_timeout,
+                        cpu_priority: source.cpu_priority,
                         test_group: source.test_group.clone(),
                         success_output: source.success_output,
                         failure_output: source.failure_output,
@@ -1030,6 +1056,9 @@ pub(in crate::config) struct DeserializedOverride {
         deserialize_with = "crate::config::elements::deserialize_leak_timeout"
     )]
     leak_timeout: Option<LeakTimeout>,
+    /// OS scheduling priority for matching tests.
+    #[serde(default)]
+    cpu_priority: Option<CpuPriority>,
     /// Test group to put matching tests in.
     #[serde(default)]
     test_group: Option<TestGroup>,
@@ -1165,7 +1194,7 @@ mod tests {
     use super::*;
     use crate::config::{
         core::NextestConfig,
-        elements::{LeakTimeoutResult, SlowTimeoutResult},
+        elements::{CpuPriorityLevel, LeakTimeoutResult, SlowTimeoutResult},
         utils::test_helpers::*,
     };
     use camino_tempfile::tempdir;
@@ -1194,6 +1223,7 @@ mod tests {
             retries = 3
             slow-timeout = "60s"
             leak-timeout = "300ms"
+            cpu-priority = "below-normal"
             test-group = "my-group"
             failure-output = "final"
             junit = { store-failure-output = false }
@@ -1276,6 +1306,10 @@ mod tests {
             }
         );
         assert_eq!(overrides.test_group(), &test_group("my-group"));
+        assert_eq!(
+            overrides.cpu_priority(),
+            CpuPriority::Set(CpuPriorityLevel::BelowNormal)
+        );
         assert_eq!(overrides.success_output(), TestOutputDisplay::Never);
         assert_eq!(overrides.failure_output(), TestOutputDisplay::Final);
         // For clarity.
@@ -1327,6 +1361,10 @@ mod tests {
             }
         );
         assert_eq!(overrides.test_group(), &test_group("my-group"));
+        assert_eq!(
+            overrides.cpu_priority(),
+            CpuPriority::Set(CpuPriorityLevel::BelowNormal)
+        );
         assert_eq!(
             overrides.success_output(),
             TestOutputDisplay::ImmediateFinal
@@ -1382,6 +1420,68 @@ mod tests {
         };
         let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(0));
+        assert_eq!(overrides.cpu_priority(), CpuPriority::Unset);
+    }
+
+    #[test]
+    fn test_overrides_cpu_priority_unset() {
+        let config_contents = indoc! {r#"
+            [profile.default]
+            cpu-priority = "below-normal"
+
+            [[profile.default.overrides]]
+            filter = "test(opt_out)"
+            cpu-priority = "unset"
+        "#};
+
+        let workspace_dir = tempdir().unwrap();
+        let graph = temp_workspace(&workspace_dir, config_contents);
+        let package_id = graph.workspace().iter().next().unwrap().id();
+        let pcx = ParseContext::new(&graph);
+
+        let nextest_config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &[][..],
+            &Default::default(),
+        )
+        .expect("config is valid");
+        let profile = nextest_config
+            .profile("default")
+            .expect("valid profile name")
+            .apply_build_platforms(&build_platforms());
+
+        let bq = binary_query(&graph, package_id, "lib", "my-binary", BuildPlatform::Host);
+
+        // The test matching the override is explicitly unset, so it is left at
+        // nextest's own priority even though the profile sets below-normal.
+        let opt_out = TestCaseName::new("opt_out");
+        let query = TestQuery {
+            binary_query: bq.to_query(),
+            test_name: &opt_out,
+        };
+        assert_eq!(
+            profile
+                .settings_for(NextestRunMode::Test, &query)
+                .cpu_priority(),
+            CpuPriority::Unset,
+            "an override's unset opts the test out of the profile's cpu-priority",
+        );
+
+        // A test not matching the override inherits the profile's below-normal.
+        let other = TestCaseName::new("other");
+        let query = TestQuery {
+            binary_query: bq.to_query(),
+            test_name: &other,
+        };
+        assert_eq!(
+            profile
+                .settings_for(NextestRunMode::Test, &query)
+                .cpu_priority(),
+            CpuPriority::Set(CpuPriorityLevel::BelowNormal),
+            "tests not matching the override inherit the profile's cpu-priority",
+        );
     }
 
     /// Test that bench.slow-timeout works correctly in overrides.

@@ -5,6 +5,7 @@
 
 mod archive;
 pub(super) mod bench;
+mod cpu_priority;
 mod global_timeout;
 mod inherits;
 mod junit;
@@ -19,6 +20,7 @@ mod threads_required;
 
 pub use archive::*;
 pub(super) use bench::*;
+pub use cpu_priority::*;
 pub use global_timeout::*;
 pub use inherits::*;
 pub use junit::*;

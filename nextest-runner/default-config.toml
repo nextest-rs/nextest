@@ -89,6 +89,9 @@ bench.global-timeout = "30y"
 # See <https://nexte.st/docs/features/leaky-tests> for more information.
 leak-timeout = "200ms"
 
+# OS scheduling priority for test processes.
+cpu-priority = "unset"
+
 # Stop all tests after the configured global timeout.
 #
 # Defaults to 30 years, which is a large enough value to feel "infinite" without

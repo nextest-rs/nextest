@@ -62,6 +62,19 @@ leak-timeout = { period = "100ms", result = "fail" }
 platform = { host = 'cfg(any(windows, target_os = "illumos"))' }
 leak-timeout = '1s'
 
+# Run test_cpu_priority at below-normal priority so it can assert the OS applied it.
+[[profile.default.overrides]]
+filter = "test(=test_cpu_priority)"
+cpu-priority = "below-normal"
+
+# Request a priority raise so integration tests can exercise the pre-run probe
+# and its warning end to end (see integration/cpu_priority.rs).
+[profile.cpu-priority-raise]
+
+[[profile.cpu-priority-raise.overrides]]
+filter = "test(=test_success)"
+cpu-priority = "high"
+
 [profile.with-retries]
 retries = 2
 

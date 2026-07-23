@@ -46,6 +46,13 @@ uuid = "1.19.0"
 [dev-dependencies]
 dylib-test = { path = "dylib-test" }
 
+# Used by test_cpu_priority to read the process's own scheduling priority.
+[target.'cfg(unix)'.dev-dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
+
 # Test that the "line-tables-only" debug setting works.
 [profile.dev]
 debug = 1

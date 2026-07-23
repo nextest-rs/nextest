@@ -98,6 +98,17 @@ pub fn double_spawn_child_init() {
     imp::double_spawn_child_init()
 }
 
+/// Applies the requested CPU priority (a nice value) to this process.
+///
+/// This ignores errors (e.g. `EACCES` on an unprivileged raise), instead
+/// relying on the main process to warn once.
+pub fn double_spawn_child_set_priority(nice: i32) {
+    imp::double_spawn_child_set_priority(nice)
+}
+
+#[cfg(unix)]
+pub(crate) use imp::get_current_exe;
+
 #[cfg(unix)]
 mod imp {
     use super::*;
@@ -141,7 +152,7 @@ mod imp {
     }
 
     #[cfg(target_os = "linux")]
-    fn get_current_exe() -> std::io::Result<PathBuf> {
+    pub(crate) fn get_current_exe() -> std::io::Result<PathBuf> {
         static PROC_SELF_EXE: &str = "/proc/self/exe";
 
         // Always use /proc/self/exe directly rather than trying to readlink it. Just make sure it's
@@ -160,7 +171,7 @@ mod imp {
 
     #[cfg(not(target_os = "linux"))]
     #[inline]
-    fn get_current_exe() -> std::io::Result<PathBuf> {
+    pub(crate) fn get_current_exe() -> std::io::Result<PathBuf> {
         std::env::current_exe()
     }
 
@@ -196,6 +207,13 @@ mod imp {
         if sigset.thread_unblock().is_err() {
             warn!("[double-spawn] unable to unblock SIGTSTP in child");
         }
+    }
+
+    #[inline]
+    pub(super) fn double_spawn_child_set_priority(nice: i32) {
+        // Ignore errors (e.g. EACCES on an unprivileged raise). We rely on the
+        // main process to warn if this fails.
+        let _ = crate::cpu_priority_probe::try_set_nice(nice);
     }
 }
 
@@ -235,4 +253,7 @@ mod imp {
 
     #[inline]
     pub(super) fn double_spawn_child_init() {}
+
+    #[inline]
+    pub(super) fn double_spawn_child_set_priority(_nice: i32) {}
 }

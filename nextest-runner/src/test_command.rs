@@ -3,7 +3,7 @@
 
 use crate::{
     cargo_config::EnvironmentMap,
-    config::scripts::ScriptCommandEnvMap,
+    config::{elements::CpuPriorityLevel, scripts::ScriptCommandEnvMap},
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     helpers::dylib_path_envvar,
     list::{RustBuildMeta, TestListState},
@@ -19,12 +19,25 @@ use std::{
     ffi::{OsStr, OsString},
     fs::File,
     io::{BufRead, BufReader},
+    path::Path,
     sync::LazyLock,
 };
 use tracing::warn;
 
 mod imp;
 pub(crate) use imp::{Child, ChildAccumulator, ChildFds};
+
+cfg_if::cfg_if! {
+    if #[cfg(unix)] {
+        #[path = "test_command/unix.rs"]
+        mod os;
+    } else if #[cfg(windows)] {
+        #[path = "test_command/windows.rs"]
+        mod os;
+    } else {
+        compile_error!("unsupported target platform");
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct LocalExecuteContext<'a> {
@@ -44,6 +57,57 @@ pub(crate) struct LocalExecuteContext<'a> {
 pub(crate) enum TestCommandPhase {
     List,
     Run,
+}
+
+/// A configured CPU priority, together with how it will be applied.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum CpuPriorityRequest {
+    /// Provided as `--nice=N` to the double-spawn wrapper.
+    ///
+    /// Only available on Unix.
+    #[cfg(unix)]
+    DoubleSpawn(CpuPriorityLevel),
+
+    /// Applied via a `pre_exec` setpriority hook. This is used when
+    /// double-spawn isn't available or if an interceptor is involved.
+    ///
+    /// Only available on Unix.
+    #[cfg(unix)]
+    PreExec(CpuPriorityLevel),
+
+    /// Applied via the job object's priority class.
+    ///
+    /// Only available on Windows.
+    #[cfg(windows)]
+    JobObject(CpuPriorityLevel),
+}
+
+impl CpuPriorityRequest {
+    fn double_spawn_nice(self) -> Option<i32> {
+        match self {
+            #[cfg(unix)]
+            CpuPriorityRequest::DoubleSpawn(level) => Some(level.to_nice()),
+            #[cfg(unix)]
+            CpuPriorityRequest::PreExec(_) => None,
+            #[cfg(windows)]
+            CpuPriorityRequest::JobObject(_) => None,
+        }
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn pre_exec_nice(self) -> Option<i32> {
+        match self {
+            CpuPriorityRequest::DoubleSpawn(_) => None,
+            CpuPriorityRequest::PreExec(level) => Some(level.to_nice()),
+        }
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn priority_class(self) -> win32job::PriorityClass {
+        match self {
+            CpuPriorityRequest::JobObject(level) => os::to_priority_class(level),
+        }
+    }
 }
 
 /// Represents a to-be-run test command for a test binary with a certain set of arguments.
@@ -70,11 +134,19 @@ impl TestCommand {
         package: &PackageMetadata<'_>,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
         interceptor: &Interceptor,
+        cpu_priority: Option<CpuPriorityRequest>,
     ) -> Self {
-        let mut cmd = if interceptor.should_show_wrapper_command() {
+        // TODO-RAINCLAUDE: --nice is emitted exactly when resolve_cpu_priority picked the DoubleSpawn method: the double-spawn branch below is selected by the same spawns_via_double_spawn call that resolve_cpu_priority consults, and double_spawn_nice returns None for the other methods, so the decision and the emission share one predicate and cannot drift.
+        let mut cmd = if spawns_via_double_spawn(interceptor, lctx.double_spawn) {
+            let current_exe = lctx
+                .double_spawn
+                .current_exe()
+                .expect("spawns_via_double_spawn returned true, so current_exe is present");
+            create_double_spawn_command(current_exe, program.as_str(), args, cpu_priority)
+        } else if interceptor.should_show_wrapper_command() {
             create_command_with_interceptor(program.clone(), args, interceptor)
         } else {
-            create_command(program.clone(), args, lctx.double_spawn)
+            create_plain_command(program.clone(), args)
         };
 
         // Apply Cargo's config.toml env first (workspace-wide), then the
@@ -214,25 +286,74 @@ impl TestCommand {
     }
 }
 
+// TODO-RAINCLAUDE: single source of truth for whether a test is launched through the double-spawn wrapper. resolve_cpu_priority and TestCommand::new both consult this, so the chosen CPU priority method (DoubleSpawn vs PreExec) can't drift from how the command is actually built. The double-spawn wrapper is used only when no interceptor wrapper command is shown and double-spawn resolved an exe.
+pub(crate) fn spawns_via_double_spawn(
+    interceptor: &Interceptor,
+    double_spawn: &DoubleSpawnInfo,
+) -> bool {
+    !interceptor.should_show_wrapper_command() && double_spawn.current_exe().is_some()
+}
+
 pub(crate) fn create_command<I, S>(
     program: String,
     args: I,
     double_spawn: &DoubleSpawnInfo,
+    cpu_priority: Option<CpuPriorityRequest>,
 ) -> std::process::Command
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
     if let Some(current_exe) = double_spawn.current_exe() {
-        let mut cmd = std::process::Command::new(current_exe);
-        cmd.args([DoubleSpawnInfo::SUBCOMMAND_NAME, "--", program.as_str()]);
-        cmd.arg(shell_words::join(args));
-        cmd
+        create_double_spawn_command(current_exe, program.as_str(), args, cpu_priority)
     } else {
-        let mut cmd = std::process::Command::new(program);
-        cmd.args(args.into_iter().map(|arg| arg.as_ref().to_owned()));
-        cmd
+        create_plain_command(program, args)
     }
+}
+
+// TODO-RAINCLAUDE: builds the double-spawn invocation; shared by TestCommand::new (tests) and create_command (setup scripts) so both construct the wrapper identically.
+fn create_double_spawn_command<I, S>(
+    current_exe: &Path,
+    program: &str,
+    args: I,
+    cpu_priority: Option<CpuPriorityRequest>,
+) -> std::process::Command
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut cmd = std::process::Command::new(current_exe);
+    cmd.args(double_spawn_args(program, args, cpu_priority));
+    cmd
+}
+
+fn create_plain_command<I, S>(program: String, args: I) -> std::process::Command
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args.into_iter().map(|arg| arg.as_ref().to_owned()));
+    cmd
+}
+
+fn double_spawn_args<I, S>(
+    program: &str,
+    args: I,
+    cpu_priority: Option<CpuPriorityRequest>,
+) -> Vec<String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut argv = vec![DoubleSpawnInfo::SUBCOMMAND_NAME.to_owned()];
+    if let Some(nice) = cpu_priority.and_then(|req| req.double_spawn_nice()) {
+        argv.push(format!("--nice={nice}"));
+    }
+    argv.push("--".to_owned());
+    argv.push(program.to_owned());
+    argv.push(shell_words::join(args));
+    argv
 }
 
 pub(crate) fn create_command_with_interceptor<I, S>(
@@ -430,6 +551,60 @@ mod tests {
                 ("NEW_EMPTY_VALUE".to_owned(), "".to_owned()),
             ],
             "parsed key-value pairs match"
+        );
+    }
+
+    #[test]
+    fn double_spawn_command_without_priority_omits_nice() {
+        assert_eq!(
+            double_spawn_args("test-program", ["arg1", "arg2"], None),
+            vec![
+                DoubleSpawnInfo::SUBCOMMAND_NAME,
+                "--",
+                "test-program",
+                "arg1 arg2",
+            ],
+            "no --nice arg is added when cpu-priority is unset",
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn double_spawn_command_includes_nice() {
+        assert_eq!(
+            double_spawn_args(
+                "test-program",
+                ["arg1", "arg2"],
+                Some(CpuPriorityRequest::DoubleSpawn(CpuPriorityLevel::Low)),
+            ),
+            vec![
+                DoubleSpawnInfo::SUBCOMMAND_NAME,
+                "--nice=19",
+                "--",
+                "test-program",
+                "arg1 arg2",
+            ],
+            "expected --nice=19 to be emitted before the -- separator",
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn double_spawn_command_includes_negative_nice() {
+        assert_eq!(
+            double_spawn_args(
+                "test-program",
+                ["arg1", "arg2"],
+                Some(CpuPriorityRequest::DoubleSpawn(CpuPriorityLevel::High)),
+            ),
+            vec![
+                DoubleSpawnInfo::SUBCOMMAND_NAME,
+                "--nice=-10",
+                "--",
+                "test-program",
+                "arg1 arg2",
+            ],
+            "a negative nice is emitted as a single token so clap accepts it",
         );
     }
 }

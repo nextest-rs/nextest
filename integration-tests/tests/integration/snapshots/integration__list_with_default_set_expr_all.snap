@@ -5,6 +5,7 @@ expression: default_filter_stdout(&all_tests_output)
 cdylib-link test_multiply_two
 fixture-project tests::call_dylib_add_two
 fixture-project tests::unit_test_success
+fixture-project::basic test_cpu_priority
 fixture-project::basic test_cwd
 fixture-project::basic test_execute_bin
 fixture-project::basic test_failure_assert

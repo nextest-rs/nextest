@@ -36,6 +36,7 @@ use std::{borrow::Cow, collections::BTreeSet, fs::File, io::Write};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
 
 mod cargo_message_format;
+mod cpu_priority;
 mod fixtures;
 mod interceptor;
 mod large_alloc;

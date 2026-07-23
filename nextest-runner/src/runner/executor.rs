@@ -430,7 +430,8 @@ impl<'a> ExecutorContext<'a> {
 
         // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
         // best-effort thing.
-        let job = super::os::create_job().ok();
+        // Setup scripts don't support CPU priority.
+        let job = super::os::create_job(None).ok();
 
         // The --no-capture CLI argument overrides the config.
         if self.capture_strategy != CaptureStrategy::None {
@@ -734,12 +735,16 @@ impl<'a> ExecutorContext<'a> {
         req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     ) -> Result<InternalExecuteStatus<'a>, ChildStartError> {
         let ctx = self.test_execute_context();
+        let cpu_priority = test.settings.cpu_priority().level().map(|level| {
+            super::os::resolve_cpu_priority(level, &self.interceptor, &self.double_spawn)
+        });
         let mut cmd = test.test_instance.make_command(
             &ctx,
             self.test_list,
             test.settings.run_wrapper(),
             test.settings.run_extra_args(),
             &self.interceptor,
+            cpu_priority,
         );
 
         let attempt_id = test.test_instance.id().attempt_id(
@@ -829,9 +834,11 @@ impl<'a> ExecutorContext<'a> {
             super::os::set_process_group(command_mut);
         }
 
+        super::os::set_cpu_priority_pre_exec(command_mut, cpu_priority);
+
         // If creating a job fails, we might be on an old system. Ignore this --
         // job objects are a best-effort thing.
-        let job = super::os::create_job().ok();
+        let job = super::os::create_job(cpu_priority).ok();
 
         // Capture program and args before spawn moves cmd
         let program = cmd.program().to_owned();
@@ -903,9 +910,10 @@ impl<'a> ExecutorContext<'a> {
                 .map(|s| s.to_owned()),
         });
 
-        // If assigning the child to the job fails, ignore this. This can happen if the process has
-        // exited.
-        let _ = super::os::assign_process_to_job(&child, job.as_ref());
+        // TODO-RAINCLAUDE: assignment failures are best-effort for process management, but on Windows the job object is also the only vehicle for cpu-priority, so surface a once-only warning in that case (no-op on Unix, where assignment is infallible).
+        if let Err(error) = super::os::assign_process_to_job(&child, job.as_ref()) {
+            super::os::warn_on_cpu_priority_assign_error(cpu_priority, error);
+        }
 
         let mut child_acc = ChildAccumulator::new(child_fds);
 

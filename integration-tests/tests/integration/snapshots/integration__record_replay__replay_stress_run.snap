@@ -1,18 +1,18 @@
 ---
 source: integration-tests/tests/integration/record_replay.rs
-assertion_line: 1067
 expression: "redact_dynamic_fields(&output, temp_root)"
 ---
    Replaying recorded run 60000001-0000-0000-0000-000000000001
      Started XXXX-XX-XX XX:XX:XX  status: stress completed
 ────────────
  Nextest run ID 60000001-0000-0000-0000-000000000001 with nextest profile: default
-    Starting 1 test across 7 binaries (31 tests skipped)
+    Starting 1 test across 7 binaries (32 tests skipped)
 ────────────
  Stress test iteration 1/5 (HH:MM:SS elapsed so far, 5 iterations remaining)
         SKIP [         ] [1/5] (───) fixture-project tests::call_dylib_add_two
         SKIP [         ] [1/5] (───) fixture-project tests::unit_test_success
         SKIP [         ] [1/5] (───) fixture-project::basic test_cargo_env_vars
+        SKIP [         ] [1/5] (───) fixture-project::basic test_cpu_priority
         SKIP [         ] [1/5] (───) fixture-project::basic test_cwd
         SKIP [         ] [1/5] (───) fixture-project::basic test_execute_bin
         SKIP [         ] [1/5] (───) fixture-project::basic test_failure_assert
@@ -42,12 +42,13 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [1/5] (───) fixture-project::example/fixture-project fake_test_name
         SKIP [         ] [1/5] (───) fixture-project::example/fixture-project tests::example_success
         PASS [ duration] [1/5] (1/1) fixture-project::basic test_success
- Stress test [ duration] iteration 1/5: 1 test run: 1 passed, 31 skipped
+ Stress test [ duration] iteration 1/5: 1 test run: 1 passed, 32 skipped
 ────────────
  Stress test iteration 2/5 (HH:MM:SS elapsed so far, 4 iterations remaining)
         SKIP [         ] [2/5] (───) fixture-project tests::call_dylib_add_two
         SKIP [         ] [2/5] (───) fixture-project tests::unit_test_success
         SKIP [         ] [2/5] (───) fixture-project::basic test_cargo_env_vars
+        SKIP [         ] [2/5] (───) fixture-project::basic test_cpu_priority
         SKIP [         ] [2/5] (───) fixture-project::basic test_cwd
         SKIP [         ] [2/5] (───) fixture-project::basic test_execute_bin
         SKIP [         ] [2/5] (───) fixture-project::basic test_failure_assert
@@ -77,12 +78,13 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [2/5] (───) fixture-project::example/fixture-project fake_test_name
         SKIP [         ] [2/5] (───) fixture-project::example/fixture-project tests::example_success
         PASS [ duration] [2/5] (1/1) fixture-project::basic test_success
- Stress test [ duration] iteration 2/5: 1 test run: 1 passed, 31 skipped
+ Stress test [ duration] iteration 2/5: 1 test run: 1 passed, 32 skipped
 ────────────
  Stress test iteration 3/5 (HH:MM:SS elapsed so far, 3 iterations remaining)
         SKIP [         ] [3/5] (───) fixture-project tests::call_dylib_add_two
         SKIP [         ] [3/5] (───) fixture-project tests::unit_test_success
         SKIP [         ] [3/5] (───) fixture-project::basic test_cargo_env_vars
+        SKIP [         ] [3/5] (───) fixture-project::basic test_cpu_priority
         SKIP [         ] [3/5] (───) fixture-project::basic test_cwd
         SKIP [         ] [3/5] (───) fixture-project::basic test_execute_bin
         SKIP [         ] [3/5] (───) fixture-project::basic test_failure_assert
@@ -112,12 +114,13 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [3/5] (───) fixture-project::example/fixture-project fake_test_name
         SKIP [         ] [3/5] (───) fixture-project::example/fixture-project tests::example_success
         PASS [ duration] [3/5] (1/1) fixture-project::basic test_success
- Stress test [ duration] iteration 3/5: 1 test run: 1 passed, 31 skipped
+ Stress test [ duration] iteration 3/5: 1 test run: 1 passed, 32 skipped
 ────────────
  Stress test iteration 4/5 (HH:MM:SS elapsed so far, 2 iterations remaining)
         SKIP [         ] [4/5] (───) fixture-project tests::call_dylib_add_two
         SKIP [         ] [4/5] (───) fixture-project tests::unit_test_success
         SKIP [         ] [4/5] (───) fixture-project::basic test_cargo_env_vars
+        SKIP [         ] [4/5] (───) fixture-project::basic test_cpu_priority
         SKIP [         ] [4/5] (───) fixture-project::basic test_cwd
         SKIP [         ] [4/5] (───) fixture-project::basic test_execute_bin
         SKIP [         ] [4/5] (───) fixture-project::basic test_failure_assert
@@ -147,12 +150,13 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [4/5] (───) fixture-project::example/fixture-project fake_test_name
         SKIP [         ] [4/5] (───) fixture-project::example/fixture-project tests::example_success
         PASS [ duration] [4/5] (1/1) fixture-project::basic test_success
- Stress test [ duration] iteration 4/5: 1 test run: 1 passed, 31 skipped
+ Stress test [ duration] iteration 4/5: 1 test run: 1 passed, 32 skipped
 ────────────
  Stress test iteration 5/5 (HH:MM:SS elapsed so far, 1 iteration remaining)
         SKIP [         ] [5/5] (───) fixture-project tests::call_dylib_add_two
         SKIP [         ] [5/5] (───) fixture-project tests::unit_test_success
         SKIP [         ] [5/5] (───) fixture-project::basic test_cargo_env_vars
+        SKIP [         ] [5/5] (───) fixture-project::basic test_cpu_priority
         SKIP [         ] [5/5] (───) fixture-project::basic test_cwd
         SKIP [         ] [5/5] (───) fixture-project::basic test_execute_bin
         SKIP [         ] [5/5] (───) fixture-project::basic test_failure_assert
@@ -182,6 +186,6 @@ expression: "redact_dynamic_fields(&output, temp_root)"
         SKIP [         ] [5/5] (───) fixture-project::example/fixture-project fake_test_name
         SKIP [         ] [5/5] (───) fixture-project::example/fixture-project tests::example_success
         PASS [ duration] [5/5] (1/1) fixture-project::basic test_success
- Stress test [ duration] iteration 5/5: 1 test run: 1 passed, 31 skipped
+ Stress test [ duration] iteration 5/5: 1 test run: 1 passed, 32 skipped
 ────────────
      Summary [ duration] 5/5 stress run iterations: 5 passed

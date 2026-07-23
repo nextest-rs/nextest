@@ -5,7 +5,7 @@ use super::{DispatcherContext, ExecutorContext, RunnerTaskState};
 use crate::{
     config::{
         core::EvaluatableProfile,
-        elements::{FlakyResult, MaxFail, RetryPolicy, TestGroup, TestThreads},
+        elements::{CpuPriorityLevel, FlakyResult, MaxFail, RetryPolicy, TestGroup, TestThreads},
         scripts::SetupScriptExecuteData,
     },
     double_spawn::DoubleSpawnInfo,
@@ -16,6 +16,7 @@ use crate::{
     input::{InputHandler, InputHandlerKind, InputHandlerStatus},
     list::{OwnedTestInstanceId, TestInstanceWithSettings, TestList},
     reporter::events::{ReporterEvent, RunStats, StressIndex},
+    run_mode::NextestRunMode,
     runner::ExecutorEvent,
     signal::{SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
@@ -29,8 +30,14 @@ use nextest_metadata::FilterMatch;
 use quick_junit::ReportUuid;
 use semver::Version;
 use std::{
-    collections::BTreeSet, convert::Infallible, fmt, num::NonZero, pin::Pin, str::FromStr,
-    sync::Arc, time::Duration,
+    collections::{BTreeMap, BTreeSet},
+    convert::Infallible,
+    fmt,
+    num::NonZero,
+    pin::Pin,
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
 };
 use tokio::{
     runtime::Runtime,
@@ -544,6 +551,28 @@ impl<'a> TestRunner<'a> {
     }
 }
 
+// TODO-RAINCLAUDE: tally the CPU priority levels requested by tests that will actually run. Iterate tests directly (not to_priority_queue) and skip filtered-out tests before resolving settings, so we don't pay override evaluation for tests that won't run, nor the queue's priority sort.
+fn tally_requested_cpu_priorities(
+    test_list: &TestList<'_>,
+    profile: &EvaluatableProfile<'_>,
+    mode: NextestRunMode,
+) -> BTreeMap<CpuPriorityLevel, usize> {
+    let mut level_counts: BTreeMap<CpuPriorityLevel, usize> = BTreeMap::new();
+    for instance in test_list.iter_tests() {
+        if !instance.test_info.filter_match.is_match() {
+            continue;
+        }
+        if let Some(level) = profile
+            .settings_for(mode, &instance.to_test_query())
+            .cpu_priority()
+            .level()
+        {
+            *level_counts.entry(level).or_insert(0) += 1;
+        }
+    }
+    level_counts
+}
+
 #[derive(Debug)]
 struct TestRunnerInner<'a> {
     run_id: ReportUuid,
@@ -576,6 +605,20 @@ impl<'a> TestRunnerInner<'a> {
     where
         F: FnMut(ReporterEvent<'a>) + Send,
     {
+        // TODO-RAINCLAUDE: probe whether the requested CPU priorities can be applied and warn once with affected test counts, before the dispatcher's block_on (blocking here is fine). The tally is platform-neutral; the probe goes through the os seam. Unix spawns a probe subprocess because privilege depends on the execve'd security context; Windows probes in-process by creating a throwaway job object, since setting a job's priority class to high requires SeIncreaseBasePriorityPrivilege.
+        if self.profile.may_set_cpu_priority() {
+            let mode = self.test_list.mode();
+            let level_counts = tally_requested_cpu_priorities(self.test_list, self.profile, mode);
+            if !level_counts.is_empty() {
+                super::os::maybe_warn_cpu_priority(
+                    level_counts,
+                    mode,
+                    &self.double_spawn,
+                    &self.runtime,
+                );
+            }
+        }
+
         // TODO: add support for other test-running approaches, measure performance.
 
         // Disable the global timeout when an interceptor is active.
