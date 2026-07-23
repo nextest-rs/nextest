@@ -1002,7 +1002,7 @@ impl MismatchReason {
     ];
     /// Returns true if the test was skipped because its ignore status didn't
     /// match the user-provided `--run-ignored` setting.
-    pub fn is_ignored(self) -> bool {
+    pub fn is_ignore_mismatch(self) -> bool {
         match self {
             MismatchReason::Ignored => true,
             MismatchReason::NotBenchmark
@@ -1198,10 +1198,13 @@ mod tests {
     }
     #[test]
     fn mismatch_reason_predicates() {
-        assert!(MismatchReason::Ignored.is_ignored());
+        assert!(MismatchReason::Ignored.is_ignore_mismatch());
         for &reason in MismatchReason::ALL_VARIANTS {
             if reason != MismatchReason::Ignored {
-                assert!(!reason.is_ignored(), "{reason:?} is not ignored");
+                assert!(
+                    !reason.is_ignore_mismatch(),
+                    "{reason:?} is not an ignore mismatch"
+                );
             }
         }
 

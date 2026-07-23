@@ -391,23 +391,16 @@ impl ExpectedTestResults {
                     JunitSkippedExpectation::AllCounted => {
                         reason.is_some_and(|reason| reason.counted_in_skip_summary())
                     }
-                    JunitSkippedExpectation::IgnoredOnly => {
-                        // Filtered is included in this determination because
-                        // production checks the ignore filter before the
-                        // filterset, so an ignored test that also matches a
-                        // filter is reported as MismatchReason::Ignored.
-                        let skip_reason_is_ignored = match reason {
-                            Some(SkipReason::Ignored | SkipReason::Filtered) => true,
-                            Some(
-                                SkipReason::SuiteNotInRun
-                                | SkipReason::NotBenchmark
-                                | SkipReason::RerunAlreadyPassed,
-                            ) => false,
-                            None => false,
-                        };
-
-                        test.status.is_ignored() && skip_reason_is_ignored
-                    }
+                    JunitSkippedExpectation::IgnoredOnly => match reason {
+                        Some(SkipReason::Ignored) => true,
+                        Some(
+                            SkipReason::Filtered
+                            | SkipReason::SuiteNotInRun
+                            | SkipReason::NotBenchmark
+                            | SkipReason::RerunAlreadyPassed,
+                        ) => false,
+                        None => false,
+                    },
                 };
                 if include {
                     self.junit_skipped

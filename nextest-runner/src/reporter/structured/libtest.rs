@@ -256,7 +256,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                 test_instance,
                 reason,
                 ..
-            } if reason.is_ignored() => {
+            } if reason.is_ignore_mismatch() => {
                 // libtest only reports ignored tests as skipped, so we match
                 // the `ReportSkipPolicy::Ignored` policy here.
                 //

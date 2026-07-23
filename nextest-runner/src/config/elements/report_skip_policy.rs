@@ -43,7 +43,7 @@ impl ReportSkipPolicy {
     pub fn should_report(self, reason: MismatchReason) -> bool {
         match self {
             ReportSkipPolicy::None => false,
-            ReportSkipPolicy::Ignored => reason.is_ignored(),
+            ReportSkipPolicy::Ignored => reason.is_ignore_mismatch(),
             ReportSkipPolicy::All => reason.is_substantive_skip(),
         }
     }
@@ -77,8 +77,8 @@ mod tests {
             );
             assert_eq!(
                 ReportSkipPolicy::Ignored.should_report(reason),
-                reason.is_ignored(),
-                "Ignored policy must mirror is_ignored for {reason:?}"
+                reason.is_ignore_mismatch(),
+                "Ignored policy must mirror is_ignore_mismatch for {reason:?}"
             );
             assert_eq!(
                 ReportSkipPolicy::All.should_report(reason),

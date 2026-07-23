@@ -532,15 +532,23 @@ pub fn expected_skip_reason(
         return Some(SkipReason::NotBenchmark);
     }
 
+    // The production checks the ignore filter before the filterset. The
+    // !test.status.is_ignored() guards below defer such tests to the trailing
+    // ignore check.
+    //
+    // ---
+    //
     // NotInDefaultSet filter.
-    if test.has_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET)
+    if !test.status.is_ignored()
+        && test.has_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET)
         && properties.contains(RunProperties::WITH_DEFAULT_FILTER)
     {
         return Some(SkipReason::Filtered);
     }
 
     // NotInDefaultSetUnix filter (Unix-specific).
-    if cfg!(unix)
+    if !test.status.is_ignored()
+        && cfg!(unix)
         && test.has_property(TestCaseFixtureProperties::NOT_IN_DEFAULT_SET_UNIX)
         && properties.contains(RunProperties::WITH_DEFAULT_FILTER)
     {
@@ -548,21 +556,24 @@ pub fn expected_skip_reason(
     }
 
     // MatchesCdylib + WithSkipCdylibFilter.
-    if test.has_property(TestCaseFixtureProperties::MATCHES_CDYLIB)
+    if !test.status.is_ignored()
+        && test.has_property(TestCaseFixtureProperties::MATCHES_CDYLIB)
         && properties.contains(RunProperties::WITH_SKIP_CDYLIB_FILTER)
     {
         return Some(SkipReason::Filtered);
     }
 
     // WithMultiplyTwoExactFilter - skip tests that don't match.
-    if !test.has_property(TestCaseFixtureProperties::MATCHES_TEST_MULTIPLY_TWO)
+    if !test.status.is_ignored()
+        && !test.has_property(TestCaseFixtureProperties::MATCHES_TEST_MULTIPLY_TWO)
         && properties.contains(RunProperties::WITH_MULTIPLY_TWO_EXACT_FILTER)
     {
         return Some(SkipReason::Filtered);
     }
 
     // CdyLibExamplePackageFilter - only run test_multiply_two_cdylib.
-    if properties.contains(RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER)
+    if !test.status.is_ignored()
+        && properties.contains(RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER)
         && test.name != TestCaseName::new("tests::test_multiply_two_cdylib")
     {
         return Some(SkipReason::Filtered);
