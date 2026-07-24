@@ -397,6 +397,17 @@
             }
           ]
         },
+        "report-skipped": {
+          "description": "Which skipped tests to emit for matching tests in the JUnit XML report.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReportSkipPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "store-failure-output": {
           "description": "Whether to store failed output for matching tests in the JUnit XML\nreport.",
           "type": [
@@ -772,6 +783,18 @@
           ],
           "default": null
         },
+        "report-skipped": {
+          "description": "Which skipped tests to emit as `<testcase>` elements with a `<skipped>`\nchild in the JUnit XML report.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReportSkipPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "store-failure-output": {
           "description": "Whether to store failed test output in the JUnit XML report.",
           "type": [
@@ -903,6 +926,26 @@
             }
           },
           "additionalProperties": false
+        }
+      ]
+    },
+    "ReportSkipPolicy": {
+      "description": "Controls which skipped tests are emitted as `<testcase>` elements with a\n`<skipped>` child in machine-readable reports such as JUnit XML output.\n\nSkipped tests are not emitted by default to keep machine-readable output\nstable. This setting opts in to reporting some or all of them.",
+      "oneOf": [
+        {
+          "description": "Do not emit any skipped tests. This is the default and keeps\nmachine-readable output stable.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "Only emit tests whose ignore status did not match the run's run-ignored\nselection. In a default run these are the tests marked `#[ignore]`;\nunder `--run-ignored only` these are the tests that are not ignored.",
+          "type": "string",
+          "const": "ignored"
+        },
+        {
+          "description": "Emit all skipped tests, regardless of why they were skipped, except\ntests skipped because they are not benchmarks.\n\nNote: because filtered-out tests (for example, tests in a different\npartition) are reported as skipped, using `all` with partitioned runs\ncauses each partition's report to contain the tests skipped in that\npartition. Merging those reports will produce duplicate skipped entries.",
+          "type": "string",
+          "const": "all"
         }
       ]
     },

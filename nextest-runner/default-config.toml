@@ -123,6 +123,19 @@ store-success-output = false
 # stored in the <description> element.
 store-failure-output = true
 
+# Which skipped tests to emit as <testcase> elements with a <skipped> child in
+# the JUnit XML report:
+#
+# * "none": do not emit any skipped tests (the default, keeps machine-readable
+#   output stable).
+# * "ignored": only emit tests whose ignore status did not match the run's
+#   run-ignored selection (in a default run, the tests marked #[ignore]).
+# * "all": emit all skipped tests except tests skipped because they are not
+#   benchmarks. Note that with partitioned runs, "all" causes each partition's
+#   report to include the tests skipped in that partition, so merging reports
+#   produces duplicate skipped entries.
+report-skipped = "none"
+
 # How flaky-fail tests are reported in the JUnit XML report. "failure" reports
 # them as failures with <failure> and <flakyFailure> elements; "success"
 # reports them as successes, identical to flaky-pass tests.

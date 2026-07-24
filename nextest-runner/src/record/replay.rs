@@ -257,6 +257,7 @@ impl<'a> ReplayContext<'a> {
                 stress_index,
                 test_instance,
                 reason,
+                junit_report_skipped,
             } => {
                 let instance_id = self.lookup_test_instance_id(test_instance).ok_or_else(|| {
                     ReplayConversionError::TestNotFound {
@@ -268,6 +269,7 @@ impl<'a> ReplayContext<'a> {
                     stress_index: stress_index.as_ref().map(convert_stress_index),
                     test_instance: instance_id,
                     reason: *reason,
+                    junit_report_skipped: *junit_report_skipped,
                 })
             }
 

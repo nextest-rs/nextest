@@ -17,7 +17,10 @@
 #[cfg(test)]
 use crate::output_spec::ArbitraryOutputSpec;
 use crate::{
-    config::{elements::JunitFlakyFailStatus, scripts::ScriptId},
+    config::{
+        elements::{JunitFlakyFailStatus, ReportSkipPolicy},
+        scripts::ScriptId,
+    },
     list::OwnedTestInstanceId,
     output_spec::{LiveSpec, OutputSpec, SerializableOutputSpec},
     reporter::{
@@ -270,6 +273,10 @@ pub enum CoreEventKind {
         test_instance: OwnedTestInstanceId,
         /// The reason the test was skipped.
         reason: MismatchReason,
+        /// The per-test resolved policy controlling which skipped tests are
+        /// emitted in machine-readable reports such as JUnit.
+        #[serde(default)]
+        junit_report_skipped: ReportSkipPolicy,
     },
 
     /// A run began being cancelled.
@@ -532,10 +539,12 @@ impl TestEventKindSummary<LiveSpec> {
                 stress_index,
                 test_instance,
                 reason,
+                junit_report_skipped,
             } => Self::Core(CoreEventKind::TestSkipped {
                 stress_index: stress_index.map(StressIndexSummary::from),
                 test_instance: test_instance.to_owned(),
                 reason,
+                junit_report_skipped,
             }),
             TestEventKind::RunBeginCancel {
                 setup_scripts_running,
@@ -890,6 +899,7 @@ pub enum ZipStoreOutputDescription {
 mod tests {
     use super::*;
     use crate::output_spec::RecordingSpec;
+    use nextest_metadata::{RustBinaryId, TestCaseName};
     use test_strategy::proptest;
 
     #[proptest]
@@ -898,6 +908,45 @@ mod tests {
         let roundtrip: TestEventSummary<RecordingSpec> =
             serde_json::from_str(&json).expect("deserialization succeeds");
         proptest::prop_assert_eq!(value, roundtrip);
+    }
+
+    #[test]
+    fn test_skipped_report_skipped_defaults_when_absent() {
+        let event = CoreEventKind::TestSkipped {
+            stress_index: None,
+            test_instance: OwnedTestInstanceId {
+                binary_id: RustBinaryId::new("my-crate::my-bin"),
+                test_name: TestCaseName::new("tests::my_test"),
+            },
+            reason: MismatchReason::Ignored,
+            junit_report_skipped: ReportSkipPolicy::All,
+        };
+
+        let mut value = serde_json::to_value(&event).expect("serialization succeeds");
+        let removed = value
+            .as_object_mut()
+            .expect("serialized event is a JSON object")
+            .remove("junit-report-skipped");
+        assert!(
+            removed.is_some(),
+            "junit-report-skipped field is present before removal"
+        );
+
+        let deserialized: CoreEventKind =
+            serde_json::from_value(value).expect("deserialization without the field succeeds");
+        match deserialized {
+            CoreEventKind::TestSkipped {
+                junit_report_skipped,
+                ..
+            } => {
+                assert_eq!(
+                    junit_report_skipped,
+                    ReportSkipPolicy::None,
+                    "a missing junit-report-skipped field defaults to None"
+                );
+            }
+            other => panic!("expected TestSkipped, got {other:?}"),
+        }
     }
 
     #[test]

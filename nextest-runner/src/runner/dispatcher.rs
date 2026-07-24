@@ -841,6 +841,7 @@ where
                 stress_index,
                 test_instance,
                 reason,
+                junit_report_skipped,
             }) => {
                 if reason.is_substantive_skip() {
                     self.run_stats.skipped += 1;
@@ -849,6 +850,7 @@ where
                     stress_index,
                     test_instance: test_instance.id(),
                     reason,
+                    junit_report_skipped,
                 })
             }
             InternalEvent::Signal(event) => self.handle_signal_event(event),

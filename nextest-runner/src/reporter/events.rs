@@ -12,7 +12,8 @@ use crate::output_spec::ArbitraryOutputSpec;
 use crate::{
     config::{
         elements::{
-            FlakyResult, JunitFlakyFailStatus, LeakTimeoutResult, SlowTimeoutResult, TestGroup,
+            FlakyResult, JunitFlakyFailStatus, LeakTimeoutResult, ReportSkipPolicy,
+            SlowTimeoutResult, TestGroup,
         },
         scripts::ScriptId,
     },
@@ -320,6 +321,10 @@ pub enum TestEventKind<'a> {
 
         /// The reason this test was skipped.
         reason: MismatchReason,
+
+        /// The per-test resolved policy controlling which skipped tests are
+        /// emitted in machine-readable reports such as JUnit.
+        junit_report_skipped: ReportSkipPolicy,
     },
 
     /// An information request was received.

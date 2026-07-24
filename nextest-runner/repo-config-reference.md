@@ -353,6 +353,16 @@ When `max-fail` is exceeded:
 - **Documentation**: [_JUnit support_](../machine-readable/junit.md)
 - **Default**: `true`
 
+#### `profile.<name>.junit.report-skipped`
+
+<!-- md:version 0.9.141 -->
+
+- **Type**: String
+- **Description**: Which skipped tests to emit as `<testcase>` elements with a `<skipped>` child in the JUnit XML report.
+- **Documentation**: [_JUnit support_](../machine-readable/junit.md)
+- **Valid values**: `"none"`, `"ignored"`, or `"all"`
+- **Default**: `"none"`
+
 #### `profile.<name>.junit.flaky-fail-status`
 
 <!-- md:version 0.9.131 -->
@@ -456,6 +466,7 @@ All profile-level settings can be overridden:
 - `failure-output`
 - `junit.store-success-output`
 - `junit.store-failure-output`
+- `junit.report-skipped`
 
 ## Test group configuration
 

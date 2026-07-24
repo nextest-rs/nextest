@@ -901,6 +901,101 @@ fn test_run() {
 }
 
 #[test]
+fn test_run_junit_report_skipped_all() {
+    let env_info = set_env_vars_for_test();
+
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--profile=with-junit-skipped",
+            "--workspace",
+            "--all-targets",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
+    );
+
+    check_run_output_with_junit_skipped(
+        &output.stderr,
+        &p.junit_path("with-junit-skipped"),
+        RunProperties::WITH_DEFAULT_FILTER,
+        JunitSkippedExpectation::AllCounted,
+    );
+}
+
+#[test]
+fn test_run_junit_report_skipped_ignored() {
+    let env_info = set_env_vars_for_test();
+
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--profile=with-junit-skipped-ignored",
+            "--workspace",
+            "--all-targets",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
+    );
+
+    check_run_output_with_junit_skipped(
+        &output.stderr,
+        &p.junit_path("with-junit-skipped-ignored"),
+        RunProperties::WITH_DEFAULT_FILTER,
+        JunitSkippedExpectation::IgnoredOnly,
+    );
+}
+
+#[test]
+fn test_run_junit_report_skipped_override() {
+    let env_info = set_env_vars_for_test();
+
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "-P",
+            "with-junit-skipped-override",
+            "-E",
+            "test(=test_success) | test(=test_ignored)",
+        ])
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(0),
+        "run with only a passing and an ignored test should succeed\n{output}"
+    );
+
+    check_junit_skipped_by_name(
+        &p.junit_path("with-junit-skipped-override"),
+        &["test_success"],
+        &["test_ignored"],
+    );
+}
+
+#[test]
 fn test_run_after_build() {
     let env_info = set_env_vars_for_test();
 

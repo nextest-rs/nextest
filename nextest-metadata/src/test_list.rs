@@ -1000,6 +1000,19 @@ impl MismatchReason {
         Self::RerunAlreadyPassed,
         Self::DefaultFilter,
     ];
+    /// Returns true if the test was skipped because its ignore status didn't
+    /// match the user-provided `--run-ignored` setting.
+    pub fn is_ignore_mismatch(self) -> bool {
+        match self {
+            MismatchReason::Ignored => true,
+            MismatchReason::NotBenchmark
+            | MismatchReason::String
+            | MismatchReason::Expression
+            | MismatchReason::Partition
+            | MismatchReason::RerunAlreadyPassed
+            | MismatchReason::DefaultFilter => false,
+        }
+    }
 
     /// Returns true if the skip reflects a real filtering decision, rather than
     /// a run-mode artifact such as a non-benchmark test excluded from a
@@ -1183,9 +1196,18 @@ mod tests {
         // If you add a variant, update ALL_VARIANTS and this count.
         assert_eq!(MismatchReason::ALL_VARIANTS.len(), 7);
     }
-
     #[test]
-    fn is_substantive_skip_only_excludes_not_benchmark() {
+    fn mismatch_reason_predicates() {
+        assert!(MismatchReason::Ignored.is_ignore_mismatch());
+        for &reason in MismatchReason::ALL_VARIANTS {
+            if reason != MismatchReason::Ignored {
+                assert!(
+                    !reason.is_ignore_mismatch(),
+                    "{reason:?} is not an ignore mismatch"
+                );
+            }
+        }
+
         assert!(!MismatchReason::NotBenchmark.is_substantive_skip());
         for &reason in MismatchReason::ALL_VARIANTS {
             if reason != MismatchReason::NotBenchmark {

@@ -403,6 +403,17 @@ profile.<name>.junit.store-failure-output
 - Documentation: JUnit support <https://nexte.st/docs/machine-readable/junit/>
 - Default: true
 
+profile.<name>.junit.report-skipped
+
+(since 0.9.141)
+
+- Type: String
+- Description: Which skipped tests to emit as <testcase> elements with a
+  <skipped> child in the JUnit XML report.
+- Documentation: JUnit support <https://nexte.st/docs/machine-readable/junit/>
+- Valid values: "none", "ignored", or "all"
+- Default: "none"
+
 profile.<name>.junit.flaky-fail-status
 
 (since 0.9.131)
@@ -511,6 +522,7 @@ All profile-level settings can be overridden:
 - failure-output
 - junit.store-success-output
 - junit.store-failure-output
+- junit.report-skipped
 
 Test group configuration
 
