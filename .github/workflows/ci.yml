@@ -73,7 +73,7 @@ jobs:
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - name: Build rustdoc
         run: cargo doc --all-features --workspace
-  
+
   nextest-metadata-msrv:
     name: Build nextest-metadata on MSRV
     runs-on: ${{ matrix.os }}
@@ -92,10 +92,10 @@ jobs:
         run: cd fixtures/nextest-metadata-msrv && cargo build
       # It would be nice to run tests, but it seems hard to do that without some
       # horrible patching of the various Cargo.toml files. It's also not really
-      # necessary, since we already run tests in the "Build and test" job below.
+      # necessary, since we already run tests in the "Test" jobs below.
 
-  build:
-    name: Build and test
+  build-checks:
+    name: Build checks
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -123,27 +123,97 @@ jobs:
           toolchain: ${{ matrix.rust-version }}
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          # Matrix instances (other than OS) need to be added to this explicitly
-          key: ${{ matrix.rust-version }}
-      - name: Install latest nextest release
-        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
-        with:
-          tool: nextest
+          # This job builds the widest set of feature combinations, so it is the
+          # one that populates the cache. The `test` jobs below restore the same
+          # entry via this key and never write to it.
+          shared-key: build-${{ matrix.rust-version }}
       - name: Build nextest-metadata
         run: cargo build --package nextest-metadata
       - name: Build cargo-nextest without self-update
         run: cargo build --package cargo-nextest --no-default-features --features default-no-update
-      - name: Build cargo-nextest
-        run: cargo build --package cargo-nextest
       - name: Build all targets
         run: cargo build --all-targets
       - name: Build all targets with all features
         run: cargo build --all-targets --all-features
+      # Build the default feature set last, so that it is the binary left in
+      # target/debug for the doctests and the upload below. --all-features turns
+      # on experimental-tokio-console, and the RUSTFLAGS env var set for this
+      # workflow overrides build.rustflags from .cargo/config.toml rather than
+      # merging with it, so that build loses `--cfg tokio_unstable` and the
+      # resulting binary panics on startup.
+      - name: Build cargo-nextest
+        run: cargo build --package cargo-nextest
+      # The nextest-metadata doctest shells out to `cargo nextest`, so
+      # cargo-nextest has to be on PATH before the doctests run. Use the binary
+      # built above so the doctest exercises the code under test.
+      - name: Put cargo-nextest on PATH
+        shell: bash
+        run: echo "$GITHUB_WORKSPACE/target/debug" >> "$GITHUB_PATH"
       - name: Doctests
         run: cargo test --doc
 
+      - name: Upload nextest binary
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cargo-nextest-${{ matrix.os }}-${{ matrix.rust-version }}
+          path: |
+            target/debug/cargo-nextest
+            target/debug/cargo-nextest.exe
+          if-no-files-found: error
+
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-latest
+          - windows-latest
+        # 1.91 is the MSRV
+        rust-version: ["1.91", stable]
+        # Each variant runs the whole suite through a couple of related nextest
+        # entry points: `local` covers the locally built binary in both spawn
+        # modes, and `compat` covers the latest nextest release and without
+        # rustup wrappers. (This could be four variants, but we don't want to
+        # spawn too many jobs.)
+        variant: [local, compat]
+      fail-fast: false
+    steps:
+      - name: Set temp directory on Windows
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          mkdir -p "D:\a\_temp"
+          echo "TEMP=D:\a\_temp" >> $GITHUB_ENV
+          echo "TMP=D:\a\_temp" >> $GITHUB_ENV
+        shell: bash
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88 # master
+        with:
+          toolchain: ${{ matrix.rust-version }}
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: build-${{ matrix.rust-version }}
+          # `build-checks` writes this entry. Saving here as well would race
+          # between the variants and add a multi-minute tail to every job.
+          save-if: "false"
+
+      - name: Install latest nextest release
+        if: ${{ matrix.variant == 'compat' }}
+        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
+        with:
+          tool: nextest
+      # Both variants need the locally built binary: `local` runs it directly,
+      # and `compat` runs it through scripts/nextest-without-rustup.sh.
+      - name: Build cargo-nextest
+        run: cargo build --package cargo-nextest
+
       # Set up recording for the local nextest run.
       - name: Create recording user config
+        if: ${{ matrix.variant == 'local' }}
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/nextest-config"
@@ -152,12 +222,13 @@ jobs:
           cat "$RUNNER_TEMP/nextest-config/config.toml"
 
       - name: Test with locally built nextest
+        if: ${{ matrix.variant == 'local' }}
         shell: bash
         run: cargo local-nt run --profile ci --user-config-file "$RUNNER_TEMP/nextest-config/config.toml"
 
       - name: Create portable archive from recorded run
         # Run this step even if the test step fails.
-        if: "!cancelled()"
+        if: ${{ matrix.variant == 'local' && !cancelled() }}
         shell: bash
         run: |
           cargo local-nt store export latest \
@@ -166,7 +237,7 @@ jobs:
 
       - name: Upload recorded run archive
         # Run this step even if the test step fails.
-        if: "!cancelled()"
+        if: ${{ matrix.variant == 'local' && !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           path: ${{ runner.temp }}/nextest-run-${{ matrix.os }}-${{ matrix.rust-version }}.zip
@@ -174,7 +245,7 @@ jobs:
 
       - name: Upload results
         # Run this step even if the test step fails
-        if: "!cancelled()"
+        if: ${{ matrix.variant == 'local' && !cancelled() }}
         uses: trunk-io/analytics-uploader@385f1ccdf345b4532dc4b6c665dd432b702b8e28 # v2.1.2
         with:
           # Path to your test results.
@@ -189,7 +260,7 @@ jobs:
         # Run this step even if the test step fails. Copy to a uniquely-named
         # file so that archive: false (which uses the filename as the artifact
         # name) produces distinct artifact names across matrix jobs.
-        if: "!cancelled()"
+        if: ${{ matrix.variant == 'local' && !cancelled() }}
         shell: bash
         run: cp target/nextest/ci/junit.xml "target/nextest/ci/junit-${{ matrix.os }}-${{ matrix.rust-version }}.xml"
 
@@ -197,36 +268,31 @@ jobs:
         # Run this step even if the test step fails. Upload it right now because
         # we're most interested in the JUnit report generated by the local
         # version of nextest, not the latest release.
-        if: "!cancelled()"
+        if: ${{ matrix.variant == 'local' && !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           path: target/nextest/ci/junit-${{ matrix.os }}-${{ matrix.rust-version }}.xml
           archive: false
           if-no-files-found: error
 
-      - name: Test with latest nextest release
-        run: cargo nextest run --profile ci
+      # Double-spawn only applies to Unix.
       - name: Test without double-spawning
-        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-latest' }}
+        if: ${{ matrix.variant == 'local' && runner.os != 'Windows' }}
         env:
           NEXTEST_DOUBLE_SPAWN: 0
         run: cargo local-nt run --profile ci
 
+      - name: Test with latest nextest release
+        if: ${{ matrix.variant == 'compat' }}
+        run: cargo nextest run --profile ci
+
       - name: Test without rustup wrappers
+        if: ${{ matrix.variant == 'compat' }}
         env:
           CARGO_NEXTEST: target/debug/cargo-nextest
           RUSTUP_AVAILABLE: 1
         shell: bash
         run: ./scripts/nextest-without-rustup.sh run --profile ci
-
-      - name: Upload nextest binary
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: cargo-nextest-${{ matrix.os }}-${{ matrix.rust-version }}
-          path: |
-            target/debug/cargo-nextest
-            target/debug/cargo-nextest.exe
-          if-no-files-found: error
 
   test-archive-target-runner:
     name: Test archives with a target runner
@@ -300,7 +366,9 @@ jobs:
     runs-on: ${{ matrix.data.os }}
     needs:
       - test-archive-target-runner
-      - build
+      # Only the uploaded cargo-nextest binary is needed here, so this is gated
+      # on `build-checks` rather than on the full test matrix.
+      - build-checks
     steps:
       - name: Set temp directory on Windows
         if: ${{ runner.os == 'Windows' }}
