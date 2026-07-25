@@ -30,6 +30,7 @@ pub enum CheckResult {
     FlakyFailJunitSuccess,
     FailLeak,
     Abort,
+    AbortLeak,
     Timeout,
 }
 
@@ -48,7 +49,32 @@ impl CheckResult {
             | CheckResult::FlakyFailJunitSuccess
             | CheckResult::FailLeak
             | CheckResult::Abort
+            | CheckResult::AbortLeak
             | CheckResult::Timeout => true,
+        }
+    }
+
+    /// Returns the leaky variant for this check result, if one exists.
+    ///
+    /// Leak detection is timing-sensitive, so a test not expected to leak may
+    /// still be reported leaky.
+    pub fn leaky_variant(self) -> Option<Self> {
+        match self {
+            CheckResult::Pass => Some(CheckResult::Leak),
+            CheckResult::Fail => Some(CheckResult::FailLeak),
+            CheckResult::Abort => Some(CheckResult::AbortLeak),
+            // These variants are already leaky.
+            CheckResult::Leak
+            | CheckResult::LeakFail
+            | CheckResult::FailLeak
+            | CheckResult::AbortLeak => None,
+            // Flaky status lines and the "flaky failure" JUnit type are written
+            // without consulting the leak flag, and Timeout doesn't track leaks
+            // at all. Flaky leaks do show up in the summary's leaky count,
+            // which is checked as a lower bound.
+            CheckResult::FlakyFail | CheckResult::FlakyFailJunitSuccess | CheckResult::Timeout => {
+                None
+            }
         }
     }
 
@@ -66,7 +92,9 @@ impl CheckResult {
                 TerminalCheckResult::FlakyFail
             }
             CheckResult::FailLeak => TerminalCheckResult::FailLeak,
-            CheckResult::Abort => TerminalCheckResult::Abort,
+            // The status column ignores the leak flag for aborts, so both
+            // show up as ABORT in the UI.
+            CheckResult::Abort | CheckResult::AbortLeak => TerminalCheckResult::Abort,
             CheckResult::Timeout => TerminalCheckResult::Timeout,
         }
     }

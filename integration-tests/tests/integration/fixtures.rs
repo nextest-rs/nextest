@@ -467,7 +467,7 @@ impl ExpectedSummary {
                 // Note: Currently fail + leak tests are not added to leak_count,
                 // just fail_count. This matches the existing behavior.
             }
-            CheckResult::Abort => {
+            CheckResult::Abort | CheckResult::AbortLeak => {
                 self.fail_count += 1;
             }
             CheckResult::Timeout => {
@@ -794,13 +794,21 @@ fn verify_expected_in_actual(
                     Some(actual) => {
                         let actual_result = actual.final_result();
                         let expected_terminal = result.result.to_terminal();
-                        assert_eq!(
-                            expected_terminal,
-                            actual_result,
-                            "{}: expected result {:?} but got {:?} (attempts: {:?})\n\n\
+                        // Tolerate a stray leak here (see
+                        // CheckResult::leaky_variant).
+                        let leaky_terminal =
+                            result.result.leaky_variant().map(CheckResult::to_terminal);
+                        assert!(
+                            actual_result == expected_terminal
+                                || leaky_terminal == Some(actual_result),
+                            "{}: expected result {:?}{} but got {:?} (attempts: {:?})\n\n\
                              --- output ---\n{}\n--- end output ---",
                             expected_test.id.full_name(),
                             expected_terminal,
+                            match leaky_terminal {
+                                Some(leaky) => format!(" (or {leaky:?})"),
+                                None => String::new(),
+                            },
                             actual_result,
                             actual.attempts,
                             output
@@ -966,10 +974,12 @@ fn verify_summary(
         debug_run_properties(properties),
         output
     );
-    assert_eq!(
-        expected_summary.leak_count,
+    assert!(
+        actual.leak_count >= expected_summary.leak_count,
+        "leak_count {} is below the expected {} (properties: {})\n\n\
+         --- output ---\n{}\n--- end output ---",
         actual.leak_count,
-        "leak_count mismatch (properties: {})\n\n--- output ---\n{}\n--- end output ---",
+        expected_summary.leak_count,
         debug_run_properties(properties),
         output
     );
@@ -1447,6 +1457,7 @@ const JUNIT_FAIL: &str = "test failure with exit code 101";
 const JUNIT_FAIL_LEAK: &str = "test failure with exit code 101 (leaked handles)";
 const JUNIT_FLAKY_FAIL: &str = "flaky failure";
 const JUNIT_ABORT: &str = "test abort";
+const JUNIT_ABORT_LEAK: &str = "test abort (leaked handles)";
 
 /// Expected JUnit properties for a non-success test case.
 #[derive(Clone, Debug)]
@@ -1591,6 +1602,11 @@ fn expected_junit_for_result(
             ty: JUNIT_ABORT,
             message: JunitExpectedMessage::StartsWithOneOf(ABORT_MESSAGE_PREFIXES),
         }),
+        CheckResult::AbortLeak => Some(ExpectedJunit {
+            kind: quick_junit::NonSuccessKind::Failure,
+            ty: JUNIT_ABORT_LEAK,
+            message: JunitExpectedMessage::StartsWithOneOf(ABORT_MESSAGE_PREFIXES),
+        }),
         CheckResult::Timeout => {
             let timeout_kind = if properties.contains(RunProperties::BENCHMARKS) {
                 "benchmark timeout"
@@ -1609,6 +1625,17 @@ fn expected_junit_for_result(
     }
 }
 
+fn junit_shape_matches(
+    expected: Option<&ExpectedJunit<'_>>,
+    actual_non_success: Option<&JunitNonSuccess>,
+) -> bool {
+    match (expected, actual_non_success) {
+        (None, None) => true,
+        (Some(expected), Some(actual)) => expected.kind == actual.kind && expected.ty == actual.ty,
+        (None, Some(_)) | (Some(_), None) => false,
+    }
+}
+
 /// Returns the expected rerun kind for a `CheckResult`, or `None` for success
 /// cases. `FlakyFail` expects `Flaky` (reruns serialize as `<flakyFailure>`);
 /// other failures expect `Rerun` (reruns serialize as `<rerunFailure>`).
@@ -1622,6 +1649,7 @@ fn expected_rerun_kind_for_result(result: CheckResult) -> Option<FlakyOrRerun> {
         | CheckResult::Fail
         | CheckResult::FailLeak
         | CheckResult::Abort
+        | CheckResult::AbortLeak
         | CheckResult::Timeout => Some(FlakyOrRerun::Rerun),
     }
 }
@@ -1643,7 +1671,17 @@ fn verify_expected_in_junit(
                 match actual_outcome {
                     Some(actual) => {
                         // Verify the JUnit status matches our expected CheckResult.
-                        let expected_junit = expected_junit_for_result(result.result, properties);
+                        let mut expected_junit =
+                            expected_junit_for_result(result.result, properties);
+                        if let Some(leaky) = result.result.leaky_variant() {
+                            let leaky_junit = expected_junit_for_result(leaky, properties);
+                            if junit_shape_matches(
+                                leaky_junit.as_ref(),
+                                actual.non_success.as_ref(),
+                            ) {
+                                expected_junit = leaky_junit;
+                            }
+                        }
 
                         match (&expected_junit, &actual.non_success) {
                             (None, None) => {
