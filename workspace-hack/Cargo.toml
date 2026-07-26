@@ -39,8 +39,8 @@ petgraph = { version = "0.8.3" }
 phf_shared = { version = "0.11.3" }
 proptest = { version = "1.11.0" }
 regex-automata = { version = "0.4.16", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
-serde = { version = "1.0.228", features = ["alloc", "derive", "rc"] }
-serde_core = { version = "1.0.228", features = ["alloc", "rc"] }
+serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
+serde_core = { version = "1.0.229", features = ["alloc", "rc"] }
 serde_json = { version = "1.0.150", features = ["alloc", "unbounded_depth"] }
 smallvec = { version = "1.15.2", default-features = false, features = ["const_generics"] }
 target-spec = { version = "3.6.0", default-features = false, features = ["custom", "summaries"] }
@@ -58,7 +58,7 @@ once_cell = { version = "1.21.3" }
 phf_shared = { version = "0.11.3" }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
-serde_core = { version = "1.0.228", features = ["alloc", "rc"] }
+serde_core = { version = "1.0.229", features = ["alloc", "rc"] }
 syn = { version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
 ucd-trie = { version = "0.1.7" }
 
@@ -88,7 +88,7 @@ bitflags = { version = "2.13.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.186", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
-serde = { version = "1.0.228", features = ["alloc", "derive", "rc"] }
+serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
 serde_json = { version = "1.0.150", features = ["alloc", "unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
@@ -138,7 +138,7 @@ bitflags = { version = "2.13.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.186", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
-serde = { version = "1.0.228", features = ["alloc", "derive", "rc"] }
+serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
 serde_json = { version = "1.0.150", features = ["alloc", "unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
@@ -188,7 +188,7 @@ bitflags = { version = "2.13.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.186", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
-serde = { version = "1.0.228", features = ["alloc", "derive", "rc"] }
+serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
 serde_json = { version = "1.0.150", features = ["alloc", "unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
@@ -219,7 +219,7 @@ bitflags = { version = "2.13.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.186", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
-serde = { version = "1.0.228", features = ["alloc", "derive", "rc"] }
+serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
 serde_json = { version = "1.0.150", features = ["alloc", "unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
@@ -250,7 +250,7 @@ bitflags = { version = "2.13.1", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
 libc = { version = "0.2.186", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
-serde = { version = "1.0.228", features = ["alloc", "derive", "rc"] }
+serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
 serde_json = { version = "1.0.150", features = ["alloc", "unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
@@ -279,7 +279,7 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 bitflags = { version = "2.13.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.186", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
-serde = { version = "1.0.228", features = ["alloc", "derive", "rc"] }
+serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
 serde_json = { version = "1.0.150", features = ["alloc", "unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
