@@ -87,9 +87,9 @@ dependencies = [
 
 [[package]]
 name = "anstyle-progress"
-version = "0.1.0"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee65f3323c89eac2de51015f125682e9a88c3bf7a10d0c39b3768ff6af654ff7"
+checksum = "cea2f2f260ad602a2099d3dd068afcb7ed43001f685827b1e16e3d344d246eb2"
 
 [[package]]
 name = "anstyle-query"
