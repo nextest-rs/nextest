@@ -125,7 +125,7 @@ self_update = { version = "0.44.0", default-features = false, features = [
     "ureq",
 ] }
 semver = "1.0.28"
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
 serde_ignored = "0.1.14"
 serde_json = "1.0.150"
 serde_path_to_error = "0.1.20"
