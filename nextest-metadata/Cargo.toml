@@ -11,7 +11,7 @@ documentation = "https://docs.rs/nextest-metadata"
 keywords = ["nextest", "test-runner"]
 categories = ["development-tools::testing"]
 # Older version for nextest-metadata.
-rust-version = "1.78"
+rust-version = "1.86"
 exclude.workspace = true
 
 [dependencies]

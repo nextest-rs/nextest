@@ -10,13 +10,16 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## Unreleased
+## [0.9.141] - 2026-08-04
 
 ### Added
 
 - A new `junit.report-skipped` [configuration setting](https://nexte.st/docs/machine-readable/junit/#configuration) controls which skipped tests are emitted in the JUnit XML report as `<testcase>` elements with a `<skipped>` child. ([#885])
 
-[#885]: https://github.com/nextest-rs/nextest/issues/885
+  Thanks to [liangfu](https://github.com/liangfu) for your first contribution!
+
+- While listing tests, nextest now shows a progress bar if listing takes longer than 2 seconds. Listing is usually fast, but can be slow in some environments, such as with antivirus software that scans each test binary before it runs. ([#3471])
+- The binaries metadata (used by archives and `--binaries-metadata`) now records whether Cargo built each non-test binary for the host or the target platform. Future versions of nextest will use this to configure environment variables correctly in cross-compilation scenarios. ([#3520])
 
 ### Changed
 
@@ -24,9 +27,17 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
 ### Fixed
 
-- Nextest now computes the dynamic library search path correctly under [build directory layout v2](https://blog.rust-lang.org/2026/03/13/call-for-testing-build-dir-layout-v2/), which became the default on nightly Rust in the 2026-07-30 toolchain. Previously, tests that linked against a `dylib` dependency failed to start because the dynamic library could not be found (on Linux, `error while loading shared libraries`).
-- When Cargo's [`build.build-dir`](https://doc.rust-lang.org/cargo/reference/config.html#buildbuild-dir) is configured, nextest now adds the Cargo artifact directory (where final artifacts like binaries and dynamic libraries are uplifted to) to the dynamic library search path, matching Cargo's own behavior.
+- Nextest now computes the dynamic library search path correctly under [build directory layout v2](https://blog.rust-lang.org/2026/03/13/call-for-testing-build-dir-layout-v2/), which became the default on nightly Rust on 2026-07-30. Previously, tests that linked against a `dylib` dependency failed to start because the dynamic library could not be found.
+- When Cargo's [`build.build-dir`](https://doc.rust-lang.org/cargo/reference/config.html#buildbuild-dir) is configured, nextest now adds the Cargo artifact directory (where final artifacts like binaries and dynamic libraries are uplifted to) instead of the build directory (for intermediate artifacts) to the dynamic library search path. This matches Cargo's behavior.
 - Nextest now detects the base output directory for test binaries built from `[[example]]` targets, which Cargo places in `examples` rather than `deps`. Previously, a run restricted to examples didn't add anything to the dynamic library search path, so an example test linking against a `dylib` failed to start.
+- While [creating an archive with a filterset](https://nexte.st/docs/ci-features/archiving#filtering-test-binaries-from-an-archive), nextest now always includes dynamic libraries in the archive, even those from packages whose test binaries are all filtered out. Dynamic libraries are on the library search path and may be loaded by tests in other packages. Binaries exposed via `CARGO_BIN_EXE_<name>` are still filtered out if no test binaries from that package are selected. ([#3516])
+- The "Archiving" message now counts non-test binaries correctly. Previously, nextest counted the number of packages containing non-test binaries rather than the number of binaries. ([#3515])
+
+[#885]: https://github.com/nextest-rs/nextest/issues/885
+[#3471]: https://github.com/nextest-rs/nextest/pull/3471
+[#3515]: https://github.com/nextest-rs/nextest/pull/3515
+[#3516]: https://github.com/nextest-rs/nextest/pull/3516
+[#3520]: https://github.com/nextest-rs/nextest/pull/3520
 
 ## [0.9.140] - 2026-07-05
 
@@ -2250,6 +2261,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.141]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.141
 [0.9.140]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.140
 [0.9.139]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.139
 [0.9.138]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.138

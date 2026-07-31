@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## [0.15.0] - 2026-08-04
 
 ### Added
 
 - A new `build_platform` field on `RustNonTestBinarySummary` records whether Cargo built the binary for the host or for the target. Future versions of nextest will use this to correctly configure environment variables depending on the build platform.
 - `BuildPlatform` now implements `Hash`, `PartialOrd`, and `Ord`. The order is `Target` before `Host`, though this isn't semantically meaningful.
+- `MismatchReason::is_substantive_skip` returns true if a skip reflects a real filtering decision, rather than a run-mode artifact such as a non-benchmark test excluded from a benchmark run.
 
 ### Changed
 
@@ -323,6 +324,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.15.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.15.0
 [0.14.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.14.1
 [0.14.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.14.0
 [0.13.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.13.3
