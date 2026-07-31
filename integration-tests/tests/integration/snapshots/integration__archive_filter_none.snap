@@ -2,7 +2,7 @@
 source: integration-tests/tests/integration/main.rs
 expression: output.stderr_as_str()
 ---
-   Archiving 0 binaries (16 test binaries and 4 non-test binaries filtered out), 2 linked paths, and 1 standard library to <archive-file>
+   Archiving 1 binary (including 1 non-test binary; 16 test binaries and 3 non-test binaries filtered out), 2 linked paths, and 1 standard library to <archive-file>
      Warning linked path `<target-dir>/debug/build/<cdylib-link-hash>/does-not-exist` not found, requested by: cdylib-link v0.1.0
              (this is a bug in this crate that should be fixed)
     Archived <file-count> files to <archive-file> in <duration>

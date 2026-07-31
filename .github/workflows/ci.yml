@@ -452,7 +452,7 @@ jobs:
       # Only --lib is built here because fixture-project's other test targets
       # contain deliberately-failing tests.
       #
-      # These three steps clear RUSTFLAGS because this workflow sets
+      # The steps that build fixture-project clear RUSTFLAGS because this workflow sets
       # `-D warnings`, and fixture-project's lib deliberately calls a deprecated
       # function to produce a compiler warning for the --cargo-message-format
       # tests. The integration test harness clears RUSTFLAGS for the same reason
@@ -497,18 +497,31 @@ jobs:
           ./scripts/nextest-without-rustup.sh run \
             --manifest-path fixtures/fixture-project/Cargo.toml \
             --package fixture-project --lib
+      # fixture-project is included here so that the archive has to carry the
+      # dylib-test dylib. Here, dylib-test is not among the selected packages,
+      # so it doesn't enter the set of packages that apply_archive_filters
+      # considers relevant -- but fixture-project's lib test still needs its
+      # dylib at exec time.
+      #
+      # --lib is required here because fixture-project's other test targets
+      # contain deliberately failing tests, and we want this step to succeed.
+      #
+      # RUSTFLAGS is cleared for the deprecation warning in fixture-project's
+      # lib, as in the steps above.
       - name: Archive fixture tests with build-dir
         env:
           CARGO_NEXTEST: target/debug/cargo-nextest
           RUSTUP_AVAILABLE: 1
+          RUSTFLAGS: ""
           CARGO_BUILD_BUILD_DIR: ${{ github.workspace }}/build-output
         run: |
           ./scripts/nextest-without-rustup.sh archive \
             -Z build-dir-new-layout \
             --manifest-path fixtures/fixture-project/Cargo.toml \
             --archive-file target/build-dir-archive.tar.zst \
+            --lib \
             --package cdylib-link --package cdylib-example \
-            --package with-build-script
+            --package with-build-script --package fixture-project
       # Run from the archive without build-dir env to verify archive
       # portability. (build_directory is normalized to target_directory in the
       # archive). Wipe both the target and build directories first to ensure

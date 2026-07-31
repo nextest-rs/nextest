@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use guppy::PackageId;
-use nextest_metadata::RustNonTestBinarySummary;
-use std::collections::{BTreeMap, BTreeSet};
+use nextest_metadata::{RustNonTestBinaryKind, RustNonTestBinarySummary};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 /// A collection of non-test binaries that are part of a build.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -58,18 +58,36 @@ impl RustNonTestBinaries {
         self.by_package_id.get(package_id).into_iter().flatten()
     }
 
-    pub(crate) fn partition_by_package_id(
+    /// Partitions the non-test binaries in this collection for use with an archive.
+    ///
+    /// This drops package-scoped binaries owned by packages with no archived test binary.
+    pub(crate) fn partition_for_archive(
         &self,
-        mut retain: impl FnMut(&PackageId) -> bool,
+        relevant_package_ids: &HashSet<&str>,
+    ) -> PartitionedNonTestBinaries {
+        self.partition(|package_id, binary| {
+            relevant_package_ids.contains(package_id.repr()) || !is_package_scoped(&binary.kind)
+        })
+    }
+
+    fn partition(
+        &self,
+        mut retain: impl FnMut(&PackageId, &RustNonTestBinarySummary) -> bool,
     ) -> PartitionedNonTestBinaries {
         let mut by_package_id = BTreeMap::new();
         let mut filtered_out_binary_count = 0;
 
         for (package_id, files) in &self.by_package_id {
-            if retain(package_id) {
-                by_package_id.insert(package_id.clone(), files.clone());
-            } else {
-                filtered_out_binary_count += binary_count(files);
+            let retained: BTreeSet<_> = files
+                .iter()
+                .filter(|file| retain(package_id, file))
+                .cloned()
+                .collect();
+
+            filtered_out_binary_count += binary_count(files) - binary_count(&retained);
+            // If nothing was retained, don't bother adding it to the result.
+            if !retained.is_empty() {
+                by_package_id.insert(package_id.clone(), retained);
             }
         }
 
@@ -93,10 +111,17 @@ fn binary_count(files: &BTreeSet<RustNonTestBinarySummary>) -> usize {
         .len()
 }
 
+/// Returns true if this non-test binary is package-scoped.
+///
+/// This returns true for bin-exes (via `CARGO_BIN_EXE_<name>`) and false for
+/// other kinds.
+fn is_package_scoped(kind: &RustNonTestBinaryKind) -> bool {
+    *kind == RustNonTestBinaryKind::BIN_EXE
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nextest_metadata::RustNonTestBinaryKind;
 
     #[test]
     fn binary_count_is_platform_stable() {
@@ -155,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn partition_by_package_id_counts_binaries() {
+    fn partition_counts_binaries() {
         let non_test_binaries = RustNonTestBinaries::from_summary(BTreeMap::from([
             (
                 "with-tests".to_owned(),
@@ -186,9 +211,8 @@ mod tests {
             ),
         ]));
 
-        let partitioned = non_test_binaries.partition_by_package_id(|package_id| {
-            matches!(package_id.repr(), "with-tests" | "mixed")
-        });
+        let partitioned = non_test_binaries
+            .partition(|package_id, _| matches!(package_id.repr(), "with-tests" | "mixed"));
 
         assert_eq!(
             partitioned.retained.to_summary(),
@@ -219,6 +243,91 @@ mod tests {
         );
     }
 
+    #[test]
+    fn partition_for_archive_only_scopes_bin_exes() {
+        let non_test_binaries = RustNonTestBinaries::from_summary(BTreeMap::from([
+            (
+                "with-tests".to_owned(),
+                BTreeSet::from([bin_exe("helper", "debug/helper")]),
+            ),
+            (
+                "three-bins".to_owned(),
+                BTreeSet::from([
+                    bin_exe("one", "debug/one"),
+                    bin_exe("two", "debug/two"),
+                    bin_exe("three", "debug/three"),
+                ]),
+            ),
+            (
+                "mixed".to_owned(),
+                BTreeSet::from([
+                    bin_exe("mixed-bin", "debug/mixed-bin"),
+                    dylib("mixed_dylib", "debug/libmixed_dylib.so"),
+                ]),
+            ),
+            (
+                "mixed-no-tests".to_owned(),
+                BTreeSet::from([
+                    bin_exe("untested-bin", "debug/untested-bin"),
+                    dylib("untested_dylib", "debug/libuntested_dylib.so"),
+                ]),
+            ),
+            (
+                "dylib-only".to_owned(),
+                BTreeSet::from([dylib("only_dylib", "debug/libonly_dylib.so")]),
+            ),
+            (
+                "unknown-only".to_owned(),
+                BTreeSet::from([future_kind(
+                    "from_a_newer_nextest",
+                    "debug/from_a_newer_nextest",
+                )]),
+            ),
+        ]));
+
+        let relevant_package_ids = HashSet::from(["with-tests", "mixed"]);
+        let partitioned = non_test_binaries.partition_for_archive(&relevant_package_ids);
+
+        assert_eq!(
+            partitioned.retained.to_summary(),
+            BTreeMap::from([
+                (
+                    "with-tests".to_owned(),
+                    BTreeSet::from([bin_exe("helper", "debug/helper")]),
+                ),
+                (
+                    "mixed".to_owned(),
+                    BTreeSet::from([
+                        bin_exe("mixed-bin", "debug/mixed-bin"),
+                        dylib("mixed_dylib", "debug/libmixed_dylib.so"),
+                    ]),
+                ),
+                (
+                    "mixed-no-tests".to_owned(),
+                    BTreeSet::from([dylib("untested_dylib", "debug/libuntested_dylib.so")]),
+                ),
+                (
+                    "dylib-only".to_owned(),
+                    BTreeSet::from([dylib("only_dylib", "debug/libonly_dylib.so")]),
+                ),
+                (
+                    "unknown-only".to_owned(),
+                    BTreeSet::from([future_kind(
+                        "from_a_newer_nextest",
+                        "debug/from_a_newer_nextest",
+                    )]),
+                ),
+            ]),
+            "only bin-exes are package-scoped: dylibs and unrecognized kinds are always retained, \
+             and packages left with no binaries are dropped"
+        );
+        assert_eq!(
+            partitioned.filtered_out_binary_count, 4,
+            "3 bin-exes are dropped from three-bins and 1 from mixed-no-tests; counting map \
+             entries that vanished, as the old code did, would report 1"
+        );
+    }
+
     fn bin_exe(name: &str, path: &str) -> RustNonTestBinarySummary {
         RustNonTestBinarySummary {
             name: name.to_owned(),
@@ -231,6 +340,14 @@ mod tests {
         RustNonTestBinarySummary {
             name: name.to_owned(),
             kind: RustNonTestBinaryKind::DYLIB,
+            path: path.into(),
+        }
+    }
+
+    fn future_kind(name: &str, path: &str) -> RustNonTestBinarySummary {
+        RustNonTestBinarySummary {
+            name: name.to_owned(),
+            kind: RustNonTestBinaryKind::new("some-future-kind"),
             path: path.into(),
         }
     }
