@@ -18,6 +18,16 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
 [#885]: https://github.com/nextest-rs/nextest/issues/885
 
+### Changed
+
+- Nextest now orders the dynamic library search path the way current versions of Cargo do, with the Cargo artifact directory ahead of the `deps` directory. Previously the two were reversed, so a test could potentially resolve a `dylib` to a different copy than `cargo test` would. (Cargo swapped the two in 1.93.)
+
+### Fixed
+
+- Nextest now computes the dynamic library search path correctly under [build directory layout v2](https://blog.rust-lang.org/2026/03/13/call-for-testing-build-dir-layout-v2/), which became the default on nightly Rust in the 2026-07-30 toolchain. Previously, tests that linked against a `dylib` dependency failed to start because the dynamic library could not be found (on Linux, `error while loading shared libraries`).
+- When Cargo's [`build.build-dir`](https://doc.rust-lang.org/cargo/reference/config.html#buildbuild-dir) is configured, nextest now adds the Cargo artifact directory (where final artifacts like binaries and dynamic libraries are uplifted to) to the dynamic library search path, matching Cargo's own behavior.
+- Nextest now detects the base output directory for test binaries built from `[[example]]` targets, which Cargo places in `examples` rather than `deps`. Previously, a run restricted to examples didn't add anything to the dynamic library search path, so an example test linking against a `dylib` failed to start.
+
 ## [0.9.140] - 2026-07-05
 
 ### Added

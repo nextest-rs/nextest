@@ -431,15 +431,22 @@ impl<'g> BinaryListBuildState<'g> {
         Ok(())
     }
 
-    /// Look for paths that contain "deps" in their second-to-last component,
-    /// and are descendants of the target directory.
-    /// The paths without "deps" are base output directories.
+    /// Records the base output directory an artifact was built into.
     ///
-    /// e.g. path/to/repo/target/debug/deps/test-binary => add "debug"
-    /// to base output dirs.
+    /// A base output directory is the `[<triple>/]<profile>` prefix of an
+    /// artifact's path, relative to the build directory. Only these shapes are
+    /// recognized:
     ///
-    /// Note that test binaries are always present in "deps", so we should always
-    /// have a match.
+    /// * the legacy layout: `debug/deps/test-binary`
+    /// * the legacy layout, for `[[example]]` targets: `debug/examples/test-binary`
+    /// * the build-dir layout v2: `debug/build/my-package/f3694e28990a9310/out/test-binary`
+    ///
+    /// In each case, the base output directory is `debug`. For each one, nextest
+    /// adds two directories to the dynamic library path:
+    ///
+    /// * the Cargo artifact directory, where Cargo uplifts final artifacts to
+    ///   (the base output directory under the *target* directory)
+    /// * the legacy `deps` directory (under the *build* directory)
     ///
     /// The `Option` in the return value is to let ? work.
     fn detect_base_output_dir(&mut self, artifact_path: &Utf8Path) -> Option<()> {
@@ -458,14 +465,12 @@ impl<'g> BinaryListBuildState<'g> {
                 return None;
             }
         };
-        let parent = rel_path.parent()?;
-        if parent.file_name() == Some("deps") {
-            let base = parent.parent()?;
-            if !self.rust_build_meta.base_output_directories.contains(base) {
-                self.rust_build_meta
-                    .base_output_directories
-                    .insert(convert_rel_path_to_forward_slash(base));
-            }
+
+        let base = base_output_dir(rel_path)?;
+        if !self.rust_build_meta.base_output_directories.contains(base) {
+            self.rust_build_meta
+                .base_output_directories
+                .insert(convert_rel_path_to_forward_slash(base));
         }
         Some(())
     }
@@ -583,11 +588,70 @@ impl<'g> BinaryListBuildState<'g> {
             info.retain(|package_id, _| relevant_package_ids.contains(package_id));
         }
 
+        // All test binaries live inside a base output dir under both Cargo
+        // layouts, so an empty set suggests that we didn't recognize the
+        // layout. It's worth warning about this.
+        if !self.rust_binaries.is_empty() && self.rust_build_meta.base_output_directories.is_empty()
+        {
+            warn!(
+                target: "nextest-runner::list",
+                "failed to detect any base output directories under the build directory `{}`; \
+                 tests that link against dynamic libraries may fail to start. \
+                 This usually means Cargo's build directory layout changed -- \
+                 please report it at https://github.com/nextest-rs/nextest/issues/new",
+                self.rust_build_meta.build_directory,
+            );
+        }
+
         BinaryList {
             rust_build_meta: self.rust_build_meta,
             rust_binaries: self.rust_binaries,
         }
     }
+}
+
+fn base_output_dir(rel_path: &Utf8Path) -> Option<&Utf8Path> {
+    let parent = rel_path.parent()?;
+    let base = match parent.file_name()? {
+        // The legacy layout.
+        //
+        // Test binaries built from `[[example]]` targets go to `examples`
+        // rather than `deps` -- see Cargo's `CompilationFiles::output_dir`.
+        // (Under the v2 layout they go to the `out` directory below, like every
+        // other compilation unit.)
+        "deps" | "examples" => parent.parent()?,
+        // The build-dir v2 layout.
+        "out" => parent
+            .ancestors()
+            // There is a subtle point here: we want to restrict this branch to
+            // the v2 layout.
+            //
+            // With the legacy layout, build script out dirs are of the form
+            // `<base>/build/<package>-<hash>/out`. `nth(3)` would return
+            // `<base>`, whose last component is the profile's directory name.
+            // That name can never be `build`, because:
+            //
+            // * Cargo does not allow profiles to have the name `build`
+            // * `profile.<name>.dir-name`, the only potential way to decouple a
+            //   profile's directory name from the profile name, is currently
+            //   disallowed as of 2026-07.
+            //
+            // So the filter below discards legacy build script out dirs without
+            // also discarding any real base output directory.
+            //
+            // With the v2 layout, out dirs are of the form
+            // `<base>/build/<package>/<hash>/out`. `nth(3)` returns `build`.
+            // This is also the shape of build script out dirs under v2, which
+            // is harmless: they resolve to the same `<base>`.
+            .nth(3)
+            .filter(|dir| dir.file_name() == Some("build"))?
+            .parent()?,
+        _ => return None,
+    };
+
+    // A base output dir is always `[<triple>/]<profile>`, so an empty one means
+    // the path didn't have the shape we expected.
+    (!base.as_str().is_empty()).then_some(base)
 }
 
 #[cfg(test)]
@@ -824,9 +888,13 @@ mod tests {
             target: None,
         };
         let package = package_metadata();
+        // The fixture sets build_directory separately from target_directory, so
+        // an artifact resolved against the wrong root fails to produce a base
+        // output directory.
         let artifact_path = PACKAGE_GRAPH_FIXTURE
             .workspace()
-            .target_directory()
+            .build_directory()
+            .expect("fixture sets build_directory")
             .join("debug/deps/metadata_helper-test");
         let src_path = package
             .manifest_path()
@@ -879,6 +947,12 @@ mod tests {
         let from_lines = builder.finish();
 
         assert_eq!(
+            from_lines.rust_build_meta.base_output_directories,
+            btreeset! { Utf8PathBuf::from("debug") },
+            "base output directory detected from the artifact's executable path"
+        );
+
+        assert_eq!(
             from_lines
                 .to_string(OutputFormat::Serializable(SerializableFormat::JsonPretty))
                 .expect("json-pretty succeeds"),
@@ -886,5 +960,81 @@ mod tests {
                 .to_string(OutputFormat::Serializable(SerializableFormat::JsonPretty))
                 .expect("json-pretty succeeds")
         );
+    }
+
+    #[test]
+    fn test_base_output_dir() {
+        let cases: &[(&str, Option<&str>, &str)] = &[
+            ("debug/deps/foo-9e6e6f7b", Some("debug"), "legacy layout"),
+            (
+                "aarch64-unknown-linux-gnu/debug/deps/foo-9e6e6f7b",
+                Some("aarch64-unknown-linux-gnu/debug"),
+                "legacy layout with a target triple",
+            ),
+            (
+                "debug/build/metadata-helper/9e6e6f7b/out/foo",
+                Some("debug"),
+                "v2 layout",
+            ),
+            (
+                "aarch64-unknown-linux-gnu/debug/build/metadata-helper/9e6e6f7b/out/foo",
+                Some("aarch64-unknown-linux-gnu/debug"),
+                "v2 layout with a target triple",
+            ),
+            (
+                "debug/build/build/9e6e6f7b/out/foo",
+                Some("debug"),
+                "v2 layout, package named build",
+            ),
+            (
+                "debug/examples/foo-9e6e6f7b",
+                Some("debug"),
+                "legacy layout, example test binary",
+            ),
+            (
+                "aarch64-unknown-linux-gnu/debug/examples/foo-9e6e6f7b",
+                Some("aarch64-unknown-linux-gnu/debug"),
+                "legacy layout, example test binary with a target triple",
+            ),
+            (
+                "debug/build/metadata-helper-9e6e6f7b/out/foo",
+                None,
+                "legacy build script out dir",
+            ),
+            (
+                "aarch64-unknown-linux-gnu/debug/build/metadata-helper-9e6e6f7b/out/foo",
+                None,
+                "legacy build script out dir with a target triple",
+            ),
+            ("debug/foo", None, "uplifted into the profile directory"),
+            (
+                "out/foo",
+                None,
+                "out directory directly under the build directory",
+            ),
+            (
+                "deps/foo",
+                None,
+                "deps directory directly under the build directory",
+            ),
+            (
+                "examples/foo",
+                None,
+                "examples directory directly under the build directory",
+            ),
+            (
+                "build/metadata-helper/9e6e6f7b/out/foo",
+                None,
+                "v2 build directory directly under the build directory",
+            ),
+        ];
+
+        for (rel_artifact_path, expected, description) in cases {
+            assert_eq!(
+                base_output_dir(Utf8Path::new(rel_artifact_path)),
+                expected.map(Utf8Path::new),
+                "{description}: base output dir for artifact path {rel_artifact_path}"
+            );
+        }
     }
 }

@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Documentation-only change: `base_output_directories` is now documented as being resolved against both of the following:
+  - When joined with `target_directory` it is the Cargo artifact directory, where final artifacts like binaries and dynamic libraries are uplifted to.
+  - When joined with `build_directory` plus `deps`, it is the legacy `deps` directory.
+
+  This supersedes the note in 0.14.0 that described them as relative to the build directory alone.
 - MSRV updated to Rust 1.86.
 
 ## [0.14.1] - 2026-04-14
