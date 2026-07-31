@@ -30,8 +30,11 @@ jobs:
           # The full history is required to make mkdocs' git-revision-date-localized plugin work
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
-      # Deployment is gated on push to main, so PR cache poisoning is not a concern.
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1 # zizmor: ignore[cache-poisoning]
+      # We don't use rust-cache here on purpose. `cargo doc` doesn't benefit
+      # much from it, and Renovate churn and toolchain bumps rotate the key
+      # often enough that most runs missed anyway. This also keeps the
+      # publishing job free of restored artifacts.
+      #
       # Fetch nextest directly from get.nexte.st rather than via
       # taiki-e/install-action: docs must reflect the latest release regardless
       # of any delay in updating the install action.
@@ -50,6 +53,20 @@ jobs:
           rm -rf target/gh-pages
           mv site/output target/gh-pages
           mv target/doc target/gh-pages/rustdoc
+      # Ensure that a dependency change that causes the number of files to
+      # exceed a threshold fails on the PR rather than on the deploy to main.
+      - name: Check deployment file count
+        run: |
+          count=$(find target/gh-pages -type f | wc -l)
+          echo "Deployment file count: $count (budget 15000, Cloudflare Pages limit 20000)"
+          if [ "$count" -gt 15000 ]; then
+            echo "Largest rustdoc directories:"
+            for dir in target/gh-pages/rustdoc/*/; do
+              echo "$(find "$dir" -type f | wc -l) $dir"
+            done | sort -rn | head -10
+            echo "::error::The site has $count files, over the 15000-file budget. Cloudflare Pages rejects deployments above 20000 files. Add the offending crates to EXCLUDE_RE in scripts/build-rustdoc.sh."
+            exit 1
+          fi
       - name: Publish
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
