@@ -397,11 +397,10 @@ impl<'g> BinaryListBuildState<'g> {
                         path: convert_rel_path_to_forward_slash(rel_path),
                     };
 
-                    self.rust_build_meta
-                        .non_test_binaries
-                        .entry(artifact.package_id.repr)
-                        .or_default()
-                        .insert(non_test_binary);
+                    self.rust_build_meta.non_test_binaries.insert(
+                        guppy::PackageId::new(artifact.package_id.repr),
+                        non_test_binary,
+                    );
                 };
             }
         } else if artifact
@@ -419,11 +418,10 @@ impl<'g> BinaryListBuildState<'g> {
                         kind: RustNonTestBinaryKind::DYLIB,
                         path: convert_rel_path_to_forward_slash(rel_path),
                     };
-                    self.rust_build_meta
-                        .non_test_binaries
-                        .entry(artifact.package_id.repr.clone())
-                        .or_default()
-                        .insert(non_test_binary);
+                    self.rust_build_meta.non_test_binaries.insert(
+                        guppy::PackageId::new(artifact.package_id.repr.clone()),
+                        non_test_binary,
+                    );
                 }
             }
         }
@@ -716,26 +714,27 @@ mod tests {
         rust_build_meta
             .base_output_directories
             .insert("my-profile".into());
-        rust_build_meta.non_test_binaries.insert(
-            "my-package-id".into(),
-            btreeset! {
-                RustNonTestBinarySummary {
-                    name: "my-name".into(),
-                    kind: RustNonTestBinaryKind::BIN_EXE,
-                    path: "my-profile/my-name".into(),
-                },
-                RustNonTestBinarySummary {
-                    name: "your-name".into(),
-                    kind: RustNonTestBinaryKind::DYLIB,
-                    path: "my-profile/your-name.dll".into(),
-                },
-                RustNonTestBinarySummary {
-                    name: "your-name".into(),
-                    kind: RustNonTestBinaryKind::DYLIB,
-                    path: "my-profile/your-name.exp".into(),
-                },
+        for non_test_binary in [
+            RustNonTestBinarySummary {
+                name: "my-name".into(),
+                kind: RustNonTestBinaryKind::BIN_EXE,
+                path: "my-profile/my-name".into(),
             },
-        );
+            RustNonTestBinarySummary {
+                name: "your-name".into(),
+                kind: RustNonTestBinaryKind::DYLIB,
+                path: "my-profile/your-name.dll".into(),
+            },
+            RustNonTestBinarySummary {
+                name: "your-name".into(),
+                kind: RustNonTestBinaryKind::DYLIB,
+                path: "my-profile/your-name.exp".into(),
+            },
+        ] {
+            rust_build_meta
+                .non_test_binaries
+                .insert(guppy::PackageId::new("my-package-id"), non_test_binary);
+        }
 
         let binary_list = BinaryList {
             rust_build_meta,

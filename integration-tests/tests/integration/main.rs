@@ -1425,49 +1425,59 @@ fn test_archive_with_build_filter() {
         .collect();
 
     // Check that all test files are present with the `all()` filter.
-    check_archive_contents(&env_info, "all()", |env_info, archive_file, paths| {
-        for file in all_test_binaries.iter() {
-            assert!(
-                paths
-                    .iter()
-                    .any(|path| path_contains_test_fixture_file(path, file)),
-                "{:?} was missing from the test archive",
-                file
-            );
-        }
-        run_archive_with_args(
-            env_info,
-            &archive_file,
-            RunProperties::RELOCATED,
-            NextestExitCode::TEST_RUN_FAILED,
-        );
-    });
-
-    // Check that no test files are present with the `none()` filter.
-    check_archive_contents(&env_info, "none()", |env_info, archive_file, paths| {
-        for file in all_test_binaries.iter() {
-            if let Some(found) = paths
-                .iter()
-                .filter(|path| {
-                    path.ancestors()
-                        // Test binaries are in the `deps` folder.
-                        .any(|folder| folder.file_name() == Some("deps"))
-                })
-                .find(|path| path_contains_test_fixture_file(path, file))
-            {
-                panic!(
-                    "{} was present in the test archive as {}, but it should be missing",
-                    file, found
+    check_archive_contents(
+        &env_info,
+        "all()",
+        "archive_filter_all",
+        |env_info, archive_file, paths| {
+            for file in all_test_binaries.iter() {
+                assert!(
+                    paths
+                        .iter()
+                        .any(|path| path_contains_test_fixture_file(path, file)),
+                    "{:?} was missing from the test archive",
+                    file
                 );
             }
-        }
-        run_archive_with_args(
-            env_info,
-            &archive_file,
-            RunProperties::SKIP_SUMMARY_CHECK | RunProperties::EXPECT_NO_BINARIES,
-            NextestExitCode::NO_TESTS_RUN,
-        );
-    });
+            run_archive_with_args(
+                env_info,
+                &archive_file,
+                RunProperties::RELOCATED,
+                NextestExitCode::TEST_RUN_FAILED,
+            );
+        },
+    );
+
+    // Check that no test files are present with the `none()` filter.
+    check_archive_contents(
+        &env_info,
+        "none()",
+        "archive_filter_none",
+        |env_info, archive_file, paths| {
+            for file in all_test_binaries.iter() {
+                if let Some(found) = paths
+                    .iter()
+                    .filter(|path| {
+                        path.ancestors()
+                            // Test binaries are in the `deps` folder.
+                            .any(|folder| folder.file_name() == Some("deps"))
+                    })
+                    .find(|path| path_contains_test_fixture_file(path, file))
+                {
+                    panic!(
+                        "{} was present in the test archive as {}, but it should be missing",
+                        file, found
+                    );
+                }
+            }
+            run_archive_with_args(
+                env_info,
+                &archive_file,
+                RunProperties::SKIP_SUMMARY_CHECK | RunProperties::EXPECT_NO_BINARIES,
+                NextestExitCode::NO_TESTS_RUN,
+            );
+        },
+    );
 
     let expected_package_test_file = "cdylib_example";
     let filtered_test = "fixture_project";
@@ -1475,6 +1485,7 @@ fn test_archive_with_build_filter() {
     check_archive_contents(
         &env_info,
         "package(cdylib-example)",
+        "archive_filter_package",
         |env_info, archive_file, paths| {
             assert!(
                 paths
@@ -1533,10 +1544,11 @@ fn test_archive_with_unsupported_test_filter() {
 fn check_archive_contents(
     env_info: &TestEnvInfo,
     filter: &str,
+    snapshot_name: &str,
     cb: impl FnOnce(&TestEnvInfo, Utf8PathBuf, Vec<Utf8PathBuf>),
 ) {
     let (_p1, archive_file) =
-        create_archive_with_args(env_info, "", false, "", &["-E", filter], false)
+        create_archive_with_args(env_info, "", false, snapshot_name, &["-E", filter], true)
             .expect("archive succeeded");
     let file = File::open(archive_file.clone()).unwrap();
     let decoder = zstd::stream::read::Decoder::new(file).unwrap();
