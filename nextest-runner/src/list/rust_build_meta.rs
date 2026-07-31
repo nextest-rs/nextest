@@ -31,9 +31,7 @@ pub struct RustBuildMeta<State> {
     /// Cargo's `build.build-dir` is configured.
     pub build_directory: Utf8PathBuf,
 
-    /// A list of base output directories, relative to the build directory.
-    /// These directories and their "deps" subdirectories are added to the
-    /// dynamic library path.
+    /// A list of base output directories of the form `[<triple>/]<profile>`.
     pub base_output_directories: BTreeSet<Utf8PathBuf>,
 
     /// Information about non-test executables, keyed by package ID. Paths are
@@ -172,9 +170,7 @@ impl RustBuildMeta<TestListState> {
             warn!("failed to detect the rustc libdir, may fail to list or run tests");
         }
 
-        // Cargo puts linked paths before base output directories. Both
-        // linked paths and base output dirs are relative to the build
-        // directory.
+        // Cargo puts linked paths before base output directories.
         self.linked_paths
             .keys()
             .filter_map(|rel_path| {
@@ -185,12 +181,18 @@ impl RustBuildMeta<TestListState> {
                 join_path.exists().then_some(join_path)
             })
             .chain(self.base_output_directories.iter().flat_map(|base_output| {
-                let abs_base = self
-                    .build_directory
-                    .join(convert_rel_path_to_main_sep(base_output));
-                let with_deps = abs_base.join("deps");
-                // This is the order paths are added in by Cargo.
-                [with_deps, abs_base]
+                let rel_base = convert_rel_path_to_main_sep(base_output);
+                // The Cargo artifact directory, where Cargo uplifts final
+                // artifacts to, is under the target directory. (Remember that
+                // recent Cargo versions make a separation between the target
+                // and build directories, even though they are often the same.)
+                let artifact_dir = self.target_directory.join(&rel_base);
+                // For the legacy layout, the deps directory is under the build directory.
+                let legacy_deps_dir = self.build_directory.join(rel_base).join("deps");
+                // This is the order paths are added in by Cargo. (Note that
+                // Cargo 1.93 changed the order slightly here, putting
+                // artifact_dir before legacy_deps_dir.)
+                [artifact_dir, legacy_deps_dir]
             }))
             .chain(libdirs)
             .unique()
@@ -670,6 +672,32 @@ mod tests {
         assert!(
             dylib_paths.contains(&target_libdir),
             "{dylib_paths:?} should contain {target_libdir}"
+        );
+    }
+
+    #[test]
+    fn test_dylib_paths_artifact_dir_is_under_the_target_directory() {
+        let rust_build_meta = RustBuildMeta {
+            target_directory: "/fake/target".into(),
+            build_directory: "/fake/build".into(),
+            base_output_directories: ["debug".into(), "aarch64-unknown-linux-gnu/debug".into()]
+                .into(),
+            build_platforms: BuildPlatforms {
+                host: host_current_with_libdir("/fake/rustc/host/libdir"),
+                target: None,
+            },
+            ..RustBuildMeta::empty()
+        };
+
+        assert_eq!(
+            rust_build_meta.dylib_paths(),
+            vec![
+                Utf8PathBuf::from("/fake/target/aarch64-unknown-linux-gnu/debug"),
+                Utf8PathBuf::from("/fake/build/aarch64-unknown-linux-gnu/debug/deps"),
+                Utf8PathBuf::from("/fake/target/debug"),
+                Utf8PathBuf::from("/fake/build/debug/deps"),
+                Utf8PathBuf::from("/fake/rustc/host/libdir"),
+            ],
         );
     }
 

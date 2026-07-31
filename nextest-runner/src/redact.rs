@@ -24,6 +24,7 @@ use std::{
 
 static CRATE_NAME_HASH_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^([a-zA-Z0-9_-]+)-[a-f0-9]{16}$").unwrap());
+static UNIT_HASH_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[a-f0-9]{16}$").unwrap());
 static TARGET_DIR_REDACTION: &str = "<target-dir>";
 static BUILD_DIR_REDACTION: &str = "<build-dir>";
 static FILE_COUNT_REDACTION: &str = "<file-count>";
@@ -529,29 +530,50 @@ fn build_linked_path_redactions<'a>(
     let mut linked_path_redactions = BTreeMap::new();
 
     for linked_path in linked_paths {
-        // Linked paths are relative to the target dir, and usually of the form
-        // <profile>/build/<crate-name>-<hash>/.... If the linked path matches this form, redact it
-        // (in both absolute and relative forms).
-
-        // First, look for a component of the form <crate-name>-hash in it.
+        // Linked paths are relative to the build directory, and usually point
+        // inside a build script's output directory. Cargo uses different
+        // conventions depending on the build directory layout:
+        //
+        // * legacy: `<profile>/build/<crate-name>-<hash>/...`
+        // * v2: `<profile>/build/<crate-name>/<hash>/...`
+        //
+        // Both are redacted to `<profile>/build/<crate-name-hash>/...`, so that
+        // snapshots are stable across layouts.
         let mut source = Utf8PathBuf::new();
         let mut replacement = ReplacementBuilder::new();
+        let mut components = linked_path.iter().peekable();
+        let mut prev = None;
 
-        for elem in linked_path {
+        while let Some(elem) = components.next() {
             if let Some(captures) = CRATE_NAME_HASH_REGEX.captures(elem) {
-                // Found it! Redact it.
                 let crate_name = captures.get(1).expect("regex had one capture");
                 source.push(elem);
                 replacement.push(&format!("<{}-hash>", crate_name.as_str()));
                 linked_path_redactions.insert(source, replacement.into_string());
                 break;
-            } else {
-                // Not found yet, keep looking.
-                source.push(elem);
-                replacement.push(elem);
             }
 
-            // If the path isn't of the form above, we don't redact it.
+            // For v2, require the parent to be `build` before treating
+            // `<elem>/<hash>` as a unit directory. A 16-hex-digit
+            // component is a much weaker signal than the legacy
+            // `<crate-name>-<hash>`, so anchor it to where Cargo actually
+            // produces these.
+            if prev == Some("build")
+                && let Some(hash_dir) = components.peek()
+                && UNIT_HASH_REGEX.is_match(hash_dir)
+            {
+                source.push(elem);
+                source.push(hash_dir);
+                replacement.push(&format!("<{elem}-hash>"));
+                linked_path_redactions.insert(source, replacement.into_string());
+                break;
+            }
+
+            // Not found yet, keep looking. If the path isn't of either form
+            // above, we don't redact it.
+            source.push(elem);
+            replacement.push(elem);
+            prev = Some(elem);
         }
     }
 
@@ -587,6 +609,95 @@ impl ReplacementBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_build_linked_path_redactions() {
+        struct Expected {
+            source: &'static str,
+            replacement: &'static str,
+        }
+
+        struct Case {
+            linked_path: &'static str,
+            expected: Option<Expected>,
+            description: &'static str,
+        }
+
+        let cases = [
+            Case {
+                linked_path: "debug/build/cdylib-link-f17768fb3bcd584c/out",
+                expected: Some(Expected {
+                    source: "debug/build/cdylib-link-f17768fb3bcd584c",
+                    replacement: "debug/build/<cdylib-link-hash>",
+                }),
+                description: "legacy layout",
+            },
+            Case {
+                linked_path: "debug/build/cdylib-link/f17768fb3bcd584c/out",
+                expected: Some(Expected {
+                    source: "debug/build/cdylib-link/f17768fb3bcd584c",
+                    replacement: "debug/build/<cdylib-link-hash>",
+                }),
+                description: "build-dir v2 layout",
+            },
+            Case {
+                linked_path: "aarch64-unknown-linux-gnu/debug/build/cdylib-link/f17768fb3bcd584c/out",
+                expected: Some(Expected {
+                    source: "aarch64-unknown-linux-gnu/debug/build/cdylib-link/f17768fb3bcd584c",
+                    replacement: "aarch64-unknown-linux-gnu/debug/build/<cdylib-link-hash>",
+                }),
+                description: "build-dir v2 layout with a target triple",
+            },
+            Case {
+                linked_path: "debug/build/cdylib-link/f17768fb3bcd584c/does-not-exist",
+                expected: Some(Expected {
+                    source: "debug/build/cdylib-link/f17768fb3bcd584c",
+                    replacement: "debug/build/<cdylib-link-hash>",
+                }),
+                description: "v2 layout, linked path that does not exist on disk",
+            },
+            Case {
+                linked_path: "debug/build/f17768fb3bcd584c/out",
+                expected: None,
+                description: "a hash directly under build is not a unit directory",
+            },
+            Case {
+                linked_path: "debug/deps/cdylib-link/f17768fb3bcd584c",
+                expected: None,
+                description: "the v2 shape is only recognized directly under build",
+            },
+            Case {
+                linked_path: "debug/build/cdylib-link/not-a-hash/out",
+                expected: None,
+                description: "v2 shape with a non-hash second component",
+            },
+            Case {
+                linked_path: "/usr/lib",
+                expected: None,
+                description: "a path outside the build directory",
+            },
+        ];
+
+        for case in &cases {
+            let actual =
+                build_linked_path_redactions(std::iter::once(Utf8Path::new(case.linked_path)));
+            let expected: BTreeMap<Utf8PathBuf, String> = case
+                .expected
+                .iter()
+                .map(|expected| {
+                    (
+                        Utf8PathBuf::from(expected.source),
+                        expected.replacement.to_owned(),
+                    )
+                })
+                .collect();
+            assert_eq!(
+                actual, expected,
+                "{}: redactions for linked path {}",
+                case.description, case.linked_path
+            );
+        }
+    }
 
     #[test]
     fn test_redact_path() {

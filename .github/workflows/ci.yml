@@ -423,8 +423,16 @@ jobs:
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - name: Build cargo-nextest
         run: cargo build --package cargo-nextest
-      # build.build-dir was stabilized in Cargo 1.91. The new layout is
-      # still nightly-only (-Zbuild-dir-new-layout).
+      # build.build-dir was stabilized in Cargo 1.91. The new build directory
+      # layout is nightly-only, and as of the 2026-07-30 nightly it is the
+      # default there, so -Zbuild-dir-new-layout is now redundant. It is kept so
+      # these steps stay pinned to the new layout if that default changes. (The
+      # layout was stabilized and then reverted once already, so it might.)
+      #
+      # The legacy layout is covered separately below, via Cargo's temporary
+      # opt-out env var. Once that env var goes away, this job should install a
+      # stable toolchain for those steps instead: build.build-dir itself is
+      # stable, so only the layout needs nightly.
       - name: Run fixture tests with build-dir
         env:
           CARGO_NEXTEST: target/debug/cargo-nextest
@@ -436,6 +444,59 @@ jobs:
             --manifest-path fixtures/fixture-project/Cargo.toml \
             --package cdylib-link --package cdylib-example \
             --package with-build-script
+      # Also exercise dylibs: fixture-project's lib unit test
+      # `tests::call_dylib_add_two` links against the dylib-test package, whose
+      # crate-type is "dylib". That test is the only consumer of a dylib
+      # dependency in the fixture, so this step must keep building it.
+      #
+      # Only --lib is built here because fixture-project's other test targets
+      # contain deliberately-failing tests.
+      #
+      # These three steps clear RUSTFLAGS because this workflow sets
+      # `-D warnings`, and fixture-project's lib deliberately calls a deprecated
+      # function to produce a compiler warning for the --cargo-message-format
+      # tests. The integration test harness clears RUSTFLAGS for the same reason
+      # (see sanitize_env in integration-tests/src/env.rs); the fixture is test
+      # data, not nextest's own code.
+      - name: Run dylib fixture tests with build-dir
+        env:
+          CARGO_NEXTEST: target/debug/cargo-nextest
+          RUSTUP_AVAILABLE: 1
+          RUSTFLAGS: ""
+          CARGO_BUILD_BUILD_DIR: ${{ github.workspace }}/build-output
+        run: |
+          ./scripts/nextest-without-rustup.sh run \
+            -Z build-dir-new-layout \
+            --manifest-path fixtures/fixture-project/Cargo.toml \
+            --package fixture-project --lib
+      # The same dylib test under the new layout without build.build-dir, which
+      # is the configuration nightly users get by default (and the one reported
+      # in #3512).
+      - name: Run dylib fixture tests with the new layout only
+        env:
+          CARGO_NEXTEST: target/debug/cargo-nextest
+          RUSTUP_AVAILABLE: 1
+          RUSTFLAGS: ""
+        run: |
+          ./scripts/nextest-without-rustup.sh run \
+            -Z build-dir-new-layout \
+            --manifest-path fixtures/fixture-project/Cargo.toml \
+            --package fixture-project --lib
+      # And with build.build-dir under the legacy layout, which is what stable
+      # users get today. __CARGO_TEMPORARY_BUILD_DIR_NEW_LAYOUT_OPT_OUT is
+      # Cargo's own opt-out; see the note above about replacing it with a stable
+      # toolchain once it is removed.
+      - name: Run dylib fixture tests with build-dir under the legacy layout
+        env:
+          CARGO_NEXTEST: target/debug/cargo-nextest
+          RUSTUP_AVAILABLE: 1
+          RUSTFLAGS: ""
+          CARGO_BUILD_BUILD_DIR: ${{ github.workspace }}/build-output-legacy
+          __CARGO_TEMPORARY_BUILD_DIR_NEW_LAYOUT_OPT_OUT: 1
+        run: |
+          ./scripts/nextest-without-rustup.sh run \
+            --manifest-path fixtures/fixture-project/Cargo.toml \
+            --package fixture-project --lib
       - name: Archive fixture tests with build-dir
         env:
           CARGO_NEXTEST: target/debug/cargo-nextest
@@ -458,6 +519,8 @@ jobs:
           # Do not set RUSTUP_AVAILABLE here, since running tests out of an
           # archive should not require rustup or Cargo.
         run: |
-          rm -r fixtures/fixture-project/target ${{ github.workspace }}/build-output
+          rm -r fixtures/fixture-project/target \
+            ${{ github.workspace }}/build-output \
+            ${{ github.workspace }}/build-output-legacy
           ./scripts/nextest-without-rustup.sh run \
             --archive-file target/build-dir-archive.tar.zst

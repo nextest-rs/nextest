@@ -258,8 +258,10 @@ Nextest sets the dynamic library path at runtime, similar to [what Cargo does](h
 
 Nextest includes the following paths:
 
-- Search paths included from any build script with the [`rustc-link-search` instruction](https://doc.rust-lang.org/cargo/reference/build-scripts.html#rustc-link-search). Paths outside of the target directory are removed. If additional libraries on the system are needed in the search path, consider using a [setup script <!-- md:flag experimental -->](setup-scripts.md) to configure the environment.
-- The base output directory, such as `target/debug`, and the "deps" directory. This enables support for `dylib` dependencies and rustc compiler plugins.
+- Search paths included from any build script with the [`rustc-link-search` instruction](https://doc.rust-lang.org/cargo/reference/build-scripts.html#rustc-link-search). Paths outside of the build directory are removed. If additional libraries on the system are needed in the search path, consider using a [setup script <!-- md:flag experimental -->](setup-scripts.md) to configure the environment.
+- The Cargo artifact directory, such as `target/debug`, followed by the `deps` directory, such as `target/debug/deps`. The combination of the two enables support for `dylib` dependencies and rustc compiler plugins.
+
+    The *Cargo artifact directory* is where final artifacts like binaries and dynamic libraries are uplifted to. It lives under the *target directory*, as distinct from the *build directory*, where intermediate artifacts are placed. (The target and build directories are the same unless [`build.build-dir`](https://doc.rust-lang.org/cargo/reference/config.html#buildbuild-dir) is configured.) Note that under Cargo's [build directory layout v2](https://blog.rust-lang.org/2026/03/13/call-for-testing-build-dir-layout-v2/) there is no `deps` directory (all dynamic libraries are present in the artifact directory).
 - <!-- md:version 0.9.72 --> The rustc sysroot library path, to enable proc-macro tests and binaries compiled with `-C prefer-dynamic` to work.
 
 ## Altering the environment within tests

@@ -599,7 +599,15 @@ pub struct RustBuildMetaSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub build_directory: Option<Utf8PathBuf>,
 
-    /// Base output directories, relative to the build directory.
+    /// Base output directories, of the form `[<triple>/]<profile>`, stored
+    /// relative to the build directory.
+    ///
+    /// To reconstruct the dynamic library search path, resolve each entry `E`
+    /// against both of:
+    ///
+    /// * the Cargo artifact directory, where Cargo uplifts final artifacts to:
+    ///   `target_directory.join(E)`
+    /// * the `deps` directory (legacy layout only): `build_directory.join(E).join("deps")`
     pub base_output_directories: BTreeSet<Utf8PathBuf>,
 
     /// Information about non-test binaries, keyed by package ID.
