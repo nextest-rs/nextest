@@ -395,6 +395,7 @@ impl<'g> BinaryListBuildState<'g> {
                         name: artifact.target.name,
                         kind: RustNonTestBinaryKind::BIN_EXE,
                         path: convert_rel_path_to_forward_slash(rel_path),
+                        build_platform: self.non_test_build_platform(&path),
                     };
 
                     self.rust_build_meta.non_test_binaries.insert(
@@ -417,6 +418,7 @@ impl<'g> BinaryListBuildState<'g> {
                         name: artifact.target.name.clone(),
                         kind: RustNonTestBinaryKind::DYLIB,
                         path: convert_rel_path_to_forward_slash(rel_path),
+                        build_platform: self.non_test_build_platform(&filename),
                     };
                     self.rust_build_meta.non_test_binaries.insert(
                         guppy::PackageId::new(artifact.package_id.repr.clone()),
@@ -451,6 +453,11 @@ impl<'g> BinaryListBuildState<'g> {
         // Artifact paths must be relative to the build directory (which
         // equals the target directory unless Cargo's build.build-dir is
         // configured).
+        //
+        // Unlike `artifact_build_platform`, which picks whichever is the
+        // innermost of the build and target directories, this resolves against
+        // the build directory and nothing else, because its result goes into
+        // `base_output_directories`, which is relative to the build directory.
         let rel_path = match artifact_path.strip_prefix(&self.rust_build_meta.build_directory) {
             Ok(rel) => rel,
             Err(_) => {
@@ -471,6 +478,19 @@ impl<'g> BinaryListBuildState<'g> {
                 .insert(convert_rel_path_to_forward_slash(base));
         }
         Some(())
+    }
+
+    fn non_test_build_platform(&self, artifact_path: &Utf8Path) -> Option<BuildPlatform> {
+        artifact_build_platform(
+            artifact_path,
+            &self.rust_build_meta.target_directory,
+            &self.rust_build_meta.build_directory,
+            self.rust_build_meta
+                .build_platforms
+                .target
+                .as_ref()
+                .map(|target| target.triple.platform.triple_str()),
+        )
     }
 
     fn process_build_script(&mut self, build_script: BuildScript) -> Result<(), FromMessagesError> {
@@ -608,6 +628,46 @@ impl<'g> BinaryListBuildState<'g> {
     }
 }
 
+/// Determines the build platform for a particular artifact.
+///
+/// This is a heuristic due to Cargo's lack of platform information in build
+/// message output. See <https://github.com/rust-lang/cargo/issues/12869> for
+/// the Cargo issue.
+fn artifact_build_platform(
+    artifact_path: &Utf8Path,
+    target_directory: &Utf8Path,
+    build_directory: &Utf8Path,
+    target_triple: Option<&str>,
+) -> Option<BuildPlatform> {
+    // If we're not cross compiling, we must be building for the target.
+    let Some(target_triple) = target_triple else {
+        return Some(BuildPlatform::Target);
+    };
+
+    // As of this writing (2026-08), callers ensure that the artifact path is
+    // under either the target directory or the build directory. But we can
+    // reasonably return None here if that assumption doesn't hold.
+    let Some(rel_path) = [target_directory, build_directory]
+        .into_iter()
+        .filter_map(|root| artifact_path.strip_prefix(root).ok())
+        .min_by_key(|rel_path| rel_path.as_str().len())
+    else {
+        debug!(
+            target: "nextest-runner::list",
+            "artifact path `{}` is under neither the target directory `{}` nor the build \
+             directory `{}`, recording its build platform as unknown",
+            artifact_path, target_directory, build_directory,
+        );
+        return None;
+    };
+
+    if rel_path.starts_with(target_triple) {
+        Some(BuildPlatform::Target)
+    } else {
+        Some(BuildPlatform::Host)
+    }
+}
+
 fn base_output_dir(rel_path: &Utf8Path) -> Option<&Utf8Path> {
     let parent = rel_path.parent()?;
     let base = match parent.file_name()? {
@@ -711,6 +771,11 @@ mod tests {
 
         let mut rust_build_meta =
             RustBuildMeta::new("/fake/target", "/fake/target", build_platforms);
+        // With a target triple set, a binary built for the target platform
+        // lives under `<triple>/<profile>`, otherwise just under `<profile>`.
+        rust_build_meta
+            .base_output_directories
+            .insert("aarch64-unknown-linux-gnu/my-profile".into());
         rust_build_meta
             .base_output_directories
             .insert("my-profile".into());
@@ -718,17 +783,20 @@ mod tests {
             RustNonTestBinarySummary {
                 name: "my-name".into(),
                 kind: RustNonTestBinaryKind::BIN_EXE,
-                path: "my-profile/my-name".into(),
+                path: "aarch64-unknown-linux-gnu/my-profile/my-name".into(),
+                build_platform: Some(BuildPlatform::Target),
             },
             RustNonTestBinarySummary {
                 name: "your-name".into(),
                 kind: RustNonTestBinaryKind::DYLIB,
                 path: "my-profile/your-name.dll".into(),
+                build_platform: Some(BuildPlatform::Host),
             },
             RustNonTestBinarySummary {
                 name: "your-name".into(),
                 kind: RustNonTestBinaryKind::DYLIB,
                 path: "my-profile/your-name.exp".into(),
+                build_platform: Some(BuildPlatform::Host),
             },
         ] {
             rust_build_meta
@@ -760,6 +828,7 @@ mod tests {
             "target-directory": "/fake/target",
             "build-directory": "/fake/target",
             "base-output-directories": [
+              "aarch64-unknown-linux-gnu/my-profile",
               "my-profile"
             ],
             "non-test-binaries": {
@@ -767,17 +836,20 @@ mod tests {
                 {
                   "name": "my-name",
                   "kind": "bin-exe",
-                  "path": "my-profile/my-name"
+                  "path": "aarch64-unknown-linux-gnu/my-profile/my-name",
+                  "build-platform": "target"
                 },
                 {
                   "name": "your-name",
                   "kind": "dylib",
-                  "path": "my-profile/your-name.dll"
+                  "path": "my-profile/your-name.dll",
+                  "build-platform": "host"
                 },
                 {
                   "name": "your-name",
                   "kind": "dylib",
-                  "path": "my-profile/your-name.exp"
+                  "path": "my-profile/your-name.exp",
+                  "build-platform": "host"
                 }
               ]
             },
@@ -895,39 +967,13 @@ mod tests {
             .build_directory()
             .expect("fixture sets build_directory")
             .join("debug/deps/metadata_helper-test");
-        let src_path = package
-            .manifest_path()
-            .parent()
-            .expect("manifest path has a parent")
-            .join("src/lib.rs");
-
-        let compiler_artifact = json!({
-            "reason": "compiler-artifact",
-            "package_id": PACKAGE_METADATA_ID,
-            "manifest_path": package.manifest_path(),
-            "target": {
-                "name": package.name(),
-                "kind": ["lib"],
-                "crate_types": ["lib"],
-                "required-features": [],
-                "src_path": src_path,
-                "edition": "2021",
-                "doctest": true,
-                "test": true,
-                "doc": true
-            },
-            "profile": {
-                "opt_level": "0",
-                "debuginfo": 0,
-                "debug_assertions": true,
-                "overflow_checks": true,
-                "test": true
-            },
-            "features": [],
-            "filenames": [artifact_path],
-            "executable": artifact_path,
-            "fresh": false
-        });
+        let compiler_artifact = artifact_json(
+            package.name(),
+            &["lib"],
+            std::slice::from_ref(&artifact_path),
+            Some(&artifact_path),
+            TestTarget::Yes,
+        );
         let input = format!("this is not JSON\n{}\n\n", compiler_artifact);
 
         let from_messages = BinaryList::from_messages(
@@ -959,6 +1005,401 @@ mod tests {
                 .to_string(OutputFormat::Serializable(SerializableFormat::JsonPretty))
                 .expect("json-pretty succeeds")
         );
+    }
+
+    #[test]
+    fn test_artifact_build_platform() {
+        static TARGET_DIR: &str = "/w/target";
+        static TRIPLE: &str = "aarch64-unknown-linux-gnu";
+
+        struct Case {
+            artifact_path: &'static str,
+            // None here means Cargo's `build.build-dir` is unset, so it equals
+            // the target directory.
+            build_directory: Option<&'static str>,
+            target_triple: Option<&'static str>,
+            expected: Option<BuildPlatform>,
+            description: &'static str,
+        }
+
+        let cases = [
+            Case {
+                artifact_path: "/w/target/debug/libfoo.so",
+                build_directory: None,
+                target_triple: None,
+                expected: Some(BuildPlatform::Target),
+                description: "with no target platform the host and the target coincide, and \
+                    nextest reports target",
+            },
+            Case {
+                artifact_path: "/w/target/aarch64-unknown-linux-gnu/debug/libfoo.so",
+                build_directory: None,
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Target),
+                description: "a dylib uplifted into the target platform's artifact directory",
+            },
+            Case {
+                artifact_path: "/w/target/debug/libfoo.so",
+                build_directory: None,
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Host),
+                description: "the same dylib, built for the host as a build dependency",
+            },
+            Case {
+                artifact_path: "/w/target/aarch64-unknown-linux-gnu/debug/deps/libfoo.rlib",
+                build_directory: None,
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Target),
+                description: "an rlib that was never uplifted, legacy layout",
+            },
+            Case {
+                artifact_path: "/w/target/debug/deps/libfoo.rlib",
+                build_directory: None,
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Host),
+                description: "the same rlib built for the host, legacy layout",
+            },
+            Case {
+                artifact_path: "/w/target/aarch64-unknown-linux-gnu/debug/build/foo/9e6e6f7b/out/libfoo.rlib",
+                build_directory: None,
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Target),
+                description: "an rlib that was never uplifted, build-dir layout v2",
+            },
+            Case {
+                artifact_path: "/w/target/debug/build/foo/9e6e6f7b/out/libfoo.rlib",
+                build_directory: None,
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Host),
+                description: "the same rlib built for the host, build-dir layout v2",
+            },
+            Case {
+                artifact_path: "/w/target/aarch64-unknown-linux-gnu/debug/libfoo.so",
+                build_directory: Some("/w/build"),
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Target),
+                description: "a build directory beside the target directory: uplifts are unaffected",
+            },
+            Case {
+                artifact_path: "/w/target/build/aarch64-unknown-linux-gnu/debug/deps/libfoo.rlib",
+                build_directory: Some("/w/target/build"),
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Target),
+                description: "a build directory inside the target directory: the build directory is the \
+                    innermost root, so the triple is still the first component under it",
+            },
+            Case {
+                artifact_path: "/w/target/build/debug/deps/libfoo.rlib",
+                build_directory: Some("/w/target/build"),
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Host),
+                description: "a build directory inside the target directory, host artifact",
+            },
+            Case {
+                artifact_path: "/w/target/build/aarch64-unknown-linux-gnu/debug/build/foo/9e6e6f7b/out/libfoo.rlib",
+                build_directory: Some("/w/target/build"),
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Target),
+                description: "the shape Cargo emits under the build-dir v2 layout for \
+                    `build.build-dir = target/build` plus --target: nesting and v2 at once. \
+                    Verified by hand against a real nightly build",
+            },
+            Case {
+                artifact_path: "/w/target/aarch64-unknown-linux-gnu/debug/libfoo.so",
+                build_directory: Some("/w/target/build"),
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Target),
+                description: "a build directory inside the target directory: uplifts still go to the \
+                    target directory, which is the innermost root containing them",
+            },
+            Case {
+                artifact_path: "/w/target/debug/libfoo.so",
+                build_directory: Some("/w/target/build"),
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Host),
+                description: "a host dylib uplifted alongside a nested build directory. The \
+                    nested build directory does not contain it, so dropping the target directory \
+                    from the candidate roots would leave nothing to strip",
+            },
+            Case {
+                artifact_path: "/w/target/debug/deps/aarch64-unknown-linux-gnu/libfoo.so",
+                build_directory: None,
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Host),
+                description: "only the first component is the triple slot; a triple-named \
+                    directory deeper in the path means nothing",
+            },
+            Case {
+                artifact_path: "/w/target/debug/libfoo.so",
+                build_directory: Some("/w"),
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Host),
+                description: "the reverse nesting: `build.build-dir` and `build.target-dir` are \
+                    independent, so the target directory can sit inside the build directory. It \
+                    is then the innermost root",
+            },
+            Case {
+                artifact_path: "/w/target/aarch64-unknown-linux-gnu/debug/libfoo.so",
+                build_directory: Some("/w"),
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Target),
+                description: "the reverse nesting, target artifact: resolving against the outer \
+                    build directory would see `target` first and misreport this as host",
+            },
+            Case {
+                artifact_path: "/w/target/aarch64-unknown-linux-gnu-ilp32/debug/libfoo.so",
+                build_directory: None,
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Host),
+                description: "a directory whose name merely starts with the triple is not the triple",
+            },
+            Case {
+                artifact_path: "/w/target/aarch64-unknown-linux-gnu/debug/libfoo.so",
+                build_directory: Some("/w/target/aarch"),
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Target),
+                description: "root selection is component-wise, so a build directory that is only \
+                    a string prefix of the path never wins; a byte-wise prefix test would strip \
+                    `/w/target/aarch` here and misread the artifact as host",
+            },
+            Case {
+                artifact_path: "/w/target/my-custom-target/debug/libfoo.so",
+                build_directory: None,
+                target_triple: Some("my-custom-target"),
+                expected: Some(BuildPlatform::Target),
+                description: "a custom JSON target's directory is its file stem, which is also its triple \
+                    string in nextest",
+            },
+            Case {
+                artifact_path: "/w/target/aarch64-unknown-linux-gnu/libfoo.so",
+                build_directory: None,
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Target),
+                description: "KNOWN WRONG, pinned so the limitation stays visible: a custom \
+                    profile named exactly after the triple puts host uplifts at \
+                    `<profile>/libfoo.so` under the target directory, and the profile component \
+                    occupies the `<triple>` slot, so a host artifact reads as target. \
+                    Self-inflicted",
+            },
+            Case {
+                artifact_path: "/w/target/aarch64-unknown-linux-gnu/debug/libfoo.so",
+                build_directory: Some("/w/target/aarch64-unknown-linux-gnu"),
+                target_triple: Some(TRIPLE),
+                expected: Some(BuildPlatform::Host),
+                description: "KNOWN WRONG, pinned so the limitation stays visible: a build \
+                    directory nested in the target directory and named after the triple becomes \
+                    the innermost root and swallows the triple component, so an uplifted target \
+                    artifact reads as host. Self-inflicted, like the triple-named custom profile \
+                    above",
+            },
+            Case {
+                artifact_path: "/elsewhere/debug/libfoo.so",
+                build_directory: None,
+                target_triple: Some(TRIPLE),
+                expected: None,
+                description: "a path under neither root has no `<triple>` slot to read, so the \
+                    platform is unknown",
+            },
+        ];
+
+        for case in cases {
+            let build_directory = case.build_directory.unwrap_or(TARGET_DIR);
+            assert_eq!(
+                artifact_build_platform(
+                    Utf8Path::new(case.artifact_path),
+                    Utf8Path::new(TARGET_DIR),
+                    Utf8Path::new(build_directory),
+                    case.target_triple,
+                ),
+                case.expected,
+                "{}: build platform for {} (build directory {build_directory})",
+                case.description,
+                case.artifact_path,
+            );
+        }
+    }
+
+    fn cross_build_platforms() -> BuildPlatforms {
+        let target_triple = TargetTriple {
+            platform: Platform::new("aarch64-unknown-linux-gnu", TargetFeatures::Unknown)
+                .expect("aarch64-unknown-linux-gnu is a builtin triple"),
+            source: TargetTripleSource::CliOption,
+            location: TargetDefinitionLocation::Builtin,
+        };
+        BuildPlatforms {
+            host: HostPlatform {
+                platform: TargetTriple::x86_64_unknown_linux_gnu().platform,
+                libdir: PlatformLibdir::Available("/fake/host/libdir".into()),
+            },
+            target: Some(TargetPlatform::new(
+                target_triple,
+                PlatformLibdir::Available("/fake/target/libdir".into()),
+            )),
+        }
+    }
+
+    #[test]
+    fn test_non_test_build_platform_resolves_against_the_build_directory() {
+        let mut state = BinaryListBuildState::new(&PACKAGE_GRAPH_FIXTURE, cross_build_platforms());
+        state.rust_build_meta.target_directory = "/w/target".into();
+        state.rust_build_meta.build_directory = "/w/target/build".into();
+
+        assert_eq!(
+            state.non_test_build_platform(Utf8Path::new(
+                "/w/target/build/aarch64-unknown-linux-gnu/debug/deps/libfoo.rlib"
+            )),
+            Some(BuildPlatform::Target),
+            "the nested build directory is the innermost root, so the triple is the first \
+             component under it; resolving against the target directory instead would see \
+             `build` first and misreport this as host"
+        );
+    }
+
+    #[test]
+    fn test_non_test_binaries_record_the_build_platform() {
+        let build_platforms = cross_build_platforms();
+
+        let workspace = PACKAGE_GRAPH_FIXTURE.workspace();
+        let target_dir = workspace.target_directory();
+        let build_dir = workspace
+            .build_directory()
+            .expect("fixture sets build_directory");
+
+        // This simulates `cargo test --no-run --target
+        // aarch64-unknown-linux-gnu` for a crate with `crate-type = ["dylib",
+        // "rlib"]` reachable through both a build dependency (i.e. host) and a
+        // regular dependency (target). Cargo compiles such libraries twice, and
+        // uplifts each build's dylib into the build's artifact directory, but
+        // leaves the rlibs in the build directory.
+        let input = [
+            dylib_artifact_json(
+                "shared",
+                &[
+                    target_dir.join("debug/libshared.so"),
+                    build_dir.join("debug/deps/libshared.rlib"),
+                ],
+            ),
+            dylib_artifact_json(
+                "shared",
+                &[
+                    target_dir.join("aarch64-unknown-linux-gnu/debug/libshared.so"),
+                    build_dir.join("aarch64-unknown-linux-gnu/debug/deps/libshared.rlib"),
+                ],
+            ),
+            bin_artifact_json(
+                "mainbin",
+                &target_dir.join("aarch64-unknown-linux-gnu/debug/mainbin"),
+            ),
+        ]
+        .map(|artifact| artifact.to_string())
+        .join("\n");
+
+        let binary_list =
+            BinaryList::from_messages(input.as_bytes(), &PACKAGE_GRAPH_FIXTURE, build_platforms)
+                .expect("parsing from messages succeeds");
+
+        assert_eq!(
+            binary_list.rust_build_meta.non_test_binaries.to_summary(),
+            BTreeMap::from([(
+                PACKAGE_METADATA_ID.to_owned(),
+                btreeset! {
+                    RustNonTestBinarySummary {
+                        name: "mainbin".to_owned(),
+                        kind: RustNonTestBinaryKind::BIN_EXE,
+                        path: "aarch64-unknown-linux-gnu/debug/mainbin".into(),
+                        build_platform: Some(BuildPlatform::Target),
+                    },
+                    RustNonTestBinarySummary {
+                        name: "shared".to_owned(),
+                        kind: RustNonTestBinaryKind::DYLIB,
+                        path: "aarch64-unknown-linux-gnu/debug/libshared.so".into(),
+                        build_platform: Some(BuildPlatform::Target),
+                    },
+                    RustNonTestBinarySummary {
+                        name: "shared".to_owned(),
+                        kind: RustNonTestBinaryKind::DYLIB,
+                        path: "debug/libshared.so".into(),
+                        build_platform: Some(BuildPlatform::Host),
+                    },
+                },
+            )]),
+            "the two builds of one dylib target are told apart by the triple component of their \
+             uplifted paths; the rlibs live in the fixture's build directory, which is not under \
+             the target directory, so they are not recorded at all"
+        );
+    }
+
+    #[derive(Clone, Copy)]
+    enum TestTarget {
+        Yes,
+        No,
+    }
+
+    impl TestTarget {
+        fn as_bool(self) -> bool {
+            match self {
+                Self::Yes => true,
+                Self::No => false,
+            }
+        }
+    }
+
+    fn bin_artifact_json(name: &str, path: &Utf8Path) -> serde_json::Value {
+        artifact_json(
+            name,
+            &["bin"],
+            &[path.to_owned()],
+            Some(path),
+            TestTarget::No,
+        )
+    }
+
+    fn dylib_artifact_json(name: &str, filenames: &[Utf8PathBuf]) -> serde_json::Value {
+        artifact_json(name, &["dylib", "rlib"], filenames, None, TestTarget::No)
+    }
+
+    fn artifact_json(
+        name: &str,
+        kind: &[&str],
+        filenames: &[Utf8PathBuf],
+        executable: Option<&Utf8Path>,
+        test_target: TestTarget,
+    ) -> serde_json::Value {
+        let package = package_metadata();
+        let src_path = package
+            .manifest_path()
+            .parent()
+            .expect("manifest path has a parent")
+            .join("src/lib.rs");
+        let is_test = test_target.as_bool();
+
+        json!({
+            "reason": "compiler-artifact",
+            "package_id": PACKAGE_METADATA_ID,
+            "manifest_path": package.manifest_path(),
+            "target": {
+                "name": name,
+                "kind": kind,
+                "crate_types": kind,
+                "required-features": [],
+                "src_path": src_path,
+                "edition": "2021",
+                "doctest": is_test,
+                "test": is_test,
+                "doc": is_test
+            },
+            "profile": {
+                "opt_level": "0",
+                "debuginfo": 0,
+                "debug_assertions": true,
+                "overflow_checks": true,
+                "test": is_test
+            },
+            "features": [],
+            "filenames": filenames,
+            "executable": executable,
+            "fresh": false
+        })
     }
 
     #[test]

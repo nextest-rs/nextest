@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- A new `build_platform` field on `RustNonTestBinarySummary` records whether Cargo built the binary for the host or for the target. Future versions of nextest will use this to correctly configure environment variables depending on the build platform.
+- `BuildPlatform` now implements `Hash`, `PartialOrd`, and `Ord`. The order is `Target` before `Host`, though this isn't semantically meaningful.
+
 ### Changed
 
 - Documentation-only change: `base_output_directories` is now documented as being resolved against both of the following:

@@ -159,8 +159,11 @@ impl TestListSummary {
     }
 }
 
-/// The platform a binary was built on (useful for cross-compilation)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+/// The platform a binary was built for: the host or the target.
+///
+/// This is relevant for cross-compilation; if that isn't occurring, binaries
+/// are built for the target platform.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum BuildPlatform {
     /// The target platform.
@@ -680,6 +683,15 @@ pub struct RustNonTestBinarySummary {
 
     /// The path to the binary, relative to the target directory.
     pub path: Utf8PathBuf,
+
+    /// The platform the binary was built for.
+    ///
+    /// In current versions of nextest, this is heuristically determined due to
+    /// a [Cargo limitation](https://github.com/rust-lang/cargo/issues/12869).
+    ///
+    /// Added in cargo-nextest 0.9.141.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_platform: Option<BuildPlatform>,
 }
 
 /// Serialized representation of the host and the target platform.
@@ -1131,6 +1143,38 @@ mod tests {
         target_platforms: vec![],
         platforms: None,
     }; "single target platform specified")]
+    #[test_case(r#"{
+        "target-directory": "/foo",
+        "base-output-directories": [],
+        "non-test-binaries": {
+            "my-package-id": [
+                {
+                    "name": "my-name",
+                    "kind": "bin-exe",
+                    "path": "debug/my-name"
+                }
+            ]
+        },
+        "linked-paths": []
+    }"#, RustBuildMetaSummary {
+        target_directory: "/foo".into(),
+        build_directory: None,
+        base_output_directories: BTreeSet::new(),
+        non_test_binaries: BTreeMap::from([("my-package-id".to_owned(), BTreeSet::from([
+            RustNonTestBinarySummary {
+                name: "my-name".to_owned(),
+                kind: RustNonTestBinaryKind::BIN_EXE,
+                path: "debug/my-name".into(),
+                build_platform: None,
+            },
+        ]))]),
+        build_script_out_dirs: BTreeMap::new(),
+        build_script_info: None,
+        linked_paths: BTreeSet::new(),
+        target_platform: None,
+        target_platforms: vec![],
+        platforms: None,
+    }; "non-test binary without a build platform")]
     fn test_deserialize_old_rust_build_meta(input: &str, expected: RustBuildMetaSummary) {
         let build_meta: RustBuildMetaSummary =
             serde_json::from_str(input).expect("input deserialized correctly");
