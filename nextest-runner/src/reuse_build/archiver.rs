@@ -73,20 +73,22 @@ pub fn apply_archive_filters(
         .cloned()
         .collect();
 
-    // Build a map of package IDs included in the filtered set, then use that to
-    // filter out non-test binaries not referred to by any package.
-    let relevant_package_ids: HashSet<_> = filtered_binaries
+    // Build the set of package IDs included in the filtered set, then use that
+    // to filter out non-test binaries not referred to by any package.
+    let relevant_package_ids: HashSet<&str> = filtered_binaries
         .iter()
-        .map(|binary| &binary.package_id)
+        .map(|binary| binary.package_id.as_str())
         .collect();
-    let mut filtered_non_test_binaries = binary_list.rust_build_meta.non_test_binaries.clone();
-    filtered_non_test_binaries.retain(|package_id, _| relevant_package_ids.contains(package_id));
+    let partitioned_non_test_binaries = binary_list
+        .rust_build_meta
+        .non_test_binaries
+        .partition_by_package_id(|package_id| relevant_package_ids.contains(package_id.repr()));
 
     // Also filter out build script out directories and env vars.
     let mut filtered_build_script_out_dirs =
         binary_list.rust_build_meta.build_script_out_dirs.clone();
     filtered_build_script_out_dirs
-        .retain(|package_id, _| relevant_package_ids.contains(package_id));
+        .retain(|package_id, _| relevant_package_ids.contains(package_id.as_str()));
     let filtered_build_script_info =
         binary_list
             .rust_build_meta
@@ -94,7 +96,7 @@ pub fn apply_archive_filters(
             .as_ref()
             .map(|info| {
                 info.iter()
-                    .filter(|(package_id, _)| relevant_package_ids.contains(package_id))
+                    .filter(|(package_id, _)| relevant_package_ids.contains(package_id.as_str()))
                     .map(|(k, v)| (k.clone(), v.clone()))
                     .collect()
             });
@@ -103,11 +105,8 @@ pub fn apply_archive_filters(
         .rust_binaries
         .len()
         .saturating_sub(filtered_binaries.len());
-    let filtered_out_non_test_binary_count = binary_list
-        .rust_build_meta
-        .non_test_binaries
-        .len()
-        .saturating_sub(filtered_non_test_binaries.len());
+    let filtered_out_non_test_binary_count =
+        partitioned_non_test_binaries.filtered_out_binary_count;
     let filtered_out_build_script_out_dir_count = binary_list
         .rust_build_meta
         .build_script_out_dirs
@@ -115,7 +114,7 @@ pub fn apply_archive_filters(
         .saturating_sub(filtered_build_script_out_dirs.len());
 
     let filtered_build_meta = RustBuildMeta {
-        non_test_binaries: filtered_non_test_binaries,
+        non_test_binaries: partitioned_non_test_binaries.retained,
         build_script_out_dirs: filtered_build_script_out_dirs,
         build_script_info: filtered_build_script_info,
         ..binary_list.rust_build_meta.clone()
@@ -235,7 +234,8 @@ where
             )?;
 
             let test_binary_count = binary_list.rust_binaries.len();
-            let non_test_binary_count = binary_list.rust_build_meta.non_test_binaries.len();
+            let non_test_binary_count =
+                binary_list.rust_build_meta.non_test_binaries.binary_count();
             let build_script_out_dir_count =
                 binary_list.rust_build_meta.build_script_out_dirs.len();
             let linked_path_count = binary_list.rust_build_meta.linked_paths.len();
@@ -462,13 +462,7 @@ impl<'a, W: Write> Archiver<'a, W> {
 
             self.append_file(ArchiveStep::TestBinaries, &binary.path, &rel_path)?;
         }
-        for non_test_binary in self
-            .binary_list
-            .rust_build_meta
-            .non_test_binaries
-            .values()
-            .flatten()
-        {
+        for non_test_binary in self.binary_list.rust_build_meta.non_test_binaries.files() {
             let src_path = self
                 .binary_list
                 .rust_build_meta

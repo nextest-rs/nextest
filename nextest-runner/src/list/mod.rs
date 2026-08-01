@@ -9,6 +9,7 @@
 
 mod binary_list;
 mod display_filter;
+mod non_test_binaries;
 mod output_format;
 #[cfg(test)]
 mod partition_tests;
@@ -20,6 +21,7 @@ mod test_list;
 
 pub use binary_list::*;
 pub(crate) use display_filter::*;
+pub(crate) use non_test_binaries::*;
 pub use output_format::*;
 pub use progress::ListProgressOptions;
 pub(crate) use progress::{ListProgressEvent, ListProgressReporter};

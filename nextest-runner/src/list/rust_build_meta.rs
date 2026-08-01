@@ -4,15 +4,13 @@
 use crate::{
     errors::RustBuildMetaParseError,
     helpers::convert_rel_path_to_main_sep,
-    list::{BinaryListState, TestListState},
+    list::{BinaryListState, RustNonTestBinaries, TestListState},
     platform::{BuildPlatforms, TargetPlatform},
     reuse_build::PathMapper,
 };
 use camino::Utf8PathBuf;
 use itertools::Itertools;
-use nextest_metadata::{
-    BuildPlatformsSummary, BuildScriptInfoSummary, RustBuildMetaSummary, RustNonTestBinarySummary,
-};
+use nextest_metadata::{BuildPlatformsSummary, BuildScriptInfoSummary, RustBuildMetaSummary};
 use std::{
     collections::{BTreeMap, BTreeSet},
     marker::PhantomData,
@@ -36,7 +34,7 @@ pub struct RustBuildMeta<State> {
 
     /// Information about non-test executables, keyed by package ID. Paths are
     /// relative to `target_directory` (non-test binaries are uplifted by Cargo).
-    pub non_test_binaries: BTreeMap<String, BTreeSet<RustNonTestBinarySummary>>,
+    pub(crate) non_test_binaries: RustNonTestBinaries,
 
     /// Build script output directory, relative to the build directory and keyed
     /// by package ID. Only present for workspace packages that have build
@@ -80,7 +78,7 @@ impl RustBuildMeta<BinaryListState> {
             target_directory: target_directory.into(),
             build_directory: build_directory.into(),
             base_output_directories: BTreeSet::new(),
-            non_test_binaries: BTreeMap::new(),
+            non_test_binaries: RustNonTestBinaries::default(),
             build_script_out_dirs: BTreeMap::new(),
             build_script_info: Some(BTreeMap::new()),
             linked_paths: BTreeMap::new(),
@@ -130,7 +128,7 @@ impl RustBuildMeta<TestListState> {
             target_directory: Utf8PathBuf::new(),
             build_directory: Utf8PathBuf::new(),
             base_output_directories: BTreeSet::new(),
-            non_test_binaries: BTreeMap::new(),
+            non_test_binaries: RustNonTestBinaries::default(),
             build_script_out_dirs: BTreeMap::new(),
             build_script_info: Some(BTreeMap::new()),
             linked_paths: BTreeMap::new(),
@@ -229,7 +227,7 @@ impl<State> RustBuildMeta<State> {
                     .map(|(k, v)| (k, BuildScriptInfo::from_summary(v)))
                     .collect()
             }),
-            non_test_binaries: summary.non_test_binaries,
+            non_test_binaries: RustNonTestBinaries::from_summary(summary.non_test_binaries),
             linked_paths: summary
                 .linked_paths
                 .into_iter()
@@ -246,7 +244,7 @@ impl<State> RustBuildMeta<State> {
             target_directory: self.target_directory.clone(),
             build_directory: Some(self.build_directory.clone()),
             base_output_directories: self.base_output_directories.clone(),
-            non_test_binaries: self.non_test_binaries.clone(),
+            non_test_binaries: self.non_test_binaries.to_summary(),
             build_script_out_dirs: self.build_script_out_dirs.clone(),
             build_script_info: self.build_script_info.as_ref().map(|info| {
                 info.iter()
