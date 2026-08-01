@@ -1509,6 +1509,35 @@ fn test_archive_with_build_filter() {
             );
         },
     );
+
+    // This filter excludes dylib-test's test binary, but fixture-project's lib
+    // test still needs dylib-test's dylib at exec time.
+    let expected_dylib = "dylib_test";
+    let dylib_test_case = "tests::call_dylib_add_two";
+    check_archive_contents(
+        &env_info,
+        "package(fixture-project)",
+        "archive_filter_package_dylib",
+        |env_info, archive_file, paths| {
+            assert!(
+                paths.iter().any(|path| {
+                    // Dylibs are uplifted to the final artifact directory, so
+                    // they sit alongside deps rather than inside it.
+                    path.parent().and_then(Utf8Path::file_name) == Some("debug")
+                        && path_contains_test_fixture_file(path, expected_dylib)
+                }),
+                "{:?} was missing from the test archive",
+                expected_dylib
+            );
+            let output = list_from_archive(env_info, &archive_file);
+            assert!(
+                output.stdout_as_str().contains(dylib_test_case),
+                "{:?} was missing from the test list\n{}",
+                dylib_test_case,
+                output
+            );
+        },
+    );
 }
 
 /// Checks if the file name at `path` contains `expected_file_name`
@@ -1691,19 +1720,43 @@ fn run_archive(env_info: &TestEnvInfo, archive_file: &Utf8Path) -> (TempProject,
     )
 }
 
+/// Lists tests out of an archive.
+///
+/// This requires that all binaries be executable (e.g., that dylib dependencies
+/// are satisfied).
+fn list_from_archive(env_info: &TestEnvInfo, archive_file: &Utf8Path) -> CargoNextestOutput {
+    let (_p2, _extracted_target, output) =
+        nextest_from_archive(env_info, archive_file, "list", NextestExitCode::OK);
+    output
+}
+
 fn run_archive_with_args(
     env_info: &TestEnvInfo,
     archive_file: &Utf8Path,
     run_property: RunProperties,
     expected_exit_code: i32,
 ) -> (TempProject, Utf8PathBuf) {
+    let (p2, extracted_target, output) =
+        nextest_from_archive(env_info, archive_file, "run", expected_exit_code);
+    check_run_output_with_junit(&output.stderr, &p2.junit_path("default"), run_property);
+
+    // project is included in return value to keep tempdirs alive
+    (p2, extracted_target)
+}
+
+fn nextest_from_archive(
+    env_info: &TestEnvInfo,
+    archive_file: &Utf8Path,
+    subcommand: &str,
+    expected_exit_code: i32,
+) -> (TempProject, Utf8PathBuf, CargoNextestOutput) {
     let p2 = TempProject::new(env_info).unwrap();
     let extract_to = p2.workspace_root().join("extract_to");
     std::fs::create_dir_all(&extract_to).unwrap();
 
     let output = CargoNextestCli::for_test(env_info)
         .args([
-            "run",
+            subcommand,
             "--archive-file",
             archive_file.as_str(),
             "--workspace-remap",
@@ -1718,10 +1771,8 @@ fn run_archive_with_args(
         Some(expected_exit_code),
         "correct exit code for command\n{output}"
     );
-    check_run_output_with_junit(&output.stderr, &p2.junit_path("default"), run_property);
 
-    // project is included in return value to keep tempdirs alive
-    (p2, extract_to.join("target"))
+    (p2, extract_to.join("target"), output)
 }
 
 #[test]

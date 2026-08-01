@@ -82,7 +82,7 @@ pub fn apply_archive_filters(
     let partitioned_non_test_binaries = binary_list
         .rust_build_meta
         .non_test_binaries
-        .partition_by_package_id(|package_id| relevant_package_ids.contains(package_id.repr()));
+        .partition_for_archive(&relevant_package_ids);
 
     // Also filter out build script out directories and env vars.
     let mut filtered_build_script_out_dirs =
