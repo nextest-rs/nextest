@@ -7,6 +7,7 @@
 //! * [`TestList`] for test instances
 //! * [`BinaryList`] for test binaries
 
+mod binary_invocation;
 mod binary_list;
 mod display_filter;
 mod non_test_binaries;
@@ -20,6 +21,7 @@ mod rust_build_meta;
 mod test_helpers;
 mod test_list;
 
+pub use binary_invocation::*;
 pub use binary_list::*;
 pub(crate) use display_filter::*;
 pub(crate) use non_test_binaries::*;

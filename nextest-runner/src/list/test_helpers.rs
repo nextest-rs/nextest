@@ -48,6 +48,7 @@ pub(super) fn make_test_artifact(binary_id: &str) -> RustTestArtifact<'static> {
         kind: RustTestBinaryKind::LIB,
         non_test_binaries: BTreeSet::new(),
         build_platform: BuildPlatform::Target,
+        invocation: TestBinaryInvocation::empty(),
     }
 }
 

@@ -14,7 +14,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use quick_junit::ReportUuid;
 use std::{
     borrow::Cow,
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     ffi::{OsStr, OsString},
     fs::File,
     io::{BufRead, BufReader},
@@ -65,6 +65,7 @@ impl TestCommand {
         program: String,
         args: &[Cow<'_, str>],
         env: Option<&ScriptCommandEnvMap>,
+        suite_env: &BTreeMap<String, String>,
         cwd: &Utf8Path,
         package: &PackageInfo,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
@@ -76,10 +77,15 @@ impl TestCommand {
             create_command(program.clone(), args, lctx.double_spawn)
         };
 
-        // Apply Cargo's config.toml env first (workspace-wide), then the
-        // wrapper's command.env (per-script). This way command.env takes
-        // priority as the more specific configuration.
+        // Apply Cargo's config.toml env first (workspace-wide), then the test
+        // suite's own env (per-binary, from the build system that described it),
+        // then the wrapper's command.env (per-script). Each is more specific
+        // than the last, so each takes priority over it.
+        //
+        // The variables nextest sets below override all three: they describe the
+        // run itself, and a test binary must not be able to lie about them.
         lctx.env.apply_env(&mut cmd);
+        cmd.envs(suite_env);
         if let Some(env) = env {
             env.apply_env(&mut cmd);
         }

@@ -4,7 +4,7 @@
 use crate::{
     errors::{FromMessagesError, RustBuildMetaParseError, WriteTestListError},
     helpers::convert_rel_path_to_forward_slash,
-    list::{BinaryListState, OutputFormat, RustBuildMeta, Styles},
+    list::{BinaryListState, OutputFormat, RustBuildMeta, Styles, TestBinaryInvocation},
     platform::BuildPlatforms,
     write_str::WriteStr,
 };
@@ -39,6 +39,13 @@ pub struct RustTestBinary {
     /// Platform for which this binary was built.
     /// (Proc-macro tests are built for the host.)
     pub build_platform: BuildPlatform,
+
+    /// Extra details for invoking this binary.
+    ///
+    /// Empty for Cargo-built binaries, which are invoked directly. Not part of
+    /// [`RustTestBinarySummary`], so it does not survive a round trip through
+    /// `--binaries-metadata` or an archive.
+    pub invocation: TestBinaryInvocation,
 }
 
 /// The list of Rust test binaries built by Cargo.
@@ -80,6 +87,8 @@ impl BinaryList {
                 kind: bin.kind,
                 id: bin.binary_id,
                 build_platform: bin.build_platform,
+                // Not carried in the summary format; see `RustTestBinary`.
+                invocation: TestBinaryInvocation::empty(),
             })
             .collect();
         Ok(Self {
@@ -380,6 +389,8 @@ impl<'g> BinaryListBuildState<'g> {
                     name,
                     id,
                     build_platform: platform,
+                    // Cargo binaries are invoked directly.
+                    invocation: TestBinaryInvocation::empty(),
                 });
             } else if artifact
                 .target
@@ -740,6 +751,7 @@ mod tests {
             kind: RustTestBinaryKind::LIB,
             name: "fake-binary".to_owned(),
             build_platform: BuildPlatform::Target,
+            invocation: TestBinaryInvocation::empty(),
         };
         let fake_macro_test = RustTestBinary {
             id: "fake-macro::proc-macro/fake-macro".into(),
@@ -749,6 +761,7 @@ mod tests {
             kind: RustTestBinaryKind::PROC_MACRO,
             name: "fake-macro".to_owned(),
             build_platform: BuildPlatform::Host,
+            invocation: TestBinaryInvocation::empty(),
         };
 
         let fake_triple = TargetTriple {

@@ -17,7 +17,7 @@ use crate::{
     indenter::indented,
     list::{
         BinaryList, ListProgressEvent, ListProgressOptions, ListProgressReporter, OutputFormat,
-        PackageInfo, RustBuildMeta, Styles, TestListState,
+        PackageInfo, RustBuildMeta, Styles, TestBinaryInvocation, TestListState,
     },
     partition::{Partitioner, PartitionerBuilder, PartitionerScope},
     reuse_build::PathMapper,
@@ -86,6 +86,9 @@ pub struct RustTestArtifact<'g> {
 
     /// The platform for which this test artifact was built.
     pub build_platform: BuildPlatform,
+
+    /// Extra details for invoking this binary.
+    pub invocation: TestBinaryInvocation,
 }
 
 impl<'g> RustTestArtifact<'g> {
@@ -156,6 +159,7 @@ impl<'g> RustTestArtifact<'g> {
                 cwd,
                 non_test_binaries,
                 build_platform: binary.build_platform,
+                invocation: binary.invocation.clone(),
             })
         }
 
@@ -186,6 +190,7 @@ impl<'g> RustTestArtifact<'g> {
             non_test_binaries,
             cwd,
             build_platform,
+            invocation,
         } = self;
 
         RustTestSuite {
@@ -197,6 +202,7 @@ impl<'g> RustTestArtifact<'g> {
             non_test_binaries,
             cwd,
             build_platform,
+            invocation,
             status,
         }
     }
@@ -527,6 +533,8 @@ impl<'g> TestList<'g> {
                 non_test_binaries: BTreeSet::new(), // Not stored in summary.
                 cwd: suite_summary.cwd.clone(),
                 build_platform: suite_summary.binary.build_platform,
+                // Not carried in the summary format; see `RustTestBinary`.
+                invocation: TestBinaryInvocation::empty(),
                 status,
             };
 
@@ -1322,6 +1330,9 @@ pub struct RustTestSuite<'g> {
     /// Non-test binaries corresponding to this test suite (name, path).
     pub non_test_binaries: BTreeSet<(String, Utf8PathBuf)>,
 
+    /// Extra details for invoking this binary.
+    pub invocation: TestBinaryInvocation,
+
     /// Test suite status and test case names.
     pub status: RustTestSuiteStatus,
 }
@@ -1392,6 +1403,7 @@ impl RustTestArtifact<'_> {
             &lctx.rust_build_meta.target_directory,
         );
         cli.push(self.binary_path.as_str());
+        cli.extend(self.invocation.leading_args.iter().map(String::as_str));
 
         cli.extend(["--list", "--format", "terse"]);
         if ignored {
@@ -1406,6 +1418,7 @@ impl RustTestArtifact<'_> {
                 .into_owned(),
             &cli.args,
             cli.env,
+            &self.invocation.env,
             &self.cwd,
             self.package,
             &self.non_test_binaries,
@@ -1633,7 +1646,6 @@ impl<'a> TestInstance<'a> {
         extra_args: &[String],
         interceptor: &Interceptor,
     ) -> TestCommand {
-        // TODO: non-rust tests
         let cli = self.compute_cli(ctx, test_list, wrapper_script, extra_args);
 
         let lctx = LocalExecuteContext {
@@ -1655,6 +1667,7 @@ impl<'a> TestInstance<'a> {
                 .into_owned(),
             &cli.args,
             cli.env,
+            &self.suite_info.invocation.env,
             &self.suite_info.cwd,
             self.suite_info.package,
             &self.suite_info.non_test_binaries,
@@ -1692,6 +1705,13 @@ impl<'a> TestInstance<'a> {
             &test_list.rust_build_meta().target_directory,
         );
         cli.push(self.suite_info.binary_path.as_str());
+        cli.extend(
+            self.suite_info
+                .invocation
+                .leading_args
+                .iter()
+                .map(String::as_str),
+        );
 
         cli.extend(["--exact", self.name.as_str(), "--nocapture"]);
         if self.test_info.ignored {
@@ -2024,6 +2044,7 @@ mod tests {
             kind: RustTestBinaryKind::LIB,
             non_test_binaries: BTreeSet::new(),
             build_platform: BuildPlatform::Target,
+            invocation: TestBinaryInvocation::empty(),
         };
 
         let skipped_binary_name = "skipped-binary".to_owned();
@@ -2037,6 +2058,7 @@ mod tests {
             kind: RustTestBinaryKind::PROC_MACRO,
             non_test_binaries: BTreeSet::new(),
             build_platform: BuildPlatform::Host,
+            invocation: TestBinaryInvocation::empty(),
         };
 
         let fake_triple = TargetTriple {
@@ -2149,6 +2171,7 @@ mod tests {
                     binary_path: "/fake/binary".into(),
                     kind: RustTestBinaryKind::LIB,
                     non_test_binaries: BTreeSet::new(),
+                    invocation: TestBinaryInvocation::empty(),
                 },
                 RustTestSuite {
                     status: RustTestSuiteStatus::Skipped {
@@ -2162,6 +2185,7 @@ mod tests {
                     binary_path: "/fake/skipped-binary".into(),
                     kind: RustTestBinaryKind::PROC_MACRO,
                     non_test_binaries: BTreeSet::new(),
+                    invocation: TestBinaryInvocation::empty(),
                 },
             }
         );
@@ -2393,6 +2417,7 @@ mod tests {
             kind: RustTestBinaryKind::LIB,
             non_test_binaries: BTreeSet::new(),
             build_platform: BuildPlatform::Target,
+            invocation: TestBinaryInvocation::empty(),
         };
 
         let fake_host_libdir = "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib";
@@ -2439,6 +2464,138 @@ mod tests {
             }
             other => panic!("expected Listed status, got {other:?}"),
         }
+    }
+
+    /// The libtest arguments must stay last, so a suite's leading args go
+    /// between the binary path and them. Wrappers stay in front of everything.
+    #[test]
+    fn invocation_leading_args_precede_libtest_args() {
+        let suite = RustTestSuite {
+            binary_id: RustBinaryId::new("fake-package::fake-binary"),
+            binary_path: "/fake/binary".into(),
+            package: package_info(),
+            binary_name: "fake-binary".to_owned(),
+            kind: RustTestBinaryKind::TEST,
+            cwd: "/fake/cwd".into(),
+            build_platform: BuildPlatform::Target,
+            non_test_binaries: BTreeSet::new(),
+            invocation: TestBinaryInvocation {
+                leading_args: vec!["--buck-arg".to_owned(), "value".to_owned()],
+                env: BTreeMap::new(),
+            },
+            status: RustTestSuiteStatus::Listed {
+                test_cases: DebugIgnore(IdOrdMap::new()),
+            },
+        };
+        let test_info = RustTestCaseSummary {
+            kind: Some(RustTestKind::TEST),
+            ignored: false,
+            filter_match: FilterMatch::Matches,
+        };
+        let name = TestCaseName::new("tests::foo");
+        let instance = TestInstance {
+            name: &name,
+            suite_info: &suite,
+            test_info: &test_info,
+        };
+
+        let test_list = TestList::empty();
+        let version_env_vars = VersionEnvVars {
+            current_version: semver::Version::new(0, 0, 0),
+            required_version: None,
+            recommended_version: None,
+        };
+        let ctx = TestExecuteContext {
+            run_id: ReportUuid::new_v4(),
+            version_env_vars: &version_env_vars,
+            profile_name: "default",
+            double_spawn: &DoubleSpawnInfo::disabled(),
+            target_runner: &TargetRunner::empty(),
+        };
+
+        assert_eq!(
+            instance.command_line(&ctx, &test_list, None, &[]),
+            vec![
+                "/fake/binary",
+                "--buck-arg",
+                "value",
+                "--exact",
+                "tests::foo",
+                "--nocapture",
+            ],
+            "leading args come after the binary and before the libtest args"
+        );
+
+        // An extra arg from the profile still goes last.
+        assert_eq!(
+            instance.command_line(&ctx, &test_list, None, &["--extra".to_owned()]),
+            vec![
+                "/fake/binary",
+                "--buck-arg",
+                "value",
+                "--exact",
+                "tests::foo",
+                "--nocapture",
+                "--extra",
+            ],
+            "run-extra-args stay last"
+        );
+    }
+
+    /// Cargo suites have an empty invocation, which must not alter the command.
+    #[test]
+    fn empty_invocation_leaves_command_unchanged() {
+        let suite = RustTestSuite {
+            binary_id: RustBinaryId::new("fake-package::fake-binary"),
+            binary_path: "/fake/binary".into(),
+            package: package_info(),
+            binary_name: "fake-binary".to_owned(),
+            kind: RustTestBinaryKind::TEST,
+            cwd: "/fake/cwd".into(),
+            build_platform: BuildPlatform::Target,
+            non_test_binaries: BTreeSet::new(),
+            invocation: TestBinaryInvocation::empty(),
+            status: RustTestSuiteStatus::Listed {
+                test_cases: DebugIgnore(IdOrdMap::new()),
+            },
+        };
+        let test_info = RustTestCaseSummary {
+            kind: Some(RustTestKind::TEST),
+            ignored: true,
+            filter_match: FilterMatch::Matches,
+        };
+        let name = TestCaseName::new("tests::foo");
+        let instance = TestInstance {
+            name: &name,
+            suite_info: &suite,
+            test_info: &test_info,
+        };
+
+        let test_list = TestList::empty();
+        let version_env_vars = VersionEnvVars {
+            current_version: semver::Version::new(0, 0, 0),
+            required_version: None,
+            recommended_version: None,
+        };
+        let ctx = TestExecuteContext {
+            run_id: ReportUuid::new_v4(),
+            version_env_vars: &version_env_vars,
+            profile_name: "default",
+            double_spawn: &DoubleSpawnInfo::disabled(),
+            target_runner: &TargetRunner::empty(),
+        };
+
+        assert_eq!(
+            instance.command_line(&ctx, &test_list, None, &[]),
+            vec![
+                "/fake/binary",
+                "--exact",
+                "tests::foo",
+                "--nocapture",
+                "--ignored",
+            ],
+            "an empty invocation adds nothing"
+        );
     }
 
     #[test]
@@ -2972,6 +3129,7 @@ mod tests {
                     kind: RustTestBinaryKind::LIB,
                     non_test_binaries: BTreeSet::new(),
                     build_platform: BuildPlatform::Target,
+                    invocation: TestBinaryInvocation::empty(),
                 },
                 test_cases: vec![
                     ParsedTestCase {
