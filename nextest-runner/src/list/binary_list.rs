@@ -719,7 +719,7 @@ mod tests {
         cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
         list::{
             SerializableFormat,
-            test_helpers::{PACKAGE_GRAPH_FIXTURE, PACKAGE_METADATA_ID, package_metadata},
+            test_helpers::{PACKAGE_GRAPH_FIXTURE, PACKAGE_METADATA_ID, package_info},
         },
         platform::{HostPlatform, PlatformLibdir, TargetPlatform},
     };
@@ -958,7 +958,7 @@ mod tests {
             },
             target: None,
         };
-        let package = package_metadata();
+        let package = package_info();
         // The fixture sets build_directory separately from target_directory, so
         // an artifact resolved against the wrong root fails to produce a base
         // output directory.
@@ -968,7 +968,7 @@ mod tests {
             .expect("fixture sets build_directory")
             .join("debug/deps/metadata_helper-test");
         let compiler_artifact = artifact_json(
-            package.name(),
+            &package.name,
             &["lib"],
             std::slice::from_ref(&artifact_path),
             Some(&artifact_path),
@@ -1365,9 +1365,9 @@ mod tests {
         executable: Option<&Utf8Path>,
         test_target: TestTarget,
     ) -> serde_json::Value {
-        let package = package_metadata();
+        let package = package_info();
         let src_path = package
-            .manifest_path()
+            .manifest_path
             .parent()
             .expect("manifest path has a parent")
             .join("src/lib.rs");
@@ -1376,7 +1376,7 @@ mod tests {
         json!({
             "reason": "compiler-artifact",
             "package_id": PACKAGE_METADATA_ID,
-            "manifest_path": package.manifest_path(),
+            "manifest_path": package.manifest_path,
             "target": {
                 "name": name,
                 "kind": kind,

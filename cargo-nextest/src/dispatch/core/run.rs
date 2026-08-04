@@ -862,6 +862,7 @@ impl App {
         self.build_filter.compute_test_list(
             ctx,
             self.base.graph(),
+            self.base.packages(),
             self.base.workspace_root.clone(),
             binary_list,
             test_filter,

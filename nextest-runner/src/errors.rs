@@ -1160,6 +1160,15 @@ pub enum FromMessagesError {
     #[error("error querying package graph")]
     PackageGraph(#[source] guppy::Error),
 
+    /// A test binary referred to a package that wasn't in the package map.
+    #[error("no package info found for package ID `{package_id}` (binary `{binary_id}`)")]
+    PackageInfoNotFound {
+        /// The package ID that wasn't found.
+        package_id: String,
+        /// The binary that referred to the missing package.
+        binary_id: RustBinaryId,
+    },
+
     /// A target in the package graph was missing `kind` information.
     #[error("missing kind for target {binary_name} in package {package_name}")]
     MissingTargetKind {

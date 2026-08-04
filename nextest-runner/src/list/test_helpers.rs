@@ -9,10 +9,7 @@ use crate::{
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir},
     reuse_build::PathMapper,
 };
-use guppy::{
-    CargoMetadata, PackageId,
-    graph::{PackageGraph, PackageMetadata},
-};
+use guppy::{CargoMetadata, PackageId, graph::PackageGraph};
 use nextest_filtering::{CompiledExpr, EvalContext};
 use nextest_metadata::{BuildPlatform, RustBinaryId, RustTestBinaryKind};
 use std::{collections::BTreeSet, sync::LazyLock};
@@ -28,10 +25,15 @@ pub(super) static PACKAGE_GRAPH_FIXTURE: LazyLock<PackageGraph> = LazyLock::new(
 pub(super) static PACKAGE_METADATA_ID: &str =
     "metadata-helper 0.1.0 (path+file:///Users/fakeuser/local/testcrates/metadata/metadata-helper)";
 
-pub(super) fn package_metadata() -> PackageMetadata<'static> {
-    PACKAGE_GRAPH_FIXTURE
+pub(super) static PACKAGE_INFO_FIXTURE: LazyLock<PackageInfo> = LazyLock::new(|| {
+    let metadata = PACKAGE_GRAPH_FIXTURE
         .metadata(&PackageId::new(PACKAGE_METADATA_ID))
-        .expect("package ID is valid")
+        .expect("package ID is valid");
+    PackageInfo::from_package_metadata(&metadata)
+});
+
+pub(super) fn package_info() -> &'static PackageInfo {
+    &PACKAGE_INFO_FIXTURE
 }
 
 /// Creates a test artifact with the given binary ID and sensible defaults.
@@ -40,7 +42,7 @@ pub(super) fn make_test_artifact(binary_id: &str) -> RustTestArtifact<'static> {
     RustTestArtifact {
         binary_path: format!("/fake/{binary_name}").into(),
         cwd: "/fake/cwd".into(),
-        package: package_metadata(),
+        package: package_info(),
         binary_name: binary_name.to_owned(),
         binary_id: RustBinaryId::new(binary_id),
         kind: RustTestBinaryKind::LIB,

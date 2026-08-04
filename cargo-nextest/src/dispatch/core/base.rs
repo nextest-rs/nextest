@@ -15,6 +15,7 @@ use crate::{
 };
 use camino::Utf8PathBuf;
 use guppy::graph::PackageGraph;
+use iddqd::IdOrdMap;
 use nextest_filtering::ParseContext;
 use nextest_runner::{
     cargo_config::CargoConfigs,
@@ -23,7 +24,7 @@ use nextest_runner::{
         NextestVersionEval, VersionOnlyConfig,
     },
     double_spawn::DoubleSpawnInfo,
-    list::BinaryList,
+    list::{BinaryList, PackageInfo},
     platform::BuildPlatforms,
     reuse_build::ReuseBuildInfo,
     target_runner::TargetRunner,
@@ -45,6 +46,8 @@ pub(crate) struct BaseApp {
     pub(crate) build_platforms: BuildPlatforms,
     pub(crate) cargo_metadata_json: Arc<String>,
     package_graph: Arc<PackageGraph>,
+    // Computed from `package_graph` on first access.
+    packages: OnceLock<IdOrdMap<PackageInfo>>,
     // Potentially remapped workspace root (might not be the same as the graph).
     pub(crate) workspace_root: Utf8PathBuf,
     manifest_path: Option<Utf8PathBuf>,
@@ -161,6 +164,7 @@ impl BaseApp {
             cargo_configs,
             current_version,
 
+            packages: OnceLock::new(),
             double_spawn: OnceLock::new(),
             target_runner: OnceLock::new(),
         })
@@ -485,6 +489,15 @@ impl BaseApp {
     #[inline]
     pub(crate) fn graph(&self) -> &PackageGraph {
         &self.package_graph
+    }
+
+    /// Returns package information for every package in the graph.
+    ///
+    /// `nextest-runner`'s list and run phases take this rather than the graph
+    /// itself, so that non-Cargo orchestrators can supply their own.
+    pub(crate) fn packages(&self) -> &IdOrdMap<PackageInfo> {
+        self.packages
+            .get_or_init(|| PackageInfo::map_from_graph(&self.package_graph))
     }
 
     pub(crate) fn load_profile<'cfg>(

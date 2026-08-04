@@ -303,7 +303,7 @@ impl<'cfg> LibtestReporter<'cfg> {
         let suite_info = test_list
             .get_suite(test_instance.binary_id)
             .expect("suite should exist in test list");
-        let crate_name = suite_info.package.name();
+        let crate_name = suite_info.package.name.as_str();
         let binary_name = &suite_info.binary_name;
 
         // Emit the suite start if this is the first test of the suite
@@ -387,7 +387,7 @@ impl<'cfg> LibtestReporter<'cfg> {
         write!(
             out,
             r#"{{"type":"{kind}","event":"{eve}","name":"{}::{}"#,
-            suite_info.package.name(),
+            suite_info.package.name.as_str(),
             suite_info.binary_name,
         )
         .map_err(fmt_err)?;
@@ -476,7 +476,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                 writeln!(
                     ib,
                     r#"{{"type":"{kind}","event":"{EVENT_IGNORED}","name":"{}::{}${}"}}"#,
-                    suite_info.package.name(),
+                    suite_info.package.name.as_str(),
                     suite_info.binary_name,
                     test_instance.test_name,
                 )
@@ -550,7 +550,7 @@ impl<'cfg> LibtestReporter<'cfg> {
         .map_err(fmt_err)?;
 
         if self.emit_nextest_obj {
-            let crate_name = suite_info.package.name();
+            let crate_name = suite_info.package.name.as_str();
             let binary_name = &suite_info.binary_name;
             write!(
                 out,

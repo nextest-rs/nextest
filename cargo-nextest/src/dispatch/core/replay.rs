@@ -19,7 +19,7 @@ use guppy::graph::PackageGraph;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{
     errors::{DisplayErrorChain, RecordReadError},
-    list::{OwnedTestInstanceId, TestList},
+    list::{OwnedTestInstanceId, PackageInfo, TestList},
     output_spec::RecordingSpec,
     pager::PagedOutput,
     record::{
@@ -244,8 +244,15 @@ fn run_replay_common(
         .read_record_opts()
         .map_err(|err| ExpectedError::RecordReadError { err })?;
 
-    let test_list = TestList::from_summary(&graph, &test_list_summary, record_opts.run_mode)
-        .map_err(|err| ExpectedError::TestListFromSummaryError { err })?;
+    let packages = PackageInfo::map_from_graph(&graph);
+    let workspace_root = graph.workspace().root().to_owned();
+    let test_list = TestList::from_summary(
+        &packages,
+        workspace_root,
+        &test_list_summary,
+        record_opts.run_mode,
+    )
+    .map_err(|err| ExpectedError::TestListFromSummaryError { err })?;
 
     let mut replay_cx = ReplayContext::new(&test_list);
     for (binary_id, suite) in &test_list_summary.rust_suites {

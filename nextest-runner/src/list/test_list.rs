@@ -17,7 +17,7 @@ use crate::{
     indenter::indented,
     list::{
         BinaryList, ListProgressEvent, ListProgressOptions, ListProgressReporter, OutputFormat,
-        RustBuildMeta, Styles, TestListState,
+        PackageInfo, RustBuildMeta, Styles, TestListState,
     },
     partition::{Partitioner, PartitionerBuilder, PartitionerScope},
     reuse_build::PathMapper,
@@ -31,10 +31,7 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use debug_ignore::DebugIgnore;
 use futures::prelude::*;
-use guppy::{
-    PackageId,
-    graph::{PackageGraph, PackageMetadata},
-};
+use guppy::PackageId;
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_filtering::{BinaryQuery, EvalContext, GroupLookup, TestQuery};
 use nextest_metadata::{
@@ -70,7 +67,7 @@ pub struct RustTestArtifact<'g> {
 
     /// Metadata for the package this artifact is a part of. This is used to set the correct
     /// environment variables.
-    pub package: PackageMetadata<'g>,
+    pub package: &'g PackageInfo,
 
     /// The path to the binary artifact.
     pub binary_path: Utf8PathBuf,
@@ -93,8 +90,12 @@ pub struct RustTestArtifact<'g> {
 
 impl<'g> RustTestArtifact<'g> {
     /// Constructs a list of test binaries from the list of built binaries.
+    ///
+    /// `packages` must contain an entry for every package ID referenced by
+    /// `binary_list`. Cargo-based callers build it from a `PackageGraph` with
+    /// [`PackageInfo::map_from_graph`].
     pub fn from_binary_list(
-        graph: &'g PackageGraph,
+        packages: &'g IdOrdMap<PackageInfo>,
         binary_list: Arc<BinaryList>,
         rust_build_meta: &RustBuildMeta<TestListState>,
         path_mapper: &PathMapper,
@@ -107,23 +108,17 @@ impl<'g> RustTestArtifact<'g> {
                 continue;
             }
 
-            // Look up the executable by package ID.
+            // Look up the package by package ID.
             let package_id = PackageId::new(binary.package_id.clone());
-            let package = graph
-                .metadata(&package_id)
-                .map_err(FromMessagesError::PackageGraph)?;
+            let package = packages.get(&package_id).ok_or_else(|| {
+                FromMessagesError::PackageInfoNotFound {
+                    package_id: binary.package_id.clone(),
+                    binary_id: binary.id.clone(),
+                }
+            })?;
 
-            // Tests are run in the directory containing Cargo.toml
-            let cwd = package
-                .manifest_path()
-                .parent()
-                .unwrap_or_else(|| {
-                    panic!(
-                        "manifest path {} doesn't have a parent",
-                        package.manifest_path()
-                    )
-                })
-                .to_path_buf();
+            // Tests are run in the directory containing the manifest.
+            let cwd = package.cwd().to_path_buf();
 
             // Test binaries live under the build directory (never uplifted).
             let binary_path = path_mapper.map_build_path(binary.path.clone());
@@ -170,7 +165,7 @@ impl<'g> RustTestArtifact<'g> {
     /// Returns a [`BinaryQuery`] corresponding to this test artifact.
     pub fn to_binary_query(&self) -> BinaryQuery<'_> {
         BinaryQuery {
-            package_id: self.package.id(),
+            package_id: &self.package.id,
             binary_id: &self.binary_id,
             kind: &self.kind,
             binary_name: &self.binary_name,
@@ -466,16 +461,14 @@ impl<'g> TestList<'g> {
     /// executing test binaries. The reconstructed TestList provides the
     /// data needed for display through the reporter infrastructure.
     pub fn from_summary(
-        graph: &'g PackageGraph,
+        packages: &'g IdOrdMap<PackageInfo>,
+        workspace_root: Utf8PathBuf,
         summary: &TestListSummary,
         mode: NextestRunMode,
     ) -> Result<Self, TestListFromSummaryError> {
         // Build RustBuildMeta from summary.
         let rust_build_meta = RustBuildMeta::from_summary(summary.rust_build_meta.clone())
             .map_err(TestListFromSummaryError::RustBuildMeta)?;
-
-        // Get the workspace root from the graph.
-        let workspace_root = graph.workspace().root().to_path_buf();
 
         // Construct an empty environment map - we don't need it for replay.
         let env = EnvironmentMap::empty();
@@ -488,9 +481,9 @@ impl<'g> TestList<'g> {
         let mut test_count = 0;
 
         for (binary_id, suite_summary) in &summary.rust_suites {
-            // Look up the package in the graph by package_id.
+            // Look up the package by package_id.
             let package_id = PackageId::new(suite_summary.binary.package_id.clone());
-            let package = graph.metadata(&package_id).map_err(|_| {
+            let package = packages.get(&package_id).ok_or_else(|| {
                 TestListFromSummaryError::PackageNotFound {
                     name: suite_summary.package_name.clone(),
                     package_id: suite_summary.binary.package_id.clone(),
@@ -658,10 +651,10 @@ impl<'g> TestList<'g> {
             .map(|test_suite| {
                 let (status, test_cases) = test_suite.status.to_summary();
                 let testsuite = RustTestSuiteSummary {
-                    package_name: test_suite.package.name().to_owned(),
+                    package_name: test_suite.package.name.clone(),
                     binary: RustTestBinarySummary {
                         binary_name: test_suite.binary_name.clone(),
-                        package_id: test_suite.package.id().repr().to_owned(),
+                        package_id: test_suite.package.id.repr().to_owned(),
                         kind: test_suite.kind.clone(),
                         binary_path: test_suite.binary_path.clone(),
                         binary_id: test_suite.binary_id.clone(),
@@ -1311,7 +1304,7 @@ pub struct RustTestSuite<'g> {
     pub binary_path: Utf8PathBuf,
 
     /// Package metadata.
-    pub package: PackageMetadata<'g>,
+    pub package: &'g PackageInfo,
 
     /// The unique binary name defined in `Cargo.toml` or inferred by the filename.
     pub binary_name: String,
@@ -1337,7 +1330,7 @@ impl<'g> RustTestSuite<'g> {
     /// Returns a binary query for this suite.
     pub fn to_binary_query(&self) -> BinaryQuery<'_> {
         BinaryQuery {
-            package_id: self.package.id(),
+            package_id: &self.package.id,
             binary_id: &self.binary_id,
             kind: &self.kind,
             binary_name: &self.binary_name,
@@ -1414,7 +1407,7 @@ impl RustTestArtifact<'_> {
             &cli.args,
             cli.env,
             &self.cwd,
-            &self.package,
+            self.package,
             &self.non_test_binaries,
             &Interceptor::None, // Interceptors are not used during the test list phase.
         );
@@ -1621,7 +1614,7 @@ impl<'a> TestInstance<'a> {
     pub fn to_test_query(&self) -> TestQuery<'a> {
         TestQuery {
             binary_query: BinaryQuery {
-                package_id: self.suite_info.package.id(),
+                package_id: &self.suite_info.package.id,
                 binary_id: &self.suite_info.binary_id,
                 kind: &self.suite_info.kind,
                 binary_name: &self.suite_info.binary_name,
@@ -1663,7 +1656,7 @@ impl<'a> TestInstance<'a> {
             &cli.args,
             cli.env,
             &self.suite_info.cwd,
-            &self.suite_info.package,
+            self.suite_info.package,
             &self.suite_info.non_test_binaries,
             interceptor,
         )
@@ -1966,7 +1959,7 @@ mod tests {
         config::scripts::{ScriptCommand, ScriptCommandEnvMap, ScriptCommandRelativeTo},
         list::{
             SerializableFormat,
-            test_helpers::{PACKAGE_GRAPH_FIXTURE, package_metadata},
+            test_helpers::{PACKAGE_GRAPH_FIXTURE, package_info},
         },
         platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
         target_runner::PlatformRunnerSource,
@@ -2025,7 +2018,7 @@ mod tests {
         let test_binary = RustTestArtifact {
             binary_path: "/fake/binary".into(),
             cwd: fake_cwd.clone(),
-            package: package_metadata(),
+            package: package_info(),
             binary_name: fake_binary_name.clone(),
             binary_id: fake_binary_id.clone(),
             kind: RustTestBinaryKind::LIB,
@@ -2038,7 +2031,7 @@ mod tests {
         let skipped_binary = RustTestArtifact {
             binary_path: "/fake/skipped-binary".into(),
             cwd: fake_cwd.clone(),
-            package: package_metadata(),
+            package: package_info(),
             binary_name: skipped_binary_name.clone(),
             binary_id: skipped_binary_id.clone(),
             kind: RustTestBinaryKind::PROC_MACRO,
@@ -2150,7 +2143,7 @@ mod tests {
                     },
                     cwd: fake_cwd.clone(),
                     build_platform: BuildPlatform::Target,
-                    package: package_metadata(),
+                    package: package_info(),
                     binary_name: fake_binary_name,
                     binary_id: fake_binary_id,
                     binary_path: "/fake/binary".into(),
@@ -2163,7 +2156,7 @@ mod tests {
                     },
                     cwd: fake_cwd,
                     build_platform: BuildPlatform::Host,
-                    package: package_metadata(),
+                    package: package_info(),
                     binary_name: skipped_binary_name,
                     binary_id: skipped_binary_id,
                     binary_path: "/fake/skipped-binary".into(),
@@ -2394,7 +2387,7 @@ mod tests {
         let test_binary = RustTestArtifact {
             binary_path: "/fake/binary".into(),
             cwd: fake_cwd.clone(),
-            package: package_metadata(),
+            package: package_info(),
             binary_name: "overlap-binary".to_owned(),
             binary_id: fake_binary_id.clone(),
             kind: RustTestBinaryKind::LIB,
@@ -2973,7 +2966,7 @@ mod tests {
                 artifact: RustTestArtifact {
                     binary_path: "/fake/binary".into(),
                     cwd: "/fake/cwd".into(),
-                    package: package_metadata(),
+                    package: package_info(),
                     binary_name: "fake-binary".to_owned(),
                     binary_id: fake_binary_id.clone(),
                     kind: RustTestBinaryKind::LIB,

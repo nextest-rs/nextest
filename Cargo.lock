@@ -441,6 +441,7 @@ dependencies = [
  "enable-ansi-support",
  "guppy",
  "humantime",
+ "iddqd",
  "idna_adapter",
  "insta",
  "itertools 0.15.0",

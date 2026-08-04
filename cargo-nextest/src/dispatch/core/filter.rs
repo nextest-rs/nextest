@@ -8,10 +8,14 @@ use crate::{ExpectedError, Result, reuse_build::make_path_mapper};
 use camino::Utf8PathBuf;
 use clap::{ArgAction, Args};
 use guppy::graph::PackageGraph;
+use iddqd::IdOrdMap;
 use nextest_runner::{
     cargo_config::EnvironmentMap,
     config::core::{EvaluatableProfile, get_num_cpus},
-    list::{BinaryList, ListProgressOptions, RustTestArtifact, TestExecuteContext, TestList},
+    list::{
+        BinaryList, ListProgressOptions, PackageInfo, RustTestArtifact, TestExecuteContext,
+        TestList,
+    },
     partition::PartitionerBuilder,
     reuse_build::ReuseBuildInfo,
     run_mode::NextestRunMode,
@@ -98,6 +102,7 @@ impl TestBuildFilter {
         &self,
         ctx: &TestExecuteContext<'_>,
         graph: &'g PackageGraph,
+        packages: &'g IdOrdMap<PackageInfo>,
         workspace_root: Utf8PathBuf,
         binary_list: Arc<BinaryList>,
         test_filter: &TestFilter,
@@ -123,7 +128,7 @@ impl TestBuildFilter {
 
         let rust_build_meta = binary_list.rust_build_meta.map_paths(&path_mapper);
         let test_artifacts = RustTestArtifact::from_binary_list(
-            graph,
+            packages,
             binary_list,
             &rust_build_meta,
             &path_mapper,

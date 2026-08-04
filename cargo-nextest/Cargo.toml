@@ -22,6 +22,7 @@ dialoguer = { workspace = true, optional = true }
 duct.workspace = true
 enable-ansi-support.workspace = true
 guppy.workspace = true
+iddqd.workspace = true
 humantime.workspace = true
 idna_adapter.workspace = true
 itertools.workspace = true

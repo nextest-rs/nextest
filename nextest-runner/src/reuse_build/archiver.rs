@@ -9,7 +9,7 @@ use crate::{
     },
     errors::{ArchiveCreateError, FromMessagesError, UnknownArchiveFormat, WriteTestListError},
     helpers::{convert_rel_path_to_forward_slash, rel_path_join},
-    list::{BinaryList, RustBuildMeta, RustTestArtifact},
+    list::{BinaryList, PackageInfo, RustBuildMeta, RustTestArtifact},
     redact::Redactor,
     reuse_build::{ArchiveFilterCounts, LIBDIRS_BASE_DIR, PathMapper},
     test_filter::{BinaryFilter, FilterBinaryMatch, FilterBound},
@@ -38,8 +38,9 @@ pub fn apply_archive_filters(
     path_mapper: &PathMapper,
 ) -> Result<(BinaryList, ArchiveFilterCounts), FromMessagesError> {
     let rust_build_meta = binary_list.rust_build_meta.map_paths(path_mapper);
+    let packages = PackageInfo::map_from_graph(graph);
     let test_artifacts = RustTestArtifact::from_binary_list(
-        graph,
+        &packages,
         binary_list.clone(),
         &rust_build_meta,
         path_mapper,
