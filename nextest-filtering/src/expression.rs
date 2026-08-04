@@ -401,37 +401,63 @@ impl KnownGroups {
 /// Inputs to filterset parsing.
 #[derive(Debug)]
 pub struct ParseContext<'g> {
-    /// The package graph.
-    graph: &'g PackageGraph,
+    /// The package graph, if one is available.
+    ///
+    /// Orchestrators for build systems other than Cargo have no package graph.
+    /// Predicates that need one report an error at compile time; the rest work
+    /// as usual.
+    graph: Option<&'g PackageGraph>,
 
     /// Cached data computed on first access.
     cache: OnceLock<ParseContextCache<'g>>,
 }
 
 impl<'g> ParseContext<'g> {
-    /// Creates a new `ParseContext`.
+    /// Creates a new `ParseContext` backed by a Cargo package graph.
     #[inline]
     pub fn new(graph: &'g PackageGraph) -> Self {
         Self {
-            graph,
+            graph: Some(graph),
             cache: OnceLock::new(),
         }
     }
 
-    /// Returns the package graph.
+    /// Creates a new `ParseContext` with no package graph.
+    ///
+    /// `package()`, `deps()`, and `rdeps()` fail to compile against this
+    /// context, since they have no package metadata to resolve against. Every
+    /// other predicate behaves as it does with a graph, except that suggestions
+    /// for misspelled binary names and IDs are unavailable.
     #[inline]
-    pub fn graph(&self) -> &'g PackageGraph {
+    pub fn without_graph() -> Self {
+        Self {
+            graph: None,
+            cache: OnceLock::new(),
+        }
+    }
+
+    /// Returns the package graph, if one is available.
+    #[inline]
+    pub fn graph(&self) -> Option<&'g PackageGraph> {
         self.graph
     }
 
     pub(crate) fn make_cache(&self) -> &ParseContextCache<'g> {
-        self.cache
-            .get_or_init(|| ParseContextCache::new(self.graph))
+        self.cache.get_or_init(|| match self.graph {
+            Some(graph) => ParseContextCache::new(graph),
+            None => ParseContextCache::empty(),
+        })
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct ParseContextCache<'g> {
+    /// Whether a package graph backed this cache.
+    ///
+    /// Without one, the collections below are empty because nothing is known,
+    /// not because nothing matched -- so the "didn't match anything"
+    /// diagnostics must be suppressed.
+    pub(crate) has_graph: bool,
     pub(crate) workspace_packages: Vec<PackageMetadata<'g>>,
     // Ordinarily we'd store RustBinaryId here, but that wouldn't allow looking
     // up a string.
@@ -457,9 +483,24 @@ impl<'g> ParseContextCache<'g> {
             .unzip();
 
         Self {
+            has_graph: true,
             workspace_packages,
             binary_ids,
             binary_names,
+        }
+    }
+
+    /// Returns an empty cache, for use when no package graph is available.
+    ///
+    /// `binary()` and `binary_id()` still compile against this; they simply
+    /// have nothing to check the name against, so no "didn't match anything"
+    /// diagnostic is produced.
+    fn empty() -> Self {
+        Self {
+            has_graph: false,
+            workspace_packages: Vec::new(),
+            binary_ids: HashSet::new(),
+            binary_names: HashSet::new(),
         }
     }
 }

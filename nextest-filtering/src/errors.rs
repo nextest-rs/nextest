@@ -161,6 +161,13 @@ pub enum ParseSingleError {
     #[error("operator didn't match any packages")]
     NoPackageMatch(#[label("no packages matched this")] SourceSpan),
 
+    /// A package graph predicate was used without a package graph being available.
+    #[error("predicate requires a Cargo package graph")]
+    PackageGraphUnavailable(
+        #[label("this predicate needs Cargo package metadata, which isn't available here")]
+        SourceSpan,
+    ),
+
     /// This matcher didn't match any test groups.
     #[error("operator didn't match any test groups")]
     NoGroupMatch(#[label("no test groups matched this")] SourceSpan),

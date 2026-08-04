@@ -1273,3 +1273,87 @@ fn test_group_regex_match() {
         "should have NoGroupMatch error: {err:?}"
     );
 }
+
+mod without_graph {
+    use super::{default_known_groups, load_graph};
+    use nextest_filtering::{
+        Filterset, FiltersetKind, ParseContext,
+        errors::{FiltersetParseErrors, ParseSingleError},
+    };
+    use test_case::test_case;
+
+    #[track_caller]
+    fn parse_without_graph(input: &str) -> Result<Filterset, FiltersetParseErrors> {
+        let cx = ParseContext::without_graph();
+        Filterset::parse(
+            input.to_owned(),
+            &cx,
+            FiltersetKind::Test,
+            &default_known_groups(),
+        )
+    }
+
+    /// These predicates resolve against Cargo package metadata, which a
+    /// non-Cargo orchestrator doesn't have. They must say so rather than
+    /// silently matching nothing.
+    #[test_case("package(crate_a)" ; "package")]
+    #[test_case("deps(crate_a)" ; "deps")]
+    #[test_case("rdeps(crate_a)" ; "rdeps")]
+    fn package_graph_predicates_are_rejected(input: &str) {
+        let errors =
+            parse_without_graph(input).expect_err("package graph predicates need a package graph");
+        assert_eq!(errors.errors.len(), 1, "exactly one error: {errors:?}");
+        assert!(
+            matches!(
+                errors.errors[0],
+                ParseSingleError::PackageGraphUnavailable(_)
+            ),
+            "expected PackageGraphUnavailable, got {:?}",
+            errors.errors[0]
+        );
+    }
+
+    /// Everything else compiles without a graph. In particular `binary()` and
+    /// `binary_id()` must not be rejected just because no names are known.
+    #[test_case("test(foo)" ; "test")]
+    #[test_case("binary(my-binary)" ; "binary")]
+    #[test_case("binary_id(my-crate::my-binary)" ; "binary id")]
+    #[test_case("kind(lib)" ; "kind")]
+    #[test_case("platform(host)" ; "platform")]
+    #[test_case("all()" ; "all")]
+    #[test_case("none()" ; "none")]
+    #[test_case("test(foo) + binary(bar)" ; "union")]
+    #[test_case("test(foo) & !kind(test)" ; "intersection and negation")]
+    fn other_predicates_compile(input: &str) {
+        parse_without_graph(input)
+            .unwrap_or_else(|errors| panic!("`{input}` should compile: {errors:?}"));
+    }
+
+    /// A package graph predicate nested inside a larger expression is still
+    /// reported, and reported once per occurrence.
+    #[test]
+    fn nested_package_predicate_is_reported() {
+        let errors = parse_without_graph("test(foo) + (package(crate_a) & kind(lib))")
+            .expect_err("nested package() still needs a graph");
+        assert_eq!(errors.errors.len(), 1, "exactly one error: {errors:?}");
+        assert!(matches!(
+            errors.errors[0],
+            ParseSingleError::PackageGraphUnavailable(_)
+        ));
+    }
+
+    /// With a graph, these same predicates keep working -- the new context is
+    /// the only thing that changes behavior.
+    #[test]
+    fn package_predicates_still_work_with_a_graph() {
+        let graph = load_graph();
+        let cx = ParseContext::new(&graph);
+        Filterset::parse(
+            "package(crate_a)".to_owned(),
+            &cx,
+            FiltersetKind::Test,
+            &default_known_groups(),
+        )
+        .expect("package() works when a graph is available");
+    }
+}

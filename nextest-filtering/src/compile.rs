@@ -33,8 +33,8 @@ pub(crate) fn compile(
     }
 
     let cx_cache = cx.make_cache();
-    let mut cache = cx.graph().new_depends_cache();
-    let expr = compile_expr(expr, cx_cache, known_groups, &mut cache, &mut errors);
+    let mut cache = cx.graph().map(|graph| graph.new_depends_cache());
+    let expr = compile_expr(expr, cx_cache, known_groups, cache.as_mut(), &mut errors);
 
     if errors.is_empty() {
         Ok(expr)
@@ -169,32 +169,64 @@ fn compile_set_def(
     set: &ParsedLeaf,
     cx_cache: &ParseContextCache<'_>,
     known_groups: &KnownGroups,
-    cache: &mut DependsCache<'_>,
+    cache: Option<&mut DependsCache<'_>>,
     errors: &mut Vec<ParseSingleError>,
 ) -> FiltersetLeaf {
     match set {
-        ParsedLeaf::Package(matcher, span) => FiltersetLeaf::Packages(expect_non_empty_packages(
-            matching_packages(matcher, &cx_cache.workspace_packages),
-            *span,
-            errors,
-        )),
-        ParsedLeaf::Deps(matcher, span) => FiltersetLeaf::Packages(expect_non_empty_packages(
-            dependencies_packages(matcher, &cx_cache.workspace_packages, cache),
-            *span,
-            errors,
-        )),
-        ParsedLeaf::Rdeps(matcher, span) => FiltersetLeaf::Packages(expect_non_empty_packages(
-            rdependencies_packages(matcher, &cx_cache.workspace_packages, cache),
-            *span,
-            errors,
-        )),
+        // `package()`, `deps()`, and `rdeps()` resolve against Cargo package
+        // metadata. Without a package graph there is nothing to resolve them
+        // to, so report that rather than silently matching no packages.
+        ParsedLeaf::Package(matcher, span) => {
+            let Some(_) = cache else {
+                errors.push(ParseSingleError::PackageGraphUnavailable(*span));
+                return FiltersetLeaf::Packages(HashSet::new());
+            };
+            FiltersetLeaf::Packages(expect_non_empty_packages(
+                matching_packages(matcher, &cx_cache.workspace_packages),
+                *span,
+                errors,
+            ))
+        }
+        ParsedLeaf::Deps(matcher, span) => {
+            let Some(cache) = cache else {
+                errors.push(ParseSingleError::PackageGraphUnavailable(*span));
+                return FiltersetLeaf::Packages(HashSet::new());
+            };
+            FiltersetLeaf::Packages(expect_non_empty_packages(
+                dependencies_packages(matcher, &cx_cache.workspace_packages, cache),
+                *span,
+                errors,
+            ))
+        }
+        ParsedLeaf::Rdeps(matcher, span) => {
+            let Some(cache) = cache else {
+                errors.push(ParseSingleError::PackageGraphUnavailable(*span));
+                return FiltersetLeaf::Packages(HashSet::new());
+            };
+            FiltersetLeaf::Packages(expect_non_empty_packages(
+                rdependencies_packages(matcher, &cx_cache.workspace_packages, cache),
+                *span,
+                errors,
+            ))
+        }
         ParsedLeaf::Kind(matcher, span) => FiltersetLeaf::Kind(matcher.clone(), *span),
+        // Without a graph, the known-name sets are empty because nothing is
+        // known, not because nothing matched -- so skip the "didn't match"
+        // check rather than rejecting every name.
         ParsedLeaf::Binary(matcher, span) => FiltersetLeaf::Binary(
-            expect_non_empty_binary_names(matcher, &cx_cache.binary_names, *span, errors),
+            if cx_cache.has_graph {
+                expect_non_empty_binary_names(matcher, &cx_cache.binary_names, *span, errors)
+            } else {
+                matcher.clone()
+            },
             *span,
         ),
         ParsedLeaf::BinaryId(matcher, span) => FiltersetLeaf::BinaryId(
-            expect_non_empty_binary_ids(matcher, &cx_cache.binary_ids, *span, errors),
+            if cx_cache.has_graph {
+                expect_non_empty_binary_ids(matcher, &cx_cache.binary_ids, *span, errors)
+            } else {
+                matcher.clone()
+            },
             *span,
         ),
         ParsedLeaf::Platform(platform, span) => FiltersetLeaf::Platform(*platform, *span),
@@ -280,13 +312,19 @@ fn compile_expr(
     expr: &ParsedExpr,
     cx_cache: &ParseContextCache<'_>,
     known_groups: &KnownGroups,
-    cache: &mut DependsCache<'_>,
+    mut cache: Option<&mut DependsCache<'_>>,
     errors: &mut Vec<ParseSingleError>,
 ) -> CompiledExpr {
     use crate::expression::ExprFrame::*;
 
     Wrapped(expr).collapse_frames(|layer: ExprFrame<&ParsedLeaf, CompiledExpr>| match layer {
-        Set(set) => CompiledExpr::Set(compile_set_def(set, cx_cache, known_groups, cache, errors)),
+        Set(set) => CompiledExpr::Set(compile_set_def(
+            set,
+            cx_cache,
+            known_groups,
+            cache.as_deref_mut(),
+            errors,
+        )),
         Not(expr) => CompiledExpr::Not(Box::new(expr)),
         Union(expr_1, expr_2) => CompiledExpr::Union(Box::new(expr_1), Box::new(expr_2)),
         Intersection(expr_1, expr_2) => {
