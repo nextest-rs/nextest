@@ -445,8 +445,12 @@ jobs:
           git config user.name "Nextest Bot"
           git pull --autostash --rebase origin main
           git add releases.json _redirects
-          git commit -m "Update release metadata for ${REF_NAME}"
-          git push origin HEAD:main
+          if git diff --cached --quiet; then
+            echo "No changes to release metadata; nothing to do."
+          else
+            git commit -m "Update release metadata for ${REF_NAME}"
+            git push origin HEAD:main
+          fi
       - name: Run cargo-release-publish.sh
         run: |
           cd nextest
