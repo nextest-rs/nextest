@@ -36,7 +36,7 @@ Configuration options supported for JUnit reports, within the `junit` section:
 `store-failure-output`
 : Whether to store output for failing tests in the `<system-out>` and `<system-err>` elements. Defaults to true.
 
-`report-skipped` <!-- md:version 0.9.142 -->
+`report-skipped` <!-- md:version 0.9.143 -->
 : Which skipped tests to emit as `<testcase>` elements with a `<skipped>` child.
 
     * `"none"` (the default) does not emit any skipped tests.
