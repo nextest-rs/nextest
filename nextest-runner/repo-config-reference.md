@@ -355,7 +355,7 @@ When `max-fail` is exceeded:
 
 #### `profile.<name>.junit.report-skipped`
 
-<!-- md:version 0.9.141 -->
+<!-- md:version 0.9.142 -->
 
 - **Type**: String
 - **Description**: Which skipped tests to emit as `<testcase>` elements with a `<skipped>` child in the JUnit XML report.

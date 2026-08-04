@@ -53,7 +53,7 @@ or a map with `host` and `target` keys for cross-compiling. See
 `junit.store-success-output` and `junit.store-failure-output`
 : Whether to store successful and failed output, respectively, for matching tests in the [JUnit XML report](../machine-readable/junit.md).
 
-`junit.report-skipped` <!-- md:version 0.9.141 -->
+`junit.report-skipped` <!-- md:version 0.9.142 -->
 : Which skipped tests to emit as `<skipped>` testcases for matching tests in the [JUnit XML report](../machine-readable/junit.md): `"none"` (the default), `"ignored"`, or `"all"`.
 
 `junit.flaky-fail-status` <!-- md:version 0.9.131 -->

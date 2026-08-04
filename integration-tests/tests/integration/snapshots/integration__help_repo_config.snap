@@ -405,7 +405,7 @@ profile.<name>.junit.store-failure-output
 
 profile.<name>.junit.report-skipped
 
-(since 0.9.141)
+(since 0.9.142)
 
 - Type: String
 - Description: Which skipped tests to emit as <testcase> elements with a

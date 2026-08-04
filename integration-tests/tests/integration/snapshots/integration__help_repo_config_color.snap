@@ -389,7 +389,7 @@ When [36mmax-fail[0m is exceeded:
 
 [1;4m[36mprofile.<name>.junit.report-skipped[0m
 
-[3m(since 0.9.141)[0m
+[3m(since 0.9.142)[0m
 
 - [1mType[0m: String
 - [1mDescription[0m: Which skipped tests to emit as [36m<testcase>[0m elements with a
