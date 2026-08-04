@@ -2576,7 +2576,7 @@ dependencies = [
 
 [[package]]
 name = "nextest-runner"
-version = "0.122.0"
+version = "0.122.1"
 dependencies = [
  "aho-corasick",
  "anstyle-progress",
