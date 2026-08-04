@@ -120,8 +120,13 @@ impl<'g> RustTestArtifact<'g> {
                 }
             })?;
 
-            // Tests are run in the directory containing the manifest.
-            let cwd = package.cwd().to_path_buf();
+            // Tests are run wherever the build system said, defaulting to the
+            // directory containing the manifest.
+            let cwd = binary
+                .invocation
+                .cwd
+                .clone()
+                .unwrap_or_else(|| package.cwd().to_path_buf());
 
             // Test binaries live under the build directory (never uplifted).
             let binary_path = path_mapper.map_build_path(binary.path.clone());
@@ -1978,8 +1983,10 @@ mod tests {
         cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
         config::scripts::{ScriptCommand, ScriptCommandEnvMap, ScriptCommandRelativeTo},
         list::{
-            SerializableFormat,
-            test_helpers::{PACKAGE_GRAPH_FIXTURE, package_info},
+            RustTestBinary, SerializableFormat,
+            test_helpers::{
+                PACKAGE_GRAPH_FIXTURE, PACKAGE_METADATA_ID, package_info, simple_build_meta,
+            },
         },
         platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
         target_runner::PlatformRunnerSource,
@@ -2482,6 +2489,7 @@ mod tests {
             invocation: TestBinaryInvocation {
                 leading_args: vec!["--buck-arg".to_owned(), "value".to_owned()],
                 env: BTreeMap::new(),
+                cwd: None,
             },
             status: RustTestSuiteStatus::Listed {
                 test_cases: DebugIgnore(IdOrdMap::new()),
@@ -2595,6 +2603,61 @@ mod tests {
                 "--ignored",
             ],
             "an empty invocation adds nothing"
+        );
+    }
+
+    /// A build system that names the working directory wins over the manifest
+    /// directory; one that does not still gets the manifest directory.
+    #[test]
+    fn invocation_cwd_overrides_the_manifest_directory() {
+        fn binary(id: &str, cwd: Option<&str>) -> RustTestBinary {
+            RustTestBinary {
+                id: RustBinaryId::new(id),
+                path: "/fake/binary".into(),
+                package_id: PACKAGE_METADATA_ID.to_owned(),
+                kind: RustTestBinaryKind::TEST,
+                name: "fake-binary".to_owned(),
+                build_platform: BuildPlatform::Target,
+                invocation: TestBinaryInvocation {
+                    cwd: cwd.map(Utf8PathBuf::from),
+                    ..TestBinaryInvocation::empty()
+                },
+            }
+        }
+
+        let binary_list = BinaryList {
+            rust_build_meta: RustBuildMeta::new(
+                "/fake",
+                "/fake",
+                BuildPlatforms {
+                    host: HostPlatform {
+                        platform: TargetTriple::x86_64_unknown_linux_gnu().platform,
+                        libdir: PlatformLibdir::Available("/fake/libdir".into()),
+                    },
+                    target: None,
+                },
+            ),
+            rust_binaries: vec![
+                binary("fake-package::explicit", Some("/explicit/cwd")),
+                binary("fake-package::derived", None),
+            ],
+        };
+        let packages = id_ord_map! { package_info().clone() };
+
+        let artifacts = RustTestArtifact::from_binary_list(
+            &packages,
+            Arc::new(binary_list),
+            &simple_build_meta(),
+            &PathMapper::noop(),
+            None,
+        )
+        .expect("every binary's package is present");
+
+        assert_eq!(artifacts[0].cwd, "/explicit/cwd");
+        assert_eq!(
+            artifacts[1].cwd,
+            package_info().cwd(),
+            "no explicit cwd falls back to the manifest directory"
         );
     }
 

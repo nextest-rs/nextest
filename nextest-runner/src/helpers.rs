@@ -178,6 +178,11 @@ pub mod plural {
     pub fn remain_str(count: usize) -> &'static str {
         if count == 1 { "remains" } else { "remain" }
     }
+
+    /// Returns "attempt" if `count` is 1, otherwise "attempts".
+    pub fn attempts_str(count: usize) -> &'static str {
+        if count == 1 { "attempt" } else { "attempts" }
+    }
 }
 
 /// A helper for displaying test instances with formatting.

@@ -1,0 +1,39 @@
+# Copyright (c) The nextest Contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+# A build-time artifact, so the example covers a test that depends on something Buck2 produced
+# rather than only on its own sources.
+genrule(
+    name = "greeting",
+    out = "greeting.txt",
+    cmd = "echo hello from buck2 > $OUT",
+)
+
+rust_library(
+    name = "demo",
+    srcs = ["src/lib.rs"],
+    crate_root = "src/lib.rs",
+    edition = "2024",
+)
+
+# Unit tests, compiled from the library's own sources with `--test`.
+rust_test(
+    name = "demo-lib-test",
+    srcs = ["src/lib.rs"],
+    crate_root = "src/lib.rs",
+    edition = "2024",
+)
+
+# Integration tests. The `env` here becomes the spec's `env` map, which nextest sets on the test
+# process; `$(location :greeting)` also makes the generated file an input, so it is materialized
+# before the tests run.
+rust_test(
+    name = "demo-integration-test",
+    srcs = ["tests/integration.rs"],
+    crate_root = "tests/integration.rs",
+    edition = "2024",
+    env = {
+        "DEMO_GREETING_PATH": "$(location :greeting)",
+    },
+    deps = [":demo"],
+)

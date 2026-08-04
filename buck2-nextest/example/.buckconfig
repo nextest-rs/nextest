@@ -1,0 +1,33 @@
+[cells]
+  root = .
+  prelude = prelude
+  toolchains = toolchains
+  none = none
+
+[cell_aliases]
+  config = prelude
+  ovr_config = prelude
+  fbcode = none
+  fbsource = none
+  fbcode_macros = none
+  buck = none
+
+# Uses a copy of the prelude bundled with the buck2 binary, so this example needs no submodule and
+# no vendored Starlark. The prelude therefore tracks whichever buck2 is installed.
+[external_cells]
+  prelude = bundled
+
+[parser]
+  target_platform_detector_spec = target:root//...->prelude//platforms:default \
+    target:prelude//...->prelude//platforms:default \
+    target:toolchains//...->prelude//platforms:default
+
+[build]
+  execution_platforms = prelude//platforms:default
+
+# Makes `buck2 test` drive nextest. The path is a placeholder: it has to be
+# absolute, and where the binary lands depends on the checkout, so `run.sh`
+# passes the real one with `-c test.v2_test_executor=...` instead.
+#
+# [test]
+#   v2_test_executor = /absolute/path/to/buck2-nextest

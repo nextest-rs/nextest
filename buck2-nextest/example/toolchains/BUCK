@@ -1,0 +1,9 @@
+# Copyright (c) The nextest Contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+load("@prelude//toolchains:demo.bzl", "system_demo_toolchains")
+
+# The demo toolchains find `rustc` and a C linker on `PATH`. A real project would copy these
+# definitions and pin its own toolchains; for an example, tracking the host's Rust installation is
+# what makes the project runnable straight from a checkout.
+system_demo_toolchains()

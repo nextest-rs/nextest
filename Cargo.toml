@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "buck2-nextest",
   "cargo-nextest",
   "fixture-data",
   "integration-tests",
@@ -26,6 +27,7 @@ atomicwrites = "0.4.4"
 bitflags = "2.13.1"
 bstr = { version = "1.13.0", default-features = false, features = ["std"] }
 bytesize = { version = "2.4.2", features = ["serde"] }
+buck2-nextest = { path = "buck2-nextest" }
 bytes = "1.12.1"
 camino = "1.2.5"
 camino-tempfile = "1.4.1"
@@ -52,7 +54,7 @@ config = { version = "0.15.25", default-features = false, features = [
     "preserve_order",
 ] }
 console-subscriber = "0.5.0"
-countio = "0.2.19"
+countio = "0.3.0"
 cp_r = "0.5.2"
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 datatest-stable = { version = "0.3.3", features = ["include-dir"] }
@@ -107,6 +109,8 @@ petgraph = "0.8.3"
 pin-project-lite = "0.2.17"
 pretty_assertions = "1.4.1"
 proptest = "1.11.0"
+prost = "0.14.1"
+prost-types = "0.14.1"
 pulldown-cmark = { version = "0.13.4", default-features = false }
 quick-junit = "0.7.0"
 rand = "0.10.2"
@@ -130,7 +134,7 @@ serde_ignored = "0.1.14"
 serde_json = "1.0.151"
 serde_path_to_error = "0.1.20"
 schemars = { version = "1.2.2", features = ["indexmap2"] }
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 shell-words = "1.1.1"
 smallvec = "1.15.2"
 smol_str = { version = "0.3.2", features = ["serde"] }
@@ -151,6 +155,17 @@ tokio = "1.53.1"
 tokio-stream = "0.1.19"
 toml = "1.1.4"
 toml_edit = "0.25.13"
+# Buck2's test executor protocol is gRPC. `tonic-prost` carries the codec the
+# generated code uses; `tonic-prost-build` is only for the `generate-proto`
+# tool, so that building the workspace never requires `protoc`.
+tonic = "0.14.2"
+tonic-prost = "0.14.2"
+tonic-prost-build = "0.14.6"
+# `hyper-util` and `tower` are needed to hand tonic a socket Buck2 already
+# connected for us, rather than letting it dial one itself.
+hyper = "1.6.0"
+hyper-util = { version = "0.1.13", features = ["tokio"] }
+tower = { version = "0.5.2", features = ["util"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "tracing-log", "fmt"] }
 unicode-ident = "1.0.24"

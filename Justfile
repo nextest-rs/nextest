@@ -10,6 +10,11 @@ help:
 generate-schemas:
     cargo run --package nextest-runner --features config-schema --bin generate-schemas
 
+# Regenerate the Rust bindings for Buck2's test executor protocol. Needs protoc.
+generate-proto:
+    cargo run --package buck2-nextest --features proto-codegen --bin generate-proto
+    cargo xfmt
+
 # Get the signing key slug to use on Windows, given a tag's ref_name.
 win-signing-policy-slug ref_name:
     #!/usr/bin/env bash

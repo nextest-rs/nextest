@@ -521,20 +521,18 @@ impl MuktiUpdateContext<'_> {
         std::mem::drop(tmp_archive);
 
         // Verify the checksum of the downloaded file if available.
-        let mut hasher = Sha256::default();
+        //
         // Just read the file into memory for now -- it would be nice to have an
         // incremental hasher that updates the hash as it's being downloaded,
-        // but it's not critical since our archives are quite small.
-        let mut tmp_archive =
-            fs::File::open(&tmp_archive_path).map_err(|error| UpdateError::TempArchiveRead {
+        // but it's not critical since our archives are quite small. (`Digest`
+        // no longer implements `io::Write` as of digest 0.11, which also
+        // pushes towards reading the whole file at once here.)
+        let archive_bytes =
+            fs::read(&tmp_archive_path).map_err(|error| UpdateError::TempArchiveRead {
                 archive_path: tmp_archive_path.clone(),
                 error,
             })?;
-        io::copy(&mut tmp_archive, &mut hasher).map_err(|error| UpdateError::TempArchiveRead {
-            archive_path: tmp_archive_path.clone(),
-            error,
-        })?;
-        let hash = hasher.finalize();
+        let hash = Sha256::digest(&archive_bytes);
         let hash_str = hex::encode(hash);
 
         match self.location.checksums.get(&DigestAlgorithm::SHA256) {

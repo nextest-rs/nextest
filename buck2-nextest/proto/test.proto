@@ -1,0 +1,365 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is dual-licensed under either the MIT license found in the
+ * LICENSE-MIT file in the root directory of this source tree or the Apache
+ * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+ * of this source tree. You may select, at your option, one of the
+ * above-listed licenses.
+ */
+
+// Vendored from Buck2, which defines the protocol `buck2 test` uses to talk to
+// an external test executor.
+//
+// Source: facebook/buck2, app/buck2_test_proto/test.proto
+// Commit: 02398f3669fa38bba4037c10ae53039752595323
+//
+// Changes from upstream, all deletions:
+//
+// * The `Execute2` RPC and the `ExecuteRequest2`, `ExecuteResponse2`,
+//   `ExecutionResult2`, and `ExecutionDetails` messages. `buck2-nextest` runs
+//   test processes itself rather than asking Buck2 to run them, so it never
+//   calls `Execute2`.
+// * The `data.proto` and `host_sharing.proto` imports, which only those
+//   messages needed. Keeping them would mean vendoring several thousand more
+//   lines of Buck2's event schema for types this crate never exchanges.
+//
+// Nothing else is edited, so this file diffs cleanly against upstream. Buck2
+// treats this protocol as internal and offers no stability guarantee; when
+// resyncing, re-apply the deletions above and regenerate with `just
+// generate-proto`.
+
+syntax = "proto3";
+
+package buck.test;
+
+import "google/protobuf/duration.proto";
+
+// Message sent when a TestSuite is discovered.
+message Testing {
+  // A name for the current suite.
+  string suite = 1;
+  repeated string testcases = 2;
+  optional string variant = 3;
+  // Unique id for tests being run multiple times, e.g. for stress runs.
+  optional uint64 repeat_count = 4;
+}
+
+message TestStage {
+  message Listing {
+    string suite = 1;
+    bool cacheable = 2;
+  }
+
+  oneof item {
+    Listing listing = 1;
+    Testing testing = 2;
+  }
+}
+
+message ExecutionStream {
+  oneof item {
+    bytes inline = 1;
+  }
+}
+
+message ExecutionStatus {
+  oneof status {
+    int32 finished = 1;
+    google.protobuf.Duration timed_out = 2;
+  }
+}
+
+message ConfiguredTargetHandle {
+  int64 id = 1;
+}
+
+message ConfiguredTarget {
+  reserved 2;
+  ConfiguredTargetHandle handle = 1;
+  // Structured data describing the target
+  string cell = 3;
+  string package = 4;
+  string target = 5;
+  string configuration = 6;
+  string package_project_relative_path = 7;
+  bool test_config_unification_rollout = 8;
+  optional string package_oncall = 9;
+}
+
+enum TestStatus {
+  NOT_SET = 0;
+  PASS = 1;
+  FAIL = 2;
+  SKIP = 3;
+  OMITTED = 4;
+  FATAL = 5;
+  TIMEOUT = 6;
+  UNKNOWN = 7;
+  RERUN = 8;
+  LISTING_SUCCESS = 9;
+  LISTING_FAILED = 10;
+  INFRA_FAILURE = 11;
+}
+
+message TestResult {
+  message OptionalMsg {
+    string msg = 1; // Required
+  }
+
+  string name = 1; // Required
+  TestStatus status = 2; // Required
+  OptionalMsg msg = 5; // Optional
+  ConfiguredTargetHandle target = 6; // Required
+  google.protobuf.Duration duration = 7; // Optional
+  string details = 8; // Required
+  optional uint64 max_memory_used_bytes = 9;
+}
+
+message ReportTestResultRequest {
+  TestResult result = 1;
+}
+
+message ReportTestsDiscoveredRequest {
+  ConfiguredTargetHandle target = 1;
+  Testing testing = 3;
+}
+
+message ReportTestSessionRequest {
+  reserved 2;
+  string session_info = 3;
+  optional string test_session_id = 4;
+}
+
+message EndOfTestResultsRequest {
+  int32 exit_code = 1;
+}
+
+message Empty {};
+
+message ExternalRunnerSpecRequest {
+  ExternalRunnerSpec test_spec = 1;
+}
+
+// A spec representing test targets aiming for maximum compatibility with the
+// external runner spec as defined in buck1.
+message ExternalRunnerSpec {
+  // Target the spec belongs to
+  ConfiguredTarget target = 1;
+
+  // Type of test spec
+  string test_type = 2;
+
+  // Base command used for further processing. A mix of verbatim arguments and
+  // opaque handles for more complex arguments.
+  repeated ExternalRunnerSpecValue command = 3;
+
+  // Environment variables a specified by the rule. A mapping from keys to
+  // verbatim values or opaque handles for more complex values.
+  map<string, ExternalRunnerSpecValue> env = 4;
+
+  // Labels defined on the rule.
+  repeated string labels = 5;
+
+  // Contacts defined on the rule.
+  repeated string contacts = 6;
+
+  // Oncall
+  optional string oncall = 7;
+
+  // Current working directory cell.
+  string working_dir_cell = 8;
+}
+
+message ExternalRunnerSpecValue {
+  oneof value {
+    string verbatim = 1;
+    int64 arg_handle = 2;
+    string env_handle = 3;
+  }
+}
+
+message TestExecutable {
+  reserved 4;
+  TestStage stage = 1;
+  ConfiguredTargetHandle target = 2;
+  repeated ArgValue cmd = 3;
+  repeated DeclaredOutput pre_create_dirs = 5;
+  repeated EnvironmentVariable env = 6;
+}
+
+message ExecutorConfigOverride {
+  string name = 1;
+}
+
+message LocalResourceType {
+  string name = 1;
+}
+
+message PrepareForLocalExecutionRequest {
+  TestExecutable test_executable = 1;
+  repeated LocalResourceType required_local_resources = 2;
+}
+
+message ArgValue {
+  ArgValueContent content = 1;
+  // Optional format string for the value
+  ArgFormat format = 2;
+}
+
+message EnvironmentVariable {
+  string key = 1;
+  ArgValue value = 2;
+}
+
+message ArgFormat {
+  string format = 1;
+}
+
+message ArgValueContent {
+  oneof value {
+    ExternalRunnerSpecValue spec_value = 1;
+    OutputName declared_output = 2;
+  }
+}
+
+// This message should be compatible with the prefix of DeclaredOutput for
+// backwards compatibility
+message OutputName {
+  string name = 1;
+  reserved 2;
+}
+
+message TtlConfig {
+  // Specifies a custom TTL in seconds for blobs in the output.
+  int64 ttl_seconds = 1;
+  // Specifies a custom use-case to use for managing the blobs in CAS.
+  string use_case = 2;
+}
+
+message DeclaredOutput {
+  string name = 1;
+  // Flags that a consumer supports *remote* output, in which case it's not
+  // necessary to materialize this output.
+  bool supports_remote = 2;
+  optional TtlConfig ttl_config = 3;
+}
+
+// Copy of Digest from Remote Execution API:
+// https://github.com/facebook/buck2/blob/main/remote_execution/oss/re_grpc_proto/proto/build/bazel/remote/execution/v2/remote_execution.proto#L936-L943
+message CasDigest {
+  // The hash. In the case of SHA-256, it will always be a lowercase hex string
+  // exactly 64 characters long.
+  string hash = 1;
+
+  // The size of the blob, in bytes.
+  int64 size_bytes = 2;
+}
+
+// TODO(arr): consider using remote_execution.proto later on. The API surface
+// there is larger but consolidation may be worth it.
+message RemoteFileNode {
+  string name = 1;
+}
+
+message RemoteDirNode {
+  string name = 1;
+  repeated RemoteObject children = 2;
+}
+
+message RemoteObject {
+  CasDigest digest = 1;
+  oneof node {
+    RemoteFileNode file = 2;
+    RemoteDirNode dir = 3;
+  }
+}
+
+message Output {
+  // TODO(arr): replace this oneof with just it's fields when we start uploading
+  // results of local executions to CAS
+  oneof value {
+    string local_path = 1;
+    RemoteObject remote_object = 2;
+  }
+}
+
+message OutputEntry {
+  OutputName declared_output = 1;
+  Output output = 2;
+}
+
+enum CancellationReason {
+  NOT_SPECIFIED = 0;
+  RE_QUEUE_TIMEOUT = 1;
+}
+
+message Cancelled {
+  optional CancellationReason reason = 1;
+}
+
+message PrepareForLocalExecutionResult {
+  reserved 2;
+  repeated string cmd = 1;
+  string cwd = 3;
+  repeated VerbatimEnvironmentVariable env = 4;
+}
+
+message SetupLocalResourceLocalExecutionCommand {
+  repeated string cmd = 1;
+  string cwd = 2;
+  repeated VerbatimEnvironmentVariable env = 3;
+}
+
+message VerbatimEnvironmentVariable {
+  string key = 1;
+  string value = 2;
+}
+
+message PrepareForLocalExecutionResponse {
+  PrepareForLocalExecutionResult result = 1;
+  repeated SetupLocalResourceLocalExecutionCommand
+      setup_local_resource_commands = 2;
+}
+
+message AttachInfoMessageRequest {
+  string message = 1;
+}
+
+message UploadFileToCasRequest {
+  // Absolute path to the local file to upload to CAS.
+  string local_path = 1;
+  // TTL and use-case configuration for the uploaded blob.
+  TtlConfig ttl_config = 2;
+}
+
+message UploadFileToCasResponse {
+  CasDigest digest = 1;
+}
+
+message UnstableHeapDumpRequest {
+  // The path to write the heap dump to. If this path is relative, it is made
+  // absolute relative to the working directory of the daemon.
+  string destination_path = 1;
+}
+message UnstableHeapDumpResponse {}
+
+service TestOrchestrator {
+  rpc EndOfTestResults(EndOfTestResultsRequest) returns (Empty);
+  rpc ReportTestResult(ReportTestResultRequest) returns (Empty);
+  rpc ReportTestsDiscovered(ReportTestsDiscoveredRequest) returns (Empty);
+  rpc ReportTestSession(ReportTestSessionRequest) returns (Empty);
+  rpc PrepareForLocalExecution(PrepareForLocalExecutionRequest)
+      returns (PrepareForLocalExecutionResponse);
+  rpc AttachInfoMessage(AttachInfoMessageRequest) returns (Empty);
+  rpc UploadFileToCas(UploadFileToCasRequest) returns (UploadFileToCasResponse);
+}
+
+service TestExecutor {
+  rpc ExternalRunnerSpec(ExternalRunnerSpecRequest) returns (Empty);
+  rpc EndOfTestRequests(Empty) returns (Empty);
+  // Requests the test server to perform a heap dump and save the dump to a
+  // file.
+  rpc Unstable_HeapDump(UnstableHeapDumpRequest)
+      returns (UnstableHeapDumpResponse);
+}

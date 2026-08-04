@@ -1,0 +1,87 @@
+# Copyright (c) The nextest Contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+"""Generates a `buck2-nextest` spec from Buck2's `ExternalRunnerTestInfo`.
+
+Buck2 normally hands this information to a test executor such as `tpx`, over a
+gRPC channel that the executor also uses to resolve argument and environment
+handles. `buck2-nextest` reads a file instead, so this script analyses the
+requested targets, collects the provider Buck2 would have sent, and writes it
+out as JSON.
+
+There is nothing example-specific below: it works against any Buck2 project
+that uses the standard prelude.
+
+Usage:
+
+    buck2 bxl //bxl/nextest.bxl:generate -- --target //...
+
+`--target` takes a target pattern or a cquery expression. `buck2-nextest`
+supports only the `rust` test type and rejects a spec containing anything else,
+so a project with tests in several languages should narrow the scope:
+
+    buck2 bxl //bxl/nextest.bxl:generate -- --target 'kind("rust_test", //...)'
+
+The absolute path of the generated spec is printed to standard output.
+"""
+
+def _generate_impl(ctx):
+    actions = ctx.bxl_actions().actions
+
+    entries = []
+
+    # `cquery().eval` accepts a plain target pattern as well as a query
+    # expression, so `--target` can be either.
+    for target in ctx.cquery().eval(ctx.cli_args.target):
+        providers = ctx.analysis(target).providers()
+
+        # A target pattern picks up libraries and other non-test rules too.
+        if ExternalRunnerTestInfo not in providers:
+            continue
+
+        info = providers[ExternalRunnerTestInfo]
+        label = target.label
+
+        entries.append({
+            # `info.command` is a list of `cmd_args`, each of which expands to
+            # any number of arguments. Wrapping the whole list in one `cmd_args`
+            # flattens it, so `write_json` emits one string per argument rather
+            # than a list of lists.
+            "command": cmd_args(info.command),
+            "contacts": info.contacts,
+            # An environment value is a single string rather than an argument
+            # list, so anything that expands to several parts is joined instead
+            # of being written out as an array.
+            "env": {
+                name: cmd_args(value, delimiter = "")
+                for name, value in info.env.items()
+            },
+            "labels": info.labels,
+            "target": {
+                "cell": label.cell,
+                "configuration": str(label.config()),
+                "package": label.package,
+                "target": label.name,
+            },
+            "test_type": info.test_type,
+        })
+
+    spec = actions.declare_output("spec.json")
+
+    # `with_inputs` ties the artifacts the spec names -- the test binaries, and
+    # anything their environment points at -- to the JSON file, so ensuring it
+    # materializes them as well. Without this the spec would name paths that do
+    # not exist yet.
+    spec_with_inputs = actions.write_json(spec, {"targets": entries}, with_inputs = True)
+    ctx.output.ensure_multiple(spec_with_inputs)
+
+    ctx.output.print(ctx.output.ensure(spec).abs_path())
+
+generate = bxl_main(
+    impl = _generate_impl,
+    cli_args = {
+        "target": cli_args.string(
+            doc = "The target pattern or cquery expression to generate a spec for.",
+        ),
+    },
+)

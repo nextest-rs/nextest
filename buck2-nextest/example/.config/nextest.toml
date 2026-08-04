@@ -1,0 +1,14 @@
+# Nextest configuration for the example project.
+#
+# `buck2-nextest` loads this from `<project-root>/.config/nextest.toml`, exactly as `cargo-nextest`
+# loads it from the workspace root. Select a profile with `-P`, e.g. `-P ci`.
+
+[profile.default]
+# The example's tests all pass, so this only shows up if something is wrong.
+failure-output = "immediate-final"
+
+[profile.ci]
+failure-output = "immediate-final"
+fail-fast = false
+retries = 2
+status-level = "all"

@@ -1,0 +1,78 @@
+[package]
+name = "buck2-nextest"
+description = "A next-generation test runner for Buck2."
+version = "0.1.0"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/nextest-rs/nextest"
+documentation = "https://nexte.st"
+keywords = ["nextest", "test-runner", "buck2"]
+categories = ["development-tools::testing"]
+edition.workspace = true
+rust-version.workspace = true
+exclude.workspace = true
+publish = false
+
+[dependencies]
+camino.workspace = true
+clap = { workspace = true, features = ["derive", "env", "unicode", "wrap_help"] }
+futures.workspace = true
+guppy.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+iddqd.workspace = true
+miette = { workspace = true, features = ["fancy"] }
+# Instead of using workspace dependencies which have floating versions, we pin exact versions here
+# to avoid compatibility issues.
+nextest-filtering = { version = "=0.22.0", path = "../nextest-filtering" }
+nextest-metadata = { version = "=0.15.0", path = "../nextest-metadata" }
+nextest-runner = { version = "=0.122.1", path = "../nextest-runner" }
+nextest-workspace-hack.workspace = true
+owo-colors.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+quick-junit.workspace = true
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_path_to_error.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "rt-multi-thread", "sync"] }
+tokio-stream.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+tower.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, default-features = false }
+
+# Only used by the `generate-proto` tool, which is gated behind the
+# `proto-codegen` feature so that `protoc` is never needed to build the
+# workspace.
+[dependencies.tonic-prost-build]
+workspace = true
+optional = true
+
+[dev-dependencies]
+camino-tempfile.workspace = true
+indoc.workspace = true
+insta.workspace = true
+test-case.workspace = true
+
+[features]
+# Reading a run from a spec file, for working on `buck2-nextest` without a live
+# Buck2. Off by default so it is absent from release builds; `cargo nextest run
+# --all-features` turns it on along with the test that uses it.
+spec-file = []
+proto-codegen = ["dep:tonic-prost-build"]
+
+[[test]]
+name = "example"
+path = "tests/example.rs"
+required-features = ["spec-file"]
+
+[[bin]]
+name = "generate-proto"
+path = "src/bin/generate-proto.rs"
+required-features = ["proto-codegen"]
+
+[lints]
+workspace = true

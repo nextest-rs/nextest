@@ -142,6 +142,7 @@ nav:
           - "Debuggers and tracers": docs/integrations/debuggers-tracers.md
           - docs/integrations/criterion.md
           - "cargo-mutants": docs/integrations/cargo-mutants.md
+          - "Buck2": docs/integrations/buck2.md
           - docs/integrations/usdt.md
           - "Machine-readable output":
                 - "About output formats": docs/machine-readable/index.md
