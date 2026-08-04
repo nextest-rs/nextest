@@ -37,8 +37,8 @@ impl RustNonTestBinaries {
             .insert(file);
     }
 
-    /// Returns the number of distinct (package ID, name, kind) pairs of
-    /// non-test binaries in this collection.
+    /// Returns the number of distinct (package ID, name, kind, build platform)
+    /// tuples of non-test binaries in this collection.
     ///
     /// One binary can be stored as several files sharing a name and kind (e.g.,
     /// on Windows, a dylib comes with an import library, an export library, and
@@ -106,7 +106,7 @@ pub(crate) struct PartitionedNonTestBinaries {
 fn binary_count(files: &BTreeSet<RustNonTestBinarySummary>) -> usize {
     files
         .iter()
-        .map(|file| (file.name.as_str(), &file.kind))
+        .map(|file| (file.name.as_str(), &file.kind, file.build_platform))
         .collect::<BTreeSet<_>>()
         .len()
 }
@@ -122,6 +122,7 @@ fn is_package_scoped(kind: &RustNonTestBinaryKind) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nextest_metadata::BuildPlatform;
 
     #[test]
     fn binary_count_is_platform_stable() {
@@ -176,6 +177,42 @@ mod tests {
             4,
             "the same 4 binaries: a dylib's import library, export library, and \
              .pdb are stored as separate files but are not separate binaries"
+        );
+    }
+
+    #[test]
+    fn binary_count_counts_distinct_targets() {
+        let non_test_binaries = RustNonTestBinaries::from_summary(BTreeMap::from([
+            (
+                "pkg-a".to_owned(),
+                BTreeSet::from([bin_exe("helper", "debug/helper")]),
+            ),
+            (
+                "pkg-b".to_owned(),
+                BTreeSet::from([bin_exe("helper", "debug/helper")]),
+            ),
+            (
+                "bin-and-lib".to_owned(),
+                BTreeSet::from([
+                    bin_exe("dual", "debug/dual"),
+                    dylib("dual", "debug/libdual.so"),
+                ]),
+            ),
+            (
+                "host-and-target".to_owned(),
+                BTreeSet::from([
+                    host_dylib("cross", "debug/libcross.so"),
+                    dylib("cross", "aarch64-unknown-linux-gnu/debug/libcross.so"),
+                ]),
+            ),
+        ]));
+
+        assert_eq!(
+            non_test_binaries.binary_count(),
+            6,
+            "one per distinct (package, name, kind, build platform): pkg-a 1, pkg-b 1, \
+             bin-and-lib 2 (one name, two kinds), host-and-target 2 (one name and kind, two \
+             compilations)"
         );
     }
 
@@ -333,6 +370,7 @@ mod tests {
             name: name.to_owned(),
             kind: RustNonTestBinaryKind::BIN_EXE,
             path: path.into(),
+            build_platform: Some(BuildPlatform::Target),
         }
     }
 
@@ -341,6 +379,16 @@ mod tests {
             name: name.to_owned(),
             kind: RustNonTestBinaryKind::DYLIB,
             path: path.into(),
+            build_platform: Some(BuildPlatform::Target),
+        }
+    }
+
+    fn host_dylib(name: &str, path: &str) -> RustNonTestBinarySummary {
+        RustNonTestBinarySummary {
+            name: name.to_owned(),
+            kind: RustNonTestBinaryKind::DYLIB,
+            path: path.into(),
+            build_platform: Some(BuildPlatform::Host),
         }
     }
 
@@ -349,6 +397,7 @@ mod tests {
             name: name.to_owned(),
             kind: RustNonTestBinaryKind::new("some-future-kind"),
             path: path.into(),
+            build_platform: Some(BuildPlatform::Target),
         }
     }
 
@@ -357,6 +406,7 @@ mod tests {
             name: name.to_owned(),
             kind: RustNonTestBinaryKind::DYLIB,
             path: format!("debug/{name}.{extension}").into(),
+            build_platform: Some(BuildPlatform::Target),
         })
     }
 }
