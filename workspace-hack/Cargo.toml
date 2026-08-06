@@ -76,7 +76,7 @@ mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.42", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.43", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.2", default-features = false, features = ["const_new"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -104,7 +104,7 @@ libc = { version = "0.2.189", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.42", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.43", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.2", default-features = false, features = ["const_new"] }
 tokio = { version = "1.53.1", default-features = false, features = ["net"] }
@@ -126,7 +126,7 @@ mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.42", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.43", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.2", default-features = false, features = ["const_new"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -154,7 +154,7 @@ libc = { version = "0.2.189", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.42", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.43", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.2", default-features = false, features = ["const_new"] }
 tokio = { version = "1.53.1", default-features = false, features = ["net"] }
@@ -176,7 +176,7 @@ mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.42", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.43", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.2", default-features = false, features = ["const_new"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -207,7 +207,7 @@ mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.42", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.43", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.2", default-features = false, features = ["const_new"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -238,7 +238,7 @@ mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.42", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.43", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.2", default-features = false, features = ["const_new"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -268,7 +268,7 @@ mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.42", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.43", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.2", default-features = false, features = ["const_new"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -290,7 +290,7 @@ futures-channel = { version = "0.3.33", features = ["sink"] }
 futures-core = { version = "0.3.33" }
 futures-sink = { version = "0.3.33" }
 httparse = { version = "1.10.1" }
-rustls = { version = "0.23.42", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.43", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.2", default-features = false, features = ["const_new"] }
 tokio = { version = "1.53.1", default-features = false, features = ["net"] }
@@ -306,7 +306,7 @@ futures-channel = { version = "0.3.33", features = ["sink"] }
 futures-core = { version = "0.3.33" }
 futures-sink = { version = "0.3.33" }
 httparse = { version = "1.10.1" }
-rustls = { version = "0.23.42", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.43", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.15.2", default-features = false, features = ["const_new"] }
 tokio = { version = "1.53.1", default-features = false, features = ["net"] }
