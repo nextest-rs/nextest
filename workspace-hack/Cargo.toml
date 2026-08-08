@@ -21,8 +21,8 @@ aho-corasick = { version = "1.1.4" }
 bit-set = { version = "0.8.0" }
 bit-vec = { version = "0.8.0" }
 camino = { version = "1.2.5", default-features = false, features = ["serde1"] }
-clap = { version = "4.6.4", features = ["derive", "env", "unicode", "unstable-markdown", "wrap_help"] }
-clap_builder = { version = "4.6.2", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
+clap = { version = "4.6.6", features = ["derive", "env", "unicode", "unstable-markdown", "wrap_help"] }
+clap_builder = { version = "4.6.6", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
 either = { version = "1.15.0", features = ["use_std"] }
 foldhash = { version = "0.2.0" }
 getrandom = { version = "0.3.4", default-features = false, features = ["std"] }
