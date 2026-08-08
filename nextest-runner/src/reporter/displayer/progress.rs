@@ -162,12 +162,6 @@ impl RunningTest {
             }
             RunningTestStatus::Retry => "RETRY".style(styles.retry).to_string(),
         };
-        let elapsed = format!(
-            "{:0>2}:{:0>2}:{:0>2}",
-            elapsed.as_secs() / 3600,
-            elapsed.as_secs() / 60,
-            elapsed.as_secs() % 60,
-        );
         let max_width = width.saturating_sub(25);
         let test = DisplayTestInstance::new(
             None,
@@ -180,7 +174,12 @@ impl RunningTest {
             &styles.list_styles,
         )
         .with_max_width(max_width);
-        format!("       {} [{:>9}] {}", status, elapsed, test)
+        format!(
+            "       {} {}{}",
+            status,
+            DisplayBracketedHhMmSs(elapsed),
+            test
+        )
     }
 }
 
@@ -934,6 +933,23 @@ mod tests {
             let msg = running_test.message(now, 80, &styles);
             insta::assert_snapshot!(name, msg);
         }
+    }
+
+    #[test]
+    fn running_test_message_multi_hour() {
+        let styles = Styles::default();
+        let start_time = Instant::now();
+        let now = start_time + Duration::from_secs(5 * 3600 + 13 * 60 + 30);
+
+        let running_test = RunningTest {
+            binary_id: RustBinaryId::new("my-binary"),
+            test_name: TestCaseName::new("test::my_test"),
+            status: RunningTestStatus::Running,
+            start_time,
+            paused_for: Duration::ZERO,
+        };
+        let msg = running_test.message(now, 80, &styles);
+        insta::assert_snapshot!(msg, @"             [ 05:13:30] my-binary test::my_test");
     }
 
     fn running_test_examples(now: Instant) -> Vec<(&'static str, RunningTest)> {
