@@ -243,7 +243,7 @@ pub enum ConfigCompileErrorKind {
     /// It only makes sense to specify one of the two.
     FilterAndDefaultFilterSpecified,
 
-    /// One or more errors occured while parsing expressions.
+    /// One or more errors occurred while parsing expressions.
     Parse {
         /// A potential error that occurred while parsing the host platform expression.
         host_parse_error: Option<target_spec::Error>,
