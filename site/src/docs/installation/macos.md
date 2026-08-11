@@ -32,6 +32,12 @@ Adding your terminal to Developer Tools will cause any processes run by it to be
 
 ![macOS Developer Tools with Terminal.app enabled](../../static/macos-exclusions.png)
 
+### Adding a terminal multiplexer to Developer Tools
+
+If you use a terminal multiplexer like [`tmux`](https://github.com/tmux/tmux) or [`zellij`](https://zellij.dev/), you will need to add the multiplexer to Developer Tools. This is because exclusions apply to children of a process, and shells within the multiplexer are not children of the terminal.
+
+If the macOS binary is ad-hoc signed — i.e., not notarized using a paid Apple Developer account — you will need to re-add the terminal multiplexer to Developer Tools after each update. (As of 2026-08, Homebrew's `tmux` and `zellij` binaries are ad-hoc signed.) This is because Developer Tools exclusions are based on the cryptographic identity of the binary's signer, and ad-hoc signatures use a fresh identity each time.
+
 !!! note
 
     There are still some reports of performance issues on macOS after Developer Tools have been enabled. If you're seeing this, please [add a note to this issue](https://github.com/nextest-rs/nextest/issues/63)!
