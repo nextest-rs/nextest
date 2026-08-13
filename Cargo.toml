@@ -68,7 +68,7 @@ fixture-data = { path = "fixture-data" }
 fs-err = "3.3.1"
 future-queue = "0.4.0"
 futures = "0.3.33"
-globset = "0.4.19"
+globset = "0.4.20"
 guppy = "0.17.26"
 hex = "0.4.3"
 home = "0.5.12"
