@@ -25,7 +25,7 @@ Setup scripts are configured in two parts: _defining scripts_, and _setting up r
 
 Setup scripts are defined using the top-level `scripts.setup` configuration. For example, to define a script named "my-script", which runs `my-script.sh`:
 
-```toml title="Setup script definition in <code>.config/nextest.toml</code>"
+```toml title="Setup script definition in `.config/nextest.toml`"
 [scripts.setup.my-script]
 command = 'my-script.sh'
 ```

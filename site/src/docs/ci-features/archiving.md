@@ -82,7 +82,7 @@ build process creates artifacts outside of Cargo that are required for Rust test
 
 Use the `profile.<profile-name>.archive.include` configuration option for this. For example:
 
-```toml title="Extra archive files in <code>.config/nextest.toml</code>"
+```toml title="Extra archive files in `.config/nextest.toml`"
 [profile.default]
 archive.include = [
     { path = "my-extra-path", relative-to = "target" },

@@ -67,7 +67,7 @@ or a map with `host` and `target` keys for cross-compiling. See
 
 ## Example
 
-```toml title="Basic example for per-test settings in <code>.config/nextest.toml</code>"
+```toml title="Basic example for per-test settings in `.config/nextest.toml`"
 [profile.ci]
 retries = 1
 
@@ -106,7 +106,7 @@ Precedence is evaluated separately for each override. If a particular override d
 
 ### Example
 
-```toml title="Example for per-test settings in <code>.config/nextest.toml</code>"
+```toml title="Example for per-test settings in `.config/nextest.toml`"
 [profile.default]
 retries = 0  # this is the default, so it doesn't need to be specified
 slow-timeout = "30s"

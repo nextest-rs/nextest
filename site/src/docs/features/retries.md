@@ -44,7 +44,7 @@ In those cases, you can insert delays between test attempts with a backoff algor
 
 To insert a constant delay between test attempts, use the fixed backoff algorithm. For example, to retry tests up to twice with a 1 second delay between attempts, use:
 
-```toml title="Fixed backoff in <code>.config/nextest.toml</code>"
+```toml title="Fixed backoff in `.config/nextest.toml`"
 [profile.default]
 retries = { backoff = "fixed", count = 2, delay = "1s" }
 ```

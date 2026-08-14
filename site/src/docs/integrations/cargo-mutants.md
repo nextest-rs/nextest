@@ -24,7 +24,7 @@ cargo mutants --test-tool=nextest
 
 If your tree should always be built with nextest, you can configure this in `.cargo/mutants.toml`:
 
-```toml title="Configuring nextest in <code>.cargo/mutants.toml</code>"
+```toml title="Configuring nextest in `.cargo/mutants.toml`"
 test_tool = "nextest"
 ```
 
