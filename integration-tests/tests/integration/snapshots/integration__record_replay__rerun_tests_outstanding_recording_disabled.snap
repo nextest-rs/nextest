@@ -1,0 +1,20 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&denied_rerun_output.stderr_as_str(), temp_root)"
+---
+info: experimental features enabled: setup-scripts, wrapper-scripts, benchmarks
+info: rerun: inheriting build scope from original run: (default scope)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in [ELAPSED]
+warning: recording disabled: failed to create run recorder
+  caused by:
+  - cannot write to record store: runs.json.zst format version 9999 is newer than supported version 2
+────────────
+ Nextest run ID 96000003-0000-0000-0000-000000000003 with nextest profile: default
+    Starting 1 test across 7 binaries (31 tests skipped)
+        PASS [ duration] (1/1) fixture-project::basic test_success
+────────────
+     Summary [ duration] 1 test run: 1 passed, 31 skipped
+        Note 2 outstanding tests not seen during this rerun:
+             fixture-project::basic test_failure_assert
+             fixture-project::basic test_failure_error
+warning: 2 outstanding tests still remain

@@ -1656,7 +1656,10 @@ fn final_result(
             info!("no outstanding tests remain");
             Ok(())
         }
-        Some(count) => Err(ExpectedError::RerunTestsOutstanding { count }),
+        Some(count) => Err(ExpectedError::RerunTestsOutstanding {
+            count,
+            rerun_available,
+        }),
         None => Ok(()),
     }
 }
@@ -1751,7 +1754,10 @@ mod tests {
         assert!(
             matches!(
                 result,
-                Err(ExpectedError::RerunTestsOutstanding { count: 5 })
+                Err(ExpectedError::RerunTestsOutstanding {
+                    count: 5,
+                    rerun_available: false,
+                })
             ),
             "--no-tests=auto (rerun with outstanding) should return RerunTestsOutstanding"
         );
@@ -1790,7 +1796,10 @@ mod tests {
         assert!(
             matches!(
                 result,
-                Err(ExpectedError::RerunTestsOutstanding { count: 3 })
+                Err(ExpectedError::RerunTestsOutstanding {
+                    count: 3,
+                    rerun_available: false,
+                })
             ),
             "default (rerun with outstanding) should return RerunTestsOutstanding"
         );
@@ -1817,9 +1826,29 @@ mod tests {
         assert!(
             matches!(
                 result,
-                Err(ExpectedError::RerunTestsOutstanding { count: 2 })
+                Err(ExpectedError::RerunTestsOutstanding {
+                    count: 2,
+                    rerun_available: false,
+                })
             ),
-            "all tests passed (rerun with outstanding) should return RerunTestsOutstanding"
+            "all tests passed (rerun with outstanding) should return RerunTestsOutstanding \
+             with rerun_available: false"
+        );
+
+        // Rerun with outstanding, and this run was recorded. We can show the
+        // continue rerunning hint in this case.
+        let stats = make_run_stats(5, 5, 5);
+        let result = final_result(NextestRunMode::Test, stats, None, Some(2), true);
+        assert!(
+            matches!(
+                result,
+                Err(ExpectedError::RerunTestsOutstanding {
+                    count: 2,
+                    rerun_available: true
+                })
+            ),
+            "all tests passed (recorded rerun with outstanding) should return \
+             RerunTestsOutstanding with rerun_available: true"
         );
 
         // Failures return TestRunFailed (no rerun available).
