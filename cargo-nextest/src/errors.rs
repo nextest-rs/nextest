@@ -10,8 +10,8 @@ use nextest_runner::{
     config::core::{ConfigExperimental, ToolName},
     errors::{
         ChromeTraceError, PortableRecordingError, PortableRecordingReadError, RecordReadError,
-        RecordSetupError, RunIdResolutionError, RunStoreError, StateDirError,
-        TestListFromSummaryError, UserConfigError, *,
+        RunIdResolutionError, RunStoreError, StateDirError, TestListFromSummaryError,
+        UserConfigError, *,
     },
     helpers::{format_interceptor_too_many_tests, plural},
     indenter::DisplayIndented,
@@ -373,11 +373,6 @@ pub enum ExpectedError {
         #[source]
         err: RunStoreError,
     },
-    #[error("error setting up recording session")]
-    RecordSessionSetupError {
-        #[source]
-        err: RecordSetupError,
-    },
     #[error("filterset parse error")]
     FiltersetParseError {
         all_errors: Vec<FiltersetParseErrors>,
@@ -667,7 +662,6 @@ impl ExpectedError {
             }
             Self::RecordStateDirNotFound { .. }
             | Self::RecordSetupError { .. }
-            | Self::RecordSessionSetupError { .. }
             | Self::RunIdResolutionError { .. }
             | Self::RecordReadError { .. }
             | Self::StoreVersionIncompatible { .. }
@@ -1261,10 +1255,6 @@ impl ExpectedError {
             }
             Self::RecordSetupError { err } => {
                 error!("error setting up recording");
-                Some(err as &dyn Error)
-            }
-            Self::RecordSessionSetupError { err } => {
-                error!("error setting up recording session");
                 Some(err as &dyn Error)
             }
             Self::FiltersetParseError { all_errors } => {

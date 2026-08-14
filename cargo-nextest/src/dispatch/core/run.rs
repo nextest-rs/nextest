@@ -26,6 +26,7 @@ use nextest_runner::{
         core::ConfigExperimental,
         elements::{MaxFail, RetryPolicy, TestThreads},
     },
+    errors::DisplayErrorChain,
     helpers::{ShowTerminalProgress, ThemeCharacters, force_or_new_run_id, plural},
     input::InputHandlerKind,
     list::{BinaryList, ListProgressOptions, TestExecuteContext, TestList},
@@ -837,6 +838,30 @@ pub(super) fn filter_env_vars_for_recording(
     .collect()
 }
 
+/// Performs setup for a recording session.
+///
+/// Errors during setup are treated as non-fatal and are logged.
+fn setup_recording_session(
+    config: RecordSessionConfig<'_>,
+    cargo_metadata_json: Arc<String>,
+    test_list: &TestList<'_>,
+    structured_reporter: &mut structured::StructuredReporter<'_>,
+) -> Option<RecordSession> {
+    match RecordSession::setup(config) {
+        Ok(setup) => {
+            let record = structured::RecordReporter::new(setup.recorder);
+            let opts = RecordOpts::new(test_list.mode());
+            record.write_meta(cargo_metadata_json, test_list.to_summary(), opts);
+            structured_reporter.set_record(record);
+            Some(setup.session)
+        }
+        Err(error) => {
+            warn!("recording disabled: {}", DisplayErrorChain::new(&error));
+            None
+        }
+    }
+}
+
 /// Application for running tests (run/list/bench).
 pub(crate) struct App {
     pub(crate) base: BaseApp,
@@ -1162,28 +1187,12 @@ impl App {
                 max_output_size: resolved_user_config.record.max_output_size,
                 rerun_info,
             };
-            match RecordSession::setup(config) {
-                Ok(setup) => {
-                    let record = structured::RecordReporter::new(setup.recorder);
-                    let opts = RecordOpts::new(test_list.mode());
-                    record.write_meta(
-                        self.base.cargo_metadata_json.clone(),
-                        test_list.to_summary(),
-                        opts,
-                    );
-                    structured_reporter.set_record(record);
-                    Some(setup.session)
-                }
-                Err(err) => match err.disabled_error() {
-                    Some(reason) => {
-                        // Recording is disabled due to a format version mismatch.
-                        // Log a warning and continue without recording.
-                        warn!("recording disabled: {reason}");
-                        None
-                    }
-                    None => return Err(ExpectedError::RecordSessionSetupError { err }),
-                },
-            }
+            setup_recording_session(
+                config,
+                self.base.cargo_metadata_json.clone(),
+                &test_list,
+                &mut structured_reporter,
+            )
         } else {
             None
         };
@@ -1425,28 +1434,12 @@ impl App {
                 // TODO: support reruns? value seems dubious.
                 rerun_info: None,
             };
-            match RecordSession::setup(config) {
-                Ok(setup) => {
-                    let record = structured::RecordReporter::new(setup.recorder);
-                    let opts = RecordOpts::new(test_list.mode());
-                    record.write_meta(
-                        self.base.cargo_metadata_json.clone(),
-                        test_list.to_summary(),
-                        opts,
-                    );
-                    structured_reporter.set_record(record);
-                    Some(setup.session)
-                }
-                Err(err) => match err.disabled_error() {
-                    Some(reason) => {
-                        // Recording is disabled due to a format version mismatch.
-                        // Log a warning and continue without recording.
-                        warn!("recording disabled: {reason}");
-                        None
-                    }
-                    None => return Err(ExpectedError::RecordSessionSetupError { err }),
-                },
-            }
+            setup_recording_session(
+                config,
+                self.base.cargo_metadata_json.clone(),
+                &test_list,
+                &mut structured_reporter,
+            )
         } else {
             None
         };

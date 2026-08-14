@@ -2269,6 +2269,117 @@ fn test_replayability_store_version_too_new() {
     }
 }
 
+// A corrupted runs.json.zst must disable recording with a warning.
+#[test]
+fn test_record_setup_corrupt_index_is_nonfatal() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const RUN_ID: &str = "97000001-0000-0000-0000-000000000001";
+
+    let recording = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
+        .args([
+            "run",
+            "--workspace",
+            "--all-targets",
+            "-E",
+            "test(=test_success)",
+        ])
+        .output();
+    assert!(
+        recording.exit_status.success(),
+        "initial recorded run should succeed: {recording}"
+    );
+    check_run_output_for_test_names(&recording.stderr, &["test_success"], RunProperties::empty());
+
+    let runs_dir = find_runs_dir(&cache_dir).expect("runs dir should exist after recording");
+    let count_run_dirs = |runs_dir: &Utf8Path| {
+        fs::read_dir(runs_dir)
+            .expect("runs dir should be readable")
+            .filter(|entry| {
+                entry
+                    .as_ref()
+                    .expect("read runs dir entry")
+                    .file_type()
+                    .expect("read runs dir entry file type")
+                    .is_dir()
+            })
+            .count()
+    };
+    assert_eq!(
+        count_run_dirs(&runs_dir),
+        1,
+        "one run dir should exist after the initial recording"
+    );
+
+    fs::write(runs_dir.join("runs.json.zst"), b"not a zstd stream")
+        .expect("corrupt data written to runs.json.zst");
+
+    let output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args([
+            "run",
+            "--workspace",
+            "--all-targets",
+            "-E",
+            "test(=test_success)",
+        ])
+        .output();
+    assert!(
+        output.exit_status.success(),
+        "run with a corrupt index should still succeed: {output}"
+    );
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("recording disabled"),
+        "run with a corrupt index should warn that recording is disabled: {output}"
+    );
+    assert!(
+        stderr.contains("run list"),
+        "warning should mention the run list failure: {output}"
+    );
+    check_run_output_for_test_names(&output.stderr, &["test_success"], RunProperties::empty());
+    assert_eq!(
+        count_run_dirs(&runs_dir),
+        1,
+        "no new run dir should be created while recording is disabled"
+    );
+}
+
+// An unwritable state dir must disable recording with a warning.
+#[test]
+fn test_record_setup_unwritable_state_dir_is_nonfatal() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    let state_dir = p.temp_root().join("unwritable-state");
+
+    // Put a regular file where the state dir is -- this causes an error on all
+    // platforms.
+    fs::write(&state_dir, b"blocking file").expect("created blocking file at state dir path");
+
+    let output = cli_with_recording(&env_info, &p, &state_dir, &user_config_path, None)
+        .args([
+            "run",
+            "--workspace",
+            "--all-targets",
+            "-E",
+            "test(=test_success)",
+        ])
+        .output();
+    assert!(
+        output.exit_status.success(),
+        "run with an unwritable state dir should still succeed: {output}"
+    );
+    assert!(
+        output.stderr_as_str().contains("recording disabled"),
+        "run with an unwritable state dir should warn that recording is disabled: {output}"
+    );
+    check_run_output_for_test_names(&output.stderr, &["test_success"], RunProperties::empty());
+}
+
 // --- Rerun tests ---
 
 /// Reads rerun-info.json from a recorded run's store.zip.
