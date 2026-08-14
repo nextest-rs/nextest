@@ -2318,23 +2318,6 @@ pub enum RecordSetupError {
     RecorderCreate(#[source] RunStoreError),
 }
 
-impl RecordSetupError {
-    /// If this error indicates that recording should be disabled (but the test
-    /// run should continue), returns the underlying error.
-    ///
-    /// This is the case when the runs.json.zst file has a newer format version than
-    /// this nextest supports. Recording is disabled to avoid data loss, but the
-    /// test run can proceed normally.
-    pub fn disabled_error(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            RecordSetupError::RecorderCreate(err @ RunStoreError::FormatVersionTooNew { .. }) => {
-                Some(err)
-            }
-            _ => None,
-        }
-    }
-}
-
 /// An error that occurred while pruning recorded runs.
 #[derive(Debug, Error)]
 pub enum RecordPruneError {
