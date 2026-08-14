@@ -10,7 +10,7 @@ description: Using target triples and cfg() expressions to filter per-test setti
 
 For example, with the following configuration:
 
-```toml title="Platform overrides in `.config/nextest.toml`"
+```toml title="Platform overrides in .config/nextest.toml"
 [[profile.default.overrides]]
 platform = 'cfg(target_os = "linux")'
 retries = 3

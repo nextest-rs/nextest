@@ -12,7 +12,7 @@ With nextest, you can mark heavy tests as taking up multiple threads out of the 
 
 For example, on a machine with 16 logical CPUs, nextest will run 16 tests concurrently by default. However, if you mark tests that begin with `tests::heavy::` as requiring 2 threads each:
 
-```toml title="Heavy tests in `.config/nextest.toml`"
+```toml title="Heavy tests in .config/nextest.toml"
 [[profile.default.overrides]]
 filter = 'test(/^tests::heavy::/)'
 threads-required = 2

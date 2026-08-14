@@ -19,7 +19,7 @@ cargo-nextest supports multiple _profiles_, where each profile is a set of optio
 
 Here is a recommended profile for CI runs:
 
-```toml title="Configuring a CI profile in `.config/nextest.toml`"
+```toml title="Configuring a CI profile in .config/nextest.toml"
 [profile.ci]
 # Run all tests regardless of failures.
 fail-fast = false
@@ -37,7 +37,7 @@ After checking the profile into `.config/nextest.toml`, use `cargo nextest --pro
 
 By default, all custom profiles inherit their configuration from the profile named `default`. To inherit from another profile, specify the `inherits` key:
 
-```toml title="Inheriting from another profile in `.config/nextest.toml`"
+```toml title="Inheriting from another profile in .config/nextest.toml"
 [profile.ci]
 fail-fast = false
 slow-timeout = "60s"

@@ -31,7 +31,7 @@ Run recording can be enabled locally or in CI.
 
 To enable recording in [user configuration](../../user-config/index.md):
 
-```toml title="Enabling recording in `~/.config/nextest/config.toml`"
+```toml title="Enabling recording in ~/.config/nextest/config.toml"
 [experimental]
 record = true
 

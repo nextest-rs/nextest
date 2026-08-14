@@ -21,7 +21,7 @@ field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-
 To set a minimum required version, add to [`.config/nextest.toml`](index.md), at the top of
 the file:
 
-```toml title="Minimum required version in `.config/nextest.toml`"
+```toml title="Minimum required version in .config/nextest.toml"
 nextest-version = "0.9.55"
 # or
 nextest-version = { required = "0.9.55" }

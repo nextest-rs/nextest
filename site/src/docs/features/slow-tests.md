@@ -27,7 +27,7 @@ For tests that take more than a certain amount of time (by default 60 seconds), 
 
 To customize how long it takes before a test is marked slow, use the `slow-timeout` [configuration parameter](../configuration/index.md). For example, to set a timeout of 2 minutes before a test is marked slow, add this to `.config/nextest.toml`:
 
-```toml title="Slow tests in `.config/nextest.toml`"
+```toml title="Slow tests in .config/nextest.toml"
 [profile.default]
 slow-timeout = "2m"
 ```

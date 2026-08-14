@@ -60,7 +60,7 @@ The cache is pruned in order of _last written at_, starting from the oldest runs
 
 ### Example pruning configuration
 
-```toml title="Custom pruning configuration in `~/.config/nextest/config.toml`"
+```toml title="Custom pruning configuration in ~/.config/nextest/config.toml"
 [record]
 enabled = true
 

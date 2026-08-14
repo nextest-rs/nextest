@@ -67,7 +67,7 @@ settings](per-test-overrides.md).
 To run all tests in the `gui` package's `tests/custom-tests.rs` target
 with the `--test-threads=1` argument:
 
-```toml title="Extra arguments in `.config/nextest.toml`"
+```toml title="Extra arguments in .config/nextest.toml"
 [[profile.default.overrides]]
 filter = "binary_id(gui::custom-tests)"
 run-extra-args = ["--test-threads=1"]
