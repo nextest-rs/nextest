@@ -63,11 +63,6 @@ pub struct RecordSessionSetup {
     pub session: RecordSession,
     /// The recorder to pass to the structured reporter.
     pub recorder: RunRecorder,
-    /// The shortest unique prefix for the run ID.
-    ///
-    /// This can be used for display purposes to highlight the unique prefix
-    /// portion of the run ID.
-    pub run_id_unique_prefix: ShortestRunIdPrefix,
 }
 
 /// Manages the full lifecycle of a recording session.
@@ -77,6 +72,7 @@ pub struct RecordSessionSetup {
 pub struct RecordSession {
     state_dir: Utf8PathBuf,
     run_id: ReportUuid,
+    run_id_unique_prefix: ShortestRunIdPrefix,
 }
 
 impl RecordSession {
@@ -121,18 +117,20 @@ impl RecordSession {
         let session = RecordSession {
             state_dir,
             run_id: config.run_id,
+            run_id_unique_prefix,
         };
 
-        Ok(RecordSessionSetup {
-            session,
-            recorder,
-            run_id_unique_prefix,
-        })
+        Ok(RecordSessionSetup { session, recorder })
     }
 
     /// Returns the run ID for this session.
     pub fn run_id(&self) -> ReportUuid {
         self.run_id
+    }
+
+    /// Returns the shortest unique prefix for this session's run ID.
+    pub fn run_id_unique_prefix(&self) -> &ShortestRunIdPrefix {
+        &self.run_id_unique_prefix
     }
 
     /// Returns the state directory for this session.

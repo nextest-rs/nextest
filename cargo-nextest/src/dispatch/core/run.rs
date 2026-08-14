@@ -1136,7 +1136,7 @@ impl App {
 
         // Set up recording if the experimental feature is enabled (via env var or user config)
         // AND recording is enabled in the config.
-        let (recording_session, run_id_unique_prefix) = if resolved_user_config
+        let recording_session = if resolved_user_config
             .is_experimental_enabled(UserConfigExperimental::Record)
             && resolved_user_config.record.enabled
         {
@@ -1172,20 +1172,20 @@ impl App {
                         opts,
                     );
                     structured_reporter.set_record(record);
-                    (Some(setup.session), Some(setup.run_id_unique_prefix))
+                    Some(setup.session)
                 }
                 Err(err) => match err.disabled_error() {
                     Some(reason) => {
                         // Recording is disabled due to a format version mismatch.
                         // Log a warning and continue without recording.
                         warn!("recording disabled: {reason}");
-                        (None, None)
+                        None
                     }
                     None => return Err(ExpectedError::RecordSessionSetupError { err }),
                 },
             }
         } else {
-            (None, None)
+            None
         };
 
         let show_term_progress = ShowTerminalProgress::from_cargo_configs(
@@ -1201,8 +1201,8 @@ impl App {
         );
 
         // Set the run ID unique prefix for highlighting if a recording session is active.
-        if let Some(prefix) = run_id_unique_prefix {
-            reporter.set_run_id_unique_prefix(prefix);
+        if let Some(session) = &recording_session {
+            reporter.set_run_id_unique_prefix(session.run_id_unique_prefix().clone());
         }
 
         configure_handle_inheritance(no_capture)?;
@@ -1408,7 +1408,7 @@ impl App {
 
         // Set up recording if the experimental feature is enabled AND recording is enabled in
         // the config.
-        let (recording_session, run_id_unique_prefix) = if resolved_user_config
+        let recording_session = if resolved_user_config
             .is_experimental_enabled(UserConfigExperimental::Record)
             && resolved_user_config.record.enabled
         {
@@ -1435,20 +1435,20 @@ impl App {
                         opts,
                     );
                     structured_reporter.set_record(record);
-                    (Some(setup.session), Some(setup.run_id_unique_prefix))
+                    Some(setup.session)
                 }
                 Err(err) => match err.disabled_error() {
                     Some(reason) => {
                         // Recording is disabled due to a format version mismatch.
                         // Log a warning and continue without recording.
                         warn!("recording disabled: {reason}");
-                        (None, None)
+                        None
                     }
                     None => return Err(ExpectedError::RecordSessionSetupError { err }),
                 },
             }
         } else {
-            (None, None)
+            None
         };
 
         let show_term_progress = ShowTerminalProgress::from_cargo_configs(
@@ -1464,8 +1464,8 @@ impl App {
         );
 
         // Set the run ID unique prefix for highlighting if a recording session is active.
-        if let Some(prefix) = run_id_unique_prefix {
-            reporter.set_run_id_unique_prefix(prefix);
+        if let Some(session) = &recording_session {
+            reporter.set_run_id_unique_prefix(session.run_id_unique_prefix().clone());
         }
 
         // TODO: no_capture is always true for benchmarks for now.
