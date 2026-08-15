@@ -2858,6 +2858,7 @@ fn test_rerun_tests_outstanding() {
 
     const INITIAL_RUN_ID: &str = "96000001-0000-0000-0000-000000000001";
     const RERUN_ID: &str = "96000002-0000-0000-0000-000000000002";
+    const DENIED_RERUN_ID: &str = "96000003-0000-0000-0000-000000000003";
 
     let initial_output = cli_with_recording(
         &env_info,
@@ -2903,6 +2904,63 @@ fn test_rerun_tests_outstanding() {
         "rerun_tests_outstanding",
         redact_dynamic_fields(&rerun_output.stderr_as_str(), temp_root)
     );
+
+    // A rerun that causes runs.json.zst writes (and thus recording) to be
+    // disabled. We must not record this run or show the continue-rerunning
+    // hint.
+    let runs_dir = find_runs_dir(&cache_dir).expect("runs dir should exist after recording");
+    deny_runs_json_writes(&runs_dir);
+
+    let denied_rerun_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(DENIED_RERUN_ID),
+    )
+    .args([
+        "run",
+        "--cargo-message-format=json",
+        "--rerun",
+        INITIAL_RUN_ID,
+        "-E",
+        "test(=test_success)",
+    ])
+    .unchecked(true)
+    .output();
+    assert_eq!(
+        denied_rerun_output.exit_status.code(),
+        Some(NextestExitCode::RERUN_TESTS_OUTSTANDING),
+        "rerun with outstanding tests not seen should return RERUN_TESTS_OUTSTANDING: \
+         {denied_rerun_output}"
+    );
+    assert!(
+        !runs_dir.join(DENIED_RERUN_ID).exists(),
+        "the rerun should not have been recorded: {denied_rerun_output}"
+    );
+    insta::assert_snapshot!(
+        "rerun_tests_outstanding_recording_disabled",
+        redact_dynamic_fields(&denied_rerun_output.stderr_as_str(), temp_root)
+    );
+}
+
+// A little hack that alters runs.json.zst so that reads succeed but writes are
+// denied.
+fn deny_runs_json_writes(runs_dir: &Utf8Path) {
+    let runs_json_path = runs_dir.join("runs.json.zst");
+    let compressed = fs::read(&runs_json_path).expect("read runs.json.zst");
+    let decompressed =
+        zstd::stream::decode_all(compressed.as_slice()).expect("decompressed runs.json.zst");
+    let mut list: serde_json::Value =
+        serde_json::from_slice(&decompressed).expect("parsed runs.json.zst as JSON");
+    let format_version = list
+        .get_mut("format-version")
+        .expect("runs.json.zst has a format-version field");
+    *format_version = serde_json::Value::from(9999);
+    let updated = serde_json::to_vec(&list).expect("serialized runs.json.zst");
+    let recompressed =
+        zstd::stream::encode_all(updated.as_slice(), 3).expect("compressed runs.json.zst");
+    fs::write(&runs_json_path, recompressed).expect("wrote runs.json.zst");
 }
 
 /// Rerun from a portable recording.

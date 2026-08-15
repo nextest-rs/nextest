@@ -271,6 +271,8 @@ pub enum ExpectedError {
     RerunTestsOutstanding {
         /// The number of tests that were not seen during this rerun.
         count: usize,
+        /// Whether this run was recorded, so `-R latest` can continue the chain.
+        rerun_available: bool,
     },
     #[error("no tests to run")]
     NoTestsRun {
@@ -1101,7 +1103,10 @@ impl ExpectedError {
                 }
                 None
             }
-            Self::RerunTestsOutstanding { count } => {
+            Self::RerunTestsOutstanding {
+                count,
+                rerun_available,
+            } => {
                 warn!(
                     "{} outstanding {} still {}",
                     count.style(styles.bold),
@@ -1112,11 +1117,13 @@ impl ExpectedError {
                 // Advice to run `cargo nextest run -R latest` might not always
                 // be complete due to the expanded build scope or disappearing
                 // tests. We just hint that the user can continue doing reruns.
-                info!(
-                    target: "cargo_nextest::no_heading",
-                    "(hint: {} to continue rerunning)",
-                    "cargo nextest run -R latest".style(styles.bold),
-                );
+                if *rerun_available {
+                    info!(
+                        target: "cargo_nextest::no_heading",
+                        "(hint: {} to continue rerunning)",
+                        "cargo nextest run -R latest".style(styles.bold),
+                    );
+                }
                 None
             }
             Self::NoTestsRun { mode, is_default } => {
