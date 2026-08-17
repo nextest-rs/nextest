@@ -39,9 +39,11 @@ Configuration options supported for JUnit reports, within the `junit` section:
 `report-skipped` <!-- md:version 0.9.143 -->
 : Which skipped tests to emit as `<testcase>` elements with a `<skipped>` child.
 
-    * `"none"` (the default) does not emit any skipped tests.
-    * `"ignored"` emits only tests whose ignore status did not match the run's run-ignored selection (in a default run, the tests marked `#[ignore]`; under `--run-ignored only`, the tests that are not marked `#[ignore]`).
-    * `"all"` emits all skipped tests except tests skipped because they are not benchmarks. Note that with [partitioned](../ci-features/partitioning.md) runs, `"all"` causes each partition's report to include the tests skipped in that partition, so a naive merging of reports will produce duplicate skipped entries.
+  * `"none"` (the default) does not emit any skipped tests.
+  * `"ignored"` emits only those skipped tests whose ignore status did not match the run's run-ignored selection.
+    * In a default run, emits the tests marked `#[ignore]`.
+    * Under `--run-ignored only`, emits the tests that are not marked `#[ignore]`.
+  * `"all"` emits all skipped tests except tests skipped because they are not benchmarks. Note that with [partitioned](../ci-features/partitioning.md) runs, `"all"` causes each partition's report to include the tests skipped in that partition, so a naive merging of reports will produce duplicate skipped entries.
 
 `flaky-fail-status` <!-- md:version 0.9.131 -->
 : Controls how [flaky-fail](../features/retries.md#failing-flaky-tests) tests are reported. `"failure"` (the default) reports them with `<failure>` and `<flakyFailure>`/`<flakyError>` elements. `"success"` reports them as successes, identical to flaky-pass tests. This setting only affects the JUnit representation; the runner will still mark flaky-fail tests as failed.
