@@ -19,7 +19,7 @@ If you're on Linux cross-compiling to Windows, you can choose to run tests throu
 
 If you add the following to `.cargo/config.toml`:
 
-```toml title="Target runner in <code>.cargo/config.toml</code>"
+```toml title="Target runner in .cargo/config.toml"
 [target.x86_64-pc-windows-msvc]
 runner = "wine"
 ```

@@ -91,7 +91,7 @@ When max-fail is exceeded, nextest supports two termination modes:
 
 ### Configuration
 
-```toml title="Fail-fast behavior in <code>.config/nextest.toml</code>"
+```toml title="Fail-fast behavior in .config/nextest.toml"
 [profile.default]
 # Exit the test run after N failures, e.g. 5 failures. max-fail in configuration
 # is available starting cargo-nextest 0.9.89+.

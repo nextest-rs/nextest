@@ -9,7 +9,7 @@ description: "Reordering tests with nextest so that they run first or last."
 
 Nextest allows you to manually reorder tests such that some tests are run first or last. To do so, configure a [per-test override](per-test-overrides.md) with the priority field:
 
-```toml title="Test priorities in <code>.config/nextest.toml</code>"
+```toml title="Test priorities in .config/nextest.toml"
 [[profile.default.overrides]]
 # Run these tests with the highest priority.
 filter = 'test(high_priority)'
