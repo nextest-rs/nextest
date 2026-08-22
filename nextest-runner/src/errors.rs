@@ -1749,6 +1749,41 @@ pub enum CargoConfigError {
     /// Failed to deserialize config file
     #[error(transparent)]
     ConfigParseError(#[from] Box<CargoConfigParseError>),
+
+    /// Failed to load a config file pulled in via another config file's `include` key.
+    ///
+    /// This wraps the underlying error so that the chain of `include` keys leading to the failure
+    /// is preserved, matching Cargo's nested diagnostics.
+    #[error("failed to load config include `{path}` from `{included_from}`")]
+    FailedToLoadInclude {
+        /// The include path, as written in the config file.
+        path: String,
+
+        /// The config file that specified the include.
+        included_from: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: Box<CargoConfigError>,
+    },
+
+    /// A config file's `include` key referred to a path not ending in `.toml`.
+    #[error("config `include` path `{path}` in `{included_from}` does not end with `.toml`")]
+    IncludePathNotToml {
+        /// The offending include path, as written in the config file.
+        path: String,
+
+        /// The config file that specified the include.
+        included_from: Utf8PathBuf,
+    },
+
+    /// A config file was reached more than once while following config `include` keys. This
+    /// includes cycles as well as a file reached via multiple include paths.
+    #[error("config file `{path}` is included more than once")]
+    IncludeReachedTwice {
+        /// The path that was reached more than once.
+        path: Utf8PathBuf,
+    },
 }
 
 /// Failed to deserialize config file
