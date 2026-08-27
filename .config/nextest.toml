@@ -5,8 +5,15 @@ experimental = ["setup-scripts"]
 final-status-level = "slow"
 
 [[profile.default.overrides]]
+# test_archive_with_build_filter runs four sequential archive, extract, and
+# nested-run cycles. Reserve extra threads to reduce contention, and raise
+# the timeout to 300 seconds, which stays under the 360-second sleep in
+# test_subprocess_doesnt_exit so that the stuck-nextest check below still
+# applies to this test.
 filter = 'package(integration-tests) and test(test_archive_with_build_filter)'
 priority = 20
+threads-required = 4
+slow-timeout = { period = "60s", terminate-after = 5 }
 
 [[profile.default.overrides]]
 # The sigttou tests leave nextest backgrounded in interactive terminals, which
