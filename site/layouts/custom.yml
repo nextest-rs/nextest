@@ -57,9 +57,12 @@ layers:
           content: *page_eyebrow
           align: start
           color: "#ffffffb3"
+          # Use Inter Tight for the small lines: Inter 4 kerns "ex" tighter and
+          # "xt" looser, which makes the x in "nextest" sit unevenly at this
+          # size. Inter Tight is built from Inter 3 and has no positive "xt"
+          # kern.
           font:
-              family: Inter
-              variant: 28pt
+              family: Inter Tight
               style: SemiBold
 
     # The box height sets the title font size (92px at 1x) -- keep roughly 10%
@@ -107,8 +110,7 @@ layers:
           align: start bottom
           color: "#ffffff80"
           font:
-              family: Inter
-              variant: 28pt
+              family: Inter Tight
               style: Medium
 
     - size: { width: 288, height: 288 }
