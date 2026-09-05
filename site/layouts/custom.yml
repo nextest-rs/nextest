@@ -25,7 +25,8 @@ layers:
           align: start
           color: white
           font:
-              family: Inter Tight
+              family: Inter
+              variant: 28pt
               style: SemiBold
     - size: { width: 1664, height: 620 }
       offset: { x: 124, y: 320 }
@@ -37,7 +38,8 @@ layers:
               amount: 3
               height: 1.25
           font:
-              family: Inter Tight
+              family: Inter
+              variant: 28pt
               style: Bold
     - size: { width: 1664, height: 220 }
       offset: { x: 124, y: 900 }
