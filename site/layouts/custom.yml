@@ -31,7 +31,7 @@ definitions:
 
     - &page_icon >-
         {%- if page.is_homepage -%}
-          {{ page.meta.get("icon", "material/test-tube") }}
+          {{ page.meta.get("icon", config.theme.icon.logo) }}
         {%- else -%}
           {{ page.meta.get("icon", "") }}
         {%- endif -%}

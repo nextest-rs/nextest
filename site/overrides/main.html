@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  <link rel="icon" href="{{ 'static/favicon.svg' | url }}" type="image/svg+xml" sizes="any">
+  <link rel="apple-touch-icon" href="{{ 'static/apple-touch-icon.png' | url }}" sizes="180x180">
+{% endblock %}

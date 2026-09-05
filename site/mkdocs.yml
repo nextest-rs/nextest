@@ -12,6 +12,9 @@ site_dir: output
 theme:
     name: material
     custom_dir: overrides
+    icon:
+        logo: material/format-list-checks
+    favicon: static/favicon-32.png
     features:
         - navigation.tabs
         - navigation.sections
