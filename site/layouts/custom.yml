@@ -12,12 +12,14 @@ definitions:
     - &page_description >-
         {{ page.meta.get("description", config.site_description) or "" }}
 
-size: { width: 1200, height: 630 }
+# Render social images at 2x (2400x1260) because Pillow snaps each glyph to a
+# whole pixel, which makes letter spacing visibly uneven at 1x.
+size: { width: 2400, height: 1260 }
 layers:
     - background:
           color: "#045"
-    - size: { width: 832, height: 50 }
-      offset: { x: 62, y: 70 }
+    - size: { width: 1664, height: 100 }
+      offset: { x: 124, y: 140 }
       typography:
           content: "cargo-nextest"
           align: start
@@ -25,8 +27,8 @@ layers:
           font:
               family: Inter Tight
               style: SemiBold
-    - size: { width: 832, height: 310 }
-      offset: { x: 62, y: 160 }
+    - size: { width: 1664, height: 620 }
+      offset: { x: 124, y: 320 }
       typography:
           content: "{{ page.title }}"
           align: start
@@ -37,8 +39,8 @@ layers:
           font:
               family: Inter Tight
               style: Bold
-    - size: { width: 832, height: 110 }
-      offset: { x: 62, y: 450 }
+    - size: { width: 1664, height: 220 }
+      offset: { x: 124, y: 900 }
       typography:
           content: *page_description
           align: start
@@ -48,9 +50,13 @@ layers:
               height: 1.25
           font:
               family: Inter
+              # The default Inter file is the opsz=14 text design and is too
+              # loosely spaced at this size. Use the 28pt variant which looks a
+              # lot nicer.
+              variant: 28pt
               style: Regular
-    - size: { width: 144, height: 144 }
-      offset: { x: 992, y: 64 }
+    - size: { width: 288, height: 288 }
+      offset: { x: 1984, y: 128 }
       icon:
           value: *page_icon
           color: white
