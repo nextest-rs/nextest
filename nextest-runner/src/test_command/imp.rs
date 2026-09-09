@@ -346,21 +346,35 @@ impl ChildOutputMut {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use std::{io::Write, path::Path, process::Command, sync::Barrier, thread, time::Duration};
+    use std::{process::Command, sync::Barrier, thread, time::Duration};
     use test_case::test_case;
 
+    // With the lock disabled and 32 threads, measurements on 3- and 10-core
+    // machines found the first inherited pipe as late as round 16 (zero-based).
+    // Use 32 rounds to leave room beyond that observation, and 32 threads to
+    // oversubscribe both machines.
     const SPAWN_CONCURRENCY: usize = 32;
-    const SPAWN_ROUNDS: usize = 16;
+    const SPAWN_ROUNDS: usize = 32;
     const CAPTURE_MARKER: &str = "NEXTEST_CAPTURE_CLOSED";
     const EOF_TIMEOUT: Duration = Duration::from_secs(30);
-    const CHILD_LIFETIME: Duration = Duration::from_secs(120);
+    const CHILD_LIFETIME_SECS: u64 = 120;
 
     /// Children close their own capture pipes and linger, so a reader that
     /// does not reach EOF proves a sibling inherited the writer.
-    #[test_case(CaptureStrategy::Split; "split")]
-    #[test_case(CaptureStrategy::Combined; "combined")]
-    fn concurrent_spawns_do_not_inherit_capture_pipes(strategy: CaptureStrategy) {
-        let executable = std::env::current_exe().expect("current test executable is available");
+    #[test_case(CaptureStrategy::Split, ChildProgram::Absolute; "split absolute")]
+    #[test_case(CaptureStrategy::Combined, ChildProgram::Absolute; "combined absolute")]
+    #[cfg_attr(
+        target_vendor = "apple",
+        test_case(CaptureStrategy::Split, ChildProgram::RelativeWithCwd; "split relative")
+    )]
+    #[cfg_attr(
+        target_vendor = "apple",
+        test_case(CaptureStrategy::Combined, ChildProgram::RelativeWithCwd; "combined relative")
+    )]
+    fn concurrent_spawns_do_not_inherit_capture_pipes(
+        strategy: CaptureStrategy,
+        program: ChildProgram,
+    ) {
         let runtime = tokio::runtime::Runtime::new().expect("Tokio runtime starts");
 
         for round in 0..SPAWN_ROUNDS {
@@ -371,7 +385,7 @@ mod tests {
                         scope.spawn(|| {
                             barrier.wait();
                             let _guard = runtime.enter();
-                            spawn_lingering_child(&executable, strategy)
+                            spawn_lingering_child(strategy, program)
                         })
                     })
                     .collect::<Vec<_>>()
@@ -393,8 +407,17 @@ mod tests {
         }
     }
 
-    /// Kills on drop so a failed assertion does not wait out `CHILD_LIFETIME`
-    /// behind a leaked writer.
+    /// A relative program with a working directory makes the standard library
+    /// fork and exec on Apple platforms, so those spawns take the write lock.
+    #[derive(Clone, Copy)]
+    enum ChildProgram {
+        Absolute,
+        #[cfg(target_vendor = "apple")]
+        RelativeWithCwd,
+    }
+
+    /// Kills on drop so a failed assertion does not wait out
+    /// `CHILD_LIFETIME_SECS` behind a leaked writer.
     struct LingeringChildren(Vec<TokioChild>);
 
     impl LingeringChildren {
@@ -413,14 +436,24 @@ mod tests {
         }
     }
 
-    fn spawn_lingering_child(executable: &Path, strategy: CaptureStrategy) -> io::Result<Child> {
-        let mut command = Command::new(executable);
-        command.args([
-            "--exact",
-            "test_command::imp::tests::child_closes_capture_and_lingers",
-            "--ignored",
-            "--nocapture",
-        ]);
+    fn spawn_lingering_child(
+        strategy: CaptureStrategy,
+        program: ChildProgram,
+    ) -> io::Result<Child> {
+        let mut command = match program {
+            ChildProgram::Absolute => Command::new("/bin/sh"),
+            #[cfg(target_vendor = "apple")]
+            ChildProgram::RelativeWithCwd => {
+                let mut command = Command::new("./sh");
+                command.current_dir("/bin");
+                command
+            }
+        };
+        // `exec >&-` closes the capture descriptors in the shell, and `exec
+        // sleep` replaces the shell so nothing else holds them.
+        command.arg("-c").arg(format!(
+            "echo {CAPTURE_MARKER}; exec >&- 2>&-; exec sleep {CHILD_LIFETIME_SECS}"
+        ));
         spawn(command, strategy, false)
     }
 
@@ -452,22 +485,5 @@ mod tests {
                 .contains(CAPTURE_MARKER),
             "child {index} in round {round} did not write the marker to its capture pipe"
         );
-    }
-
-    /// Not a test: the parent runs it with `--exact --ignored`. Closes its
-    /// capture pipes so the parent sees EOF, lingers so an inherited pipe
-    /// stays detectable, and the sleep bounds it if the parent dies first.
-    #[test]
-    #[ignore]
-    fn child_closes_capture_and_lingers() {
-        println!("{CAPTURE_MARKER}");
-        io::stdout().flush().expect("stdout flushes");
-        // SAFETY: `close` has no memory-safety preconditions, and nothing
-        // writes to these descriptors afterwards.
-        unsafe {
-            libc::close(libc::STDOUT_FILENO);
-            libc::close(libc::STDERR_FILENO);
-        }
-        thread::sleep(CHILD_LIFETIME);
     }
 }
