@@ -3,6 +3,7 @@
 
 use crate::{
     errors::{ChildFdError, ErrorList},
+    test_command::{create_pipe, spawn_piped, spawn_process},
     test_output::{CaptureStrategy, ChildExecutionOutput, ChildOutput, ChildSplitOutput},
 };
 use bytes::BytesMut;
@@ -31,6 +32,16 @@ cfg_if::cfg_if! {
     }
 }
 
+pub(super) fn attach_capture_readers(
+    child: &mut TokioChild,
+    stdout_rx: Option<PipeReader>,
+    stderr_rx: Option<PipeReader>,
+) -> io::Result<()> {
+    child.stdout = stdout_rx.map(os::pipe_reader_to_child_stdout).transpose()?;
+    child.stderr = stderr_rx.map(os::pipe_reader_to_child_stderr).transpose()?;
+    Ok(())
+}
+
 /// A spawned child process along with its file descriptors.
 pub(crate) struct Child {
     pub child: TokioChild,
@@ -48,47 +59,27 @@ pub(super) fn spawn(
         cmd.stdin(Stdio::null());
     }
 
-    let combined_rx: Option<PipeReader> = match strategy {
-        CaptureStrategy::None => None,
-        CaptureStrategy::Split => {
-            cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-            None
+    let (child, child_fds) = match strategy {
+        CaptureStrategy::None => {
+            let child = spawn_process(cmd)?;
+            (child, ChildFds::new_split(None, None))
         }
-        CaptureStrategy::Combined => {
-            // We use std::io::pipe() here rather than tokio::net::unix::pipe()
-            // for a couple of reasons:
-            //
-            // * std::io::pipe has the most up-to-date information about things
-            //   like atomic O_CLOEXEC. In particular, mio-pipe 0.1.1 doesn't do
-            //   O_CLOEXEC on platforms like illumos.
-            // * There's no analog to Tokio's anonymous pipes on Windows, while
-            //   std::io::pipe works on all platforms.
-            let (rx, tx) = std::io::pipe()?;
-            cmd.stdout(tx.try_clone()?).stderr(tx);
-            Some(rx)
-        }
-    };
-
-    let mut cmd: tokio::process::Command = cmd.into();
-    let mut child = cmd.spawn()?;
-
-    let output = match strategy {
-        CaptureStrategy::None => ChildFds::new_split(None, None),
         CaptureStrategy::Split => {
+            let mut child = spawn_piped(cmd, true, true)?;
             let stdout = child.stdout.take().expect("stdout was set");
             let stderr = child.stderr.take().expect("stderr was set");
-
-            ChildFds::new_split(Some(stdout), Some(stderr))
+            (child, ChildFds::new_split(Some(stdout), Some(stderr)))
         }
-        CaptureStrategy::Combined => ChildFds::new_combined(
-            os::pipe_reader_to_file(combined_rx.expect("combined_fx was set")).into(),
-        ),
+        CaptureStrategy::Combined => {
+            let (rx, tx) = create_pipe()?;
+            cmd.stdout(tx.try_clone()?).stderr(tx);
+            let child = spawn_process(cmd)?;
+            let combined = os::pipe_reader_to_file(rx).into();
+            (child, ChildFds::new_combined(combined))
+        }
     };
 
-    Ok(Child {
-        child,
-        child_fds: output,
-    })
+    Ok(Child { child, child_fds })
 }
 
 /// The size of each buffered reader's buffer, and the size at which we grow the combined buffer.
@@ -349,5 +340,146 @@ impl ChildOutputMut {
             ),
             Self::Combined(combined) => (Some(combined.len() as u64), None),
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::{process::Command, sync::Barrier, thread, time::Duration};
+    use test_case::test_case;
+
+    // 32 threads oversubscribe the measured 3- and 10-core machines. Without
+    // the lock, one sample first failed at round 16 (zero-based), so use 32
+    // rounds to leave margin.
+    const SPAWN_CONCURRENCY: usize = 32;
+    const SPAWN_ROUNDS: usize = 32;
+    const CAPTURE_MARKER: &str = "NEXTEST_CAPTURE_CLOSED";
+    const EOF_TIMEOUT: Duration = Duration::from_secs(30);
+    const CHILD_LIFETIME_SECS: u64 = 120;
+
+    /// Keep children alive after closing stdout and stderr so an inherited
+    /// writer in a sibling delays EOF.
+    #[test_case(CaptureStrategy::Split, ChildProgram::Absolute; "split absolute")]
+    #[test_case(CaptureStrategy::Combined, ChildProgram::Absolute; "combined absolute")]
+    #[cfg_attr(
+        target_vendor = "apple",
+        test_case(CaptureStrategy::Split, ChildProgram::RelativeWithCwd; "split relative")
+    )]
+    #[cfg_attr(
+        target_vendor = "apple",
+        test_case(CaptureStrategy::Combined, ChildProgram::RelativeWithCwd; "combined relative")
+    )]
+    fn concurrent_spawns_do_not_inherit_capture_pipes(
+        strategy: CaptureStrategy,
+        program: ChildProgram,
+    ) {
+        let runtime = tokio::runtime::Runtime::new().expect("Tokio runtime starts");
+
+        for round in 0..SPAWN_ROUNDS {
+            let barrier = Barrier::new(SPAWN_CONCURRENCY);
+            let children = thread::scope(|scope| {
+                (0..SPAWN_CONCURRENCY)
+                    .map(|_| {
+                        scope.spawn(|| {
+                            barrier.wait();
+                            let _guard = runtime.enter();
+                            spawn_lingering_child(strategy, program)
+                        })
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .map(|handle| handle.join().expect("spawn thread does not panic"))
+                    .collect::<io::Result<Vec<_>>>()
+                    .expect("children start")
+            });
+
+            let (fds, processes): (Vec<_>, Vec<_>) = children
+                .into_iter()
+                .map(|Child { child, child_fds }| (child_fds, child))
+                .unzip();
+            let mut lingering = LingeringChildren(processes);
+            for (index, child_fds) in fds.into_iter().enumerate() {
+                runtime.block_on(assert_capture_closes(child_fds, round, index));
+            }
+            runtime.block_on(lingering.kill_all());
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    enum ChildProgram {
+        Absolute,
+        /// The cwd forces Apple's fork/exec fallback for a relative program.
+        #[cfg(target_vendor = "apple")]
+        RelativeWithCwd,
+    }
+
+    /// Kill on panic so inherited writers cannot delay runtime shutdown.
+    struct LingeringChildren(Vec<TokioChild>);
+
+    impl LingeringChildren {
+        async fn kill_all(&mut self) {
+            for child in &mut self.0 {
+                child.kill().await.expect("lingering child is killed");
+            }
+        }
+    }
+
+    impl Drop for LingeringChildren {
+        fn drop(&mut self) {
+            for child in &mut self.0 {
+                _ = child.start_kill();
+            }
+        }
+    }
+
+    fn spawn_lingering_child(
+        strategy: CaptureStrategy,
+        program: ChildProgram,
+    ) -> io::Result<Child> {
+        let mut command = match program {
+            ChildProgram::Absolute => Command::new("/bin/sh"),
+            #[cfg(target_vendor = "apple")]
+            ChildProgram::RelativeWithCwd => {
+                let mut command = Command::new("./sh");
+                command.current_dir("/bin");
+                command
+            }
+        };
+        // Replace the shell so cleanup can kill the child without orphaning sleep.
+        command.arg("-c").arg(format!(
+            "echo {CAPTURE_MARKER}; exec >&- 2>&-; exec sleep {CHILD_LIFETIME_SECS}"
+        ));
+        spawn(command, strategy, false)
+    }
+
+    async fn assert_capture_closes(child_fds: ChildFds, round: usize, index: usize) {
+        let mut accumulator = ChildAccumulator::new(child_fds);
+        let drained = tokio::time::timeout(EOF_TIMEOUT, async {
+            while !accumulator.fds.is_done() {
+                accumulator.fill_buf().await;
+            }
+        })
+        .await;
+        assert!(
+            drained.is_ok(),
+            "child {index} in round {round} closed its capture pipes, but a sibling still holds them"
+        );
+        assert!(
+            accumulator.errors.is_empty(),
+            "capture reads succeed: {:?}",
+            accumulator.errors
+        );
+
+        let stdout = match &accumulator.output {
+            ChildOutputMut::Split { stdout, .. } => stdout.as_ref().expect("stdout is captured"),
+            ChildOutputMut::Combined(output) => output,
+        };
+        assert!(
+            std::str::from_utf8(stdout)
+                .expect("child output is UTF-8")
+                .contains(CAPTURE_MARKER),
+            "child {index} in round {round} did not write the marker to its capture pipe"
+        );
     }
 }
