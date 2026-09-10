@@ -931,7 +931,7 @@ where
         run_status: ExecuteStatus<LiveSpec>,
     ) {
         self.running_tests
-            .get_mut(&key)
+            .get_mut(key)
             .expect("existing test instance expected but not found")
             .attempt_failed_will_retry(run_status);
     }
@@ -942,7 +942,7 @@ where
         last_run_status: ExecuteStatus<LiveSpec>,
     ) -> ExecutionStatuses<LiveSpec> {
         self.running_tests
-            .remove(&key)
+            .remove(key)
             .unwrap_or_else(|| {
                 panic!(
                     "existing test instance {key:?} expected, \
