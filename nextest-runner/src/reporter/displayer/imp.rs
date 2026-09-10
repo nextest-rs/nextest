@@ -14,8 +14,8 @@ use super::{
         write_final_warnings, write_skip_counts,
     },
     progress::{
-        MaxProgressRunning, ProgressBarState, progress_bar_msg, progress_str,
-        terminal_progress_value, write_summary_str,
+        MaxProgressRunning, ProgressBarState, RunWrapperGroupCounts, progress_bar_msg,
+        progress_str, terminal_progress_value, write_summary_str,
     },
     unit_output::{OutputDisplayOverrides, TestOutputDisplay},
 };
@@ -161,6 +161,7 @@ impl DisplayReporterBuilder {
                 cancel_status: None,
                 unit_output: UnitOutputReporter::new(overrides, self.displayer_kind),
                 final_outputs: DebugIgnore(Vec::new()),
+                run_wrapper_groups: RunWrapperGroupCounts::default(),
                 run_id_unique_prefix: None,
                 redactor: self.redactor,
             },
@@ -555,6 +556,7 @@ struct DisplayReporterImpl<'a> {
     cancel_status: Option<CancelReason>,
     unit_output: UnitOutputReporter,
     final_outputs: DebugIgnore<Vec<FinalOutputEntry<'a>>>,
+    run_wrapper_groups: RunWrapperGroupCounts,
     // The unique prefix for the current run ID, if a recording session is active.
     // Used for highlighting the run ID in RunStarted output.
     run_id_unique_prefix: Option<ShortestRunIdPrefix>,
@@ -1006,6 +1008,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 current_stats,
                 ..
             } => {
+                self.run_wrapper_groups.record(run_statuses);
                 let describe = run_statuses.describe();
                 let last_status = run_statuses.last_status();
                 let test_output_display = self.unit_output.overrides().resolve_for_describe(
@@ -1349,8 +1352,14 @@ impl<'a> DisplayReporterImpl<'a> {
                 );
 
                 let mut summary_str = String::new();
-                write_summary_str(sub_stats, &self.styles, &mut summary_str);
+                write_summary_str(
+                    sub_stats,
+                    Some(&self.run_wrapper_groups),
+                    &self.styles,
+                    &mut summary_str,
+                );
                 writeln!(writer, " {tests_str} run: {summary_str}")?;
+                self.run_wrapper_groups.clear();
             }
             TestEventKind::RunFinished {
                 start_time: _start_time,
@@ -1402,7 +1411,12 @@ impl<'a> DisplayReporterImpl<'a> {
                         );
 
                         let mut summary_str = String::new();
-                        write_summary_str(run_stats, &self.styles, &mut summary_str);
+                        write_summary_str(
+                            run_stats,
+                            Some(&self.run_wrapper_groups),
+                            &self.styles,
+                            &mut summary_str,
+                        );
                         writeln!(writer, " {tests_str} run: {summary_str}")?;
                     }
                     RunFinishedStats::Stress(stats) => {
@@ -1655,11 +1669,22 @@ impl<'a> DisplayReporterImpl<'a> {
         // Write the status prefix (e.g., "PASS", "FAIL", "FLAKY 2/3").
         self.write_status_line_prefix(describe, kind, writer)?;
 
-        // Write the duration and test instance.
+        // Write the duration, wrapper report, and test instance.
+        write!(
+            writer,
+            "{}",
+            DisplayBracketedDuration(last_status.time_taken),
+        )?;
+        if let Some(wrapper_report) = &last_status.run_wrapper_report {
+            write!(
+                writer,
+                "({}) ",
+                wrapper_report.label.style(self.styles.script_id),
+            )?;
+        }
         writeln!(
             writer,
-            "{}{}",
-            DisplayBracketedDuration(last_status.time_taken),
+            "{}",
             self.display_test_instance(stress_index, counter, test_instance),
         )?;
 
@@ -2889,6 +2914,7 @@ mod tests {
             },
             output: make_split_output(Some(ExecutionResult::Pass), "", ""),
             result: ExecutionResultDescription::Pass,
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -2915,6 +2941,7 @@ mod tests {
             },
             output: make_split_output(Some(result), "", ""),
             result: ExecutionResultDescription::from(result),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -2964,6 +2991,7 @@ mod tests {
             // output is not relevant here.
             output: make_split_output(Some(fail_result_internal), "", ""),
             result: fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -2985,6 +3013,7 @@ mod tests {
             // output is not relevant here.
             output: make_split_output(Some(fail_result_internal), "", ""),
             result: ExecutionResultDescription::Pass,
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(2),
             is_slow: false,
@@ -3129,6 +3158,7 @@ mod tests {
             },
             output: make_split_output(Some(pass_result_internal), "", ""),
             result: pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3144,6 +3174,7 @@ mod tests {
             },
             output: make_split_output(Some(leak_pass_result_internal), "", ""),
             result: leak_pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(2),
             is_slow: false,
@@ -3159,6 +3190,7 @@ mod tests {
             },
             output: make_split_output(Some(timeout_pass_result_internal), "", ""),
             result: timeout_pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(240),
             is_slow: false,
@@ -3175,6 +3207,7 @@ mod tests {
             },
             output: make_split_output(Some(pass_result_internal), "", ""),
             result: pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(30),
             is_slow: true,
@@ -3190,6 +3223,7 @@ mod tests {
             },
             output: make_split_output(Some(leak_pass_result_internal), "", ""),
             result: leak_pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(30),
             is_slow: true,
@@ -3205,6 +3239,7 @@ mod tests {
             },
             output: make_split_output(Some(timeout_pass_result_internal), "", ""),
             result: timeout_pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(300),
             is_slow: true,
@@ -3221,6 +3256,7 @@ mod tests {
             },
             output: make_split_output(Some(fail_result_internal), "", ""),
             result: fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3235,6 +3271,7 @@ mod tests {
             },
             output: make_split_output(Some(pass_result_internal), "", ""),
             result: pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3251,6 +3288,7 @@ mod tests {
             },
             output: make_split_output(Some(fail_result_internal), "", ""),
             result: fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3266,6 +3304,7 @@ mod tests {
             },
             output: make_split_output(Some(fail_leak_result_internal), "", ""),
             result: fail_leak_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3281,6 +3320,7 @@ mod tests {
             },
             output: make_split_output(Some(exec_fail_result_internal), "", ""),
             result: exec_fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3296,6 +3336,7 @@ mod tests {
             },
             output: make_split_output(Some(leak_fail_result_internal), "", ""),
             result: leak_fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3311,6 +3352,7 @@ mod tests {
             },
             output: make_split_output(Some(timeout_fail_result_internal), "", ""),
             result: timeout_fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(60),
             is_slow: false,
@@ -3326,6 +3368,7 @@ mod tests {
             },
             output: make_split_output(None, "", ""),
             result: abort_unix_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3341,6 +3384,7 @@ mod tests {
             },
             output: make_split_output(None, "", ""),
             result: abort_windows_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3357,6 +3401,7 @@ mod tests {
             },
             output: make_split_output(Some(fail_result_internal), "", ""),
             result: fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3372,6 +3417,7 @@ mod tests {
             },
             output: make_split_output(Some(fail_leak_result_internal), "", ""),
             result: fail_leak_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3387,6 +3433,7 @@ mod tests {
             },
             output: make_split_output(Some(leak_fail_result_internal), "", ""),
             result: leak_fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3402,6 +3449,7 @@ mod tests {
             },
             output: make_split_output(Some(timeout_fail_result_internal), "", ""),
             result: timeout_fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(60),
             is_slow: false,
@@ -3566,6 +3614,63 @@ mod tests {
         );
 
         insta::assert_snapshot!("status_line_all_variants", out);
+    }
+
+    #[test]
+    fn status_line_with_wrapper_report() {
+        let binary_id = RustBinaryId::new("my-binary-id");
+        let test_name = TestCaseName::new("test_name");
+        let test_instance = TestInstanceId {
+            binary_id: &binary_id,
+            test_name: &test_name,
+        };
+        let status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(ExecutionResult::Pass), "", ""),
+            result: ExecutionResultDescription::Pass,
+            run_wrapper_report: Some(RunWrapperReport {
+                label: "cached".to_owned(),
+                group: Some("cached".to_owned()),
+            }),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+        let describe = ExecutionDescription::Success {
+            single_status: &status,
+        };
+        let mut out = String::new();
+
+        with_reporter(
+            |mut reporter| {
+                reporter
+                    .inner
+                    .write_status_line_impl(
+                        None,
+                        TestInstanceCounter::Counter {
+                            current: 1,
+                            total: 100,
+                        },
+                        test_instance,
+                        describe,
+                        StatusLineKind::Final,
+                        reporter.output.writer_mut().unwrap(),
+                    )
+                    .unwrap();
+            },
+            &mut out,
+        );
+
+        assert_eq!(
+            out,
+            "        PASS [   1.000s] (cached) (  1/100) my-binary-id test_name\n"
+        );
     }
 
     #[test]

@@ -21,8 +21,8 @@ use crate::{
         events::{
             ChildExecutionOutputDescription, ErrorSummary, ExecuteStatus, ExecutionResult,
             ExecutionResultDescription, InfoResponse, OutputErrorSlice, RetryData,
-            SetupScriptEnvMap, SetupScriptExecuteStatus, StressIndex, TestSlotAssignment, UnitKind,
-            UnitState,
+            RunWrapperReport, SetupScriptEnvMap, SetupScriptExecuteStatus, StressIndex,
+            TestSlotAssignment, UnitKind, UnitState,
         },
     },
     signal::ShutdownEvent,
@@ -167,6 +167,7 @@ pub(super) struct InternalExecuteStatus<'a> {
     pub(super) slow_after: Option<Duration>,
     pub(super) output: ChildExecutionOutput,
     pub(super) result: ExecutionResult,
+    pub(super) run_wrapper_report: Option<RunWrapperReport>,
     pub(super) stopwatch_end: StopwatchSnapshot,
 }
 
@@ -190,6 +191,7 @@ impl InternalExecuteStatus<'_> {
             retry_data: self.test.retry_data(),
             output,
             result: self.result.into(),
+            run_wrapper_report: self.run_wrapper_report,
             start_time: self.stopwatch_end.start_time.fixed_offset(),
             time_taken: self.stopwatch_end.active,
             is_slow: self.slow_after.is_some(),
