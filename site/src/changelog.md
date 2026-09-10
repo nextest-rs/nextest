@@ -10,6 +10,25 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.144] - 2026-09-10
+
+### Changed
+
+- Failures while setting up [run recording](https://nexte.st/docs/features/record-replay-rerun/) (for example, a store directory that cannot be created) are now always reported as warnings, and the test run continues without recording. Previously, only a store format version mismatch was treated as a warning, and other setup failures aborted the run. This makes setup consistent with recording finalization, which already never fails a run. ([#3547])
+- The "continue rerunning" hint printed when a rerun has outstanding tests is now only shown when the rerun was itself recorded, since `cargo nextest run -R latest` can only continue the chain in that case. ([#3548])
+
+### Fixed
+
+- Fixed the elapsed time shown in per-test running lines for tests that had been running for more than an hour. The minutes field was displayed as the total number of minutes rather than the minutes within the hour, producing output like `[05:313:30]`. ([#3535])
+- When a `cargo metadata` or `cargo build` invocation fails, the error message now shows the full list of arguments that were passed to Cargo, including `--color` and `--manifest-path`. Previously, some arguments were omitted from the message. ([#3557])
+
+Thanks [chirizxc](https://github.com/chirizxc), [latent-9](https://github.com/latent-9), and [k-cross](https://github.com/k-cross) for your first contributions!
+
+[#3535]: https://github.com/nextest-rs/nextest/pull/3535
+[#3547]: https://github.com/nextest-rs/nextest/pull/3547
+[#3548]: https://github.com/nextest-rs/nextest/pull/3548
+[#3557]: https://github.com/nextest-rs/nextest/pull/3557
+
 ## [0.9.143] - 2026-08-04
 
 ### Added
@@ -2269,6 +2288,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.144]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.144
 [0.9.143]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.143
 [0.9.142]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.142
 [0.9.141]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.141
