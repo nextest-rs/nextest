@@ -349,18 +349,17 @@ mod tests {
     use std::{process::Command, sync::Barrier, thread, time::Duration};
     use test_case::test_case;
 
-    // With the lock disabled and 32 threads, measurements on 3- and 10-core
-    // machines found the first inherited pipe as late as round 16 (zero-based).
-    // Use 32 rounds to leave room beyond that observation, and 32 threads to
-    // oversubscribe both machines.
+    // 32 threads oversubscribe the measured 3- and 10-core machines. Without
+    // the lock, one sample first failed at round 16 (zero-based), so use 32
+    // rounds to leave margin.
     const SPAWN_CONCURRENCY: usize = 32;
     const SPAWN_ROUNDS: usize = 32;
     const CAPTURE_MARKER: &str = "NEXTEST_CAPTURE_CLOSED";
     const EOF_TIMEOUT: Duration = Duration::from_secs(30);
     const CHILD_LIFETIME_SECS: u64 = 120;
 
-    /// Children close their own capture pipes and linger, so a reader that
-    /// does not reach EOF proves a sibling inherited the writer.
+    /// Keep children alive after closing stdout and stderr so an inherited
+    /// writer in a sibling delays EOF.
     #[test_case(CaptureStrategy::Split, ChildProgram::Absolute; "split absolute")]
     #[test_case(CaptureStrategy::Combined, ChildProgram::Absolute; "combined absolute")]
     #[cfg_attr(
@@ -407,17 +406,15 @@ mod tests {
         }
     }
 
-    /// A relative program with a working directory makes the standard library
-    /// fork and exec on Apple platforms, so those spawns take the write lock.
     #[derive(Clone, Copy)]
     enum ChildProgram {
         Absolute,
+        /// The cwd forces Apple's fork/exec fallback for a relative program.
         #[cfg(target_vendor = "apple")]
         RelativeWithCwd,
     }
 
-    /// Kills on drop so a failed assertion does not wait out
-    /// `CHILD_LIFETIME_SECS` behind a leaked writer.
+    /// Kill on panic so inherited writers cannot delay runtime shutdown.
     struct LingeringChildren(Vec<TokioChild>);
 
     impl LingeringChildren {
@@ -449,8 +446,7 @@ mod tests {
                 command
             }
         };
-        // `exec >&-` closes the capture descriptors in the shell, and `exec
-        // sleep` replaces the shell so nothing else holds them.
+        // Replace the shell so cleanup can kill the child without orphaning sleep.
         command.arg("-c").arg(format!(
             "echo {CAPTURE_MARKER}; exec >&- 2>&-; exec sleep {CHILD_LIFETIME_SECS}"
         ));

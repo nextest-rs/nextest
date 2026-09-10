@@ -28,12 +28,12 @@ mod imp;
 use imp::attach_capture_readers;
 pub(crate) use imp::{Child, ChildAccumulator, ChildFds};
 
-/// Outside the listed targets the standard library has no `pipe2(O_CLOEXEC)`
-/// and sets `FD_CLOEXEC` after `pipe()`, so a child spawned from another
-/// thread in that window keeps the capture writer open and the test shows up
-/// as leaked (rust-lang/rust#95584). Windows serializes `CreateProcess` inside
-/// the standard library. Keep the list in sync with
-/// `library/std/src/sys/pipe/unix.rs`.
+/// Without atomic CLOEXEC, a concurrent spawn can inherit a pipe between
+/// `pipe()` and setting `FD_CLOEXEC`. An inherited capture writer delays EOF,
+/// so nextest can report a leak after the test exits (rust-lang/rust#95584).
+/// The excluded Unix targets use `pipe2(O_CLOEXEC)`; keep this list in sync
+/// with `library/std/src/sys/pipe/unix.rs`. On Windows, std serializes
+/// `CreateProcess`.
 const SPAWN_INHERITS_PIPES: bool = cfg!(all(
     unix,
     not(any(
@@ -50,7 +50,6 @@ const SPAWN_INHERITS_PIPES: bool = cfg!(all(
     ))
 ));
 
-/// Spawns must exclude pipe creation, not each other.
 static PROCESS_SPAWN_LOCK: RwLock<()> = RwLock::new(());
 
 #[derive(Clone, Debug)]
@@ -238,11 +237,10 @@ impl TestCommand {
     }
 }
 
-/// `std::io::pipe()` rather than Tokio's pipes: the standard library tracks
-/// atomic `O_CLOEXEC` per target (mio-pipe 0.1.1 lacks it on illumos), and
-/// Tokio has no anonymous pipes on Windows.
+/// Use std's pipes for atomic CLOEXEC on illumos (missing in mio-pipe 0.1.1)
+/// and anonymous pipes on Windows, which Tokio does not provide.
 fn create_pipe() -> std::io::Result<(PipeReader, PipeWriter)> {
-    // The lock guards no data, so poisoning carries no invariant.
+    // This lock protects no data, so a panic leaves no state to repair.
     let _guard = SPAWN_INHERITS_PIPES.then(|| {
         PROCESS_SPAWN_LOCK
             .write()
@@ -251,14 +249,12 @@ fn create_pipe() -> std::io::Result<(PipeReader, PipeWriter)> {
     std::io::pipe()
 }
 
-/// Callers must not use `Stdio::piped()`: the standard library would create
-/// those pipes inside its spawn, outside the write lock.
+/// Create capture pipes with `create_pipe`; `Stdio::piped()` bypasses its lock.
 ///
-/// The read lock is enough only where `posix_spawn` is guaranteed, on Apple
-/// with an absolute program. Elsewhere a fork-and-exec fallback creates an
-/// exec-error pipe inside the spawn; leaked into a concurrent child it would
-/// stall this spawn and every `create_pipe` behind it, so those spawns take
-/// the write lock.
+/// Fork/exec creates an exec-error pipe. A sibling that inherits its writer
+/// stalls the spawn and blocks pipe creation behind its lock. Take the write
+/// lock to prevent this; Apple spawns with absolute paths use `posix_spawn`
+/// and can run under a read lock.
 fn spawn_process(cmd: std::process::Command) -> std::io::Result<tokio::process::Child> {
     let exclusive = SPAWN_INHERITS_PIPES
         && (!cfg!(target_vendor = "apple") || !Path::new(cmd.get_program()).is_absolute());
@@ -297,7 +293,7 @@ pub(crate) fn spawn_piped(
 
     let mut child = spawn_process(cmd)?;
     if let Err(error) = attach_capture_readers(&mut child, stdout_rx, stderr_rx) {
-        // No supervisor exists yet; an unkilled child would run unobserved.
+        // The caller cannot supervise a child it never receives.
         _ = child.start_kill();
         return Err(error);
     }
