@@ -75,6 +75,7 @@ mod tests {
     use guppy::graph::cargo::BuildPlatform;
     use nextest_filtering::{ParseContext, TestQuery};
     use nextest_metadata::TestCaseName;
+    use std::collections::HashSet;
 
     fn tool_name(s: &str) -> ToolName {
         ToolName::new(s.into()).unwrap()
@@ -315,6 +316,47 @@ mod tests {
         // This is present in .config/nextest.toml and is the highest priority
         assert_eq!(default_profile.retries(), RetryPolicy::new_without_delay(3));
 
+        let repo_path = workspace_root.join(NextestConfig::CONFIG_PATH);
+        let override_sources: Vec<_> = default_profile
+            .compiled_data
+            .overrides
+            .iter()
+            .map(|override_| {
+                let id = override_.id();
+                (
+                    id.config_source.path().absolute_path(),
+                    id.config_source.kind(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            override_sources,
+            [
+                (repo_path.as_path(), &ConfigSourceKind::DiscoveredRepository),
+                (repo_path.as_path(), &ConfigSourceKind::DiscoveredRepository),
+                (
+                    tool1_path.as_path(),
+                    &ConfigSourceKind::Tool(tool_name("tool1"))
+                ),
+                (
+                    tool2_path.as_path(),
+                    &ConfigSourceKind::Tool(tool_name("tool2"))
+                ),
+            ],
+            "overrides record their source, highest priority first"
+        );
+        let override_ids: HashSet<_> = default_profile
+            .compiled_data
+            .overrides
+            .iter()
+            .map(|override_| override_.id())
+            .collect();
+        assert_eq!(
+            override_ids.len(),
+            default_profile.compiled_data.overrides.len(),
+            "override ids are pairwise distinct"
+        );
+
         let package_id = graph.workspace().iter().next().unwrap().id();
 
         let binary_query = binary_query(
@@ -393,6 +435,37 @@ mod tests {
             .expect("tool profile is present")
             .apply_build_platforms(&build_platforms());
         assert_eq!(tool_profile.retries(), RetryPolicy::new_without_delay(12));
+
+        let tool_override_sources: Vec<_> = tool_profile
+            .compiled_data
+            .overrides
+            .iter()
+            .map(|override_| {
+                let id = override_.id();
+                (
+                    id.config_source.path().absolute_path(),
+                    id.config_source.kind(),
+                    id.profile_name.as_str(),
+                )
+            })
+            .collect();
+        let tool1_kind = ConfigSourceKind::Tool(tool_name("tool1"));
+        let tool2_kind = ConfigSourceKind::Tool(tool_name("tool2"));
+        let repo_kind = ConfigSourceKind::DiscoveredRepository;
+        assert_eq!(
+            tool_override_sources,
+            [
+                (tool1_path.as_path(), &tool1_kind, "tool"),
+                (tool1_path.as_path(), &tool1_kind, "tool"),
+                (tool2_path.as_path(), &tool2_kind, "tool"),
+                (tool2_path.as_path(), &tool2_kind, "tool"),
+                (repo_path.as_path(), &repo_kind, "default"),
+                (repo_path.as_path(), &repo_kind, "default"),
+                (tool1_path.as_path(), &tool1_kind, "default"),
+                (tool2_path.as_path(), &tool2_kind, "default"),
+            ],
+            "tool profile overrides record their source, highest priority first"
+        );
         assert_eq!(
             tool_profile
                 .settings_for(NextestRunMode::Test, &test_foo_query)

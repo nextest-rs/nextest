@@ -217,7 +217,10 @@ fn config_diagnostics_color() {
     // profile keeps the run from building anything.
     fs::write(
         &config,
-        "nextest-version = { recommended = '999.0.0' }\n[profile.default]\nretries = 'bad'\n",
+        "nextest-version = { recommended = '999.0.0' }
+[profile.default]
+retries = 'bad'
+",
     )
     .unwrap();
     let output = CargoNextestCli::for_test(&env_info)
@@ -233,6 +236,29 @@ fn config_diagnostics_color() {
         .unchecked(true)
         .output();
     push_scenario(&mut blocks, "recommended-version", &output, temp_root);
+
+    // show-config test-groups names the file each override came from.
+    fs::write(
+        &config,
+        "[test-groups.path-group]
+max-threads = 1
+[[profile.default.overrides]]
+filter = 'test(=test_success)'
+test-group = 'path-group'
+",
+    )
+    .unwrap();
+    let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(temp_root)
+        .args(["--color", "always", "--manifest-path"])
+        .arg(project.manifest_path().as_str())
+        .args(["show-config", "test-groups", "--groups", "path-group"])
+        .output();
+    blocks.push(format!(
+        "scenario: show-config-test-groups
+{}",
+        redact_temp_root(output.stdout_as_str().trim_end(), temp_root),
+    ));
 
     insta::assert_snapshot!(blocks.join("\n\n"));
 }

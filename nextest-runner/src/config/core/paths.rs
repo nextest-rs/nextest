@@ -10,7 +10,10 @@ use camino_anchored::{
     AbsUtf8PathBuf, AnchoredPath, CurrentDirError, DisplayPath, PathAnchor, RelUtf8PathBuf,
     ResolvePathError,
 };
-use std::sync::Arc;
+use std::{
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
 use thiserror::Error;
 
 /// Tracks the directory from which nextest was invoked.
@@ -139,6 +142,12 @@ impl PartialEq for ConfigPath {
 }
 
 impl Eq for ConfigPath {}
+
+impl Hash for ConfigPath {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.absolute().hash(state);
+    }
+}
 
 /// An error establishing a configuration file's absolute location.
 #[derive(Debug, Error)]
