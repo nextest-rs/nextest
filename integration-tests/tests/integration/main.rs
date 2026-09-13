@@ -1579,14 +1579,7 @@ fn check_archive_contents(
     let (_p1, archive_file) =
         create_archive_with_args(env_info, "", false, snapshot_name, &["-E", filter], true)
             .expect("archive succeeded");
-    let file = File::open(archive_file.clone()).unwrap();
-    let decoder = zstd::stream::read::Decoder::new(file).unwrap();
-    let mut archive = tar::Archive::new(decoder);
-    let paths = archive
-        .entries()
-        .unwrap()
-        .map(|e| e.unwrap().path().unwrap().into_owned().try_into().unwrap())
-        .collect::<Vec<_>>();
+    let paths = archive_entry_paths(&archive_file);
     cb(env_info, archive_file, paths);
 }
 
