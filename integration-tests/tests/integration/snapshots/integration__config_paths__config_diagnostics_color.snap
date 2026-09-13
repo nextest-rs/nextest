@@ -37,3 +37,27 @@ scenario: experimental-hint
 exit code: 95
 [31;1merror[0m: experimental feature not enabled: [1mbenchmarks[0m
 (hint: add to the [1mexperimental[0m list in [36msrc/.config/nextest.toml[0m, or set NEXTEST_EXPERIMENTAL_BENCHMARKS=1)
+
+scenario: version-requirement
+command: list (stderr)
+exit code: 92
+[31;1merror[0m: this repository requires nextest version [1m999.0.0[0m, but the current version is [1m0.9.100[0m
+(required version specified in [36msrc/.config/nextest.toml[0m)
+[1minfo[0m: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
+
+scenario: version-requirement
+command: show-config version (stdout)
+exit code: 92
+current nextest version: [1m0.9.100[0m
+version requirements:
+    - required: [1m999.0.0[0m (from [36msrc/.config/nextest.toml[0m)
+evaluation result: [31;1mdoes not meet required version[0m
+
+scenario: recommended-version
+exit code: 96
+[33;1mwarning[0m: this repository recommends nextest version [1m999.0.0[0m, but the current version is [1m0.9.100[0m
+(recommended version specified in [36msrc/.config/nextest.toml[0m)
+[31;1merror[0m: failed to parse nextest config at `[36msrc/.config/nextest.toml[0m`
+
+Caused by:
+  profile.default.retries: invalid type: string "bad", expected a table ({ backoff = "fixed", count = 5 }) or a number (5)

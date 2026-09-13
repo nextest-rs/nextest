@@ -41,6 +41,7 @@ cwd: [TEMP_DIR]/src
 scenario: version-requirement
 command: list (stderr)
 error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+(required version specified in .config/nextest.toml)
 info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
 
 cwd: [TEMP_DIR]/src
@@ -49,7 +50,7 @@ scenario: version-requirement
 command: show-config version (stdout)
 current nextest version: 0.9.100
 version requirements:
-    - required: 999.0.0
+    - required: 999.0.0 (from .config/nextest.toml)
 evaluation result: does not meet required version
 
 cwd: [TEMP_DIR]/src
@@ -91,6 +92,7 @@ cwd: [TEMP_DIR]/src
 scenario: version-requirement
 command: list (stderr)
 error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+(required version specified in .config/nextest.toml)
 info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
 
 cwd: [TEMP_DIR]/src
@@ -99,7 +101,7 @@ scenario: version-requirement
 command: show-config version (stdout)
 current nextest version: 0.9.100
 version requirements:
-    - required: 999.0.0
+    - required: 999.0.0 (from .config/nextest.toml)
 evaluation result: does not meet required version
 
 cwd: [TEMP_DIR]/src
@@ -141,6 +143,7 @@ cwd: [TEMP_DIR]/src
 scenario: version-requirement
 command: list (stderr)
 error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+(required version specified in .config/nextest.toml)
 info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
 
 cwd: [TEMP_DIR]/src
@@ -149,7 +152,7 @@ scenario: version-requirement
 command: show-config version (stdout)
 current nextest version: 0.9.100
 version requirements:
-    - required: 999.0.0
+    - required: 999.0.0 (from .config/nextest.toml)
 evaluation result: does not meet required version
 
 cwd: [TEMP_DIR]/src/nested/child
@@ -191,6 +194,7 @@ cwd: [TEMP_DIR]/src/nested/child
 scenario: version-requirement
 command: list (stderr)
 error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+(required version specified in [TEMP_DIR]/src/.config/nextest.toml)
 info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
 
 cwd: [TEMP_DIR]/src/nested/child
@@ -199,7 +203,7 @@ scenario: version-requirement
 command: show-config version (stdout)
 current nextest version: 0.9.100
 version requirements:
-    - required: 999.0.0
+    - required: 999.0.0 (from [TEMP_DIR]/src/.config/nextest.toml)
 evaluation result: does not meet required version
 
 cwd: [TEMP_DIR]/src/nested/child
@@ -241,6 +245,7 @@ cwd: [TEMP_DIR]/src/nested/child
 scenario: version-requirement
 command: list (stderr)
 error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+(required version specified in ../../.config/nextest.toml)
 info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
 
 cwd: [TEMP_DIR]/src/nested/child
@@ -249,7 +254,7 @@ scenario: version-requirement
 command: show-config version (stdout)
 current nextest version: 0.9.100
 version requirements:
-    - required: 999.0.0
+    - required: 999.0.0 (from ../../.config/nextest.toml)
 evaluation result: does not meet required version
 
 cwd: [TEMP_DIR]/src/nested/child
@@ -291,6 +296,7 @@ cwd: [TEMP_DIR]/src/nested/child
 scenario: version-requirement
 command: list (stderr)
 error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+(required version specified in [TEMP_DIR]/src/.config/nextest.toml)
 info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
 
 cwd: [TEMP_DIR]/src/nested/child
@@ -299,7 +305,7 @@ scenario: version-requirement
 command: show-config version (stdout)
 current nextest version: 0.9.100
 version requirements:
-    - required: 999.0.0
+    - required: 999.0.0 (from [TEMP_DIR]/src/.config/nextest.toml)
 evaluation result: does not meet required version
 
 cwd: [TEMP_DIR]
@@ -341,6 +347,7 @@ cwd: [TEMP_DIR]
 scenario: version-requirement
 command: list (stderr)
 error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+(required version specified in src/.config/nextest.toml)
 info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
 
 cwd: [TEMP_DIR]
@@ -349,7 +356,7 @@ scenario: version-requirement
 command: show-config version (stdout)
 current nextest version: 0.9.100
 version requirements:
-    - required: 999.0.0
+    - required: 999.0.0 (from src/.config/nextest.toml)
 evaluation result: does not meet required version
 
 cwd: [TEMP_DIR]
@@ -391,6 +398,7 @@ cwd: [TEMP_DIR]
 scenario: version-requirement
 command: list (stderr)
 error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+(required version specified in src/.config/nextest.toml)
 info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
 
 cwd: [TEMP_DIR]
@@ -399,7 +407,7 @@ scenario: version-requirement
 command: show-config version (stdout)
 current nextest version: 0.9.100
 version requirements:
-    - required: 999.0.0
+    - required: 999.0.0 (from src/.config/nextest.toml)
 evaluation result: does not meet required version
 
 cwd: [TEMP_DIR]
@@ -441,6 +449,7 @@ cwd: [TEMP_DIR]
 scenario: version-requirement
 command: list (stderr)
 error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+(required version specified in src/.config/nextest.toml)
 info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
 
 cwd: [TEMP_DIR]
@@ -449,5 +458,5 @@ scenario: version-requirement
 command: show-config version (stdout)
 current nextest version: 0.9.100
 version requirements:
-    - required: 999.0.0
+    - required: 999.0.0 (from src/.config/nextest.toml)
 evaluation result: does not meet required version
