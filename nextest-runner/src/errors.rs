@@ -196,6 +196,12 @@ pub enum ConfigParseErrorKind {
     InheritanceErrors(Vec<InheritsError>),
 }
 
+impl From<ConfigError> for ConfigParseErrorKind {
+    fn from(error: ConfigError) -> Self {
+        ConfigParseErrorKind::BuildError(Box::new(error))
+    }
+}
+
 /// An error that occurred while compiling overrides or scripts specified in
 /// configuration.
 #[derive(Debug)]

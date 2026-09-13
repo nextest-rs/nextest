@@ -8,9 +8,11 @@
 mod identifier;
 mod imp;
 mod nextest_version;
+mod sources;
 mod tool_config;
 
 pub use identifier::*;
 pub use imp::*;
 pub use nextest_version::*;
+pub(crate) use sources::*;
 pub use tool_config::*;
