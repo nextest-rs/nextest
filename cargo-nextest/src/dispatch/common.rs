@@ -8,7 +8,8 @@ use camino::Utf8PathBuf;
 use clap::Args;
 use nextest_filtering::ParseContext;
 use nextest_runner::config::core::{
-    ConfigPaths, DefaultConfigWarnings, NextestConfig, ToolConfigFile, VersionOnlyConfig,
+    ConfigFileSelection, ConfigPaths, DefaultConfigWarnings, NextestConfig, ToolConfigFile,
+    VersionOnlyConfig,
 };
 use std::collections::BTreeSet;
 
@@ -85,7 +86,7 @@ impl ConfigOpts {
     ) -> Result<VersionOnlyConfig> {
         VersionOnlyConfig::from_sources_with_paths(
             paths,
-            self.config_file.as_deref(),
+            ConfigFileSelection::new(self.config_file.as_deref()),
             &self.tool_config_files,
         )
         .map_err(ExpectedError::config_parse_error)
