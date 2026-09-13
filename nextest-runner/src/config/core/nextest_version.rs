@@ -3,9 +3,7 @@
 
 //! Nextest version configuration.
 
-use super::{
-    ConfigFileSelection, ConfigPath, ConfigPaths, ConfigSource, ConfigSourceKind, ToolConfigFile,
-};
+use super::{ConfigFileSelection, ConfigPaths, ConfigSource, ConfigSourceKind, ToolConfigFile};
 use crate::errors::{ConfigParseError, ConfigParseErrorKind};
 use camino::Utf8Path;
 use semver::Version;
@@ -98,7 +96,7 @@ impl VersionOnlyConfig {
     ) -> Result<Self, ConfigParseError> {
         let mut nextest_version = NextestVersionConfig::default();
         let mut known = BTreeSet::new();
-        let mut unknown = BTreeSet::new();
+        let mut unknown = Vec::new();
 
         for source in selection.sources(paths, tool_config_files_rev)? {
             let Some(contents) = source.read()? else {
@@ -116,7 +114,9 @@ impl VersionOnlyConfig {
             // Note that tool configs cannot define experimental features
             // (`deserialize` rejects them).
             known.extend(d.experimental.known);
-            unknown.extend(d.experimental.unknown);
+            if !d.experimental.unknown.is_empty() {
+                unknown.push((source, d.experimental.unknown));
+            }
         }
 
         Ok(Self {
@@ -395,8 +395,8 @@ pub struct ExperimentalConfig {
     /// Known experimental features that are enabled.
     known: BTreeSet<ConfigExperimental>,
 
-    /// Unknown experimental feature names.
-    unknown: BTreeSet<String>,
+    /// Unknown experimental feature names, grouped by the file that enabled them.
+    unknown: Vec<(ConfigSource, BTreeSet<String>)>,
 }
 
 impl ExperimentalConfig {
@@ -405,54 +405,20 @@ impl ExperimentalConfig {
         &self.known
     }
 
-    /// Evaluates the experimental configuration.
+    /// Reports unknown features with the path of the file that enabled them.
     ///
     /// This should be called after the nextest version check, so that the version error takes
     /// precedence over unknown experimental features (a future version may have new features).
-    pub fn eval(&self) -> ExperimentalConfigEval {
-        if self.unknown.is_empty() {
-            ExperimentalConfigEval::Satisfied
-        } else {
-            ExperimentalConfigEval::UnknownFeatures {
-                unknown: self.unknown.clone(),
-                known: ConfigExperimental::known_features().collect(),
-            }
-        }
-    }
-}
-
-/// The result of evaluating an [`ExperimentalConfig`].
-///
-/// Returned by [`ExperimentalConfig::eval`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExperimentalConfigEval {
-    /// All experimental features are known.
-    Satisfied,
-
-    /// Unknown experimental features were found.
-    UnknownFeatures {
-        /// The set of unknown feature names.
-        unknown: BTreeSet<String>,
-
-        /// The set of known features.
-        known: BTreeSet<ConfigExperimental>,
-    },
-}
-
-impl ExperimentalConfigEval {
-    /// Converts this eval result into an error, if it represents an error condition.
-    ///
-    /// Returns `Some(ConfigParseError)` if this is `UnknownFeatures`, and `None` if `Satisfied`.
-    pub fn into_error(self, config_file: &ConfigPath) -> Option<ConfigParseError> {
-        match self {
-            ExperimentalConfigEval::Satisfied => None,
-            ExperimentalConfigEval::UnknownFeatures { unknown, known } => {
-                Some(ConfigParseError::from_path(
-                    config_file,
-                    ConfigParseErrorKind::UnknownExperimentalFeatures { unknown, known },
-                ))
-            }
-        }
+    pub fn source_errors(&self) -> impl Iterator<Item = ConfigParseError> + '_ {
+        self.unknown.iter().map(|(source, unknown)| {
+            ConfigParseError::new(
+                source,
+                ConfigParseErrorKind::UnknownExperimentalFeatures {
+                    unknown: unknown.clone(),
+                    known: ConfigExperimental::known_features().collect(),
+                },
+            )
+        })
     }
 }
 
@@ -833,6 +799,53 @@ mod tests {
         let ConfigParseErrorKind::ReadError(_) = error.kind() else {
             panic!("a directory at the repo config path is a read error, got {error:?}");
         };
+    }
+
+    #[test]
+    fn test_unknown_experimental_features_are_attributed_to_their_file() {
+        let workspace = tempdir().unwrap();
+        let repo_config = workspace.child(NextestConfig::CONFIG_PATH);
+        repo_config
+            .write_str("experimental = ['setup-scripts', 'unknown-feature']")
+            .unwrap();
+        let explicit_config = workspace.child("explicit.toml");
+        explicit_config
+            .write_str("experimental = ['other-unknown-feature']")
+            .unwrap();
+
+        for (config_file, expected_path, expected_unknown) in [
+            (None, repo_config.as_path(), "unknown-feature"),
+            (
+                Some(explicit_config.as_path()),
+                explicit_config.as_path(),
+                "other-unknown-feature",
+            ),
+        ] {
+            let config =
+                VersionOnlyConfig::from_sources(workspace.path(), config_file, &[]).unwrap();
+            let errors: Vec<_> = config.experimental().source_errors().collect();
+            let [error] = errors.as_slice() else {
+                panic!("exactly one file enabled unknown features, got {errors:?}");
+            };
+            assert_eq!(error.config_file(), expected_path);
+            assert_eq!(error.tool(), None);
+            let ConfigParseErrorKind::UnknownExperimentalFeatures { unknown, known } = error.kind()
+            else {
+                panic!("unknown features are reported as such, got {error:?}");
+            };
+            assert_eq!(unknown, &BTreeSet::from([expected_unknown.to_owned()]));
+            assert_eq!(known, &ConfigExperimental::known_features().collect());
+        }
+
+        repo_config
+            .write_str("experimental = ['setup-scripts']")
+            .unwrap();
+        let config = VersionOnlyConfig::from_sources(workspace.path(), None, &[]).unwrap();
+        assert_eq!(
+            config.experimental().known(),
+            &BTreeSet::from([ConfigExperimental::SetupScripts])
+        );
+        assert_eq!(config.experimental().source_errors().count(), 0);
     }
 
     #[test_case(
