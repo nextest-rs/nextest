@@ -29,10 +29,13 @@ mod tests {
             ConfigParseErrorKind,
             InheritsError::{self, *},
         },
+        run_mode::NextestRunMode,
     };
     use camino_tempfile::tempdir;
+    use guppy::graph::cargo::BuildPlatform;
     use indoc::indoc;
-    use nextest_filtering::ParseContext;
+    use nextest_filtering::{ParseContext, TestQuery};
+    use nextest_metadata::TestCaseName;
     use std::{collections::HashSet, fs};
     use test_case::test_case;
 
@@ -298,6 +301,10 @@ mod tests {
             indoc! {r#"
                     [profile.prof_b]
                     retries = 3
+
+                    [[profile.prof_b.overrides]]
+                    filter = "test(overridden)"
+                    retries = 7
                 "#},
         )
         .unwrap();
@@ -336,6 +343,25 @@ mod tests {
             .unwrap()
             .apply_build_platforms(&build_platforms());
         assert_eq!(profile.retries(), RetryPolicy::new_without_delay(5));
+
+        let package_id = graph.workspace().iter().next().unwrap().id();
+        let binary = binary_query(
+            &graph,
+            package_id,
+            "lib",
+            "test-package",
+            BuildPlatform::Target,
+        );
+        let test_name = TestCaseName::new("test_overridden");
+        let query = TestQuery {
+            binary_query: binary.to_query(),
+            test_name: &test_name,
+        };
+        assert_eq!(
+            profile.settings_for(NextestRunMode::Test, &query).retries(),
+            RetryPolicy::new_without_delay(7),
+            "prof_a applies the override inherited from prof_b in a lower-priority file"
+        );
 
         // prof_b should have retries=3
         let profile = config

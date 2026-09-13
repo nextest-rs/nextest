@@ -792,18 +792,35 @@ impl NextestConfig {
         let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
         store_dir.push(name);
 
-        // Grab the compiled data as well.
-        let compiled_data = match self.compiled.other.get(name) {
-            Some(data) => data.clone().chain(self.compiled.default.clone()),
-            None => self.compiled.default.clone(),
-        };
+        // Grab the compiled data as well, furthest ancestor first so that the
+        // profile itself ends up with the highest priority.
+        let mut compiled_data = self.compiled.default.clone();
+        for profile_name in inheritance_chain
+            .iter()
+            .rev()
+            .map(|(ancestor, _)| *ancestor)
+            .chain(std::iter::once(name))
+        {
+            // It is possible that a profile in the chain doesn't have any
+            // compiled data associated with it. `compiled.other` is built only
+            // from the config files that were read, so a profile that exists
+            // solely in the embedded default config, such as `default-miri`,
+            // doesn't have an entry in `compiled.other`. Ignore this case since
+            // if there's no data, there's certainly no overrides.
+            if let Some(data) = self.compiled.other.get(profile_name) {
+                compiled_data = data.clone().chain(compiled_data);
+            }
+        }
 
         Ok(EarlyProfile {
             name: name.to_owned(),
             store_dir,
             default_profile: &self.inner.default_profile,
             custom_profile,
-            inheritance_chain,
+            inheritance_chain: inheritance_chain
+                .into_iter()
+                .map(|(_, profile)| profile)
+                .collect(),
             test_groups: &self.inner.test_groups,
             scripts: &self.inner.scripts,
             compiled_data,
@@ -1261,7 +1278,7 @@ impl NextestConfigImpl {
     fn resolve_inheritance_chain(
         &self,
         profile_name: &str,
-    ) -> Result<Vec<&CustomProfileImpl>, ProfileNotFound> {
+    ) -> Result<Vec<(&str, &CustomProfileImpl)>, ProfileNotFound> {
         let mut chain = Vec::new();
 
         // Start from the profile's parent, not the profile itself (the profile
@@ -1273,7 +1290,7 @@ impl NextestConfigImpl {
         while let Some(name) = curr {
             let profile = self.get_profile(name)?;
             if let Some(profile) = profile {
-                chain.push(profile);
+                chain.push((name, profile));
                 curr = profile.inherits.as_deref();
             } else {
                 // Reached the default profile -- stop.
@@ -1791,7 +1808,10 @@ mod tests {
     use super::*;
     use crate::config::{core::ToolName, utils::test_helpers::*};
     use camino_tempfile::tempdir;
+    use guppy::graph::cargo::BuildPlatform;
     use iddqd::{IdHashItem, IdHashMap, id_hash_map, id_upcast};
+    use nextest_metadata::TestCaseName;
+    use std::time::Duration;
 
     fn tool_name(s: &str) -> ToolName {
         ToolName::new(s.into()).unwrap()
@@ -2182,6 +2202,144 @@ mod tests {
                     config_file: tool_path,
                 }
             }
+        );
+    }
+
+    #[test]
+    fn inherited_profiles_contribute_compiled_data() {
+        let dir = tempdir().unwrap();
+        let graph = temp_workspace(
+            &dir,
+            r#"
+            [scripts.setup.prepare]
+            command = "echo prepare"
+
+            [scripts.wrapper.grandparent-wrapper]
+            command = "grandparent-wrapper"
+
+            [scripts.wrapper.parent-wrapper]
+            command = "parent-wrapper"
+
+            [[profile.default.overrides]]
+            filter = "all()"
+            retries = 3
+            slow-timeout = "10s"
+
+            [profile.grandparent]
+
+            [[profile.grandparent.overrides]]
+            filter = "test(parent)"
+            retries = 13
+            slow-timeout = "30s"
+
+            [[profile.grandparent.scripts]]
+            filter = "all()"
+            run-wrapper = "grandparent-wrapper"
+
+            [profile.parent]
+            inherits = "grandparent"
+            default-filter = "test(parent)"
+
+            [[profile.parent.overrides]]
+            filter = "test(parent)"
+            retries = 8
+            slow-timeout = "40s"
+
+            [[profile.parent.scripts]]
+            filter = "all()"
+            setup = ["prepare"]
+
+            [[profile.parent.scripts]]
+            filter = "test(parent)"
+            run-wrapper = "parent-wrapper"
+
+            [profile.child]
+            inherits = "parent"
+
+            [[profile.child.overrides]]
+            filter = "test(child)"
+            retries = 5
+        "#,
+        );
+        let pcx = ParseContext::new(&graph);
+        let config = NextestConfig::from_sources(
+            dir.path(),
+            &pcx,
+            None,
+            &[],
+            &maplit::btreeset! {
+                ConfigExperimental::SetupScripts,
+                ConfigExperimental::WrapperScripts,
+            },
+        )
+        .unwrap();
+        let profile = config
+            .profile("child")
+            .unwrap()
+            .apply_build_platforms(&build_platforms());
+
+        let override_profiles: Vec<_> = profile
+            .compiled_data
+            .overrides
+            .iter()
+            .map(|override_| override_.id().profile_name.as_str())
+            .collect();
+        assert_eq!(
+            override_profiles,
+            ["child", "parent", "grandparent", "default"],
+            "overrides are ordered from the profile itself to its furthest ancestor"
+        );
+        assert_eq!(
+            profile.default_filter().profile,
+            "parent",
+            "default-filter is inherited from the nearest ancestor that sets it"
+        );
+
+        let package_id = graph.workspace().iter().next().unwrap().id();
+        let binary = binary_query(
+            &graph,
+            package_id,
+            "lib",
+            "test-package",
+            BuildPlatform::Target,
+        );
+        for (name, retries, timeout, wrapper) in [
+            ("child_only", 5, 10, Some("grandparent-wrapper")),
+            ("parent_only", 8, 40, Some("parent-wrapper")),
+            ("parent_and_child", 5, 40, Some("parent-wrapper")),
+            ("other", 3, 10, Some("grandparent-wrapper")),
+        ] {
+            let test_name = TestCaseName::new(name);
+            let query = TestQuery {
+                binary_query: binary.to_query(),
+                test_name: &test_name,
+            };
+            let settings = profile.settings_for(NextestRunMode::Test, &query);
+            assert_eq!(settings.retries().count(), retries, "retries for {name}");
+            assert_eq!(
+                settings.slow_timeout().period,
+                Duration::from_secs(timeout),
+                "slow timeout for {name}"
+            );
+            assert_eq!(
+                settings
+                    .run_wrapper()
+                    .map(|wrapper| wrapper.command.program.as_str()),
+                wrapper,
+                "run wrapper for {name}"
+            );
+        }
+
+        let setup_scripts: Vec<_> = profile
+            .compiled_data
+            .scripts
+            .iter()
+            .flat_map(|scripts| scripts.setup.iter().cloned())
+            .collect();
+        assert_eq!(
+            setup_scripts,
+            [ScriptId::new("prepare".into()).unwrap()],
+            "child profile inherits the parent profile's setup script selection"
         );
     }
 }

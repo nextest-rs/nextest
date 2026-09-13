@@ -97,12 +97,14 @@ When `--profile ci` is specified:
 Overrides are configured as an ordered list, and are applied in the following order. For a given test _T_ and a given setting _S_, overrides are applied in the following order:
 
 1. Command-line arguments and environment variables for _S_, if specified, take precedence over all overrides. See [*Hierarchical configuration*](index.md#hierarchical-configuration) for more.
-2. If nextest is run with `--profile my-profile`, the first override within `profile.my-profile.overrides` that matches _T_ and configures _S_ is applied.
-3. Otherwise, the first override within `profile.default.overrides` that matches _T_ and configures _S_ is applied.
-4. Otherwise, if nextest is run with `--profile my-profile`, the global configuration for that profile is applied, if it configures _S_.
-5. If none of the above conditions apply, the global configuration specified by `profile.default` is applied.
 
-Precedence is evaluated separately for each override. If a particular override does not configure a setting, it is ignored for that setting.
+2. Starting with the selected profile, then following its [inheritance chain](index.md#profile-inheritance) through `default`, the first override that matches _T_ and configures _S_ is applied.
+
+   For example, with `--profile my-profile`, overrides in `profile.my-profile.overrides` are checked first, then those in each profile `my-profile` inherits from, and finally those in `profile.default.overrides`.
+
+3. Otherwise, the profile's base settings are resolved using [hierarchical configuration](index.md#hierarchical-configuration).
+
+Precedence is evaluated separately for each setting. If a particular override does not configure a setting, it is ignored for that setting.
 
 ### Example
 
