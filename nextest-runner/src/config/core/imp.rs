@@ -1,7 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{ExperimentalDeserialize, NextestVersionDeserialize, ToolConfigFile, ToolName};
+use super::{
+    ExperimentalDeserialize, NextestVersionDeserialize, ToolConfigFile, ToolName,
+    display_config_path,
+};
 use crate::{
     config::{
         core::ConfigExperimental,
@@ -121,9 +124,7 @@ impl ConfigWarnings for DefaultConfigWarnings {
 
         warn!(
             "in config file {}{}, ignoring unknown configuration {unknown_str}",
-            config_file
-                .strip_prefix(workspace_root)
-                .unwrap_or(config_file),
+            display_config_path(config_file, workspace_root),
             provided_by_tool(tool),
         )
     }
@@ -137,9 +138,7 @@ impl ConfigWarnings for DefaultConfigWarnings {
     ) {
         warn!(
             "in config file {}{}, ignoring unknown profiles in the reserved `default-` namespace:",
-            config_file
-                .strip_prefix(workspace_root)
-                .unwrap_or(config_file),
+            display_config_path(config_file, workspace_root),
             provided_by_tool(tool),
         );
 
@@ -157,9 +156,7 @@ impl ConfigWarnings for DefaultConfigWarnings {
         warn!(
             "in config file {}{}, [script.*] is deprecated and will be removed in a \
              future version of nextest; use the `scripts.setup` table instead",
-            config_file
-                .strip_prefix(workspace_root)
-                .unwrap_or(config_file),
+            display_config_path(config_file, workspace_root),
             provided_by_tool(tool),
         );
     }
@@ -175,9 +172,7 @@ impl ConfigWarnings for DefaultConfigWarnings {
         warn!(
             "in config file {}{}, [[profile.{}.scripts]] has {} {} \
              with neither setup nor wrapper scripts",
-            config_file
-                .strip_prefix(workspace_root)
-                .unwrap_or(config_file),
+            display_config_path(config_file, workspace_root),
             provided_by_tool(tool),
             profile_name,
             empty_count,
@@ -862,9 +857,7 @@ impl NextestConfig {
     fn build_and_deserialize_config(
         builder: &ConfigBuilder<DefaultState>,
     ) -> Result<(NextestConfigDeserialize, BTreeSet<String>), ConfigParseErrorKind> {
-        let config = builder
-            .build_cloned()
-            .map_err(|error| ConfigParseErrorKind::BuildError(Box::new(error)))?;
+        let config = builder.build_cloned()?;
 
         let mut ignored = BTreeSet::new();
         let mut cb = |path: serde_ignored::Path| {
