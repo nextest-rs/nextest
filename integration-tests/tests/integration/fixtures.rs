@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::temp_project::TempProject;
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use fixture_data::{
     fixture_project::EXPECTED_TEST_SUITES,
     models::{
@@ -21,7 +21,7 @@ use nextest_metadata::{
 };
 use quick_junit::{FlakyOrRerun, Report};
 use regex::Regex;
-use std::{collections::BTreeSet, process::Command, sync::LazyLock};
+use std::{collections::BTreeSet, fs::File, process::Command, sync::LazyLock};
 
 #[track_caller]
 pub fn save_cargo_metadata(p: &TempProject) {
@@ -64,6 +64,21 @@ pub fn save_binaries_metadata(env_info: &TestEnvInfo, p: &TempProject) {
         .output();
 
     std::fs::write(p.binaries_metadata_path(), output.stdout).unwrap();
+}
+
+#[track_caller]
+pub fn archive_entry_paths(archive_file: &Utf8Path) -> Vec<Utf8PathBuf> {
+    let file = File::open(archive_file).unwrap();
+    let decoder = zstd::stream::read::Decoder::new(file).unwrap();
+    let mut archive = tar::Archive::new(decoder);
+    archive
+        .entries()
+        .unwrap()
+        .map(|entry| {
+            let path = entry.unwrap().path().unwrap().into_owned();
+            Utf8PathBuf::try_from(path).unwrap()
+        })
+        .collect()
 }
 
 pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
