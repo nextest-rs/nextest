@@ -132,8 +132,8 @@ Caused by:
 cwd: [TEMP_DIR]/src/nested/child
 --config-file: (none)
 scenario: unknown-groups
-warning: in config file .config/nextest.toml, ignoring unknown configuration key: unknown-key
-warning: in config file .config/nextest.toml, ignoring unknown profiles in the reserved `default-` namespace:
+warning: in config file [TEMP_DIR]/src/.config/nextest.toml, ignoring unknown configuration key: unknown-key
+warning: in config file [TEMP_DIR]/src/.config/nextest.toml, ignoring unknown profiles in the reserved `default-` namespace:
 warning:   default-foo
 error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
@@ -200,8 +200,8 @@ Caused by:
 cwd: [TEMP_DIR]/src/nested/child
 --config-file: [TEMP_DIR]/src/.config/nextest.toml
 scenario: unknown-groups
-warning: in config file .config/nextest.toml, ignoring unknown configuration key: unknown-key
-warning: in config file .config/nextest.toml, ignoring unknown profiles in the reserved `default-` namespace:
+warning: in config file [TEMP_DIR]/src/.config/nextest.toml, ignoring unknown configuration key: unknown-key
+warning: in config file [TEMP_DIR]/src/.config/nextest.toml, ignoring unknown profiles in the reserved `default-` namespace:
 warning:   default-foo
 error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
@@ -234,8 +234,8 @@ Caused by:
 cwd: [TEMP_DIR]
 --config-file: (none)
 scenario: unknown-groups
-warning: in config file .config/nextest.toml, ignoring unknown configuration key: unknown-key
-warning: in config file .config/nextest.toml, ignoring unknown profiles in the reserved `default-` namespace:
+warning: in config file src/.config/nextest.toml, ignoring unknown configuration key: unknown-key
+warning: in config file src/.config/nextest.toml, ignoring unknown profiles in the reserved `default-` namespace:
 warning:   default-foo
 error: for config file `src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
@@ -302,8 +302,8 @@ Caused by:
 cwd: [TEMP_DIR]
 --config-file: [TEMP_DIR]/src/.config/nextest.toml
 scenario: unknown-groups
-warning: in config file .config/nextest.toml, ignoring unknown configuration key: unknown-key
-warning: in config file .config/nextest.toml, ignoring unknown profiles in the reserved `default-` namespace:
+warning: in config file src/.config/nextest.toml, ignoring unknown configuration key: unknown-key
+warning: in config file src/.config/nextest.toml, ignoring unknown profiles in the reserved `default-` namespace:
 warning:   default-foo
 error: for config file `src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
