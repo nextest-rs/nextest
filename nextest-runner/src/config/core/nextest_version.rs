@@ -5,7 +5,7 @@
 
 use super::{ConfigPath, ConfigPaths, ToolConfigFile, ToolName};
 use crate::errors::{ConfigParseError, ConfigParseErrorKind};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use semver::Version;
 use serde::{
     Deserialize, Deserializer,
@@ -82,28 +82,22 @@ impl VersionOnlyConfig {
 
         // Merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
-            let resolved = paths.resolve_input(config_file)?;
-            if let Some(v) =
-                Self::read_and_deserialize(&resolved, config_file, Some(tool))?.nextest_version
-            {
+            let config_file = paths.resolve_input(config_file)?;
+            if let Some(v) = Self::read_and_deserialize(&config_file, Some(tool))?.nextest_version {
                 nextest_version.accumulate(v, Some(tool.clone()));
             }
         }
 
         // Finally, merge in the repo config.
         let config_file = match config_file {
-            Some(file) => Some((paths.resolve_input(file)?, file.to_owned())),
+            Some(file) => Some(paths.resolve_input(file)?),
             None => {
                 let config_file = paths.shared_config();
-                let diagnostic_path = config_file.absolute_path().to_owned();
-                config_file
-                    .absolute_path()
-                    .exists()
-                    .then_some((config_file, diagnostic_path))
+                config_file.absolute_path().exists().then_some(config_file)
             }
         };
-        if let Some((resolved, config_file)) = config_file {
-            let d = Self::read_and_deserialize(&resolved, &config_file, None)?;
+        if let Some(config_file) = config_file {
+            let d = Self::read_and_deserialize(&config_file, None)?;
             if let Some(v) = d.nextest_version {
                 nextest_version.accumulate(v, None);
             }
@@ -122,11 +116,10 @@ impl VersionOnlyConfig {
     }
 
     fn read_and_deserialize(
-        resolved: &ConfigPath,
-        config_file: &Utf8Path,
+        config_file: &ConfigPath,
         tool: Option<&ToolName>,
     ) -> Result<VersionOnlyDeserialize, ConfigParseError> {
-        let toml_str = std::fs::read_to_string(resolved.absolute_path()).map_err(|error| {
+        let toml_str = std::fs::read_to_string(config_file.absolute_path()).map_err(|error| {
             ConfigParseError::new(
                 config_file,
                 tool,
@@ -445,7 +438,7 @@ impl ExperimentalConfigEval {
     /// Converts this eval result into an error, if it represents an error condition.
     ///
     /// Returns `Some(ConfigParseError)` if this is `UnknownFeatures`, and `None` if `Satisfied`.
-    pub fn into_error(self, config_file: impl Into<Utf8PathBuf>) -> Option<ConfigParseError> {
+    pub fn into_error(self, config_file: &ConfigPath) -> Option<ConfigParseError> {
         match self {
             ExperimentalConfigEval::Satisfied => None,
             ExperimentalConfigEval::UnknownFeatures { unknown, known } => {

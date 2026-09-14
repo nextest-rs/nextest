@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    ConfigPaths, ExperimentalDeserialize, NextestVersionDeserialize, ToolConfigFile, ToolName,
-    display_config_path,
+    ConfigPath, ConfigPaths, ExperimentalDeserialize, NextestVersionDeserialize, ToolConfigFile,
+    ToolName, display_config_path,
 };
 use crate::{
     config::{
@@ -394,13 +394,18 @@ impl NextestConfig {
         let mut known_profiles = BTreeSet::new();
 
         // Next, merge in tool configs.
-        for ToolConfigFile { config_file, tool } in tool_config_files_rev {
-            let resolved = paths.resolve_input(config_file)?;
-            let source = File::new(resolved.absolute_path().as_str(), FileFormat::Toml);
+        for ToolConfigFile {
+            config_file: warning_path,
+            tool,
+        } in tool_config_files_rev
+        {
+            let config_file = paths.resolve_input(warning_path)?;
+            let source = File::new(config_file.absolute_path().as_str(), FileFormat::Toml);
             Self::deserialize_individual_config(
                 pcx,
                 workspace_root,
-                config_file,
+                &config_file,
+                warning_path,
                 Some(tool),
                 source.clone(),
                 &mut compiled,
@@ -418,21 +423,24 @@ impl NextestConfig {
         // Next, merge in the config from the given file.
         let (config_file, source) = match file {
             Some(file) => {
-                let resolved = paths.resolve_input(file)?;
-                let source = File::new(resolved.absolute_path().as_str(), FileFormat::Toml);
-                (file.to_owned(), source)
+                let path = paths.resolve_input(file)?;
+                let source = File::new(path.absolute_path().as_str(), FileFormat::Toml);
+                (path, source)
             }
             None => {
-                let config_file = paths.shared_config().absolute_path().to_owned();
-                let source = File::new(config_file.as_str(), FileFormat::Toml).required(false);
+                let config_file = paths.shared_config();
+                let source = File::new(config_file.absolute_path().as_str(), FileFormat::Toml)
+                    .required(false);
                 (config_file, source)
             }
         };
+        let warning_path = file.unwrap_or(config_file.absolute_path());
 
         Self::deserialize_individual_config(
             pcx,
             workspace_root,
             &config_file,
+            warning_path,
             None,
             source.clone(),
             &mut compiled,
@@ -463,7 +471,8 @@ impl NextestConfig {
     fn deserialize_individual_config(
         pcx: &ParseContext<'_>,
         workspace_root: &Utf8Path,
-        config_file: &Utf8Path,
+        config_file: &ConfigPath,
+        warning_path: &Utf8Path,
         tool: Option<&ToolName>,
         source: File<FileSourceFile, FileFormat>,
         compiled_out: &mut CompiledByProfile,
@@ -481,7 +490,7 @@ impl NextestConfig {
             .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
 
         if !unknown.is_empty() {
-            warnings.unknown_config_keys(config_file, workspace_root, tool, &unknown);
+            warnings.unknown_config_keys(warning_path, workspace_root, tool, &unknown);
         }
 
         // Check that test groups are named as expected.
@@ -521,7 +530,7 @@ impl NextestConfig {
 
         // If old_setup_scripts are present, produce a warning.
         if !this_config.old_setup_scripts.is_empty() {
-            warnings.deprecated_script_config(config_file, workspace_root, tool);
+            warnings.deprecated_script_config(warning_path, workspace_root, tool);
             this_config.scripts.setup = this_config.old_setup_scripts.clone();
         }
 
@@ -597,7 +606,7 @@ impl NextestConfig {
             .collect();
         if !unknown_default_profiles.is_empty() {
             warnings.unknown_reserved_profiles(
-                config_file,
+                warning_path,
                 workspace_root,
                 tool,
                 &unknown_default_profiles,
@@ -744,7 +753,7 @@ impl NextestConfig {
 
         if empty_script_count > 0 {
             warnings.empty_script_sections(
-                config_file,
+                warning_path,
                 workspace_root,
                 tool,
                 "default",
@@ -784,7 +793,7 @@ impl NextestConfig {
 
             if empty_script_count > 0 {
                 warnings.empty_script_sections(
-                    config_file,
+                    warning_path,
                     workspace_root,
                     tool,
                     profile_name,

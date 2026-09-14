@@ -6,7 +6,7 @@
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
     config::{
-        core::{ConfigExperimental, ConfigPathResolveError, NextestConfig, ToolName},
+        core::{ConfigExperimental, ConfigPath, ConfigPathResolveError, NextestConfig, ToolName},
         elements::{CustomTestGroup, TestGroup},
         scripts::{ProfileScriptType, ScriptId, ScriptType},
     },
@@ -52,7 +52,7 @@ use thiserror::Error;
 )]
 #[non_exhaustive]
 pub struct ConfigParseError {
-    config_file: Utf8PathBuf,
+    config_file: ConfigErrorPath,
     tool: Option<ToolName>,
     #[source]
     kind: ConfigParseErrorKind,
@@ -60,12 +60,12 @@ pub struct ConfigParseError {
 
 impl ConfigParseError {
     pub(crate) fn new(
-        config_file: impl Into<Utf8PathBuf>,
+        config_file: &ConfigPath,
         tool: Option<&ToolName>,
         kind: ConfigParseErrorKind,
     ) -> Self {
         Self {
-            config_file: config_file.into(),
+            config_file: ConfigErrorPath::Resolved(config_file.clone()),
             tool: tool.cloned(),
             kind,
         }
@@ -80,15 +80,23 @@ impl ConfigParseError {
             Some(config_file) => config_file.to_owned(),
             None => workspace_root.join(NextestConfig::CONFIG_PATH),
         };
-        Self::new(
-            config_file,
-            None,
-            ConfigParseErrorKind::PathsCaptureError(Box::new(error)),
-        )
+        Self {
+            config_file: ConfigErrorPath::Unresolved(config_file),
+            tool: None,
+            kind: ConfigParseErrorKind::PathsCaptureError(Box::new(error)),
+        }
     }
 
     /// Returns the config file for this error.
     pub fn config_file(&self) -> &Utf8Path {
+        match &self.config_file {
+            ConfigErrorPath::Resolved(path) => path.absolute_path(),
+            ConfigErrorPath::Unresolved(path) => path,
+        }
+    }
+
+    /// Returns the invocation-relative path for diagnostics.
+    pub fn display_config_file(&self) -> impl fmt::Display + '_ {
         &self.config_file
     }
 
@@ -103,13 +111,28 @@ impl ConfigParseError {
     }
 }
 
+#[derive(Debug)]
+enum ConfigErrorPath {
+    Resolved(ConfigPath),
+    Unresolved(Utf8PathBuf),
+}
+
+impl fmt::Display for ConfigErrorPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Resolved(path) => fmt::Display::fmt(&path.display(), f),
+            Self::Unresolved(path) => fmt::Display::fmt(path, f),
+        }
+    }
+}
+
 impl From<ConfigPathResolveError> for ConfigParseError {
     fn from(error: ConfigPathResolveError) -> Self {
-        Self::new(
-            error.path,
-            None,
-            ConfigParseErrorKind::PathResolveError(Box::new(error.error)),
-        )
+        Self {
+            config_file: ConfigErrorPath::Unresolved(error.path),
+            tool: None,
+            kind: ConfigParseErrorKind::PathResolveError(Box::new(error.error)),
+        }
     }
 }
 

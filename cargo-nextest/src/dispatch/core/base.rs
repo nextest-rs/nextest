@@ -317,7 +317,11 @@ impl BaseApp {
             .config_file
             .clone()
             .unwrap_or_else(|| self.workspace_root.join(NextestConfig::CONFIG_PATH));
-        if let Some(err) = experimental_cfg.eval().into_error(config_file) {
+        let config_file = self
+            .config_paths
+            .resolve_input(&config_file)
+            .map_err(ConfigParseError::from)?;
+        if let Some(err) = experimental_cfg.eval().into_error(&config_file) {
             Err(err.into())
         } else {
             Ok(())

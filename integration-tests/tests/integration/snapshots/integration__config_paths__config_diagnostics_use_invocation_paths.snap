@@ -5,7 +5,7 @@ expression: "blocks.join(\"\\n\\n\")"
 cwd: [TEMP_DIR]/src
 --config-file: (none)
 scenario: version-syntax
-error: failed to parse nextest config at `[TEMP_DIR]/src/.config/nextest.toml`
+error: failed to parse nextest config at `.config/nextest.toml`
 
 Caused by:
   TOML parse error at line 1, column 20
@@ -17,12 +17,12 @@ Caused by:
 cwd: [TEMP_DIR]/src
 --config-file: (none)
 scenario: experimental
-error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown experimental features defined: not-a-feature (known features: setup-scripts, wrapper-scripts, benchmarks):
+error: for config file `.config/nextest.toml`, unknown experimental features defined: not-a-feature (known features: setup-scripts, wrapper-scripts, benchmarks):
 
 cwd: [TEMP_DIR]/src
 --config-file: (none)
 scenario: deserialize
-error: failed to parse nextest config at `[TEMP_DIR]/src/.config/nextest.toml`
+error: failed to parse nextest config at `.config/nextest.toml`
 
 Caused by:
   profile.default.retries: invalid type: string "bad", expected a table ({ backoff = "fixed", count = 5 }) or a number (5)
@@ -33,7 +33,7 @@ scenario: unknown-groups
 warning: in config file .config/nextest.toml, ignoring unknown configuration key: unknown-key
 warning: in config file .config/nextest.toml, ignoring unknown profiles in the reserved `default-` namespace:
 warning:   default-foo
-error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
+error: for config file `.config/nextest.toml`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
 
 cwd: [TEMP_DIR]/src
@@ -73,7 +73,7 @@ error: for config file `.config/nextest.toml`, unknown test groups defined (know
 cwd: [TEMP_DIR]/src
 --config-file: [TEMP_DIR]/src/.config/nextest.toml
 scenario: version-syntax
-error: failed to parse nextest config at `[TEMP_DIR]/src/.config/nextest.toml`
+error: failed to parse nextest config at `.config/nextest.toml`
 
 Caused by:
   TOML parse error at line 1, column 20
@@ -85,12 +85,12 @@ Caused by:
 cwd: [TEMP_DIR]/src
 --config-file: [TEMP_DIR]/src/.config/nextest.toml
 scenario: experimental
-error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown experimental features defined: not-a-feature (known features: setup-scripts, wrapper-scripts, benchmarks):
+error: for config file `.config/nextest.toml`, unknown experimental features defined: not-a-feature (known features: setup-scripts, wrapper-scripts, benchmarks):
 
 cwd: [TEMP_DIR]/src
 --config-file: [TEMP_DIR]/src/.config/nextest.toml
 scenario: deserialize
-error: failed to parse nextest config at `[TEMP_DIR]/src/.config/nextest.toml`
+error: failed to parse nextest config at `.config/nextest.toml`
 
 Caused by:
   profile.default.retries: invalid type: string "bad", expected a table ({ backoff = "fixed", count = 5 }) or a number (5)
@@ -101,7 +101,7 @@ scenario: unknown-groups
 warning: in config file .config/nextest.toml, ignoring unknown configuration key: unknown-key
 warning: in config file .config/nextest.toml, ignoring unknown profiles in the reserved `default-` namespace:
 warning:   default-foo
-error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
+error: for config file `.config/nextest.toml`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
 
 cwd: [TEMP_DIR]/src/nested/child
@@ -209,7 +209,7 @@ error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown test group
 cwd: [TEMP_DIR]
 --config-file: (none)
 scenario: version-syntax
-error: failed to parse nextest config at `[TEMP_DIR]/src/.config/nextest.toml`
+error: failed to parse nextest config at `src/.config/nextest.toml`
 
 Caused by:
   TOML parse error at line 1, column 20
@@ -221,12 +221,12 @@ Caused by:
 cwd: [TEMP_DIR]
 --config-file: (none)
 scenario: experimental
-error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown experimental features defined: not-a-feature (known features: setup-scripts, wrapper-scripts, benchmarks):
+error: for config file `src/.config/nextest.toml`, unknown experimental features defined: not-a-feature (known features: setup-scripts, wrapper-scripts, benchmarks):
 
 cwd: [TEMP_DIR]
 --config-file: (none)
 scenario: deserialize
-error: failed to parse nextest config at `[TEMP_DIR]/src/.config/nextest.toml`
+error: failed to parse nextest config at `src/.config/nextest.toml`
 
 Caused by:
   profile.default.retries: invalid type: string "bad", expected a table ({ backoff = "fixed", count = 5 }) or a number (5)
@@ -237,7 +237,7 @@ scenario: unknown-groups
 warning: in config file .config/nextest.toml, ignoring unknown configuration key: unknown-key
 warning: in config file .config/nextest.toml, ignoring unknown profiles in the reserved `default-` namespace:
 warning:   default-foo
-error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
+error: for config file `src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
 
 cwd: [TEMP_DIR]
@@ -277,7 +277,7 @@ error: for config file `src/.config/nextest.toml`, unknown test groups defined (
 cwd: [TEMP_DIR]
 --config-file: [TEMP_DIR]/src/.config/nextest.toml
 scenario: version-syntax
-error: failed to parse nextest config at `[TEMP_DIR]/src/.config/nextest.toml`
+error: failed to parse nextest config at `src/.config/nextest.toml`
 
 Caused by:
   TOML parse error at line 1, column 20
@@ -289,12 +289,12 @@ Caused by:
 cwd: [TEMP_DIR]
 --config-file: [TEMP_DIR]/src/.config/nextest.toml
 scenario: experimental
-error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown experimental features defined: not-a-feature (known features: setup-scripts, wrapper-scripts, benchmarks):
+error: for config file `src/.config/nextest.toml`, unknown experimental features defined: not-a-feature (known features: setup-scripts, wrapper-scripts, benchmarks):
 
 cwd: [TEMP_DIR]
 --config-file: [TEMP_DIR]/src/.config/nextest.toml
 scenario: deserialize
-error: failed to parse nextest config at `[TEMP_DIR]/src/.config/nextest.toml`
+error: failed to parse nextest config at `src/.config/nextest.toml`
 
 Caused by:
   profile.default.retries: invalid type: string "bad", expected a table ({ backoff = "fixed", count = 5 }) or a number (5)
@@ -305,5 +305,5 @@ scenario: unknown-groups
 warning: in config file .config/nextest.toml, ignoring unknown configuration key: unknown-key
 warning: in config file .config/nextest.toml, ignoring unknown profiles in the reserved `default-` namespace:
 warning:   default-foo
-error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
+error: for config file `src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
