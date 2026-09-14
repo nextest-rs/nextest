@@ -6,7 +6,7 @@
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
     config::{
-        core::{ConfigExperimental, ToolName},
+        core::{ConfigExperimental, ConfigPathResolveError, NextestConfig, ToolName},
         elements::{CustomTestGroup, TestGroup},
         scripts::{ProfileScriptType, ScriptId, ScriptType},
     },
@@ -22,6 +22,7 @@ use crate::{
 };
 use bytesize::ByteSize;
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
+use camino_anchored::{CurrentDirError, ResolvePathError};
 use config::ConfigError;
 use eazip::CompressionMethod;
 use etcetera::HomeDirError;
@@ -70,6 +71,22 @@ impl ConfigParseError {
         }
     }
 
+    pub(crate) fn from_paths_capture_error(
+        workspace_root: &Utf8Path,
+        config_file: Option<&Utf8Path>,
+        error: ConfigPathsCaptureError,
+    ) -> Self {
+        let config_file = match config_file {
+            Some(config_file) => config_file.to_owned(),
+            None => workspace_root.join(NextestConfig::CONFIG_PATH),
+        };
+        Self::new(
+            config_file,
+            None,
+            ConfigParseErrorKind::PathsCaptureError(Box::new(error)),
+        )
+    }
+
     /// Returns the config file for this error.
     pub fn config_file(&self) -> &Utf8Path {
         &self.config_file
@@ -86,6 +103,29 @@ impl ConfigParseError {
     }
 }
 
+impl From<ConfigPathResolveError> for ConfigParseError {
+    fn from(error: ConfigPathResolveError) -> Self {
+        Self::new(
+            error.path,
+            None,
+            ConfigParseErrorKind::PathResolveError(Box::new(error.error)),
+        )
+    }
+}
+
+/// An error produced by
+/// [`ConfigPaths::capture`](crate::config::core::ConfigPaths::capture).
+#[derive(Debug, Error)]
+pub enum ConfigPathsCaptureError {
+    /// The process's current directory could not be determined.
+    #[error("failed to determine the current directory, which config paths are resolved against")]
+    CurrentDir(#[source] CurrentDirError),
+
+    /// The workspace root could not be resolved against the current directory.
+    #[error("failed to resolve workspace root `{}`", .0.input())]
+    WorkspaceRoot(#[source] ResolvePathError),
+}
+
 /// Returns the string ` provided by tool <tool>`, if `tool` is `Some`.
 pub fn provided_by_tool(tool: Option<&ToolName>) -> String {
     match tool {
@@ -100,6 +140,12 @@ pub fn provided_by_tool(tool: Option<&ToolName>) -> String {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ConfigParseErrorKind {
+    /// An input path could not be resolved to an absolute location.
+    #[error("error resolving the configuration path")]
+    PathResolveError(#[source] Box<ResolvePathError>),
+    /// The current directory or workspace root could not be determined.
+    #[error(transparent)]
+    PathsCaptureError(Box<ConfigPathsCaptureError>),
     /// An error occurred while building the config.
     #[error(transparent)]
     BuildError(Box<ConfigError>),

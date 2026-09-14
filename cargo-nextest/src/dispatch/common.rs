@@ -4,10 +4,12 @@
 //! Common options shared between cargo nextest and cargo ntr.
 
 use crate::{ExpectedError, Result};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use clap::Args;
 use nextest_filtering::ParseContext;
-use nextest_runner::config::core::{NextestConfig, ToolConfigFile, VersionOnlyConfig};
+use nextest_runner::config::core::{
+    ConfigPaths, DefaultConfigWarnings, NextestConfig, ToolConfigFile, VersionOnlyConfig,
+};
 use std::collections::BTreeSet;
 
 /// Options shared between cargo nextest and cargo ntr.
@@ -79,10 +81,10 @@ impl ConfigOpts {
     /// Creates a nextest version-only config with the given options.
     pub(crate) fn make_version_only_config(
         &self,
-        workspace_root: &Utf8Path,
+        paths: &ConfigPaths,
     ) -> Result<VersionOnlyConfig> {
-        VersionOnlyConfig::from_sources(
-            workspace_root,
+        VersionOnlyConfig::from_sources_with_paths(
+            paths,
             self.config_file.as_deref(),
             &self.tool_config_files,
         )
@@ -92,16 +94,17 @@ impl ConfigOpts {
     /// Creates a nextest config with the given options.
     pub(crate) fn make_config(
         &self,
-        workspace_root: &Utf8Path,
+        paths: &ConfigPaths,
         pcx: &ParseContext<'_>,
         experimental: &BTreeSet<nextest_runner::config::core::ConfigExperimental>,
     ) -> Result<NextestConfig> {
-        NextestConfig::from_sources(
-            workspace_root,
+        NextestConfig::from_sources_with_paths(
+            paths,
             pcx,
             self.config_file.as_deref(),
             &self.tool_config_files,
             experimental,
+            &mut DefaultConfigWarnings,
         )
         .map_err(ExpectedError::config_parse_error)
     }

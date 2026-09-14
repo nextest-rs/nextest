@@ -19,8 +19,8 @@ use nextest_filtering::ParseContext;
 use nextest_runner::{
     cargo_config::CargoConfigs,
     config::core::{
-        ConfigExperimental, EarlyProfile, ExperimentalConfig, NextestConfig, NextestVersionConfig,
-        NextestVersionEval, VersionOnlyConfig,
+        ConfigExperimental, ConfigPaths, EarlyProfile, ExperimentalConfig, NextestConfig,
+        NextestVersionConfig, NextestVersionEval, VersionOnlyConfig,
     },
     double_spawn::DoubleSpawnInfo,
     list::BinaryList,
@@ -47,6 +47,7 @@ pub(crate) struct BaseApp {
     package_graph: Arc<PackageGraph>,
     // Potentially remapped workspace root (might not be the same as the graph).
     pub(crate) workspace_root: Utf8PathBuf,
+    config_paths: ConfigPaths,
     manifest_path: Option<Utf8PathBuf>,
     pub(crate) reuse_build: ReuseBuildInfo,
     pub(crate) cargo_opts: CargoOptions,
@@ -145,6 +146,7 @@ impl BaseApp {
             });
         }
 
+        let config_paths = ConfigPaths::capture(&workspace_root)?;
         let current_version = current_version();
 
         Ok(Self {
@@ -154,6 +156,7 @@ impl BaseApp {
             cargo_metadata_json,
             package_graph,
             workspace_root,
+            config_paths,
             reuse_build,
             manifest_path,
             cargo_opts,
@@ -175,7 +178,7 @@ impl BaseApp {
         // the config.
         let version_only_config = self
             .config_opts
-            .make_version_only_config(&self.workspace_root)?;
+            .make_version_only_config(&self.config_paths)?;
         self.check_version_config_initial(version_only_config.nextest_version())?;
 
         // Check for unknown experimental features after the version check. This ensures that if
@@ -216,7 +219,7 @@ impl BaseApp {
         }
 
         let config = self.config_opts.make_config(
-            &self.workspace_root,
+            &self.config_paths,
             pcx,
             version_only_config.experimental().known(),
         )?;
