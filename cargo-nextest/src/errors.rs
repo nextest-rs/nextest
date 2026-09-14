@@ -7,7 +7,7 @@ use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{
-    config::core::{ConfigExperimental, ToolName},
+    config::core::{ConfigExperimental, ConfigPath, ToolName},
     errors::{
         ChromeTraceError, PortableRecordingError, PortableRecordingReadError, RecordReadError,
         RunIdResolutionError, RunStoreError, StateDirError, TestListFromSummaryError,
@@ -367,7 +367,7 @@ pub enum ExpectedError {
     },
     #[error("experimental features not enabled in config")]
     ConfigExperimentalFeaturesNotEnabled {
-        config_file: Utf8PathBuf,
+        config_file: ConfigPath,
         missing: Vec<ConfigExperimental>,
     },
     #[error("could not determine state directory for recording")]
@@ -1454,7 +1454,7 @@ impl ExpectedError {
 ///
 /// This is extracted for testing purposes.
 pub(crate) fn format_experimental_features_not_enabled(
-    config_file: &Utf8PathBuf,
+    config_file: &ConfigPath,
     missing: &[ConfigExperimental],
     bold: Style,
 ) -> String {
@@ -1469,7 +1469,7 @@ pub(crate) fn format_experimental_features_not_enabled(
              (hint: add to the {} list in {}{})",
             missing[0].style(bold),
             "experimental".style(bold),
-            config_file.style(bold),
+            config_file.display().style(bold),
             env_hint,
         )
     } else {
@@ -1478,7 +1478,7 @@ pub(crate) fn format_experimental_features_not_enabled(
              (hint: add to the {} list in {})",
             missing.iter().map(|f| f.style(bold)).join(", "),
             "experimental".style(bold),
-            config_file.style(bold),
+            config_file.display().style(bold),
         )
     }
 }
@@ -1486,11 +1486,16 @@ pub(crate) fn format_experimental_features_not_enabled(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino::Utf8Path;
     use insta::assert_snapshot;
+    use nextest_runner::config::core::ConfigPaths;
 
     #[test]
     fn test_format_experimental_features_not_enabled() {
-        let config_file = Utf8PathBuf::from(".config/nextest.toml");
+        let config_file = ConfigPaths::capture(".")
+            .unwrap()
+            .resolve_input(Utf8Path::new(".config/nextest.toml"))
+            .unwrap();
         let style = Style::default();
 
         // Single feature with env var shows the env var hint.
