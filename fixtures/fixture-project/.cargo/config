@@ -1,3 +1,7 @@
+# Pull in an additional config file to exercise nextest's support for Cargo's
+# `include` key. The included file defines an [env] variable that tests assert on.
+include = ["included-config.toml"]
+
 [target.x86_64-pc-windows-gnu]
 runner = "wine"
 
@@ -12,6 +16,9 @@ CONFIG_WORKSPACE_DIR = { value = "", relative = true }
 
 CMD_ENV_VAR = { value = "test-value-set-by-main-config" }
 CMD_ENV_VAR_CARGO = { value = "test-value-set-by-main-config", force = true }
+
+# Defined in both the main config and the included config; the main config wins.
+__NEXTEST_TESTING_INCLUDED_CONFIG_OVERRIDDEN_BY_MAIN = "test-PASSED-value-set-by-main-config"
 
 __NEXTEST_ENV_VAR_FOR_TESTING_NOT_IN_PARENT_ENV = "test-PASSED-value-set-by-main-config"
 __NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_NO_OVERRIDE = "test-FAILED-value-set-by-main-config"
