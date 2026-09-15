@@ -163,7 +163,9 @@ impl ConfigPathResolveError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{config::core::VersionOnlyConfig, errors::ConfigParseErrorKind};
     use camino_tempfile::tempdir;
+    use std::fs;
 
     #[test]
     fn invocation_and_workspace_are_independent() {
@@ -192,6 +194,34 @@ mod tests {
             let explicit = paths.resolve_input(Utf8Path::new("./custom.toml")).unwrap();
             assert_eq!(explicit.absolute_path(), cwd.join("./custom.toml"));
             assert_eq!(explicit.display().to_string(), "./custom.toml");
+        }
+    }
+
+    #[test]
+    fn parse_error_displays_invocation_relative_path() {
+        let temp = tempdir().unwrap();
+        let invocation = temp.path().join("invocation");
+        let workspace = temp.path().join("workspace");
+        fs::create_dir(&invocation).expect("created the invocation directory");
+        fs::write(invocation.join("custom.toml"), "nextest-version = [")
+            .expect("wrote the malformed config");
+        let paths = ConfigPaths::new(
+            InvocationDir::new(AbsUtf8PathBuf::new(invocation.clone()).unwrap()),
+            WorkspaceRoot::new(AbsUtf8PathBuf::new(workspace).unwrap()),
+        );
+
+        let error = VersionOnlyConfig::from_sources_with_paths(
+            &paths,
+            Some(Utf8Path::new("custom.toml")),
+            &[][..],
+        )
+        .expect_err("the malformed config is rejected");
+
+        assert_eq!(error.config_file(), invocation.join("custom.toml"));
+        assert_eq!(error.display_config_file().to_string(), "custom.toml");
+        match error.kind() {
+            ConfigParseErrorKind::TomlParseError(_) => {}
+            other => panic!("expected a TOML parse error, found {other:?}"),
         }
     }
 }

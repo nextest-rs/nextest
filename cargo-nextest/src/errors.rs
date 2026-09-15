@@ -826,7 +826,7 @@ impl ExpectedError {
                             };
                             error!(
                                 "for config file `{}`{}, failed to parse {}",
-                                err.config_file(),
+                                err.display_config_file(),
                                 provided_by_tool(err.tool()),
                                 section_str.style(styles.bold)
                             );
@@ -857,7 +857,7 @@ impl ExpectedError {
                         error!(
                             "for config file `{}`{}, unknown test groups defined \
                             (known groups: {known_groups_str}):\n{errors_str}",
-                            err.config_file(),
+                            err.display_config_file(),
                             provided_by_tool(err.tool()),
                         );
                         None
@@ -874,7 +874,7 @@ impl ExpectedError {
 
                         let mut errors_str: String = format!(
                             "for config file `{}`{}, errors encountered parsing [[profile.*.scripts]]\n",
-                            err.config_file(),
+                            err.display_config_file(),
                             provided_by_tool(err.tool()),
                         );
 
@@ -951,7 +951,7 @@ impl ExpectedError {
                         error!(
                             "for config file `{}`{}, unknown experimental features defined: \
                              {unknown_str} (known features: {known_str}):",
-                            err.config_file(),
+                            err.display_config_file(),
                             provided_by_tool(err.tool()),
                         );
                         None
