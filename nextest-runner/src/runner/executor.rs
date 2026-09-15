@@ -31,8 +31,8 @@ use crate::{
     },
     runner::{
         ExecutorEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus,
-        InternalTerminateReason, RunUnitQuery, RunUnitRequest, SignalRequest, UnitExecuteStatus,
-        parse_env_file,
+        InternalTerminateReason, RUN_WRAPPER_REPORT_ENV, RunUnitQuery, RunUnitRequest,
+        SignalRequest, UnitExecuteStatus, new_report_path, parse_env_file, read_report,
     },
     target_runner::TargetRunner,
     test_command::{ChildAccumulator, ChildFds},
@@ -722,6 +722,7 @@ impl<'a> ExecutorContext<'a> {
                 slow_after: None,
                 output: ChildExecutionOutput::StartError(error),
                 result: ExecutionResult::ExecFail,
+                run_wrapper_report: None,
                 stopwatch_end: stopwatch.snapshot(),
             },
         }
@@ -749,7 +750,11 @@ impl<'a> ExecutorContext<'a> {
             test.retry_data.attempt,
         );
 
+        let wrapper_report_path = cmd.has_wrapper().then(new_report_path).transpose()?;
         let command_mut = cmd.command_mut();
+        if let Some(path) = &wrapper_report_path {
+            command_mut.env(RUN_WRAPPER_REPORT_ENV, path);
+        }
 
         // Test-related environment variables.
         command_mut.env("NEXTEST_RUN_ID", self.run_id.to_string());
@@ -1110,6 +1115,7 @@ impl<'a> ExecutorContext<'a> {
         });
 
         let stopwatch_end = stopwatch.snapshot();
+        let run_wrapper_report = read_report(wrapper_report_path.as_ref());
 
         // Compute stdout and stderr lengths for USDT probe
         let (stdout_len, stderr_len) = child_acc.output.stdout_stderr_len();
@@ -1146,6 +1152,7 @@ impl<'a> ExecutorContext<'a> {
                 errors: ErrorList::new(UnitKind::WAITING_ON_TEST_MESSAGE, child_acc.errors),
             },
             result: exec_result,
+            run_wrapper_report,
             stopwatch_end,
         })
     }

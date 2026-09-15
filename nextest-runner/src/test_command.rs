@@ -54,6 +54,8 @@ pub(crate) struct TestCommand {
     args: Vec<String>,
     /// The command to be run.
     command: std::process::Command,
+    /// Whether a wrapper script is present in the command line.
+    has_wrapper: bool,
     /// Double-spawn context.
     double_spawn: Option<DoubleSpawnContext>,
 }
@@ -65,7 +67,7 @@ impl TestCommand {
         lctx: &LocalExecuteContext<'_>,
         program: String,
         args: &[Cow<'_, str>],
-        env: Option<&ScriptCommandEnvMap>,
+        wrapper_env: Option<&ScriptCommandEnvMap>,
         cwd: &Utf8Path,
         package: &PackageMetadata<'_>,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
@@ -77,11 +79,15 @@ impl TestCommand {
             create_command(program.clone(), args, lctx.double_spawn)
         };
 
+        // Set exactly when the wrapper participates in the command line (see
+        // `TestCommandCli::apply_wrappers`).
+        let has_wrapper = wrapper_env.is_some();
+
         // Apply Cargo's config.toml env first (workspace-wide), then the
         // wrapper's command.env (per-script). This way command.env takes
         // priority as the more specific configuration.
         lctx.env.apply_env(&mut cmd);
-        if let Some(env) = env {
+        if let Some(env) = wrapper_env {
             env.apply_env(&mut cmd);
         }
 
@@ -171,6 +177,7 @@ impl TestCommand {
             program,
             args: args.iter().map(|arg| arg.to_string()).collect(),
             command: cmd,
+            has_wrapper,
             double_spawn,
         }
     }
@@ -181,6 +188,10 @@ impl TestCommand {
 
     pub(crate) fn args(&self) -> &[String] {
         &self.args
+    }
+
+    pub(crate) fn has_wrapper(&self) -> bool {
+        self.has_wrapper
     }
 
     #[inline]
