@@ -24,6 +24,6 @@ error: for config file `.config/tool.toml` provided by tool `my-tool`, unknown t
 
 cwd: [TEMP_DIR]/src/nested/child
 scenario: unknown-groups
-warning: in config file .config/tool.toml provided by tool `my-tool`, ignoring unknown configuration key: unknown-key
+warning: in config file [TEMP_DIR]/src/.config/tool.toml provided by tool `my-tool`, ignoring unknown configuration key: unknown-key
 error: for config file `[TEMP_DIR]/src/.config/tool.toml` provided by tool `my-tool`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
