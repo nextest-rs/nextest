@@ -1,0 +1,28 @@
+---
+source: integration-tests/tests/integration/config_paths.rs
+expression: "blocks.join(\"\\n\\n\")"
+---
+cwd: [TEMP_DIR]/src
+--config-file: (none)
+error: experimental feature not enabled: benchmarks
+(hint: add to the experimental list in .config/nextest.toml, or set NEXTEST_EXPERIMENTAL_BENCHMARKS=1)
+
+cwd: [TEMP_DIR]/src/nested/child
+--config-file: (none)
+error: experimental feature not enabled: benchmarks
+(hint: add to the experimental list in [TEMP_DIR]/src/.config/nextest.toml, or set NEXTEST_EXPERIMENTAL_BENCHMARKS=1)
+
+cwd: [TEMP_DIR]/src/nested/child
+--config-file: ../../.config/nextest.toml
+error: experimental feature not enabled: benchmarks
+(hint: add to the experimental list in ../../.config/nextest.toml, or set NEXTEST_EXPERIMENTAL_BENCHMARKS=1)
+
+cwd: [TEMP_DIR]/src
+--config-file: [TEMP_DIR]/src/.config/nextest.toml
+error: experimental feature not enabled: benchmarks
+(hint: add to the experimental list in .config/nextest.toml, or set NEXTEST_EXPERIMENTAL_BENCHMARKS=1)
+
+cwd: [TEMP_DIR]
+--config-file: (none)
+error: experimental feature not enabled: benchmarks
+(hint: add to the experimental list in src/.config/nextest.toml, or set NEXTEST_EXPERIMENTAL_BENCHMARKS=1)

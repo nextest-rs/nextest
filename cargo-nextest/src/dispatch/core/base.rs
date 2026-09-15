@@ -23,6 +23,7 @@ use nextest_runner::{
         NextestVersionConfig, NextestVersionEval, VersionOnlyConfig,
     },
     double_spawn::DoubleSpawnInfo,
+    errors::ConfigParseError,
     list::BinaryList,
     platform::BuildPlatforms,
     reuse_build::ReuseBuildInfo,
@@ -196,11 +197,13 @@ impl BaseApp {
             .collect::<Vec<_>>();
 
         if !missing.is_empty() {
-            let config_file = self
-                .config_opts
-                .config_file
-                .clone()
-                .unwrap_or_else(|| Utf8PathBuf::from(".config/nextest.toml"));
+            let config_file = match &self.config_opts.config_file {
+                Some(path) => self
+                    .config_paths
+                    .resolve_input(path)
+                    .map_err(ConfigParseError::from)?,
+                None => self.config_paths.shared_config(),
+            };
             return Err(ExpectedError::ConfigExperimentalFeaturesNotEnabled {
                 config_file,
                 missing,
