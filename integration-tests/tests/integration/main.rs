@@ -1929,6 +1929,31 @@ fn test_show_config_test_groups() {
 }
 
 #[test]
+fn test_show_config_test_groups_inherited_overrides() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let config_path = p.workspace_root().join(".config/nextest.toml");
+    let mut contents = std::fs::read_to_string(&config_path).unwrap();
+    contents.push_str("\n[profile.inherits-with-retries]\ninherits = \"with-retries\"\n");
+    std::fs::write(&config_path, contents).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "test-groups",
+            "--workspace",
+            "--all-targets",
+            "--profile=inherits-with-retries",
+        ])
+        .output();
+
+    insta::assert_snapshot!(output.stdout_as_str());
+}
+
+#[test]
 fn test_list_with_default_filter() {
     let env_info = set_env_vars_for_test();
     let p = TempProject::new(&env_info).unwrap();
