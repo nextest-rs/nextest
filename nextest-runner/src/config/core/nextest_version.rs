@@ -3,7 +3,10 @@
 
 //! Nextest version configuration.
 
-use super::{ConfigFileSelection, ConfigPath, ConfigPaths, ToolConfigFile, ToolName};
+use super::{
+    ConfigFileSelection, ConfigPath, ConfigPaths, ConfigSource, ConfigSourceKind, ToolConfigFile,
+    ToolName,
+};
 use crate::errors::{ConfigParseError, ConfigParseErrorKind};
 use camino::Utf8Path;
 use semver::Version;
@@ -102,7 +105,7 @@ impl VersionOnlyConfig {
             let Some(contents) = source.read()? else {
                 continue;
             };
-            let d = Self::deserialize(&source.path, source.tool(), &contents)?;
+            let d = Self::deserialize(&source, &contents)?;
             if let Some(v) = d.nextest_version {
                 nextest_version.accumulate(v, source.tool().cloned());
             }
@@ -124,33 +127,34 @@ impl VersionOnlyConfig {
     }
 
     fn deserialize(
-        config_file: &ConfigPath,
-        tool: Option<&ToolName>,
+        source: &ConfigSource,
         toml_str: &str,
     ) -> Result<VersionOnlyDeserialize, ConfigParseError> {
         let toml_de = toml::de::Deserializer::parse(toml_str).map_err(|error| {
             ConfigParseError::new(
-                config_file,
-                tool,
+                source,
                 ConfigParseErrorKind::TomlParseError(Box::new(error)),
             )
         })?;
         let v: VersionOnlyDeserialize =
             serde_path_to_error::deserialize(toml_de).map_err(|error| {
                 ConfigParseError::new(
-                    config_file,
-                    tool,
+                    source,
                     ConfigParseErrorKind::VersionOnlyDeserializeError(Box::new(error)),
                 )
             })?;
-        if tool.is_some() && !v.experimental.is_empty() {
-            return Err(ConfigParseError::new(
-                config_file,
-                tool,
-                ConfigParseErrorKind::ExperimentalFeaturesInToolConfig {
-                    features: v.experimental.feature_names(),
-                },
-            ));
+        match source.kind() {
+            ConfigSourceKind::Tool(_) => {
+                if !v.experimental.is_empty() {
+                    return Err(ConfigParseError::new(
+                        source,
+                        ConfigParseErrorKind::ExperimentalFeaturesInToolConfig {
+                            features: v.experimental.feature_names(),
+                        },
+                    ));
+                }
+            }
+            ConfigSourceKind::ExplicitRepository | ConfigSourceKind::DiscoveredRepository => {}
         }
 
         Ok(v)
@@ -444,9 +448,8 @@ impl ExperimentalConfigEval {
         match self {
             ExperimentalConfigEval::Satisfied => None,
             ExperimentalConfigEval::UnknownFeatures { unknown, known } => {
-                Some(ConfigParseError::new(
+                Some(ConfigParseError::from_path(
                     config_file,
-                    None,
                     ConfigParseErrorKind::UnknownExperimentalFeatures { unknown, known },
                 ))
             }

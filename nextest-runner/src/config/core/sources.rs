@@ -47,12 +47,12 @@ impl<'a> ConfigFileSelection<'a> {
         self,
         paths: &ConfigPaths,
         tool_config_files_rev: impl Iterator<Item = &'t ToolConfigFile>,
-    ) -> Result<Vec<ConfigSource<'t>>, ConfigParseError> {
+    ) -> Result<Vec<ConfigSource>, ConfigParseError> {
         let mut sources: Vec<_> = tool_config_files_rev
             .map(|ToolConfigFile { config_file, tool }| {
                 Ok(ConfigSource {
                     path: paths.resolve_input(config_file)?,
-                    kind: ConfigSourceKind::Tool(tool),
+                    kind: ConfigSourceKind::Tool(tool.clone()),
                 })
             })
             .collect::<Result<_, ConfigParseError>>()?;
@@ -68,26 +68,33 @@ impl<'a> ConfigFileSelection<'a> {
     }
 }
 
-pub(super) struct ConfigSource<'t> {
-    pub(super) path: ConfigPath,
-    pub(super) kind: ConfigSourceKind<'t>,
+/// The source of a configuration setting.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConfigSource {
+    path: ConfigPath,
+    kind: ConfigSourceKind,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub(super) enum ConfigSourceKind<'t> {
-    Tool(&'t ToolName),
-    ExplicitRepository,
-    DiscoveredRepository,
-}
+impl ConfigSource {
+    /// Returns the resolved path of this config file.
+    pub fn path(&self) -> &ConfigPath {
+        &self.path
+    }
 
-impl<'t> ConfigSource<'t> {
-    pub(super) fn tool(&self) -> Option<&'t ToolName> {
-        match self.kind {
+    /// Returns how this config file was selected.
+    pub fn kind(&self) -> &ConfigSourceKind {
+        &self.kind
+    }
+
+    /// Returns the tool that provided this config file, if any.
+    pub fn tool(&self) -> Option<&ToolName> {
+        match &self.kind {
             ConfigSourceKind::Tool(tool) => Some(tool),
             ConfigSourceKind::ExplicitRepository | ConfigSourceKind::DiscoveredRepository => None,
         }
     }
 
+    /// Returns whether this config file is required.
     pub(super) fn required(&self) -> bool {
         match self.kind {
             ConfigSourceKind::Tool(_) | ConfigSourceKind::ExplicitRepository => true,
@@ -123,12 +130,21 @@ impl<'t> ConfigSource<'t> {
     }
 
     fn read_error(&self, error: io::Error) -> ConfigParseError {
-        ConfigParseError::new(
-            &self.path,
-            self.tool(),
-            ConfigParseErrorKind::ReadError(error),
-        )
+        ConfigParseError::new(self, ConfigParseErrorKind::ReadError(error))
     }
+}
+
+/// How a config file was selected.
+///
+/// The variants are in priority order from lowest to highest.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ConfigSourceKind {
+    /// A tool configuration, passed in via `--tool-config-file`.
+    Tool(ToolName),
+    /// An explicit repository configuration, passed in via `--config-file`.
+    ExplicitRepository,
+    /// The shared repository file found at the workspace root.
+    DiscoveredRepository,
 }
 
 #[cfg(test)]

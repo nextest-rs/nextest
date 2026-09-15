@@ -7,8 +7,8 @@ use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
     config::{
         core::{
-            ConfigExperimental, ConfigPath, ConfigPathResolveError, ConfigStyles, NextestConfig,
-            ToolName,
+            ConfigExperimental, ConfigPath, ConfigPathResolveError, ConfigSource, ConfigStyles,
+            NextestConfig, ToolName,
         },
         elements::{CustomTestGroup, TestGroup},
         scripts::{ProfileScriptType, ScriptId, ScriptType},
@@ -60,14 +60,20 @@ pub struct ConfigParseError {
 }
 
 impl ConfigParseError {
-    pub(crate) fn new(
-        config_file: &ConfigPath,
-        tool: Option<&ToolName>,
-        kind: ConfigParseErrorKind,
-    ) -> Self {
+    pub(crate) fn new(source: &ConfigSource, kind: ConfigParseErrorKind) -> Self {
+        Self {
+            config_file: ConfigErrorPath::Resolved(source.path().clone()),
+            tool: source.tool().cloned(),
+            kind,
+        }
+    }
+
+    /// Creates a new `ConfigParseError` for errors not attributable to a single
+    /// source, such as the composite config build.
+    pub(crate) fn from_path(config_file: &ConfigPath, kind: ConfigParseErrorKind) -> Self {
         Self {
             config_file: ConfigErrorPath::Resolved(config_file.clone()),
-            tool: tool.cloned(),
+            tool: None,
             kind,
         }
     }
