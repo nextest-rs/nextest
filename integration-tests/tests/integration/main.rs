@@ -2299,17 +2299,10 @@ fail-fast = false
         output.stderr_as_str()
     );
 
-    let stderr = output.stderr_as_str();
-    assert!(
-        stderr.contains("requires nextest version 0.9.9999"),
-        "expected version error in stderr, got: {}",
-        stderr
-    );
-    assert!(
-        !stderr.contains("unknown-experimental-feature"),
-        "should not contain unknown experimental feature error, got: {}",
-        stderr
-    );
+    let mut blocks = vec![format!(
+        "scenario: version-not-met\n{}",
+        normalize_nextest_stderr(&output.stderr_as_str(), p.temp_root())
+    )];
 
     // Now test that the unknown experimental feature error is shown when the version passes.
     std::fs::write(
@@ -2345,12 +2338,12 @@ fail-fast = false
         output.stderr_as_str()
     );
 
-    let stderr = output.stderr_as_str();
-    assert!(
-        stderr.contains("unknown-experimental-feature"),
-        "expected unknown experimental feature error in stderr, got: {}",
-        stderr
-    );
+    blocks.push(format!(
+        "scenario: version-met-unknown-feature\n{}",
+        normalize_nextest_stderr(&output.stderr_as_str(), p.temp_root())
+    ));
+
+    insta::assert_snapshot!(blocks.join("\n\n"));
 }
 
 /// Test that unknown experimental features in table format cause an error.
@@ -2398,13 +2391,10 @@ fail-fast = false
         output.stderr_as_str()
     );
 
-    // The error message should contain the unknown feature name.
-    let stderr = output.stderr_as_str();
-    assert!(
-        stderr.contains("unknown experimental features defined: unknown-feature"),
-        "expected unknown-feature in stderr, got: {}",
-        stderr
-    );
+    insta::assert_snapshot!(normalize_nextest_stderr(
+        &output.stderr_as_str(),
+        p.temp_root()
+    ));
 }
 
 /// Tests that valid experimental features in table format work correctly.

@@ -3,8 +3,7 @@
 
 //! Config discovery and diagnostics from different invocation directories.
 
-use super::TempProject;
-use camino::Utf8Path;
+use super::{TempProject, fixtures::redact_temp_root};
 use integration_tests::{env::set_env_vars_for_test, nextest_cli::CargoNextestCli};
 use nextest_metadata::NextestExitCode;
 use std::fs;
@@ -57,16 +56,4 @@ fn experimental_feature_hints_use_invocation_paths() {
     }
 
     insta::assert_snapshot!(blocks.join("\n\n"));
-}
-
-/// Redacts the temporary root since it is random.
-///
-/// Also converts `\` to `/` for Windows.
-fn redact_temp_root(text: &str, temp_root: &Utf8Path) -> String {
-    let redacted = text.replace(temp_root.as_str(), "[TEMP_DIR]");
-    if cfg!(windows) {
-        redacted.replace('\\', "/")
-    } else {
-        redacted
-    }
 }
