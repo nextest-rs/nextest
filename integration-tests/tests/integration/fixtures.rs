@@ -81,6 +81,46 @@ pub fn archive_entry_paths(archive_file: &Utf8Path) -> Vec<Utf8PathBuf> {
         .collect()
 }
 
+/// Redacts the temporary root since it is random.
+///
+/// Also converts `\` to `/` for Windows.
+pub fn redact_temp_root(text: &str, temp_root: &Utf8Path) -> String {
+    let redacted = text.replace(temp_root.as_str(), "[TEMP_DIR]");
+    if cfg!(windows) {
+        redacted.replace('\\', "/")
+    } else {
+        redacted
+    }
+}
+
+/// Filters cargo and nextest noise from stderr, then calls
+/// [`redact_temp_root`].
+///
+/// This is somewhat heuristic and might need to be tweaked as Cargo changes.
+pub fn normalize_nextest_stderr(stderr: &str, temp_root: &Utf8Path) -> String {
+    let filtered = stderr
+        .lines()
+        .filter(|line| {
+            !line.contains("Blocking waiting for file lock")
+                && !line.starts_with("info: experimental features enabled")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    // The update hint depends on whether cargo-nextest was built with the
+    // self-update feature, which differs between `-p integration-tests` and
+    // whole-workspace runs.
+    let normalized = filtered
+        .replace(
+            "update nextest with cargo nextest self update",
+            "update nextest [UPDATE INSTRUCTIONS]",
+        )
+        .replace(
+            "update nextest via your package manager",
+            "update nextest [UPDATE INSTRUCTIONS]",
+        );
+    redact_temp_root(normalized.trim_end(), temp_root)
+}
+
 pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
     let result: TestListSummary = serde_json::from_slice(stdout).unwrap();
 
