@@ -9,10 +9,12 @@ mod identifier;
 mod imp;
 mod nextest_version;
 mod paths;
+mod sources;
 mod tool_config;
 
 pub use identifier::*;
 pub use imp::*;
 pub use nextest_version::*;
 pub use paths::*;
+pub use sources::*;
 pub use tool_config::*;

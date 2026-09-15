@@ -163,7 +163,10 @@ impl ConfigPathResolveError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::core::VersionOnlyConfig, errors::ConfigParseErrorKind};
+    use crate::{
+        config::core::{ConfigFileSelection, VersionOnlyConfig},
+        errors::ConfigParseErrorKind,
+    };
     use camino_tempfile::tempdir;
     use std::fs;
 
@@ -212,7 +215,7 @@ mod tests {
 
         let error = VersionOnlyConfig::from_sources_with_paths(
             &paths,
-            Some(Utf8Path::new("custom.toml")),
+            ConfigFileSelection::new(Some(Utf8Path::new("custom.toml"))),
             &[][..],
         )
         .expect_err("the malformed config is rejected");
