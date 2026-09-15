@@ -18,13 +18,41 @@ use std::{
     collections::{BTreeSet, HashMap},
     ffi::{OsStr, OsString},
     fs::File,
-    io::{BufRead, BufReader},
-    sync::LazyLock,
+    io::{BufRead, BufReader, PipeReader, PipeWriter},
+    path::Path,
+    sync::{LazyLock, PoisonError, RwLock},
 };
 use tracing::warn;
 
 mod imp;
+use imp::attach_capture_readers;
 pub(crate) use imp::{Child, ChildAccumulator, ChildFds};
+
+/// Platforms without atomic CLOEXEC, per `library/std/src/sys/pipe/unix.rs`.
+/// Windows std already serializes `CreateProcess`.
+const SPAWN_INHERITS_PIPES: bool = cfg!(all(
+    unix,
+    not(any(
+        target_os = "android",
+        target_os = "cygwin",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "hurd",
+        target_os = "illumos",
+        target_os = "linux",
+        target_os = "netbsd",
+        target_os = "openbsd",
+        target_os = "redox",
+    ))
+));
+
+/// Without atomic CLOEXEC, a concurrent spawn can inherit a pipe before CLOEXEC
+/// is set, and a test that inherits a capture pipe shows up as leaky
+/// (rust-lang/rust#95584).
+///
+/// Pipe creation and fork/exec spawns take the write lock, since fork/exec
+/// creates its own pipe. `posix_spawn` spawns take the read lock.
+static PROCESS_SPAWN_LOCK: RwLock<()> = RwLock::new(());
 
 #[derive(Clone, Debug)]
 pub(crate) struct LocalExecuteContext<'a> {
@@ -201,10 +229,7 @@ impl TestCommand {
     }
 
     pub(crate) async fn wait_with_output(self) -> std::io::Result<std::process::Output> {
-        let mut cmd = self.command;
-        cmd.stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
-        let res = tokio::process::Command::from(cmd).spawn();
+        let res = spawn_piped(self.command, true, true);
 
         if let Some(ctx) = self.double_spawn {
             ctx.finish();
@@ -212,6 +237,66 @@ impl TestCommand {
 
         res?.wait_with_output().await
     }
+}
+
+/// Use std's pipes for atomic CLOEXEC on illumos (missing in mio-pipe 0.1.1)
+/// and anonymous pipes on Windows, which Tokio does not provide.
+fn create_pipe() -> std::io::Result<(PipeReader, PipeWriter)> {
+    // This lock protects no data, so a panic leaves no state to repair.
+    let _guard = SPAWN_INHERITS_PIPES.then(|| {
+        PROCESS_SPAWN_LOCK
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+    });
+    std::io::pipe()
+}
+
+/// Capture pipes must come from `create_pipe`, not `Stdio::piped()`.
+///
+/// Only Apple with an absolute program is known to use `posix_spawn`.
+fn spawn_process(cmd: std::process::Command) -> std::io::Result<tokio::process::Child> {
+    let exclusive = SPAWN_INHERITS_PIPES
+        && (!cfg!(target_vendor = "apple") || !Path::new(cmd.get_program()).is_absolute());
+    let _write_guard = exclusive.then(|| {
+        PROCESS_SPAWN_LOCK
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+    });
+    let _read_guard = (SPAWN_INHERITS_PIPES && !exclusive).then(|| {
+        PROCESS_SPAWN_LOCK
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+    });
+    tokio::process::Command::from(cmd).spawn()
+}
+
+pub(crate) fn spawn_piped(
+    mut cmd: std::process::Command,
+    capture_stdout: bool,
+    capture_stderr: bool,
+) -> std::io::Result<tokio::process::Child> {
+    let stdout_rx = if capture_stdout {
+        let (rx, tx) = create_pipe()?;
+        cmd.stdout(tx);
+        Some(rx)
+    } else {
+        None
+    };
+    let stderr_rx = if capture_stderr {
+        let (rx, tx) = create_pipe()?;
+        cmd.stderr(tx);
+        Some(rx)
+    } else {
+        None
+    };
+
+    let mut child = spawn_process(cmd)?;
+    if let Err(error) = attach_capture_readers(&mut child, stdout_rx, stderr_rx) {
+        // The caller cannot supervise a child it never receives.
+        _ = child.start_kill();
+        return Err(error);
+    }
+    Ok(child)
 }
 
 pub(crate) fn create_command<I, S>(
