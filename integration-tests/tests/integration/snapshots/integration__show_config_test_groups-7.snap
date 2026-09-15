@@ -1,0 +1,13 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: with_termination_tool_stdout
+---
+group: flaky (max threads = 4)
+    (no matches)
+group: serial (max threads = 1)
+    (no matches)
+group: unused (max threads = 20)
+    (no matches)
+group: @global
+  * override for with-termination profile with filter 'test(=test_slow_timeout_2)':
+      fixture-project::basic:

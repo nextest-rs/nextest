@@ -328,6 +328,50 @@ fn config_diagnostics_use_invocation_paths() {
     insta::assert_snapshot!(blocks.join("\n\n"));
 }
 
+#[test]
+fn override_sources_use_invocation_paths() {
+    let env_info = set_env_vars_for_test();
+    let project = TempProject::new(&env_info).unwrap();
+    let temp_root = project.temp_root();
+    let config = project.workspace_root().join(".config/nextest.toml");
+    let member = project.workspace_root().join("nested/child");
+    fs::create_dir_all(&member).unwrap();
+    fs::write(&config, "[test-groups.path-group]\nmax-threads = 1\n[[profile.default.overrides]]\nfilter = 'test(=test_success)'\ntest-group = 'path-group'\n").unwrap();
+
+    let mut blocks = Vec::new();
+    for (cwd, config_file) in [
+        (project.workspace_root(), None),
+        (member.as_path(), None),
+        (member.as_path(), Some("../../.config/nextest.toml")),
+        (temp_root, None),
+    ] {
+        let mut cli = CargoNextestCli::for_test(&env_info);
+        cli.current_dir(cwd).args([
+            "--manifest-path",
+            project.manifest_path().as_str(),
+            "show-config",
+            "test-groups",
+            "--groups",
+            "path-group",
+        ]);
+        if let Some(config_file) = config_file {
+            cli.args(["--config-file", config_file]);
+        }
+        let output = cli.output();
+        blocks.push(format!(
+            "cwd: {}\n--config-file: {}\n{}",
+            redact_temp_root(cwd.as_str(), temp_root),
+            config_file.map_or_else(
+                || "(none)".to_owned(),
+                |config_file| redact_temp_root(config_file, temp_root),
+            ),
+            redact_temp_root(output.stdout_as_str().trim_end(), temp_root),
+        ));
+    }
+
+    insta::assert_snapshot!(blocks.join("\n\n"));
+}
+
 #[derive(Clone, Copy)]
 enum CapturedStream {
     Stderr,
