@@ -406,6 +406,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "camino-anchored"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32327985e29b176c48880fe75edc260c8eea98ab5b84f76772a48d5b631f5bd7"
+dependencies = [
+ "camino",
+]
+
+[[package]]
 name = "camino-tempfile"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2586,6 +2595,7 @@ dependencies = [
  "bytes",
  "bytesize",
  "camino",
+ "camino-anchored",
  "camino-tempfile",
  "camino-tempfile-ext",
  "cargo_metadata",

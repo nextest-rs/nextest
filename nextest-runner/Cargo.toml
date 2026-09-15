@@ -23,6 +23,7 @@ bstr.workspace = true
 bytes.workspace = true
 bytesize.workspace = true
 camino = { workspace = true, features = ["serde1"] }
+camino-anchored.workspace = true
 camino-tempfile.workspace = true
 cargo_metadata.workspace = true
 config.workspace = true
