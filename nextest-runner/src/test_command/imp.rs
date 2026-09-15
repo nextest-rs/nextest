@@ -358,8 +358,6 @@ mod tests {
     const EOF_TIMEOUT: Duration = Duration::from_secs(30);
     const CHILD_LIFETIME_SECS: u64 = 120;
 
-    /// Keep children alive after closing stdout and stderr so an inherited
-    /// writer in a sibling delays EOF.
     #[test_case(CaptureStrategy::Split, ChildProgram::Absolute; "split absolute")]
     #[test_case(CaptureStrategy::Combined, ChildProgram::Absolute; "combined absolute")]
     #[cfg_attr(
@@ -409,12 +407,15 @@ mod tests {
     #[derive(Clone, Copy)]
     enum ChildProgram {
         Absolute,
-        /// The cwd forces Apple's fork/exec fallback for a relative program.
+        /// Configure the test to run as a program with a cwd and a relative path.
+        ///
+        /// In this scenario, Apple platforms fall back to fork/exec.
         #[cfg(target_vendor = "apple")]
         RelativeWithCwd,
     }
 
-    /// Kill on panic so inherited writers cannot delay runtime shutdown.
+    /// Kills the sleeping children on drop so a failed assertion does not leave
+    /// them running.
     struct LingeringChildren(Vec<TokioChild>);
 
     impl LingeringChildren {
@@ -446,7 +447,9 @@ mod tests {
                 command
             }
         };
-        // Replace the shell so cleanup can kill the child without orphaning sleep.
+        // Close the capture pipes but keep running, so a sibling holding a
+        // leaked copy is the only thing that can delay EOF. `exec sleep`
+        // replaces the shell so killing the child kills sleep.
         command.arg("-c").arg(format!(
             "echo {CAPTURE_MARKER}; exec >&- 2>&-; exec sleep {CHILD_LIFETIME_SECS}"
         ));

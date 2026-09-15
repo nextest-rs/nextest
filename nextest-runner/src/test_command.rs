@@ -28,12 +28,8 @@ mod imp;
 use imp::attach_capture_readers;
 pub(crate) use imp::{Child, ChildAccumulator, ChildFds};
 
-/// Without atomic CLOEXEC, a concurrent spawn can inherit a pipe between
-/// `pipe()` and setting `FD_CLOEXEC`. An inherited capture writer delays EOF,
-/// so nextest can report a leak after the test exits (rust-lang/rust#95584).
-/// The excluded Unix targets use `pipe2(O_CLOEXEC)`; keep this list in sync
-/// with `library/std/src/sys/pipe/unix.rs`. On Windows, std serializes
-/// `CreateProcess`.
+/// Platforms without atomic CLOEXEC, per `library/std/src/sys/pipe/unix.rs`.
+/// Windows std already serializes `CreateProcess`.
 const SPAWN_INHERITS_PIPES: bool = cfg!(all(
     unix,
     not(any(
@@ -50,6 +46,12 @@ const SPAWN_INHERITS_PIPES: bool = cfg!(all(
     ))
 ));
 
+/// Without atomic CLOEXEC, a concurrent spawn can inherit a pipe before CLOEXEC
+/// is set, and a test that inherits a capture pipe shows up as leaky
+/// (rust-lang/rust#95584).
+///
+/// Pipe creation and fork/exec spawns take the write lock, since fork/exec
+/// creates its own pipe. `posix_spawn` spawns take the read lock.
 static PROCESS_SPAWN_LOCK: RwLock<()> = RwLock::new(());
 
 #[derive(Clone, Debug)]
@@ -249,12 +251,9 @@ fn create_pipe() -> std::io::Result<(PipeReader, PipeWriter)> {
     std::io::pipe()
 }
 
-/// Create capture pipes with `create_pipe`; `Stdio::piped()` bypasses its lock.
+/// Capture pipes must come from `create_pipe`, not `Stdio::piped()`.
 ///
-/// Fork/exec creates an exec-error pipe. A sibling that inherits its writer
-/// stalls the spawn and blocks pipe creation behind its lock. Take the write
-/// lock to prevent this; Apple spawns with absolute paths use `posix_spawn`
-/// and can run under a read lock.
+/// Only Apple with an absolute program is known to use `posix_spawn`.
 fn spawn_process(cmd: std::process::Command) -> std::io::Result<tokio::process::Child> {
     let exclusive = SPAWN_INHERITS_PIPES
         && (!cfg!(target_vendor = "apple") || !Path::new(cmd.get_program()).is_absolute());
