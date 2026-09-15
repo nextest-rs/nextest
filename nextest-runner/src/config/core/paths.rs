@@ -3,6 +3,8 @@
 
 //! File locations and invocation-relative diagnostics for repository configuration.
 
+use super::NextestConfig;
+use crate::errors::ConfigPathsCaptureError;
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_anchored::{
     AbsUtf8PathBuf, AnchoredPath, CurrentDirError, DisplayPath, PathAnchor, RelUtf8PathBuf,
@@ -17,11 +19,8 @@ pub struct InvocationDir(PathAnchor);
 
 impl InvocationDir {
     /// Creates a new `InvocationDir`, capturing the process's current directory.
-    pub fn capture() -> Result<Self, ConfigPathResolveError> {
-        let anchor = PathAnchor::current_dir().map_err(|error| {
-            ConfigPathResolveError::new(".", ConfigPathResolveErrorKind::CurrentDir(error))
-        })?;
-        Ok(Self(anchor))
+    pub fn capture() -> Result<Self, CurrentDirError> {
+        PathAnchor::current_dir().map(Self)
     }
 
     /// Creates a new `InvocationDir` from a provided directory.
@@ -31,9 +30,10 @@ impl InvocationDir {
 
     /// Resolves a user-provided configuration path.
     pub fn resolve_input(&self, path: &Utf8Path) -> Result<ConfigPath, ConfigPathResolveError> {
-        let resolved = self.0.resolve_input(path).map_err(|error| {
-            ConfigPathResolveError::new(path, ConfigPathResolveErrorKind::Input(error))
-        })?;
+        let resolved = self
+            .0
+            .resolve_input(path)
+            .map_err(|error| ConfigPathResolveError::new(path, error))?;
         Ok(ConfigPath(Arc::new(resolved)))
     }
 
@@ -68,12 +68,17 @@ pub struct ConfigPaths {
 
 impl ConfigPaths {
     /// Captures the invocation directory and resolves the workspace directory.
-    pub fn capture(workspace_root: impl Into<Utf8PathBuf>) -> Result<Self, ConfigPathResolveError> {
-        let invocation = InvocationDir::capture()?;
-        let workspace_root = invocation.resolve_input(&workspace_root.into())?;
+    pub fn capture(
+        workspace_root: impl Into<Utf8PathBuf>,
+    ) -> Result<Self, ConfigPathsCaptureError> {
+        let invocation = InvocationDir::capture().map_err(ConfigPathsCaptureError::CurrentDir)?;
+        let workspace_root = invocation
+            .0
+            .resolve_input(workspace_root.into())
+            .map_err(ConfigPathsCaptureError::WorkspaceRoot)?;
         Ok(Self::new(
             invocation,
-            WorkspaceRoot::new(workspace_root.0.absolute().clone()),
+            WorkspaceRoot::new(workspace_root.into_absolute()),
         ))
     }
 
@@ -99,6 +104,14 @@ impl ConfigPaths {
     pub fn repository_config(&self, relative: &RelUtf8PathBuf) -> ConfigPath {
         self.invocation
             .resolve_absolute(self.workspace_root.0.join(relative))
+    }
+
+    /// Locates the shared repository config file.
+    pub fn shared_config(&self) -> ConfigPath {
+        self.repository_config(
+            &RelUtf8PathBuf::new(NextestConfig::CONFIG_PATH)
+                .expect("the shared config path is relative"),
+        )
     }
 }
 
@@ -135,28 +148,16 @@ pub struct ConfigPathResolveError {
     pub path: Utf8PathBuf,
     /// The reason resolution failed.
     #[source]
-    pub error: ConfigPathResolveErrorKind,
+    pub error: ResolvePathError,
 }
 
 impl ConfigPathResolveError {
-    fn new(path: impl Into<Utf8PathBuf>, error: ConfigPathResolveErrorKind) -> Self {
+    fn new(path: impl Into<Utf8PathBuf>, error: ResolvePathError) -> Self {
         Self {
             path: path.into(),
             error,
         }
     }
-}
-
-/// The reason a configuration path could not be resolved.
-#[derive(Debug, Error)]
-pub enum ConfigPathResolveErrorKind {
-    /// The current (invocation) directory could not be determined.
-    #[error(transparent)]
-    CurrentDir(CurrentDirError),
-
-    /// An input path could not be resolved against the invocation directory.
-    #[error(transparent)]
-    Input(ResolvePathError),
 }
 
 #[cfg(test)]

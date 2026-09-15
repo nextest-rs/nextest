@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    ExperimentalDeserialize, NextestVersionDeserialize, ToolConfigFile, ToolName,
+    ConfigPaths, ExperimentalDeserialize, NextestVersionDeserialize, ToolConfigFile, ToolName,
     display_config_path,
 };
 use crate::{
@@ -286,8 +286,11 @@ impl NextestConfig {
     where
         I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
     {
-        Self::from_sources_impl(
-            workspace_root,
+        let workspace_root = workspace_root.into();
+        Self::from_sources_with_paths(
+            &ConfigPaths::capture(&workspace_root).map_err(|error| {
+                ConfigParseError::from_paths_capture_error(&workspace_root, config_file, error)
+            })?,
             pcx,
             config_file,
             tool_config_files,
@@ -296,9 +299,9 @@ impl NextestConfig {
         )
     }
 
-    // A custom unknown_callback can be passed in while testing.
-    fn from_sources_impl<'a, I>(
-        workspace_root: impl Into<Utf8PathBuf>,
+    /// Loads configuration with a shared invocation and workspace path context.
+    pub fn from_sources_with_paths<'a, I>(
+        paths: &ConfigPaths,
         pcx: &ParseContext<'_>,
         config_file: Option<&Utf8Path>,
         tool_config_files: impl IntoIterator<IntoIter = I>,
@@ -308,11 +311,11 @@ impl NextestConfig {
     where
         I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
     {
-        let workspace_root = workspace_root.into();
+        let workspace_root = paths.workspace_root().as_path().to_owned();
         let tool_config_files_rev = tool_config_files.into_iter().rev();
         let (inner, compiled) = Self::read_from_sources(
             pcx,
-            &workspace_root,
+            paths,
             config_file,
             tool_config_files_rev,
             experimental,
@@ -370,12 +373,13 @@ impl NextestConfig {
 
     fn read_from_sources<'a>(
         pcx: &ParseContext<'_>,
-        workspace_root: &Utf8Path,
+        paths: &ConfigPaths,
         file: Option<&Utf8Path>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
         experimental: &BTreeSet<ConfigExperimental>,
         warnings: &mut impl ConfigWarnings,
     ) -> Result<(NextestConfigImpl, CompiledByProfile), ConfigParseError> {
+        let workspace_root = paths.workspace_root().as_path();
         // First, get the default config.
         let mut composite_builder = Self::make_default_config();
 
@@ -391,7 +395,8 @@ impl NextestConfig {
 
         // Next, merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
-            let source = File::new(config_file.as_str(), FileFormat::Toml);
+            let resolved = paths.resolve_input(config_file)?;
+            let source = File::new(resolved.absolute_path().as_str(), FileFormat::Toml);
             Self::deserialize_individual_config(
                 pcx,
                 workspace_root,
@@ -412,9 +417,13 @@ impl NextestConfig {
 
         // Next, merge in the config from the given file.
         let (config_file, source) = match file {
-            Some(file) => (file.to_owned(), File::new(file.as_str(), FileFormat::Toml)),
+            Some(file) => {
+                let resolved = paths.resolve_input(file)?;
+                let source = File::new(resolved.absolute_path().as_str(), FileFormat::Toml);
+                (file.to_owned(), source)
+            }
             None => {
-                let config_file = workspace_root.join(Self::CONFIG_PATH);
+                let config_file = paths.shared_config().absolute_path().to_owned();
                 let source = File::new(config_file.as_str(), FileFormat::Toml).required(false);
                 (config_file, source)
             }

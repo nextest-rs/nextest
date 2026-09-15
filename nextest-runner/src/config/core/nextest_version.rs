@@ -3,7 +3,7 @@
 
 //! Nextest version configuration.
 
-use super::{NextestConfig, ToolConfigFile, ToolName};
+use super::{ConfigPath, ConfigPaths, ToolConfigFile, ToolName};
 use crate::errors::{ConfigParseError, ConfigParseErrorKind};
 use camino::{Utf8Path, Utf8PathBuf};
 use semver::Version;
@@ -11,7 +11,9 @@ use serde::{
     Deserialize, Deserializer,
     de::{MapAccess, SeqAccess, Visitor},
 };
-use std::{borrow::Cow, collections::BTreeSet, fmt, str::FromStr};
+#[cfg(feature = "config-schema")]
+use std::borrow::Cow;
+use std::{collections::BTreeSet, fmt, str::FromStr};
 
 /// A "version-only" form of the nextest configuration.
 ///
@@ -29,7 +31,7 @@ pub struct VersionOnlyConfig {
 impl VersionOnlyConfig {
     /// Reads the nextest version configuration from the given sources.
     ///
-    /// See [`NextestConfig::from_sources`] for more details.
+    /// See [`NextestConfig::from_sources`](super::NextestConfig::from_sources) for more details.
     pub fn from_sources<'a, I>(
         workspace_root: &Utf8Path,
         config_file: Option<&Utf8Path>,
@@ -38,9 +40,25 @@ impl VersionOnlyConfig {
     where
         I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
     {
-        let tool_config_files_rev = tool_config_files.into_iter().rev();
+        Self::from_sources_with_paths(
+            &ConfigPaths::capture(workspace_root).map_err(|error| {
+                ConfigParseError::from_paths_capture_error(workspace_root, config_file, error)
+            })?,
+            config_file,
+            tool_config_files,
+        )
+    }
 
-        Self::read_from_sources(workspace_root, config_file, tool_config_files_rev)
+    /// Reads version configuration using a shared invocation and workspace path context.
+    pub fn from_sources_with_paths<'a, I>(
+        paths: &ConfigPaths,
+        config_file: Option<&Utf8Path>,
+        tool_config_files: impl IntoIterator<IntoIter = I>,
+    ) -> Result<Self, ConfigParseError>
+    where
+        I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
+    {
+        Self::read_from_sources(paths, config_file, tool_config_files.into_iter().rev())
     }
 
     /// Returns the nextest version requirement.
@@ -54,7 +72,7 @@ impl VersionOnlyConfig {
     }
 
     fn read_from_sources<'a>(
-        workspace_root: &Utf8Path,
+        paths: &ConfigPaths,
         config_file: Option<&Utf8Path>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
     ) -> Result<Self, ConfigParseError> {
@@ -64,21 +82,28 @@ impl VersionOnlyConfig {
 
         // Merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
-            if let Some(v) = Self::read_and_deserialize(config_file, Some(tool))?.nextest_version {
+            let resolved = paths.resolve_input(config_file)?;
+            if let Some(v) =
+                Self::read_and_deserialize(&resolved, config_file, Some(tool))?.nextest_version
+            {
                 nextest_version.accumulate(v, Some(tool.clone()));
             }
         }
 
         // Finally, merge in the repo config.
         let config_file = match config_file {
-            Some(file) => Some(Cow::Borrowed(file)),
+            Some(file) => Some((paths.resolve_input(file)?, file.to_owned())),
             None => {
-                let config_file = workspace_root.join(NextestConfig::CONFIG_PATH);
-                config_file.exists().then_some(Cow::Owned(config_file))
+                let config_file = paths.shared_config();
+                let diagnostic_path = config_file.absolute_path().to_owned();
+                config_file
+                    .absolute_path()
+                    .exists()
+                    .then_some((config_file, diagnostic_path))
             }
         };
-        if let Some(config_file) = config_file {
-            let d = Self::read_and_deserialize(&config_file, None)?;
+        if let Some((resolved, config_file)) = config_file {
+            let d = Self::read_and_deserialize(&resolved, &config_file, None)?;
             if let Some(v) = d.nextest_version {
                 nextest_version.accumulate(v, None);
             }
@@ -97,10 +122,11 @@ impl VersionOnlyConfig {
     }
 
     fn read_and_deserialize(
+        resolved: &ConfigPath,
         config_file: &Utf8Path,
         tool: Option<&ToolName>,
     ) -> Result<VersionOnlyDeserialize, ConfigParseError> {
-        let toml_str = std::fs::read_to_string(config_file.as_str()).map_err(|error| {
+        let toml_str = std::fs::read_to_string(resolved.absolute_path()).map_err(|error| {
             ConfigParseError::new(
                 config_file,
                 tool,
@@ -753,6 +779,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::errors::ConfigPathsCaptureError;
     use test_case::test_case;
 
     #[test_case(
@@ -817,6 +844,28 @@ mod tests {
             err.to_string().contains(error_message),
             "error `{err}` contains `{error_message}`"
         );
+    }
+
+    #[test_case(None, ".config/nextest.toml" ; "default config")]
+    #[test_case(Some("custom.toml"), "custom.toml" ; "explicit config")]
+    fn test_paths_capture_attribution(config_file: Option<&str>, expected: &str) {
+        let error = VersionOnlyConfig::from_sources(
+            Utf8Path::new(""),
+            config_file.map(Utf8Path::new),
+            &[][..],
+        )
+        .expect_err("an empty workspace root is rejected");
+        assert_eq!(error.config_file().as_str(), expected);
+        assert_eq!(error.tool(), None);
+        let ConfigParseErrorKind::PathsCaptureError(capture_error) = error.kind() else {
+            panic!("expected a paths capture error, found {:?}", error.kind());
+        };
+        match &**capture_error {
+            ConfigPathsCaptureError::WorkspaceRoot(resolve_error) => {
+                assert_eq!(resolve_error.input().as_str(), "");
+            }
+            other => panic!("expected a workspace root capture error, found {other:?}"),
+        }
     }
 
     fn tool_name(s: &str) -> ToolName {

@@ -123,6 +123,11 @@ pub enum ExpectedError {
         #[source]
         err: std::io::Error,
     },
+    #[error("failed to determine config paths")]
+    ConfigPathsCaptureError {
+        #[from]
+        err: ConfigPathsCaptureError,
+    },
     #[error("cargo config error")]
     CargoConfigError {
         #[from]
@@ -597,6 +602,7 @@ impl ExpectedError {
             | Self::GetCurrentExeFailed { .. }
             | Self::ProfileNotFound { .. }
             | Self::StoreDirCreateError { .. }
+            | Self::ConfigPathsCaptureError { .. }
             | Self::RootManifestNotFound { .. }
             | Self::CargoConfigError { .. }
             | Self::UserConfigError { .. }
@@ -769,6 +775,20 @@ impl ExpectedError {
                     store_dir.style(styles.bold)
                 );
                 Some(err as &dyn Error)
+            }
+            Self::ConfigPathsCaptureError { err } => {
+                match err {
+                    ConfigPathsCaptureError::CurrentDir(_) => {
+                        error!(
+                            "{err}\n(hint: run nextest from a directory that exists and whose \
+                             path is valid UTF-8)"
+                        );
+                    }
+                    ConfigPathsCaptureError::WorkspaceRoot(_) => {
+                        error!("{err}");
+                    }
+                }
+                err.source()
             }
             Self::CargoConfigError { err } => {
                 error!("{}", err);
