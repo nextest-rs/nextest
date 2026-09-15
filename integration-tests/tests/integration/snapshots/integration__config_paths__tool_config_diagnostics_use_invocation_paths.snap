@@ -1,0 +1,29 @@
+---
+source: integration-tests/tests/integration/config_paths.rs
+expression: "blocks.join(\"\\n\\n\")"
+---
+cwd: [TEMP_DIR]/src
+scenario: deserialize
+error: failed to parse nextest config at `[TEMP_DIR]/src/.config/tool.toml` provided by tool `my-tool`
+
+Caused by:
+  profile.default.retries: invalid type: string "bad", expected a table ({ backoff = "fixed", count = 5 }) or a number (5)
+
+cwd: [TEMP_DIR]/src/nested/child
+scenario: deserialize
+error: failed to parse nextest config at `[TEMP_DIR]/src/.config/tool.toml` provided by tool `my-tool`
+
+Caused by:
+  profile.default.retries: invalid type: string "bad", expected a table ({ backoff = "fixed", count = 5 }) or a number (5)
+
+cwd: [TEMP_DIR]/src
+scenario: unknown-groups
+warning: in config file .config/tool.toml provided by tool `my-tool`, ignoring unknown configuration key: unknown-key
+error: for config file `[TEMP_DIR]/src/.config/tool.toml` provided by tool `my-tool`, unknown test groups defined (known groups: @global):
+ - group `missing-group` in overrides for profile `default`
+
+cwd: [TEMP_DIR]/src/nested/child
+scenario: unknown-groups
+warning: in config file .config/tool.toml provided by tool `my-tool`, ignoring unknown configuration key: unknown-key
+error: for config file `[TEMP_DIR]/src/.config/tool.toml` provided by tool `my-tool`, unknown test groups defined (known groups: @global):
+ - group `missing-group` in overrides for profile `default`

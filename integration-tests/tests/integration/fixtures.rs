@@ -98,9 +98,28 @@ pub fn redact_temp_root(text: &str, temp_root: &Utf8Path) -> String {
 ///
 /// This is somewhat heuristic and might need to be tweaked as Cargo changes.
 pub fn normalize_nextest_stderr(stderr: &str, temp_root: &Utf8Path) -> String {
+    let mut in_cargo_config_warning = false;
     let filtered = stderr
         .lines()
         .filter(|line| {
+            // Cargo warns about the fixture's deprecated `.cargo/config` when
+            // run from inside the workspace. Stable continues with ` |` and ` =
+            // help:`, and Cargo 1.91 with `note:`.
+            if line.starts_with("warning: ")
+                && line.contains(".cargo")
+                && line.contains("is deprecated in favor of `config.toml`")
+            {
+                in_cargo_config_warning = true;
+                return false;
+            }
+            if in_cargo_config_warning
+                && (line.starts_with("  |")
+                    || line.starts_with("  = ")
+                    || line.starts_with("note: "))
+            {
+                return false;
+            }
+            in_cargo_config_warning = false;
             !line.contains("Blocking waiting for file lock")
                 && !line.starts_with("info: experimental features enabled")
         })
