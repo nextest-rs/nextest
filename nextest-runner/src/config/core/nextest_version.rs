@@ -772,8 +772,34 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::errors::ConfigPathsCaptureError;
+    use crate::{config::core::NextestConfig, errors::ConfigPathsCaptureError};
+    use camino_tempfile::tempdir;
+    use camino_tempfile_ext::prelude::*;
     use test_case::test_case;
+
+    #[test]
+    fn test_malformed_repo_config() {
+        let workspace = tempdir().unwrap();
+        let config_file = workspace.child(NextestConfig::CONFIG_PATH);
+        config_file.write_str("invalid = [").unwrap();
+        let error = VersionOnlyConfig::from_sources(workspace.path(), None, &[]).unwrap_err();
+        assert_eq!(error.config_file(), config_file.as_path());
+        let ConfigParseErrorKind::TomlParseError(_) = error.kind() else {
+            panic!("malformed TOML in the repo config is a parse error, got {error:?}");
+        };
+    }
+
+    #[test]
+    fn test_repo_config_is_directory() {
+        let workspace = tempdir().unwrap();
+        let config_file = workspace.child(NextestConfig::CONFIG_PATH);
+        config_file.create_dir_all().unwrap();
+        let error = VersionOnlyConfig::from_sources(workspace.path(), None, &[]).unwrap_err();
+        assert_eq!(error.config_file(), config_file.as_path());
+        let ConfigParseErrorKind::VersionOnlyReadError(_) = error.kind() else {
+            panic!("a directory at the repo config path is a read error, got {error:?}");
+        };
+    }
 
     #[test_case(
         r#"
