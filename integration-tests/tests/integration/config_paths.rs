@@ -119,6 +119,11 @@ fn config_diagnostics_use_invocation_paths() {
         (temp_root, config.strip_prefix(temp_root).unwrap().as_str()),
     ] {
         for config_file in [None, Some(relative), Some(config.as_str())] {
+            let cwd_label = redact_temp_root(cwd.as_str(), temp_root);
+            let config_file_label = config_file.map_or_else(
+                || "(none)".to_owned(),
+                |config_file| redact_temp_root(config_file, temp_root),
+            );
             for (scenario, contents) in [
                 ("version-syntax", "nextest-version = ["),
                 ("experimental", "experimental = ['not-a-feature']"),
@@ -145,17 +150,52 @@ fn config_diagnostics_use_invocation_paths() {
                     "{output}"
                 );
                 blocks.push(format!(
-                    "cwd: {}\n--config-file: {}\nscenario: {scenario}\n{}",
-                    redact_temp_root(cwd.as_str(), temp_root),
-                    config_file.map_or_else(
-                        || "(none)".to_owned(),
-                        |config_file| redact_temp_root(config_file, temp_root),
-                    ),
+                    "cwd: {cwd_label}\n--config-file: {config_file_label}\nscenario: {scenario}\n{}",
                     normalize_nextest_stderr(&output.stderr_as_str(), temp_root),
+                ));
+            }
+            fs::write(&config, "nextest-version = '999.0.0'").unwrap();
+            for (command, stream) in [
+                (&["list"][..], CapturedStream::Stderr),
+                (&["show-config", "version"][..], CapturedStream::Stdout),
+            ] {
+                let mut cli = CargoNextestCli::for_test(&env_info);
+                cli.current_dir(cwd)
+                    .env("__NEXTEST_TEST_VERSION", "0.9.100")
+                    .args(["--manifest-path", project.manifest_path().as_str()])
+                    .args(command.iter().copied());
+                if let Some(config_file) = config_file {
+                    cli.args(["--config-file", config_file]);
+                }
+                let output = cli.unchecked(true).output();
+                assert_eq!(
+                    output.exit_status.code(),
+                    Some(NextestExitCode::REQUIRED_VERSION_NOT_MET),
+                    "{output}"
+                );
+                let (stream_name, captured) = match stream {
+                    CapturedStream::Stderr => (
+                        "stderr",
+                        normalize_nextest_stderr(&output.stderr_as_str(), temp_root),
+                    ),
+                    CapturedStream::Stdout => (
+                        "stdout",
+                        redact_temp_root(output.stdout_as_str().trim_end(), temp_root),
+                    ),
+                };
+                blocks.push(format!(
+                    "cwd: {cwd_label}\n--config-file: {config_file_label}\nscenario: version-requirement\ncommand: {} ({stream_name})\n{captured}",
+                    command.join(" "),
                 ));
             }
         }
     }
 
     insta::assert_snapshot!(blocks.join("\n\n"));
+}
+
+#[derive(Clone, Copy)]
+enum CapturedStream {
+    Stderr,
+    Stdout,
 }

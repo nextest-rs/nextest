@@ -37,6 +37,22 @@ error: for config file `.config/nextest.toml`, unknown test groups defined (know
  - group `missing-group` in overrides for profile `default`
 
 cwd: [TEMP_DIR]/src
+--config-file: (none)
+scenario: version-requirement
+command: list (stderr)
+error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
+
+cwd: [TEMP_DIR]/src
+--config-file: (none)
+scenario: version-requirement
+command: show-config version (stdout)
+current nextest version: 0.9.100
+version requirements:
+    - required: 999.0.0
+evaluation result: does not meet required version
+
+cwd: [TEMP_DIR]/src
 --config-file: .config/nextest.toml
 scenario: version-syntax
 error: failed to parse nextest config at `.config/nextest.toml`
@@ -71,6 +87,22 @@ error: for config file `.config/nextest.toml`, unknown test groups defined (know
  - group `missing-group` in overrides for profile `default`
 
 cwd: [TEMP_DIR]/src
+--config-file: .config/nextest.toml
+scenario: version-requirement
+command: list (stderr)
+error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
+
+cwd: [TEMP_DIR]/src
+--config-file: .config/nextest.toml
+scenario: version-requirement
+command: show-config version (stdout)
+current nextest version: 0.9.100
+version requirements:
+    - required: 999.0.0
+evaluation result: does not meet required version
+
+cwd: [TEMP_DIR]/src
 --config-file: [TEMP_DIR]/src/.config/nextest.toml
 scenario: version-syntax
 error: failed to parse nextest config at `.config/nextest.toml`
@@ -103,6 +135,22 @@ warning: in config file .config/nextest.toml, ignoring unknown profiles in the r
 warning:   default-foo
 error: for config file `.config/nextest.toml`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
+
+cwd: [TEMP_DIR]/src
+--config-file: [TEMP_DIR]/src/.config/nextest.toml
+scenario: version-requirement
+command: list (stderr)
+error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
+
+cwd: [TEMP_DIR]/src
+--config-file: [TEMP_DIR]/src/.config/nextest.toml
+scenario: version-requirement
+command: show-config version (stdout)
+current nextest version: 0.9.100
+version requirements:
+    - required: 999.0.0
+evaluation result: does not meet required version
 
 cwd: [TEMP_DIR]/src/nested/child
 --config-file: (none)
@@ -137,6 +185,22 @@ warning: in config file [TEMP_DIR]/src/.config/nextest.toml, ignoring unknown pr
 warning:   default-foo
 error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
+
+cwd: [TEMP_DIR]/src/nested/child
+--config-file: (none)
+scenario: version-requirement
+command: list (stderr)
+error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
+
+cwd: [TEMP_DIR]/src/nested/child
+--config-file: (none)
+scenario: version-requirement
+command: show-config version (stdout)
+current nextest version: 0.9.100
+version requirements:
+    - required: 999.0.0
+evaluation result: does not meet required version
 
 cwd: [TEMP_DIR]/src/nested/child
 --config-file: ../../.config/nextest.toml
@@ -173,6 +237,22 @@ error: for config file `../../.config/nextest.toml`, unknown test groups defined
  - group `missing-group` in overrides for profile `default`
 
 cwd: [TEMP_DIR]/src/nested/child
+--config-file: ../../.config/nextest.toml
+scenario: version-requirement
+command: list (stderr)
+error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
+
+cwd: [TEMP_DIR]/src/nested/child
+--config-file: ../../.config/nextest.toml
+scenario: version-requirement
+command: show-config version (stdout)
+current nextest version: 0.9.100
+version requirements:
+    - required: 999.0.0
+evaluation result: does not meet required version
+
+cwd: [TEMP_DIR]/src/nested/child
 --config-file: [TEMP_DIR]/src/.config/nextest.toml
 scenario: version-syntax
 error: failed to parse nextest config at `[TEMP_DIR]/src/.config/nextest.toml`
@@ -206,6 +286,22 @@ warning:   default-foo
 error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
 
+cwd: [TEMP_DIR]/src/nested/child
+--config-file: [TEMP_DIR]/src/.config/nextest.toml
+scenario: version-requirement
+command: list (stderr)
+error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
+
+cwd: [TEMP_DIR]/src/nested/child
+--config-file: [TEMP_DIR]/src/.config/nextest.toml
+scenario: version-requirement
+command: show-config version (stdout)
+current nextest version: 0.9.100
+version requirements:
+    - required: 999.0.0
+evaluation result: does not meet required version
+
 cwd: [TEMP_DIR]
 --config-file: (none)
 scenario: version-syntax
@@ -241,6 +337,22 @@ error: for config file `src/.config/nextest.toml`, unknown test groups defined (
  - group `missing-group` in overrides for profile `default`
 
 cwd: [TEMP_DIR]
+--config-file: (none)
+scenario: version-requirement
+command: list (stderr)
+error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
+
+cwd: [TEMP_DIR]
+--config-file: (none)
+scenario: version-requirement
+command: show-config version (stdout)
+current nextest version: 0.9.100
+version requirements:
+    - required: 999.0.0
+evaluation result: does not meet required version
+
+cwd: [TEMP_DIR]
 --config-file: src/.config/nextest.toml
 scenario: version-syntax
 error: failed to parse nextest config at `src/.config/nextest.toml`
@@ -275,6 +387,22 @@ error: for config file `src/.config/nextest.toml`, unknown test groups defined (
  - group `missing-group` in overrides for profile `default`
 
 cwd: [TEMP_DIR]
+--config-file: src/.config/nextest.toml
+scenario: version-requirement
+command: list (stderr)
+error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
+
+cwd: [TEMP_DIR]
+--config-file: src/.config/nextest.toml
+scenario: version-requirement
+command: show-config version (stdout)
+current nextest version: 0.9.100
+version requirements:
+    - required: 999.0.0
+evaluation result: does not meet required version
+
+cwd: [TEMP_DIR]
 --config-file: [TEMP_DIR]/src/.config/nextest.toml
 scenario: version-syntax
 error: failed to parse nextest config at `src/.config/nextest.toml`
@@ -307,3 +435,19 @@ warning: in config file src/.config/nextest.toml, ignoring unknown profiles in t
 warning:   default-foo
 error: for config file `src/.config/nextest.toml`, unknown test groups defined (known groups: @global):
  - group `missing-group` in overrides for profile `default`
+
+cwd: [TEMP_DIR]
+--config-file: [TEMP_DIR]/src/.config/nextest.toml
+scenario: version-requirement
+command: list (stderr)
+error: this repository requires nextest version 999.0.0, but the current version is 0.9.100
+info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
+
+cwd: [TEMP_DIR]
+--config-file: [TEMP_DIR]/src/.config/nextest.toml
+scenario: version-requirement
+command: show-config version (stdout)
+current nextest version: 0.9.100
+version requirements:
+    - required: 999.0.0
+evaluation result: does not meet required version
