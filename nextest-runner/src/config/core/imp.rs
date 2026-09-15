@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    ConfigFileSelection, ConfigPath, ConfigPaths, ExperimentalDeserialize,
+    ConfigFileSelection, ConfigPath, ConfigPaths, ConfigStyles, ExperimentalDeserialize,
     NextestVersionDeserialize, ToolConfigFile, ToolName,
 };
 use crate::{
@@ -46,6 +46,7 @@ use indexmap::IndexMap;
 use nextest_filtering::{
     BinaryQuery, EvalContext, Filterset, KnownGroups, ParseContext, TestQuery,
 };
+use owo_colors::OwoColorize;
 use petgraph::{Directed, Graph, algo::scc::kosaraju_scc, graph::NodeIndex};
 use serde::Deserialize;
 use std::{
@@ -89,8 +90,20 @@ pub trait ConfigWarnings {
     );
 }
 
-/// Default implementation of ConfigWarnings that logs warnings using the tracing crate.
-pub struct DefaultConfigWarnings;
+/// Default implementation of ConfigWarnings that logs warnings using the
+/// tracing crate.
+#[derive(Clone, Debug, Default)]
+pub struct DefaultConfigWarnings {
+    styles: ConfigStyles,
+}
+
+impl DefaultConfigWarnings {
+    /// Creates an instance of self that style config paths and tool names with
+    /// `styles`.
+    pub fn new(styles: ConfigStyles) -> Self {
+        Self { styles }
+    }
+}
 
 impl ConfigWarnings for DefaultConfigWarnings {
     fn unknown_config_keys(
@@ -115,8 +128,8 @@ impl ConfigWarnings for DefaultConfigWarnings {
 
         warn!(
             "in config file {}{}, ignoring unknown configuration {unknown_str}",
-            config_file.display(),
-            provided_by_tool(tool),
+            config_file.display().style(self.styles.path),
+            provided_by_tool(tool, self.styles.tool),
         )
     }
 
@@ -128,8 +141,8 @@ impl ConfigWarnings for DefaultConfigWarnings {
     ) {
         warn!(
             "in config file {}{}, ignoring unknown profiles in the reserved `default-` namespace:",
-            config_file.display(),
-            provided_by_tool(tool),
+            config_file.display().style(self.styles.path),
+            provided_by_tool(tool, self.styles.tool),
         );
 
         for profile in profiles {
@@ -141,8 +154,8 @@ impl ConfigWarnings for DefaultConfigWarnings {
         warn!(
             "in config file {}{}, [script.*] is deprecated and will be removed in a \
              future version of nextest; use the `scripts.setup` table instead",
-            config_file.display(),
-            provided_by_tool(tool),
+            config_file.display().style(self.styles.path),
+            provided_by_tool(tool, self.styles.tool),
         );
     }
 
@@ -156,8 +169,8 @@ impl ConfigWarnings for DefaultConfigWarnings {
         warn!(
             "in config file {}{}, [[profile.{}.scripts]] has {} {} \
              with neither setup nor wrapper scripts",
-            config_file.display(),
-            provided_by_tool(tool),
+            config_file.display().style(self.styles.path),
+            provided_by_tool(tool, self.styles.tool),
             profile_name,
             empty_count,
             plural::sections_str(empty_count),
@@ -254,7 +267,7 @@ impl NextestConfig {
             config_file,
             tool_config_files,
             experimental,
-            &mut DefaultConfigWarnings,
+            &mut DefaultConfigWarnings::default(),
         )
     }
 

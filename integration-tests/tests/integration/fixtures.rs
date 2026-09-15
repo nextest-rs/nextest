@@ -13,7 +13,7 @@ use fixture_data::{
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use integration_tests::{
     env::TestEnvInfo,
-    nextest_cli::{CargoNextestCli, cargo_bin},
+    nextest_cli::{CargoNextestCli, CargoNextestOutput, cargo_bin},
 };
 use nextest_metadata::{
     BinaryListSummary, BuildPlatform, RustBinaryId, RustTestSuiteStatusSummary, TestCaseName,
@@ -22,6 +22,16 @@ use nextest_metadata::{
 use quick_junit::{FlakyOrRerun, Report};
 use regex::Regex;
 use std::{collections::BTreeSet, fs::File, process::Command, sync::LazyLock};
+
+static ANSI_ESCAPE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\x1b\[[0-9;]*m").expect("compiled the ANSI escape regex"));
+
+static UPDATE_HINT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"update nextest with (?:\x1b\[[0-9;]*m)*cargo nextest self update(?:\x1b\[[0-9;]*m)*",
+    )
+    .expect("compiled the update hint regex")
+});
 
 #[track_caller]
 pub fn save_cargo_metadata(p: &TempProject) {
@@ -105,39 +115,56 @@ pub fn normalize_nextest_stderr(stderr: &str, temp_root: &Utf8Path) -> String {
             // Cargo warns about the fixture's deprecated `.cargo/config` when
             // run from inside the workspace. Stable continues with ` |` and ` =
             // help:`, and Cargo 1.91 with `note:`.
-            if line.starts_with("warning: ")
-                && line.contains(".cargo")
-                && line.contains("is deprecated in favor of `config.toml`")
+            let plain = ANSI_ESCAPE.replace_all(line, "");
+            if plain.starts_with("warning: ")
+                && plain.contains(".cargo")
+                && plain.contains("is deprecated in favor of `config.toml`")
             {
                 in_cargo_config_warning = true;
                 return false;
             }
             if in_cargo_config_warning
-                && (line.starts_with("  |")
-                    || line.starts_with("  = ")
-                    || line.starts_with("note: "))
+                && (plain.starts_with("  |")
+                    || plain.starts_with("  = ")
+                    || plain.starts_with("note: "))
             {
                 return false;
             }
             in_cargo_config_warning = false;
-            !line.contains("Blocking waiting for file lock")
-                && !line.starts_with("info: experimental features enabled")
+            !plain.contains("Blocking waiting for file lock")
+                && !plain.starts_with("info: experimental features enabled")
         })
         .collect::<Vec<_>>()
         .join("\n");
     // The update hint depends on whether cargo-nextest was built with the
     // self-update feature, which differs between `-p integration-tests` and
     // whole-workspace runs.
-    let normalized = filtered
-        .replace(
-            "update nextest with cargo nextest self update",
-            "update nextest [UPDATE INSTRUCTIONS]",
-        )
+    let normalized = UPDATE_HINT
+        .replace_all(&filtered, "update nextest [UPDATE INSTRUCTIONS]")
         .replace(
             "update nextest via your package manager",
             "update nextest [UPDATE INSTRUCTIONS]",
         );
     redact_temp_root(normalized.trim_end(), temp_root)
+}
+
+/// Records a single scenario block (exit code plus normalized stderr) for a
+/// snapshot.
+#[track_caller]
+pub fn push_scenario(
+    blocks: &mut Vec<String>,
+    scenario: &str,
+    output: &CargoNextestOutput,
+    temp_root: &Utf8Path,
+) {
+    let exit_code = output
+        .exit_status
+        .code()
+        .unwrap_or_else(|| panic!("nextest exited with a code: {output}"));
+    blocks.push(format!(
+        "scenario: {scenario}\nexit code: {exit_code}\n{}",
+        normalize_nextest_stderr(&output.stderr_as_str(), temp_root),
+    ));
 }
 
 pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
