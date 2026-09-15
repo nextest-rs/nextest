@@ -434,17 +434,12 @@ impl<'a> ExecutorContext<'a> {
         let job = super::os::create_job().ok();
 
         // The --no-capture CLI argument overrides the config.
-        if self.capture_strategy != CaptureStrategy::None {
-            if script.config.capture_stdout {
-                command_mut.stdout(std::process::Stdio::piped());
-            }
-            if script.config.capture_stderr {
-                command_mut.stderr(std::process::Stdio::piped());
-            }
-        }
-
+        let capture = self.capture_strategy != CaptureStrategy::None;
         let (mut child, env_path) = cmd
-            .spawn()
+            .spawn(
+                capture && script.config.capture_stdout,
+                capture && script.config.capture_stderr,
+            )
             .map_err(|error| ChildStartError::Spawn(Arc::new(error)))?;
         let child_pid = child
             .id()
