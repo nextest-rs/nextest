@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    ConfigPath, ConfigPaths, ExperimentalDeserialize, NextestVersionDeserialize, ToolConfigFile,
-    ToolName,
+    ConfigFileSelection, ConfigPath, ConfigPaths, ExperimentalDeserialize,
+    NextestVersionDeserialize, ToolConfigFile, ToolName,
 };
 use crate::{
     config::{
@@ -39,7 +39,7 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{
-    Config, ConfigBuilder, ConfigError, File, FileFormat, FileSourceFile, builder::DefaultState,
+    Config, ConfigBuilder, ConfigError, File, FileFormat, FileSourceString, builder::DefaultState,
 };
 use iddqd::IdOrdMap;
 use indexmap::IndexMap;
@@ -270,24 +270,50 @@ impl NextestConfig {
     where
         I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
     {
-        let workspace_root = workspace_root.into();
-        Self::from_sources_with_paths(
-            &ConfigPaths::capture(&workspace_root).map_err(|error| {
-                ConfigParseError::from_paths_capture_error(&workspace_root, config_file, error)
-            })?,
+        Self::from_sources_with_selection(
+            workspace_root,
             pcx,
-            config_file,
+            ConfigFileSelection::new(config_file),
             tool_config_files,
             experimental,
             warnings,
         )
     }
 
-    /// Loads configuration with a shared invocation and workspace path context.
+    /// Reads configuration from the given workspace root and file selection.
+    pub fn from_sources_with_selection<'a, I>(
+        workspace_root: impl Into<Utf8PathBuf>,
+        pcx: &ParseContext<'_>,
+        selection: ConfigFileSelection<'_>,
+        tool_config_files: impl IntoIterator<IntoIter = I>,
+        experimental: &BTreeSet<ConfigExperimental>,
+        warnings: &mut impl ConfigWarnings,
+    ) -> Result<Self, ConfigParseError>
+    where
+        I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
+    {
+        let workspace_root = workspace_root.into();
+        Self::from_sources_with_paths(
+            &ConfigPaths::capture(&workspace_root).map_err(|error| {
+                ConfigParseError::from_paths_capture_error(
+                    &workspace_root,
+                    selection.explicit_config_file(),
+                    error,
+                )
+            })?,
+            pcx,
+            selection,
+            tool_config_files,
+            experimental,
+            warnings,
+        )
+    }
+
+    /// Reads configuration from the given paths and file selection.
     pub fn from_sources_with_paths<'a, I>(
         paths: &ConfigPaths,
         pcx: &ParseContext<'_>,
-        config_file: Option<&Utf8Path>,
+        selection: ConfigFileSelection<'_>,
         tool_config_files: impl IntoIterator<IntoIter = I>,
         experimental: &BTreeSet<ConfigExperimental>,
         warnings: &mut impl ConfigWarnings,
@@ -300,7 +326,7 @@ impl NextestConfig {
         let (inner, compiled) = Self::read_from_sources(
             pcx,
             paths,
-            config_file,
+            selection,
             tool_config_files_rev,
             experimental,
             warnings,
@@ -358,7 +384,7 @@ impl NextestConfig {
     fn read_from_sources<'a>(
         pcx: &ParseContext<'_>,
         paths: &ConfigPaths,
-        file: Option<&Utf8Path>,
+        selection: ConfigFileSelection<'_>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
         experimental: &BTreeSet<ConfigExperimental>,
         warnings: &mut impl ConfigWarnings,
@@ -376,15 +402,16 @@ impl NextestConfig {
         // from profiles defined in the same file or in previously loaded (lower priority) files.
         let mut known_profiles = BTreeSet::new();
 
-        // Next, merge in tool configs.
-        for ToolConfigFile { config_file, tool } in tool_config_files_rev {
-            let config_file = paths.resolve_input(config_file)?;
-            let source = File::new(config_file.absolute_path().as_str(), FileFormat::Toml);
+        for source in selection.sources(paths, tool_config_files_rev)? {
+            let Some(contents) = source.read()? else {
+                continue;
+            };
+            let file = File::from_str(&contents, FileFormat::Toml);
             Self::deserialize_individual_config(
                 pcx,
-                &config_file,
-                Some(tool),
-                source.clone(),
+                &source.path,
+                source.tool(),
+                file.clone(),
                 &mut compiled,
                 experimental,
                 warnings,
@@ -394,41 +421,12 @@ impl NextestConfig {
             )?;
 
             // This is the final, composite builder used at the end.
-            composite_builder = composite_builder.add_source(source);
+            composite_builder = composite_builder.add_source(file);
         }
-
-        // Next, merge in the config from the given file.
-        let (config_file, source) = match file {
-            Some(file) => {
-                let path = paths.resolve_input(file)?;
-                let source = File::new(path.absolute_path().as_str(), FileFormat::Toml);
-                (path, source)
-            }
-            None => {
-                let config_file = paths.shared_config();
-                let source = File::new(config_file.absolute_path().as_str(), FileFormat::Toml)
-                    .required(false);
-                (config_file, source)
-            }
-        };
-
-        Self::deserialize_individual_config(
-            pcx,
-            &config_file,
-            None,
-            source.clone(),
-            &mut compiled,
-            experimental,
-            warnings,
-            &mut known_groups,
-            &mut known_scripts,
-            &mut known_profiles,
-        )?;
-
-        composite_builder = composite_builder.add_source(source);
 
         // The unknown set is ignored here because any values in it have already been reported in
         // deserialize_individual_config.
+        let config_file = selection.repo_config_path(paths)?;
         let (config, _unknown) = Self::build_and_deserialize_config(&composite_builder)
             .map_err(|kind| ConfigParseError::new(&config_file, None, kind))?;
 
@@ -446,7 +444,7 @@ impl NextestConfig {
         pcx: &ParseContext<'_>,
         config_file: &ConfigPath,
         tool: Option<&ToolName>,
-        source: File<FileSourceFile, FileFormat>,
+        source: File<FileSourceString, FileFormat>,
         compiled_out: &mut CompiledByProfile,
         experimental: &BTreeSet<ConfigExperimental>,
         warnings: &mut impl ConfigWarnings,

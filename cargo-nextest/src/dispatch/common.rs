@@ -102,7 +102,7 @@ impl ConfigOpts {
         NextestConfig::from_sources_with_paths(
             paths,
             pcx,
-            self.config_file.as_deref(),
+            ConfigFileSelection::new(self.config_file.as_deref()),
             &self.tool_config_files,
             experimental,
             &mut DefaultConfigWarnings,

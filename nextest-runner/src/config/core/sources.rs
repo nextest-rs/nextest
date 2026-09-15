@@ -140,11 +140,14 @@ mod tests {
     };
     use camino_tempfile::{Utf8TempDir, tempdir};
     use camino_tempfile_ext::prelude::*;
+    use nextest_filtering::ParseContext;
+    use std::collections::BTreeSet;
     use test_case::test_case;
 
     #[derive(Clone, Copy, Debug)]
     enum Loader {
         VersionOnly,
+        Full,
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -171,7 +174,7 @@ mod tests {
     fn load(
         loader: Loader,
         dir: &Utf8TempDir,
-        _graph: &guppy::graph::PackageGraph,
+        graph: &guppy::graph::PackageGraph,
         config_file: Option<&Utf8Path>,
         tool_config_files: &[ToolConfigFile],
     ) -> Result<(), ConfigParseError> {
@@ -180,14 +183,27 @@ mod tests {
                 VersionOnlyConfig::from_sources(dir.path(), config_file, tool_config_files)
                     .map(|_| ())
             }
+            Loader::Full => NextestConfig::from_sources(
+                dir.path(),
+                &ParseContext::new(graph),
+                config_file,
+                tool_config_files,
+                &BTreeSet::new(),
+            )
+            .map(|_| ()),
         }
     }
 
     #[test_case(Loader::VersionOnly, Scenario::AbsentRepoConfig; "version only, absent repo config")]
+    #[test_case(Loader::Full, Scenario::AbsentRepoConfig; "full, absent repo config")]
     #[test_case(Loader::VersionOnly, Scenario::DotConfigIsFile; "version only, .config is a file")]
+    #[test_case(Loader::Full, Scenario::DotConfigIsFile; "full, .config is a file")]
     #[test_case(Loader::VersionOnly, Scenario::RepoConfigIsDirectory; "version only, repo config is a directory")]
+    #[test_case(Loader::Full, Scenario::RepoConfigIsDirectory; "full, repo config is a directory")]
     #[test_case(Loader::VersionOnly, Scenario::MissingToolConfig; "version only, missing tool config")]
+    #[test_case(Loader::Full, Scenario::MissingToolConfig; "full, missing tool config")]
     #[test_case(Loader::VersionOnly, Scenario::MissingExplicitConfig; "version only, missing explicit config")]
+    #[test_case(Loader::Full, Scenario::MissingExplicitConfig; "full, missing explicit config")]
     fn read_errors_and_absent_files(loader: Loader, scenario: Scenario) {
         let dir = tempdir().unwrap();
         let graph = workspace_without_repo_config(&dir);
