@@ -792,6 +792,33 @@ mod tests {
     }
 
     #[test]
+    fn test_experimental_features_in_tool_config() {
+        let workspace = tempdir().unwrap();
+        let tool_config = workspace.child("tool.toml");
+        tool_config
+            .write_str(r#"experimental = ["setup-scripts"]"#)
+            .unwrap();
+        let tool = ToolName::new("my-tool".into()).unwrap();
+        let tool_config_file = ToolConfigFile {
+            tool: tool.clone(),
+            config_file: tool_config.to_path_buf(),
+        };
+        let error = VersionOnlyConfig::from_sources(
+            workspace.path(),
+            None,
+            std::slice::from_ref(&tool_config_file),
+        )
+        .unwrap_err();
+        assert_eq!(error.config_file(), tool_config.as_path());
+        assert_eq!(error.tool(), Some(&tool));
+        let ConfigParseErrorKind::ExperimentalFeaturesInToolConfig { features } = error.kind()
+        else {
+            panic!("experimental features in a tool config are rejected, got {error:?}");
+        };
+        assert_eq!(features, &BTreeSet::from(["setup-scripts".to_owned()]));
+    }
+
+    #[test]
     fn test_repo_config_is_directory() {
         let workspace = tempdir().unwrap();
         let config_file = workspace.child(NextestConfig::CONFIG_PATH);

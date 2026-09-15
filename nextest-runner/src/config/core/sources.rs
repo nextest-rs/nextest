@@ -156,6 +156,7 @@ mod tests {
         DotConfigIsFile,
         RepoConfigIsDirectory,
         MissingToolConfig,
+        MalformedToolConfig,
         MissingExplicitConfig,
     }
 
@@ -202,6 +203,8 @@ mod tests {
     #[test_case(Loader::Full, Scenario::RepoConfigIsDirectory; "full, repo config is a directory")]
     #[test_case(Loader::VersionOnly, Scenario::MissingToolConfig; "version only, missing tool config")]
     #[test_case(Loader::Full, Scenario::MissingToolConfig; "full, missing tool config")]
+    #[test_case(Loader::VersionOnly, Scenario::MalformedToolConfig; "version only, malformed tool config")]
+    #[test_case(Loader::Full, Scenario::MalformedToolConfig; "full, malformed tool config")]
     #[test_case(Loader::VersionOnly, Scenario::MissingExplicitConfig; "version only, missing explicit config")]
     #[test_case(Loader::Full, Scenario::MissingExplicitConfig; "full, missing explicit config")]
     fn read_errors_and_absent_files(loader: Loader, scenario: Scenario) {
@@ -239,6 +242,25 @@ mod tests {
                 let ConfigParseErrorKind::ReadError(_) = error.kind() else {
                     panic!("a missing tool config file is a read error, got {error:?}");
                 };
+            }
+            Scenario::MalformedToolConfig => {
+                let tool_config = dir.child("malformed-tool.toml");
+                tool_config.write_str("invalid = [").unwrap();
+                let tool = ToolConfigFile {
+                    tool: tool_name("malformed-tool"),
+                    config_file: tool_config.to_path_buf(),
+                };
+                let error =
+                    load(loader, &dir, &graph, None, std::slice::from_ref(&tool)).unwrap_err();
+                assert_eq!(error.config_file(), tool.config_file);
+                assert_eq!(error.tool(), Some(&tool.tool));
+                match (loader, error.kind()) {
+                    (Loader::VersionOnly, ConfigParseErrorKind::TomlParseError(_))
+                    | (Loader::Full, ConfigParseErrorKind::BuildError(_)) => {}
+                    (Loader::VersionOnly | Loader::Full, _) => {
+                        panic!("malformed TOML in a tool config is a parse error, got {error:?}");
+                    }
+                }
             }
             Scenario::MissingExplicitConfig => {
                 let explicit = dir.child("missing.toml");
