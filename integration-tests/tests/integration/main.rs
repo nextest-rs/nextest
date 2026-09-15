@@ -2110,6 +2110,7 @@ fn test_show_config_version() {
     // Required 0.9.56, recommended 0.9.54.
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2122,6 +2123,7 @@ fn test_show_config_version() {
     insta::assert_snapshot!(output.stdout_as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2139,6 +2141,7 @@ fn test_show_config_version() {
     insta::assert_snapshot!(output.stdout_as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2156,6 +2159,7 @@ fn test_show_config_version() {
     insta::assert_snapshot!(output.stdout_as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2173,6 +2177,7 @@ fn test_show_config_version() {
     insta::assert_snapshot!(output.stdout_as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2193,6 +2198,7 @@ fn test_show_config_version() {
     // With --override-version-check
     // ---
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2206,6 +2212,7 @@ fn test_show_config_version() {
     insta::assert_snapshot!(output.stdout_as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2237,6 +2244,7 @@ fn test_show_config_version() {
     std::mem::drop(f);
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2303,6 +2311,32 @@ fail-fast = false
         "scenario: version-not-met\n{}",
         normalize_nextest_stderr(&output.stderr_as_str(), p.temp_root())
     )];
+
+    // With the unknown feature still configured, overriding the version check
+    // reports the requirement's source, then fails on the unknown feature
+    // before cargo runs (keeping output relatively minimal).
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--message-format",
+            "human",
+            "--override-version-check",
+        ])
+        .env(TEST_VERSION_ENV, "0.9.100")
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "{output}"
+    );
+    blocks.push(format!(
+        "scenario: version-not-met-override\n{}",
+        normalize_nextest_stderr(&output.stderr_as_str(), p.temp_root())
+    ));
 
     // Now test that the unknown experimental feature error is shown when the version passes.
     std::fs::write(
