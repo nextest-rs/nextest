@@ -48,8 +48,9 @@ pub(crate) struct ConfigOpts {
     /// nextest.
     ///
     /// Arguments are specified in the format "tool:abs_path", for example
-    /// "my-tool:/path/to/nextest.toml" (or "my-tool:C:\\path\\to\\nextest.toml" on Windows).
-    /// Paths must be absolute.
+    /// "my-tool:/path/to/nextest.toml" (or "my-tool:C:\\path\\to\\nextest.toml"
+    /// on Windows). Paths must be absolute. Each tool name may have at most one
+    /// config file associated with it.
     ///
     /// This argument may be specified multiple times. Files that come later are lower priority
     /// than those that come earlier.
