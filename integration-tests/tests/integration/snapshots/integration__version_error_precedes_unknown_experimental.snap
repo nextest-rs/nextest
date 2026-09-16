@@ -4,10 +4,12 @@ expression: "blocks.join(\"\\n\\n\")"
 ---
 scenario: version-not-met
 error: this repository requires nextest version 0.9.9999, but the current version is 0.9.100
+(required version specified in [TEMP_DIR]/src/.config/nextest.toml)
 info: update nextest [UPDATE INSTRUCTIONS], or bypass check with --override-version-check
 
 scenario: version-not-met-override
 info: overriding version check (required: 0.9.9999, current: 0.9.100)
+(required version specified in [TEMP_DIR]/src/.config/nextest.toml)
 error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown experimental features defined: unknown-experimental-feature (known features: setup-scripts, wrapper-scripts, benchmarks):
 
 scenario: version-met-unknown-feature

@@ -1,13 +1,17 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{ExtractOutputFormat, output::StderrStyles};
+use crate::{
+    ExtractOutputFormat,
+    helpers::{VersionReqKind, log_version_source},
+    output::StderrStyles,
+};
 use camino::Utf8PathBuf;
 use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{
-    config::core::{ConfigExperimental, ConfigPath, ToolName},
+    config::core::{ConfigExperimental, ConfigPath, ConfigSource},
     errors::{
         ChromeTraceError, PortableRecordingError, PortableRecordingReadError, RecordReadError,
         RunIdResolutionError, RunStoreError, StateDirError, TestListFromSummaryError,
@@ -358,7 +362,9 @@ pub enum ExpectedError {
     RequiredVersionNotMet {
         required: Version,
         current: Version,
-        tool: Option<ToolName>,
+        // This is not named `source` because that has a special meaning to
+        // thiserror.
+        config_source: ConfigSource,
     },
     #[error("experimental feature not enabled")]
     ExperimentalFeatureNotEnabled {
@@ -1211,20 +1217,18 @@ impl ExpectedError {
             Self::RequiredVersionNotMet {
                 required,
                 current,
-                tool,
+                config_source,
             } => {
                 error!(
                     "this repository requires nextest version {}, but the current version is {}",
                     required.style(styles.bold),
                     current.style(styles.bold),
                 );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(required version specified by tool `{}`)",
-                        tool.style(styles.config_styles.tool),
-                    );
-                }
+                log_version_source(
+                    VersionReqKind::Required,
+                    config_source,
+                    styles.config_styles,
+                );
 
                 crate::helpers::log_needs_update(
                     Level::INFO,

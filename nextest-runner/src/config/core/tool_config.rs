@@ -61,7 +61,10 @@ mod tests {
     use super::*;
     use crate::{
         config::{
-            core::{NextestConfig, NextestVersionConfig, NextestVersionReq, VersionOnlyConfig},
+            core::{
+                ConfigFileSelection, ConfigPaths, ConfigSource, ConfigSourceKind, NextestConfig,
+                NextestVersionConfig, NextestVersionReq, VersionOnlyConfig,
+            },
             elements::{RetryPolicy, TestGroup},
             utils::test_helpers::*,
         },
@@ -267,17 +270,31 @@ mod tests {
         let version_only_config =
             VersionOnlyConfig::from_sources(workspace_root, None, &tool_config_files).unwrap();
         let nextest_version = version_only_config.nextest_version();
+        let sources = ConfigFileSelection::new(None)
+            .sources(
+                &ConfigPaths::capture(workspace_root).unwrap(),
+                tool_config_files.iter().rev(),
+            )
+            .unwrap();
+        let [_tool2_source, tool1_source, _repo_source] = <[ConfigSource; 3]>::try_from(sources)
+            .expect("two tool sources followed by the repository source");
+        match tool1_source.kind() {
+            ConfigSourceKind::Tool(tool) => assert_eq!(tool, &tool_name("tool1")),
+            ConfigSourceKind::ExplicitRepository | ConfigSourceKind::DiscoveredRepository => {
+                panic!("expected tool1's source, got {tool1_source:?}")
+            }
+        }
         assert_eq!(
             nextest_version,
             &NextestVersionConfig {
                 required: NextestVersionReq::Version {
                     version: "0.9.51".parse().unwrap(),
-                    tool: Some(tool_name("tool1"))
+                    source: tool1_source.clone(),
                 },
                 recommended: NextestVersionReq::Version {
                     version: "0.9.52".parse().unwrap(),
-                    tool: Some(tool_name("tool1"))
-                }
+                    source: tool1_source,
+                },
             },
         );
 

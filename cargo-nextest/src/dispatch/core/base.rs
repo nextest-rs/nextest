@@ -11,6 +11,7 @@ use crate::{
         common::ConfigOpts,
         helpers::{acquire_graph_data, detect_build_platforms, runner_for_target},
     },
+    helpers::{VersionReqKind, log_version_source},
     output::{OutputContext, OutputWriter},
 };
 use camino::Utf8PathBuf;
@@ -242,67 +243,49 @@ impl BaseApp {
             NextestVersionEval::Error {
                 required,
                 current,
-                tool,
+                source,
             } => Err(ExpectedError::RequiredVersionNotMet {
                 required,
                 current,
-                tool,
+                config_source: source,
             }),
             NextestVersionEval::Warn {
                 recommended: required,
                 current,
-                tool,
+                source,
             } => {
                 warn!(
                     "this repository recommends nextest version {}, but the current version is {}",
                     required.style(styles.bold),
                     current.style(styles.bold),
                 );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(recommended version specified by tool `{}`)",
-                        tool.style(styles.config_styles.tool),
-                    );
-                }
+                log_version_source(VersionReqKind::Recommended, &source, styles.config_styles);
 
                 Ok(())
             }
             NextestVersionEval::ErrorOverride {
                 required,
                 current,
-                tool,
+                source,
             } => {
                 info!(
                     "overriding version check (required: {}, current: {})",
                     required, current
                 );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(required version specified by tool `{}`)",
-                        tool.style(styles.config_styles.tool),
-                    );
-                }
+                log_version_source(VersionReqKind::Required, &source, styles.config_styles);
 
                 Ok(())
             }
             NextestVersionEval::WarnOverride {
                 recommended,
                 current,
-                tool,
+                source,
             } => {
                 info!(
                     "overriding version check (recommended: {}, current: {})",
                     recommended, current,
                 );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(recommended version specified by tool `{}`)",
-                        tool.style(styles.config_styles.tool),
-                    );
-                }
+                log_version_source(VersionReqKind::Recommended, &source, styles.config_styles);
 
                 Ok(())
             }
@@ -343,29 +326,23 @@ impl BaseApp {
             NextestVersionEval::Error {
                 required,
                 current,
-                tool,
+                source,
             } => Err(ExpectedError::RequiredVersionNotMet {
                 required,
                 current,
-                tool,
+                config_source: source,
             }),
             NextestVersionEval::Warn {
                 recommended: required,
                 current,
-                tool,
+                source,
             } => {
                 warn!(
                     "this repository recommends nextest version {}, but the current version is {}",
                     required.style(styles.bold),
                     current.style(styles.bold),
                 );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(recommended version specified by tool `{}`)",
-                        tool.style(styles.config_styles.tool),
-                    );
-                }
+                log_version_source(VersionReqKind::Recommended, &source, styles.config_styles);
 
                 // Don't need to print extra text here -- this is a warning, not an error.
                 crate::helpers::log_needs_update(

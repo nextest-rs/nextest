@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    config::core::{ConfigStyles, NextestVersionConfig, NextestVersionEval, NextestVersionReq},
+    config::core::{
+        ConfigSource, ConfigSourceKind, ConfigStyles, NextestVersionConfig, NextestVersionEval,
+        NextestVersionReq,
+    },
     write_str::WriteStr,
 };
 use owo_colors::{OwoColorize, Style};
@@ -46,20 +49,16 @@ impl<'a> ShowNextestVersion<'a> {
         write!(writer, "version requirements:")?;
 
         let mut any_requirements = false;
-        if let NextestVersionReq::Version { version, tool } = &self.version_cfg.required {
+        if let NextestVersionReq::Version { version, source } = &self.version_cfg.required {
             if !any_requirements {
                 writeln!(writer)?;
             }
             any_requirements = true;
             write!(writer, "    - required: {}", version.style(styles.version))?;
-            if let Some(tool) = tool {
-                writeln!(writer, " (by tool {})", tool.style(styles.config.tool))?;
-            } else {
-                writeln!(writer)?;
-            }
+            self.write_source(writer, source, &styles)?;
         }
 
-        if let NextestVersionReq::Version { version, tool } = &self.version_cfg.recommended {
+        if let NextestVersionReq::Version { version, source } = &self.version_cfg.recommended {
             if !any_requirements {
                 writeln!(writer)?;
             }
@@ -69,11 +68,7 @@ impl<'a> ShowNextestVersion<'a> {
                 "    - recommended: {}",
                 version.style(styles.version)
             )?;
-            if let Some(tool) = tool {
-                writeln!(writer, " (by tool {})", tool.style(styles.config.tool))?;
-            } else {
-                writeln!(writer)?;
-            }
+            self.write_source(writer, source, &styles)?;
         }
 
         if any_requirements {
@@ -119,6 +114,26 @@ impl<'a> ShowNextestVersion<'a> {
         }
 
         Ok(())
+    }
+
+    fn write_source(
+        &self,
+        writer: &mut dyn WriteStr,
+        source: &ConfigSource,
+        styles: &Styles,
+    ) -> io::Result<()> {
+        match source.kind() {
+            ConfigSourceKind::Tool(tool) => {
+                writeln!(writer, " (by tool {})", tool.style(styles.config.tool))
+            }
+            ConfigSourceKind::ExplicitRepository | ConfigSourceKind::DiscoveredRepository => {
+                writeln!(
+                    writer,
+                    " (from {})",
+                    source.path().display().style(styles.config.path)
+                )
+            }
+        }
     }
 }
 

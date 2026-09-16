@@ -178,6 +178,62 @@ fn config_diagnostics_color() {
         .output();
     push_scenario(&mut blocks, "experimental-hint", &output, temp_root);
 
+    // The version requirement also names the file it came from, both on stderr
+    // and in show-config.
+    fs::write(&config, "nextest-version = '999.0.0'").unwrap();
+    for (command, stream) in [
+        (&["list"][..], CapturedStream::Stderr),
+        (&["show-config", "version"][..], CapturedStream::Stdout),
+    ] {
+        let output = CargoNextestCli::for_test(&env_info)
+            .current_dir(temp_root)
+            .env("__NEXTEST_TEST_VERSION", "0.9.100")
+            .args(["--color", "always", "--manifest-path"])
+            .arg(project.manifest_path().as_str())
+            .args(command.iter().copied())
+            .unchecked(true)
+            .output();
+        let exit_code = output
+            .exit_status
+            .code()
+            .unwrap_or_else(|| panic!("nextest exited with a code: {output}"));
+        let (stream_name, captured) = match stream {
+            CapturedStream::Stderr => (
+                "stderr",
+                normalize_nextest_stderr(&output.stderr_as_str(), temp_root),
+            ),
+            CapturedStream::Stdout => (
+                "stdout",
+                redact_temp_root(output.stdout_as_str().trim_end(), temp_root),
+            ),
+        };
+        blocks.push(format!(
+            "scenario: version-requirement\ncommand: {} ({stream_name})\nexit code: {exit_code}\n{captured}",
+            command.join(" "),
+        ));
+    }
+
+    // The recommended warning is logged before config parsing, so a broken
+    // profile keeps the run from building anything.
+    fs::write(
+        &config,
+        "nextest-version = { recommended = '999.0.0' }\n[profile.default]\nretries = 'bad'\n",
+    )
+    .unwrap();
+    let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(temp_root)
+        .env("__NEXTEST_TEST_VERSION", "0.9.100")
+        .args([
+            "--color",
+            "always",
+            "list",
+            "--manifest-path",
+            project.manifest_path().as_str(),
+        ])
+        .unchecked(true)
+        .output();
+    push_scenario(&mut blocks, "recommended-version", &output, temp_root);
+
     insta::assert_snapshot!(blocks.join("\n\n"));
 }
 

@@ -5,7 +5,6 @@
 
 use super::{
     ConfigFileSelection, ConfigPath, ConfigPaths, ConfigSource, ConfigSourceKind, ToolConfigFile,
-    ToolName,
 };
 use crate::errors::{ConfigParseError, ConfigParseErrorKind};
 use camino::Utf8Path;
@@ -107,7 +106,7 @@ impl VersionOnlyConfig {
             };
             let d = Self::deserialize(&source, &contents)?;
             if let Some(v) = d.nextest_version {
-                nextest_version.accumulate(v, source.tool().cloned());
+                nextest_version.accumulate(v, &source);
             }
 
             // Process experimental features. Unknown features are stored rather
@@ -332,12 +331,12 @@ pub struct NextestVersionConfig {
 
 impl NextestVersionConfig {
     /// Accumulates a deserialized version requirement into this configuration.
-    pub(crate) fn accumulate(&mut self, v: NextestVersionDeserialize, v_tool: Option<ToolName>) {
+    pub(crate) fn accumulate(&mut self, v: NextestVersionDeserialize, source: &ConfigSource) {
         if let Some(version) = v.required {
-            self.required.accumulate(version, v_tool.clone());
+            self.required.accumulate(version, source);
         }
         if let Some(version) = v.recommended {
-            self.recommended.accumulate(version, v_tool);
+            self.recommended.accumulate(version, source);
         }
     }
 
@@ -349,18 +348,18 @@ impl NextestVersionConfig {
     ) -> NextestVersionEval {
         match self.required.satisfies(current_version) {
             Ok(()) => {}
-            Err((required, tool)) => {
+            Err((required, source)) => {
                 if override_version_check {
                     return NextestVersionEval::ErrorOverride {
                         required: required.clone(),
                         current: current_version.clone(),
-                        tool: tool.cloned(),
+                        source: source.clone(),
                     };
                 } else {
                     return NextestVersionEval::Error {
                         required: required.clone(),
                         current: current_version.clone(),
-                        tool: tool.cloned(),
+                        source: source.clone(),
                     };
                 }
             }
@@ -368,18 +367,18 @@ impl NextestVersionConfig {
 
         match self.recommended.satisfies(current_version) {
             Ok(()) => NextestVersionEval::Satisfied,
-            Err((recommended, tool)) => {
+            Err((recommended, source)) => {
                 if override_version_check {
                     NextestVersionEval::WarnOverride {
                         recommended: recommended.clone(),
                         current: current_version.clone(),
-                        tool: tool.cloned(),
+                        source: source.clone(),
                     }
                 } else {
                     NextestVersionEval::Warn {
                         recommended: recommended.clone(),
                         current: current_version.clone(),
-                        tool: tool.cloned(),
+                        source: source.clone(),
                     }
                 }
             }
@@ -526,11 +525,11 @@ impl fmt::Display for ConfigExperimental {
 pub enum NextestVersionReq {
     /// A version was specified.
     Version {
-        /// The version to warn before.
+        /// The required or recommended version.
         version: Version,
 
-        /// The tool which produced this version specification.
-        tool: Option<ToolName>,
+        /// Where this version specification came from.
+        source: ConfigSource,
     },
 
     /// No version was specified.
@@ -547,35 +546,35 @@ impl NextestVersionReq {
         }
     }
 
-    fn accumulate(&mut self, v: Version, v_tool: Option<ToolName>) {
+    fn accumulate(&mut self, new_version: Version, new_source: &ConfigSource) {
         match self {
-            NextestVersionReq::Version { version, tool } => {
-                // This is v >= version rather than v > version, so that if multiple tools specify
-                // the same version, the last tool wins.
-                if &v >= version {
-                    *version = v;
-                    *tool = v_tool;
+            NextestVersionReq::Version { version, source } => {
+                // This is v >= version rather than v > version, so that if multiple sources
+                // specify the same version, the last source wins.
+                if &new_version >= version {
+                    *version = new_version;
+                    *source = new_source.clone();
                 }
             }
             NextestVersionReq::None => {
                 *self = NextestVersionReq::Version {
-                    version: v,
-                    tool: v_tool,
+                    version: new_version,
+                    source: new_source.clone(),
                 };
             }
         }
     }
 
-    fn satisfies(&self, version: &Version) -> Result<(), (&Version, Option<&ToolName>)> {
+    fn satisfies(&self, version: &Version) -> Result<(), (&Version, &ConfigSource)> {
         match self {
             NextestVersionReq::Version {
                 version: required,
-                tool,
+                source,
             } => {
                 if version >= required {
                     Ok(())
                 } else {
-                    Err((required, tool.as_ref()))
+                    Err((required, source))
                 }
             }
             NextestVersionReq::None => Ok(()),
@@ -597,8 +596,8 @@ pub enum NextestVersionEval {
         required: Version,
         /// The current version.
         current: Version,
-        /// The tool which produced this version specification.
-        tool: Option<ToolName>,
+        /// Where this version specification came from.
+        source: ConfigSource,
     },
 
     /// A warning should be produced.
@@ -607,18 +606,18 @@ pub enum NextestVersionEval {
         recommended: Version,
         /// The current version.
         current: Version,
-        /// The tool which produced this version specification.
-        tool: Option<ToolName>,
+        /// Where this version specification came from.
+        source: ConfigSource,
     },
 
     /// An error should be produced but the version is overridden.
     ErrorOverride {
-        /// The minimum version recommended.
+        /// The minimum version required.
         required: Version,
         /// The current version.
         current: Version,
-        /// The tool which produced this version specification.
-        tool: Option<ToolName>,
+        /// Where this version specification came from.
+        source: ConfigSource,
     },
 
     /// A warning should be produced but the version is overridden.
@@ -627,8 +626,8 @@ pub enum NextestVersionEval {
         recommended: Version,
         /// The current version.
         current: Version,
-        /// The tool which produced this version specification.
-        tool: Option<ToolName>,
+        /// Where this version specification came from.
+        source: ConfigSource,
     },
 }
 
@@ -777,7 +776,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::core::NextestConfig, errors::ConfigPathsCaptureError};
+    use crate::{
+        config::core::{NextestConfig, ToolName},
+        errors::ConfigPathsCaptureError,
+    };
     use camino_tempfile::tempdir;
     use camino_tempfile_ext::prelude::*;
     use test_case::test_case;
@@ -925,20 +927,43 @@ mod tests {
 
     #[test]
     fn test_accumulate() {
+        let tool_config_files = ["tool1", "tool2", "tool3", "tool4"].map(|name| ToolConfigFile {
+            tool: tool_name(name),
+            config_file: format!("{name}.toml").into(),
+        });
+        let sources = ConfigFileSelection::new(None)
+            .sources(
+                &ConfigPaths::capture(".").unwrap(),
+                tool_config_files.iter(),
+            )
+            .unwrap();
+        let [tool1, tool2, tool3, tool4, repo] = <[ConfigSource; 5]>::try_from(sources)
+            .expect("four tool sources followed by the repository source");
+        assert_tool_source(&tool1, "tool1");
+        assert_tool_source(&tool2, "tool2");
+        assert_tool_source(&tool3, "tool3");
+        assert_tool_source(&tool4, "tool4");
+        match repo.kind() {
+            ConfigSourceKind::DiscoveredRepository => {}
+            ConfigSourceKind::Tool(_) | ConfigSourceKind::ExplicitRepository => {
+                panic!("expected the discovered repository source, got {repo:?}")
+            }
+        }
+
         let mut nextest_version = NextestVersionConfig::default();
         nextest_version.accumulate(
             NextestVersionDeserialize {
                 required: Some("0.9.20".parse().unwrap()),
                 recommended: None,
             },
-            Some(tool_name("tool1")),
+            &tool1,
         );
         nextest_version.accumulate(
             NextestVersionDeserialize {
                 required: Some("0.9.30".parse().unwrap()),
                 recommended: Some("0.9.35".parse().unwrap()),
             },
-            Some(tool_name("tool2")),
+            &tool2,
         );
         nextest_version.accumulate(
             NextestVersionDeserialize {
@@ -947,7 +972,7 @@ mod tests {
                 // version.
                 recommended: Some("0.9.25".parse().unwrap()),
             },
-            Some(tool_name("tool3")),
+            &tool3,
         );
         nextest_version.accumulate(
             NextestVersionDeserialize {
@@ -956,7 +981,16 @@ mod tests {
                 required: Some("0.9.30".parse().unwrap()),
                 recommended: None,
             },
-            Some(tool_name("tool4")),
+            &tool4,
+        );
+        nextest_version.accumulate(
+            NextestVersionDeserialize {
+                // This is accepted because it is the same as the last required version, and the
+                // repository config comes after every tool config.
+                required: Some("0.9.30".parse().unwrap()),
+                recommended: None,
+            },
+            &repo,
         );
 
         assert_eq!(
@@ -964,14 +998,23 @@ mod tests {
             NextestVersionConfig {
                 required: NextestVersionReq::Version {
                     version: "0.9.30".parse().unwrap(),
-                    tool: Some(tool_name("tool4")),
+                    source: repo,
                 },
                 recommended: NextestVersionReq::Version {
                     version: "0.9.35".parse().unwrap(),
-                    tool: Some(tool_name("tool2")),
+                    source: tool2,
                 },
             }
         );
+    }
+
+    fn assert_tool_source(source: &ConfigSource, expected: &str) {
+        match source.kind() {
+            ConfigSourceKind::Tool(tool) => assert_eq!(tool.as_str(), expected),
+            ConfigSourceKind::ExplicitRepository | ConfigSourceKind::DiscoveredRepository => {
+                panic!("expected a tool source for {expected}, got {source:?}")
+            }
+        }
     }
 
     #[test]
