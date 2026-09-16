@@ -1819,7 +1819,7 @@ mod tests {
         core::{ConfigSourceKind, ToolName},
         utils::test_helpers::*,
     };
-    use camino_tempfile::tempdir;
+    use camino_tempfile::{Utf8TempDir, tempdir};
     use guppy::graph::cargo::BuildPlatform;
     use iddqd::{IdHashItem, IdHashMap, id_hash_map, id_upcast};
     use nextest_metadata::TestCaseName;
@@ -2402,6 +2402,81 @@ mod tests {
                 .iter()
                 .any(|error| matches!(error, InheritsError::InheritanceCycle(_))),
             "{errors:?}"
+        );
+    }
+
+    fn tool_config_file(
+        dir: &Utf8TempDir,
+        file_name: &str,
+        tool: &str,
+        contents: &str,
+    ) -> ToolConfigFile {
+        let config_file = dir.path().join(file_name);
+        std::fs::write(&config_file, contents).expect("wrote the tool config file");
+        ToolConfigFile {
+            tool: tool_name(tool),
+            config_file,
+        }
+    }
+
+    #[test]
+    fn unknown_key_warnings_only_include_fields_the_file_defines() {
+        let dir = tempdir().unwrap();
+        let graph = temp_workspace(
+            &dir,
+            "[profile.ci]\ntest-threads = 2\nrepo-typo = true\nshared-typo = true",
+        );
+        let root = graph.workspace().root();
+        // We must produce a warning for:
+        //
+        // * tool file with tool-typo
+        // * tool file with shared-typo
+        // * repository file with repo-typo
+        // * repository file with shared-typo
+        //
+        // We must NOT warn about repository file with tool-typo. This is true
+        // today because when we deserialize a config file, we do so against the
+        // default config, not in a layered fashion.
+        let tool = tool_config_file(
+            &dir,
+            "tool.toml",
+            "t",
+            "[profile.ci]\nretries = 1\ntool-typo = true\nshared-typo = true",
+        );
+        let tool_path = tool.config_file.clone();
+
+        let mut warnings = TestConfigWarnings::default();
+        NextestConfig::from_sources_with_warnings(
+            root,
+            &ParseContext::new(&graph),
+            None,
+            &[tool],
+            &BTreeSet::new(),
+            &mut warnings,
+        )
+        .expect("config is valid");
+
+        assert_eq!(
+            warnings.unknown_keys,
+            id_hash_map! {
+                UnknownKeys {
+                    kind: ConfigSourceKind::DiscoveredRepository,
+                    config_file: root.join(NextestConfig::CONFIG_PATH),
+                    keys: maplit::btreeset! {
+                        "profile.ci.repo-typo".to_owned(),
+                        "profile.ci.shared-typo".to_owned(),
+                    },
+                },
+                UnknownKeys {
+                    kind: ConfigSourceKind::Tool(tool_name("t")),
+                    config_file: tool_path,
+                    keys: maplit::btreeset! {
+                        "profile.ci.tool-typo".to_owned(),
+                        "profile.ci.shared-typo".to_owned(),
+                    },
+                },
+            },
+            "each file is warned about exactly the unknown keys it wrote"
         );
     }
 }
