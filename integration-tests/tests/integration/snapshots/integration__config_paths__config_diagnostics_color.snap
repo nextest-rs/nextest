@@ -61,3 +61,9 @@ exit code: 96
 
 Caused by:
   profile.default.retries: invalid type: string "bad", expected a table ({ backoff = "fixed", count = 5 }) or a number (5)
+
+scenario: show-config-test-groups
+group: [1;4mpath-group[0m (max threads = [1m1[0m)
+  * override for [1mdefault[0m profile with filter [33m'test(=test_success)'[0m (from [36msrc/.config/nextest.toml[0m):
+      [35;1mfixture-project::basic[0m:
+          [34;1mtest_success[0m

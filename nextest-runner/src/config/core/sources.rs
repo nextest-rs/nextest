@@ -69,7 +69,7 @@ impl<'a> ConfigFileSelection<'a> {
 }
 
 /// The source of a configuration setting.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ConfigSource {
     path: ConfigPath,
     kind: ConfigSourceKind,
@@ -137,7 +137,7 @@ impl ConfigSource {
 /// How a config file was selected.
 ///
 /// The variants are in priority order from lowest to highest.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ConfigSourceKind {
     /// A tool configuration, passed in via `--tool-config-file`.
     Tool(ToolName),

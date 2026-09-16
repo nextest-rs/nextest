@@ -581,7 +581,7 @@ impl NextestConfig {
         );
 
         // Compile the overrides for this file.
-        let this_compiled = CompiledByProfile::new(pcx, &this_config)
+        let this_compiled = CompiledByProfile::new(pcx, source, &this_config)
             .map_err(|kind| ConfigParseError::new(source, kind))?;
 
         // Check that all overrides specify known test groups.
