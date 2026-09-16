@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    ConfigFileSelection, ConfigPath, ConfigPaths, ConfigStyles, ExperimentalDeserialize,
-    NextestVersionDeserialize, ToolConfigFile, ToolName,
+    ConfigFileSelection, ConfigPaths, ConfigSource, ConfigStyles, ExperimentalDeserialize,
+    NextestVersionDeserialize, ToolConfigFile,
 };
 use crate::{
     config::{
@@ -61,30 +61,19 @@ use tracing::warn;
 /// (the default behavior) or collecting them for testing purposes.
 pub trait ConfigWarnings {
     /// Handle unknown configuration keys found in a config file.
-    fn unknown_config_keys(
-        &mut self,
-        config_file: &ConfigPath,
-        tool: Option<&ToolName>,
-        unknown: &BTreeSet<String>,
-    );
+    fn unknown_config_keys(&mut self, source: &ConfigSource, unknown: &BTreeSet<String>);
 
     /// Handle unknown profiles found in the reserved `default-` namespace.
-    fn unknown_reserved_profiles(
-        &mut self,
-        config_file: &ConfigPath,
-        tool: Option<&ToolName>,
-        profiles: &[&str],
-    );
+    fn unknown_reserved_profiles(&mut self, source: &ConfigSource, profiles: &[&str]);
 
     /// Handle deprecated `[script.*]` configuration.
-    fn deprecated_script_config(&mut self, config_file: &ConfigPath, tool: Option<&ToolName>);
+    fn deprecated_script_config(&mut self, source: &ConfigSource);
 
     /// Handle warning about empty script sections with neither setup nor
     /// wrapper scripts.
     fn empty_script_sections(
         &mut self,
-        config_file: &ConfigPath,
-        tool: Option<&ToolName>,
+        source: &ConfigSource,
         profile_name: &str,
         empty_count: usize,
     );
@@ -106,12 +95,7 @@ impl DefaultConfigWarnings {
 }
 
 impl ConfigWarnings for DefaultConfigWarnings {
-    fn unknown_config_keys(
-        &mut self,
-        config_file: &ConfigPath,
-        tool: Option<&ToolName>,
-        unknown: &BTreeSet<String>,
-    ) {
+    fn unknown_config_keys(&mut self, source: &ConfigSource, unknown: &BTreeSet<String>) {
         let mut unknown_str = String::new();
         if unknown.len() == 1 {
             // Print this on the same line.
@@ -128,21 +112,16 @@ impl ConfigWarnings for DefaultConfigWarnings {
 
         warn!(
             "in config file {}{}, ignoring unknown configuration {unknown_str}",
-            config_file.display().style(self.styles.path),
-            provided_by_tool(tool, self.styles.tool),
+            source.path().display().style(self.styles.path),
+            provided_by_tool(source.tool(), self.styles.tool),
         )
     }
 
-    fn unknown_reserved_profiles(
-        &mut self,
-        config_file: &ConfigPath,
-        tool: Option<&ToolName>,
-        profiles: &[&str],
-    ) {
+    fn unknown_reserved_profiles(&mut self, source: &ConfigSource, profiles: &[&str]) {
         warn!(
             "in config file {}{}, ignoring unknown profiles in the reserved `default-` namespace:",
-            config_file.display().style(self.styles.path),
-            provided_by_tool(tool, self.styles.tool),
+            source.path().display().style(self.styles.path),
+            provided_by_tool(source.tool(), self.styles.tool),
         );
 
         for profile in profiles {
@@ -150,27 +129,26 @@ impl ConfigWarnings for DefaultConfigWarnings {
         }
     }
 
-    fn deprecated_script_config(&mut self, config_file: &ConfigPath, tool: Option<&ToolName>) {
+    fn deprecated_script_config(&mut self, source: &ConfigSource) {
         warn!(
             "in config file {}{}, [script.*] is deprecated and will be removed in a \
              future version of nextest; use the `scripts.setup` table instead",
-            config_file.display().style(self.styles.path),
-            provided_by_tool(tool, self.styles.tool),
+            source.path().display().style(self.styles.path),
+            provided_by_tool(source.tool(), self.styles.tool),
         );
     }
 
     fn empty_script_sections(
         &mut self,
-        config_file: &ConfigPath,
-        tool: Option<&ToolName>,
+        source: &ConfigSource,
         profile_name: &str,
         empty_count: usize,
     ) {
         warn!(
             "in config file {}{}, [[profile.{}.scripts]] has {} {} \
              with neither setup nor wrapper scripts",
-            config_file.display().style(self.styles.path),
-            provided_by_tool(tool, self.styles.tool),
+            source.path().display().style(self.styles.path),
+            provided_by_tool(source.tool(), self.styles.tool),
             profile_name,
             empty_count,
             plural::sections_str(empty_count),
@@ -422,8 +400,7 @@ impl NextestConfig {
             let file = File::from_str(&contents, FileFormat::Toml);
             Self::deserialize_individual_config(
                 pcx,
-                &source.path,
-                source.tool(),
+                &source,
                 file.clone(),
                 &mut compiled,
                 experimental,
@@ -441,7 +418,7 @@ impl NextestConfig {
         // deserialize_individual_config.
         let config_file = selection.repo_config_path(paths)?;
         let (config, _unknown) = Self::build_and_deserialize_config(&composite_builder)
-            .map_err(|kind| ConfigParseError::new(&config_file, None, kind))?;
+            .map_err(|kind| ConfigParseError::from_path(&config_file, kind))?;
 
         // Reverse all the compiled data at the end.
         compiled.default.reverse();
@@ -455,9 +432,8 @@ impl NextestConfig {
     #[expect(clippy::too_many_arguments)]
     fn deserialize_individual_config(
         pcx: &ParseContext<'_>,
-        config_file: &ConfigPath,
-        tool: Option<&ToolName>,
-        source: File<FileSourceString, FileFormat>,
+        source: &ConfigSource,
+        file: File<FileSourceString, FileFormat>,
         compiled_out: &mut CompiledByProfile,
         experimental: &BTreeSet<ConfigExperimental>,
         warnings: &mut impl ConfigWarnings,
@@ -468,13 +444,15 @@ impl NextestConfig {
         // Try building default builder + this file to get good error attribution and handle
         // overrides additively.
         let default_builder = Self::make_default_config();
-        let this_builder = default_builder.add_source(source);
+        let this_builder = default_builder.add_source(file);
         let (mut this_config, unknown) = Self::build_and_deserialize_config(&this_builder)
-            .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
+            .map_err(|kind| ConfigParseError::new(source, kind))?;
 
         if !unknown.is_empty() {
-            warnings.unknown_config_keys(config_file, tool, &unknown);
+            warnings.unknown_config_keys(source, &unknown);
         }
+
+        let tool = source.tool();
 
         // Check that test groups are named as expected.
         let (valid_groups, invalid_groups): (BTreeSet<_>, _) =
@@ -497,7 +475,7 @@ impl NextestConfig {
             } else {
                 ConfigParseErrorKind::InvalidTestGroupsDefined(invalid_groups)
             };
-            return Err(ConfigParseError::new(config_file, tool, kind));
+            return Err(ConfigParseError::new(source, kind));
         }
 
         known_groups.extend(valid_groups);
@@ -505,15 +483,14 @@ impl NextestConfig {
         // If both scripts and old_setup_scripts are present, produce an error.
         if !this_config.scripts.is_empty() && !this_config.old_setup_scripts.is_empty() {
             return Err(ConfigParseError::new(
-                config_file,
-                tool,
+                source,
                 ConfigParseErrorKind::BothScriptAndScriptsDefined,
             ));
         }
 
         // If old_setup_scripts are present, produce a warning.
         if !this_config.old_setup_scripts.is_empty() {
-            warnings.deprecated_script_config(config_file, tool);
+            warnings.deprecated_script_config(source);
             this_config.scripts.setup = this_config.old_setup_scripts.clone();
         }
 
@@ -532,8 +509,7 @@ impl NextestConfig {
             }
             if !missing_features.is_empty() {
                 return Err(ConfigParseError::new(
-                    config_file,
-                    tool,
+                    source,
                     ConfigParseErrorKind::ExperimentalFeaturesNotEnabled { missing_features },
                 ));
             }
@@ -542,8 +518,7 @@ impl NextestConfig {
         let duplicate_ids: BTreeSet<_> = this_config.scripts.duplicate_ids().cloned().collect();
         if !duplicate_ids.is_empty() {
             return Err(ConfigParseError::new(
-                config_file,
-                tool,
+                source,
                 ConfigParseErrorKind::DuplicateConfigScriptNames(duplicate_ids),
             ));
         }
@@ -572,7 +547,7 @@ impl NextestConfig {
             } else {
                 ConfigParseErrorKind::InvalidConfigScriptsDefined(invalid_scripts)
             };
-            return Err(ConfigParseError::new(config_file, tool, kind));
+            return Err(ConfigParseError::new(source, kind));
         }
 
         known_scripts.extend(
@@ -588,7 +563,7 @@ impl NextestConfig {
             .filter(|p| p.starts_with("default-") && !NextestConfig::DEFAULT_PROFILES.contains(p))
             .collect();
         if !unknown_default_profiles.is_empty() {
-            warnings.unknown_reserved_profiles(config_file, tool, &unknown_default_profiles);
+            warnings.unknown_reserved_profiles(source, &unknown_default_profiles);
         }
 
         // Check that the profiles correctly use the inherits setting.
@@ -596,7 +571,7 @@ impl NextestConfig {
         // loaded (lower priority) files.
         this_config
             .sanitize_profile_inherits(known_profiles)
-            .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
+            .map_err(|kind| ConfigParseError::new(source, kind))?;
 
         // Add this file's profiles to known_profiles for subsequent files.
         known_profiles.extend(
@@ -607,7 +582,7 @@ impl NextestConfig {
 
         // Compile the overrides for this file.
         let this_compiled = CompiledByProfile::new(pcx, &this_config)
-            .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
+            .map_err(|kind| ConfigParseError::new(source, kind))?;
 
         // Check that all overrides specify known test groups.
         let mut unknown_group_errors = Vec::new();
@@ -641,8 +616,7 @@ impl NextestConfig {
         if !unknown_group_errors.is_empty() {
             let known_groups = TestGroup::make_all_groups(known_groups.iter().cloned()).collect();
             return Err(ConfigParseError::new(
-                config_file,
-                tool,
+                source,
                 ConfigParseErrorKind::UnknownTestGroups {
                     errors: unknown_group_errors,
                     known_groups,
@@ -730,7 +704,7 @@ impl NextestConfig {
         });
 
         if empty_script_count > 0 {
-            warnings.empty_script_sections(config_file, tool, "default", empty_script_count);
+            warnings.empty_script_sections(source, "default", empty_script_count);
         }
 
         this_compiled.other.iter().for_each(|(profile_name, data)| {
@@ -764,7 +738,7 @@ impl NextestConfig {
             });
 
             if empty_script_count > 0 {
-                warnings.empty_script_sections(config_file, tool, profile_name, empty_script_count);
+                warnings.empty_script_sections(source, profile_name, empty_script_count);
             }
         });
 
@@ -776,8 +750,7 @@ impl NextestConfig {
                 .map(|script| script.id.clone())
                 .collect();
             return Err(ConfigParseError::new(
-                config_file,
-                tool,
+                source,
                 ConfigParseErrorKind::ProfileScriptErrors {
                     errors: Box::new(profile_script_errors),
                     known_scripts,
@@ -1816,7 +1789,7 @@ impl CustomProfileImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::utils::test_helpers::*;
+    use crate::config::{core::ToolName, utils::test_helpers::*};
     use camino_tempfile::tempdir;
     use iddqd::{IdHashItem, IdHashMap, id_hash_map, id_upcast};
 
@@ -1834,31 +1807,21 @@ mod tests {
     }
 
     impl ConfigWarnings for TestConfigWarnings {
-        fn unknown_config_keys(
-            &mut self,
-            config_file: &ConfigPath,
-            tool: Option<&ToolName>,
-            unknown: &BTreeSet<String>,
-        ) {
+        fn unknown_config_keys(&mut self, source: &ConfigSource, unknown: &BTreeSet<String>) {
             self.unknown_keys
                 .insert_unique(UnknownKeys {
-                    tool: tool.cloned(),
-                    config_file: config_file.absolute_path().to_owned(),
+                    tool: source.tool().cloned(),
+                    config_file: source.path().absolute_path().to_owned(),
                     keys: unknown.clone(),
                 })
                 .unwrap();
         }
 
-        fn unknown_reserved_profiles(
-            &mut self,
-            config_file: &ConfigPath,
-            tool: Option<&ToolName>,
-            profiles: &[&str],
-        ) {
+        fn unknown_reserved_profiles(&mut self, source: &ConfigSource, profiles: &[&str]) {
             self.reserved_profiles
                 .insert_unique(ReservedProfiles {
-                    tool: tool.cloned(),
-                    config_file: config_file.absolute_path().to_owned(),
+                    tool: source.tool().cloned(),
+                    config_file: source.path().absolute_path().to_owned(),
                     profiles: profiles.iter().map(|&s| s.to_owned()).collect(),
                 })
                 .unwrap();
@@ -1866,26 +1829,25 @@ mod tests {
 
         fn empty_script_sections(
             &mut self,
-            config_file: &ConfigPath,
-            tool: Option<&ToolName>,
+            source: &ConfigSource,
             profile_name: &str,
             empty_count: usize,
         ) {
             self.empty_script_warnings
                 .insert_unique(EmptyScriptSections {
-                    tool: tool.cloned(),
-                    config_file: config_file.absolute_path().to_owned(),
+                    tool: source.tool().cloned(),
+                    config_file: source.path().absolute_path().to_owned(),
                     profile_name: profile_name.to_owned(),
                     empty_count,
                 })
                 .unwrap();
         }
 
-        fn deprecated_script_config(&mut self, config_file: &ConfigPath, tool: Option<&ToolName>) {
+        fn deprecated_script_config(&mut self, source: &ConfigSource) {
             self.deprecated_scripts
                 .insert_unique(DeprecatedScripts {
-                    tool: tool.cloned(),
-                    config_file: config_file.absolute_path().to_owned(),
+                    tool: source.tool().cloned(),
+                    config_file: source.path().absolute_path().to_owned(),
                 })
                 .unwrap();
         }
