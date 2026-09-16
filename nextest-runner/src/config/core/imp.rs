@@ -420,13 +420,22 @@ impl NextestConfig {
         let (config, _unknown) = Self::build_and_deserialize_config(&composite_builder)
             .map_err(|kind| ConfigParseError::from_path(&config_file, kind))?;
 
+        let config = config.into_config_impl();
+
+        // A higher-priority file can redefine a profile that a lower-priority
+        // file inherits from, so do one final check for cycles in the merged
+        // config.
+        config
+            .sanitize_profile_inherits(&BTreeSet::new())
+            .map_err(|kind| ConfigParseError::from_path(&config_file, kind))?;
+
         // Reverse all the compiled data at the end.
         compiled.default.reverse();
         for data in compiled.other.values_mut() {
             data.reverse();
         }
 
-        Ok((config.into_config_impl(), compiled))
+        Ok((config, compiled))
     }
 
     #[expect(clippy::too_many_arguments)]
@@ -2340,6 +2349,54 @@ mod tests {
             setup_scripts,
             [ScriptId::new("prepare".into()).unwrap()],
             "child profile inherits the parent profile's setup script selection"
+        );
+    }
+
+    #[test]
+    fn cross_file_inheritance_cycle_is_rejected() {
+        let workspace_dir = tempdir().unwrap();
+        let graph = temp_workspace(&workspace_dir, "");
+        let workspace_root = graph.workspace().root();
+
+        // Each file on its own is acyclic -- the cycle only exists once the
+        // higher-priority file redefines `a`.
+        let lower_path = workspace_root.join(".config/lower.toml");
+        std::fs::write(
+            &lower_path,
+            "[profile.a]\nretries = 1\n[profile.b]\ninherits = 'a'\n",
+        )
+        .unwrap();
+        let upper_path = workspace_root.join(".config/upper.toml");
+        std::fs::write(&upper_path, "[profile.a]\ninherits = 'b'\n").unwrap();
+
+        // Tool files are processed in reverse array order, so the redefining
+        // file comes first here to be merged last.
+        let error = NextestConfig::from_sources(
+            workspace_root,
+            &ParseContext::new(&graph),
+            None,
+            &[
+                ToolConfigFile {
+                    tool: tool_name("upper"),
+                    config_file: upper_path,
+                },
+                ToolConfigFile {
+                    tool: tool_name("lower"),
+                    config_file: lower_path,
+                },
+            ][..],
+            &Default::default(),
+        )
+        .expect_err("a cycle spanning config files is rejected");
+
+        let ConfigParseErrorKind::InheritanceErrors(errors) = error.kind() else {
+            panic!("expected inheritance errors, got {error:?}");
+        };
+        assert!(
+            errors
+                .iter()
+                .any(|error| matches!(error, InheritsError::InheritanceCycle(_))),
+            "{errors:?}"
         );
     }
 }
