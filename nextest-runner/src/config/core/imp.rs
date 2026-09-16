@@ -17,7 +17,7 @@ use crate::{
         },
         overrides::{
             CompiledByProfile, CompiledData, CompiledDefaultFilter, DeserializedOverride,
-            ListSettings, SettingSource, TestSettings,
+            ListSettings, ProfileDefaultFilter, SettingSource, TestSettings,
             group_membership::PrecomputedGroupMembership,
         },
         scripts::{
@@ -595,8 +595,13 @@ impl NextestConfig {
         );
 
         // Compile the overrides for this file.
-        let this_compiled = CompiledByProfile::new(pcx, source, &this_config)
-            .map_err(|kind| ConfigParseError::new(source, kind))?;
+        let this_compiled = CompiledByProfile::new(
+            pcx,
+            source,
+            &this_config,
+            ProfileDefaultFilter::SetByThisFile(this_config.default_profile().default_filter()),
+        )
+        .map_err(|kind| ConfigParseError::new(source, kind))?;
 
         // Check that all overrides specify known test groups.
         let mut unknown_group_errors = Vec::new();
