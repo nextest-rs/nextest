@@ -296,16 +296,11 @@ impl BaseApp {
         &self,
         experimental_cfg: &ExperimentalConfig,
     ) -> Result<()> {
-        let config_file = self
-            .config_opts
-            .config_file
-            .clone()
-            .unwrap_or_else(|| self.workspace_root.join(NextestConfig::CONFIG_PATH));
-        let config_file = self
-            .config_paths
-            .resolve_input(&config_file)
-            .map_err(ConfigParseError::from)?;
-        if let Some(err) = experimental_cfg.eval().into_error(&config_file) {
+        // Only the first file's error is surfaced -- this is fine for now since
+        // exactly one config file can carry experimental features. If/when a
+        // second repository file adds support for experimental features, we'll
+        // want to revisit this.
+        if let Some(err) = experimental_cfg.source_errors().next() {
             Err(err.into())
         } else {
             Ok(())
