@@ -104,6 +104,31 @@ fn tool_config_diagnostics_use_invocation_paths() {
 }
 
 #[test]
+fn duplicate_tool_config_files_are_rejected() {
+    let env_info = set_env_vars_for_test();
+    let project = TempProject::new(&env_info).unwrap();
+    let temp_root = project.temp_root();
+    let first = project.workspace_root().join(".config/first.toml");
+    let second = project.workspace_root().join(".config/second.toml");
+    fs::write(&first, "").unwrap();
+    fs::write(&second, "").unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(project.workspace_root())
+        .args(["list", "--manifest-path", project.manifest_path().as_str()])
+        .arg("--tool-config-file")
+        .arg(format!("my-tool:{first}"))
+        .arg("--tool-config-file")
+        .arg(format!("my-tool:{second}"))
+        .unchecked(true)
+        .output();
+
+    let mut blocks = Vec::new();
+    push_scenario(&mut blocks, "duplicate-tool", &output, temp_root);
+    insta::assert_snapshot!(blocks.join("\n\n"));
+}
+
+#[test]
 fn config_diagnostics_color() {
     let env_info = set_env_vars_for_test();
     let project = TempProject::new(&env_info).unwrap();

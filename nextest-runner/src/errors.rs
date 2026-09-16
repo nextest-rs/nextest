@@ -331,6 +331,19 @@ pub enum ConfigParseErrorKind {
     /// An inheritance cycle was detected in the profile configuration.
     #[error("inheritance error(s) detected: {}", .0.iter().join(", "))]
     InheritanceErrors(Vec<InheritsError>),
+    /// A tool provided more than one config file.
+    #[error(
+        "tool `{tool}` already provided config file `{}`\n\
+         (hint: each tool can provide at most one config file: merge the files, \
+         or pass `--tool-config-file {tool}:<path>` only once)",
+        .first.display(),
+    )]
+    DuplicateToolConfigFile {
+        /// The tool that passed more than one file.
+        tool: ToolName,
+        /// The file from the earlier, higher-priority argument.
+        first: ConfigPath,
+    },
 }
 
 impl From<ConfigError> for ConfigParseErrorKind {

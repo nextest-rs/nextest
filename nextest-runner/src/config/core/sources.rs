@@ -6,7 +6,10 @@
 use super::{ConfigPath, ConfigPaths, ToolConfigFile, ToolName};
 use crate::errors::{ConfigParseError, ConfigParseErrorKind};
 use camino::Utf8Path;
-use std::{fs, io};
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    fs, io,
+};
 use tracing::debug;
 
 /// Selects repository configuration files independently of tool configuration.
@@ -48,14 +51,36 @@ impl<'a> ConfigFileSelection<'a> {
         paths: &ConfigPaths,
         tool_config_files_rev: impl Iterator<Item = &'t ToolConfigFile>,
     ) -> Result<Vec<ConfigSource>, ConfigParseError> {
-        let mut sources: Vec<_> = tool_config_files_rev
+        let tool_sources = tool_config_files_rev
             .map(|ToolConfigFile { config_file, tool }| {
-                Ok(ConfigSource {
+                let source = ConfigSource {
                     path: paths.resolve_input(config_file)?,
                     kind: ConfigSourceKind::Tool(tool.clone()),
-                })
+                };
+                Ok((tool, source))
             })
-            .collect::<Result<_, ConfigParseError>>()?;
+            .collect::<Result<Vec<_>, ConfigParseError>>()?;
+        // Walk the tools in command-line order so the error lands on the later
+        // argument and names the earlier one. (This runs before any file is
+        // read.)
+        let mut first_path_by_tool = HashMap::new();
+        for (tool, source) in tool_sources.iter().rev() {
+            match first_path_by_tool.entry(*tool) {
+                Entry::Vacant(entry) => {
+                    entry.insert(source.path());
+                }
+                Entry::Occupied(entry) => {
+                    return Err(ConfigParseError::new(
+                        source,
+                        ConfigParseErrorKind::DuplicateToolConfigFile {
+                            tool: (*tool).clone(),
+                            first: (*entry.get()).clone(),
+                        },
+                    ));
+                }
+            }
+        }
+        let mut sources: Vec<_> = tool_sources.into_iter().map(|(_, source)| source).collect();
         let kind = match self.config_file {
             Some(_) => ConfigSourceKind::ExplicitRepository,
             None => ConfigSourceKind::DiscoveredRepository,
@@ -288,5 +313,37 @@ mod tests {
                 };
             }
         }
+    }
+
+    #[test_case(Loader::VersionOnly; "version only")]
+    #[test_case(Loader::Full; "full")]
+    fn duplicate_tool_config_files_are_rejected(loader: Loader) {
+        let dir = tempdir().unwrap();
+        let graph = workspace_without_repo_config(&dir);
+        // (None of these files exist, so a read error instead of the duplicate
+        // error would mean the check ran too late.)
+        let tool_config_files = [
+            ToolConfigFile {
+                tool: tool_name("my-tool"),
+                config_file: dir.child("first.toml").to_path_buf(),
+            },
+            ToolConfigFile {
+                tool: tool_name("other-tool"),
+                config_file: dir.child("other.toml").to_path_buf(),
+            },
+            ToolConfigFile {
+                tool: tool_name("my-tool"),
+                config_file: dir.child("second.toml").to_path_buf(),
+            },
+        ];
+
+        let error = load(loader, &dir, &graph, None, &tool_config_files).unwrap_err();
+        assert_eq!(error.config_file(), tool_config_files[2].config_file);
+        assert_eq!(error.tool(), Some(&tool_name("my-tool")));
+        let ConfigParseErrorKind::DuplicateToolConfigFile { tool, first } = error.kind() else {
+            panic!("a second config file for the same tool is rejected, got {error:?}");
+        };
+        assert_eq!(tool, &tool_name("my-tool"));
+        assert_eq!(first.absolute_path(), tool_config_files[0].config_file);
     }
 }
