@@ -71,7 +71,7 @@ Configuration is resolved in the following order:
 
 1. Command-line arguments. For example, if `--retries=3` is specified on the command line, failing tests are retried up to 3 times.
 2. Environment variables. For example, if `NEXTEST_RETRIES=4` is specified on the command line, failing tests are retried up to 4 times.
-3. [Per-test overrides](per-test-overrides.md), if they're supported for this configuration variable.
+3. [Per-test overrides](per-test-overrides.md), if they're supported for this configuration variable. Overrides are consulted for the selected profile and then for each profile in its [inheritance chain](#profile-inheritance).
 4. If a profile is specified, profile-specific configuration in `.config/nextest.toml`. For example, if the repository-specific configuration looks like:
 
    ```toml
