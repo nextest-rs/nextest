@@ -828,7 +828,7 @@ impl ExpectedError {
                                 "for config file `{}`{}, failed to parse {}",
                                 err.display_config_file(),
                                 provided_by_tool(err.tool()),
-                                section_str.style(styles.bold)
+                                section_str,
                             );
                             for report in compile_error.kind.reports() {
                                 error!(target: "cargo_nextest::no_heading", "{report:?}");
