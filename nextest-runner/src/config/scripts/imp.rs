@@ -13,7 +13,7 @@ use crate::{
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     errors::{
         ChildStartError, ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection,
-        InvalidConfigScriptName,
+        ConfigParseErrorKind, InvalidConfigScriptName,
     },
     helpers::convert_rel_path_to_main_sep,
     list::TestList,
@@ -33,7 +33,7 @@ use quick_junit::ReportUuid;
 use serde::{Deserialize, de::Error};
 use smol_str::SmolStr;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fmt,
     process::Command,
     sync::Arc,
@@ -83,10 +83,22 @@ impl ScriptConfig {
         self.setup.keys().chain(self.wrapper.keys())
     }
 
-    /// Returns an iterator over names that are used by more than one type of
+    /// Produces an error if any script name is used by more than one type of
     /// script.
-    pub(in crate::config) fn duplicate_ids(&self) -> impl Iterator<Item = &ScriptId> {
-        self.wrapper.keys().filter(|k| self.setup.contains_key(*k))
+    pub(in crate::config) fn check_duplicate_ids(&self) -> Result<(), ConfigParseErrorKind> {
+        let duplicate_ids: BTreeSet<_> = self
+            .wrapper
+            .keys()
+            .filter(|k| self.setup.contains_key(*k))
+            .cloned()
+            .collect();
+        if duplicate_ids.is_empty() {
+            Ok(())
+        } else {
+            Err(ConfigParseErrorKind::DuplicateConfigScriptNames(
+                duplicate_ids,
+            ))
+        }
     }
 }
 
