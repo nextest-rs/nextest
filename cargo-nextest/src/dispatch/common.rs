@@ -3,7 +3,7 @@
 
 //! Common options shared between cargo nextest and cargo ntr.
 
-use crate::{ExpectedError, Result};
+use crate::{ExpectedError, Result, output::OutputContext};
 use camino::Utf8PathBuf;
 use clap::Args;
 use nextest_filtering::ParseContext;
@@ -98,6 +98,7 @@ impl ConfigOpts {
         paths: &ConfigPaths,
         pcx: &ParseContext<'_>,
         experimental: &BTreeSet<nextest_runner::config::core::ConfigExperimental>,
+        output: OutputContext,
     ) -> Result<NextestConfig> {
         NextestConfig::from_sources_with_paths(
             paths,
@@ -105,7 +106,7 @@ impl ConfigOpts {
             ConfigFileSelection::new(self.config_file.as_deref()),
             &self.tool_config_files,
             experimental,
-            &mut DefaultConfigWarnings,
+            &mut DefaultConfigWarnings::new(output.stderr_styles().config_styles),
         )
         .map_err(ExpectedError::config_parse_error)
     }

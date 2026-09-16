@@ -1,0 +1,6 @@
+---
+source: cargo-nextest/src/errors.rs
+expression: "format_experimental_features_not_enabled(&config_file,\n&[ConfigExperimental::Benchmarks], &colored,)"
+---
+experimental feature not enabled: [1mbenchmarks[0m
+(hint: add to the [1mexperimental[0m list in [36m.config/nextest.toml[0m, or set NEXTEST_EXPERIMENTAL_BENCHMARKS=1)

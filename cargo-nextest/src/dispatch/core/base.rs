@@ -225,6 +225,7 @@ impl BaseApp {
             &self.config_paths,
             pcx,
             version_only_config.experimental().known(),
+            self.output,
         )?;
 
         Ok((version_only_config, config))
@@ -261,7 +262,7 @@ impl BaseApp {
                     info!(
                         target: "cargo_nextest::no_heading",
                         "(recommended version specified by tool `{}`)",
-                        tool,
+                        tool.style(styles.config_styles.tool),
                     );
                 }
 
@@ -280,7 +281,7 @@ impl BaseApp {
                     info!(
                         target: "cargo_nextest::no_heading",
                         "(required version specified by tool `{}`)",
-                        tool,
+                        tool.style(styles.config_styles.tool),
                     );
                 }
 
@@ -299,7 +300,7 @@ impl BaseApp {
                     info!(
                         target: "cargo_nextest::no_heading",
                         "(recommended version specified by tool `{}`)",
-                        tool,
+                        tool.style(styles.config_styles.tool),
                     );
                 }
 
@@ -362,7 +363,7 @@ impl BaseApp {
                     info!(
                         target: "cargo_nextest::no_heading",
                         "(recommended version specified by tool `{}`)",
-                        tool,
+                        tool.style(styles.config_styles.tool),
                     );
                 }
 

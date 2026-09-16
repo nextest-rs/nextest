@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    config::core::{NextestVersionConfig, NextestVersionEval, NextestVersionReq},
+    config::core::{ConfigStyles, NextestVersionConfig, NextestVersionEval, NextestVersionReq},
     write_str::WriteStr,
 };
 use owo_colors::{OwoColorize, Style};
@@ -53,7 +53,7 @@ impl<'a> ShowNextestVersion<'a> {
             any_requirements = true;
             write!(writer, "    - required: {}", version.style(styles.version))?;
             if let Some(tool) = tool {
-                writeln!(writer, " (by tool {})", tool.style(styles.tool))?;
+                writeln!(writer, " (by tool {})", tool.style(styles.config.tool))?;
             } else {
                 writeln!(writer)?;
             }
@@ -70,7 +70,7 @@ impl<'a> ShowNextestVersion<'a> {
                 version.style(styles.version)
             )?;
             if let Some(tool) = tool {
-                writeln!(writer, " (by tool {})", tool.style(styles.tool))?;
+                writeln!(writer, " (by tool {})", tool.style(styles.config.tool))?;
             } else {
                 writeln!(writer)?;
             }
@@ -125,7 +125,7 @@ impl<'a> ShowNextestVersion<'a> {
 #[derive(Clone, Debug, Default)]
 struct Styles {
     version: Style,
-    tool: Style,
+    config: ConfigStyles,
     satisfied: Style,
     error: Style,
     warning: Style,
@@ -135,7 +135,7 @@ struct Styles {
 impl Styles {
     fn colorize(&mut self) {
         self.version = Style::new().bold();
-        self.tool = Style::new().bold().yellow();
+        self.config.colorize();
         self.satisfied = Style::new().bold().green();
         self.error = Style::new().bold().red();
         self.warning = Style::new().bold().yellow();

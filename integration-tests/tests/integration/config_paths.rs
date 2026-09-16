@@ -5,7 +5,7 @@
 
 use super::{
     TempProject,
-    fixtures::{normalize_nextest_stderr, redact_temp_root},
+    fixtures::{normalize_nextest_stderr, push_scenario, redact_temp_root},
 };
 use integration_tests::{env::set_env_vars_for_test, nextest_cli::CargoNextestCli};
 use nextest_metadata::NextestExitCode;
@@ -99,6 +99,84 @@ fn tool_config_diagnostics_use_invocation_paths() {
             ));
         }
     }
+
+    insta::assert_snapshot!(blocks.join("\n\n"));
+}
+
+#[test]
+fn config_diagnostics_color() {
+    let env_info = set_env_vars_for_test();
+    let project = TempProject::new(&env_info).unwrap();
+    let temp_root = project.temp_root();
+    let config = project.workspace_root().join(".config/nextest.toml");
+    let tool_config = project.workspace_root().join(".config/tool.toml");
+    fs::write(&tool_config, "unknown-key = true\n").unwrap();
+
+    let mut blocks = Vec::new();
+    for (scenario, contents) in [
+        ("deserialize", "[profile.default]\nretries = 'bad'\n"),
+        (
+            "unknown-groups",
+            "[[profile.default.overrides]]\nfilter = 'all()'\ntest-group = 'missing-group'\n",
+        ),
+    ] {
+        fs::write(&config, contents).unwrap();
+        // This is run outside the test workspace so cargo's `.cargo/config`
+        // deprecation warning (which the normalizer cannot match once colored)
+        // does not appear.
+        let output = CargoNextestCli::for_test(&env_info)
+            .current_dir(temp_root)
+            .args([
+                "--color",
+                "always",
+                "list",
+                "--manifest-path",
+                project.manifest_path().as_str(),
+            ])
+            .arg("--tool-config-file")
+            .arg(format!("my-tool:{tool_config}"))
+            .unchecked(true)
+            .output();
+        push_scenario(&mut blocks, scenario, &output, temp_root);
+    }
+
+    // Add an error originating in the tool config, so the error line itself
+    // carries " provided by tool".
+    fs::write(&config, "").unwrap();
+    fs::write(
+        &tool_config,
+        "[[profile.default.overrides]]\nfilter = 'not a filter'\nretries = 2\n",
+    )
+    .unwrap();
+    let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(temp_root)
+        .args([
+            "--color",
+            "always",
+            "list",
+            "--manifest-path",
+            project.manifest_path().as_str(),
+        ])
+        .arg("--tool-config-file")
+        .arg(format!("my-tool:{tool_config}"))
+        .unchecked(true)
+        .output();
+    push_scenario(&mut blocks, "tool-compile-error", &output, temp_root);
+
+    // The experimental features hint names the config file too.
+    let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(temp_root)
+        .env_remove("NEXTEST_EXPERIMENTAL_BENCHMARKS")
+        .args([
+            "--color",
+            "always",
+            "bench",
+            "--manifest-path",
+            project.manifest_path().as_str(),
+        ])
+        .unchecked(true)
+        .output();
+    push_scenario(&mut blocks, "experimental-hint", &output, temp_root);
 
     insta::assert_snapshot!(blocks.join("\n\n"));
 }

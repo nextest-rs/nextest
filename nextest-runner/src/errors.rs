@@ -6,7 +6,10 @@
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
     config::{
-        core::{ConfigExperimental, ConfigPath, ConfigPathResolveError, NextestConfig, ToolName},
+        core::{
+            ConfigExperimental, ConfigPath, ConfigPathResolveError, ConfigStyles, NextestConfig,
+            ToolName,
+        },
         elements::{CustomTestGroup, TestGroup},
         scripts::{ProfileScriptType, ScriptId, ScriptType},
     },
@@ -29,6 +32,7 @@ use etcetera::HomeDirError;
 use itertools::{Either, Itertools};
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::{RustBinaryId, TestCaseName};
+use owo_colors::{OwoColorize, Style};
 use quick_junit::ReportUuid;
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
@@ -46,10 +50,7 @@ use thiserror::Error;
 
 /// An error that occurred while parsing the config.
 #[derive(Debug, Error)]
-#[error(
-    "failed to parse nextest config at `{config_file}`{}",
-    provided_by_tool(tool.as_ref())
-)]
+#[error("{}", self.display_header(ConfigStyles::default()))]
 #[non_exhaustive]
 pub struct ConfigParseError {
     config_file: ConfigErrorPath,
@@ -100,6 +101,24 @@ impl ConfigParseError {
         &self.config_file
     }
 
+    /// Renders "`path` provided by tool `x`".
+    pub fn display_file(&self, styles: ConfigStyles) -> impl fmt::Display + '_ {
+        DisplayConfigFile {
+            error: self,
+            styles,
+        }
+    }
+
+    /// Renders the full "failed to parse nextest config at ..." heading.
+    ///
+    /// The Display impl is this with no styling.
+    pub fn display_header(&self, styles: ConfigStyles) -> impl fmt::Display + '_ {
+        DisplayConfigHeader {
+            error: self,
+            styles,
+        }
+    }
+
     /// Returns the tool name associated with this error.
     pub fn tool(&self) -> Option<&ToolName> {
         self.tool.as_ref()
@@ -108,6 +127,37 @@ impl ConfigParseError {
     /// Returns the kind of error this is.
     pub fn kind(&self) -> &ConfigParseErrorKind {
         &self.kind
+    }
+}
+
+struct DisplayConfigFile<'a> {
+    error: &'a ConfigParseError,
+    styles: ConfigStyles,
+}
+
+impl fmt::Display for DisplayConfigFile<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "`{}`{}",
+            self.error.display_config_file().style(self.styles.path),
+            provided_by_tool(self.error.tool(), self.styles.tool),
+        )
+    }
+}
+
+struct DisplayConfigHeader<'a> {
+    error: &'a ConfigParseError,
+    styles: ConfigStyles,
+}
+
+impl fmt::Display for DisplayConfigHeader<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "failed to parse nextest config at {}",
+            self.error.display_file(self.styles),
+        )
     }
 }
 
@@ -149,11 +199,23 @@ pub enum ConfigPathsCaptureError {
     WorkspaceRoot(#[source] ResolvePathError),
 }
 
-/// Returns the string ` provided by tool <tool>`, if `tool` is `Some`.
-pub fn provided_by_tool(tool: Option<&ToolName>) -> String {
-    match tool {
-        Some(tool) => format!(" provided by tool `{tool}`"),
-        None => String::new(),
+/// Renders " provided by tool `x`" when a tool provided the file, and nothing
+/// otherwise.
+pub fn provided_by_tool(tool: Option<&ToolName>, style: Style) -> impl fmt::Display + '_ {
+    ProvidedByTool { tool, style }
+}
+
+struct ProvidedByTool<'a> {
+    tool: Option<&'a ToolName>,
+    style: Style,
+}
+
+impl fmt::Display for ProvidedByTool<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.tool {
+            Some(tool) => write!(f, " provided by tool `{}`", tool.style(self.style)),
+            None => Ok(()),
+        }
     }
 }
 

@@ -1,0 +1,39 @@
+---
+source: integration-tests/tests/integration/config_paths.rs
+expression: "blocks.join(\"\\n\\n\")"
+---
+scenario: deserialize
+exit code: 96
+[33;1mwarning[0m: in config file [36msrc/.config/tool.toml[0m provided by tool `[33;1mmy-tool[0m`, ignoring unknown configuration key: unknown-key
+[31;1merror[0m: failed to parse nextest config at `[36msrc/.config/nextest.toml[0m`
+
+Caused by:
+  profile.default.retries: invalid type: string "bad", expected a table ({ backoff = "fixed", count = 5 }) or a number (5)
+
+scenario: unknown-groups
+exit code: 96
+[33;1mwarning[0m: in config file [36msrc/.config/tool.toml[0m provided by tool `[33;1mmy-tool[0m`, ignoring unknown configuration key: unknown-key
+[31;1merror[0m: for config file `[36msrc/.config/nextest.toml[0m`, unknown test groups defined (known groups: [1m@global[0m):
+ - group `[1mmissing-group[0m` in overrides for profile `[1mdefault[0m`
+
+scenario: tool-compile-error
+exit code: 96
+[31;1merror[0m: for config file `[36msrc/.config/tool.toml[0m` provided by tool `[33;1mmy-tool[0m`, failed to parse [1mprofile.default.overrides[0m at index [1m0[0m
+  [31;1merror:[0m expected expression
+   ╭────
+ [2m1[0m │ not a filter
+   · [31m   ────┬────[0m
+   ·        [31m╰── [31mmissing expression[0m[0m
+   ╰────
+
+  [31;1merror:[0m expected end of expression
+   ╭────
+ [2m1[0m │ not a filter
+   · [31m   ────┬────[0m
+   ·        [31m╰── [31munparsed input[0m[0m
+   ╰────
+
+scenario: experimental-hint
+exit code: 95
+[31;1merror[0m: experimental feature not enabled: [1mbenchmarks[0m
+(hint: add to the [1mexperimental[0m list in [36msrc/.config/nextest.toml[0m, or set NEXTEST_EXPERIMENTAL_BENCHMARKS=1)
