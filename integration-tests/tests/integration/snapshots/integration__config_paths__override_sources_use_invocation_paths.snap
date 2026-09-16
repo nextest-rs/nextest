@@ -1,0 +1,31 @@
+---
+source: integration-tests/tests/integration/config_paths.rs
+expression: "blocks.join(\"\\n\\n\")"
+---
+cwd: [TEMP_DIR]/src
+--config-file: (none)
+group: path-group (max threads = 1)
+  * override for default profile with filter 'test(=test_success)':
+      fixture-project::basic:
+          test_success
+
+cwd: [TEMP_DIR]/src/nested/child
+--config-file: (none)
+group: path-group (max threads = 1)
+  * override for default profile with filter 'test(=test_success)':
+      fixture-project::basic:
+          test_success
+
+cwd: [TEMP_DIR]/src/nested/child
+--config-file: ../../.config/nextest.toml
+group: path-group (max threads = 1)
+  * override for default profile with filter 'test(=test_success)':
+      fixture-project::basic:
+          test_success
+
+cwd: [TEMP_DIR]
+--config-file: (none)
+group: path-group (max threads = 1)
+  * override for default profile with filter 'test(=test_success)':
+      fixture-project::basic:
+          test_success

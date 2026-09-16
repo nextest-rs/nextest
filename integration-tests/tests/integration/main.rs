@@ -1803,6 +1803,7 @@ fn test_show_config_test_groups() {
     let p = TempProject::new(&env_info).unwrap();
 
     let default_profile_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1816,6 +1817,7 @@ fn test_show_config_test_groups() {
     insta::assert_snapshot!(default_profile_output.stdout_as_str());
 
     let default_profile_all_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1830,6 +1832,7 @@ fn test_show_config_test_groups() {
     insta::assert_snapshot!(default_profile_all_output.stdout_as_str());
 
     let with_retries_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1844,6 +1847,7 @@ fn test_show_config_test_groups() {
     insta::assert_snapshot!(with_retries_output.stdout_as_str());
 
     let with_retries_all_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1859,6 +1863,7 @@ fn test_show_config_test_groups() {
     insta::assert_snapshot!(with_retries_all_output.stdout_as_str());
 
     let with_termination_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1873,6 +1878,7 @@ fn test_show_config_test_groups() {
     insta::assert_snapshot!(with_termination_output.stdout_as_str());
 
     let with_termination_all_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1886,6 +1892,40 @@ fn test_show_config_test_groups() {
         .output();
 
     insta::assert_snapshot!(with_termination_all_output.stdout_as_str());
+
+    // A tool override at the same profile and index as a repository override must be
+    // reported separately, attributed to the tool.
+    let tool_config_path = p.temp_root().join("tool-config.toml");
+    std::fs::write(
+        &tool_config_path,
+        r#"
+        [[profile.with-termination.overrides]]
+        filter = 'test(=test_slow_timeout_subprocess)'
+        test-group = '@global'
+        "#,
+    )
+    .unwrap();
+    let with_termination_tool_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "--tool-config-file",
+            &format!("my-tool:{tool_config_path}"),
+            "show-config",
+            "test-groups",
+            "--workspace",
+            "--all-targets",
+            "--profile=with-termination",
+        ])
+        .output();
+
+    // The tool config path is a temporary directory, so replace it for the snapshot.
+    let with_termination_tool_stdout = with_termination_tool_output
+        .stdout_as_str()
+        .replace(tool_config_path.as_str(), "<tool-config-path>");
+
+    insta::assert_snapshot!(with_termination_tool_stdout);
 }
 
 #[test]
