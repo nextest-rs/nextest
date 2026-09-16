@@ -1815,7 +1815,10 @@ impl CustomProfileImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{core::ToolName, utils::test_helpers::*};
+    use crate::config::{
+        core::{ConfigSourceKind, ToolName},
+        utils::test_helpers::*,
+    };
     use camino_tempfile::tempdir;
     use guppy::graph::cargo::BuildPlatform;
     use iddqd::{IdHashItem, IdHashMap, id_hash_map, id_upcast};
@@ -1839,21 +1842,21 @@ mod tests {
         fn unknown_config_keys(&mut self, source: &ConfigSource, unknown: &BTreeSet<String>) {
             self.unknown_keys
                 .insert_unique(UnknownKeys {
-                    tool: source.tool().cloned(),
+                    kind: source.kind().clone(),
                     config_file: source.path().absolute_path().to_owned(),
                     keys: unknown.clone(),
                 })
-                .unwrap();
+                .expect("each config source reports unknown keys at most once");
         }
 
         fn unknown_reserved_profiles(&mut self, source: &ConfigSource, profiles: &[&str]) {
             self.reserved_profiles
                 .insert_unique(ReservedProfiles {
-                    tool: source.tool().cloned(),
+                    kind: source.kind().clone(),
                     config_file: source.path().absolute_path().to_owned(),
                     profiles: profiles.iter().map(|&s| s.to_owned()).collect(),
                 })
-                .unwrap();
+                .expect("each config source reports reserved profiles at most once");
         }
 
         fn empty_script_sections(
@@ -1864,80 +1867,82 @@ mod tests {
         ) {
             self.empty_script_warnings
                 .insert_unique(EmptyScriptSections {
-                    tool: source.tool().cloned(),
+                    kind: source.kind().clone(),
                     config_file: source.path().absolute_path().to_owned(),
                     profile_name: profile_name.to_owned(),
                     empty_count,
                 })
-                .unwrap();
+                .expect(
+                    "each config source reports a profile's empty script sections at most once",
+                );
         }
 
         fn deprecated_script_config(&mut self, source: &ConfigSource) {
             self.deprecated_scripts
                 .insert_unique(DeprecatedScripts {
-                    tool: source.tool().cloned(),
+                    kind: source.kind().clone(),
                     config_file: source.path().absolute_path().to_owned(),
                 })
-                .unwrap();
+                .expect("each config source reports deprecated script config at most once");
         }
     }
 
-    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
     struct UnknownKeys {
-        tool: Option<ToolName>,
+        kind: ConfigSourceKind,
         config_file: Utf8PathBuf,
         keys: BTreeSet<String>,
     }
 
     impl IdHashItem for UnknownKeys {
-        type Key<'a> = Option<&'a ToolName>;
+        type Key<'a> = &'a ConfigSourceKind;
         fn key(&self) -> Self::Key<'_> {
-            self.tool.as_ref()
+            &self.kind
         }
         id_upcast!();
     }
 
-    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
     struct ReservedProfiles {
-        tool: Option<ToolName>,
+        kind: ConfigSourceKind,
         config_file: Utf8PathBuf,
         profiles: Vec<String>,
     }
 
     impl IdHashItem for ReservedProfiles {
-        type Key<'a> = Option<&'a ToolName>;
+        type Key<'a> = &'a ConfigSourceKind;
         fn key(&self) -> Self::Key<'_> {
-            self.tool.as_ref()
+            &self.kind
         }
         id_upcast!();
     }
 
-    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
     struct DeprecatedScripts {
-        tool: Option<ToolName>,
+        kind: ConfigSourceKind,
         config_file: Utf8PathBuf,
     }
 
     impl IdHashItem for DeprecatedScripts {
-        type Key<'a> = Option<&'a ToolName>;
+        type Key<'a> = &'a ConfigSourceKind;
         fn key(&self) -> Self::Key<'_> {
-            self.tool.as_ref()
+            &self.kind
         }
         id_upcast!();
     }
 
-    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
     struct EmptyScriptSections {
-        tool: Option<ToolName>,
+        kind: ConfigSourceKind,
         config_file: Utf8PathBuf,
         profile_name: String,
         empty_count: usize,
     }
 
     impl IdHashItem for EmptyScriptSections {
-        type Key<'a> = (&'a Option<ToolName>, &'a str);
+        type Key<'a> = (&'a ConfigSourceKind, &'a str);
         fn key(&self) -> Self::Key<'_> {
-            (&self.tool, &self.profile_name)
+            (&self.kind, &self.profile_name)
         }
         id_upcast!();
     }
@@ -2022,7 +2027,7 @@ mod tests {
             warnings.unknown_keys,
             id_hash_map! {
                 UnknownKeys {
-                    tool: None,
+                    kind: ConfigSourceKind::DiscoveredRepository,
                     config_file: workspace_root.join(".config/nextest.toml"),
                     keys: maplit::btreeset! {
                         "ignored1".to_owned(),
@@ -2031,7 +2036,7 @@ mod tests {
                     }
                 },
                 UnknownKeys {
-                    tool: Some(tool_name("my-tool")),
+                    kind: ConfigSourceKind::Tool(tool_name("my-tool")),
                     config_file: tool_path.clone(),
                     keys: maplit::btreeset! {
                         "store.ignored4".to_owned(),
@@ -2045,12 +2050,12 @@ mod tests {
             warnings.reserved_profiles,
             id_hash_map! {
                 ReservedProfiles {
-                    tool: None,
+                    kind: ConfigSourceKind::DiscoveredRepository,
                     config_file: workspace_root.join(".config/nextest.toml"),
                     profiles: vec!["default-foo".to_owned()],
                 },
                 ReservedProfiles {
-                    tool: Some(tool_name("my-tool")),
+                    kind: ConfigSourceKind::Tool(tool_name("my-tool")),
                     config_file: tool_path,
                     profiles: vec!["default-bar".to_owned()],
                 }
@@ -2140,19 +2145,19 @@ mod tests {
             warnings.empty_script_warnings,
             id_hash_map! {
                 EmptyScriptSections {
-                    tool: None,
+                    kind: ConfigSourceKind::DiscoveredRepository,
                     config_file: workspace_root.join(".config/nextest.toml"),
                     profile_name: "default".to_owned(),
                     empty_count: 1,
                 },
                 EmptyScriptSections {
-                    tool: None,
+                    kind: ConfigSourceKind::DiscoveredRepository,
                     config_file: workspace_root.join(".config/nextest.toml"),
                     profile_name: "custom".to_owned(),
                     empty_count: 2,
                 },
                 EmptyScriptSections {
-                    tool: Some(tool_name("tool")),
+                    kind: ConfigSourceKind::Tool(tool_name("tool")),
                     config_file: tool_path,
                     profile_name: "tool".to_owned(),
                     empty_count: 1,
@@ -2203,11 +2208,11 @@ mod tests {
             warnings.deprecated_scripts,
             id_hash_map! {
                 DeprecatedScripts {
-                    tool: None,
+                    kind: ConfigSourceKind::DiscoveredRepository,
                     config_file: graph.workspace().root().join(".config/nextest.toml"),
                 },
                 DeprecatedScripts {
-                    tool: Some(tool_name("my-tool")),
+                    kind: ConfigSourceKind::Tool(tool_name("my-tool")),
                     config_file: tool_path,
                 }
             }
