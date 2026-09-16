@@ -38,9 +38,7 @@ use crate::{
     run_mode::NextestRunMode,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use config::{
-    Config, ConfigBuilder, ConfigError, File, FileFormat, FileSourceString, builder::DefaultState,
-};
+use config::{Config, ConfigBuilder, ConfigError, File, FileFormat, builder::DefaultState};
 use iddqd::IdOrdMap;
 use indexmap::IndexMap;
 use nextest_filtering::{
@@ -339,11 +337,10 @@ impl NextestConfig {
             .expect("default config is always valid");
 
         let mut unknown = BTreeSet::new();
-        let deserialized: NextestConfigDeserialize =
-            serde_ignored::deserialize(config, |path: serde_ignored::Path| {
-                unknown.insert(path.to_string());
-            })
-            .expect("default config is always valid");
+        let deserialized = Self::deserialize_config(config, |path| {
+            unknown.insert(path.to_string());
+        })
+        .expect("default config is always valid");
 
         // Make sure there aren't any unknown keys in the default config, since it is
         // embedded/shipped with this binary.
@@ -397,11 +394,14 @@ impl NextestConfig {
             let Some(contents) = source.read()? else {
                 continue;
             };
-            let file = File::from_str(&contents, FileFormat::Toml);
+            let file_config = Config::builder()
+                .add_source(File::from_str(&contents, FileFormat::Toml))
+                .build()
+                .map_err(|error| ConfigParseError::new(&source, error.into()))?;
             Self::deserialize_individual_config(
                 pcx,
                 &source,
-                file.clone(),
+                &file_config,
                 &mut compiled,
                 experimental,
                 warnings,
@@ -411,13 +411,16 @@ impl NextestConfig {
             )?;
 
             // This is the final, composite builder used at the end.
-            composite_builder = composite_builder.add_source(file);
+            composite_builder = composite_builder.add_source(file_config);
         }
 
-        // The unknown set is ignored here because any values in it have already been reported in
-        // deserialize_individual_config.
         let config_file = selection.repo_config_path(paths)?;
-        let (config, _unknown) = Self::build_and_deserialize_config(&composite_builder)
+        let composite = composite_builder
+            .build()
+            .map_err(|error| ConfigParseError::from_path(&config_file, error.into()))?;
+        // Unknown keys are ignored here because any values in it have already been reported in
+        // deserialize_individual_config.
+        let config = Self::deserialize_config(composite, |_| {})
             .map_err(|kind| ConfigParseError::from_path(&config_file, kind))?;
 
         let config = config.into_config_impl();
@@ -442,7 +445,7 @@ impl NextestConfig {
     fn deserialize_individual_config(
         pcx: &ParseContext<'_>,
         source: &ConfigSource,
-        file: File<FileSourceString, FileFormat>,
+        file_config: &Config,
         compiled_out: &mut CompiledByProfile,
         experimental: &BTreeSet<ConfigExperimental>,
         warnings: &mut impl ConfigWarnings,
@@ -452,10 +455,15 @@ impl NextestConfig {
     ) -> Result<(), ConfigParseError> {
         // Try building default builder + this file to get good error attribution and handle
         // overrides additively.
-        let default_builder = Self::make_default_config();
-        let this_builder = default_builder.add_source(file);
-        let (mut this_config, unknown) = Self::build_and_deserialize_config(&this_builder)
-            .map_err(|kind| ConfigParseError::new(source, kind))?;
+        let layered = Self::make_default_config()
+            .add_source(file_config.clone())
+            .build()
+            .map_err(|error| ConfigParseError::new(source, error.into()))?;
+        let mut unknown = BTreeSet::new();
+        let mut this_config = Self::deserialize_config(layered, |path| {
+            unknown.insert(path.to_string());
+        })
+        .map_err(|kind| ConfigParseError::new(source, kind))?;
 
         if !unknown.is_empty() {
             warnings.unknown_config_keys(source, &unknown);
@@ -524,13 +532,10 @@ impl NextestConfig {
             }
         }
 
-        let duplicate_ids: BTreeSet<_> = this_config.scripts.duplicate_ids().cloned().collect();
-        if !duplicate_ids.is_empty() {
-            return Err(ConfigParseError::new(
-                source,
-                ConfigParseErrorKind::DuplicateConfigScriptNames(duplicate_ids),
-            ));
-        }
+        this_config
+            .scripts
+            .check_duplicate_ids()
+            .map_err(|kind| ConfigParseError::new(source, kind))?;
 
         // Check that setup scripts are named as expected.
         let (valid_scripts, invalid_scripts): (BTreeSet<_>, _) = this_config
@@ -836,17 +841,11 @@ impl NextestConfig {
         })
     }
 
-    /// This returns a tuple of (config, ignored paths).
-    fn build_and_deserialize_config(
-        builder: &ConfigBuilder<DefaultState>,
-    ) -> Result<(NextestConfigDeserialize, BTreeSet<String>), ConfigParseErrorKind> {
-        let config = builder.build_cloned()?;
-
-        let mut ignored = BTreeSet::new();
-        let mut cb = |path: serde_ignored::Path| {
-            ignored.insert(path.to_string());
-        };
-        let ignored_de = serde_ignored::Deserializer::new(config, &mut cb);
+    fn deserialize_config(
+        config: Config,
+        mut ignored: impl FnMut(serde_ignored::Path<'_>),
+    ) -> Result<NextestConfigDeserialize, ConfigParseErrorKind> {
+        let ignored_de = serde_ignored::Deserializer::new(config, &mut ignored);
         let config: NextestConfigDeserialize = serde_path_to_error::deserialize(ignored_de)
             .map_err(|error| {
                 // Both serde_path_to_error and the latest versions of the
@@ -863,7 +862,7 @@ impl NextestConfig {
                 )))
             })?;
 
-        Ok((config, ignored))
+        Ok(config)
     }
 }
 
