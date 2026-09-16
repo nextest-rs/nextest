@@ -184,6 +184,9 @@ pub struct NextestConfig {
     compiled: CompiledByProfile,
 }
 
+/// The config path to the default profile's default-filter.
+const DEFAULT_PROFILE_DEFAULT_FILTER_KEY: &str = "profile.default.default-filter";
+
 impl NextestConfig {
     /// The default location of the config within the path: `.config/nextest.toml`, used to read the
     /// config from the given directory.
@@ -595,11 +598,21 @@ impl NextestConfig {
         );
 
         // Compile the overrides for this file.
+        //
+        // The default-config.toml shipped with nextest sets default-filter only
+        // on profile.default, so that is the only profile that can carry a
+        // filter that this file did not write.
+        let file_default_filter =
+            match file_config.get::<String>(DEFAULT_PROFILE_DEFAULT_FILTER_KEY) {
+                Ok(filter) => Some(filter),
+                Err(ConfigError::NotFound(_)) => None,
+                Err(error) => return Err(ConfigParseError::new(source, error.into())),
+            };
         let this_compiled = CompiledByProfile::new(
             pcx,
             source,
             &this_config,
-            ProfileDefaultFilter::SetByThisFile(this_config.default_profile().default_filter()),
+            ProfileDefaultFilter::new(file_default_filter.as_deref()),
         )
         .map_err(|kind| ConfigParseError::new(source, kind))?;
 
@@ -1598,7 +1611,6 @@ struct StoreConfigImpl {
 
 #[derive(Clone, Debug)]
 pub(in crate::config) struct DefaultProfileImpl {
-    default_filter: String,
     test_threads: TestThreads,
     threads_required: ThreadsRequired,
     run_extra_args: Vec<String>,
@@ -1623,9 +1635,6 @@ pub(in crate::config) struct DefaultProfileImpl {
 impl DefaultProfileImpl {
     fn new(p: CustomProfileImpl) -> Self {
         Self {
-            default_filter: p
-                .default_filter
-                .expect("default-filter present in default profile"),
             test_threads: p
                 .test_threads
                 .expect("test-threads present in default profile"),
@@ -1670,10 +1679,6 @@ impl DefaultProfileImpl {
             ),
             inherits: Inherits::new(p.inherits),
         }
-    }
-
-    pub(in crate::config) fn default_filter(&self) -> &str {
-        &self.default_filter
     }
 
     pub(in crate::config) fn inherits(&self) -> Option<&str> {
@@ -1821,13 +1826,16 @@ mod tests {
     use super::*;
     use crate::config::{
         core::{ConfigSourceKind, ToolName},
+        overrides::CompiledDefaultFilterSection,
         utils::test_helpers::*,
     };
     use camino_tempfile::{Utf8TempDir, tempdir};
     use guppy::graph::cargo::BuildPlatform;
     use iddqd::{IdHashItem, IdHashMap, id_hash_map, id_upcast};
+    use nextest_filtering::{CompiledExpr, FiltersetKind};
     use nextest_metadata::TestCaseName;
     use std::time::Duration;
+    use test_case::test_case;
 
     fn tool_name(s: &str) -> ToolName {
         ToolName::new(s.into()).unwrap()
@@ -2482,5 +2490,108 @@ mod tests {
             },
             "each file is warned about exactly the unknown keys it wrote"
         );
+    }
+
+    #[test_case("", Some("test(tool)"), "test(tool)"; "repo config omits the default profile")]
+    #[test_case("[profile.default]\nretries = 1", Some("test(tool)"), "test(tool)"; "repo config sets no default filter")]
+    #[test_case("[profile.default]\ndefault-filter = 'test(repo)'", Some("test(tool)"), "test(repo)"; "repo config sets a default filter")]
+    // With no file setting a default filter, the value can only come from
+    // CompiledByProfile::for_default_config.
+    #[test_case("[profile.default]\nretries = 1", None, "all()"; "no file sets a default filter")]
+    fn default_filter_precedence_between_tool_and_repo_configs(
+        repo_contents: &str,
+        tool_filter: Option<&str>,
+        expected_filter: &str,
+    ) {
+        let dir = tempdir().unwrap();
+        let graph = temp_workspace(&dir, repo_contents);
+        let tool_config_files: Vec<_> = tool_filter
+            .map(|filter| {
+                tool_config_file(
+                    &dir,
+                    "tool.toml",
+                    "t",
+                    &format!("[profile.default]\ndefault-filter = '{filter}'"),
+                )
+            })
+            .into_iter()
+            .collect();
+        let pcx = ParseContext::new(&graph);
+        let config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &tool_config_files,
+            &BTreeSet::new(),
+        )
+        .unwrap();
+        let profile = config
+            .profile(NextestConfig::DEFAULT_PROFILE)
+            .expect("default profile exists")
+            .apply_build_platforms(&build_platforms());
+        let expected_expr = Filterset::parse(
+            expected_filter.to_owned(),
+            &pcx,
+            FiltersetKind::DefaultFilter,
+            &KnownGroups::Unavailable,
+        )
+        .expect("expected filter parses")
+        .compiled;
+        assert_eq!(profile.default_filter().expr, expected_expr);
+        assert_eq!(
+            profile.default_filter().profile,
+            NextestConfig::DEFAULT_PROFILE
+        );
+        assert!(
+            matches!(
+                profile.default_filter().section,
+                CompiledDefaultFilterSection::Profile
+            ),
+            "{:?}",
+            profile.default_filter().section
+        );
+    }
+
+    #[test]
+    fn default_config_sets_default_filter_only_on_the_default_profile() {
+        let default_config = NextestConfig::default_config("foo");
+
+        let built_in = NextestConfig::make_default_config()
+            .build()
+            .expect("the built-in config builds");
+        let filter = built_in
+            .get::<String>(DEFAULT_PROFILE_DEFAULT_FILTER_KEY)
+            .expect("the built-in default profile sets a default-filter");
+
+        // The default filter defined in configuration must agree with
+        // CompiledDefaultFilter::for_default_config, which hardcodes
+        // CompiledExpr::ALL. (Why we don't just use the default filter is
+        // complicated, having to do with not passing around a PackageGraph
+        // unless necessary.)
+        let dir = tempdir().unwrap();
+        let graph = temp_workspace(&dir, "");
+        let compiled = Filterset::parse(
+            filter,
+            &ParseContext::new(&graph),
+            FiltersetKind::DefaultFilter,
+            &KnownGroups::Unavailable,
+        )
+        .expect("the built-in default-filter parses")
+        .compiled;
+        assert_eq!(compiled, CompiledExpr::ALL);
+
+        let names: Vec<&str> = default_config
+            .inner
+            .other_profiles()
+            .map(|(name, _)| name)
+            .collect();
+        assert_eq!(names, ["default-miri"]);
+        for (name, profile) in default_config.inner.other_profiles() {
+            assert_eq!(
+                profile.default_filter(),
+                None,
+                "built-in profile {name} sets no default-filter"
+            );
+        }
     }
 }
