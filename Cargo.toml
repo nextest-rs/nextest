@@ -27,7 +27,7 @@ bitflags = "2.13.2"
 bstr = { version = "1.13.0", default-features = false, features = ["std"] }
 bytesize = { version = "2.7.0", features = ["serde"] }
 bytes = "1.12.1"
-camino = "1.2.5"
+camino = "1.2.6"
 camino-anchored = "0.1.1"
 camino-tempfile = "1.4.1"
 camino-tempfile-ext = "0.3.3"
