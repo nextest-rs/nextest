@@ -325,6 +325,19 @@ fn test_cargo_env_vars() {
             std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_FALSE").as_deref(),
             Ok("test-PASSED-value-set-by-environment"),
         );
+
+        // A variable defined only in a file pulled in via the `include` key in
+        // .cargo/config should be picked up.
+        assert_eq!(
+            std::env::var("__NEXTEST_TESTING_INCLUDED_CONFIG").as_deref(),
+            Ok("test-PASSED-value-set-by-included-config"),
+        );
+        // A variable defined in both the main config and the included config:
+        // the including (main) config takes precedence over the included file.
+        assert_eq!(
+            std::env::var("__NEXTEST_TESTING_INCLUDED_CONFIG_OVERRIDDEN_BY_MAIN").as_deref(),
+            Ok("test-PASSED-value-set-by-main-config"),
+        );
     }
 
     // Since this test doesn't have a build script, assert that OUT_DIR isn't present at either

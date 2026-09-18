@@ -1,0 +1,9 @@
+# This file is pulled in via the `include` key in .cargo/config. It exists to
+# test that nextest honors Cargo's config `include` directive.
+[env]
+# A variable defined only in this included file.
+__NEXTEST_TESTING_INCLUDED_CONFIG = "test-PASSED-value-set-by-included-config"
+
+# A variable also defined in the main config; the main (including) config takes
+# precedence over this included file, so the test expects the main config's value.
+__NEXTEST_TESTING_INCLUDED_CONFIG_OVERRIDDEN_BY_MAIN = "test-FAILED-value-set-by-included-config"
