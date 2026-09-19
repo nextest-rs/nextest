@@ -155,6 +155,7 @@ nav:
           - docs/design/how-it-works.md
           - docs/design/why-process-per-test.md
           - docs/design/custom-test-harnesses.md
+          - docs/design/process-lifecycle.md
           - "Architecture":
                 - "The runner loop": docs/design/architecture/runner-loop.md
                 - "Signal handling": docs/design/architecture/signal-handling.md
