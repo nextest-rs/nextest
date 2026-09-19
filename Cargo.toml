@@ -60,7 +60,7 @@ datatest-stable = { version = "0.3.3", features = ["include-dir"] }
 debug-ignore = "1.0.5"
 derive-where = "1.6.1"
 dialoguer = "0.12.0"
-duct = "1.1.1"
+duct = "1.1.2"
 dunce = "1.0.5"
 eazip = { version = "0.2.5", default-features = false, features = ["deflate", "std", "zstd"] }
 enable-ansi-support = "0.3.1"
