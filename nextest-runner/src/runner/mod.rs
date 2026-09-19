@@ -15,6 +15,7 @@ mod executor;
 mod imp;
 mod internal_events;
 mod script_helpers;
+mod wrapper_report;
 
 #[cfg(unix)]
 #[path = "unix.rs"]
@@ -29,3 +30,4 @@ use executor::*;
 pub use imp::*;
 use internal_events::*;
 use script_helpers::*;
+use wrapper_report::*;
