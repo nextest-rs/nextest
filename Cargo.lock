@@ -1160,15 +1160,15 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eazip"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69ab813f875a12fbf8a699b0ff81147de79eb4b27431e866d211cf6bba05b2c9"
+checksum = "e1372eb1bb5831ac852e14afb327b4af414c4afd789ed5c8362c162f46759db5"
 dependencies = [
  "crc32fast",
  "flate2",
  "hashbrown 0.17.1",
  "memchr",
- "zstd",
+ "zstd 0.14.0",
 ]
 
 [[package]]
@@ -2104,7 +2104,7 @@ dependencies = [
  "whoami",
  "win32job",
  "windows-sys 0.61.2",
- "zstd",
+ "zstd 0.13.3",
 ]
 
 [[package]]
@@ -2685,7 +2685,7 @@ dependencies = [
  "win32job",
  "windows-sys 0.61.2",
  "xxhash-rust",
- "zstd",
+ "zstd 0.13.3",
 ]
 
 [[package]]
@@ -6045,7 +6045,16 @@ version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
 dependencies = [
- "zstd-safe",
+ "zstd-safe 7.2.4",
+]
+
+[[package]]
+name = "zstd"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf06bd8162af0734b344780deb55b42a2429ae430870d13fcc12f238e880fe6e"
+dependencies = [
+ "zstd-safe 8.0.0",
 ]
 
 [[package]]
@@ -6060,7 +6069,7 @@ dependencies = [
  "nextest-runner",
  "nextest-workspace-hack",
  "walkdir",
- "zstd",
+ "zstd 0.13.3",
 ]
 
 [[package]]
@@ -6073,10 +6082,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "zstd-sys"
-version = "2.0.15+zstd.1.5.7"
+name = "zstd-safe"
+version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb81183ddd97d0c74cedf1d50d85c8d08c1b8b68ee863bdee9e706eedba1a237"
+checksum = "ae42c0555055784c70058d19ba8e275528e8a99a706684868ace5da4e716a4ab"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.1.0+zstd.1.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ef0a8027ec3ee71300ab3bcbcd0393f434aa72b91ca6d635a39941deae8eea0"
 dependencies = [
  "cc",
  "pkg-config",
