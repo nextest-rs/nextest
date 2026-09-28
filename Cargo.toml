@@ -164,7 +164,7 @@ win32job = "2.0.3"
 windows-sys = "0.61.2"
 winnow = "1.0.4"
 xxhash-rust = { version = "0.8.18", features = ["xxh3", "xxh64"] }
-zstd = { version = "0.13.3", features = ["zstdmt"] }
+zstd = { version = "0.14.0", features = ["zstdmt"] }
 
 [workspace.lints.clippy]
 format_push_string = "warn"
