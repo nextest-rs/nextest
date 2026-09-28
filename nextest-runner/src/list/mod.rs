@@ -8,6 +8,7 @@
 //! * [`BinaryList`] for test binaries
 
 mod binary_list;
+mod custom_harness;
 mod display_filter;
 mod non_test_binaries;
 mod output_format;
