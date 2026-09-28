@@ -66,6 +66,7 @@ eazip = { version = "0.2.6", default-features = false, features = ["deflate", "s
 enable-ansi-support = "0.3.1"
 etcetera = "0.11.0"
 fixture-data = { path = "fixture-data" }
+flate2 = "1.1"
 fs-err = "3.3.1"
 future-queue = "0.4.0"
 futures = "0.3.34"
@@ -116,15 +117,6 @@ regex = "1.13.1"
 regex-syntax = "0.8.11"
 sapling-streampager = "0.12.0"
 rustls = { version = "0.23.45", default-features = false }
-self_update = { version = "0.44.0", default-features = false, features = [
-    "archive-tar",
-    "compression-flate2",
-    # nextest only uses self_update for archive extraction (ArchiveKind,
-    # Compression, Extract), not its HTTP client. But self_update's Download
-    # struct unconditionally calls http_client::get, so at least one HTTP
-    # backend must be enabled for it to compile.
-    "ureq",
-] }
 semver = "1.0.28"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_ignored = "0.1.14"

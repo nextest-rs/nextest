@@ -13,7 +13,6 @@ use mukti_metadata::{
     DigestAlgorithm, MuktiProject, MuktiReleasesJson, ReleaseLocation, ReleaseStatus,
 };
 use owo_colors::{OwoColorize, Style};
-use self_update::{ArchiveKind, Compression, Extract};
 use semver::{Version, VersionReq};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -553,13 +552,50 @@ impl MuktiUpdateContext<'_> {
         }
 
         // Now extract data from this archive.
-        Extract::from_source(tmp_archive_path.as_std_path())
-            .archive(ArchiveKind::Tar(Some(Compression::Gz)))
-            .extract_file(
-                tmp_archive_dir.path().as_std_path(),
-                self.bin_path_in_archive,
-            )
-            .map_err(UpdateError::SelfUpdate)?;
+        {
+            let mut archive = match fs::File::open(&tmp_archive_path) {
+                Ok(tf) => tar::Archive::new(flate2::read::GzDecoder::new(tf)),
+                Err(error) => {
+                    return Err(UpdateError::TempArchiveRead {
+                        archive_path: tmp_archive_path.clone(),
+                        error,
+                    });
+                }
+            };
+
+            let bin_path_in_archive = self
+                .bin_path_in_archive
+                .strip_prefix(".")
+                .unwrap_or(self.bin_path_in_archive);
+
+            let mut entries = match archive.entries() {
+                Ok(e) => e,
+                Err(error) => {
+                    return Err(UpdateError::TempArchiveRead {
+                        archive_path: tmp_archive_path,
+                        error,
+                    });
+                }
+            };
+
+            let Some(mut entry) = entries.find_map(|e| {
+                let entry = e.ok()?;
+
+                let path = &entry.path().ok()?;
+                (path.strip_prefix(".").unwrap_or(path) == bin_path_in_archive).then_some(entry)
+            }) else {
+                return Err(UpdateError::PathMissing {
+                    path: self.bin_path_in_archive.to_owned(),
+                });
+            };
+
+            entry
+                .unpack_in(&tmp_archive_dir)
+                .map_err(|error| UpdateError::TempArchiveRead {
+                    archive_path: tmp_archive_path,
+                    error,
+                })?;
+        }
 
         // Since we're currently restricted to .tar.gz which carries metadata with it, there's no
         // need to make this file executable.
