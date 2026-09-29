@@ -531,7 +531,7 @@ impl MuktiUpdateContext<'_> {
         // Now extract data from this archive.
         extract(
             &tmp_archive_path,
-            &self.bin_path_in_archive,
+            self.bin_path_in_archive,
             tmp_archive_dir.path(),
         )?;
 
