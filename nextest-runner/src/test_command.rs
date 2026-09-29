@@ -384,7 +384,7 @@ fn apply_package_env(cmd: &mut std::process::Command, package: &PackageMetadata<
         .env(
             "CARGO_PKG_RUST_VERSION",
             package
-                .minimum_rust_version()
+                .rust_version()
                 .map_or(String::new(), |v| v.to_string()),
         );
 }
