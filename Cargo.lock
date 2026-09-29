@@ -2581,6 +2581,7 @@ dependencies = [
  "clap",
  "clap_builder",
  "dof",
+ "either",
  "foldhash 0.2.0",
  "futures-channel",
  "futures-core",
