@@ -21,7 +21,7 @@ use nextest_metadata::{
 };
 use quick_junit::{FlakyOrRerun, Report};
 use regex::Regex;
-use std::{collections::BTreeSet, fs::File, process::Command, sync::LazyLock};
+use std::{collections::BTreeSet, fs::File, num::NonZero, process::Command, sync::LazyLock};
 
 static ANSI_ESCAPE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\x1b\[[0-9;]*m").expect("compiled the ANSI escape regex"));
@@ -369,6 +369,9 @@ struct ExpectedTestResults {
     /// (for example, under a `report-skipped` policy). Every id here has a
     /// `Skipped` disposition in `tests`.
     junit_skipped: BTreeSet<TestInstanceId>,
+    /// The stress index expected on every test result line, or `None` outside
+    /// of stress runs.
+    stress_index: Option<StressIndex>,
 }
 
 impl ExpectedTestResults {
@@ -380,7 +383,7 @@ impl ExpectedTestResults {
 
             for test in &fixture.test_cases {
                 let id = TestInstanceId::new(binary_id.as_str(), &test.name);
-                let disposition = Self::ran_or_skipped(fixture, test, properties);
+                let disposition = Self::ran_or_skipped(fixture, test, properties, None);
 
                 tests
                     .insert_unique(ExpectedTest { id, disposition })
@@ -391,10 +394,36 @@ impl ExpectedTestResults {
         Self {
             tests,
             junit_skipped: BTreeSet::new(),
+            stress_index: None,
         }
     }
 
     fn for_test_names(test_names: &[&str], properties: RunProperties) -> Self {
+        Self::for_test_names_impl(test_names, properties, None)
+    }
+
+    /// Returns the expected results for the given (1-indexed) iteration of a
+    /// stress run of the given test names, with `stress_count` iterations in
+    /// total.
+    fn for_stress_iteration(
+        test_names: &[&str],
+        properties: RunProperties,
+        iteration: NonZero<u32>,
+        stress_count: u32,
+    ) -> Self {
+        let stress_index = StressIndex {
+            current: iteration,
+            total: Some(stress_count),
+        };
+        Self::for_test_names_impl(test_names, properties, Some(stress_index))
+    }
+
+    fn for_test_names_impl(
+        test_names: &[&str],
+        properties: RunProperties,
+        stress_index: Option<StressIndex>,
+    ) -> Self {
+        let stress_iteration = stress_index.map(|index| index.current);
         let mut tests = IdOrdMap::new();
 
         // Guard against typos: every requested name must exist in the fixture model.
@@ -408,7 +437,7 @@ impl ExpectedTestResults {
 
                 let disposition = if test_names.contains(&test.name.as_str()) {
                     unmatched.remove(test.name.as_str());
-                    Self::ran_or_skipped(fixture, test, properties)
+                    Self::ran_or_skipped(fixture, test, properties, stress_iteration)
                 } else {
                     ExpectedDisposition::Skipped(SkipReason::Filtered)
                 };
@@ -427,6 +456,7 @@ impl ExpectedTestResults {
         Self {
             tests,
             junit_skipped: BTreeSet::new(),
+            stress_index,
         }
     }
 
@@ -434,10 +464,11 @@ impl ExpectedTestResults {
         fixture: &TestSuiteFixture,
         test: &TestCaseFixture,
         properties: RunProperties,
+        stress_iteration: Option<NonZero<u32>>,
     ) -> ExpectedDisposition {
         match expected_skip_reason(fixture, test, properties) {
             Some(reason) => ExpectedDisposition::Skipped(reason),
-            None => ExpectedDisposition::Ran(test.expected_result(properties)),
+            None => ExpectedDisposition::Ran(test.expected_result(properties, stress_iteration)),
         }
     }
 
@@ -596,6 +627,31 @@ struct TestAttempt {
     #[expect(dead_code)]
     attempt: u32,
     result: TerminalCheckResult,
+    /// The stress index shown on the result line, or `None` if there wasn't
+    /// one.
+    stress_index: Option<StressIndex>,
+}
+
+/// A stress index, as shown on a test result line in a stress run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct StressIndex {
+    /// The 1-indexed iteration.
+    current: NonZero<u32>,
+    /// The total number of iterations, if known.
+    total: Option<u32>,
+}
+
+impl StressIndex {
+    /// Parses the stress index from the captures of a test result line.
+    fn from_captures(caps: &regex::Captures) -> Option<Self> {
+        let current = caps.name("stress_current")?;
+        Some(Self {
+            current: current.as_str().parse().expect("parsed stress index"),
+            total: caps
+                .name("stress_total")
+                .map(|m| m.as_str().parse().expect("parsed stress total")),
+        })
+    }
 }
 
 /// The actual outcome parsed from test output.
@@ -654,7 +710,11 @@ fn debug_run_properties(properties: RunProperties) -> String {
 
 /// The part of a test result line after the status: the duration, the
 /// progress, the binary ID, and the test name.
-const STATUS_LINE_TAIL: &str = r" \[[^\]]+\] \([^\)]+\) +(?<binary>.+?) +(?<test>.+)";
+///
+/// In stress runs, the stress index follows the duration, as `[current/total]`
+/// or `[current]`. It is captured in the `stress_current` and `stress_total`
+/// groups.
+const STATUS_LINE_TAIL: &str = r" \[[^\]]+\] (?:\[(?<stress_current>\d+)(?:/(?<stress_total>\d+))?\] )?\([^\)]+\) +(?<binary>.+?) +(?<test>.+)";
 
 /// Builds a regex for a test result line, where `status` matches everything
 /// before the duration (for example, `(?:TRY (?<attempt>\d+) )?PASS`).
@@ -691,7 +751,26 @@ static SUMMARY_RE: LazyLock<Regex> = LazyLock::new(|| {
     // The "passed" parenthetical may contain "N flaky" and/or "N leaky"
     // (e.g., "22 passed (1 flaky, 1 leaky)"). We capture only the leaky
     // count; flaky count is not tracked in ExpectedSummary.
-    Regex::new(r"Summary \[.*\] +(?<run>\d+) (?:tests?|benchmarks?) run: (?<passed>\d+) passed(?: \((?:\d+ flaky(?:, )?)?(?:(?<leaky>\d+) leaky)?\))?,?(?: (?<failed>\d+) (?:failed|timed out)(?: \((?<leak_failed>\d+) due to being leaky\))?,?)? (?<skipped>\d+) skipped").unwrap()
+    //
+    // In stress runs, each iteration ends with a summary line of the form
+    // "Stress test [duration] iteration N/M: <counts>", which is matched here
+    // as well.
+    Regex::new(r"(?:Summary \[.*\]|Stress test \[.*\] iteration \d+(?:/\d+)?:) +(?<run>\d+) (?:tests?|benchmarks?) run: (?<passed>\d+) passed(?: \((?:\d+ flaky(?:, )?)?(?:(?<leaky>\d+) leaky)?\))?,?(?: (?<failed>\d+) (?:failed|timed out)(?: \((?<leak_failed>\d+) due to being leaky\))?,?)? (?<skipped>\d+) skipped").unwrap()
+});
+// The start of a stress run iteration with a fixed count.
+// Format: "Stress test iteration N/M (<elapsed> elapsed so far, ...)"
+static STRESS_ITERATION_START_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s*Stress test iteration (?<current>\d+)/\d+ \(").unwrap());
+// The summary line at the end of a stress run with a fixed count.
+// Format: "Summary [duration] N/M stress run iterations: P passed(, F failed)?"
+//
+// This is anchored at the end so that cancelled stress runs, which have a
+// "; cancelled due to ..." suffix, aren't matched.
+static STRESS_SUMMARY_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"Summary \[.*\] +(?<completed>\d+)/(?<total>\d+) stress run iterations?: (?<passed>\d+) passed(?:, (?<failed>\d+) failed)?$",
+    )
+    .unwrap()
 });
 
 impl ActualTestResults {
@@ -701,6 +780,11 @@ impl ActualTestResults {
     /// With retries enabled, a test may appear multiple times in the output with
     /// different results (e.g., TRY 1 FAIL, TRY 2 FAIL, TRY 3 PASS).
     fn parse(output: &str) -> Self {
+        Self::parse_lines(output.lines())
+    }
+
+    /// Parses test results from the lines of nextest output.
+    fn parse_lines<'a>(lines: impl IntoIterator<Item = &'a str>) -> Self {
         let mut tests = IdOrdMap::new();
         let mut summary = None;
 
@@ -716,7 +800,11 @@ impl ActualTestResults {
             };
             let test_name = TestCaseName::new(&caps["test"]);
             let id = TestInstanceId::new(&caps["binary"], &test_name);
-            let attempt_record = TestAttempt { attempt, result };
+            let attempt_record = TestAttempt {
+                attempt,
+                result,
+                stress_index: StressIndex::from_captures(caps),
+            };
 
             match tests.entry(&id) {
                 iddqd::id_ord_map::Entry::Occupied(mut entry) => {
@@ -740,6 +828,7 @@ impl ActualTestResults {
             let attempt_record = TestAttempt {
                 attempt: caps["attempt"].parse().expect("parsed attempt number"),
                 result: TerminalCheckResult::FlakyFail,
+                stress_index: StressIndex::from_captures(caps),
             };
 
             match tests.entry(&id) {
@@ -773,6 +862,7 @@ impl ActualTestResults {
             let attempt_record = TestAttempt {
                 attempt: caps["attempt"].parse().expect("parsed attempt number"),
                 result: TerminalCheckResult::Pass,
+                stress_index: StressIndex::from_captures(caps),
             };
 
             match tests.entry(&id) {
@@ -802,7 +892,7 @@ impl ActualTestResults {
         // we skip the duplicate TRY/status lines that would inflate attempt
         // counts.
         let mut past_summary = false;
-        for line in output.lines() {
+        for line in lines {
             if past_summary {
                 // After the summary, only parse FLKY-FL and FLAKY lines.
                 // Other status lines are duplicates of earlier output.
@@ -864,6 +954,73 @@ impl ActualTestResults {
         }
 
         Self { tests, summary }
+    }
+}
+
+/// Stress run results parsed from actual test runner output.
+#[derive(Clone, Debug)]
+struct ActualStressResults {
+    /// The results of each iteration, in order.
+    iterations: Vec<ActualTestResults>,
+    /// The parsed stress run summary line.
+    summary: Option<StressSummary>,
+}
+
+/// Stress run summary counts, either expected or parsed from actual test
+/// output.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct StressSummary {
+    completed: u32,
+    total: u32,
+    passed: u32,
+    failed: u32,
+}
+
+impl ActualStressResults {
+    /// Parses stress run results from nextest output.
+    ///
+    /// The output is split into iterations at each iteration's start line,
+    /// and each iteration is parsed with [`ActualTestResults::parse_lines`].
+    /// Parsing stops at the stress run summary line, after which nextest
+    /// repeats failure lines.
+    fn parse(output: &str) -> Self {
+        let mut iteration_lines: Vec<Vec<&str>> = Vec::new();
+        let mut summary = None;
+
+        for line in output.lines() {
+            if let Some(caps) = STRESS_ITERATION_START_RE.captures(line) {
+                let current: usize = caps["current"].parse().expect("parsed stress iteration");
+                assert_eq!(
+                    current,
+                    iteration_lines.len() + 1,
+                    "stress iterations should be seen in order\n\n\
+                     --- output ---\n{output}\n--- end output ---"
+                );
+                iteration_lines.push(Vec::new());
+            } else if let Some(caps) = STRESS_SUMMARY_RE.captures(line) {
+                summary = Some(StressSummary {
+                    completed: caps["completed"].parse().unwrap(),
+                    total: caps["total"].parse().unwrap(),
+                    passed: caps["passed"].parse().unwrap(),
+                    failed: caps
+                        .name("failed")
+                        .map(|m| m.as_str().parse().unwrap())
+                        .unwrap_or(0),
+                });
+                break;
+            } else if let Some(lines) = iteration_lines.last_mut() {
+                lines.push(line);
+            }
+        }
+
+        let iterations = iteration_lines
+            .into_iter()
+            .map(ActualTestResults::parse_lines)
+            .collect();
+        Self {
+            iterations,
+            summary,
+        }
     }
 }
 
@@ -942,6 +1099,18 @@ fn verify_expected_in_actual(
                                     output
                                 );
                             }
+                        }
+
+                        for attempt in &actual.attempts {
+                            assert_eq!(
+                                attempt.stress_index,
+                                expected.stress_index,
+                                "{}: stress index mismatch (attempts: {:?})\n\n\
+                                 --- output ---\n{}\n--- end output ---",
+                                expected_test.id.full_name(),
+                                actual.attempts,
+                                output
+                            );
                         }
                     }
                     None => {
@@ -1208,6 +1377,63 @@ pub fn check_run_output_for_test_names(
     verify_run(&expected, &actual, &output_str, properties);
 }
 
+/// Checks the output of a stress run with a fixed iteration count against
+/// fixture data.
+///
+/// This function verifies each iteration of a stress run of the given tests,
+/// in the same way as [`check_run_output_for_test_names`], and verifies the
+/// stress run summary. Every iteration must run to completion, so the stress
+/// run must not be cancelled (for example, by fail-fast).
+#[track_caller]
+pub fn check_stress_run_output(
+    output: &[u8],
+    test_names: &[&str],
+    stress_count: u32,
+    properties: RunProperties,
+) {
+    let output_str = String::from_utf8(output.to_vec()).unwrap();
+
+    println!("{output_str}");
+
+    let actual = ActualStressResults::parse(&output_str);
+    eprintln!("actual: {actual:?}");
+
+    assert_eq!(
+        actual.iterations.len(),
+        stress_count as usize,
+        "stress iteration count mismatch\n\n--- output ---\n{output_str}\n--- end output ---"
+    );
+
+    let mut failed = 0;
+    let iterations = (1..=stress_count).map(|i| NonZero::new(i).expect("the range starts at 1"));
+    for (iteration, actual_iteration) in iterations.zip(&actual.iterations) {
+        let expected = ExpectedTestResults::for_stress_iteration(
+            test_names,
+            properties,
+            iteration,
+            stress_count,
+        );
+        eprintln!("expected (iteration {iteration}): {expected:?}");
+
+        verify_run(&expected, actual_iteration, &output_str, properties);
+        if expected.summary().fail_count > 0 {
+            failed += 1;
+        }
+    }
+
+    let expected_summary = StressSummary {
+        completed: stress_count,
+        total: stress_count,
+        passed: stress_count - failed,
+        failed,
+    };
+    assert_eq!(
+        actual.summary.as_ref(),
+        Some(&expected_summary),
+        "stress run summary mismatch\n\n--- output ---\n{output_str}\n--- end output ---"
+    );
+}
+
 /// Checks the output of a rerun against fixture data.
 ///
 /// This function verifies that a rerun only executes tests that failed in the
@@ -1344,6 +1570,7 @@ fn expected_for_rerun(expected: &ExpectedTestResults) -> ExpectedTestResults {
     ExpectedTestResults {
         tests,
         junit_skipped: BTreeSet::new(),
+        stress_index: None,
     }
 }
 

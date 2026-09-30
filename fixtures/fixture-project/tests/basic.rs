@@ -62,6 +62,30 @@ fn test_flaky_mod_6() {
     }
 }
 
+/// Returns the 0-indexed stress run iteration, or `None` outside of stress
+/// runs.
+fn nextest_stress_current() -> Option<u32> {
+    match env::var("NEXTEST_STRESS_CURRENT") {
+        Ok(var) if var == "none" => None,
+        Ok(var) => Some(
+            var.parse()
+                .expect("NEXTEST_STRESS_CURRENT should be an integer or \"none\""),
+        ),
+        Err(_) => None,
+    }
+}
+
+#[test]
+fn test_stress_fail_first_iteration() {
+    // Fail only on the first iteration of a stress run, so that later
+    // iterations pass.
+    assert_ne!(
+        nextest_stress_current(),
+        Some(0),
+        "failing on the first stress iteration"
+    );
+}
+
 #[test]
 #[should_panic]
 fn test_success_should_panic() {

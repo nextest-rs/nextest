@@ -3164,6 +3164,47 @@ fn test_string_filters_without_filterset() {
     }
 }
 
+/// Test the exit code and output of a stress run with fail-fast off, where an
+/// earlier iteration fails and the last iteration passes.
+///
+/// `test_stress_fail_first_iteration` fails on the first iteration of a stress
+/// run and passes on later iterations.
+#[test]
+fn test_stress_run_earlier_iteration_failed() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--stress-count",
+            "2",
+            "--no-fail-fast",
+            "-E",
+            "test(=test_stress_fail_first_iteration)",
+        ])
+        .unchecked(true)
+        .output();
+
+    // BUG (#3624): the exit code only reflects the last iteration, so the run
+    // exits 0 even though the first iteration failed.
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::OK),
+        "correct exit code for command\n{output}"
+    );
+    check_stress_run_output(
+        &output.stderr,
+        &["test_stress_fail_first_iteration"],
+        2,
+        RunProperties::empty(),
+    );
+}
+
 /// Test that `--run-ignored only` runs only ignored tests.
 #[test]
 fn test_run_ignored() {
