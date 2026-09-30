@@ -1,6 +1,5 @@
 ---
 source: integration-tests/tests/integration/record_replay.rs
-assertion_line: 352
 expression: "redact_dynamic_fields(&info_output.stdout_as_str(), temp_root)"
 ---
 Run 10000001-0000-0000-0000-000000000001
@@ -15,11 +14,11 @@ Run 10000001-0000-0000-0000-000000000001
   replayable:       yes
 
   tests:
-    passed:         22
+    passed:         23
     failed:         10
 
   sizes:            compressed  uncompressed  entries
-    log                 <size>        <size>       78
-    store               <size>        <size>       48
+    log                 <size>        <size>       80
+    store               <size>        <size>       49
                     ──────────  ────────────  ───────
-    total               <size>        <size>      126
+    total               <size>        <size>      129
