@@ -646,54 +646,46 @@ fn debug_run_properties(properties: RunProperties) -> String {
 // Example: "  TRY 3 PASS [   1.003s] (1/1) fixture-project::basic test_flaky..."
 //
 // We capture ALL result lines (including intermediate TRY N lines with progress like "(─────)")
-// to track all attempts. The attempt number is captured in group 1 (if present).
-// Groups: 1=attempt (optional), 2=binary_id, 3=test_name
+// to track all attempts. The attempt number is captured in the `attempt` group (if present).
+// Named groups: attempt (optional), binary, test
 //
 // NOTE: We use \s* (zero or more whitespace) instead of \s+ because some lines may have
 // varying amounts of leading whitespace depending on the test status and retry attempt.
-static PASS_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*(?:TRY (\d+) )?PASS \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
-});
-static LEAK_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*(?:TRY (\d+) )?LEAK \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
-});
-static LEAK_FAIL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*(?:TRY (\d+) )?(?:LEAK-FAIL|LKFAIL) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)")
-        .unwrap()
-});
-static FAIL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*(?:TRY (\d+) )?FAIL \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
-});
+
+/// The part of a test result line after the status: the duration, the
+/// progress, the binary ID, and the test name.
+const STATUS_LINE_TAIL: &str = r" \[[^\]]+\] \([^\)]+\) +(?<binary>.+?) +(?<test>.+)";
+
+/// Builds a regex for a test result line, where `status` matches everything
+/// before the duration (for example, `(?:TRY (?<attempt>\d+) )?PASS`).
+fn status_re(status: &str) -> Regex {
+    Regex::new(&format!(r"^\s*{status}{STATUS_LINE_TAIL}")).unwrap()
+}
+
+static PASS_RE: LazyLock<Regex> = LazyLock::new(|| status_re(r"(?:TRY (?<attempt>\d+) )?PASS"));
+static LEAK_RE: LazyLock<Regex> = LazyLock::new(|| status_re(r"(?:TRY (?<attempt>\d+) )?LEAK"));
+static LEAK_FAIL_RE: LazyLock<Regex> =
+    LazyLock::new(|| status_re(r"(?:TRY (?<attempt>\d+) )?(?:LEAK-FAIL|LKFAIL)"));
+static FAIL_RE: LazyLock<Regex> = LazyLock::new(|| status_re(r"(?:TRY (?<attempt>\d+) )?FAIL"));
 static FAIL_LEAK_RE: LazyLock<Regex> = LazyLock::new(|| {
     // Match both "FAIL + LEAK" (first attempt) and "FL+LK" (retry attempts).
-    Regex::new(r"^\s*(?:TRY (\d+) )?(?:FAIL \+ LEAK|FL\+LK) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)")
-        .unwrap()
+    status_re(r"(?:TRY (?<attempt>\d+) )?(?:FAIL \+ LEAK|FL\+LK)")
 });
-static ABORT_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"^\s*(?:TRY (\d+) )?(?:ABORT|ABRT|SIGSEGV|SIGABRT) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)",
-    )
-    .unwrap()
-});
-static TIMEOUT_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*(?:TRY (\d+) )?TIMEOUT \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
-});
+static ABORT_RE: LazyLock<Regex> =
+    LazyLock::new(|| status_re(r"(?:TRY (?<attempt>\d+) )?(?:ABORT|ABRT|SIGSEGV|SIGABRT)"));
+static TIMEOUT_RE: LazyLock<Regex> =
+    LazyLock::new(|| status_re(r"(?:TRY (?<attempt>\d+) )?TIMEOUT"));
 // TIMEOUT-PASS (and short forms TMPASS, SLOW+TMPASS) is shown when on-timeout = pass
 // is configured and the test timed out but is considered passing.
-static TIMEOUT_PASS_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*(?:TRY (\d+) )?(?:TIMEOUT-PASS|TMPASS|SLOW\+TMPASS) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
-});
+static TIMEOUT_PASS_RE: LazyLock<Regex> =
+    LazyLock::new(|| status_re(r"(?:TRY (?<attempt>\d+) )?(?:TIMEOUT-PASS|TMPASS|SLOW\+TMPASS)"));
 // FLKY-FL is shown for tests that eventually passed but have flaky-result = "fail".
 // Format: "FLKY-FL 4/5 [duration] (count/total) binary_id test_name"
 // Must be checked before FLAKY_RE since both start with "FL".
-static FLAKY_FAIL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*FLKY-FL (\d+)/(\d+) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
-});
+static FLAKY_FAIL_RE: LazyLock<Regex> = LazyLock::new(|| status_re(r"FLKY-FL (?<attempt>\d+)/\d+"));
 // FLAKY is shown in the summary section for tests that eventually passed.
 // Format: "FLAKY 4/5 [duration] (count/total) binary_id test_name"
-static FLAKY_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*FLAKY (\d+)/(\d+) \[[^\]]+\] \([^\)]+\) +(.+?) +(.+)").unwrap()
-});
+static FLAKY_RE: LazyLock<Regex> = LazyLock::new(|| status_re(r"FLAKY (?<attempt>\d+)/\d+"));
 static SUMMARY_RE: LazyLock<Regex> = LazyLock::new(|| {
     // Note: "failed" can also be "timed out" for timeout failures.
     // The "passed" parenthetical may contain "N flaky" and/or "N leaky"
@@ -718,13 +710,12 @@ impl ActualTestResults {
             caps: &regex::Captures,
             result: TerminalCheckResult,
         ) {
-            // Groups: 1=attempt (optional), 2=binary_id, 3=test_name
-            let attempt = match caps.get(1) {
+            let attempt = match caps.name("attempt") {
                 Some(m) => m.as_str().parse::<u32>().expect("parsed attempt number"),
                 None => 1,
             };
-            let test_name = TestCaseName::new(&caps[3]);
-            let id = TestInstanceId::new(&caps[2], &test_name);
+            let test_name = TestCaseName::new(&caps["test"]);
+            let id = TestInstanceId::new(&caps["binary"], &test_name);
             let attempt_record = TestAttempt { attempt, result };
 
             match tests.entry(&id) {
@@ -744,11 +735,10 @@ impl ActualTestResults {
         /// post-summary footer. They override the final PASS attempt with
         /// FlakyFail.
         fn handle_flaky_fail(tests: &mut IdOrdMap<ActualOutcome>, caps: &regex::Captures) {
-            // Groups: 1=pass_attempt, 2=total_attempts, 3=binary_id, 4=test_name
-            let test_name = TestCaseName::new(&caps[4]);
-            let id = TestInstanceId::new(&caps[3], &test_name);
+            let test_name = TestCaseName::new(&caps["test"]);
+            let id = TestInstanceId::new(&caps["binary"], &test_name);
             let attempt_record = TestAttempt {
-                attempt: caps[1].parse().expect("parsed attempt number"),
+                attempt: caps["attempt"].parse().expect("parsed attempt number"),
                 result: TerminalCheckResult::FlakyFail,
             };
 
@@ -778,11 +768,10 @@ impl ActualTestResults {
         /// tests that eventually passed. They confirm the final PASS result
         /// (no-op if already recorded).
         fn handle_flaky_pass(tests: &mut IdOrdMap<ActualOutcome>, caps: &regex::Captures) {
-            // Groups: 1=pass_attempt, 2=total_attempts, 3=binary_id, 4=test_name
-            let test_name = TestCaseName::new(&caps[4]);
-            let id = TestInstanceId::new(&caps[3], &test_name);
+            let test_name = TestCaseName::new(&caps["test"]);
+            let id = TestInstanceId::new(&caps["binary"], &test_name);
             let attempt_record = TestAttempt {
-                attempt: caps[1].parse().expect("parsed attempt number"),
+                attempt: caps["attempt"].parse().expect("parsed attempt number"),
                 result: TerminalCheckResult::Pass,
             };
 
@@ -1100,6 +1089,20 @@ fn verify_summary(
     );
 }
 
+/// Verifies that the actual output of a run matches the expected results:
+/// the tests that ran, their results, and the summary line.
+#[track_caller]
+fn verify_run(
+    expected: &ExpectedTestResults,
+    actual: &ActualTestResults,
+    output: &str,
+    properties: RunProperties,
+) {
+    verify_expected_in_actual(expected, actual, output, properties);
+    verify_actual_in_expected(actual, expected, output);
+    verify_summary(expected, actual.summary.as_ref(), output, properties);
+}
+
 #[track_caller]
 pub fn check_run_output_with_junit(
     stderr: &[u8],
@@ -1202,9 +1205,7 @@ pub fn check_run_output_for_test_names(
     eprintln!("expected: {expected:?}");
     eprintln!("actual: {actual:?}");
 
-    verify_expected_in_actual(&expected, &actual, &output_str, properties);
-    verify_actual_in_expected(&actual, &expected, &output_str);
-    verify_summary(&expected, actual.summary.as_ref(), &output_str, properties);
+    verify_run(&expected, &actual, &output_str, properties);
 }
 
 /// Checks the output of a rerun against fixture data.
@@ -1233,14 +1234,7 @@ pub fn check_rerun_output(rerun_stderr: &[u8], properties: RunProperties) {
     eprintln!("rerun_expected: {rerun_expected:?}");
     eprintln!("actual: {actual:?}");
 
-    verify_expected_in_actual(&rerun_expected, &actual, &rerun_output, properties);
-    verify_actual_in_expected(&actual, &rerun_expected, &rerun_output);
-    verify_summary(
-        &rerun_expected,
-        actual.summary.as_ref(),
-        &rerun_output,
-        properties,
-    );
+    verify_run(&rerun_expected, &actual, &rerun_output, properties);
 }
 
 /// Checks the output of a rerun with scope expansion.
@@ -1315,14 +1309,7 @@ pub fn check_rerun_expanded_output(
     eprintln!("rerun_expected: {rerun_expected:?}");
     eprintln!("actual: {actual:?}");
 
-    verify_expected_in_actual(&rerun_expected, &actual, &rerun_output, properties);
-    verify_actual_in_expected(&actual, &rerun_expected, &rerun_output);
-    verify_summary(
-        &rerun_expected,
-        actual.summary.as_ref(),
-        &rerun_output,
-        properties,
-    );
+    verify_run(&rerun_expected, &actual, &rerun_output, properties);
 }
 
 /// Derives the expected results for a rerun from the expected results of the
@@ -1378,9 +1365,7 @@ fn check_run_output_impl(
     eprintln!("expected: {expected:?}");
     eprintln!("actual: {actual:?}");
 
-    verify_expected_in_actual(&expected, &actual, &output, properties);
-    verify_actual_in_expected(&actual, &expected, &output);
-    verify_summary(&expected, actual.summary.as_ref(), &output, properties);
+    verify_run(&expected, &actual, &output, properties);
 
     if let Some(path) = junit_path {
         verify_junit(&expected, path, properties);
