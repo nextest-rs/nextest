@@ -1163,8 +1163,12 @@ where
         });
     }
 
-    pub(super) fn run_stats(&self) -> RunStats {
-        self.run_stats
+    /// Returns the final result of the run.
+    ///
+    /// For stress runs, this accounts for every sub-run, not just the last
+    /// one.
+    pub(super) fn final_stats(&self) -> FinalRunStats {
+        self.stress_cx.final_stats(self.run_stats.summarize_final())
     }
 }
 
@@ -1177,6 +1181,13 @@ enum DispatcherStressContext {
         completed: u32,
         failed: u32,
         cancelled: bool,
+        /// The summary of the first sub-run that failed, if any.
+        ///
+        /// With fail-fast off, the stress run continues after a failing
+        /// sub-run, so the last sub-run's summary doesn't reflect earlier
+        /// failures. This is used to compute the final result of the whole
+        /// stress run.
+        first_failure: Option<FinalRunStats>,
     },
 }
 
@@ -1239,6 +1250,7 @@ impl DispatcherStressContext {
                 completed: 0,
                 failed: 0,
                 cancelled: false,
+                first_failure: None,
             }
         } else {
             Self::None
@@ -1261,6 +1273,7 @@ impl DispatcherStressContext {
                 completed,
                 failed: _,
                 cancelled: _,
+                first_failure: _,
             } => match condition {
                 StressCondition::Count(total) => Some(StressProgress::Count {
                     total: *total,
@@ -1309,6 +1322,7 @@ impl DispatcherStressContext {
                 completed,
                 failed,
                 cancelled,
+                first_failure,
             } => {
                 *completed += 1;
                 match summary {
@@ -1319,6 +1333,7 @@ impl DispatcherStressContext {
                     }
                     FinalRunStats::Failed { .. } => {
                         *failed += 1;
+                        first_failure.get_or_insert(summary);
                     }
                     FinalRunStats::Cancelled { .. } => {
                         // In this case, we don't add to the failed count. The
@@ -1343,6 +1358,7 @@ impl DispatcherStressContext {
                 completed,
                 failed,
                 cancelled,
+                first_failure: _,
             } => {
                 let mut success_count = completed.saturating_sub(*failed);
                 // If the run is cancelled, there's one less success than we
@@ -1357,6 +1373,18 @@ impl DispatcherStressContext {
                     last_final_stats,
                 })
             }
+        }
+    }
+
+    /// Returns the final result of the whole run, given the summary of the
+    /// last (or only) run.
+    ///
+    /// For stress runs, a failure in any sub-run takes precedence, matching
+    /// [`StressRunStats::summarize_final`].
+    fn final_stats(&self, last_final_stats: FinalRunStats) -> FinalRunStats {
+        match self {
+            Self::None => last_final_stats,
+            Self::Stress { first_failure, .. } => first_failure.unwrap_or(last_final_stats),
         }
     }
 
@@ -1506,7 +1534,88 @@ impl SignalCount {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
+    use crate::reporter::events::RunStatsFailureKind;
+    use std::{num::NonZero, sync::Mutex};
+    use test_case::test_case;
+
+    const TEST_FAILED: FinalRunStats = FinalRunStats::Failed {
+        kind: RunStatsFailureKind::Test {
+            initial_run_count: 1,
+            not_run: 0,
+        },
+    };
+    const SETUP_SCRIPT_FAILED: FinalRunStats = FinalRunStats::Failed {
+        kind: RunStatsFailureKind::SetupScript,
+    };
+    const CANCELLED: FinalRunStats = FinalRunStats::Cancelled {
+        reason: Some(CancelReason::Interrupt),
+        kind: RunStatsFailureKind::Test {
+            initial_run_count: 1,
+            not_run: 1,
+        },
+    };
+
+    #[test_case(
+        &[FinalRunStats::Success, FinalRunStats::Success],
+        FinalRunStats::Success;
+        "all sub-runs pass"
+    )]
+    #[test_case(
+        &[TEST_FAILED, FinalRunStats::Success, TEST_FAILED, FinalRunStats::Success],
+        TEST_FAILED;
+        "odd sub-runs fail and the last passes"
+    )]
+    #[test_case(
+        &[FinalRunStats::Success, TEST_FAILED, FinalRunStats::Success, TEST_FAILED],
+        TEST_FAILED;
+        "even sub-runs fail including the last"
+    )]
+    #[test_case(
+        &[SETUP_SCRIPT_FAILED, TEST_FAILED, FinalRunStats::Success],
+        SETUP_SCRIPT_FAILED;
+        "the first failure is reported"
+    )]
+    #[test_case(
+        &[TEST_FAILED, FinalRunStats::NoTestsRun],
+        TEST_FAILED;
+        "an earlier failure takes precedence over no tests run"
+    )]
+    #[test_case(
+        &[TEST_FAILED, CANCELLED],
+        TEST_FAILED;
+        "an earlier failure takes precedence over cancellation"
+    )]
+    #[test_case(
+        &[FinalRunStats::Success, CANCELLED],
+        CANCELLED;
+        "a cancelled last sub-run without failures"
+    )]
+    fn stress_final_stats(sub_runs: &[FinalRunStats], expected: FinalRunStats) {
+        let count = u32::try_from(sub_runs.len()).expect("sub-run count fits in u32");
+        let mut stress_cx =
+            DispatcherStressContext::new(Some(StressCondition::Count(StressCount::Count {
+                count: NonZero::new(count).expect("at least one sub-run"),
+            })));
+        for sub_run in sub_runs {
+            stress_cx.mark_completed(*sub_run);
+        }
+        let last = *sub_runs.last().expect("at least one sub-run");
+        assert_eq!(stress_cx.final_stats(last), expected);
+    }
+
+    #[test]
+    fn non_stress_final_stats() {
+        let stress_cx = DispatcherStressContext::new(None);
+        for stats in [
+            FinalRunStats::Success,
+            FinalRunStats::NoTestsRun,
+            TEST_FAILED,
+            SETUP_SCRIPT_FAILED,
+            CANCELLED,
+        ] {
+            assert_eq!(stress_cx.final_stats(stats), stats);
+        }
+    }
 
     #[test]
     fn begin_cancel_report_signal_interrupt() {

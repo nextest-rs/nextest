@@ -3190,11 +3190,11 @@ fn test_stress_run_earlier_iteration_failed() {
         .unchecked(true)
         .output();
 
-    // BUG (#3624): the exit code only reflects the last iteration, so the run
-    // exits 0 even though the first iteration failed.
+    // A failure in any iteration fails the run, even if the last iteration
+    // passes (#3624).
     assert_eq!(
         output.exit_status.code(),
-        Some(NextestExitCode::OK),
+        Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
     check_stress_run_output(

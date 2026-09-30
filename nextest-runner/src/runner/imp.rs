@@ -15,7 +15,7 @@ use crate::{
     },
     input::{InputHandler, InputHandlerKind, InputHandlerStatus},
     list::{OwnedTestInstanceId, TestInstanceWithSettings, TestList},
-    reporter::events::{ReporterEvent, RunStats, StressIndex},
+    reporter::events::{FinalRunStats, ReporterEvent, StressIndex},
     runner::ExecutorEvent,
     signal::{SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
@@ -469,11 +469,14 @@ impl<'a> TestRunner<'a> {
     ///
     /// The callback is called with the results of each test.
     ///
+    /// Returns the final result of the run. For stress runs, this accounts for
+    /// every sub-run, not just the last one.
+    ///
     /// Returns an error if any of the tasks panicked.
     pub fn execute<F>(
         self,
         mut callback: F,
-    ) -> Result<RunStats, TestRunnerExecuteErrors<Infallible>>
+    ) -> Result<FinalRunStats, TestRunnerExecuteErrors<Infallible>>
     where
         F: FnMut(ReporterEvent<'a>) + Send,
     {
@@ -488,11 +491,14 @@ impl<'a> TestRunner<'a> {
     /// Accepts a callback that is called with the results of each test. If the callback returns an
     /// error, the test run terminates and the callback is no longer called.
     ///
+    /// Returns the final result of the run. For stress runs, this accounts for
+    /// every sub-run, not just the last one.
+    ///
     /// Returns an error if any of the tasks panicked.
     pub fn try_execute<E, F>(
         mut self,
         mut callback: F,
-    ) -> Result<RunStats, TestRunnerExecuteErrors<E>>
+    ) -> Result<FinalRunStats, TestRunnerExecuteErrors<E>>
     where
         F: FnMut(ReporterEvent<'a>) -> Result<(), E> + Send,
         E: fmt::Debug + Send,
@@ -572,7 +578,7 @@ impl<'a> TestRunnerInner<'a> {
         input_handler: &mut InputHandler,
         report_cancel_rx: oneshot::Receiver<()>,
         callback: F,
-    ) -> Result<RunStats, Vec<JoinError>>
+    ) -> Result<FinalRunStats, Vec<JoinError>>
     where
         F: FnMut(ReporterEvent<'a>) + Send,
     {
@@ -655,10 +661,10 @@ impl<'a> TestRunnerInner<'a> {
             )?;
         }
 
-        let run_stats = dispatcher_cx.run_stats();
+        let final_stats = dispatcher_cx.final_stats();
         dispatcher_cx.run_finished();
 
-        Ok(run_stats)
+        Ok(final_stats)
     }
 
     fn do_run<F>(
