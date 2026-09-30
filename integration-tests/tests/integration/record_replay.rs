@@ -237,9 +237,9 @@ fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
 
     // Replace raw temp root paths, keeping suffixes with normalized slashes.
     let temp_root_escaped = regex::escape(temp_root.as_str());
-    let temp_root_regex = Regex::new(&format!(r"{}([^\s]*)", temp_root_escaped)).unwrap();
+    let temp_root_regex = Regex::new(&format!(r"{}(?<suffix>[^\s]*)", temp_root_escaped)).unwrap();
     let output = temp_root_regex.replace_all(&output, |caps: &regex::Captures| {
-        let suffix = caps.get(1).map_or("", |m| m.as_str());
+        let suffix = caps.name("suffix").map_or("", |m| m.as_str());
         let normalized_suffix = suffix.replace('\\', "/");
         format!("[TEMP_DIR]{normalized_suffix}")
     });
@@ -254,15 +254,18 @@ fn redact_dynamic_fields(output: &str, temp_root: &Utf8Path) -> String {
     let temp_root_canonical = temp_root.canonicalize_utf8().expect("temp_root is valid");
     let temp_root_encoded = encode_workspace_path(&temp_root_canonical);
     let temp_root_encoded_escaped = regex::escape(&temp_root_encoded);
-    let temp_root_encoded_regex =
-        Regex::new(&format!(r"{}(_s|_b)?([^\s]*)", temp_root_encoded_escaped)).unwrap();
+    let temp_root_encoded_regex = Regex::new(&format!(
+        r"{}(?<sep>_s|_b)?(?<suffix>[^\s]*)",
+        temp_root_encoded_escaped
+    ))
+    .unwrap();
     let output = temp_root_encoded_regex.replace_all(&output, |caps: &regex::Captures| {
-        let sep = if caps.get(1).is_some() {
+        let sep = if caps.name("sep").is_some() {
             "[SEP_ENCODED]"
         } else {
             ""
         };
-        let suffix = caps.get(2).map_or("", |m| m.as_str());
+        let suffix = caps.name("suffix").map_or("", |m| m.as_str());
         let normalized_suffix = suffix.replace('\\', "/");
         format!("[TEMP_DIR_ENCODED]{sep}{normalized_suffix}")
     });

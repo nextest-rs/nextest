@@ -59,7 +59,7 @@ fn test_version_info() {
     // are not part of the format, and we have some flexibility in changing it.
     // The commit hash and date are optional because local dev builds may not include them.
     let version_regex = regex::Regex::new(
-        r"^cargo-nextest (0\.9\.[0-9\-a-z\.]+)(?: \(([a-f0-9]{9}) (\d{4}-\d{2}-\d{2})\))?\n$",
+        r"^cargo-nextest (?<version>0\.9\.[0-9\-a-z\.]+)(?: \((?<short_hash>[a-f0-9]{9}) (?<date>\d{4}-\d{2}-\d{2})\))?\n$",
     )
     .unwrap();
 
@@ -72,9 +72,9 @@ fn test_version_info() {
         .captures(&short_stdout)
         .unwrap_or_else(|| panic!("short version matches regex: {short_stdout}"));
 
-    let version = captures.get(1).unwrap().as_str();
-    let short_hash = captures.get(2).map(|m| m.as_str());
-    let date = captures.get(3).map(|m| m.as_str());
+    let version = &captures["version"];
+    let short_hash = captures.name("short_hash").map(|m| m.as_str());
+    let date = captures.name("date").map(|m| m.as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
         .args(["--version"])

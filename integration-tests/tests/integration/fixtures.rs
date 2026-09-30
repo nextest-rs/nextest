@@ -691,7 +691,7 @@ static SUMMARY_RE: LazyLock<Regex> = LazyLock::new(|| {
     // The "passed" parenthetical may contain "N flaky" and/or "N leaky"
     // (e.g., "22 passed (1 flaky, 1 leaky)"). We capture only the leaky
     // count; flaky count is not tracked in ExpectedSummary.
-    Regex::new(r"Summary \[.*\] +(\d+) (?:tests?|benchmarks?) run: (\d+) passed(?: \((?:\d+ flaky(?:, )?)?(?:(\d+) leaky)?\))?,?(?: (\d+) (?:failed|timed out)(?: \((\d+) due to being leaky\))?,?)? (\d+) skipped").unwrap()
+    Regex::new(r"Summary \[.*\] +(?<run>\d+) (?:tests?|benchmarks?) run: (?<passed>\d+) passed(?: \((?:\d+ flaky(?:, )?)?(?:(?<leaky>\d+) leaky)?\))?,?(?: (?<failed>\d+) (?:failed|timed out)(?: \((?<leak_failed>\d+) due to being leaky\))?,?)? (?<skipped>\d+) skipped").unwrap()
 });
 
 impl ActualTestResults {
@@ -834,21 +834,21 @@ impl ActualTestResults {
             } else if let Some(caps) = PASS_RE.captures(line) {
                 add_attempt(&mut tests, &caps, TerminalCheckResult::Pass);
             } else if let Some(caps) = SUMMARY_RE.captures(line) {
-                let run_count = caps[1].parse().unwrap();
-                let pass_count = caps[2].parse().unwrap();
+                let run_count = caps["run"].parse().unwrap();
+                let pass_count = caps["passed"].parse().unwrap();
                 let leak_count = caps
-                    .get(3)
+                    .name("leaky")
                     .map(|m| m.as_str().parse().unwrap())
                     .unwrap_or(0);
                 let fail_count = caps
-                    .get(4)
+                    .name("failed")
                     .map(|m| m.as_str().parse().unwrap())
                     .unwrap_or(0);
                 let leak_fail_count = caps
-                    .get(5)
+                    .name("leak_failed")
                     .map(|m| m.as_str().parse().unwrap())
                     .unwrap_or(0);
-                let skip_count = caps[6].parse().unwrap();
+                let skip_count = caps["skipped"].parse().unwrap();
 
                 summary = Some(ActualSummary {
                     run_count,
