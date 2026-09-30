@@ -18,7 +18,7 @@ use nextest_runner::{
     platform::{BuildPlatforms, HostPlatform, Platform, PlatformLibdir, TargetPlatform},
     reporter::{
         TestOutputErrorSlice,
-        events::{FinalRunStats, RunStatsFailureKind},
+        events::{FinalRunStats, RunFailureStep},
     },
     run_mode::NextestRunMode,
     target_runner::{PlatformRunner, TargetRunner},
@@ -277,25 +277,21 @@ pub(super) fn final_stats_to_error(
     mode: NextestRunMode,
     rerun_available: bool,
 ) -> Option<ExpectedError> {
-    match stats {
-        FinalRunStats::Success => None,
-        FinalRunStats::NoTestsRun => Some(ExpectedError::NoTestsRun {
-            mode,
-            is_default: true,
-        }),
-        FinalRunStats::Cancelled {
-            kind: RunStatsFailureKind::SetupScript,
-            ..
+    let step = match stats {
+        FinalRunStats::Success => return None,
+        FinalRunStats::NoTestsRun => {
+            return Some(ExpectedError::NoTestsRun {
+                mode,
+                is_default: true,
+            });
         }
-        | FinalRunStats::Failed {
-            kind: RunStatsFailureKind::SetupScript,
-        } => Some(ExpectedError::setup_script_failed()),
-        FinalRunStats::Cancelled {
-            kind: RunStatsFailureKind::Test { .. },
-            ..
+        FinalRunStats::Cancelled { reason: _, kind } | FinalRunStats::Failed { kind } => {
+            kind.step()
         }
-        | FinalRunStats::Failed {
-            kind: RunStatsFailureKind::Test { .. },
-        } => Some(ExpectedError::test_run_failed(rerun_available)),
-    }
+    };
+    let error = match step {
+        RunFailureStep::SetupScript => ExpectedError::setup_script_failed(),
+        RunFailureStep::Test => ExpectedError::test_run_failed(rerun_available),
+    };
+    Some(error)
 }

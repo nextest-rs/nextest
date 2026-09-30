@@ -950,6 +950,16 @@ pub enum StressFinalRunStats {
     Failed,
 }
 
+/// The step at which a run failed, without per-run details.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RunFailureStep {
+    /// A test failed.
+    Test,
+
+    /// A setup script failed.
+    SetupScript,
+}
+
 /// A type summarizing the step at which a test run failed.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "step", rename_all = "kebab-case")]
@@ -967,6 +977,16 @@ pub enum RunStatsFailureKind {
         /// run.
         not_run: usize,
     },
+}
+
+impl RunStatsFailureKind {
+    /// Returns the step at which the run failed.
+    pub fn step(&self) -> RunFailureStep {
+        match self {
+            Self::SetupScript => RunFailureStep::SetupScript,
+            Self::Test { .. } => RunFailureStep::Test,
+        }
+    }
 }
 
 /// Information about executions of a test, including retries.
