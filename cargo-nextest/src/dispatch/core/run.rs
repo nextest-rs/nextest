@@ -1669,11 +1669,17 @@ mod tests {
     use super::*;
     use nextest_runner::reporter::events::RunStats;
 
-    fn make_run_stats(initial_run_count: usize, finished_count: usize, passed: usize) -> RunStats {
+    fn make_single_run(
+        initial_run_count: usize,
+        finished_count: usize,
+        passed: usize,
+        failed: usize,
+    ) -> RunStats {
         RunStats {
             initial_run_count,
             finished_count,
             passed,
+            failed,
             ..Default::default()
         }
     }
@@ -1681,7 +1687,7 @@ mod tests {
     #[test]
     fn test_final_result() {
         // --no-tests=pass always succeeds.
-        let stats = make_run_stats(0, 0, 0);
+        let stats = make_single_run(0, 0, 0, 0);
         let result = final_result(
             NextestRunMode::Test,
             stats,
@@ -1692,7 +1698,7 @@ mod tests {
         assert!(result.is_ok(), "--no-tests=pass should succeed");
 
         // --no-tests=warn succeeds (with a warning).
-        let stats = make_run_stats(0, 0, 0);
+        let stats = make_single_run(0, 0, 0, 0);
         let result = final_result(
             NextestRunMode::Test,
             stats,
@@ -1703,7 +1709,7 @@ mod tests {
         assert!(result.is_ok(), "--no-tests=warn should succeed");
 
         // --no-tests=fail fails.
-        let stats = make_run_stats(0, 0, 0);
+        let stats = make_single_run(0, 0, 0, 0);
         let result = final_result(
             NextestRunMode::Test,
             stats,
@@ -1723,7 +1729,7 @@ mod tests {
         );
 
         // --no-tests=auto (not a rerun) fails.
-        let stats = make_run_stats(0, 0, 0);
+        let stats = make_single_run(0, 0, 0, 0);
         let result = final_result(
             NextestRunMode::Test,
             stats,
@@ -1743,7 +1749,7 @@ mod tests {
         );
 
         // --no-tests=auto (rerun with outstanding) returns RerunTestsOutstanding.
-        let stats = make_run_stats(0, 0, 0);
+        let stats = make_single_run(0, 0, 0, 0);
         let result = final_result(
             NextestRunMode::Test,
             stats,
@@ -1763,7 +1769,7 @@ mod tests {
         );
 
         // --no-tests=auto (rerun with no outstanding) succeeds.
-        let stats = make_run_stats(0, 0, 0);
+        let stats = make_single_run(0, 0, 0, 0);
         let result = final_result(
             NextestRunMode::Test,
             stats,
@@ -1777,7 +1783,7 @@ mod tests {
         );
 
         // Default (not a rerun) fails with is_default: true.
-        let stats = make_run_stats(0, 0, 0);
+        let stats = make_single_run(0, 0, 0, 0);
         let result = final_result(NextestRunMode::Test, stats, None, None, false);
         assert!(
             matches!(
@@ -1791,7 +1797,7 @@ mod tests {
         );
 
         // Default (rerun with outstanding) returns RerunTestsOutstanding.
-        let stats = make_run_stats(0, 0, 0);
+        let stats = make_single_run(0, 0, 0, 0);
         let result = final_result(NextestRunMode::Test, stats, None, Some(3), false);
         assert!(
             matches!(
@@ -1805,7 +1811,7 @@ mod tests {
         );
 
         // Not a rerun: succeeds.
-        let stats = make_run_stats(5, 5, 5);
+        let stats = make_single_run(5, 5, 5, 0);
         let result = final_result(NextestRunMode::Test, stats, None, None, false);
         assert!(
             result.is_ok(),
@@ -1813,7 +1819,7 @@ mod tests {
         );
 
         // Rerun with no outstanding: succeeds.
-        let stats = make_run_stats(5, 5, 5);
+        let stats = make_single_run(5, 5, 5, 0);
         let result = final_result(NextestRunMode::Test, stats, None, Some(0), false);
         assert!(
             result.is_ok(),
@@ -1821,7 +1827,7 @@ mod tests {
         );
 
         // Rerun with outstanding: returns RerunTestsOutstanding.
-        let stats = make_run_stats(5, 5, 5);
+        let stats = make_single_run(5, 5, 5, 0);
         let result = final_result(NextestRunMode::Test, stats, None, Some(2), false);
         assert!(
             matches!(
@@ -1837,7 +1843,7 @@ mod tests {
 
         // Rerun with outstanding, and this run was recorded. We can show the
         // continue rerunning hint in this case.
-        let stats = make_run_stats(5, 5, 5);
+        let stats = make_single_run(5, 5, 5, 0);
         let result = final_result(NextestRunMode::Test, stats, None, Some(2), true);
         assert!(
             matches!(
@@ -1852,8 +1858,7 @@ mod tests {
         );
 
         // Failures return TestRunFailed (no rerun available).
-        let mut stats = make_run_stats(5, 5, 3);
-        stats.failed = 2;
+        let stats = make_single_run(5, 5, 3, 2);
         let result = final_result(NextestRunMode::Test, stats, None, None, false);
         assert!(
             matches!(
@@ -1866,8 +1871,7 @@ mod tests {
         );
 
         // Failures return TestRunFailed (rerun available).
-        let mut stats = make_run_stats(5, 5, 3);
-        stats.failed = 2;
+        let stats = make_single_run(5, 5, 3, 2);
         let result = final_result(NextestRunMode::Test, stats, None, None, true);
         assert!(
             matches!(
@@ -1880,8 +1884,7 @@ mod tests {
         );
 
         // Failures take precedence over outstanding tests.
-        let mut stats = make_run_stats(5, 5, 3);
-        stats.failed = 2;
+        let stats = make_single_run(5, 5, 3, 2);
         let result = final_result(NextestRunMode::Test, stats, None, Some(10), false);
         assert!(
             matches!(
