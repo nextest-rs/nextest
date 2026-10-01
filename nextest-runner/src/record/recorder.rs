@@ -587,6 +587,7 @@ impl SerializeTestEventContext<'_> {
             retry_data: status.retry_data,
             output,
             result: status.result,
+            run_wrapper_report: status.run_wrapper_report,
             start_time: status.start_time,
             time_taken: status.time_taken,
             is_slow: status.is_slow,
