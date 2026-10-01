@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{DisplayFilterMatcher, TestListDisplayFilter};
+use super::{DisplayFilterMatcher, TestListDisplayFilter, custom_harness::is_custom_harness};
 use crate::{
     cargo_config::EnvironmentMap,
     config::{
@@ -796,7 +796,9 @@ impl<'g> TestList<'g> {
     ) -> Result<ParsedTestBinary<'g>, CreateTestListError> {
         let mut test_cases = Vec::new();
 
-        for (test_name, kind) in Self::parse(&test_binary.binary_id, non_ignored.as_ref())? {
+        for (test_name, kind) in Self::parse(&test_binary.binary_id, non_ignored.as_ref())
+            .map_err(|error| test_binary.with_custom_harness_hint(error))?
+        {
             test_cases.push(ParsedTestCase {
                 name: TestCaseName::new(test_name),
                 kind,
@@ -804,7 +806,9 @@ impl<'g> TestList<'g> {
             });
         }
 
-        for (test_name, kind) in Self::parse(&test_binary.binary_id, ignored.as_ref())? {
+        for (test_name, kind) in Self::parse(&test_binary.binary_id, ignored.as_ref())
+            .map_err(|error| test_binary.with_custom_harness_hint(error))?
+        {
             // Note that libtest prints out:
             // * just ignored tests if --ignored is passed in
             // * all tests, both ignored and non-ignored, if --ignored is not passed in
@@ -1360,6 +1364,26 @@ impl IdOrdItem for RustTestSuite<'_> {
 }
 
 impl RustTestArtifact<'_> {
+    fn with_custom_harness_hint(&self, error: CreateTestListError) -> CreateTestListError {
+        if matches!(
+            error,
+            CreateTestListError::CommandFail { .. }
+                | CreateTestListError::CommandNonUtf8 { .. }
+                | CreateTestListError::ParseLine { .. }
+        ) && is_custom_harness(
+            &self.cwd,
+            self.package.name(),
+            &self.binary_name,
+            &self.kind,
+        ) {
+            CreateTestListError::CustomTestHarness {
+                error: Box::new(error),
+            }
+        } else {
+            error
+        }
+    }
+
     /// Run this binary with and without --ignored and get the corresponding outputs.
     async fn exec(
         &self,
@@ -1381,7 +1405,10 @@ impl RustTestArtifact<'_> {
         let ignored = self.exec_single(true, lctx, list_settings, platform_runner);
 
         let (non_ignored_out, ignored_out) = futures::future::join(non_ignored, ignored).await;
-        Ok((non_ignored_out?, ignored_out?))
+        Ok((
+            non_ignored_out.map_err(|error| self.with_custom_harness_hint(error))?,
+            ignored_out.map_err(|error| self.with_custom_harness_hint(error))?,
+        ))
     }
 
     async fn exec_single(
@@ -1966,12 +1993,13 @@ mod tests {
         config::scripts::{ScriptCommand, ScriptCommandEnvMap, ScriptCommandRelativeTo},
         list::{
             SerializableFormat,
-            test_helpers::{PACKAGE_GRAPH_FIXTURE, package_metadata},
+            test_helpers::{PACKAGE_GRAPH_FIXTURE, make_test_artifact, package_metadata},
         },
         platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
         target_runner::PlatformRunnerSource,
         test_filter::{RunIgnored, TestFilterPatterns},
     };
+    use camino_tempfile::Utf8TempDir;
     use iddqd::id_ord_map;
     use indoc::indoc;
     use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, KnownGroups, ParseContext};
@@ -1979,10 +2007,123 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::{
         collections::{BTreeMap, HashSet},
+        error::Error as _,
+        fs,
         hash::DefaultHasher,
     };
     use target_spec::Platform;
     use test_strategy::proptest;
+
+    #[test]
+    fn test_custom_harness_hint_preserves_errors() {
+        let dir = Utf8TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("Cargo.toml"),
+            "[package]\nname = 'metadata-helper'\n[[test]]\nname = 'custom'\nharness = false",
+        )
+        .unwrap();
+        let mut artifact = make_test_artifact("package::custom");
+        artifact.cwd = dir.path().to_path_buf();
+        artifact.kind = RustTestBinaryKind::TEST;
+
+        let error = CreateTestListError::parse_line(
+            artifact.binary_id.clone(),
+            "invalid format",
+            "original output",
+        );
+        let error = artifact.with_custom_harness_hint(error);
+        assert!(matches!(
+            error
+                .source()
+                .unwrap()
+                .downcast_ref::<Box<CreateTestListError>>()
+                .map(|error| error.as_ref()),
+            Some(CreateTestListError::ParseLine { .. })
+        ));
+        let CreateTestListError::CustomTestHarness { error } = error else {
+            panic!("a custom harness should have a hint");
+        };
+        assert!(matches!(
+            *error,
+            CreateTestListError::ParseLine { binary_id, message, full_output }
+                if binary_id == artifact.binary_id
+                    && message == "invalid format"
+                    && full_output == "original output"
+        ));
+
+        let error = CreateTestListError::CommandNonUtf8 {
+            binary_id: artifact.binary_id.clone(),
+            command: vec!["custom".to_owned(), "--list".to_owned()],
+            stdout: vec![0xff],
+            stderr: b"original stderr".to_vec(),
+        };
+        let CreateTestListError::CustomTestHarness { error } =
+            artifact.with_custom_harness_hint(error)
+        else {
+            panic!("non-UTF-8 listing output should have a hint");
+        };
+        assert!(matches!(
+            *error,
+            CreateTestListError::CommandNonUtf8 { binary_id, command, stdout, stderr }
+                if binary_id == artifact.binary_id
+                    && command == ["custom", "--list"]
+                    && stdout == [0xff]
+                    && stderr == b"original stderr"
+        ));
+
+        let error = CreateTestListError::CommandExecFail {
+            binary_id: artifact.binary_id.clone(),
+            command: vec!["missing-binary".to_owned()],
+            error: io::Error::new(io::ErrorKind::NotFound, "original cause"),
+        };
+        assert!(matches!(
+            artifact.with_custom_harness_hint(error),
+            CreateTestListError::CommandExecFail { error, .. }
+                if error.kind() == io::ErrorKind::NotFound && error.to_string() == "original cause"
+        ));
+        assert!(matches!(
+            artifact.with_custom_harness_hint(CreateTestListError::CwdIsNotDir {
+                binary_id: artifact.binary_id.clone(),
+                cwd: artifact.cwd.clone(),
+            }),
+            CreateTestListError::CwdIsNotDir { .. }
+        ));
+        assert!(matches!(
+            artifact.with_custom_harness_hint(CreateTestListError::TokioRuntimeCreate(
+                io::Error::other("runtime failed"),
+            )),
+            CreateTestListError::TokioRuntimeCreate(_)
+        ));
+        let path = if cfg!(windows) {
+            "bad\"path"
+        } else {
+            "bad:path"
+        };
+        let error = std::env::join_paths([path]).unwrap_err();
+        assert!(matches!(
+            artifact.with_custom_harness_hint(CreateTestListError::dylib_join_paths(
+                vec![path.into()],
+                error,
+            )),
+            CreateTestListError::DylibJoinPaths { .. }
+        ));
+    }
+
+    #[test]
+    fn test_successful_listing_without_manifest() {
+        let dir = Utf8TempDir::new().unwrap();
+        let mut artifact = make_test_artifact("package::custom");
+        artifact.cwd = dir.path().to_path_buf();
+        let parsed = TestList::parse_output(
+            artifact,
+            "regular: test\nignored: test\n",
+            "ignored: test\n",
+        )
+        .unwrap();
+        assert!(
+            matches!(parsed, ParsedTestBinary::Listed { test_cases, .. } if test_cases.len() == 3)
+        );
+    }
 
     #[test]
     fn test_parse_test_list() {
