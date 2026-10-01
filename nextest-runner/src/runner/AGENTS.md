@@ -274,8 +274,13 @@ enum StressCondition {
 - Condition (count or duration).
 - Sub-run stopwatch (paused during SIGTSTP).
 - Completed count, failed count, cancelled flag.
+- The `RunOutcome` folded across every completed sub-run (`RunOutcome::combine`).
 
 Each sub-run resets `RunStats` but accumulates in `StressRunStats`.
+
+After each sub-run, `StressLoopAction` decides whether the stress loop continues. The loop stops if the run was cancelled for any reason, or if the sub-run itself summarizes as cancelled (some tests did not run). A cancelled sub-run is therefore always the last one, which `StressRunStats::summarize_final` relies on: it reports cancellation based on the last sub-run only.
+
+The folded `RunOutcome` is what `execute()` returns for stress runs, and determines the exit code. A failed sub-run is sticky, so a failure in any sub-run fails the run even if the last sub-run passes. `RunOutcome::combine` is commutative and associative, so the result does not depend on the order in which sub-runs complete.
 
 ### StressIndex
 

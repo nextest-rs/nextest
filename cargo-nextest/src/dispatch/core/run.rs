@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{
     ExpectedError, Result,
-    dispatch::helpers::{build_filtersets, final_stats_to_error, resolve_user_config},
+    dispatch::helpers::{build_filtersets, resolve_user_config},
     output::OutputWriter,
     reuse_build::ReuseBuildOpts,
 };
@@ -38,7 +38,7 @@ use nextest_runner::{
     redact::Redactor,
     reporter::{
         MaxProgressRunning, ReporterBuilder, ShowProgress, TestOutputDisplay,
-        events::{FinalRunStats, RunStats},
+        events::{RunFailureStep, RunOutcome},
         structured,
     },
     run_mode::NextestRunMode,
@@ -1215,7 +1215,7 @@ impl App {
         }
 
         configure_handle_inheritance(no_capture)?;
-        let run_stats = runner.try_execute(|event| reporter.report_event(event))?;
+        let outcome = runner.try_execute(|event| reporter.report_event(event))?;
         let reporter_stats = reporter.finish();
 
         let outstanding_not_seen_count = reporter_stats
@@ -1224,7 +1224,7 @@ impl App {
         let rerun_available = recording_session.is_some();
         let result = final_result(
             NextestRunMode::Test,
-            run_stats,
+            outcome,
             runner_opts.no_tests,
             outstanding_not_seen_count,
             rerun_available,
@@ -1463,7 +1463,7 @@ impl App {
 
         // TODO: no_capture is always true for benchmarks for now.
         configure_handle_inheritance(true)?;
-        let run_stats = runner.try_execute(|event| reporter.report_event(event))?;
+        let outcome = runner.try_execute(|event| reporter.report_event(event))?;
         let reporter_stats = reporter.finish();
 
         // Benchmarks don't support reruns, so outstanding_not_seen_count is
@@ -1471,7 +1471,7 @@ impl App {
         let rerun_available = recording_session.is_some();
         let result = final_result(
             NextestRunMode::Benchmark,
-            run_stats,
+            outcome,
             runner_opts.no_tests,
             None,
             rerun_available,
@@ -1600,17 +1600,15 @@ struct RerunState {
 /// Determines the final result of a test run.
 fn final_result(
     mode: NextestRunMode,
-    run_stats: RunStats,
+    outcome: RunOutcome,
     no_tests: Option<NoTestsBehaviorOpt>,
     outstanding_not_seen_count: Option<usize>,
     rerun_available: bool,
 ) -> Result<(), ExpectedError> {
-    let final_stats = run_stats.summarize_final();
     let is_rerun = outstanding_not_seen_count.is_some();
 
-    // Handle no-tests-run case first.
-    if matches!(final_stats, FinalRunStats::NoTestsRun) {
-        match no_tests {
+    match outcome {
+        RunOutcome::NoTestsRun => match no_tests {
             Some(NoTestsBehaviorOpt::Pass) => return Ok(()),
             Some(NoTestsBehaviorOpt::Warn) => {
                 warn!("no {} to run", plural::tests_plural(mode));
@@ -1642,11 +1640,13 @@ fn final_result(
                 }
                 // is_rerun: fall through to outstanding check
             }
-        }
-    } else {
-        // Tests ran. Check if the run failed.
-        if let Some(err) = final_stats_to_error(final_stats, mode, rerun_available) {
-            return Err(err);
+        },
+        RunOutcome::Success => {}
+        RunOutcome::Cancelled { step } | RunOutcome::Failed { step } => {
+            return Err(match step {
+                RunFailureStep::SetupScript => ExpectedError::setup_script_failed(),
+                RunFailureStep::Test => ExpectedError::test_run_failed(rerun_available),
+            });
         }
     }
 
@@ -1667,6 +1667,7 @@ fn final_result(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nextest_metadata::NextestExitCode;
     use nextest_runner::reporter::events::RunStats;
 
     fn make_single_run(
@@ -1674,23 +1675,26 @@ mod tests {
         finished_count: usize,
         passed: usize,
         failed: usize,
-    ) -> RunStats {
-        RunStats {
-            initial_run_count,
-            finished_count,
-            passed,
-            failed,
-            ..Default::default()
-        }
+    ) -> RunOutcome {
+        RunOutcome::from_final_stats(
+            RunStats {
+                initial_run_count,
+                finished_count,
+                passed,
+                failed,
+                ..Default::default()
+            }
+            .summarize_final(),
+        )
     }
 
     #[test]
     fn test_final_result() {
         // --no-tests=pass always succeeds.
-        let stats = make_single_run(0, 0, 0, 0);
+        let outcome = make_single_run(0, 0, 0, 0);
         let result = final_result(
             NextestRunMode::Test,
-            stats,
+            outcome,
             Some(NoTestsBehaviorOpt::Pass),
             None,
             false,
@@ -1698,10 +1702,10 @@ mod tests {
         assert!(result.is_ok(), "--no-tests=pass should succeed");
 
         // --no-tests=warn succeeds (with a warning).
-        let stats = make_single_run(0, 0, 0, 0);
+        let outcome = make_single_run(0, 0, 0, 0);
         let result = final_result(
             NextestRunMode::Test,
-            stats,
+            outcome,
             Some(NoTestsBehaviorOpt::Warn),
             None,
             false,
@@ -1709,10 +1713,10 @@ mod tests {
         assert!(result.is_ok(), "--no-tests=warn should succeed");
 
         // --no-tests=fail fails.
-        let stats = make_single_run(0, 0, 0, 0);
+        let outcome = make_single_run(0, 0, 0, 0);
         let result = final_result(
             NextestRunMode::Test,
-            stats,
+            outcome,
             Some(NoTestsBehaviorOpt::Fail),
             None,
             false,
@@ -1729,10 +1733,10 @@ mod tests {
         );
 
         // --no-tests=auto (not a rerun) fails.
-        let stats = make_single_run(0, 0, 0, 0);
+        let outcome = make_single_run(0, 0, 0, 0);
         let result = final_result(
             NextestRunMode::Test,
-            stats,
+            outcome,
             Some(NoTestsBehaviorOpt::Auto),
             None,
             false,
@@ -1749,10 +1753,10 @@ mod tests {
         );
 
         // --no-tests=auto (rerun with outstanding) returns RerunTestsOutstanding.
-        let stats = make_single_run(0, 0, 0, 0);
+        let outcome = make_single_run(0, 0, 0, 0);
         let result = final_result(
             NextestRunMode::Test,
-            stats,
+            outcome,
             Some(NoTestsBehaviorOpt::Auto),
             Some(5),
             false,
@@ -1769,10 +1773,10 @@ mod tests {
         );
 
         // --no-tests=auto (rerun with no outstanding) succeeds.
-        let stats = make_single_run(0, 0, 0, 0);
+        let outcome = make_single_run(0, 0, 0, 0);
         let result = final_result(
             NextestRunMode::Test,
-            stats,
+            outcome,
             Some(NoTestsBehaviorOpt::Auto),
             Some(0),
             false,
@@ -1783,8 +1787,8 @@ mod tests {
         );
 
         // Default (not a rerun) fails with is_default: true.
-        let stats = make_single_run(0, 0, 0, 0);
-        let result = final_result(NextestRunMode::Test, stats, None, None, false);
+        let outcome = make_single_run(0, 0, 0, 0);
+        let result = final_result(NextestRunMode::Test, outcome, None, None, false);
         assert!(
             matches!(
                 result,
@@ -1797,8 +1801,8 @@ mod tests {
         );
 
         // Default (rerun with outstanding) returns RerunTestsOutstanding.
-        let stats = make_single_run(0, 0, 0, 0);
-        let result = final_result(NextestRunMode::Test, stats, None, Some(3), false);
+        let outcome = make_single_run(0, 0, 0, 0);
+        let result = final_result(NextestRunMode::Test, outcome, None, Some(3), false);
         assert!(
             matches!(
                 result,
@@ -1811,24 +1815,24 @@ mod tests {
         );
 
         // Not a rerun: succeeds.
-        let stats = make_single_run(5, 5, 5, 0);
-        let result = final_result(NextestRunMode::Test, stats, None, None, false);
+        let outcome = make_single_run(5, 5, 5, 0);
+        let result = final_result(NextestRunMode::Test, outcome, None, None, false);
         assert!(
             result.is_ok(),
             "all tests passed (not rerun) should succeed"
         );
 
         // Rerun with no outstanding: succeeds.
-        let stats = make_single_run(5, 5, 5, 0);
-        let result = final_result(NextestRunMode::Test, stats, None, Some(0), false);
+        let outcome = make_single_run(5, 5, 5, 0);
+        let result = final_result(NextestRunMode::Test, outcome, None, Some(0), false);
         assert!(
             result.is_ok(),
             "all tests passed (rerun, no outstanding) should succeed"
         );
 
         // Rerun with outstanding: returns RerunTestsOutstanding.
-        let stats = make_single_run(5, 5, 5, 0);
-        let result = final_result(NextestRunMode::Test, stats, None, Some(2), false);
+        let outcome = make_single_run(5, 5, 5, 0);
+        let result = final_result(NextestRunMode::Test, outcome, None, Some(2), false);
         assert!(
             matches!(
                 result,
@@ -1843,8 +1847,8 @@ mod tests {
 
         // Rerun with outstanding, and this run was recorded. We can show the
         // continue rerunning hint in this case.
-        let stats = make_single_run(5, 5, 5, 0);
-        let result = final_result(NextestRunMode::Test, stats, None, Some(2), true);
+        let outcome = make_single_run(5, 5, 5, 0);
+        let result = final_result(NextestRunMode::Test, outcome, None, Some(2), true);
         assert!(
             matches!(
                 result,
@@ -1858,8 +1862,8 @@ mod tests {
         );
 
         // Failures return TestRunFailed (no rerun available).
-        let stats = make_single_run(5, 5, 3, 2);
-        let result = final_result(NextestRunMode::Test, stats, None, None, false);
+        let outcome = make_single_run(5, 5, 3, 2);
+        let result = final_result(NextestRunMode::Test, outcome, None, None, false);
         assert!(
             matches!(
                 result,
@@ -1871,8 +1875,8 @@ mod tests {
         );
 
         // Failures return TestRunFailed (rerun available).
-        let stats = make_single_run(5, 5, 3, 2);
-        let result = final_result(NextestRunMode::Test, stats, None, None, true);
+        let outcome = make_single_run(5, 5, 3, 2);
+        let result = final_result(NextestRunMode::Test, outcome, None, None, true);
         assert!(
             matches!(
                 result,
@@ -1884,8 +1888,8 @@ mod tests {
         );
 
         // Failures take precedence over outstanding tests.
-        let stats = make_single_run(5, 5, 3, 2);
-        let result = final_result(NextestRunMode::Test, stats, None, Some(10), false);
+        let outcome = make_single_run(5, 5, 3, 2);
+        let result = final_result(NextestRunMode::Test, outcome, None, Some(10), false);
         assert!(
             matches!(
                 result,
@@ -1895,5 +1899,55 @@ mod tests {
             ),
             "test failures should take precedence over outstanding tests"
         );
+    }
+
+    #[test]
+    fn test_final_result_failure_exit_codes() {
+        let cases = [
+            (
+                "a run with a failed setup script fails with SETUP_SCRIPT_FAILED",
+                RunOutcome::Failed {
+                    step: RunFailureStep::SetupScript,
+                },
+                None,
+                NextestExitCode::SETUP_SCRIPT_FAILED,
+            ),
+            (
+                "a run cancelled during tests fails with TEST_RUN_FAILED",
+                RunOutcome::Cancelled {
+                    step: RunFailureStep::Test,
+                },
+                None,
+                NextestExitCode::TEST_RUN_FAILED,
+            ),
+            (
+                "a run cancelled during setup scripts fails with SETUP_SCRIPT_FAILED",
+                RunOutcome::Cancelled {
+                    step: RunFailureStep::SetupScript,
+                },
+                None,
+                NextestExitCode::SETUP_SCRIPT_FAILED,
+            ),
+            (
+                "--no-tests=pass doesn't mask a failed run",
+                RunOutcome::Failed {
+                    step: RunFailureStep::Test,
+                },
+                Some(NoTestsBehaviorOpt::Pass),
+                NextestExitCode::TEST_RUN_FAILED,
+            ),
+        ];
+
+        for (description, outcome, no_tests, expected_exit_code) in cases {
+            let Err(error) = final_result(NextestRunMode::Test, outcome, no_tests, None, false)
+            else {
+                panic!("the run fails for test case: {description}");
+            };
+            assert_eq!(
+                error.process_exit_code(),
+                expected_exit_code,
+                "test case: {description}"
+            );
+        }
     }
 }
