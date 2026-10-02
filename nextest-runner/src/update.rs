@@ -13,7 +13,6 @@ use mukti_metadata::{
     DigestAlgorithm, MuktiProject, MuktiReleasesJson, ReleaseLocation, ReleaseStatus,
 };
 use owo_colors::{OwoColorize, Style};
-use self_update::{ArchiveKind, Compression, Extract};
 use semver::{Version, VersionReq};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -473,24 +472,17 @@ impl MuktiUpdateContext<'_> {
         progress_bar.set_prefix(prefix);
 
         let mut downloaded: u64 = 0;
-        loop {
-            let n = {
-                let buf = src.fill_buf().map_err(UpdateError::HttpBody)?;
-                tmp_archive_buf
-                    .write_all(buf)
-                    .map_err(|error| UpdateError::TempArchiveWrite {
-                        archive_path: tmp_archive_path.clone(),
-                        error,
-                    })?;
-                buf.len()
-            };
-            if n == 0 {
-                break;
-            }
-            src.consume(n);
+        let calculated_hash_str = hash_and_write_archive(&mut src, &mut tmp_archive_buf, |n| {
             downloaded += n as u64;
             progress_bar.set_position(downloaded);
-        }
+        })
+        .map_err(|(error, dir)| match dir {
+            Direction::Read => UpdateError::HttpBody(error),
+            Direction::Write => UpdateError::TempArchiveWrite {
+                archive_path: tmp_archive_path.clone(),
+                error,
+            },
+        })?;
         progress_bar.finish();
 
         // Verify that we received the expected number of bytes.
@@ -505,61 +497,43 @@ impl MuktiUpdateContext<'_> {
 
         debug!(target: "nextest-runner::update", "downloaded to {tmp_archive_path}");
 
-        let tmp_archive =
-            tmp_archive_buf
-                .into_inner()
+        // Synchronize the file on disk
+        {
+            let tmp_archive =
+                tmp_archive_buf
+                    .into_inner()
+                    .map_err(|error| UpdateError::TempArchiveWrite {
+                        archive_path: tmp_archive_path.clone(),
+                        error: error.into_error(),
+                    })?;
+            tmp_archive
+                .sync_all()
                 .map_err(|error| UpdateError::TempArchiveWrite {
                     archive_path: tmp_archive_path.clone(),
-                    error: error.into_error(),
+                    error,
                 })?;
-        tmp_archive
-            .sync_all()
-            .map_err(|error| UpdateError::TempArchiveWrite {
-                archive_path: tmp_archive_path.clone(),
-                error,
-            })?;
-        std::mem::drop(tmp_archive);
+        }
 
         // Verify the checksum of the downloaded file if available.
-        let mut hasher = Sha256::default();
-        // Just read the file into memory for now -- it would be nice to have an
-        // incremental hasher that updates the hash as it's being downloaded,
-        // but it's not critical since our archives are quite small.
-        let mut tmp_archive =
-            fs::File::open(&tmp_archive_path).map_err(|error| UpdateError::TempArchiveRead {
-                archive_path: tmp_archive_path.clone(),
-                error,
-            })?;
-        io::copy(&mut tmp_archive, &mut hasher).map_err(|error| UpdateError::TempArchiveRead {
-            archive_path: tmp_archive_path.clone(),
-            error,
-        })?;
-        let hash = hasher.finalize();
-        let hash_str = hex::encode(hash);
 
-        match self.location.checksums.get(&DigestAlgorithm::SHA256) {
-            Some(checksum) => {
-                if checksum.0 != hash_str {
-                    return Err(UpdateError::ChecksumMismatch {
-                        expected: checksum.0.clone(),
-                        actual: hash_str,
-                    });
-                }
-                debug!(target: "nextest-runner::update", "SHA-256 checksum verified: {hash_str}");
+        if let Some(expected) = self.location.checksums.get(&DigestAlgorithm::SHA256) {
+            if expected.0 != calculated_hash_str {
+                return Err(UpdateError::ChecksumMismatch {
+                    expected: expected.0.clone(),
+                    actual: calculated_hash_str,
+                });
             }
-            None => {
-                warn!(target: "nextest-runner::update", "unable to verify SHA-256 checksum of downloaded archive ({hash_str})");
-            }
+            debug!(target: "nextest-runner::update", "SHA-256 checksum verified: {calculated_hash_str}");
+        } else {
+            warn!(target: "nextest-runner::update", "unable to verify SHA-256 checksum of downloaded archive ({calculated_hash_str})");
         }
 
         // Now extract data from this archive.
-        Extract::from_source(tmp_archive_path.as_std_path())
-            .archive(ArchiveKind::Tar(Some(Compression::Gz)))
-            .extract_file(
-                tmp_archive_dir.path().as_std_path(),
-                self.bin_path_in_archive,
-            )
-            .map_err(UpdateError::SelfUpdate)?;
+        extract(
+            &tmp_archive_path,
+            self.bin_path_in_archive,
+            tmp_archive_dir.path(),
+        )?;
 
         // Since we're currently restricted to .tar.gz which carries metadata with it, there's no
         // need to make this file executable.
@@ -704,6 +678,95 @@ fn cleanup_backup_temp_directories(
             fs::remove_dir_all(entry.path())?;
         }
     }
+    Ok(())
+}
+
+/// The direction the error occurred from
+enum Direction {
+    /// Failed to read from the `BufReader`
+    Read,
+    /// Failed to write to the `BufWriter`
+    Write,
+}
+
+/// Reads from a source stream and writes to the output stream, calculating the SHA256 digest is it goes
+fn hash_and_write_archive<R, W>(
+    src: &mut BufReader<R>,
+    dst: &mut BufWriter<W>,
+    mut update: impl FnMut(usize),
+) -> Result<String, (io::Error, Direction)>
+where
+    R: io::Read,
+    W: io::Write,
+{
+    let mut hasher = Sha256::default();
+
+    loop {
+        let n = {
+            let buf = src.fill_buf().map_err(|e| (e, Direction::Read))?;
+            dst.write_all(buf).map_err(|e| (e, Direction::Write))?;
+            hasher.update(buf);
+            buf.len()
+        };
+        if n == 0 {
+            break;
+        }
+        src.consume(n);
+        update(n);
+    }
+
+    dst.flush().map_err(|e| (e, Direction::Write))?;
+
+    let hash = hasher.finalize();
+    Ok(hex::encode(hash))
+}
+
+/// Extracts a single file from a gzipped tar and places it in the specified directory
+fn extract(
+    archive_path: &Utf8Path,
+    path_in_archive: &Utf8Path,
+    unpack_dir: &Utf8Path,
+) -> Result<(), UpdateError> {
+    let mut archive = match fs::File::open(archive_path) {
+        Ok(tf) => tar::Archive::new(flate2::read::GzDecoder::new(tf)),
+        Err(error) => {
+            return Err(UpdateError::TempArchiveRead {
+                archive_path: archive_path.to_owned(),
+                error,
+            });
+        }
+    };
+
+    let path_in_archive = path_in_archive.strip_prefix(".").unwrap_or(path_in_archive);
+
+    let mut entries = match archive.entries() {
+        Ok(e) => e,
+        Err(error) => {
+            return Err(UpdateError::TempArchiveRead {
+                archive_path: archive_path.to_owned(),
+                error,
+            });
+        }
+    };
+
+    let Some(mut entry) = entries.find_map(|e| {
+        let entry = e.ok()?;
+        let path = &entry.path().ok()?;
+
+        (path.strip_prefix(".").unwrap_or(path) == path_in_archive).then_some(entry)
+    }) else {
+        return Err(UpdateError::PathMissing {
+            path: path_in_archive.to_owned(),
+        });
+    };
+
+    entry
+        .unpack_in(unpack_dir)
+        .map_err(|error| UpdateError::TempArchiveRead {
+            archive_path: archive_path.to_owned(),
+            error,
+        })?;
+
     Ok(())
 }
 
@@ -873,5 +936,132 @@ impl FromStr for UpdateVersion {
                 }),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    /// This is just a valid ELF that exits with 0
+    const ELF: &[u8] = &[
+        0x7f, 0x45, 0x4c, 0x46, 0x01, 0x01, 0x01, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x02, 0x00, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x54, 0x80, 0x04, 0x08, 0x34, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x34, 0x00, 0x20, 0x00, 0x01,
+        0x00, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x80, 0x04, 0x08, 0x00, 0x80, 0x04, 0x08, 0x57, 0x00, 0x00, 0x00, 0x57, 0x00, 0x00,
+        0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x40, 0xcd, 0x80, 0x00,
+    ];
+
+    fn create_archive(path: &str) -> Vec<u8> {
+        let mut builder = tar::Builder::new(flate2::write::GzEncoder::new(
+            Vec::with_capacity(128),
+            flate2::Compression::fast(),
+        ));
+        let mut header = tar::Header::new_gnu();
+        header.set_size(ELF.len() as u64);
+        header.set_cksum();
+
+        builder
+            .append_data(&mut header, path, io::Cursor::new(ELF))
+            .unwrap();
+
+        builder.into_inner().unwrap().finish().unwrap()
+    }
+
+    #[test]
+    fn writes_and_hashes() {
+        use sha2::{Digest, digest::Update};
+        let input = create_archive("cargo-nextest");
+        let expected = hex::encode(sha2::Sha256::default().chain(&input).finalize());
+
+        let mut input = io::BufReader::new(io::Cursor::new(input));
+        let mut output = io::BufWriter::new(Vec::new());
+
+        let mut total = 0;
+        let input = match super::hash_and_write_archive(&mut input, &mut output, |n| {
+            total += n;
+        }) {
+            Ok(calculated) => {
+                assert_eq!(
+                    expected, calculated,
+                    "hash calculated while copying bytes was incorrect"
+                );
+                let input = input.into_inner().into_inner();
+                assert_eq!(total, input.len());
+                input
+            }
+            Err((err, dir)) => {
+                panic!(
+                    "error hashing/copying {err} - {}",
+                    if matches!(dir, super::Direction::Read) {
+                        "READ"
+                    } else {
+                        "WRITE"
+                    }
+                );
+            }
+        };
+
+        // Simulate failing to write
+        struct BadWriter;
+
+        impl io::Write for BadWriter {
+            fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+                Err(io::Error::new(io::ErrorKind::FileTooLarge, "no disk space"))
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let mut input = io::BufReader::new(io::Cursor::new(input));
+        let mut output = io::BufWriter::new(BadWriter);
+        super::hash_and_write_archive(&mut input, &mut output, |_n| {})
+            .expect_err("we expected to fail");
+
+        // Simulate failing to write
+        struct BadReader;
+
+        impl io::Read for BadReader {
+            fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+                Err(io::Error::new(io::ErrorKind::NetworkDown, "oh no"))
+            }
+        }
+
+        let mut input = io::BufReader::new(BadReader);
+        let mut output = io::BufWriter::new(Vec::new());
+        super::hash_and_write_archive(&mut input, &mut output, |n| {
+            panic!("we somehow wrote {n} bytes");
+        })
+        .expect_err("we expected to fail");
+    }
+
+    #[test]
+    fn extracts() {
+        let input = create_archive("cargo-nextest");
+
+        let td = camino_tempfile::tempdir().unwrap();
+
+        let archive_path = td.path().join("archive.tar.gz");
+        std::fs::write(&archive_path, &input).expect("failed to write test archive");
+
+        super::extract(&archive_path, "wrong-path".into(), td.path())
+            .expect_err("expected to fail finding the path");
+        super::extract(&archive_path, "cargo-nextest".into(), td.path())
+            .expect("failed to extract");
+
+        let bin_path = td.path().join("cargo-nextest");
+
+        let elf = std::fs::read(&bin_path).expect("failed to read extracted file");
+        assert_eq!(elf, ELF);
+        std::fs::remove_file(&bin_path).expect("failed to remove extracted file");
+
+        super::extract(&archive_path, "./cargo-nextest".into(), td.path())
+            .expect("failed to extract");
+
+        let elf = std::fs::read(&bin_path).expect("failed to read extracted file");
+        assert_eq!(elf, ELF);
     }
 }

@@ -35,6 +35,7 @@ debug-ignore.workspace = true
 derive-where.workspace = true
 duct.workspace = true
 etcetera.workspace = true
+flate2 = { workspace = true, optional = true }
 future-queue.workspace = true
 futures.workspace = true
 guppy.workspace = true
@@ -109,8 +110,6 @@ hex = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 mukti-metadata = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
-# TODO: remove dependency on self_update, build our own thing on top of mukti
-self_update = { workspace = true, optional = true }
 
 ###
 ### tokio-console support, not enabled by default
@@ -156,17 +155,12 @@ win32job.workspace = true
 # aws-lc-rs gained riscv64gc support in 2025 (aws/aws-lc-rs#774), so riscv64
 # uses the default rustls path. Only riscv32 still needs native-tls.
 [target.'cfg(not(target_arch = "riscv32"))'.dependencies]
-self_update = { workspace = true, optional = true, default-features = false }
-# self_update's "rustls" feature hardcodes ureq's ring crypto provider. To use
-# aws-lc-rs instead, activate ureq's TLS and rustls's provider separately.
 ureq = { workspace = true, optional = true, features = ["rustls-no-provider", "rustls-webpki-roots"] }
 rustls = { workspace = true, optional = true, features = ["aws-lc-rs"] }
 
 [target.'cfg(target_arch = "riscv32")'.dependencies]
-self_update = { workspace = true, optional = true, default-features = false }
 # On 32-bit RISC-V, rustls/aws-lc-rs aren't available, so use native-tls instead.
 ureq = { workspace = true, optional = true, features = ["native-tls"] }
-
 
 [dev-dependencies]
 camino-tempfile-ext.workspace = true
@@ -189,8 +183,8 @@ tracing-subscriber.workspace = true
 [features]
 config-schema = ["dep:schemars"]
 self-update = [
+    "dep:flate2",
     "dep:hex",
-    "dep:self_update",
     "dep:http",
     "dep:mukti-metadata",
     "dep:rustls",
