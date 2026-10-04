@@ -19,8 +19,8 @@ use crate::{
     reporter::events::{
         CancelReason, ChildExecutionOutputDescription, ExecuteStatus, ExecutionResultDescription,
         ExecutionStatuses, FailureDescription, FinalRunStats, InfoResponse, ReporterEvent,
-        RunFinishedStats, RunStats, StressIndex, StressProgress, StressRunStats, TestEvent,
-        TestEventKind, TestsNotSeen,
+        RunFinishedStats, RunOutcome, RunStats, StressFinalRunStats, StressIndex, StressProgress,
+        StressRunStats, TestEvent, TestEventKind, TestsNotSeen,
     },
     runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
     signal::{
@@ -428,10 +428,9 @@ where
         self.basic_callback(TestEventKind::StressSubRunStarted { progress })
     }
 
-    pub(super) fn stress_sub_run_finished(&mut self) {
-        let sub_elapsed = self
-            .stress_cx
-            .mark_completed(self.run_stats.summarize_final());
+    pub(super) fn stress_sub_run_finished(&mut self) -> StressLoopAction {
+        let sub_final_stats = self.run_stats.summarize_final();
+        let sub_elapsed = self.stress_cx.mark_completed(sub_final_stats);
         let progress = self
             .stress_progress()
             .expect("stress_sub_run_finished called in non-stress test context");
@@ -473,7 +472,9 @@ where
             progress,
             sub_elapsed,
             sub_stats: self.run_stats,
-        })
+        });
+
+        StressLoopAction::after_sub_run(sub_final_stats, self.run_stats.cancel_reason)
     }
 
     pub(super) fn stress_index(&self) -> Option<StressIndex> {
@@ -482,11 +483,6 @@ where
 
     pub(super) fn stress_progress(&self) -> Option<StressProgress> {
         self.stress_cx.progress(self.stopwatch.snapshot().active)
-    }
-
-    /// Returns the reason for cancellation, or `None` if the run is not cancelled.
-    pub(super) fn cancel_reason(&self) -> Option<CancelReason> {
-        self.run_stats.cancel_reason
     }
 
     #[inline]
@@ -1121,10 +1117,22 @@ where
         }
     }
 
-    pub(super) fn run_finished(&mut self) {
+    pub(super) fn run_finished(&mut self) -> RunOutcome {
         let stopwatch_end = self.stopwatch.snapshot();
 
-        let stress_stats = self.stress_cx.run_stats(self.run_stats.summarize_final());
+        let final_stats = self.run_stats.summarize_final();
+        let outcome = self.stress_cx.final_outcome(final_stats);
+        let stress_stats = self.stress_cx.run_stats(final_stats);
+        if let Some(stats) = &stress_stats {
+            // The summary and the outcome are computed separately. Currently,
+            // they agree only because a cancelled sub-run is always last and
+            // initial_run_count is fixed across sub-runs.
+            debug_assert_eq!(
+                stats.summarize_final(),
+                stress_summary_for_outcome(outcome),
+                "the reported stress summary agrees with the run outcome"
+            );
+        }
         let (stress_completed, stress_success, stress_failed) = match &stress_stats {
             Some(stats) => (
                 Some(stats.completed.current),
@@ -1161,10 +1169,34 @@ where
             ),
             outstanding_not_seen: tests_not_seen,
         });
-    }
 
-    pub(super) fn run_stats(&self) -> RunStats {
-        self.run_stats
+        outcome
+    }
+}
+
+/// What the stress loop does after a sub-run finishes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[must_use]
+pub(super) enum StressLoopAction {
+    Continue,
+    Stop,
+}
+
+impl StressLoopAction {
+    fn after_sub_run(sub_final_stats: FinalRunStats, cancel_reason: Option<CancelReason>) -> Self {
+        match cancel_reason {
+            // Any cancellation stops the stress run, including one caused by a
+            // fail-fast failure.
+            Some(_) => Self::Stop,
+            None => match sub_final_stats {
+                // Some tests didn't run even though no cancel reason was
+                // recorded.
+                FinalRunStats::Cancelled { .. } => Self::Stop,
+                FinalRunStats::Success
+                | FinalRunStats::NoTestsRun
+                | FinalRunStats::Failed { .. } => Self::Continue,
+            },
+        }
     }
 }
 
@@ -1177,6 +1209,8 @@ enum DispatcherStressContext {
         completed: u32,
         failed: u32,
         cancelled: bool,
+        // None until the first sub-run completes.
+        outcome: Option<RunOutcome>,
     },
 }
 
@@ -1239,6 +1273,7 @@ impl DispatcherStressContext {
                 completed: 0,
                 failed: 0,
                 cancelled: false,
+                outcome: None,
             }
         } else {
             Self::None
@@ -1261,6 +1296,7 @@ impl DispatcherStressContext {
                 completed,
                 failed: _,
                 cancelled: _,
+                outcome: _,
             } => match condition {
                 StressCondition::Count(total) => Some(StressProgress::Count {
                     total: *total,
@@ -1309,8 +1345,14 @@ impl DispatcherStressContext {
                 completed,
                 failed,
                 cancelled,
+                outcome,
             } => {
                 *completed += 1;
+                let sub_run_outcome = RunOutcome::from_final_stats(summary);
+                *outcome = Some(match *outcome {
+                    Some(so_far) => so_far.combine(sub_run_outcome),
+                    None => sub_run_outcome,
+                });
                 match summary {
                     FinalRunStats::Success => {}
                     FinalRunStats::NoTestsRun => {
@@ -1334,6 +1376,17 @@ impl DispatcherStressContext {
         }
     }
 
+    /// Note that `final_stats` is only consulted for standard runs. Stress runs
+    /// return the accumulated outcome across sub-runs.
+    fn final_outcome(&self, final_stats: FinalRunStats) -> RunOutcome {
+        match self {
+            Self::None => RunOutcome::from_final_stats(final_stats),
+            Self::Stress { outcome, .. } => {
+                outcome.expect("a stress run completed at least one sub-run before finishing")
+            }
+        }
+    }
+
     fn run_stats(&self, last_final_stats: FinalRunStats) -> Option<StressRunStats> {
         match self {
             Self::None => None,
@@ -1343,6 +1396,7 @@ impl DispatcherStressContext {
                 completed,
                 failed,
                 cancelled,
+                outcome: _,
             } => {
                 let mut success_count = completed.saturating_sub(*failed);
                 // If the run is cancelled, there's one less success than we
@@ -1378,6 +1432,15 @@ impl DispatcherStressContext {
                 sub_stopwatch.resume();
             }
         }
+    }
+}
+
+fn stress_summary_for_outcome(outcome: RunOutcome) -> StressFinalRunStats {
+    match outcome {
+        RunOutcome::Success => StressFinalRunStats::Success,
+        RunOutcome::NoTestsRun => StressFinalRunStats::NoTestsRun,
+        RunOutcome::Cancelled { step: _ } => StressFinalRunStats::Cancelled,
+        RunOutcome::Failed { step: _ } => StressFinalRunStats::Failed,
     }
 }
 
@@ -1506,7 +1569,227 @@ impl SignalCount {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::reporter::events::{RunFailureStep, RunStatsFailureKind};
     use std::sync::Mutex;
+
+    #[test]
+    fn stress_outcome() {
+        const TEST_FAILED: FinalRunStats = FinalRunStats::Failed {
+            kind: RunStatsFailureKind::Test {
+                initial_run_count: 1,
+                not_run: 0,
+            },
+        };
+        const SETUP_SCRIPT_FAILED: FinalRunStats = FinalRunStats::Failed {
+            kind: RunStatsFailureKind::SetupScript,
+        };
+        const TEST_CANCELLED: FinalRunStats = FinalRunStats::Cancelled {
+            reason: Some(CancelReason::Interrupt),
+            kind: RunStatsFailureKind::Test {
+                initial_run_count: 1,
+                not_run: 1,
+            },
+        };
+        const SETUP_SCRIPT_CANCELLED: FinalRunStats = FinalRunStats::Cancelled {
+            reason: Some(CancelReason::Interrupt),
+            kind: RunStatsFailureKind::SetupScript,
+        };
+        const FAILED_AT_TEST: RunOutcome = RunOutcome::Failed {
+            step: RunFailureStep::Test,
+        };
+        const FAILED_AT_SETUP_SCRIPT: RunOutcome = RunOutcome::Failed {
+            step: RunFailureStep::SetupScript,
+        };
+
+        let cases: &[(&str, &[FinalRunStats], u32, RunOutcome)] = &[
+            (
+                "all sub-runs pass",
+                &[FinalRunStats::Success, FinalRunStats::Success],
+                0,
+                RunOutcome::Success,
+            ),
+            (
+                "all sub-runs run no tests",
+                &[FinalRunStats::NoTestsRun, FinalRunStats::NoTestsRun],
+                0,
+                RunOutcome::NoTestsRun,
+            ),
+            (
+                "the first and third sub-runs fail and the last passes",
+                &[
+                    TEST_FAILED,
+                    FinalRunStats::Success,
+                    TEST_FAILED,
+                    FinalRunStats::Success,
+                ],
+                2,
+                FAILED_AT_TEST,
+            ),
+            (
+                "the second and last sub-runs fail",
+                &[
+                    FinalRunStats::Success,
+                    TEST_FAILED,
+                    FinalRunStats::Success,
+                    TEST_FAILED,
+                ],
+                2,
+                FAILED_AT_TEST,
+            ),
+            (
+                "a setup script failure after a test failure takes precedence",
+                &[TEST_FAILED, SETUP_SCRIPT_FAILED],
+                2,
+                FAILED_AT_SETUP_SCRIPT,
+            ),
+            (
+                "a setup script failure before a test failure takes precedence",
+                &[SETUP_SCRIPT_FAILED, TEST_FAILED, FinalRunStats::Success],
+                2,
+                FAILED_AT_SETUP_SCRIPT,
+            ),
+            (
+                "an earlier failure followed by no tests run",
+                &[TEST_FAILED, FinalRunStats::NoTestsRun],
+                1,
+                FAILED_AT_TEST,
+            ),
+            (
+                "an earlier failure followed by cancellation during tests",
+                &[TEST_FAILED, TEST_CANCELLED],
+                1,
+                FAILED_AT_TEST,
+            ),
+            (
+                "an earlier test failure outranks cancellation during setup scripts",
+                &[TEST_FAILED, SETUP_SCRIPT_CANCELLED],
+                1,
+                FAILED_AT_TEST,
+            ),
+            (
+                "cancellation during tests without failures",
+                &[FinalRunStats::Success, TEST_CANCELLED],
+                0,
+                RunOutcome::Cancelled {
+                    step: RunFailureStep::Test,
+                },
+            ),
+            (
+                "cancellation during setup scripts without failures",
+                &[FinalRunStats::Success, SETUP_SCRIPT_CANCELLED],
+                0,
+                RunOutcome::Cancelled {
+                    step: RunFailureStep::SetupScript,
+                },
+            ),
+        ];
+
+        for (description, sub_runs, expected_failed_count, expected_outcome) in cases {
+            let mut stress_cx =
+                DispatcherStressContext::new(Some(StressCondition::Count(StressCount::Infinite)));
+            for sub_run in *sub_runs {
+                stress_cx.mark_completed(*sub_run);
+            }
+            let last = *sub_runs.last().expect("at least one sub-run");
+            let outcome = stress_cx.final_outcome(last);
+            assert_eq!(
+                outcome, *expected_outcome,
+                "outcome for test case: {description}"
+            );
+
+            let stats = stress_cx
+                .run_stats(last)
+                .expect("stress context produces stress stats");
+            assert_eq!(
+                stats.failed_count, *expected_failed_count,
+                "failed count for test case: {description}"
+            );
+
+            // The exit outcome and the reported summary (which drives the
+            // summary line and the recorded status) are computed separately, so
+            // ensure that they agree here.
+            assert_eq!(
+                stats.summarize_final(),
+                stress_summary_for_outcome(outcome),
+                "reported summary agrees with the outcome for test case: {description}"
+            );
+        }
+    }
+
+    #[test]
+    fn stress_loop_action_after_sub_run() {
+        const TEST_KIND: RunStatsFailureKind = RunStatsFailureKind::Test {
+            initial_run_count: 2,
+            not_run: 1,
+        };
+
+        let cases = [
+            (
+                "a passing sub-run continues",
+                FinalRunStats::Success,
+                None,
+                StressLoopAction::Continue,
+            ),
+            (
+                "a sub-run with no tests continues",
+                FinalRunStats::NoTestsRun,
+                None,
+                StressLoopAction::Continue,
+            ),
+            (
+                "a failed sub-run that didn't cancel the run continues",
+                FinalRunStats::Failed { kind: TEST_KIND },
+                None,
+                StressLoopAction::Continue,
+            ),
+            (
+                "a failed sub-run that cancelled the run stops",
+                FinalRunStats::Failed { kind: TEST_KIND },
+                Some(CancelReason::TestFailure),
+                StressLoopAction::Stop,
+            ),
+            (
+                "a failed setup script stops",
+                FinalRunStats::Failed {
+                    kind: RunStatsFailureKind::SetupScript,
+                },
+                Some(CancelReason::SetupScriptFailure),
+                StressLoopAction::Stop,
+            ),
+            (
+                "an interrupted sub-run stops",
+                FinalRunStats::Cancelled {
+                    reason: Some(CancelReason::Interrupt),
+                    kind: TEST_KIND,
+                },
+                Some(CancelReason::Interrupt),
+                StressLoopAction::Stop,
+            ),
+            (
+                "a signal received after every test finished stops",
+                FinalRunStats::Success,
+                Some(CancelReason::Signal),
+                StressLoopAction::Stop,
+            ),
+            (
+                "a sub-run with tests not run and no cancel reason stops",
+                FinalRunStats::Cancelled {
+                    reason: None,
+                    kind: TEST_KIND,
+                },
+                None,
+                StressLoopAction::Stop,
+            ),
+        ];
+
+        for (description, sub_final_stats, cancel_reason, expected) in cases {
+            assert_eq!(
+                StressLoopAction::after_sub_run(sub_final_stats, cancel_reason),
+                expected,
+                "test case: {description}"
+            );
+        }
+    }
 
     #[test]
     fn begin_cancel_report_signal_interrupt() {

@@ -202,7 +202,7 @@ pub struct RunStats {
 Key methods:
 - `has_failures()`: Returns true if any failures occurred.
 - `failed_count()`: Sum of `failed + exec_failed + failed_timed_out`.
-- `summarize_final()`: Returns `FinalRunStats` enum for exit code determination.
+- `summarize_final()`: Returns `FinalRunStats` enum summarizing a single run or stress sub-run. The runner converts it to a `RunOutcome` (combined across sub-runs for stress runs) for exit code determination.
 - `on_test_finished()`: Updates stats based on final execution status.
 
 ### ExecutionStatuses

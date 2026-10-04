@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{DispatcherContext, ExecutorContext, RunnerTaskState};
+use super::{DispatcherContext, ExecutorContext, RunnerTaskState, StressLoopAction};
 use crate::{
     config::{
         core::EvaluatableProfile,
@@ -15,7 +15,7 @@ use crate::{
     },
     input::{InputHandler, InputHandlerKind, InputHandlerStatus},
     list::{OwnedTestInstanceId, TestInstanceWithSettings, TestList},
-    reporter::events::{ReporterEvent, RunStats, StressIndex},
+    reporter::events::{ReporterEvent, RunOutcome, StressIndex},
     runner::ExecutorEvent,
     signal::{SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
@@ -469,11 +469,14 @@ impl<'a> TestRunner<'a> {
     ///
     /// The callback is called with the results of each test.
     ///
+    /// Returns the final result of the run. For stress runs, this accounts for
+    /// every sub-run, not just the last one.
+    ///
     /// Returns an error if any of the tasks panicked.
     pub fn execute<F>(
         self,
         mut callback: F,
-    ) -> Result<RunStats, TestRunnerExecuteErrors<Infallible>>
+    ) -> Result<RunOutcome, TestRunnerExecuteErrors<Infallible>>
     where
         F: FnMut(ReporterEvent<'a>) + Send,
     {
@@ -488,11 +491,14 @@ impl<'a> TestRunner<'a> {
     /// Accepts a callback that is called with the results of each test. If the callback returns an
     /// error, the test run terminates and the callback is no longer called.
     ///
+    /// Returns the final result of the run. For stress runs, this accounts for
+    /// every sub-run, not just the last one.
+    ///
     /// Returns an error if any of the tasks panicked.
     pub fn try_execute<E, F>(
         mut self,
         mut callback: F,
-    ) -> Result<RunStats, TestRunnerExecuteErrors<E>>
+    ) -> Result<RunOutcome, TestRunnerExecuteErrors<E>>
     where
         F: FnMut(ReporterEvent<'a>) -> Result<(), E> + Send,
         E: fmt::Debug + Send,
@@ -531,7 +537,7 @@ impl<'a> TestRunner<'a> {
         self.inner.runtime.shutdown_background();
 
         match (res, first_error) {
-            (Ok(run_stats), None) => Ok(run_stats),
+            (Ok(outcome), None) => Ok(outcome),
             (Ok(_), Some(report_error)) => Err(TestRunnerExecuteErrors {
                 report_error: Some(report_error),
                 join_errors: Vec::new(),
@@ -572,7 +578,7 @@ impl<'a> TestRunnerInner<'a> {
         input_handler: &mut InputHandler,
         report_cancel_rx: oneshot::Receiver<()>,
         callback: F,
-    ) -> Result<RunStats, Vec<JoinError>>
+    ) -> Result<RunOutcome, Vec<JoinError>>
     where
         F: FnMut(ReporterEvent<'a>) + Send,
     {
@@ -634,10 +640,9 @@ impl<'a> TestRunnerInner<'a> {
                     report_cancel_rx.as_mut(),
                 )?;
 
-                dispatcher_cx.stress_sub_run_finished();
-
-                if dispatcher_cx.cancel_reason().is_some() {
-                    break;
+                match dispatcher_cx.stress_sub_run_finished() {
+                    StressLoopAction::Stop => break,
+                    StressLoopAction::Continue => {}
                 }
 
                 progress = dispatcher_cx
@@ -661,10 +666,7 @@ impl<'a> TestRunnerInner<'a> {
             )?;
         }
 
-        let run_stats = dispatcher_cx.run_stats();
-        dispatcher_cx.run_finished();
-
-        Ok(run_stats)
+        Ok(dispatcher_cx.run_finished())
     }
 
     fn do_run<F>(
