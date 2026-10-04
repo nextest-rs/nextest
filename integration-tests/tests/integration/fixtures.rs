@@ -409,11 +409,11 @@ impl ExpectedTestResults {
         test_names: &[&str],
         properties: RunProperties,
         iteration: NonZero<u32>,
-        stress_count: NonZero<u32>,
+        stress_total: Option<NonZero<u32>>,
     ) -> Self {
         let stress_index = StressIndex {
             current: iteration,
-            total: Some(stress_count),
+            total: stress_total,
         };
         Self::for_test_names_impl(test_names, properties, Some(stress_index))
     }
@@ -759,8 +759,9 @@ static SUMMARY_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 // The start of a stress run iteration with a fixed count.
 // Format: "Stress test iteration N/M (<elapsed> elapsed so far, ...)"
+// The "/M" total is absent for duration-based stress runs.
 static STRESS_ITERATION_START_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s*Stress test iteration (?<current>\d+)/\d+ \(").unwrap());
+    LazyLock::new(|| Regex::new(r"^\s*Stress test iteration (?<current>\d+)(?:/\d+)? \(").unwrap());
 // The summary line at the end of a stress run with a fixed count.
 // Format: "Summary [duration] N/M stress run iterations: P passed(, F failed)?"
 //
@@ -768,7 +769,7 @@ static STRESS_ITERATION_START_RE: LazyLock<Regex> =
 // "; cancelled due to ..." suffix, aren't matched.
 static STRESS_SUMMARY_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"Summary \[.*\] +(?<completed>\d+)/(?<total>\d+) stress run iterations?: (?<passed>\d+) passed(?:, (?<failed>\d+) failed)?$",
+        r"Summary \[.*\] +(?<completed>\d+)(?:/(?<total>\d+))? stress run iterations?: (?<passed>\d+) passed(?:, (?<failed>\d+) failed)?$",
     )
     .unwrap()
 });
@@ -971,7 +972,7 @@ struct ActualStressResults {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct StressSummary {
     completed: u32,
-    total: NonZero<u32>,
+    total: Option<NonZero<u32>>,
     passed: u32,
     failed: u32,
 }
@@ -995,7 +996,7 @@ impl ActualStressResults {
             } else if let Some(caps) = STRESS_SUMMARY_RE.captures(line) {
                 summary = Some(StressSummary {
                     completed: caps["completed"].parse().unwrap(),
-                    total: caps["total"].parse().unwrap(),
+                    total: caps.name("total").map(|m| m.as_str().parse().unwrap()),
                     passed: caps["passed"].parse().unwrap(),
                     failed: caps
                         .name("failed")
@@ -1383,6 +1384,34 @@ pub fn check_stress_run_output(
     stress_count: NonZero<u32>,
     properties: RunProperties,
 ) {
+    check_stress_run_output_impl(
+        output,
+        test_names,
+        stress_count,
+        Some(stress_count),
+        properties,
+    );
+}
+
+/// Checks the output of a duration-based stress run against fixture data.
+#[track_caller]
+pub fn check_stress_duration_run_output(
+    output: &[u8],
+    test_names: &[&str],
+    iterations: NonZero<u32>,
+    properties: RunProperties,
+) {
+    check_stress_run_output_impl(output, test_names, iterations, None, properties);
+}
+
+#[track_caller]
+fn check_stress_run_output_impl(
+    output: &[u8],
+    test_names: &[&str],
+    completed: NonZero<u32>,
+    total: Option<NonZero<u32>>,
+    properties: RunProperties,
+) {
     let output_str = String::from_utf8(output.to_vec()).unwrap();
 
     println!("{output_str}");
@@ -1392,20 +1421,15 @@ pub fn check_stress_run_output(
 
     assert_eq!(
         actual.iterations.len(),
-        stress_count.get() as usize,
+        completed.get() as usize,
         "stress iteration count mismatch\n\n--- output ---\n{output_str}\n--- end output ---"
     );
 
     let mut failed = 0;
-    let iterations =
-        (1..=stress_count.get()).map(|i| NonZero::new(i).expect("the range starts at 1"));
+    let iterations = (1..=completed.get()).map(|i| NonZero::new(i).expect("the range starts at 1"));
     for (iteration, actual_iteration) in iterations.zip(&actual.iterations) {
-        let expected = ExpectedTestResults::for_stress_iteration(
-            test_names,
-            properties,
-            iteration,
-            stress_count,
-        );
+        let expected =
+            ExpectedTestResults::for_stress_iteration(test_names, properties, iteration, total);
         eprintln!("expected (iteration {iteration}): {expected:?}");
 
         verify_run(&expected, actual_iteration, &output_str, properties);
@@ -1415,9 +1439,9 @@ pub fn check_stress_run_output(
     }
 
     let expected_summary = StressSummary {
-        completed: stress_count.get(),
-        total: stress_count,
-        passed: stress_count.get() - failed,
+        completed: completed.get(),
+        total,
+        passed: completed.get() - failed,
         failed,
     };
     assert_eq!(

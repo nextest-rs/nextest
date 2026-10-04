@@ -619,28 +619,34 @@ impl<'a> TestRunnerInner<'a> {
         let mut report_cancel_rx = std::pin::pin!(report_cancel_rx.fuse());
 
         if self.stress_condition.is_some() {
+            let mut progress = dispatcher_cx
+                .stress_progress()
+                .expect("stress_condition is Some => stress progress is Some");
             loop {
-                let progress = dispatcher_cx
+                dispatcher_cx.stress_sub_run_started(progress);
+
+                self.do_run(
+                    dispatcher_cx.stress_index(),
+                    &mut dispatcher_cx,
+                    &executor_cx,
+                    signal_handler,
+                    input_handler,
+                    report_cancel_rx.as_mut(),
+                )?;
+
+                dispatcher_cx.stress_sub_run_finished();
+
+                if dispatcher_cx.cancel_reason().is_some() {
+                    break;
+                }
+
+                progress = dispatcher_cx
                     .stress_progress()
                     .expect("stress_condition is Some => stress progress is Some");
-                if progress.remaining().is_some() {
-                    dispatcher_cx.stress_sub_run_started(progress);
 
-                    self.do_run(
-                        dispatcher_cx.stress_index(),
-                        &mut dispatcher_cx,
-                        &executor_cx,
-                        signal_handler,
-                        input_handler,
-                        report_cancel_rx.as_mut(),
-                    )?;
-
-                    dispatcher_cx.stress_sub_run_finished();
-
-                    if dispatcher_cx.cancel_reason().is_some() {
-                        break;
-                    }
-                } else {
+                // The remaining condition is checked after each sub-run, not
+                // before, so at least one sub-run always runs.
+                if progress.remaining().is_none() {
                     break;
                 }
             }
