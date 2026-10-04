@@ -704,7 +704,7 @@ impl<'a> DisplayReporterImpl<'a> {
                                 writer,
                                 ", {} remaining",
                                 self.redactor
-                                    .redact_hhmmss_duration(t, DurationRounding::Ceiling)
+                                    .redact_hhmmss_duration(t.get(), DurationRounding::Ceiling)
                                     .style(self.styles.count)
                             )?;
                         }
