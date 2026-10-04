@@ -222,10 +222,10 @@ The `ExecutionDescription` determines status levels:
 `CancelReason` has an intentional ordering for output suppression logic:
 
 ```rust
-SetupScriptFailure < TestFailure < TestFailureImmediate < ReportError < GlobalTimeout < Signal < Interrupt < SecondSignal
+SetupScriptFailure < TestFailure < ReportError < GlobalTimeout < TestFailureImmediate < Signal < Interrupt < SecondSignal
 ```
 
-Higher values indicate more urgent cancellation; interrupt and signal hide output to avoid spam.
+Higher values indicate more urgent cancellation; interrupt and second signal hide test output to avoid spam, and signal displays it at most once.
 
 ## JUnit XML reporter
 

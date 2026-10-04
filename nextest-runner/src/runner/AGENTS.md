@@ -148,11 +148,11 @@ Third signal  → Panic (immediate exit)
 ### Cancel reasons (ordered)
 
 ```rust
-SetupScriptFailure < TestFailure < TestFailureImmediate < ReportError
-    < GlobalTimeout < Signal < Interrupt < SecondSignal
+SetupScriptFailure < TestFailure < ReportError < GlobalTimeout
+    < TestFailureImmediate < Signal < Interrupt < SecondSignal
 ```
 
-Higher values suppress output to avoid spam during shutdown.
+Values above `Signal` suppress test output to avoid spam during shutdown.
 
 ### Job control (Unix only)
 
