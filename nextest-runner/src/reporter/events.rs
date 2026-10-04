@@ -513,7 +513,10 @@ impl StressProgress {
                 total,
                 elapsed,
                 completed: _,
-            } => total.checked_sub(*elapsed).map(StressRemaining::Time),
+            } => total
+                .checked_sub(*elapsed)
+                .and_then(NonZeroDuration::new)
+                .map(StressRemaining::Time),
         }
     }
 
@@ -527,7 +530,7 @@ impl StressProgress {
 }
 
 /// For a stress test, the amount of time or number of stress runs remaining.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StressRemaining {
     /// The number of stress runs remaining, guaranteed to be non-zero.
     Count(NonZero<u32>),
@@ -536,7 +539,29 @@ pub enum StressRemaining {
     Infinite,
 
     /// The amount of time remaining.
-    Time(Duration),
+    Time(NonZeroDuration),
+}
+
+/// A [`Duration`] that is guaranteed to be non-zero.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NonZeroDuration(Duration);
+
+impl NonZeroDuration {
+    /// Creates a `NonZeroDuration` from a [`Duration`].
+    ///
+    /// Returns `None` if the duration is zero.
+    pub fn new(duration: Duration) -> Option<Self> {
+        if duration.is_zero() {
+            None
+        } else {
+            Some(Self(duration))
+        }
+    }
+
+    /// Returns the underlying [`Duration`].
+    pub fn get(self) -> Duration {
+        self.0
+    }
 }
 
 /// The index of the current stress run.
@@ -3597,5 +3622,41 @@ mod tests {
             RunFailureStep::Test => 0,
             RunFailureStep::SetupScript => 1,
         }
+    }
+
+    #[test]
+    fn stress_progress_time_remaining() {
+        let total = Duration::from_secs(30);
+        let smallest_step = Duration::from_nanos(1);
+        let progress_at = |elapsed: Duration| StressProgress::Time {
+            total,
+            elapsed,
+            completed: 3,
+        };
+
+        assert_eq!(
+            progress_at(Duration::ZERO).remaining(),
+            Some(StressRemaining::Time(
+                NonZeroDuration::new(total).expect("total is non-zero")
+            )),
+            "no time elapsed => the whole duration remains"
+        );
+        assert_eq!(
+            progress_at(total - smallest_step).remaining(),
+            Some(StressRemaining::Time(
+                NonZeroDuration::new(smallest_step).expect("smallest step is non-zero")
+            )),
+            "elapsed just below total => the difference remains"
+        );
+        assert_eq!(
+            progress_at(total).remaining(),
+            None,
+            "elapsed equal to total => nothing remains"
+        );
+        assert_eq!(
+            progress_at(total + smallest_step).remaining(),
+            None,
+            "elapsed above total => nothing remains"
+        );
     }
 }
