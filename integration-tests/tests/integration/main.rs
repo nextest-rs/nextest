@@ -3206,6 +3206,45 @@ fn test_stress_run_earlier_iteration_failed() {
     );
 }
 
+/// An iteration stopped by immediate fail-fast is summarized as failed, not as
+/// cancelled.
+#[test]
+fn test_stress_run_immediate_fail_fast() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let stress_count = NonZero::new(3).expect("3 is non-zero");
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--stress-count",
+            &stress_count.to_string(),
+            "--max-fail",
+            "1:immediate",
+            "-E",
+            "test(=test_stress_fail_first_iteration)",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
+    );
+    check_partial_stress_run_output(
+        &output.stderr,
+        &["test_stress_fail_first_iteration"],
+        NonZero::new(1).expect("1 is non-zero"),
+        stress_count,
+        RunProperties::empty(),
+    );
+}
+
 /// Verify that a stress duration that elapses before the first sub-run still
 /// runs one iteration.
 #[test]

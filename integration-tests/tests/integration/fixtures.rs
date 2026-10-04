@@ -1404,6 +1404,25 @@ pub fn check_stress_duration_run_output(
     check_stress_run_output_impl(output, test_names, iterations, None, properties);
 }
 
+/// Checks the output of a count-based stress run that stopped after `completed`
+/// of `stress_count` iterations.
+#[track_caller]
+pub fn check_partial_stress_run_output(
+    output: &[u8],
+    test_names: &[&str],
+    completed: NonZero<u32>,
+    stress_count: NonZero<u32>,
+    properties: RunProperties,
+) {
+    check_stress_run_output_impl(
+        output,
+        test_names,
+        completed,
+        Some(stress_count),
+        properties,
+    );
+}
+
 #[track_caller]
 fn check_stress_run_output_impl(
     output: &[u8],
