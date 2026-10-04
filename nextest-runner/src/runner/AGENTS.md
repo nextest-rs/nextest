@@ -280,7 +280,9 @@ enum StressCondition {
 
 Each sub-run resets `RunStats` but accumulates in `StressRunStats`.
 
-After each sub-run, `StressLoopAction` decides whether the stress loop continues. The loop stops if the run was cancelled for any reason, or if the sub-run itself summarizes as cancelled (some tests did not run). A cancelled sub-run is therefore always the last one, which `StressRunStats::summarize_final` relies on: it reports cancellation based on the last sub-run only.
+After each sub-run, `StressLoopAction::after_sub_run` decides whether the stress loop continues. It is a pure function, and the only place that decides whether another sub-run starts. (The loop in `TestRunnerInner::execute` has one other exit: a `JoinError` from `do_run` propagates out of `execute` without reaching `stress_sub_run_finished` or `run_finished`.) The loop stops if the run was cancelled for any reason, if the sub-run itself summarizes as cancelled (some tests did not run), or if no stress work remains (the count is exhausted or the duration has elapsed). A cancelled sub-run is therefore always the last one, which `StressRunStats::summarize_final` relies on: it reports cancellation based on the last sub-run only.
+
+The decision is made after a sub-run and never before one, so at least one sub-run always runs. `StressLoopAction::Continue` carries the `StressProgress` that the decision was based on, and the next sub-run starts with that same value. `stress_sub_run_finished` takes this reading after it reports `StressSubRunFinished`, so that time spent in the reporter callback counts toward a duration-based run. It is therefore a later reading than the progress carried by the `StressSubRunFinished` event: for a duration-based run, that event can carry a progress with time remaining even though the loop then stops.
 
 The folded `RunOutcome` is what `execute()` returns for stress runs, and determines the exit code. A failed sub-run is sticky, so a failure in any sub-run fails the run even if the last sub-run passes. `RunOutcome::combine` is commutative and associative, so the result does not depend on the order in which sub-runs complete.
 

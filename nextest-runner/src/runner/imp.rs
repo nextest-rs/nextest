@@ -640,19 +640,12 @@ impl<'a> TestRunnerInner<'a> {
                     report_cancel_rx.as_mut(),
                 )?;
 
+                // The action is decided after each sub-run because we want to
+                // make sure at least one sub-run occurs (i.e., something like
+                // do-while, not just a plain while).
                 match dispatcher_cx.stress_sub_run_finished() {
+                    StressLoopAction::Continue { next_progress } => progress = next_progress,
                     StressLoopAction::Stop => break,
-                    StressLoopAction::Continue => {}
-                }
-
-                progress = dispatcher_cx
-                    .stress_progress()
-                    .expect("stress_condition is Some => stress progress is Some");
-
-                // The remaining condition is checked after each sub-run, not
-                // before, so at least one sub-run always runs.
-                if progress.remaining().is_none() {
-                    break;
                 }
             }
         } else {
