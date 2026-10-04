@@ -3206,6 +3206,41 @@ fn test_stress_run_earlier_iteration_failed() {
     );
 }
 
+/// Verify that a stress duration that elapses before the first sub-run still
+/// runs one iteration.
+#[test]
+fn test_stress_duration_runs_at_least_one_iteration() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--stress-duration",
+            "1ns",
+            "-E",
+            "test(=test_success)",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::OK),
+        "correct exit code for command\n{output}"
+    );
+    check_stress_duration_run_output(
+        &output.stderr,
+        &["test_success"],
+        NonZero::new(1).expect("1 is non-zero"),
+        RunProperties::empty(),
+    );
+}
+
 /// Test that `--run-ignored only` runs only ignored tests.
 #[test]
 fn test_run_ignored() {
