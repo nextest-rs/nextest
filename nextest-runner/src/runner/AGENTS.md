@@ -148,9 +148,11 @@ Third signal  → Panic (immediate exit)
 ### Cancel reasons (ordered)
 
 ```rust
-SetupScriptFailure < TestFailure < ReportError < GlobalTimeout
-    < TestFailureImmediate < Signal < Interrupt < SecondSignal
+SetupScriptFailure < TestFailure < ReportError < TestFailureImmediate
+    < GlobalTimeout < Signal < Interrupt < SecondSignal
 ```
+
+A new cancel reason only replaces the current one if it is greater. Every other reason that terminates running tests (`GlobalTimeout` and the signal reasons) ranks above `TestFailureImmediate`: terminated tests count as failures, and with immediate fail-fast those failures must not replace the reason that terminated them. Replacing one terminating reason with a greater one broadcasts a second shutdown request, which kills units that are still in their grace period.
 
 Values above `Signal` suppress test output to avoid spam during shutdown.
 
