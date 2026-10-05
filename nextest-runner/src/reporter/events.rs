@@ -2408,11 +2408,11 @@ pub enum CancelReason {
     /// An error occurred while reporting results.
     ReportError,
 
-    /// The global timeout was exceeded.
-    GlobalTimeout,
-
     /// A test failed and fail-fast with immediate termination was specified.
     TestFailureImmediate,
+
+    /// The global timeout was exceeded.
+    GlobalTimeout,
 
     /// A termination signal (on Unix, SIGTERM or SIGHUP) was received.
     Signal,
@@ -2430,8 +2430,8 @@ impl CancelReason {
             CancelReason::SetupScriptFailure => "setup script failure",
             CancelReason::TestFailure => "test failure",
             CancelReason::ReportError => "reporting error",
-            CancelReason::GlobalTimeout => "global timeout",
             CancelReason::TestFailureImmediate => "test failure",
+            CancelReason::GlobalTimeout => "global timeout",
             CancelReason::Signal => "signal",
             CancelReason::Interrupt => "interrupt",
             CancelReason::SecondSignal => "second signal",

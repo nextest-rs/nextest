@@ -222,7 +222,7 @@ The `ExecutionDescription` determines status levels:
 `CancelReason` has an intentional ordering for output suppression logic:
 
 ```rust
-SetupScriptFailure < TestFailure < ReportError < GlobalTimeout < TestFailureImmediate < Signal < Interrupt < SecondSignal
+SetupScriptFailure < TestFailure < ReportError < TestFailureImmediate < GlobalTimeout < Signal < Interrupt < SecondSignal
 ```
 
 Higher values indicate more urgent cancellation; interrupt and second signal hide test output to avoid spam, and signal displays it at most once.

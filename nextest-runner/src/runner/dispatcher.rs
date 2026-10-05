@@ -2091,6 +2091,131 @@ mod tests {
         }
     }
 
+    #[test]
+    fn begin_cancel_global_timeout_then_test_failure_immediate() {
+        let events = Mutex::new(Vec::new());
+        let mut cx = cancel_test_cx(&events);
+
+        let response = cx.handle_event(InternalEvent::GlobalTimeout);
+        assert_eq!(
+            response,
+            HandleEventResponse::Cancel(CancelEvent::GlobalTimeout),
+            "the global timeout begins cancellation"
+        );
+        assert_eq!(
+            pop_begin_cancel_reason(&events),
+            Some(CancelReason::GlobalTimeout),
+            "the global timeout is the reported cancel reason"
+        );
+
+        let cx_after_global_timeout = cx.clone();
+
+        // Tests terminated by the global timeout count as failures, which trips
+        // immediate fail-fast.
+        let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+            ShutdownEvent::TestFailureImmediate,
+        )));
+        assert_noop(response, &events);
+        assert_eq!(
+            cx.run_stats.cancel_reason,
+            Some(CancelReason::GlobalTimeout),
+            "an immediate test failure does not replace the global timeout"
+        );
+
+        for sig in ShutdownSignalEvent::ALL_VARIANTS {
+            let mut cx = cx_after_global_timeout.clone();
+
+            let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+                ShutdownEvent::Signal(*sig),
+            )));
+            assert_eq!(
+                response,
+                HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Once(
+                    ShutdownEvent::Signal(*sig)
+                ))),
+                "{sig:?} after the global timeout begins a signal cancellation"
+            );
+            assert_eq!(
+                pop_begin_cancel_reason(&events),
+                Some(event_to_cancel_reason(ShutdownEvent::Signal(*sig))),
+                "{sig:?} replaces the global timeout"
+            );
+        }
+    }
+
+    #[test]
+    fn begin_cancel_test_failure_immediate_then_global_timeout() {
+        let events = Mutex::new(Vec::new());
+        let mut cx = cancel_test_cx(&events);
+
+        let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+            ShutdownEvent::TestFailureImmediate,
+        )));
+        assert_eq!(
+            response,
+            HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Once(
+                ShutdownEvent::TestFailureImmediate
+            ))),
+            "an immediate test failure begins cancellation"
+        );
+        assert_eq!(
+            pop_begin_cancel_reason(&events),
+            Some(CancelReason::TestFailureImmediate),
+            "the immediate test failure is the reported cancel reason"
+        );
+
+        // XXX This upgrade makes run() broadcast a second shutdown, which kills
+        // units still in the fail-fast grace period. We should fix this.
+        let response = cx.handle_event(InternalEvent::GlobalTimeout);
+        assert_eq!(
+            response,
+            HandleEventResponse::Cancel(CancelEvent::GlobalTimeout),
+            "the global timeout upgrades an immediate test failure"
+        );
+        assert_eq!(
+            pop_begin_cancel_reason(&events),
+            Some(CancelReason::GlobalTimeout),
+            "the global timeout replaces the immediate test failure"
+        );
+    }
+
+    fn cancel_test_cx<'a>(
+        events: &Mutex<Vec<Box<TestEvent<'a>>>>,
+    ) -> DispatcherContext<'a, impl FnMut(ReporterEvent<'a>) + Clone + Send> {
+        DispatcherContext::new(
+            |event| match event {
+                ReporterEvent::Test(event) => {
+                    events.lock().unwrap().push(event);
+                }
+                ReporterEvent::Tick => {}
+            },
+            ReportUuid::new_v4(),
+            "default",
+            vec![],
+            0,
+            MaxFail::All,
+            crate::time::far_future_duration(),
+            None,
+            None,
+        )
+    }
+
+    #[track_caller]
+    fn pop_begin_cancel_reason(events: &Mutex<Vec<Box<TestEvent<'_>>>>) -> Option<CancelReason> {
+        let mut events = events.lock().unwrap();
+        assert_eq!(events.len(), 1, "expected 1 event");
+        let event = events.pop().expect("exactly 1 event is present");
+        let TestEventKind::RunBeginCancel {
+            setup_scripts_running: _,
+            current_stats,
+            running: _,
+        } = event.kind
+        else {
+            panic!("expected RunBeginCancel event, found {:?}", event.kind);
+        };
+        current_stats.cancel_reason
+    }
+
     #[track_caller]
     fn assert_noop(response: HandleEventResponse, events: &Mutex<Vec<Box<TestEvent<'_>>>>) {
         assert_eq!(response, HandleEventResponse::None, "expected no response");
