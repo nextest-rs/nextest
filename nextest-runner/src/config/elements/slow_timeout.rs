@@ -38,27 +38,37 @@ impl schemars::JsonSchema for SlowTimeout {
     }
 
     fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        schemars::json_schema!({
-            "title": "SlowTimeout",
-            "oneOf": [
-                generator.subschema_for::<String>(),
-                {
-                    "type": "object",
-                    "properties": {
-                        "period": generator.subschema_for::<String>(),
-                        "terminate-after": {
-                            "type": ["integer", "null"],
-                            "minimum": 1,
-                        },
-                        "grace-period": generator.subschema_for::<String>(),
-                        "on-timeout": generator.subschema_for::<SlowTimeoutResult>(),
-                    },
-                    "required": ["period"],
-                    "additionalProperties": false,
-                }
-            ]
-        })
+        let on_timeout = generator.subschema_for::<SlowTimeoutResult>();
+        slow_timeout_schema(generator, "SlowTimeout", on_timeout)
     }
+}
+
+#[cfg(feature = "config-schema")]
+pub(in crate::config) fn slow_timeout_schema(
+    generator: &mut schemars::SchemaGenerator,
+    title: &str,
+    on_timeout: schemars::Schema,
+) -> schemars::Schema {
+    schemars::json_schema!({
+        "title": title,
+        "oneOf": [
+            generator.subschema_for::<String>(),
+            {
+                "type": "object",
+                "properties": {
+                    "period": generator.subschema_for::<String>(),
+                    "terminate-after": {
+                        "type": ["integer", "null"],
+                        "minimum": 1,
+                    },
+                    "grace-period": generator.subschema_for::<String>(),
+                    "on-timeout": on_timeout,
+                },
+                "required": ["period"],
+                "additionalProperties": false,
+            }
+        ]
+    })
 }
 
 fn default_grace_period() -> Duration {

@@ -4,10 +4,12 @@
 //! Setup scripts.
 
 use super::ScriptCommandEnvMap;
+#[cfg(feature = "config-schema")]
+use crate::config::elements::slow_timeout_schema;
 use crate::{
     config::{
         core::{ConfigIdentifier, EvaluatableProfile, FinalConfig, PreBuildPlatform},
-        elements::{LeakTimeout, SlowTimeout},
+        elements::{LeakTimeout, SlowTimeout, SlowTimeoutResult, deserialize_slow_timeout},
         overrides::{MaybeTargetSpec, PlatformStrings},
     },
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
@@ -35,8 +37,10 @@ use smol_str::SmolStr;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     fmt,
+    num::NonZeroUsize,
     process::Command,
     sync::Arc,
+    time::Duration,
 };
 use swrite::{SWrite, swrite};
 
@@ -678,11 +682,8 @@ pub struct SetupScriptConfig {
     pub command: ScriptCommand,
 
     /// Slow-timeout configuration for this setup script.
-    #[serde(
-        default,
-        deserialize_with = "crate::config::elements::deserialize_slow_timeout"
-    )]
-    pub slow_timeout: Option<SlowTimeout>,
+    #[serde(default, deserialize_with = "deserialize_setup_script_slow_timeout")]
+    pub slow_timeout: Option<SetupScriptSlowTimeout>,
 
     /// Leak-timeout configuration for this setup script.
     #[serde(
@@ -709,6 +710,72 @@ impl SetupScriptConfig {
     #[inline]
     pub fn no_capture(&self) -> bool {
         !(self.capture_stdout && self.capture_stderr)
+    }
+}
+
+/// Slow-timeout configuration for setup scripts.
+///
+/// The difference between [`SlowTimeout`] and this struct is that this only
+/// accepts `on-timeout = "fail"`. Unlike with tests, there aren't any use cases
+/// for `on-timeout = "pass"` for setup scripts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SetupScriptSlowTimeout {
+    pub(crate) period: Duration,
+    pub(crate) terminate_after: Option<NonZeroUsize>,
+    pub(crate) grace_period: Duration,
+}
+
+impl SetupScriptSlowTimeout {
+    pub(crate) const VERY_LARGE: Self = Self {
+        period: SlowTimeout::VERY_LARGE.period,
+        terminate_after: SlowTimeout::VERY_LARGE.terminate_after,
+        grace_period: SlowTimeout::VERY_LARGE.grace_period,
+    };
+}
+
+#[cfg(feature = "config-schema")]
+impl schemars::JsonSchema for SetupScriptSlowTimeout {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "SetupScriptSlowTimeout".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let on_timeout = schemars::json_schema!({
+            "description": "A setup script that times out always fails, so only \"fail\" is accepted.",
+            "type": "string",
+            "const": "fail",
+        });
+        slow_timeout_schema(generator, "SetupScriptSlowTimeout", on_timeout)
+    }
+}
+
+fn deserialize_setup_script_slow_timeout<'de, D>(
+    deserializer: D,
+) -> Result<Option<SetupScriptSlowTimeout>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let Some(slow_timeout) = deserialize_slow_timeout(deserializer)? else {
+        return Ok(None);
+    };
+    let SlowTimeout {
+        period,
+        terminate_after,
+        grace_period,
+        on_timeout,
+    } = slow_timeout;
+
+    match on_timeout {
+        SlowTimeoutResult::Fail => Ok(Some(SetupScriptSlowTimeout {
+            period,
+            terminate_after,
+            grace_period,
+        })),
+        SlowTimeoutResult::Pass => Err(D::Error::custom(
+            "`on-timeout = \"pass\"` is not supported for setup scripts: \
+             a setup script that times out always fails the run\n\
+             (hint: remove `on-timeout` or set it to `\"fail\"`)",
+        )),
     }
 }
 
@@ -1451,6 +1518,16 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
+            [scripts.setup.foo]
+            command = "my-command"
+            slow-timeout = { period = "60s", terminate-after = 2, on-timeout = "pass" }
+        "#},
+        r#"scripts.setup.foo.slow-timeout: `on-timeout = "pass"` is not supported for setup scripts: a setup script that times out always fails the run"#
+
+        ; "slow timeout on-timeout is pass"
+    )]
+    #[test_case(
+        indoc! {r#"
             [scripts.setup.'@tool:foo']
             command = "my-command"
         "#},
@@ -1587,6 +1664,61 @@ mod tests {
             actual_message.contains(message),
             "nextest config error `{actual_message}` contains message `{message}`"
         );
+    }
+
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = "my-command"
+            slow-timeout = ""
+        "#},
+        None
+
+        ; "slow timeout is an empty string"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = "my-command"
+            slow-timeout = { period = "60s", terminate-after = 2, grace-period = "1s", on-timeout = "fail" }
+        "#},
+        Some(SetupScriptSlowTimeout {
+            period: Duration::from_secs(60),
+            terminate_after: Some(NonZeroUsize::new(2).unwrap()),
+            grace_period: Duration::from_secs(1),
+        })
+
+        ; "slow timeout on-timeout is fail"
+    )]
+    fn parse_setup_script_slow_timeout(
+        config_contents: &str,
+        expected: Option<SetupScriptSlowTimeout>,
+    ) {
+        let workspace_dir = tempdir().unwrap();
+
+        let graph = temp_workspace(&workspace_dir, config_contents);
+        let pcx = ParseContext::new(&graph);
+
+        let nextest_config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &[][..],
+            &btreeset! { ConfigExperimental::SetupScripts },
+        )
+        .expect("config is valid");
+        let profile = nextest_config
+            .profile("default")
+            .expect("default profile exists")
+            .apply_build_platforms(&build_platforms());
+
+        let script_id = ScriptId::new("foo".into()).expect("foo is a valid script ID");
+        let script = profile
+            .script_config()
+            .setup
+            .get(&script_id)
+            .expect("foo is defined as a setup script");
+        assert_eq!(script.slow_timeout, expected);
     }
 
     #[test_case(

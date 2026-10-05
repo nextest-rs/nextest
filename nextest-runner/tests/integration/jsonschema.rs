@@ -338,3 +338,34 @@ ui.show-progress = "bar"
 
     Ok(())
 }
+
+#[test]
+fn test_setup_script_slow_timeout_on_timeout() -> eyre::Result<()> {
+    let validator = build_validator(NextestConfig::SCHEMA, REPO_SCHEMA_LABEL)?;
+
+    assert_validates(
+        &validator,
+        REPO_SCHEMA_LABEL,
+        "setup script with on-timeout = \"fail\" (inline)",
+        r#"
+[scripts.setup.foo]
+command = "my-command"
+slow-timeout = { period = "60s", terminate-after = 2, on-timeout = "fail" }
+"#,
+    )?;
+
+    assert_rejects(
+        &validator,
+        "setup script with on-timeout = \"pass\"",
+        r#"
+[scripts.setup.foo]
+command = "my-command"
+slow-timeout = { period = "60s", terminate-after = 2, on-timeout = "pass" }
+"#,
+        "/scripts/setup/foo/slow-timeout",
+        "anyOf",
+        r#""on-timeout":"pass""#,
+    );
+
+    Ok(())
+}
