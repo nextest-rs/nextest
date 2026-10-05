@@ -634,7 +634,7 @@ impl<'a> ExecutorContext<'a> {
                 .or_else(|| {
                     res.as_ref().ok().map(|res| {
                         create_execution_result(
-                            *res,
+                            Some(*res),
                             &child_acc.errors,
                             false,
                             LeakTimeoutResult::Pass,
@@ -664,8 +664,6 @@ impl<'a> ExecutorContext<'a> {
                 None
             }
         };
-
-        let exit_status = exit_status.expect("None always results in early return");
 
         let leaked = matches!(leak_info, LeakDetectInfo::Leaked);
         let exec_result = status.unwrap_or_else(|| {
@@ -1061,7 +1059,7 @@ impl<'a> ExecutorContext<'a> {
                 .or_else(|| {
                     res.as_ref().ok().map(|res| {
                         create_execution_result(
-                            *res,
+                            Some(*res),
                             &child_acc.errors,
                             false,
                             LeakTimeoutResult::Pass,
@@ -1097,8 +1095,6 @@ impl<'a> ExecutorContext<'a> {
             }
         };
 
-        let exit_status = exit_status.expect("None always results in early return");
-
         let (leaked, time_to_close) = match leak_info {
             LeakDetectInfo::NoLeak { time_to_close } => (false, Some(time_to_close)),
             LeakDetectInfo::Leaked => (true, None),
@@ -1127,7 +1123,7 @@ impl<'a> ExecutorContext<'a> {
             attempt: test.retry_data.attempt,
             total_attempts: test.retry_data.total_attempts,
             result: exec_result.as_static_str(),
-            exit_code: exit_status.code(),
+            exit_code: exit_status.and_then(|exit_status| exit_status.code()),
             duration_nanos: stopwatch_end.active.as_nanos() as u64,
             leaked,
             time_to_close_fds_nanos: time_to_close.map(|d| d.as_nanos() as u64),
@@ -1631,11 +1627,16 @@ async fn handle_signal_request<'a>(
 }
 
 fn create_execution_result(
-    exit_status: ExitStatus,
+    exit_status: Option<ExitStatus>,
     child_errors: &[ChildFdError],
     leaked: bool,
     leak_timeout_result: LeakTimeoutResult,
 ) -> ExecutionResult {
+    let Some(exit_status) = exit_status else {
+        // No exit status means the wait failed.
+        return ExecutionResult::ExecFail;
+    };
+
     if !child_errors.is_empty() {
         // If an error occurred while waiting on the child handles, treat it as
         // an execution failure.
@@ -1655,5 +1656,24 @@ fn create_execution_result(
             failure_status: FailureStatus::extract(exit_status),
             leaked,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn execution_result_without_exit_status_is_exec_fail() {
+        // The list of child errors passed in is empty, so only the None exit
+        // status can produce ExecFail.
+        let result_for =
+            |exit_status| create_execution_result(exit_status, &[], false, LeakTimeoutResult::Pass);
+
+        assert_eq!(result_for(None), ExecutionResult::ExecFail);
+        assert_eq!(
+            result_for(Some(ExitStatus::default())),
+            ExecutionResult::Pass,
+        );
     }
 }
