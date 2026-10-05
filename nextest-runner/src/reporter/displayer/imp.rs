@@ -1077,40 +1077,13 @@ impl<'a> DisplayReporterImpl<'a> {
                 running,
             } => {
                 self.cancel_status = self.cancel_status.max(current_stats.cancel_reason);
-
-                write!(writer, "{:>12} ", "Cancelling".style(self.styles.fail))?;
-                if let Some(reason) = current_stats.cancel_reason {
-                    write!(
-                        writer,
-                        "due to {}: ",
-                        reason.to_static_str().style(self.styles.fail)
-                    )?;
-                }
-
-                let immediately_terminating_text =
-                    if current_stats.cancel_reason == Some(CancelReason::TestFailureImmediate) {
-                        format!("immediately {} ", "terminating".style(self.styles.fail))
-                    } else {
-                        String::new()
-                    };
-
-                // At the moment, we can have either setup scripts or tests running, but not both.
-                if *setup_scripts_running > 0 {
-                    let s = plural::setup_scripts_str(*setup_scripts_running);
-                    write!(
-                        writer,
-                        "{immediately_terminating_text}{} {s} still running",
-                        setup_scripts_running.style(self.styles.count),
-                    )?;
-                } else if *running > 0 {
-                    let tests_str = plural::tests_str(self.mode, *running);
-                    write!(
-                        writer,
-                        "{immediately_terminating_text}{} {tests_str} still running",
-                        running.style(self.styles.count),
-                    )?;
-                }
-                writeln!(writer)?;
+                self.write_run_stop_line(
+                    RunStopKind::Cancel,
+                    current_stats.cancel_reason,
+                    *setup_scripts_running,
+                    *running,
+                    writer,
+                )?;
             }
             TestEventKind::RunBeginKill {
                 setup_scripts_running,
@@ -1118,33 +1091,13 @@ impl<'a> DisplayReporterImpl<'a> {
                 running,
             } => {
                 self.cancel_status = self.cancel_status.max(current_stats.cancel_reason);
-
-                write!(writer, "{:>12} ", "Killing".style(self.styles.fail),)?;
-                if let Some(reason) = current_stats.cancel_reason {
-                    write!(
-                        writer,
-                        "due to {}: ",
-                        reason.to_static_str().style(self.styles.fail)
-                    )?;
-                }
-
-                // At the moment, we can have either setup scripts or tests running, but not both.
-                if *setup_scripts_running > 0 {
-                    let s = plural::setup_scripts_str(*setup_scripts_running);
-                    write!(
-                        writer,
-                        ": {} {s} still running",
-                        setup_scripts_running.style(self.styles.count),
-                    )?;
-                } else if *running > 0 {
-                    let tests_str = plural::tests_str(self.mode, *running);
-                    write!(
-                        writer,
-                        ": {} {tests_str} still running",
-                        running.style(self.styles.count),
-                    )?;
-                }
-                writeln!(writer)?;
+                self.write_run_stop_line(
+                    RunStopKind::Kill,
+                    current_stats.cancel_reason,
+                    *setup_scripts_running,
+                    *running,
+                    writer,
+                )?;
             }
             TestEventKind::RunPaused {
                 setup_scripts_running,
@@ -1545,6 +1498,61 @@ impl<'a> DisplayReporterImpl<'a> {
         }
 
         Ok(())
+    }
+
+    fn write_run_stop_line(
+        &self,
+        kind: RunStopKind,
+        cancel_reason: Option<CancelReason>,
+        setup_scripts_running: usize,
+        running: usize,
+        writer: &mut dyn WriteStr,
+    ) -> io::Result<()> {
+        let (verb, immediately_terminating) = match kind {
+            RunStopKind::Cancel => (
+                "Cancelling",
+                cancel_reason == Some(CancelReason::TestFailureImmediate),
+            ),
+            RunStopKind::Kill => ("Killing", false),
+        };
+
+        write!(writer, "{:>12}", verb.style(self.styles.fail))?;
+        if let Some(reason) = cancel_reason {
+            write!(
+                writer,
+                " due to {}",
+                reason.to_static_str().style(self.styles.fail)
+            )?;
+        }
+
+        // Setup scripts and tests never run at the same time.
+        let still_running = if setup_scripts_running > 0 {
+            Some((
+                setup_scripts_running,
+                plural::setup_scripts_str(setup_scripts_running),
+            ))
+        } else if running > 0 {
+            Some((running, plural::tests_str(self.mode, running)))
+        } else {
+            None
+        };
+
+        if let Some((count, units_str)) = still_running {
+            write!(writer, ": ")?;
+            if immediately_terminating {
+                write!(
+                    writer,
+                    "immediately {} ",
+                    "terminating".style(self.styles.fail)
+                )?;
+            }
+            write!(
+                writer,
+                "{} {units_str} still running",
+                count.style(self.styles.count)
+            )?;
+        }
+        writeln!(writer)
     }
 
     fn write_skip_line(
@@ -2523,6 +2531,12 @@ enum StatusLineKind {
     Final,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum RunStopKind {
+    Cancel,
+    Kill,
+}
+
 const LIBTEST_PANIC_EXIT_CODE: i32 = 101;
 
 // Whether to show a status line for finished units (after STDOUT:/STDERR:).
@@ -2740,6 +2754,7 @@ mod tests {
     use quick_junit::ReportUuid;
     use smol_str::SmolStr;
     use std::{num::NonZero, sync::Arc};
+    use swrite::{SWrite, swriteln};
     use test_case::test_case;
 
     /// Creates a test reporter with default settings and calls the given function with it.
@@ -4637,6 +4652,94 @@ mod tests {
             _ => unreachable!("test only covers these levels"),
         };
         insta::assert_snapshot!(format!("test_slow_status_level_{label}"), out);
+    }
+
+    #[test]
+    fn run_begin_cancel_and_kill_lines() {
+        let cases = [
+            (RunStopKind::Cancel, Some(CancelReason::TestFailure), 0, 1),
+            (RunStopKind::Cancel, Some(CancelReason::GlobalTimeout), 0, 1),
+            (RunStopKind::Cancel, Some(CancelReason::Interrupt), 0, 3),
+            (RunStopKind::Cancel, Some(CancelReason::Interrupt), 1, 0),
+            (RunStopKind::Cancel, Some(CancelReason::Signal), 2, 0),
+            (
+                RunStopKind::Cancel,
+                Some(CancelReason::SetupScriptFailure),
+                0,
+                0,
+            ),
+            (
+                RunStopKind::Cancel,
+                Some(CancelReason::TestFailureImmediate),
+                0,
+                1,
+            ),
+            (
+                RunStopKind::Cancel,
+                Some(CancelReason::TestFailureImmediate),
+                0,
+                0,
+            ),
+            (RunStopKind::Cancel, None, 0, 1),
+            (RunStopKind::Cancel, None, 0, 0),
+            (RunStopKind::Kill, Some(CancelReason::SecondSignal), 0, 1),
+            (RunStopKind::Kill, Some(CancelReason::SecondSignal), 0, 3),
+            (RunStopKind::Kill, Some(CancelReason::SecondSignal), 1, 0),
+            (RunStopKind::Kill, Some(CancelReason::SecondSignal), 2, 0),
+            (RunStopKind::Kill, Some(CancelReason::SecondSignal), 0, 0),
+            (
+                RunStopKind::Kill,
+                Some(CancelReason::TestFailureImmediate),
+                0,
+                1,
+            ),
+            (RunStopKind::Kill, None, 0, 1),
+            (RunStopKind::Kill, None, 0, 0),
+        ];
+
+        let mut snapshot = String::new();
+        for (stop_kind, cancel_reason, setup_scripts_running, running) in cases {
+            let current_stats = RunStats {
+                cancel_reason,
+                ..RunStats::default()
+            };
+            let kind = match stop_kind {
+                RunStopKind::Cancel => TestEventKind::RunBeginCancel {
+                    setup_scripts_running,
+                    current_stats,
+                    running,
+                },
+                RunStopKind::Kill => TestEventKind::RunBeginKill {
+                    setup_scripts_running,
+                    current_stats,
+                    running,
+                },
+            };
+
+            let mut out = String::new();
+            with_reporter(
+                |mut reporter| {
+                    reporter
+                        .write_event(&TestEvent {
+                            timestamp: Local::now().into(),
+                            elapsed: Duration::ZERO,
+                            kind,
+                        })
+                        .unwrap();
+                },
+                &mut out,
+            );
+
+            // Debug-quote the actual values so trailing whitespace is visible
+            // in the snapshot.
+            swriteln!(
+                snapshot,
+                "{stop_kind:?}, cancel_reason: {cancel_reason:?}, setup_scripts_running: \
+                 {setup_scripts_running}, running: {running}\n    {out:?}",
+            );
+        }
+
+        insta::assert_snapshot!("run_begin_cancel_and_kill_lines", snapshot);
     }
 
     #[test]

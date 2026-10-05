@@ -1,0 +1,40 @@
+---
+source: nextest-runner/src/reporter/displayer/imp.rs
+expression: snapshot
+---
+Cancel, cancel_reason: Some(TestFailure), setup_scripts_running: 0, running: 1
+    "  Cancelling due to test failure: 1 test still running\n"
+Cancel, cancel_reason: Some(GlobalTimeout), setup_scripts_running: 0, running: 1
+    "  Cancelling due to global timeout: 1 test still running\n"
+Cancel, cancel_reason: Some(Interrupt), setup_scripts_running: 0, running: 3
+    "  Cancelling due to interrupt: 3 tests still running\n"
+Cancel, cancel_reason: Some(Interrupt), setup_scripts_running: 1, running: 0
+    "  Cancelling due to interrupt: 1 setup script still running\n"
+Cancel, cancel_reason: Some(Signal), setup_scripts_running: 2, running: 0
+    "  Cancelling due to signal: 2 setup scripts still running\n"
+Cancel, cancel_reason: Some(SetupScriptFailure), setup_scripts_running: 0, running: 0
+    "  Cancelling due to setup script failure\n"
+Cancel, cancel_reason: Some(TestFailureImmediate), setup_scripts_running: 0, running: 1
+    "  Cancelling due to test failure: immediately terminating 1 test still running\n"
+Cancel, cancel_reason: Some(TestFailureImmediate), setup_scripts_running: 0, running: 0
+    "  Cancelling due to test failure\n"
+Cancel, cancel_reason: None, setup_scripts_running: 0, running: 1
+    "  Cancelling: 1 test still running\n"
+Cancel, cancel_reason: None, setup_scripts_running: 0, running: 0
+    "  Cancelling\n"
+Kill, cancel_reason: Some(SecondSignal), setup_scripts_running: 0, running: 1
+    "     Killing due to second signal: 1 test still running\n"
+Kill, cancel_reason: Some(SecondSignal), setup_scripts_running: 0, running: 3
+    "     Killing due to second signal: 3 tests still running\n"
+Kill, cancel_reason: Some(SecondSignal), setup_scripts_running: 1, running: 0
+    "     Killing due to second signal: 1 setup script still running\n"
+Kill, cancel_reason: Some(SecondSignal), setup_scripts_running: 2, running: 0
+    "     Killing due to second signal: 2 setup scripts still running\n"
+Kill, cancel_reason: Some(SecondSignal), setup_scripts_running: 0, running: 0
+    "     Killing due to second signal\n"
+Kill, cancel_reason: Some(TestFailureImmediate), setup_scripts_running: 0, running: 1
+    "     Killing due to test failure: 1 test still running\n"
+Kill, cancel_reason: None, setup_scripts_running: 0, running: 1
+    "     Killing: 1 test still running\n"
+Kill, cancel_reason: None, setup_scripts_running: 0, running: 0
+    "     Killing\n"
