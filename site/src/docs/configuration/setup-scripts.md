@@ -92,7 +92,7 @@ Note that keys cannot begin with `NEXTEST`, as that is reserved for internal use
 Setup scripts can have the following configuration options attached to them:
 
 `slow-timeout`
-: Mark a setup script [as slow](../features/slow-tests.md) or [terminate it](../features/slow-tests.md#terminating-tests-after-a-timeout), using the same configuration as for tests. By default, setup scripts are not marked as slow or terminated (this is different from the slow timeout for tests).
+: Mark a setup script [as slow](../features/slow-tests.md) or [terminate it](../features/slow-tests.md#terminating-tests-after-a-timeout), using the same configuration as for tests, except that `on-timeout = "pass"` is not supported: a setup script that times out always fails the run. By default, setup scripts are not marked as slow or terminated (this is different from the slow timeout for tests).
 
 `leak-timeout`
 : Mark setup scripts [leaky](../features/leaky-tests.md) after a timeout, using the same configuration as for tests. By default, the leak timeout is 100ms.

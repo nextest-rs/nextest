@@ -1139,7 +1139,7 @@
           "description": "Slow-timeout configuration for this setup script.",
           "anyOf": [
             {
-              "$ref": "#/$defs/SlowTimeout"
+              "$ref": "#/$defs/SetupScriptSlowTimeout"
             },
             {
               "type": "null"
@@ -1168,6 +1168,41 @@
         }
       },
       "additionalProperties": false
+    },
+    "SetupScriptSlowTimeout": {
+      "title": "SetupScriptSlowTimeout",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "grace-period": {
+              "type": "string"
+            },
+            "on-timeout": {
+              "description": "A setup script that times out always fails, so only \"fail\" is accepted.",
+              "type": "string",
+              "const": "fail"
+            },
+            "period": {
+              "type": "string"
+            },
+            "terminate-after": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "period"
+          ]
+        }
+      ]
     },
     "SlowTimeout": {
       "title": "SlowTimeout",
