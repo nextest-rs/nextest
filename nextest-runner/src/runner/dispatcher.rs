@@ -474,7 +474,16 @@ where
             sub_stats: self.run_stats,
         });
 
-        StressLoopAction::after_sub_run(sub_final_stats, self.run_stats.cancel_reason)
+        // Re-read progress after the callback so reporter time counts toward
+        // elapsed (this is a small detail).
+        let next_progress = self
+            .stress_progress()
+            .expect("stress_sub_run_finished is called only in a stress run");
+        StressLoopAction::after_sub_run(
+            sub_final_stats,
+            self.run_stats.cancel_reason,
+            next_progress,
+        )
     }
 
     pub(super) fn stress_index(&self) -> Option<StressIndex> {
@@ -1178,12 +1187,16 @@ where
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[must_use]
 pub(super) enum StressLoopAction {
-    Continue,
+    Continue { next_progress: StressProgress },
     Stop,
 }
 
 impl StressLoopAction {
-    fn after_sub_run(sub_final_stats: FinalRunStats, cancel_reason: Option<CancelReason>) -> Self {
+    fn after_sub_run(
+        sub_final_stats: FinalRunStats,
+        cancel_reason: Option<CancelReason>,
+        next_progress: StressProgress,
+    ) -> Self {
         match cancel_reason {
             // Any cancellation stops the stress run, including one caused by a
             // fail-fast failure.
@@ -1194,7 +1207,10 @@ impl StressLoopAction {
                 FinalRunStats::Cancelled { .. } => Self::Stop,
                 FinalRunStats::Success
                 | FinalRunStats::NoTestsRun
-                | FinalRunStats::Failed { .. } => Self::Continue,
+                | FinalRunStats::Failed { .. } => match next_progress.remaining() {
+                    Some(_) => Self::Continue { next_progress },
+                    None => Self::Stop,
+                },
             },
         }
     }
@@ -1570,7 +1586,7 @@ impl SignalCount {
 mod tests {
     use super::*;
     use crate::reporter::events::{RunFailureStep, RunStatsFailureKind};
-    use std::sync::Mutex;
+    use std::{num::NonZero, sync::Mutex};
 
     #[test]
     fn stress_outcome() {
@@ -1722,30 +1738,122 @@ mod tests {
             initial_run_count: 2,
             not_run: 1,
         };
+        const ALL_RUN_TEST_KIND: RunStatsFailureKind = RunStatsFailureKind::Test {
+            initial_run_count: 2,
+            not_run: 0,
+        };
+        const TOTAL_COUNT: StressCount = StressCount::Count {
+            count: NonZero::new(3).expect("3 is non-zero"),
+        };
+        const COUNT_REMAINING: StressProgress = StressProgress::Count {
+            total: TOTAL_COUNT,
+            elapsed: Duration::from_secs(10),
+            completed: 2,
+        };
+        const COUNT_EXHAUSTED: StressProgress = StressProgress::Count {
+            total: TOTAL_COUNT,
+            elapsed: Duration::from_secs(10),
+            completed: 3,
+        };
+        const INFINITE: StressProgress = StressProgress::Count {
+            total: StressCount::Infinite,
+            elapsed: Duration::from_secs(10),
+            completed: 3,
+        };
+        const TIME_REMAINING: StressProgress = StressProgress::Time {
+            total: Duration::from_secs(60),
+            elapsed: Duration::from_secs(59),
+            completed: 3,
+        };
+        const TIME_EXHAUSTED: StressProgress = StressProgress::Time {
+            total: Duration::from_secs(60),
+            elapsed: Duration::from_secs(61),
+            completed: 3,
+        };
 
         let cases = [
             (
-                "a passing sub-run continues",
+                "a passing sub-run with iterations remaining continues",
                 FinalRunStats::Success,
                 None,
-                StressLoopAction::Continue,
+                COUNT_REMAINING,
+                StressLoopAction::Continue {
+                    next_progress: COUNT_REMAINING,
+                },
+            ),
+            (
+                "a passing sub-run of an infinite run continues",
+                FinalRunStats::Success,
+                None,
+                INFINITE,
+                StressLoopAction::Continue {
+                    next_progress: INFINITE,
+                },
+            ),
+            (
+                "a passing sub-run with time remaining continues",
+                FinalRunStats::Success,
+                None,
+                TIME_REMAINING,
+                StressLoopAction::Continue {
+                    next_progress: TIME_REMAINING,
+                },
+            ),
+            (
+                "a passing sub-run with no iterations remaining stops",
+                FinalRunStats::Success,
+                None,
+                COUNT_EXHAUSTED,
+                StressLoopAction::Stop,
+            ),
+            (
+                "a passing sub-run with no time remaining stops",
+                FinalRunStats::Success,
+                None,
+                TIME_EXHAUSTED,
+                StressLoopAction::Stop,
             ),
             (
                 "a sub-run with no tests continues",
                 FinalRunStats::NoTestsRun,
                 None,
-                StressLoopAction::Continue,
+                COUNT_REMAINING,
+                StressLoopAction::Continue {
+                    next_progress: COUNT_REMAINING,
+                },
+            ),
+            (
+                "a sub-run with no tests and no iterations remaining stops",
+                FinalRunStats::NoTestsRun,
+                None,
+                COUNT_EXHAUSTED,
+                StressLoopAction::Stop,
             ),
             (
                 "a failed sub-run that didn't cancel the run continues",
-                FinalRunStats::Failed { kind: TEST_KIND },
+                FinalRunStats::Failed {
+                    kind: ALL_RUN_TEST_KIND,
+                },
                 None,
-                StressLoopAction::Continue,
+                COUNT_REMAINING,
+                StressLoopAction::Continue {
+                    next_progress: COUNT_REMAINING,
+                },
+            ),
+            (
+                "a failed sub-run that didn't cancel the run, with no iterations remaining, stops",
+                FinalRunStats::Failed {
+                    kind: ALL_RUN_TEST_KIND,
+                },
+                None,
+                COUNT_EXHAUSTED,
+                StressLoopAction::Stop,
             ),
             (
                 "a failed sub-run that cancelled the run stops",
                 FinalRunStats::Failed { kind: TEST_KIND },
                 Some(CancelReason::TestFailure),
+                COUNT_REMAINING,
                 StressLoopAction::Stop,
             ),
             (
@@ -1754,6 +1862,7 @@ mod tests {
                     kind: RunStatsFailureKind::SetupScript,
                 },
                 Some(CancelReason::SetupScriptFailure),
+                COUNT_REMAINING,
                 StressLoopAction::Stop,
             ),
             (
@@ -1763,12 +1872,14 @@ mod tests {
                     kind: TEST_KIND,
                 },
                 Some(CancelReason::Interrupt),
+                COUNT_REMAINING,
                 StressLoopAction::Stop,
             ),
             (
                 "a signal received after every test finished stops",
                 FinalRunStats::Success,
                 Some(CancelReason::Signal),
+                COUNT_REMAINING,
                 StressLoopAction::Stop,
             ),
             (
@@ -1778,13 +1889,14 @@ mod tests {
                     kind: TEST_KIND,
                 },
                 None,
+                COUNT_REMAINING,
                 StressLoopAction::Stop,
             ),
         ];
 
-        for (description, sub_final_stats, cancel_reason, expected) in cases {
+        for (description, sub_final_stats, cancel_reason, next_progress, expected) in cases {
             assert_eq!(
-                StressLoopAction::after_sub_run(sub_final_stats, cancel_reason),
+                StressLoopAction::after_sub_run(sub_final_stats, cancel_reason, next_progress),
                 expected,
                 "test case: {description}"
             );
