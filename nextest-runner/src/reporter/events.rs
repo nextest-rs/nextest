@@ -702,39 +702,17 @@ impl RunStats {
         // Check for failures first. The order of setup scripts vs tests should
         // not be important, though we don't assert that here.
         if self.failed_setup_script_count() > 0 {
-            // Is this related to a cancellation other than one directly caused
-            // by the failure?
-            if self.cancel_reason > Some(CancelReason::TestFailure) {
-                FinalRunStats::Cancelled {
-                    reason: self.cancel_reason,
-                    kind: RunStatsFailureKind::SetupScript,
-                }
-            } else {
-                FinalRunStats::Failed {
-                    kind: RunStatsFailureKind::SetupScript,
-                }
-            }
+            self.summarize_failure(RunStatsFailureKind::SetupScript)
         } else if self.setup_scripts_initial_count > self.setup_scripts_finished_count {
             FinalRunStats::Cancelled {
                 reason: self.cancel_reason,
                 kind: RunStatsFailureKind::SetupScript,
             }
         } else if self.failed_count() > 0 {
-            let kind = RunStatsFailureKind::Test {
+            self.summarize_failure(RunStatsFailureKind::Test {
                 initial_run_count: self.initial_run_count,
                 not_run: self.initial_run_count.saturating_sub(self.finished_count),
-            };
-
-            // Is this related to a cancellation other than one directly caused
-            // by the failure?
-            if self.cancel_reason > Some(CancelReason::TestFailure) {
-                FinalRunStats::Cancelled {
-                    reason: self.cancel_reason,
-                    kind,
-                }
-            } else {
-                FinalRunStats::Failed { kind }
-            }
+            })
         } else if self.initial_run_count > self.finished_count {
             FinalRunStats::Cancelled {
                 reason: self.cancel_reason,
@@ -747,6 +725,27 @@ impl RunStats {
             FinalRunStats::NoTestsRun
         } else {
             FinalRunStats::Success
+        }
+    }
+
+    fn summarize_failure(&self, kind: RunStatsFailureKind) -> FinalRunStats {
+        match self.cancel_reason {
+            None
+            | Some(
+                CancelReason::SetupScriptFailure
+                | CancelReason::TestFailure
+                | CancelReason::TestFailureImmediate,
+            ) => FinalRunStats::Failed { kind },
+            Some(
+                CancelReason::ReportError
+                | CancelReason::GlobalTimeout
+                | CancelReason::Signal
+                | CancelReason::Interrupt
+                | CancelReason::SecondSignal,
+            ) => FinalRunStats::Cancelled {
+                reason: self.cancel_reason,
+                kind,
+            },
         }
     }
 
@@ -2725,6 +2724,94 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
     use test_strategy::proptest;
+
+    #[derive(Clone, Copy, Debug)]
+    enum FailureSummary {
+        Failed,
+        Cancelled,
+    }
+
+    const FAILURE_SUMMARY_BY_CANCEL_REASON: [(Option<CancelReason>, FailureSummary); 9] = [
+        (None, FailureSummary::Failed),
+        (
+            Some(CancelReason::SetupScriptFailure),
+            FailureSummary::Failed,
+        ),
+        (Some(CancelReason::TestFailure), FailureSummary::Failed),
+        (Some(CancelReason::ReportError), FailureSummary::Cancelled),
+        (
+            Some(CancelReason::TestFailureImmediate),
+            FailureSummary::Failed,
+        ),
+        (Some(CancelReason::GlobalTimeout), FailureSummary::Cancelled),
+        (Some(CancelReason::Signal), FailureSummary::Cancelled),
+        (Some(CancelReason::Interrupt), FailureSummary::Cancelled),
+        (Some(CancelReason::SecondSignal), FailureSummary::Cancelled),
+    ];
+
+    /// Ensure that all possible cancel reasons are covered in
+    /// `FAILURE_SUMMARY_BY_CANCEL_REASON` above.
+    #[proptest]
+    fn failure_summary_by_cancel_reason_is_complete(cancel_reason: Option<CancelReason>) {
+        prop_assert!(
+            FAILURE_SUMMARY_BY_CANCEL_REASON
+                .iter()
+                .any(|(reason, _)| *reason == cancel_reason),
+            "FAILURE_SUMMARY_BY_CANCEL_REASON has a row for {cancel_reason:?}"
+        );
+    }
+
+    #[track_caller]
+    fn assert_failure_summary_by_cancel_reason(stats: RunStats, kind: RunStatsFailureKind) {
+        for (cancel_reason, expected) in FAILURE_SUMMARY_BY_CANCEL_REASON {
+            let expected = match expected {
+                FailureSummary::Failed => FinalRunStats::Failed { kind },
+                FailureSummary::Cancelled => FinalRunStats::Cancelled {
+                    reason: cancel_reason,
+                    kind,
+                },
+            };
+            assert_eq!(
+                RunStats {
+                    cancel_reason,
+                    ..stats
+                }
+                .summarize_final(),
+                expected,
+                "summary for cancel reason {cancel_reason:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn summarize_final_failed_test_by_cancel_reason() {
+        assert_failure_summary_by_cancel_reason(
+            RunStats {
+                initial_run_count: 3,
+                finished_count: 2,
+                passed: 1,
+                failed: 1,
+                ..RunStats::default()
+            },
+            RunStatsFailureKind::Test {
+                initial_run_count: 3,
+                not_run: 1,
+            },
+        );
+    }
+
+    #[test]
+    fn summarize_final_failed_setup_script_by_cancel_reason() {
+        assert_failure_summary_by_cancel_reason(
+            RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 1,
+                setup_scripts_failed: 1,
+                ..RunStats::default()
+            },
+            RunStatsFailureKind::SetupScript,
+        );
+    }
 
     #[test]
     fn test_is_success() {
