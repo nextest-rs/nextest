@@ -551,11 +551,15 @@ For detailed information, see [34;4m[3m]8;;https://nexte.st/docs/configuratio
       [2m# or[0m
       slow-timeout = { period = [32m"60s"[0m, terminate-after = [33m1[0m, grace-period = [32m"5s"[0m }
 
+The [36mslow-timeout[0m object accepts the same parameters as
+[36mprofile.<name>.slow-timeout[0m, except that [36mon-timeout = "pass"[0m is not supported: a
+setup script that times out always fails the run.
+
 [1;4m[36mscripts.setup.<name>.leak-timeout[0m
 
 - [1mType[0m: String (duration) or object
 - [1mDescription[0m: Leak-timeout configuration for this setup script.
-- [1mDefault[0m: [36m200ms[0m
+- [1mDefault[0m: [36m100ms[0m
 - [1mExamples[0m:
       leak-timeout = [32m"500ms"[0m
       [2m# or[0m

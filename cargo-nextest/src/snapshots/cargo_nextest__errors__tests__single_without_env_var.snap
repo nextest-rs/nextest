@@ -1,6 +1,6 @@
 ---
 source: cargo-nextest/src/errors.rs
-expression: "format_experimental_features_not_enabled(&config_file,\n&[ConfigExperimental::SetupScripts], style,)"
+expression: "format_experimental_features_not_enabled(&config_file,\n&[ConfigExperimental::SetupScripts], &plain,)"
 ---
 experimental feature not enabled: setup-scripts
 (hint: add to the experimental list in .config/nextest.toml)

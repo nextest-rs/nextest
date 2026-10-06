@@ -1,0 +1,5 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: "normalize_nextest_stderr(&output.stderr_as_str(), p.temp_root())"
+---
+error: for config file `[TEMP_DIR]/src/.config/nextest.toml`, unknown experimental features defined: unknown-feature (known features: setup-scripts, wrapper-scripts, benchmarks):

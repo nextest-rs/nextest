@@ -16,11 +16,7 @@ use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
     errors::TargetTripleError,
     platform::{BuildPlatforms, HostPlatform, Platform, PlatformLibdir, TargetPlatform},
-    reporter::{
-        TestOutputErrorSlice,
-        events::{FinalRunStats, RunStatsFailureKind},
-    },
-    run_mode::NextestRunMode,
+    reporter::TestOutputErrorSlice,
     target_runner::{PlatformRunner, TargetRunner},
     user_config::{UserConfig, UserConfigLocation},
 };
@@ -265,37 +261,4 @@ pub(super) fn locate_workspace_root(
         .ok_or_else(|| ExpectedError::WorkspaceRootInvalid {
             workspace_root: workspace_root.to_owned(),
         })
-}
-
-/// Converts final run statistics to an error, if the run failed.
-///
-/// Returns `None` if the run was successful. For `NoTestsRun`, always returns
-/// an error with `is_default: true`; callers that want custom `NoTestsBehavior`
-/// handling should check for that case separately.
-pub(super) fn final_stats_to_error(
-    stats: FinalRunStats,
-    mode: NextestRunMode,
-    rerun_available: bool,
-) -> Option<ExpectedError> {
-    match stats {
-        FinalRunStats::Success => None,
-        FinalRunStats::NoTestsRun => Some(ExpectedError::NoTestsRun {
-            mode,
-            is_default: true,
-        }),
-        FinalRunStats::Cancelled {
-            kind: RunStatsFailureKind::SetupScript,
-            ..
-        }
-        | FinalRunStats::Failed {
-            kind: RunStatsFailureKind::SetupScript,
-        } => Some(ExpectedError::setup_script_failed()),
-        FinalRunStats::Cancelled {
-            kind: RunStatsFailureKind::Test { .. },
-            ..
-        }
-        | FinalRunStats::Failed {
-            kind: RunStatsFailureKind::Test { .. },
-        } => Some(ExpectedError::test_run_failed(rerun_available)),
-    }
 }

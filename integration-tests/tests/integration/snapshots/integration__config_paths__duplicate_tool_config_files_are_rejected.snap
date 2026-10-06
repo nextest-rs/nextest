@@ -1,0 +1,11 @@
+---
+source: integration-tests/tests/integration/config_paths.rs
+expression: "blocks.join(\"\\n\\n\")"
+---
+scenario: duplicate-tool
+exit code: 96
+error: failed to parse nextest config at `.config/second.toml` provided by tool `my-tool`
+
+Caused by:
+  tool `my-tool` already provided config file `.config/first.toml`
+  (hint: each tool can provide at most one config file: merge the files, or pass `--tool-config-file my-tool:<path>` only once)

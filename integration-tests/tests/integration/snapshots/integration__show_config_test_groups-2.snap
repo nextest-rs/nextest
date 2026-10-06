@@ -30,6 +30,7 @@ group: @global
           test_overrides_wrapper_env
           test_result_failure
           test_stdin_closed
+          test_stress_fail_first_iteration
           test_subprocess_doesnt_exit
           test_subprocess_doesnt_exit_fail
           test_subprocess_doesnt_exit_leak_fail

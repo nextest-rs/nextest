@@ -16,10 +16,13 @@ use crate::{
     config::{
         core::EvaluatableProfile,
         elements::{
-            FlakyResult, LeakTimeout, LeakTimeoutResult, RetryPolicy, SlowTimeout, TestGroup,
+            FlakyResult, LeakTimeout, LeakTimeoutResult, RetryPolicy, SlowTimeoutResult, TestGroup,
         },
         overrides::TestSettings,
-        scripts::{ScriptId, SetupScriptCommand, SetupScriptConfig, SetupScriptExecuteData},
+        scripts::{
+            ScriptId, SetupScriptCommand, SetupScriptConfig, SetupScriptExecuteData,
+            SetupScriptSlowTimeout,
+        },
     },
     double_spawn::DoubleSpawnInfo,
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
@@ -434,17 +437,12 @@ impl<'a> ExecutorContext<'a> {
         let job = super::os::create_job().ok();
 
         // The --no-capture CLI argument overrides the config.
-        if self.capture_strategy != CaptureStrategy::None {
-            if script.config.capture_stdout {
-                command_mut.stdout(std::process::Stdio::piped());
-            }
-            if script.config.capture_stderr {
-                command_mut.stderr(std::process::Stdio::piped());
-            }
-        }
-
+        let capture = self.capture_strategy != CaptureStrategy::None;
         let (mut child, env_path) = cmd
-            .spawn()
+            .spawn(
+                capture && script.config.capture_stdout,
+                capture && script.config.capture_stderr,
+            )
             .map_err(|error| ChildStartError::Spawn(Arc::new(error)))?;
         let child_pid = child
             .id()
@@ -483,7 +481,7 @@ impl<'a> ExecutorContext<'a> {
         let slow_timeout = script
             .config
             .slow_timeout
-            .unwrap_or(SlowTimeout::VERY_LARGE);
+            .unwrap_or(SetupScriptSlowTimeout::VERY_LARGE);
         let leak_timeout = script.config.leak_timeout.unwrap_or_default();
 
         let mut interval_sleep = std::pin::pin!(crate::time::pausable_sleep(slow_timeout.period));
@@ -547,8 +545,10 @@ impl<'a> ExecutorContext<'a> {
                                 job.as_ref(),
                                 slow_timeout.grace_period,
                             ).await;
+                            // A timed-out setup script always fails (on-timeout
+                            // = "pass" is rejected at the config layer).
                             status = Some(ExecutionResult::Timeout {
-                                result: slow_timeout.on_timeout
+                                result: SlowTimeoutResult::Fail,
                             });
                             if slow_timeout.grace_period.is_zero() {
                                 break child.wait().await;

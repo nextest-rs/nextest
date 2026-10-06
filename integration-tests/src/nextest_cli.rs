@@ -17,6 +17,7 @@ use std::{
     fmt,
     io::{self, Read, Write},
     iter,
+    path::{Path, PathBuf},
     process::{Command, ExitStatus, Stdio},
 };
 #[cfg(windows)]
@@ -36,7 +37,7 @@ pub struct CargoNextestCli {
     args: Vec<String>,
     envs: HashMap<OsString, OsString>,
     envs_remove: Vec<OsString>,
-    current_dir: Option<Utf8PathBuf>,
+    current_dir: Option<PathBuf>,
     unchecked: bool,
 }
 
@@ -129,8 +130,8 @@ impl CargoNextestCli {
         self
     }
 
-    pub fn current_dir(&mut self, dir: impl Into<Utf8PathBuf>) -> &mut Self {
-        self.current_dir = Some(dir.into());
+    pub fn current_dir(&mut self, dir: impl AsRef<Path>) -> &mut Self {
+        self.current_dir = Some(dir.as_ref().to_owned());
         self
     }
 

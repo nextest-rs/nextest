@@ -11,6 +11,7 @@ use crate::{
         common::ConfigOpts,
         helpers::{acquire_graph_data, detect_build_platforms, runner_for_target},
     },
+    helpers::{VersionReqKind, log_version_source},
     output::{OutputContext, OutputWriter},
 };
 use camino::Utf8PathBuf;
@@ -19,10 +20,11 @@ use nextest_filtering::ParseContext;
 use nextest_runner::{
     cargo_config::CargoConfigs,
     config::core::{
-        ConfigExperimental, EarlyProfile, ExperimentalConfig, NextestConfig, NextestVersionConfig,
-        NextestVersionEval, VersionOnlyConfig,
+        ConfigExperimental, ConfigPaths, EarlyProfile, ExperimentalConfig, NextestConfig,
+        NextestVersionConfig, NextestVersionEval, VersionOnlyConfig,
     },
     double_spawn::DoubleSpawnInfo,
+    errors::ConfigParseError,
     list::BinaryList,
     platform::BuildPlatforms,
     reuse_build::ReuseBuildInfo,
@@ -47,6 +49,7 @@ pub(crate) struct BaseApp {
     package_graph: Arc<PackageGraph>,
     // Potentially remapped workspace root (might not be the same as the graph).
     pub(crate) workspace_root: Utf8PathBuf,
+    config_paths: ConfigPaths,
     manifest_path: Option<Utf8PathBuf>,
     pub(crate) reuse_build: ReuseBuildInfo,
     pub(crate) cargo_opts: CargoOptions,
@@ -145,6 +148,7 @@ impl BaseApp {
             });
         }
 
+        let config_paths = ConfigPaths::capture(&workspace_root)?;
         let current_version = current_version();
 
         Ok(Self {
@@ -154,6 +158,7 @@ impl BaseApp {
             cargo_metadata_json,
             package_graph,
             workspace_root,
+            config_paths,
             reuse_build,
             manifest_path,
             cargo_opts,
@@ -175,7 +180,7 @@ impl BaseApp {
         // the config.
         let version_only_config = self
             .config_opts
-            .make_version_only_config(&self.workspace_root)?;
+            .make_version_only_config(&self.config_paths)?;
         self.check_version_config_initial(version_only_config.nextest_version())?;
 
         // Check for unknown experimental features after the version check. This ensures that if
@@ -193,11 +198,13 @@ impl BaseApp {
             .collect::<Vec<_>>();
 
         if !missing.is_empty() {
-            let config_file = self
-                .config_opts
-                .config_file
-                .clone()
-                .unwrap_or_else(|| Utf8PathBuf::from(".config/nextest.toml"));
+            let config_file = match &self.config_opts.config_file {
+                Some(path) => self
+                    .config_paths
+                    .resolve_input(path)
+                    .map_err(ConfigParseError::from)?,
+                None => self.config_paths.shared_config(),
+            };
             return Err(ExpectedError::ConfigExperimentalFeaturesNotEnabled {
                 config_file,
                 missing,
@@ -216,9 +223,10 @@ impl BaseApp {
         }
 
         let config = self.config_opts.make_config(
-            &self.workspace_root,
+            &self.config_paths,
             pcx,
             version_only_config.experimental().known(),
+            self.output,
         )?;
 
         Ok((version_only_config, config))
@@ -235,67 +243,49 @@ impl BaseApp {
             NextestVersionEval::Error {
                 required,
                 current,
-                tool,
+                source,
             } => Err(ExpectedError::RequiredVersionNotMet {
                 required,
                 current,
-                tool,
+                config_source: source,
             }),
             NextestVersionEval::Warn {
                 recommended: required,
                 current,
-                tool,
+                source,
             } => {
                 warn!(
                     "this repository recommends nextest version {}, but the current version is {}",
                     required.style(styles.bold),
                     current.style(styles.bold),
                 );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(recommended version specified by tool `{}`)",
-                        tool,
-                    );
-                }
+                log_version_source(VersionReqKind::Recommended, &source, styles.config_styles);
 
                 Ok(())
             }
             NextestVersionEval::ErrorOverride {
                 required,
                 current,
-                tool,
+                source,
             } => {
                 info!(
                     "overriding version check (required: {}, current: {})",
                     required, current
                 );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(required version specified by tool `{}`)",
-                        tool,
-                    );
-                }
+                log_version_source(VersionReqKind::Required, &source, styles.config_styles);
 
                 Ok(())
             }
             NextestVersionEval::WarnOverride {
                 recommended,
                 current,
-                tool,
+                source,
             } => {
                 info!(
                     "overriding version check (recommended: {}, current: {})",
                     recommended, current,
                 );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(recommended version specified by tool `{}`)",
-                        tool,
-                    );
-                }
+                log_version_source(VersionReqKind::Recommended, &source, styles.config_styles);
 
                 Ok(())
             }
@@ -306,12 +296,11 @@ impl BaseApp {
         &self,
         experimental_cfg: &ExperimentalConfig,
     ) -> Result<()> {
-        let config_file = self
-            .config_opts
-            .config_file
-            .clone()
-            .unwrap_or_else(|| self.workspace_root.join(NextestConfig::CONFIG_PATH));
-        if let Some(err) = experimental_cfg.eval().into_error(config_file) {
+        // Only the first file's error is surfaced -- this is fine for now since
+        // exactly one config file can carry experimental features. If/when a
+        // second repository file adds support for experimental features, we'll
+        // want to revisit this.
+        if let Some(err) = experimental_cfg.source_errors().next() {
             Err(err.into())
         } else {
             Ok(())
@@ -332,29 +321,23 @@ impl BaseApp {
             NextestVersionEval::Error {
                 required,
                 current,
-                tool,
+                source,
             } => Err(ExpectedError::RequiredVersionNotMet {
                 required,
                 current,
-                tool,
+                config_source: source,
             }),
             NextestVersionEval::Warn {
                 recommended: required,
                 current,
-                tool,
+                source,
             } => {
                 warn!(
                     "this repository recommends nextest version {}, but the current version is {}",
                     required.style(styles.bold),
                     current.style(styles.bold),
                 );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(recommended version specified by tool `{}`)",
-                        tool,
-                    );
-                }
+                log_version_source(VersionReqKind::Recommended, &source, styles.config_styles);
 
                 // Don't need to print extra text here -- this is a warning, not an error.
                 crate::helpers::log_needs_update(

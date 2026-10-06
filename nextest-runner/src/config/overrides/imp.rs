@@ -4,7 +4,8 @@
 use crate::{
     config::{
         core::{
-            EvaluatableProfile, FinalConfig, NextestConfig, NextestConfigImpl, PreBuildPlatform,
+            ConfigSource, EvaluatableProfile, FinalConfig, NextestConfig, NextestConfigImpl,
+            PreBuildPlatform,
         },
         elements::{
             FlakyResult, JunitFlakyFailStatus, LeakTimeout, ReportSkipPolicy, RetryPolicy,
@@ -485,6 +486,25 @@ where
     (wrapper_config, source)
 }
 
+/// Whether the config file being compiled set a default-filter for this profile.
+#[derive(Clone, Copy, Debug)]
+pub(in crate::config) enum ProfileDefaultFilter<'a> {
+    /// A default-filter was set by this file.
+    SetByThisFile(&'a str),
+
+    /// No default-filter was set by this file.
+    NotSetByThisFile,
+}
+
+impl<'a> ProfileDefaultFilter<'a> {
+    pub(in crate::config) fn new(filter: Option<&'a str>) -> Self {
+        match filter {
+            Some(filter) => Self::SetByThisFile(filter),
+            None => Self::NotSetByThisFile,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(in crate::config) struct CompiledByProfile {
     pub(in crate::config) default: CompiledData<PreBuildPlatform>,
@@ -494,13 +514,16 @@ pub(in crate::config) struct CompiledByProfile {
 impl CompiledByProfile {
     pub(in crate::config) fn new(
         pcx: &ParseContext<'_>,
+        config_source: &ConfigSource,
         config: &NextestConfigImpl,
+        default_filter: ProfileDefaultFilter<'_>,
     ) -> Result<Self, ConfigParseErrorKind> {
         let mut errors = vec![];
         let default = CompiledData::new(
             pcx,
+            config_source,
             "default",
-            Some(config.default_profile().default_filter()),
+            default_filter,
             config.default_profile().overrides(),
             config.default_profile().setup_scripts(),
             &mut errors,
@@ -512,8 +535,9 @@ impl CompiledByProfile {
                     profile_name.to_owned(),
                     CompiledData::new(
                         pcx,
+                        config_source,
                         profile_name,
-                        profile.default_filter(),
+                        ProfileDefaultFilter::new(profile.default_filter()),
                         profile.overrides(),
                         profile.scripts(),
                         &mut errors,
@@ -622,14 +646,15 @@ pub(in crate::config) struct CompiledData<State> {
 impl CompiledData<PreBuildPlatform> {
     fn new(
         pcx: &ParseContext<'_>,
+        config_source: &ConfigSource,
         profile_name: &str,
-        profile_default_filter: Option<&str>,
+        file_default_filter: ProfileDefaultFilter<'_>,
         overrides: &[DeserializedOverride],
         scripts: &[DeserializedProfileScriptConfig],
         errors: &mut Vec<ConfigCompileError>,
     ) -> Self {
-        let profile_default_filter =
-            profile_default_filter.and_then(|filter| {
+        let profile_default_filter = match file_default_filter {
+            ProfileDefaultFilter::SetByThisFile(filter) => {
                 match Filterset::parse(
                     filter.to_owned(),
                     pcx,
@@ -654,13 +679,15 @@ impl CompiledData<PreBuildPlatform> {
                         None
                     }
                 }
-            });
+            }
+            ProfileDefaultFilter::NotSetByThisFile => None,
+        };
 
         let overrides = overrides
             .iter()
             .enumerate()
             .filter_map(|(index, source)| {
-                CompiledOverride::new(pcx, profile_name, index, source, errors)
+                CompiledOverride::new(pcx, config_source, profile_name, index, source, errors)
             })
             .collect();
         let scripts = scripts
@@ -743,6 +770,7 @@ impl<State> CompiledOverride<State> {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct OverrideId {
+    pub(crate) config_source: ConfigSource,
     pub(crate) profile_name: SmolStr,
     index: usize,
 }
@@ -769,6 +797,7 @@ pub(in crate::config) struct ProfileOverrideData {
 impl CompiledOverride<PreBuildPlatform> {
     fn new(
         pcx: &ParseContext<'_>,
+        config_source: &ConfigSource,
         profile_name: &str,
         index: usize,
         source: &DeserializedOverride,
@@ -835,6 +864,7 @@ impl CompiledOverride<PreBuildPlatform> {
 
                 Some(Self {
                     id: OverrideId {
+                        config_source: config_source.clone(),
                         profile_name: profile_name.into(),
                         index,
                     },

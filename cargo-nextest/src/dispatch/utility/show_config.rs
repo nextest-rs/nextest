@@ -17,7 +17,10 @@ use crate::{
 };
 use camino::Utf8PathBuf;
 use clap::Subcommand;
-use nextest_runner::{config::core::NextestVersionEval, errors::WriteTestListError};
+use nextest_runner::{
+    config::core::{ConfigPaths, NextestVersionEval},
+    errors::WriteTestListError,
+};
 use tracing::Level;
 
 /// Subcommands for show-config.
@@ -59,7 +62,8 @@ impl ShowConfigCommand {
             Self::Version {} => {
                 let workspace_root = locate_workspace_root(manifest_path.as_deref(), output)?;
 
-                let config = config_opts.make_version_only_config(&workspace_root)?;
+                let config = config_opts
+                    .make_version_only_config(&ConfigPaths::capture(&workspace_root)?)?;
                 let current_version = current_version();
 
                 let show = nextest_runner::show_config::ShowNextestVersion::new(

@@ -18,6 +18,7 @@ fixture-project::basic test_flaky_mod_6
 fixture-project::basic test_overrides_wrapper_env
 fixture-project::basic test_result_failure
 fixture-project::basic test_stdin_closed
+fixture-project::basic test_stress_fail_first_iteration
 fixture-project::basic test_subprocess_doesnt_exit
 fixture-project::basic test_subprocess_doesnt_exit_fail
 fixture-project::basic test_subprocess_doesnt_exit_leak_fail

@@ -3,15 +3,17 @@
 
 //! Nextest version configuration.
 
-use super::{NextestConfig, ToolConfigFile, ToolName};
+use super::{ConfigFileSelection, ConfigPaths, ConfigSource, ConfigSourceKind, ToolConfigFile};
 use crate::errors::{ConfigParseError, ConfigParseErrorKind};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use semver::Version;
 use serde::{
     Deserialize, Deserializer,
     de::{MapAccess, SeqAccess, Visitor},
 };
-use std::{borrow::Cow, collections::BTreeSet, fmt, str::FromStr};
+#[cfg(feature = "config-schema")]
+use std::borrow::Cow;
+use std::{collections::BTreeSet, fmt, str::FromStr};
 
 /// A "version-only" form of the nextest configuration.
 ///
@@ -29,7 +31,7 @@ pub struct VersionOnlyConfig {
 impl VersionOnlyConfig {
     /// Reads the nextest version configuration from the given sources.
     ///
-    /// See [`NextestConfig::from_sources`] for more details.
+    /// See [`NextestConfig::from_sources`](super::NextestConfig::from_sources) for more details.
     pub fn from_sources<'a, I>(
         workspace_root: &Utf8Path,
         config_file: Option<&Utf8Path>,
@@ -38,9 +40,43 @@ impl VersionOnlyConfig {
     where
         I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
     {
-        let tool_config_files_rev = tool_config_files.into_iter().rev();
+        Self::from_sources_with_selection(
+            workspace_root,
+            ConfigFileSelection::new(config_file),
+            tool_config_files,
+        )
+    }
 
-        Self::read_from_sources(workspace_root, config_file, tool_config_files_rev)
+    /// Reads early configuration from the given workspace root and file
+    /// selection.
+    pub fn from_sources_with_selection<'a, I>(
+        workspace_root: &Utf8Path,
+        selection: ConfigFileSelection<'_>,
+        tool_config_files: impl IntoIterator<IntoIter = I>,
+    ) -> Result<Self, ConfigParseError>
+    where
+        I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
+    {
+        let config_paths = ConfigPaths::capture(workspace_root).map_err(|error| {
+            ConfigParseError::from_paths_capture_error(
+                workspace_root,
+                selection.explicit_config_file(),
+                error,
+            )
+        })?;
+        Self::from_sources_with_paths(&config_paths, selection, tool_config_files)
+    }
+
+    /// Reads early configuration from the given paths and file selection.
+    pub fn from_sources_with_paths<'a, I>(
+        paths: &ConfigPaths,
+        selection: ConfigFileSelection<'_>,
+        tool_config_files: impl IntoIterator<IntoIter = I>,
+    ) -> Result<Self, ConfigParseError>
+    where
+        I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
+    {
+        Self::read_from_sources(paths, selection, tool_config_files.into_iter().rev())
     }
 
     /// Returns the nextest version requirement.
@@ -54,40 +90,33 @@ impl VersionOnlyConfig {
     }
 
     fn read_from_sources<'a>(
-        workspace_root: &Utf8Path,
-        config_file: Option<&Utf8Path>,
+        paths: &ConfigPaths,
+        selection: ConfigFileSelection<'_>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
     ) -> Result<Self, ConfigParseError> {
         let mut nextest_version = NextestVersionConfig::default();
         let mut known = BTreeSet::new();
-        let mut unknown = BTreeSet::new();
+        let mut unknown = Vec::new();
 
-        // Merge in tool configs.
-        for ToolConfigFile { config_file, tool } in tool_config_files_rev {
-            if let Some(v) = Self::read_and_deserialize(config_file, Some(tool))?.nextest_version {
-                nextest_version.accumulate(v, Some(tool.clone()));
-            }
-        }
-
-        // Finally, merge in the repo config.
-        let config_file = match config_file {
-            Some(file) => Some(Cow::Borrowed(file)),
-            None => {
-                let config_file = workspace_root.join(NextestConfig::CONFIG_PATH);
-                config_file.exists().then_some(Cow::Owned(config_file))
-            }
-        };
-        if let Some(config_file) = config_file {
-            let d = Self::read_and_deserialize(&config_file, None)?;
+        for source in selection.sources(paths, tool_config_files_rev)? {
+            let Some(contents) = source.read()? else {
+                continue;
+            };
+            let d = Self::deserialize(&source, &contents)?;
             if let Some(v) = d.nextest_version {
-                nextest_version.accumulate(v, None);
+                nextest_version.accumulate(v, &source);
             }
 
             // Process experimental features. Unknown features are stored rather
             // than immediately causing an error, so that the nextest version
             // check can run first.
+            //
+            // Note that tool configs cannot define experimental features
+            // (`deserialize` rejects them).
             known.extend(d.experimental.known);
-            unknown.extend(d.experimental.unknown);
+            if !d.experimental.unknown.is_empty() {
+                unknown.push((source, d.experimental.unknown));
+            }
         }
 
         Ok(Self {
@@ -96,40 +125,35 @@ impl VersionOnlyConfig {
         })
     }
 
-    fn read_and_deserialize(
-        config_file: &Utf8Path,
-        tool: Option<&ToolName>,
+    fn deserialize(
+        source: &ConfigSource,
+        toml_str: &str,
     ) -> Result<VersionOnlyDeserialize, ConfigParseError> {
-        let toml_str = std::fs::read_to_string(config_file.as_str()).map_err(|error| {
+        let toml_de = toml::de::Deserializer::parse(toml_str).map_err(|error| {
             ConfigParseError::new(
-                config_file,
-                tool,
-                ConfigParseErrorKind::VersionOnlyReadError(error),
-            )
-        })?;
-        let toml_de = toml::de::Deserializer::parse(&toml_str).map_err(|error| {
-            ConfigParseError::new(
-                config_file,
-                tool,
+                source,
                 ConfigParseErrorKind::TomlParseError(Box::new(error)),
             )
         })?;
         let v: VersionOnlyDeserialize =
             serde_path_to_error::deserialize(toml_de).map_err(|error| {
                 ConfigParseError::new(
-                    config_file,
-                    tool,
+                    source,
                     ConfigParseErrorKind::VersionOnlyDeserializeError(Box::new(error)),
                 )
             })?;
-        if tool.is_some() && !v.experimental.is_empty() {
-            return Err(ConfigParseError::new(
-                config_file,
-                tool,
-                ConfigParseErrorKind::ExperimentalFeaturesInToolConfig {
-                    features: v.experimental.feature_names(),
-                },
-            ));
+        match source.kind() {
+            ConfigSourceKind::Tool(_) => {
+                if !v.experimental.is_empty() {
+                    return Err(ConfigParseError::new(
+                        source,
+                        ConfigParseErrorKind::ExperimentalFeaturesInToolConfig {
+                            features: v.experimental.feature_names(),
+                        },
+                    ));
+                }
+            }
+            ConfigSourceKind::ExplicitRepository | ConfigSourceKind::DiscoveredRepository => {}
         }
 
         Ok(v)
@@ -307,12 +331,12 @@ pub struct NextestVersionConfig {
 
 impl NextestVersionConfig {
     /// Accumulates a deserialized version requirement into this configuration.
-    pub(crate) fn accumulate(&mut self, v: NextestVersionDeserialize, v_tool: Option<ToolName>) {
+    pub(crate) fn accumulate(&mut self, v: NextestVersionDeserialize, source: &ConfigSource) {
         if let Some(version) = v.required {
-            self.required.accumulate(version, v_tool.clone());
+            self.required.accumulate(version, source);
         }
         if let Some(version) = v.recommended {
-            self.recommended.accumulate(version, v_tool);
+            self.recommended.accumulate(version, source);
         }
     }
 
@@ -324,18 +348,18 @@ impl NextestVersionConfig {
     ) -> NextestVersionEval {
         match self.required.satisfies(current_version) {
             Ok(()) => {}
-            Err((required, tool)) => {
+            Err((required, source)) => {
                 if override_version_check {
                     return NextestVersionEval::ErrorOverride {
                         required: required.clone(),
                         current: current_version.clone(),
-                        tool: tool.cloned(),
+                        source: source.clone(),
                     };
                 } else {
                     return NextestVersionEval::Error {
                         required: required.clone(),
                         current: current_version.clone(),
-                        tool: tool.cloned(),
+                        source: source.clone(),
                     };
                 }
             }
@@ -343,18 +367,18 @@ impl NextestVersionConfig {
 
         match self.recommended.satisfies(current_version) {
             Ok(()) => NextestVersionEval::Satisfied,
-            Err((recommended, tool)) => {
+            Err((recommended, source)) => {
                 if override_version_check {
                     NextestVersionEval::WarnOverride {
                         recommended: recommended.clone(),
                         current: current_version.clone(),
-                        tool: tool.cloned(),
+                        source: source.clone(),
                     }
                 } else {
                     NextestVersionEval::Warn {
                         recommended: recommended.clone(),
                         current: current_version.clone(),
-                        tool: tool.cloned(),
+                        source: source.clone(),
                     }
                 }
             }
@@ -371,8 +395,8 @@ pub struct ExperimentalConfig {
     /// Known experimental features that are enabled.
     known: BTreeSet<ConfigExperimental>,
 
-    /// Unknown experimental feature names.
-    unknown: BTreeSet<String>,
+    /// Unknown experimental feature names, grouped by the file that enabled them.
+    unknown: Vec<(ConfigSource, BTreeSet<String>)>,
 }
 
 impl ExperimentalConfig {
@@ -381,55 +405,20 @@ impl ExperimentalConfig {
         &self.known
     }
 
-    /// Evaluates the experimental configuration.
+    /// Reports unknown features with the path of the file that enabled them.
     ///
     /// This should be called after the nextest version check, so that the version error takes
     /// precedence over unknown experimental features (a future version may have new features).
-    pub fn eval(&self) -> ExperimentalConfigEval {
-        if self.unknown.is_empty() {
-            ExperimentalConfigEval::Satisfied
-        } else {
-            ExperimentalConfigEval::UnknownFeatures {
-                unknown: self.unknown.clone(),
-                known: ConfigExperimental::known_features().collect(),
-            }
-        }
-    }
-}
-
-/// The result of evaluating an [`ExperimentalConfig`].
-///
-/// Returned by [`ExperimentalConfig::eval`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExperimentalConfigEval {
-    /// All experimental features are known.
-    Satisfied,
-
-    /// Unknown experimental features were found.
-    UnknownFeatures {
-        /// The set of unknown feature names.
-        unknown: BTreeSet<String>,
-
-        /// The set of known features.
-        known: BTreeSet<ConfigExperimental>,
-    },
-}
-
-impl ExperimentalConfigEval {
-    /// Converts this eval result into an error, if it represents an error condition.
-    ///
-    /// Returns `Some(ConfigParseError)` if this is `UnknownFeatures`, and `None` if `Satisfied`.
-    pub fn into_error(self, config_file: impl Into<Utf8PathBuf>) -> Option<ConfigParseError> {
-        match self {
-            ExperimentalConfigEval::Satisfied => None,
-            ExperimentalConfigEval::UnknownFeatures { unknown, known } => {
-                Some(ConfigParseError::new(
-                    config_file,
-                    None,
-                    ConfigParseErrorKind::UnknownExperimentalFeatures { unknown, known },
-                ))
-            }
-        }
+    pub fn source_errors(&self) -> impl Iterator<Item = ConfigParseError> + '_ {
+        self.unknown.iter().map(|(source, unknown)| {
+            ConfigParseError::new(
+                source,
+                ConfigParseErrorKind::UnknownExperimentalFeatures {
+                    unknown: unknown.clone(),
+                    known: ConfigExperimental::known_features().collect(),
+                },
+            )
+        })
     }
 }
 
@@ -502,11 +491,11 @@ impl fmt::Display for ConfigExperimental {
 pub enum NextestVersionReq {
     /// A version was specified.
     Version {
-        /// The version to warn before.
+        /// The required or recommended version.
         version: Version,
 
-        /// The tool which produced this version specification.
-        tool: Option<ToolName>,
+        /// Where this version specification came from.
+        source: ConfigSource,
     },
 
     /// No version was specified.
@@ -523,35 +512,35 @@ impl NextestVersionReq {
         }
     }
 
-    fn accumulate(&mut self, v: Version, v_tool: Option<ToolName>) {
+    fn accumulate(&mut self, new_version: Version, new_source: &ConfigSource) {
         match self {
-            NextestVersionReq::Version { version, tool } => {
-                // This is v >= version rather than v > version, so that if multiple tools specify
-                // the same version, the last tool wins.
-                if &v >= version {
-                    *version = v;
-                    *tool = v_tool;
+            NextestVersionReq::Version { version, source } => {
+                // This is v >= version rather than v > version, so that if multiple sources
+                // specify the same version, the last source wins.
+                if &new_version >= version {
+                    *version = new_version;
+                    *source = new_source.clone();
                 }
             }
             NextestVersionReq::None => {
                 *self = NextestVersionReq::Version {
-                    version: v,
-                    tool: v_tool,
+                    version: new_version,
+                    source: new_source.clone(),
                 };
             }
         }
     }
 
-    fn satisfies(&self, version: &Version) -> Result<(), (&Version, Option<&ToolName>)> {
+    fn satisfies(&self, version: &Version) -> Result<(), (&Version, &ConfigSource)> {
         match self {
             NextestVersionReq::Version {
                 version: required,
-                tool,
+                source,
             } => {
                 if version >= required {
                     Ok(())
                 } else {
-                    Err((required, tool.as_ref()))
+                    Err((required, source))
                 }
             }
             NextestVersionReq::None => Ok(()),
@@ -573,8 +562,8 @@ pub enum NextestVersionEval {
         required: Version,
         /// The current version.
         current: Version,
-        /// The tool which produced this version specification.
-        tool: Option<ToolName>,
+        /// Where this version specification came from.
+        source: ConfigSource,
     },
 
     /// A warning should be produced.
@@ -583,18 +572,18 @@ pub enum NextestVersionEval {
         recommended: Version,
         /// The current version.
         current: Version,
-        /// The tool which produced this version specification.
-        tool: Option<ToolName>,
+        /// Where this version specification came from.
+        source: ConfigSource,
     },
 
     /// An error should be produced but the version is overridden.
     ErrorOverride {
-        /// The minimum version recommended.
+        /// The minimum version required.
         required: Version,
         /// The current version.
         current: Version,
-        /// The tool which produced this version specification.
-        tool: Option<ToolName>,
+        /// Where this version specification came from.
+        source: ConfigSource,
     },
 
     /// A warning should be produced but the version is overridden.
@@ -603,8 +592,8 @@ pub enum NextestVersionEval {
         recommended: Version,
         /// The current version.
         current: Version,
-        /// The tool which produced this version specification.
-        tool: Option<ToolName>,
+        /// Where this version specification came from.
+        source: ConfigSource,
     },
 }
 
@@ -753,7 +742,111 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        config::core::{NextestConfig, ToolName},
+        errors::ConfigPathsCaptureError,
+    };
+    use camino_tempfile::tempdir;
+    use camino_tempfile_ext::prelude::*;
     use test_case::test_case;
+
+    #[test]
+    fn test_malformed_repo_config() {
+        let workspace = tempdir().unwrap();
+        let config_file = workspace.child(NextestConfig::CONFIG_PATH);
+        config_file.write_str("invalid = [").unwrap();
+        let error = VersionOnlyConfig::from_sources(workspace.path(), None, &[]).unwrap_err();
+        assert_eq!(error.config_file(), config_file.as_path());
+        let ConfigParseErrorKind::TomlParseError(_) = error.kind() else {
+            panic!("malformed TOML in the repo config is a parse error, got {error:?}");
+        };
+    }
+
+    #[test]
+    fn test_experimental_features_in_tool_config() {
+        let workspace = tempdir().unwrap();
+        let tool_config = workspace.child("tool.toml");
+        tool_config
+            .write_str(r#"experimental = ["setup-scripts"]"#)
+            .unwrap();
+        let tool = ToolName::new("my-tool".into()).unwrap();
+        let tool_config_file = ToolConfigFile {
+            tool: tool.clone(),
+            config_file: tool_config.to_path_buf(),
+        };
+        let error = VersionOnlyConfig::from_sources(
+            workspace.path(),
+            None,
+            std::slice::from_ref(&tool_config_file),
+        )
+        .unwrap_err();
+        assert_eq!(error.config_file(), tool_config.as_path());
+        assert_eq!(error.tool(), Some(&tool));
+        let ConfigParseErrorKind::ExperimentalFeaturesInToolConfig { features } = error.kind()
+        else {
+            panic!("experimental features in a tool config are rejected, got {error:?}");
+        };
+        assert_eq!(features, &BTreeSet::from(["setup-scripts".to_owned()]));
+    }
+
+    #[test]
+    fn test_repo_config_is_directory() {
+        let workspace = tempdir().unwrap();
+        let config_file = workspace.child(NextestConfig::CONFIG_PATH);
+        config_file.create_dir_all().unwrap();
+        let error = VersionOnlyConfig::from_sources(workspace.path(), None, &[]).unwrap_err();
+        assert_eq!(error.config_file(), config_file.as_path());
+        let ConfigParseErrorKind::ReadError(_) = error.kind() else {
+            panic!("a directory at the repo config path is a read error, got {error:?}");
+        };
+    }
+
+    #[test]
+    fn test_unknown_experimental_features_are_attributed_to_their_file() {
+        let workspace = tempdir().unwrap();
+        let repo_config = workspace.child(NextestConfig::CONFIG_PATH);
+        repo_config
+            .write_str("experimental = ['setup-scripts', 'unknown-feature']")
+            .unwrap();
+        let explicit_config = workspace.child("explicit.toml");
+        explicit_config
+            .write_str("experimental = ['other-unknown-feature']")
+            .unwrap();
+
+        for (config_file, expected_path, expected_unknown) in [
+            (None, repo_config.as_path(), "unknown-feature"),
+            (
+                Some(explicit_config.as_path()),
+                explicit_config.as_path(),
+                "other-unknown-feature",
+            ),
+        ] {
+            let config =
+                VersionOnlyConfig::from_sources(workspace.path(), config_file, &[]).unwrap();
+            let errors: Vec<_> = config.experimental().source_errors().collect();
+            let [error] = errors.as_slice() else {
+                panic!("exactly one file enabled unknown features, got {errors:?}");
+            };
+            assert_eq!(error.config_file(), expected_path);
+            assert_eq!(error.tool(), None);
+            let ConfigParseErrorKind::UnknownExperimentalFeatures { unknown, known } = error.kind()
+            else {
+                panic!("unknown features are reported as such, got {error:?}");
+            };
+            assert_eq!(unknown, &BTreeSet::from([expected_unknown.to_owned()]));
+            assert_eq!(known, &ConfigExperimental::known_features().collect());
+        }
+
+        repo_config
+            .write_str("experimental = ['setup-scripts']")
+            .unwrap();
+        let config = VersionOnlyConfig::from_sources(workspace.path(), None, &[]).unwrap();
+        assert_eq!(
+            config.experimental().known(),
+            &BTreeSet::from([ConfigExperimental::SetupScripts])
+        );
+        assert_eq!(config.experimental().source_errors().count(), 0);
+    }
 
     #[test_case(
         r#"
@@ -819,26 +912,71 @@ mod tests {
         );
     }
 
+    #[test_case(None, ".config/nextest.toml" ; "default config")]
+    #[test_case(Some("custom.toml"), "custom.toml" ; "explicit config")]
+    fn test_paths_capture_attribution(config_file: Option<&str>, expected: &str) {
+        let error = VersionOnlyConfig::from_sources(
+            Utf8Path::new(""),
+            config_file.map(Utf8Path::new),
+            &[][..],
+        )
+        .expect_err("an empty workspace root is rejected");
+        assert_eq!(error.config_file().as_str(), expected);
+        assert_eq!(error.tool(), None);
+        let ConfigParseErrorKind::PathsCaptureError(capture_error) = error.kind() else {
+            panic!("expected a paths capture error, found {:?}", error.kind());
+        };
+        match &**capture_error {
+            ConfigPathsCaptureError::WorkspaceRoot(resolve_error) => {
+                assert_eq!(resolve_error.input().as_str(), "");
+            }
+            other => panic!("expected a workspace root capture error, found {other:?}"),
+        }
+    }
+
     fn tool_name(s: &str) -> ToolName {
         ToolName::new(s.into()).unwrap()
     }
 
     #[test]
     fn test_accumulate() {
+        let tool_config_files = ["tool1", "tool2", "tool3", "tool4"].map(|name| ToolConfigFile {
+            tool: tool_name(name),
+            config_file: format!("{name}.toml").into(),
+        });
+        let sources = ConfigFileSelection::new(None)
+            .sources(
+                &ConfigPaths::capture(".").unwrap(),
+                tool_config_files.iter(),
+            )
+            .unwrap();
+        let [tool1, tool2, tool3, tool4, repo] = <[ConfigSource; 5]>::try_from(sources)
+            .expect("four tool sources followed by the repository source");
+        assert_tool_source(&tool1, "tool1");
+        assert_tool_source(&tool2, "tool2");
+        assert_tool_source(&tool3, "tool3");
+        assert_tool_source(&tool4, "tool4");
+        match repo.kind() {
+            ConfigSourceKind::DiscoveredRepository => {}
+            ConfigSourceKind::Tool(_) | ConfigSourceKind::ExplicitRepository => {
+                panic!("expected the discovered repository source, got {repo:?}")
+            }
+        }
+
         let mut nextest_version = NextestVersionConfig::default();
         nextest_version.accumulate(
             NextestVersionDeserialize {
                 required: Some("0.9.20".parse().unwrap()),
                 recommended: None,
             },
-            Some(tool_name("tool1")),
+            &tool1,
         );
         nextest_version.accumulate(
             NextestVersionDeserialize {
                 required: Some("0.9.30".parse().unwrap()),
                 recommended: Some("0.9.35".parse().unwrap()),
             },
-            Some(tool_name("tool2")),
+            &tool2,
         );
         nextest_version.accumulate(
             NextestVersionDeserialize {
@@ -847,7 +985,7 @@ mod tests {
                 // version.
                 recommended: Some("0.9.25".parse().unwrap()),
             },
-            Some(tool_name("tool3")),
+            &tool3,
         );
         nextest_version.accumulate(
             NextestVersionDeserialize {
@@ -856,7 +994,16 @@ mod tests {
                 required: Some("0.9.30".parse().unwrap()),
                 recommended: None,
             },
-            Some(tool_name("tool4")),
+            &tool4,
+        );
+        nextest_version.accumulate(
+            NextestVersionDeserialize {
+                // This is accepted because it is the same as the last required version, and the
+                // repository config comes after every tool config.
+                required: Some("0.9.30".parse().unwrap()),
+                recommended: None,
+            },
+            &repo,
         );
 
         assert_eq!(
@@ -864,14 +1011,23 @@ mod tests {
             NextestVersionConfig {
                 required: NextestVersionReq::Version {
                     version: "0.9.30".parse().unwrap(),
-                    tool: Some(tool_name("tool4")),
+                    source: repo,
                 },
                 recommended: NextestVersionReq::Version {
                     version: "0.9.35".parse().unwrap(),
-                    tool: Some(tool_name("tool2")),
+                    source: tool2,
                 },
             }
         );
+    }
+
+    fn assert_tool_source(source: &ConfigSource, expected: &str) {
+        match source.kind() {
+            ConfigSourceKind::Tool(tool) => assert_eq!(tool.as_str(), expected),
+            ConfigSourceKind::ExplicitRepository | ConfigSourceKind::DiscoveredRepository => {
+                panic!("expected a tool source for {expected}, got {source:?}")
+            }
+        }
     }
 
     #[test]

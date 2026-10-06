@@ -202,7 +202,7 @@ pub struct RunStats {
 Key methods:
 - `has_failures()`: Returns true if any failures occurred.
 - `failed_count()`: Sum of `failed + exec_failed + failed_timed_out`.
-- `summarize_final()`: Returns `FinalRunStats` enum for exit code determination.
+- `summarize_final()`: Returns `FinalRunStats` enum summarizing a single run or stress sub-run. The runner converts it to a `RunOutcome` (combined across sub-runs for stress runs) for exit code determination.
 - `on_test_finished()`: Updates stats based on final execution status.
 
 ### ExecutionStatuses
@@ -222,10 +222,10 @@ The `ExecutionDescription` determines status levels:
 `CancelReason` has an intentional ordering for output suppression logic:
 
 ```rust
-SetupScriptFailure < TestFailure < TestFailureImmediate < ReportError < GlobalTimeout < Signal < Interrupt < SecondSignal
+SetupScriptFailure < TestFailure < ReportError < TestFailureImmediate < GlobalTimeout < Signal < Interrupt < SecondSignal
 ```
 
-Higher values indicate more urgent cancellation; interrupt and signal hide output to avoid spam.
+Higher values indicate more urgent cancellation; interrupt and second signal hide test output to avoid spam, and signal displays it at most once.
 
 ## JUnit XML reporter
 

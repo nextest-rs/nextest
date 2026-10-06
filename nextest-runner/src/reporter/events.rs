@@ -513,7 +513,10 @@ impl StressProgress {
                 total,
                 elapsed,
                 completed: _,
-            } => total.checked_sub(*elapsed).map(StressRemaining::Time),
+            } => total
+                .checked_sub(*elapsed)
+                .and_then(NonZeroDuration::new)
+                .map(StressRemaining::Time),
         }
     }
 
@@ -527,7 +530,7 @@ impl StressProgress {
 }
 
 /// For a stress test, the amount of time or number of stress runs remaining.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StressRemaining {
     /// The number of stress runs remaining, guaranteed to be non-zero.
     Count(NonZero<u32>),
@@ -536,7 +539,29 @@ pub enum StressRemaining {
     Infinite,
 
     /// The amount of time remaining.
-    Time(Duration),
+    Time(NonZeroDuration),
+}
+
+/// A [`Duration`] that is guaranteed to be non-zero.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NonZeroDuration(Duration);
+
+impl NonZeroDuration {
+    /// Creates a `NonZeroDuration` from a [`Duration`].
+    ///
+    /// Returns `None` if the duration is zero.
+    pub fn new(duration: Duration) -> Option<Self> {
+        if duration.is_zero() {
+            None
+        } else {
+            Some(Self(duration))
+        }
+    }
+
+    /// Returns the underlying [`Duration`].
+    pub fn get(self) -> Duration {
+        self.0
+    }
 }
 
 /// The index of the current stress run.
@@ -677,39 +702,17 @@ impl RunStats {
         // Check for failures first. The order of setup scripts vs tests should
         // not be important, though we don't assert that here.
         if self.failed_setup_script_count() > 0 {
-            // Is this related to a cancellation other than one directly caused
-            // by the failure?
-            if self.cancel_reason > Some(CancelReason::TestFailure) {
-                FinalRunStats::Cancelled {
-                    reason: self.cancel_reason,
-                    kind: RunStatsFailureKind::SetupScript,
-                }
-            } else {
-                FinalRunStats::Failed {
-                    kind: RunStatsFailureKind::SetupScript,
-                }
-            }
+            self.summarize_failure(RunStatsFailureKind::SetupScript)
         } else if self.setup_scripts_initial_count > self.setup_scripts_finished_count {
             FinalRunStats::Cancelled {
                 reason: self.cancel_reason,
                 kind: RunStatsFailureKind::SetupScript,
             }
         } else if self.failed_count() > 0 {
-            let kind = RunStatsFailureKind::Test {
+            self.summarize_failure(RunStatsFailureKind::Test {
                 initial_run_count: self.initial_run_count,
                 not_run: self.initial_run_count.saturating_sub(self.finished_count),
-            };
-
-            // Is this related to a cancellation other than one directly caused
-            // by the failure?
-            if self.cancel_reason > Some(CancelReason::TestFailure) {
-                FinalRunStats::Cancelled {
-                    reason: self.cancel_reason,
-                    kind,
-                }
-            } else {
-                FinalRunStats::Failed { kind }
-            }
+            })
         } else if self.initial_run_count > self.finished_count {
             FinalRunStats::Cancelled {
                 reason: self.cancel_reason,
@@ -722,6 +725,27 @@ impl RunStats {
             FinalRunStats::NoTestsRun
         } else {
             FinalRunStats::Success
+        }
+    }
+
+    fn summarize_failure(&self, kind: RunStatsFailureKind) -> FinalRunStats {
+        match self.cancel_reason {
+            None
+            | Some(
+                CancelReason::SetupScriptFailure
+                | CancelReason::TestFailure
+                | CancelReason::TestFailureImmediate,
+            ) => FinalRunStats::Failed { kind },
+            Some(
+                CancelReason::ReportError
+                | CancelReason::GlobalTimeout
+                | CancelReason::Signal
+                | CancelReason::Interrupt
+                | CancelReason::SecondSignal,
+            ) => FinalRunStats::Cancelled {
+                reason: self.cancel_reason,
+                kind,
+            },
         }
     }
 
@@ -936,6 +960,7 @@ impl StressRunStats {
 }
 
 /// A summary of final statistics for a stress run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StressFinalRunStats {
     /// The stress run was successful.
     Success,
@@ -948,6 +973,20 @@ pub enum StressFinalRunStats {
 
     /// At least one stress run failed.
     Failed,
+}
+
+/// The step at which a run failed, without per-run details.
+///
+/// Later variants take precedence over earlier ones when combining steps across
+/// stress sub-runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
+pub enum RunFailureStep {
+    /// A test failed.
+    Test,
+
+    /// A setup script failed.
+    SetupScript,
 }
 
 /// A type summarizing the step at which a test run failed.
@@ -967,6 +1006,96 @@ pub enum RunStatsFailureKind {
         /// run.
         not_run: usize,
     },
+}
+
+impl RunStatsFailureKind {
+    /// Returns the step at which the run failed.
+    pub fn step(&self) -> RunFailureStep {
+        match self {
+            Self::SetupScript => RunFailureStep::SetupScript,
+            Self::Test { .. } => RunFailureStep::Test,
+        }
+    }
+}
+
+/// The final outcome of a run.
+///
+/// For standard runs this is a reduced form of [`FinalRunStats`]. For stress
+/// runs it accounts for every sub-run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
+#[must_use]
+pub enum RunOutcome {
+    /// * For standard runs: the run was successful.
+    /// * For stress runs: all sub-runs were successful.
+    Success,
+
+    /// * For standard runs: no tests were run, setup scripts did not fail,
+    ///   and the test run was not cancelled.
+    /// * For stress runs: no sub-run ran any tests, setup scripts did not
+    ///   fail, and none were cancelled.
+    NoTestsRun,
+
+    /// * For standard runs: the run was cancelled.
+    /// * For stress runs: no sub-run failed, and at least one was cancelled.
+    ///   (Currently, stress runs occur serially, so only the last sub-run
+    ///   can be cancelled.)
+    Cancelled {
+        /// * For standard runs: the step the run was cancelled at.
+        /// * For stress runs: the highest-precedence step across cancelled
+        ///   sub-runs (see [`RunFailureStep`]; currently, stress runs occur
+        ///   serially, so this always refers to the last sub-run).
+        step: RunFailureStep,
+    },
+
+    /// * For standard runs: the run failed.
+    /// * For stress runs: at least one sub-run failed.
+    Failed {
+        /// * For standard runs: the step the run failed at.
+        /// * For stress runs: the highest-precedence step across failed
+        ///   sub-runs (see [`RunFailureStep`]).
+        step: RunFailureStep,
+    },
+}
+
+impl RunOutcome {
+    /// Creates a [`RunOutcome`] from the [`FinalRunStats`] for a standard run
+    /// or stress sub-run.
+    pub fn from_final_stats(stats: FinalRunStats) -> Self {
+        match stats {
+            FinalRunStats::Success => Self::Success,
+            FinalRunStats::NoTestsRun => Self::NoTestsRun,
+            FinalRunStats::Cancelled { reason: _, kind } => Self::Cancelled { step: kind.step() },
+            FinalRunStats::Failed { kind } => Self::Failed { step: kind.step() },
+        }
+    }
+
+    /// Combines two [`RunOutcome`] values.
+    ///
+    /// This is commutative, associative, and idempotent. The rules are:
+    ///
+    /// * `NoTestsRun < Success < Cancelled < Failed`.
+    /// * Within a class (failure or cancellation), `SetupScript` outranks
+    ///   `Test` (see [`RunFailureStep`]).
+    pub(crate) fn combine(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Failed { step: a }, Self::Failed { step: b }) => Self::Failed { step: a.max(b) },
+            (Self::Failed { step }, Self::Success | Self::NoTestsRun | Self::Cancelled { .. })
+            | (Self::Success | Self::NoTestsRun | Self::Cancelled { .. }, Self::Failed { step }) => {
+                Self::Failed { step }
+            }
+            (Self::Cancelled { step: a }, Self::Cancelled { step: b }) => {
+                Self::Cancelled { step: a.max(b) }
+            }
+            (Self::Cancelled { step }, Self::Success | Self::NoTestsRun)
+            | (Self::Success | Self::NoTestsRun, Self::Cancelled { step }) => {
+                Self::Cancelled { step }
+            }
+            (Self::Success, Self::Success | Self::NoTestsRun)
+            | (Self::NoTestsRun, Self::Success) => Self::Success,
+            (Self::NoTestsRun, Self::NoTestsRun) => Self::NoTestsRun,
+        }
+    }
 }
 
 /// Information about executions of a test, including retries.
@@ -2296,11 +2425,11 @@ pub enum CancelReason {
     /// An error occurred while reporting results.
     ReportError,
 
-    /// The global timeout was exceeded.
-    GlobalTimeout,
-
     /// A test failed and fail-fast with immediate termination was specified.
     TestFailureImmediate,
+
+    /// The global timeout was exceeded.
+    GlobalTimeout,
 
     /// A termination signal (on Unix, SIGTERM or SIGHUP) was received.
     Signal,
@@ -2318,8 +2447,8 @@ impl CancelReason {
             CancelReason::SetupScriptFailure => "setup script failure",
             CancelReason::TestFailure => "test failure",
             CancelReason::ReportError => "reporting error",
-            CancelReason::GlobalTimeout => "global timeout",
             CancelReason::TestFailureImmediate => "test failure",
+            CancelReason::GlobalTimeout => "global timeout",
             CancelReason::Signal => "signal",
             CancelReason::Interrupt => "interrupt",
             CancelReason::SecondSignal => "second signal",
@@ -2612,6 +2741,96 @@ impl fmt::Display for UnitTerminateSignal {
 mod tests {
     use super::*;
     use crate::{output_spec::RecordingSpec, record::ZipStoreOutputDescription};
+    use proptest::prelude::*;
+    use test_strategy::proptest;
+
+    #[derive(Clone, Copy, Debug)]
+    enum FailureSummary {
+        Failed,
+        Cancelled,
+    }
+
+    const FAILURE_SUMMARY_BY_CANCEL_REASON: [(Option<CancelReason>, FailureSummary); 9] = [
+        (None, FailureSummary::Failed),
+        (
+            Some(CancelReason::SetupScriptFailure),
+            FailureSummary::Failed,
+        ),
+        (Some(CancelReason::TestFailure), FailureSummary::Failed),
+        (Some(CancelReason::ReportError), FailureSummary::Cancelled),
+        (
+            Some(CancelReason::TestFailureImmediate),
+            FailureSummary::Failed,
+        ),
+        (Some(CancelReason::GlobalTimeout), FailureSummary::Cancelled),
+        (Some(CancelReason::Signal), FailureSummary::Cancelled),
+        (Some(CancelReason::Interrupt), FailureSummary::Cancelled),
+        (Some(CancelReason::SecondSignal), FailureSummary::Cancelled),
+    ];
+
+    /// Ensure that all possible cancel reasons are covered in
+    /// `FAILURE_SUMMARY_BY_CANCEL_REASON` above.
+    #[proptest]
+    fn failure_summary_by_cancel_reason_is_complete(cancel_reason: Option<CancelReason>) {
+        prop_assert!(
+            FAILURE_SUMMARY_BY_CANCEL_REASON
+                .iter()
+                .any(|(reason, _)| *reason == cancel_reason),
+            "FAILURE_SUMMARY_BY_CANCEL_REASON has a row for {cancel_reason:?}"
+        );
+    }
+
+    #[track_caller]
+    fn assert_failure_summary_by_cancel_reason(stats: RunStats, kind: RunStatsFailureKind) {
+        for (cancel_reason, expected) in FAILURE_SUMMARY_BY_CANCEL_REASON {
+            let expected = match expected {
+                FailureSummary::Failed => FinalRunStats::Failed { kind },
+                FailureSummary::Cancelled => FinalRunStats::Cancelled {
+                    reason: cancel_reason,
+                    kind,
+                },
+            };
+            assert_eq!(
+                RunStats {
+                    cancel_reason,
+                    ..stats
+                }
+                .summarize_final(),
+                expected,
+                "summary for cancel reason {cancel_reason:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn summarize_final_failed_test_by_cancel_reason() {
+        assert_failure_summary_by_cancel_reason(
+            RunStats {
+                initial_run_count: 3,
+                finished_count: 2,
+                passed: 1,
+                failed: 1,
+                ..RunStats::default()
+            },
+            RunStatsFailureKind::Test {
+                initial_run_count: 3,
+                not_run: 1,
+            },
+        );
+    }
+
+    #[test]
+    fn summarize_final_failed_setup_script_by_cancel_reason() {
+        assert_failure_summary_by_cancel_reason(
+            RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 1,
+                setup_scripts_failed: 1,
+                ..RunStats::default()
+            },
+            RunStatsFailureKind::SetupScript,
+        );
+    }
 
     #[test]
     fn test_is_success() {
@@ -3461,5 +3680,142 @@ mod tests {
         assert_eq!(stats.failed_slow, 1);
         assert_eq!(stats.passed, 0);
         assert_eq!(stats.flaky, 0);
+    }
+
+    /// All [`RunOutcome`] values.
+    ///
+    /// The domain is small enough to check `combine` exhaustively.
+    const ALL_RUN_OUTCOMES: [RunOutcome; 6] = [
+        RunOutcome::NoTestsRun,
+        RunOutcome::Success,
+        RunOutcome::Cancelled {
+            step: RunFailureStep::Test,
+        },
+        RunOutcome::Cancelled {
+            step: RunFailureStep::SetupScript,
+        },
+        RunOutcome::Failed {
+            step: RunFailureStep::Test,
+        },
+        RunOutcome::Failed {
+            step: RunFailureStep::SetupScript,
+        },
+    ];
+
+    /// Verifies that [`ALL_RUN_OUTCOMES`] actually does contain all
+    /// [`RunOutcome`] values.
+    #[proptest]
+    fn all_run_outcomes_is_complete(outcome: RunOutcome) {
+        prop_assert!(
+            ALL_RUN_OUTCOMES.contains(&outcome),
+            "ALL_RUN_OUTCOMES contains {outcome:?}"
+        );
+    }
+
+    #[test]
+    fn run_outcome_combine_is_commutative() {
+        for a in ALL_RUN_OUTCOMES {
+            for b in ALL_RUN_OUTCOMES {
+                assert_eq!(
+                    a.combine(b),
+                    b.combine(a),
+                    "combine is commutative for {a:?} and {b:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn run_outcome_combine_is_associative() {
+        for a in ALL_RUN_OUTCOMES {
+            for b in ALL_RUN_OUTCOMES {
+                for c in ALL_RUN_OUTCOMES {
+                    assert_eq!(
+                        a.combine(b).combine(c),
+                        a.combine(b.combine(c)),
+                        "combine is associative for {a:?}, {b:?}, and {c:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn run_outcome_combine_is_idempotent() {
+        for a in ALL_RUN_OUTCOMES {
+            assert_eq!(a.combine(a), a, "combine is idempotent for {a:?}");
+        }
+    }
+
+    #[test]
+    fn run_outcome_combine_matches_oracle() {
+        for a in ALL_RUN_OUTCOMES {
+            for b in ALL_RUN_OUTCOMES {
+                let expected = if outcome_rank(a) >= outcome_rank(b) {
+                    a
+                } else {
+                    b
+                };
+                assert_eq!(
+                    a.combine(b),
+                    expected,
+                    "combine returns the higher-ranked of {a:?} and {b:?}"
+                );
+            }
+        }
+    }
+
+    // Ranks are explicit integers so the oracle doesn't share RunFailureStep's
+    // derived Ord with the implementation.
+    fn outcome_rank(outcome: RunOutcome) -> (u8, u8) {
+        match outcome {
+            RunOutcome::NoTestsRun => (0, 0),
+            RunOutcome::Success => (1, 0),
+            RunOutcome::Cancelled { step } => (2, step_rank(step)),
+            RunOutcome::Failed { step } => (3, step_rank(step)),
+        }
+    }
+
+    fn step_rank(step: RunFailureStep) -> u8 {
+        match step {
+            RunFailureStep::Test => 0,
+            RunFailureStep::SetupScript => 1,
+        }
+    }
+
+    #[test]
+    fn stress_progress_time_remaining() {
+        let total = Duration::from_secs(30);
+        let smallest_step = Duration::from_nanos(1);
+        let progress_at = |elapsed: Duration| StressProgress::Time {
+            total,
+            elapsed,
+            completed: 3,
+        };
+
+        assert_eq!(
+            progress_at(Duration::ZERO).remaining(),
+            Some(StressRemaining::Time(
+                NonZeroDuration::new(total).expect("total is non-zero")
+            )),
+            "no time elapsed => the whole duration remains"
+        );
+        assert_eq!(
+            progress_at(total - smallest_step).remaining(),
+            Some(StressRemaining::Time(
+                NonZeroDuration::new(smallest_step).expect("smallest step is non-zero")
+            )),
+            "elapsed just below total => the difference remains"
+        );
+        assert_eq!(
+            progress_at(total).remaining(),
+            None,
+            "elapsed equal to total => nothing remains"
+        );
+        assert_eq!(
+            progress_at(total + smallest_step).remaining(),
+            None,
+            "elapsed above total => nothing remains"
+        );
     }
 }

@@ -10,6 +10,71 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.146] - 2026-09-21
+
+### Fixed
+
+- Updated chacha20 and der to non-yanked versions.
+
+## [0.9.145] - 2026-09-16
+
+### Changed
+
+- Configuration diagnostics now name the file each setting came from. For example, `cargo nextest show-config version` shows which file specified the `nextest-version` requirement, and `cargo nextest show-config test-groups` shows which file each override was defined in.
+
+  For now, this is most useful when [tool-specific config files](https://nexte.st/docs/configuration/#tool-specific-configuration) are in play, but upcoming work to support local configuration files also benefits from this. ([#3580], [#3584])
+
+- Config file paths in errors and warnings are now displayed relative to the directory nextest is invoked from, following typical CLI conventions. Previously, parse errors showed absolute paths and warnings showed paths relative to the workspace root. In stylized output, config file paths are now colored as well. ([#3568], [#3570], [#3577])
+
+### Fixed
+
+- Per-test overrides and setup and wrapper scripts defined in a profile's [inheritance chain](https://nexte.st/docs/configuration/#profile-inheritance) are now applied. Previously, only the selected profile's own overrides and those in `profile.default` were consulted, so overrides in intermediate profiles were silently skipped. As part of this change, a profile that does not set `default-filter` now inherits it from the nearest ancestor that does, rather than always from `profile.default`. ([#3585])
+
+- A `default-filter` set by a tool config file is now respected when the repository config does not set one. Previously, the tool's filter was ignored and `all()` was used. ([#3592])
+
+- Profile inheritance cycles that span multiple config files, such as a tool config file redefining a profile that the repository config inherits from, are now detected and reported as errors. Previously, cycles were only detected within a single file. ([#3588])
+
+- Passing `--tool-config-file` more than once for the same tool name now produces an error. Previously, nextest panicked internally. ([#3589])
+
+- The hint shown when a command requires an experimental feature that isn't enabled now points at the correct config file path when nextest is run from a subdirectory of the workspace, from outside the workspace, or with an explicit `--config-file`. ([#3565])
+
+- On Unix platforms where the Rust standard library cannot create pipes with `FD_CLOEXEC` set atomically (most notably Apple platforms), a test could inherit a sibling test's capture pipe if the two were spawned concurrently. The sibling was then reported as having leaked handles after it exited. Nextest now creates capture pipes itself and coordinates pipe creation with process spawning, so that spawns no longer inherit stray pipes. ([#3553])
+
+  An upcoming design document will go over how nextest spawns processes in detail, including more information about this workaround.
+
+  Thanks [gaborbernat](https://github.com/gaborbernat) for your first contribution!
+
+[#3553]: https://github.com/nextest-rs/nextest/pull/3553
+[#3565]: https://github.com/nextest-rs/nextest/pull/3565
+[#3568]: https://github.com/nextest-rs/nextest/pull/3568
+[#3570]: https://github.com/nextest-rs/nextest/pull/3570
+[#3577]: https://github.com/nextest-rs/nextest/pull/3577
+[#3580]: https://github.com/nextest-rs/nextest/pull/3580
+[#3584]: https://github.com/nextest-rs/nextest/pull/3584
+[#3585]: https://github.com/nextest-rs/nextest/pull/3585
+[#3588]: https://github.com/nextest-rs/nextest/pull/3588
+[#3589]: https://github.com/nextest-rs/nextest/pull/3589
+[#3592]: https://github.com/nextest-rs/nextest/pull/3592
+
+## [0.9.144] - 2026-09-10
+
+### Changed
+
+- Failures while setting up [run recording](https://nexte.st/docs/features/record-replay-rerun/) (for example, a store directory that cannot be created) are now always reported as warnings, and the test run continues without recording. Previously, only a store format version mismatch was treated as a warning, and other setup failures aborted the run. This makes setup consistent with recording finalization, which already never fails a run. ([#3547])
+- The "continue rerunning" hint printed when a rerun has outstanding tests is now only shown when the rerun was itself recorded, since `cargo nextest run -R latest` can only continue the chain in that case. ([#3548])
+
+### Fixed
+
+- Fixed the elapsed time shown in per-test running lines for tests that had been running for more than an hour. The minutes field was displayed as the total number of minutes rather than the minutes within the hour, producing output like `[05:313:30]`. ([#3535])
+- When a `cargo metadata` or `cargo build` invocation fails, the error message now shows the full list of arguments that were passed to Cargo, including `--color` and `--manifest-path`. Previously, some arguments were omitted from the message. ([#3557])
+
+Thanks [chirizxc](https://github.com/chirizxc), [latent-9](https://github.com/latent-9), and [k-cross](https://github.com/k-cross) for your first contributions!
+
+[#3535]: https://github.com/nextest-rs/nextest/pull/3535
+[#3547]: https://github.com/nextest-rs/nextest/pull/3547
+[#3548]: https://github.com/nextest-rs/nextest/pull/3548
+[#3557]: https://github.com/nextest-rs/nextest/pull/3557
+
 ## [0.9.143] - 2026-08-04
 
 ### Added
@@ -2269,6 +2334,9 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.146]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.146
+[0.9.145]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.145
+[0.9.144]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.144
 [0.9.143]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.143
 [0.9.142]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.142
 [0.9.141]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.141

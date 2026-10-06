@@ -3,11 +3,11 @@
 
 use crate::{
     config::{
-        core::{EarlyProfile, EvaluatableProfile, FinalConfig},
+        core::{ConfigStyles, EarlyProfile, EvaluatableProfile, FinalConfig},
         elements::{CustomTestGroup, TestGroup, TestGroupConfig},
         overrides::{CompiledOverride, MaybeTargetSpec, OverrideId, SettingSource},
     },
-    errors::ShowTestGroupsError,
+    errors::{ShowTestGroupsError, provided_by_tool},
     helpers::QuotedDisplay,
     indenter::indented,
     list::{TestInstance, TestList, TestListDisplayFilter},
@@ -182,6 +182,17 @@ impl<'a> ShowTestGroups<'a> {
                     )?;
                 }
 
+                write!(
+                    writer,
+                    " (from {}{})",
+                    override_id
+                        .config_source
+                        .path()
+                        .display()
+                        .style(styles.config.path),
+                    provided_by_tool(override_id.config_source.tool(), styles.config.tool),
+                )?;
+
                 writeln!(writer, ":")?;
 
                 let mut inner_writer = indented(writer).with_str(INDENT);
@@ -286,6 +297,7 @@ struct Styles {
     profile: Style,
     filter: Style,
     platform: Style,
+    config: ConfigStyles,
 }
 
 impl Styles {
@@ -295,5 +307,6 @@ impl Styles {
         self.profile = Style::new().bold();
         self.filter = Style::new().yellow();
         self.platform = Style::new().yellow();
+        self.config.colorize();
     }
 }

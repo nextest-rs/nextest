@@ -1,16 +1,15 @@
 ---
 source: integration-tests/tests/integration/main.rs
-assertion_line: 1435
 expression: with_retries_output.stdout_as_str()
 ---
 group: flaky (max threads = 4)
-  * override for with-retries profile with filter 'test(test_flaky_mod) | test(~test_flaky_mod_4)':
+  * override for with-retries profile with filter 'test(test_flaky_mod) | test(~test_flaky_mod_4)' (from .config/nextest.toml):
       fixture-project::basic:
           test_flaky_mod_3
           test_flaky_mod_4
           test_flaky_mod_6
 group: serial (max threads = 1)
-  * override for with-retries profile with filter 'test(=test_success) | test(=test_execute_bin)':
+  * override for with-retries profile with filter 'test(=test_success) | test(=test_execute_bin)' (from .config/nextest.toml):
       fixture-project::basic:
           test_execute_bin
           test_success

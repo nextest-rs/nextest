@@ -32,10 +32,11 @@ use nextest_metadata::{
     BinaryListSummary, BuildPlatform, BuildPlatformsSummary, FilterMatch, MismatchReason,
     NextestExitCode, TestCaseName, TestListSummary,
 };
-use std::{borrow::Cow, collections::BTreeSet, fs::File, io::Write};
+use std::{borrow::Cow, collections::BTreeSet, fs::File, io::Write, num::NonZero};
 use target_spec::{Platform, summaries::TargetFeaturesSummary};
 
 mod cargo_message_format;
+mod config_paths;
 mod fixtures;
 mod interceptor;
 mod large_alloc;
@@ -58,7 +59,7 @@ fn test_version_info() {
     // are not part of the format, and we have some flexibility in changing it.
     // The commit hash and date are optional because local dev builds may not include them.
     let version_regex = regex::Regex::new(
-        r"^cargo-nextest (0\.9\.[0-9\-a-z\.]+)(?: \(([a-f0-9]{9}) (\d{4}-\d{2}-\d{2})\))?\n$",
+        r"^cargo-nextest (?<version>0\.9\.[0-9\-a-z\.]+)(?: \((?<short_hash>[a-f0-9]{9}) (?<date>\d{4}-\d{2}-\d{2})\))?\n$",
     )
     .unwrap();
 
@@ -71,9 +72,9 @@ fn test_version_info() {
         .captures(&short_stdout)
         .unwrap_or_else(|| panic!("short version matches regex: {short_stdout}"));
 
-    let version = captures.get(1).unwrap().as_str();
-    let short_hash = captures.get(2).map(|m| m.as_str());
-    let date = captures.get(3).map(|m| m.as_str());
+    let version = &captures["version"];
+    let short_hash = captures.name("short_hash").map(|m| m.as_str());
+    let date = captures.name("date").map(|m| m.as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
         .args(["--version"])
@@ -1579,14 +1580,7 @@ fn check_archive_contents(
     let (_p1, archive_file) =
         create_archive_with_args(env_info, "", false, snapshot_name, &["-E", filter], true)
             .expect("archive succeeded");
-    let file = File::open(archive_file.clone()).unwrap();
-    let decoder = zstd::stream::read::Decoder::new(file).unwrap();
-    let mut archive = tar::Archive::new(decoder);
-    let paths = archive
-        .entries()
-        .unwrap()
-        .map(|e| e.unwrap().path().unwrap().into_owned().try_into().unwrap())
-        .collect::<Vec<_>>();
+    let paths = archive_entry_paths(&archive_file);
     cb(env_info, archive_file, paths);
 }
 
@@ -1809,6 +1803,7 @@ fn test_show_config_test_groups() {
     let p = TempProject::new(&env_info).unwrap();
 
     let default_profile_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1822,6 +1817,7 @@ fn test_show_config_test_groups() {
     insta::assert_snapshot!(default_profile_output.stdout_as_str());
 
     let default_profile_all_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1836,6 +1832,7 @@ fn test_show_config_test_groups() {
     insta::assert_snapshot!(default_profile_all_output.stdout_as_str());
 
     let with_retries_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1850,6 +1847,7 @@ fn test_show_config_test_groups() {
     insta::assert_snapshot!(with_retries_output.stdout_as_str());
 
     let with_retries_all_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1865,6 +1863,7 @@ fn test_show_config_test_groups() {
     insta::assert_snapshot!(with_retries_all_output.stdout_as_str());
 
     let with_termination_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1879,6 +1878,7 @@ fn test_show_config_test_groups() {
     insta::assert_snapshot!(with_termination_output.stdout_as_str());
 
     let with_termination_all_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -1892,6 +1892,65 @@ fn test_show_config_test_groups() {
         .output();
 
     insta::assert_snapshot!(with_termination_all_output.stdout_as_str());
+
+    // A tool override at the same profile and index as a repository override must be
+    // reported separately, attributed to the tool.
+    let tool_config_path = p.temp_root().join("tool-config.toml");
+    std::fs::write(
+        &tool_config_path,
+        r#"
+        [[profile.with-termination.overrides]]
+        filter = 'test(=test_slow_timeout_subprocess)'
+        test-group = '@global'
+        "#,
+    )
+    .unwrap();
+    let with_termination_tool_output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "--tool-config-file",
+            &format!("my-tool:{tool_config_path}"),
+            "show-config",
+            "test-groups",
+            "--workspace",
+            "--all-targets",
+            "--profile=with-termination",
+        ])
+        .output();
+
+    // The tool config path is a temporary directory, so replace it for the snapshot.
+    let with_termination_tool_stdout = with_termination_tool_output
+        .stdout_as_str()
+        .replace(tool_config_path.as_str(), "<tool-config-path>");
+
+    insta::assert_snapshot!(with_termination_tool_stdout);
+}
+
+#[test]
+fn test_show_config_test_groups_inherited_overrides() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let config_path = p.workspace_root().join(".config/nextest.toml");
+    let mut contents = std::fs::read_to_string(&config_path).unwrap();
+    contents.push_str("\n[profile.inherits-with-retries]\ninherits = \"with-retries\"\n");
+    std::fs::write(&config_path, contents).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "test-groups",
+            "--workspace",
+            "--all-targets",
+            "--profile=inherits-with-retries",
+        ])
+        .output();
+
+    insta::assert_snapshot!(output.stdout_as_str());
 }
 
 #[test]
@@ -2116,6 +2175,7 @@ fn test_show_config_version() {
     // Required 0.9.56, recommended 0.9.54.
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2128,6 +2188,7 @@ fn test_show_config_version() {
     insta::assert_snapshot!(output.stdout_as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2145,6 +2206,7 @@ fn test_show_config_version() {
     insta::assert_snapshot!(output.stdout_as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2162,6 +2224,7 @@ fn test_show_config_version() {
     insta::assert_snapshot!(output.stdout_as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2179,6 +2242,7 @@ fn test_show_config_version() {
     insta::assert_snapshot!(output.stdout_as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2199,6 +2263,7 @@ fn test_show_config_version() {
     // With --override-version-check
     // ---
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2212,6 +2277,7 @@ fn test_show_config_version() {
     insta::assert_snapshot!(output.stdout_as_str());
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2243,6 +2309,7 @@ fn test_show_config_version() {
     std::mem::drop(f);
 
     let output = CargoNextestCli::for_test(&env_info)
+        .current_dir(p.workspace_root())
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -2305,17 +2372,36 @@ fail-fast = false
         output.stderr_as_str()
     );
 
-    let stderr = output.stderr_as_str();
-    assert!(
-        stderr.contains("requires nextest version 0.9.9999"),
-        "expected version error in stderr, got: {}",
-        stderr
+    let mut blocks = vec![format!(
+        "scenario: version-not-met\n{}",
+        normalize_nextest_stderr(&output.stderr_as_str(), p.temp_root())
+    )];
+
+    // With the unknown feature still configured, overriding the version check
+    // reports the requirement's source, then fails on the unknown feature
+    // before cargo runs (keeping output relatively minimal).
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--message-format",
+            "human",
+            "--override-version-check",
+        ])
+        .env(TEST_VERSION_ENV, "0.9.100")
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "{output}"
     );
-    assert!(
-        !stderr.contains("unknown-experimental-feature"),
-        "should not contain unknown experimental feature error, got: {}",
-        stderr
-    );
+    blocks.push(format!(
+        "scenario: version-not-met-override\n{}",
+        normalize_nextest_stderr(&output.stderr_as_str(), p.temp_root())
+    ));
 
     // Now test that the unknown experimental feature error is shown when the version passes.
     std::fs::write(
@@ -2351,12 +2437,12 @@ fail-fast = false
         output.stderr_as_str()
     );
 
-    let stderr = output.stderr_as_str();
-    assert!(
-        stderr.contains("unknown-experimental-feature"),
-        "expected unknown experimental feature error in stderr, got: {}",
-        stderr
-    );
+    blocks.push(format!(
+        "scenario: version-met-unknown-feature\n{}",
+        normalize_nextest_stderr(&output.stderr_as_str(), p.temp_root())
+    ));
+
+    insta::assert_snapshot!(blocks.join("\n\n"));
 }
 
 /// Test that unknown experimental features in table format cause an error.
@@ -2404,13 +2490,10 @@ fail-fast = false
         output.stderr_as_str()
     );
 
-    // The error message should contain the unknown feature name.
-    let stderr = output.stderr_as_str();
-    assert!(
-        stderr.contains("unknown experimental features defined: unknown-feature"),
-        "expected unknown-feature in stderr, got: {}",
-        stderr
-    );
+    insta::assert_snapshot!(normalize_nextest_stderr(
+        &output.stderr_as_str(),
+        p.temp_root()
+    ));
 }
 
 /// Tests that valid experimental features in table format work correctly.
@@ -3079,6 +3162,122 @@ fn test_string_filters_without_filterset() {
             }
         }
     }
+}
+
+/// Test the exit code and output of a stress run with fail-fast off, where an
+/// earlier iteration fails and the last iteration passes.
+///
+/// `test_stress_fail_first_iteration` fails on the first iteration of a stress
+/// run and passes on later iterations.
+#[test]
+fn test_stress_run_earlier_iteration_failed() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let stress_count = NonZero::new(2).expect("2 is non-zero");
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--stress-count",
+            &stress_count.to_string(),
+            "--no-fail-fast",
+            "-E",
+            "test(=test_stress_fail_first_iteration)",
+        ])
+        .unchecked(true)
+        .output();
+
+    // A failure in any iteration fails the run, even if the last iteration
+    // passes.
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
+    );
+    check_stress_run_output(
+        &output.stderr,
+        &["test_stress_fail_first_iteration"],
+        stress_count,
+        RunProperties::empty(),
+    );
+}
+
+/// An iteration stopped by immediate fail-fast is summarized as failed, not as
+/// cancelled.
+#[test]
+fn test_stress_run_immediate_fail_fast() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let stress_count = NonZero::new(3).expect("3 is non-zero");
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--stress-count",
+            &stress_count.to_string(),
+            "--max-fail",
+            "1:immediate",
+            "-E",
+            "test(=test_stress_fail_first_iteration)",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
+    );
+    check_partial_stress_run_output(
+        &output.stderr,
+        &["test_stress_fail_first_iteration"],
+        NonZero::new(1).expect("1 is non-zero"),
+        stress_count,
+        RunProperties::empty(),
+    );
+}
+
+/// Verify that a stress duration that elapses before the first sub-run still
+/// runs one iteration.
+#[test]
+fn test_stress_duration_runs_at_least_one_iteration() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    let output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--stress-duration",
+            "1ns",
+            "-E",
+            "test(=test_success)",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::OK),
+        "correct exit code for command\n{output}"
+    );
+    check_stress_duration_run_output(
+        &output.stderr,
+        &["test_success"],
+        NonZero::new(1).expect("1 is non-zero"),
+        RunProperties::empty(),
+    );
 }
 
 /// Test that `--run-ignored only` runs only ignored tests.

@@ -23,11 +23,12 @@ aho-corasick = "1.1.5"
 anstyle-progress = "0.1.4"
 async-scoped = { version = "0.9.0", features = ["use-tokio"] }
 atomicwrites = "0.4.4"
-bitflags = "2.13.1"
-bstr = { version = "1.13.0", default-features = false, features = ["std"] }
-bytesize = { version = "2.4.2", features = ["serde"] }
+bitflags = "2.13.2"
+bstr = { version = "1.13.1", default-features = false, features = ["std"] }
+bytesize = { version = "2.7.0", features = ["serde"] }
 bytes = "1.12.1"
-camino = "1.2.5"
+camino = "1.2.6"
+camino-anchored = "0.1.1"
 camino-tempfile = "1.4.1"
 camino-tempfile-ext = "0.3.3"
 # We specify default-no-update here because if users just run:
@@ -41,9 +42,9 @@ cargo-nextest = { path = "cargo-nextest", default-features = false, features = [
     "default-no-update",
 ] }
 cargo_metadata = "0.23.1"
-cfg-if = "1.0.4"
+cfg-if = "1.0.5"
 chrono = { version = "0.4.45", features = ["serde"] }
-clap = { version = "4.6.6", features = ["derive", "unstable-markdown"] }
+clap = { version = "4.6.7", features = ["derive", "unstable-markdown"] }
 color-eyre = "0.6.5"
 # config's "preserve_order" feature is needed for preserving the order of
 # setup scripts in .config/nextest.toml.
@@ -59,26 +60,26 @@ datatest-stable = { version = "0.3.3", features = ["include-dir"] }
 debug-ignore = "1.0.5"
 derive-where = "1.6.1"
 dialoguer = "0.12.0"
-duct = "1.1.1"
+duct = "1.1.2"
 dunce = "1.0.5"
-eazip = { version = "0.2.5", default-features = false, features = ["deflate", "std", "zstd"] }
+eazip = { version = "0.2.6", default-features = false, features = ["deflate", "std", "zstd"] }
 enable-ansi-support = "0.3.1"
 etcetera = "0.11.0"
 fixture-data = { path = "fixture-data" }
 fs-err = "3.3.1"
 future-queue = "0.4.0"
-futures = "0.3.33"
+futures = "0.3.34"
 globset = "0.4.20"
-guppy = "0.17.26"
+guppy = "0.19.1"
 hex = "0.4.3"
 home = "0.5.12"
-http = "1.4.2"
+http = "1.5.0"
 humantime = "2.3.0"
 humantime-serde = "1.1.1"
-iddqd = { version = "0.4.6", features = ["serde"] }
+iddqd = { version = "0.5.0", features = ["serde"] }
 # Disable punycode parsing since we only access well-known domains.
 idna_adapter = "=1.0.0"
-indexmap = "2.14.0"
+indexmap = "2.14.2"
 indicatif = "0.18.6"
 indoc = "2.0.7"
 insta = { version = "1.48.0", default-features = false }
@@ -88,7 +89,7 @@ jsonschema = "0.49.9"
 libc = "0.2.189"
 libtest-mimic = "0.8.2"
 locked-tripwire = { version = "0.1.0", features = ["nextest"] }
-log = "0.4.33"
+log = "0.4.34"
 maplit = "1.0.2"
 miette = "7.6.0"
 mukti-metadata = "0.3.0"
@@ -108,13 +109,13 @@ pin-project-lite = "0.2.17"
 pretty_assertions = "1.4.1"
 proptest = "1.11.0"
 pulldown-cmark = { version = "0.13.4", default-features = false }
-quick-junit = "0.7.0"
+quick-junit = "0.8.0"
 rand = "0.10.2"
 recursion = "0.5.4"
 regex = "1.13.1"
 regex-syntax = "0.8.11"
 sapling-streampager = "0.12.0"
-rustls = { version = "0.23.43", default-features = false }
+rustls = { version = "0.23.45", default-features = false }
 self_update = { version = "0.44.0", default-features = false, features = [
     "archive-tar",
     "compression-flate2",
@@ -149,8 +150,8 @@ test-strategy = "0.4.5"
 thiserror = "2.0.20"
 tokio = "1.53.1"
 tokio-stream = "0.1.19"
-toml = "1.1.4"
-toml_edit = "0.25.13"
+toml = "1.1.6"
+toml_edit = "0.25.15"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "tracing-log", "fmt"] }
 unicode-ident = "1.0.24"
@@ -158,12 +159,12 @@ unicode-normalization = "0.1.25"
 ureq = { version = "3.3.0", default-features = false }
 usdt = "0.6.0"
 walkdir = "2.5.0"
-whoami = "2.1.2"
+whoami = "2.1.3"
 win32job = "2.0.3"
 windows-sys = "0.61.2"
 winnow = "1.0.4"
 xxhash-rust = { version = "0.8.18", features = ["xxh3", "xxh64"] }
-zstd = { version = "0.13.3", features = ["zstdmt"] }
+zstd = { version = "0.14.0", features = ["zstdmt"] }
 
 [workspace.lints.clippy]
 format_push_string = "warn"

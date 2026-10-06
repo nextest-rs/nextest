@@ -519,11 +519,13 @@ For detailed information, see [_Setup scripts_](setup-scripts.md).
   slow-timeout = { period = "60s", terminate-after = 1, grace-period = "5s" }
   ```
 
+The `slow-timeout` object accepts the same parameters as `profile.<name>.slow-timeout`, except that `on-timeout = "pass"` is not supported: a setup script that times out always fails the run.
+
 #### `scripts.setup.<name>.leak-timeout`
 
 - **Type**: String (duration) or object
 - **Description**: Leak-timeout configuration for this setup script.
-- **Default**: `200ms`
+- **Default**: `100ms`
 - **Examples**:
   ```toml
   leak-timeout = "500ms"

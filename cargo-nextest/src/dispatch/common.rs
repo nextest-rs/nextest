@@ -3,11 +3,14 @@
 
 //! Common options shared between cargo nextest and cargo ntr.
 
-use crate::{ExpectedError, Result};
-use camino::{Utf8Path, Utf8PathBuf};
+use crate::{ExpectedError, Result, output::OutputContext};
+use camino::Utf8PathBuf;
 use clap::Args;
 use nextest_filtering::ParseContext;
-use nextest_runner::config::core::{NextestConfig, ToolConfigFile, VersionOnlyConfig};
+use nextest_runner::config::core::{
+    ConfigFileSelection, ConfigPaths, DefaultConfigWarnings, NextestConfig, ToolConfigFile,
+    VersionOnlyConfig,
+};
 use std::collections::BTreeSet;
 
 /// Options shared between cargo nextest and cargo ntr.
@@ -45,8 +48,9 @@ pub(crate) struct ConfigOpts {
     /// nextest.
     ///
     /// Arguments are specified in the format "tool:abs_path", for example
-    /// "my-tool:/path/to/nextest.toml" (or "my-tool:C:\\path\\to\\nextest.toml" on Windows).
-    /// Paths must be absolute.
+    /// "my-tool:/path/to/nextest.toml" (or "my-tool:C:\\path\\to\\nextest.toml"
+    /// on Windows). Paths must be absolute. Each tool name may have at most one
+    /// config file associated with it.
     ///
     /// This argument may be specified multiple times. Files that come later are lower priority
     /// than those that come earlier.
@@ -79,11 +83,11 @@ impl ConfigOpts {
     /// Creates a nextest version-only config with the given options.
     pub(crate) fn make_version_only_config(
         &self,
-        workspace_root: &Utf8Path,
+        paths: &ConfigPaths,
     ) -> Result<VersionOnlyConfig> {
-        VersionOnlyConfig::from_sources(
-            workspace_root,
-            self.config_file.as_deref(),
+        VersionOnlyConfig::from_sources_with_paths(
+            paths,
+            ConfigFileSelection::new(self.config_file.as_deref()),
             &self.tool_config_files,
         )
         .map_err(ExpectedError::config_parse_error)
@@ -92,16 +96,18 @@ impl ConfigOpts {
     /// Creates a nextest config with the given options.
     pub(crate) fn make_config(
         &self,
-        workspace_root: &Utf8Path,
+        paths: &ConfigPaths,
         pcx: &ParseContext<'_>,
         experimental: &BTreeSet<nextest_runner::config::core::ConfigExperimental>,
+        output: OutputContext,
     ) -> Result<NextestConfig> {
-        NextestConfig::from_sources(
-            workspace_root,
+        NextestConfig::from_sources_with_paths(
+            paths,
             pcx,
-            self.config_file.as_deref(),
+            ConfigFileSelection::new(self.config_file.as_deref()),
             &self.tool_config_files,
             experimental,
+            &mut DefaultConfigWarnings::new(output.stderr_styles().config_styles),
         )
         .map_err(ExpectedError::config_parse_error)
     }

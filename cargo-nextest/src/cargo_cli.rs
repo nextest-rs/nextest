@@ -527,24 +527,26 @@ impl<'a> CargoCli<'a> {
     }
 
     pub(crate) fn all_args(&self) -> Vec<&str> {
-        let mut all_args = vec![self.cargo_path.as_str(), self.command];
+        let mut all_args = vec![
+            self.cargo_path.as_str(),
+            self.output.color.to_arg(),
+            self.command,
+        ];
+        if let Some(path) = self.manifest_path {
+            all_args.extend(["--manifest-path", path.as_str()]);
+        }
         all_args.extend(self.args.iter().map(|s| &**s));
         all_args
     }
 
     pub(crate) fn to_expression(&self) -> duct::Expression {
-        let mut initial_args = vec![self.output.color.to_arg(), self.command];
-        if let Some(path) = self.manifest_path {
-            initial_args.extend(["--manifest-path", path.as_str()]);
-        }
-        let ret = duct::cmd(
-            // Ensure that cargo gets picked up from PATH if necessary, by calling as_str
-            // rather than as_std_path.
-            self.cargo_path.as_str(),
-            initial_args
-                .into_iter()
-                .chain(self.args.iter().map(|s| s.as_ref())),
-        );
+        let all_args = self.all_args();
+        let (program, args) = all_args
+            .split_first()
+            .expect("all_args always begins with the cargo path");
+        // Ensure that cargo gets picked up from PATH if necessary, by calling as_str
+        // rather than as_std_path.
+        let ret = duct::cmd(*program, args);
 
         if self.stderr_null {
             ret.stderr_null()
@@ -560,5 +562,60 @@ fn cargo_path() -> Utf8PathBuf {
             .try_into()
             .expect("CARGO env var is not valid UTF-8"),
         None => Utf8PathBuf::from("cargo"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::output::Color;
+
+    #[test]
+    fn to_expression_uses_all_args() {
+        // Ensure that all_args is complete.
+        let mut cargo_cli = CargoCli::new(
+            "metadata",
+            Some(Utf8Path::new("path/to/Cargo.toml")),
+            OutputContext {
+                verbose: false,
+                color: Color::Never,
+            },
+        );
+        cargo_cli
+            .add_args(["--format-version=1", "--all-features"])
+            .add_owned_arg("--jobs=4".to_owned());
+
+        let all_args = cargo_cli.all_args();
+        assert_eq!(all_args[0], cargo_path().as_str());
+        assert_eq!(
+            &all_args[1..],
+            [
+                "--color=never",
+                "metadata",
+                "--manifest-path",
+                "path/to/Cargo.toml",
+                "--format-version=1",
+                "--all-features",
+                "--jobs=4",
+            ]
+        );
+        assert_eq!(
+            format!("{:?}", cargo_cli.to_expression()),
+            format!("Cmd({all_args:?})"),
+        );
+
+        // A command without --manifest-path.
+        let cargo_cli = CargoCli::new(
+            "locate-project",
+            None,
+            OutputContext {
+                verbose: false,
+                color: Color::Always,
+            },
+        );
+        assert_eq!(
+            &cargo_cli.all_args()[1..],
+            ["--color=always", "locate-project"]
+        );
     }
 }

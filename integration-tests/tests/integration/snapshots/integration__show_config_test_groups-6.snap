@@ -9,7 +9,7 @@ group: serial (max threads = 1)
 group: unused (max threads = 20)
     (no matches)
 group: @global
-  * override for with-termination profile with filter 'test(=test_slow_timeout_2)':
+  * override for with-termination profile with filter 'test(=test_slow_timeout_2)' (from .config/nextest.toml):
       fixture-project::basic:
   * from default settings:
       cdylib-example:
@@ -32,6 +32,7 @@ group: @global
           test_overrides_wrapper_env
           test_result_failure
           test_stdin_closed
+          test_stress_fail_first_iteration
           test_subprocess_doesnt_exit
           test_subprocess_doesnt_exit_fail
           test_subprocess_doesnt_exit_leak_fail

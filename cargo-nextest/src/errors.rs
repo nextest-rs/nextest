@@ -1,13 +1,17 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{ExtractOutputFormat, output::StderrStyles};
+use crate::{
+    ExtractOutputFormat,
+    helpers::{VersionReqKind, log_version_source},
+    output::StderrStyles,
+};
 use camino::Utf8PathBuf;
 use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{
-    config::core::{ConfigExperimental, ToolName},
+    config::core::{ConfigExperimental, ConfigPath, ConfigSource},
     errors::{
         ChromeTraceError, PortableRecordingError, PortableRecordingReadError, RecordReadError,
         RunIdResolutionError, RunStoreError, StateDirError, TestListFromSummaryError,
@@ -21,7 +25,7 @@ use nextest_runner::{
     run_mode::NextestRunMode,
     runner::{DebuggerCommand, TracerCommand},
 };
-use owo_colors::{OwoColorize, Style};
+use owo_colors::OwoColorize;
 use quick_junit::ReportUuid;
 use semver::Version;
 use std::{error::Error, io, process::ExitStatus, string::FromUtf8Error};
@@ -122,6 +126,11 @@ pub enum ExpectedError {
         store_dir: Utf8PathBuf,
         #[source]
         err: std::io::Error,
+    },
+    #[error("failed to determine config paths")]
+    ConfigPathsCaptureError {
+        #[from]
+        err: ConfigPathsCaptureError,
     },
     #[error("cargo config error")]
     CargoConfigError {
@@ -353,7 +362,9 @@ pub enum ExpectedError {
     RequiredVersionNotMet {
         required: Version,
         current: Version,
-        tool: Option<ToolName>,
+        // This is not named `source` because that has a special meaning to
+        // thiserror.
+        config_source: ConfigSource,
     },
     #[error("experimental feature not enabled")]
     ExperimentalFeatureNotEnabled {
@@ -362,7 +373,7 @@ pub enum ExpectedError {
     },
     #[error("experimental features not enabled in config")]
     ConfigExperimentalFeaturesNotEnabled {
-        config_file: Utf8PathBuf,
+        config_file: ConfigPath,
         missing: Vec<ConfigExperimental>,
     },
     #[error("could not determine state directory for recording")]
@@ -597,6 +608,7 @@ impl ExpectedError {
             | Self::GetCurrentExeFailed { .. }
             | Self::ProfileNotFound { .. }
             | Self::StoreDirCreateError { .. }
+            | Self::ConfigPathsCaptureError { .. }
             | Self::RootManifestNotFound { .. }
             | Self::CargoConfigError { .. }
             | Self::UserConfigError { .. }
@@ -770,6 +782,20 @@ impl ExpectedError {
                 );
                 Some(err as &dyn Error)
             }
+            Self::ConfigPathsCaptureError { err } => {
+                match err {
+                    ConfigPathsCaptureError::CurrentDir(_) => {
+                        error!(
+                            "{err}\n(hint: run nextest from a directory that exists and whose \
+                             path is valid UTF-8)"
+                        );
+                    }
+                    ConfigPathsCaptureError::WorkspaceRoot(_) => {
+                        error!("{err}");
+                    }
+                }
+                err.source()
+            }
             Self::CargoConfigError { err } => {
                 error!("{}", err);
                 err.source()
@@ -805,10 +831,9 @@ impl ExpectedError {
                                 }
                             };
                             error!(
-                                "for config file `{}`{}, failed to parse {}",
-                                err.config_file(),
-                                provided_by_tool(err.tool()),
-                                section_str.style(styles.bold)
+                                "for config file {}, failed to parse {}",
+                                err.display_file(styles.config_styles),
+                                section_str,
                             );
                             for report in compile_error.kind.reports() {
                                 error!(target: "cargo_nextest::no_heading", "{report:?}");
@@ -835,10 +860,9 @@ impl ExpectedError {
                         }
 
                         error!(
-                            "for config file `{}`{}, unknown test groups defined \
+                            "for config file {}, unknown test groups defined \
                             (known groups: {known_groups_str}):\n{errors_str}",
-                            err.config_file(),
-                            provided_by_tool(err.tool()),
+                            err.display_file(styles.config_styles),
                         );
                         None
                     }
@@ -853,9 +877,8 @@ impl ExpectedError {
                         } = &**errors;
 
                         let mut errors_str: String = format!(
-                            "for config file `{}`{}, errors encountered parsing [[profile.*.scripts]]\n",
-                            err.config_file(),
-                            provided_by_tool(err.tool()),
+                            "for config file {}, errors encountered parsing [[profile.*.scripts]]\n",
+                            err.display_file(styles.config_styles),
                         );
 
                         if !unknown_scripts.is_empty() {
@@ -929,16 +952,15 @@ impl ExpectedError {
                             .join(", ");
 
                         error!(
-                            "for config file `{}`{}, unknown experimental features defined: \
+                            "for config file {}, unknown experimental features defined: \
                              {unknown_str} (known features: {known_str}):",
-                            err.config_file(),
-                            provided_by_tool(err.tool()),
+                            err.display_file(styles.config_styles),
                         );
                         None
                     }
                     _ => {
                         // These other errors are printed out normally.
-                        error!("{}", err);
+                        error!("{}", err.display_header(styles.config_styles));
                         err.source()
                     }
                 }
@@ -1195,20 +1217,18 @@ impl ExpectedError {
             Self::RequiredVersionNotMet {
                 required,
                 current,
-                tool,
+                config_source,
             } => {
                 error!(
                     "this repository requires nextest version {}, but the current version is {}",
                     required.style(styles.bold),
                     current.style(styles.bold),
                 );
-                if let Some(tool) = tool {
-                    info!(
-                        target: "cargo_nextest::no_heading",
-                        "(required version specified by tool `{}`)",
-                        tool,
-                    );
-                }
+                log_version_source(
+                    VersionReqKind::Required,
+                    config_source,
+                    styles.config_styles,
+                );
 
                 crate::helpers::log_needs_update(
                     Level::INFO,
@@ -1252,7 +1272,7 @@ impl ExpectedError {
             } => {
                 error!(
                     "{}",
-                    format_experimental_features_not_enabled(config_file, missing, styles.bold)
+                    format_experimental_features_not_enabled(config_file, missing, styles)
                 );
                 None
             }
@@ -1434,9 +1454,9 @@ impl ExpectedError {
 ///
 /// This is extracted for testing purposes.
 pub(crate) fn format_experimental_features_not_enabled(
-    config_file: &Utf8PathBuf,
+    config_file: &ConfigPath,
     missing: &[ConfigExperimental],
-    bold: Style,
+    styles: &StderrStyles,
 ) -> String {
     if missing.len() == 1 {
         let env_hint = if let Some(env_var) = missing[0].env_var() {
@@ -1447,18 +1467,18 @@ pub(crate) fn format_experimental_features_not_enabled(
         format!(
             "experimental feature not enabled: {}\n\
              (hint: add to the {} list in {}{})",
-            missing[0].style(bold),
-            "experimental".style(bold),
-            config_file.style(bold),
+            missing[0].style(styles.bold),
+            "experimental".style(styles.bold),
+            config_file.display().style(styles.config_styles.path),
             env_hint,
         )
     } else {
         format!(
             "experimental features not enabled: {}\n\
              (hint: add to the {} list in {})",
-            missing.iter().map(|f| f.style(bold)).join(", "),
-            "experimental".style(bold),
-            config_file.style(bold),
+            missing.iter().map(|f| f.style(styles.bold)).join(", "),
+            "experimental".style(styles.bold),
+            config_file.display().style(styles.config_styles.path),
         )
     }
 }
@@ -1466,12 +1486,18 @@ pub(crate) fn format_experimental_features_not_enabled(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino::Utf8Path;
     use insta::assert_snapshot;
+    use nextest_runner::config::core::{ConfigPaths, ConfigStyles};
+    use owo_colors::Style;
 
     #[test]
     fn test_format_experimental_features_not_enabled() {
-        let config_file = Utf8PathBuf::from(".config/nextest.toml");
-        let style = Style::default();
+        let config_file = ConfigPaths::capture(".")
+            .unwrap()
+            .resolve_input(Utf8Path::new(".config/nextest.toml"))
+            .unwrap();
+        let plain = StderrStyles::default();
 
         // Single feature with env var shows the env var hint.
         assert_snapshot!(
@@ -1479,7 +1505,7 @@ mod tests {
             format_experimental_features_not_enabled(
                 &config_file,
                 &[ConfigExperimental::Benchmarks],
-                style,
+                &plain,
             )
         );
 
@@ -1489,7 +1515,7 @@ mod tests {
             format_experimental_features_not_enabled(
                 &config_file,
                 &[ConfigExperimental::SetupScripts],
-                style,
+                &plain,
             )
         );
 
@@ -1502,7 +1528,24 @@ mod tests {
                     ConfigExperimental::Benchmarks,
                     ConfigExperimental::SetupScripts,
                 ],
-                style,
+                &plain,
+            )
+        );
+
+        // Colored output: the bold and config path styles must not be swapped.
+        let mut config_styles = ConfigStyles::default();
+        config_styles.colorize();
+        let colored = StderrStyles {
+            bold: Style::new().bold(),
+            config_styles,
+            ..Default::default()
+        };
+        assert_snapshot!(
+            "single_colored",
+            format_experimental_features_not_enabled(
+                &config_file,
+                &[ConfigExperimental::Benchmarks],
+                &colored,
             )
         );
     }

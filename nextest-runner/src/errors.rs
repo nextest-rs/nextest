@@ -6,7 +6,10 @@
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
     config::{
-        core::{ConfigExperimental, ToolName},
+        core::{
+            ConfigExperimental, ConfigPath, ConfigPathResolveError, ConfigSource, ConfigStyles,
+            NextestConfig, ToolName,
+        },
         elements::{CustomTestGroup, TestGroup},
         scripts::{ProfileScriptType, ScriptId, ScriptType},
     },
@@ -22,12 +25,14 @@ use crate::{
 };
 use bytesize::ByteSize;
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
+use camino_anchored::{CurrentDirError, ResolvePathError};
 use config::ConfigError;
 use eazip::CompressionMethod;
 use etcetera::HomeDirError;
 use itertools::{Either, Itertools};
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::{RustBinaryId, TestCaseName};
+use owo_colors::{OwoColorize, Style};
 use quick_junit::ReportUuid;
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
@@ -45,34 +50,79 @@ use thiserror::Error;
 
 /// An error that occurred while parsing the config.
 #[derive(Debug, Error)]
-#[error(
-    "failed to parse nextest config at `{config_file}`{}",
-    provided_by_tool(tool.as_ref())
-)]
+#[error("{}", self.display_header(ConfigStyles::default()))]
 #[non_exhaustive]
 pub struct ConfigParseError {
-    config_file: Utf8PathBuf,
+    config_file: ConfigErrorPath,
     tool: Option<ToolName>,
     #[source]
     kind: ConfigParseErrorKind,
 }
 
 impl ConfigParseError {
-    pub(crate) fn new(
-        config_file: impl Into<Utf8PathBuf>,
-        tool: Option<&ToolName>,
-        kind: ConfigParseErrorKind,
-    ) -> Self {
+    pub(crate) fn new(source: &ConfigSource, kind: ConfigParseErrorKind) -> Self {
         Self {
-            config_file: config_file.into(),
-            tool: tool.cloned(),
+            config_file: ConfigErrorPath::Resolved(source.path().clone()),
+            tool: source.tool().cloned(),
             kind,
+        }
+    }
+
+    /// Creates a new `ConfigParseError` for errors not attributable to a single
+    /// source, such as the composite config build.
+    pub(crate) fn from_path(config_file: &ConfigPath, kind: ConfigParseErrorKind) -> Self {
+        Self {
+            config_file: ConfigErrorPath::Resolved(config_file.clone()),
+            tool: None,
+            kind,
+        }
+    }
+
+    pub(crate) fn from_paths_capture_error(
+        workspace_root: &Utf8Path,
+        config_file: Option<&Utf8Path>,
+        error: ConfigPathsCaptureError,
+    ) -> Self {
+        let config_file = match config_file {
+            Some(config_file) => config_file.to_owned(),
+            None => workspace_root.join(NextestConfig::CONFIG_PATH),
+        };
+        Self {
+            config_file: ConfigErrorPath::Unresolved(config_file),
+            tool: None,
+            kind: ConfigParseErrorKind::PathsCaptureError(Box::new(error)),
         }
     }
 
     /// Returns the config file for this error.
     pub fn config_file(&self) -> &Utf8Path {
+        match &self.config_file {
+            ConfigErrorPath::Resolved(path) => path.absolute_path(),
+            ConfigErrorPath::Unresolved(path) => path,
+        }
+    }
+
+    /// Returns the invocation-relative path for diagnostics.
+    pub fn display_config_file(&self) -> impl fmt::Display + '_ {
         &self.config_file
+    }
+
+    /// Renders "`path` provided by tool `x`".
+    pub fn display_file(&self, styles: ConfigStyles) -> impl fmt::Display + '_ {
+        DisplayConfigFile {
+            error: self,
+            styles,
+        }
+    }
+
+    /// Renders the full "failed to parse nextest config at ..." heading.
+    ///
+    /// The Display impl is this with no styling.
+    pub fn display_header(&self, styles: ConfigStyles) -> impl fmt::Display + '_ {
+        DisplayConfigHeader {
+            error: self,
+            styles,
+        }
     }
 
     /// Returns the tool name associated with this error.
@@ -86,11 +136,92 @@ impl ConfigParseError {
     }
 }
 
-/// Returns the string ` provided by tool <tool>`, if `tool` is `Some`.
-pub fn provided_by_tool(tool: Option<&ToolName>) -> String {
-    match tool {
-        Some(tool) => format!(" provided by tool `{tool}`"),
-        None => String::new(),
+struct DisplayConfigFile<'a> {
+    error: &'a ConfigParseError,
+    styles: ConfigStyles,
+}
+
+impl fmt::Display for DisplayConfigFile<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "`{}`{}",
+            self.error.display_config_file().style(self.styles.path),
+            provided_by_tool(self.error.tool(), self.styles.tool),
+        )
+    }
+}
+
+struct DisplayConfigHeader<'a> {
+    error: &'a ConfigParseError,
+    styles: ConfigStyles,
+}
+
+impl fmt::Display for DisplayConfigHeader<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "failed to parse nextest config at {}",
+            self.error.display_file(self.styles),
+        )
+    }
+}
+
+#[derive(Debug)]
+enum ConfigErrorPath {
+    Resolved(ConfigPath),
+    Unresolved(Utf8PathBuf),
+}
+
+impl fmt::Display for ConfigErrorPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Resolved(path) => fmt::Display::fmt(&path.display(), f),
+            Self::Unresolved(path) => fmt::Display::fmt(path, f),
+        }
+    }
+}
+
+impl From<ConfigPathResolveError> for ConfigParseError {
+    fn from(error: ConfigPathResolveError) -> Self {
+        Self {
+            config_file: ConfigErrorPath::Unresolved(error.path),
+            tool: None,
+            kind: ConfigParseErrorKind::PathResolveError(Box::new(error.error)),
+        }
+    }
+}
+
+/// An error produced by
+/// [`ConfigPaths::capture`](crate::config::core::ConfigPaths::capture).
+#[derive(Debug, Error)]
+pub enum ConfigPathsCaptureError {
+    /// The process's current directory could not be determined.
+    #[error("failed to determine the current directory, which config paths are resolved against")]
+    CurrentDir(#[source] CurrentDirError),
+
+    /// The workspace root could not be resolved against the current directory.
+    #[error("failed to resolve workspace root `{}`", .0.input())]
+    WorkspaceRoot(#[source] ResolvePathError),
+}
+
+/// Renders " provided by tool `x`" when a tool provided the file, and nothing
+/// otherwise.
+pub fn provided_by_tool(tool: Option<&ToolName>, style: Style) -> impl fmt::Display + '_ {
+    ProvidedByTool { tool, style }
+}
+
+struct ProvidedByTool<'a> {
+    tool: Option<&'a ToolName>,
+    style: Style,
+}
+
+impl fmt::Display for ProvidedByTool<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.tool {
+            Some(tool) => write!(f, " provided by tool `{}`", tool.style(self.style)),
+            None => Ok(()),
+        }
     }
 }
 
@@ -100,6 +231,12 @@ pub fn provided_by_tool(tool: Option<&ToolName>) -> String {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ConfigParseErrorKind {
+    /// An input path could not be resolved to an absolute location.
+    #[error("error resolving the configuration path")]
+    PathResolveError(#[source] Box<ResolvePathError>),
+    /// The current directory or workspace root could not be determined.
+    #[error(transparent)]
+    PathsCaptureError(Box<ConfigPathsCaptureError>),
     /// An error occurred while building the config.
     #[error(transparent)]
     BuildError(Box<ConfigError>),
@@ -109,9 +246,9 @@ pub enum ConfigParseErrorKind {
     #[error(transparent)]
     /// An error occurred while deserializing the config.
     DeserializeError(Box<serde_path_to_error::Error<ConfigError>>),
-    /// An error occurred while reading the config file (version only).
+    /// An error occurred while reading a config file.
     #[error(transparent)]
-    VersionOnlyReadError(std::io::Error),
+    ReadError(std::io::Error),
     /// An error occurred while deserializing the config (version only).
     #[error(transparent)]
     VersionOnlyDeserializeError(Box<serde_path_to_error::Error<toml::de::Error>>),
@@ -194,6 +331,25 @@ pub enum ConfigParseErrorKind {
     /// An inheritance cycle was detected in the profile configuration.
     #[error("inheritance error(s) detected: {}", .0.iter().join(", "))]
     InheritanceErrors(Vec<InheritsError>),
+    /// A tool provided more than one config file.
+    #[error(
+        "tool `{tool}` already provided config file `{}`\n\
+         (hint: each tool can provide at most one config file: merge the files, \
+         or pass `--tool-config-file {tool}:<path>` only once)",
+        .first.display(),
+    )]
+    DuplicateToolConfigFile {
+        /// The tool that passed more than one file.
+        tool: ToolName,
+        /// The file from the earlier, higher-priority argument.
+        first: ConfigPath,
+    },
+}
+
+impl From<ConfigError> for ConfigParseErrorKind {
+    fn from(error: ConfigError) -> Self {
+        ConfigParseErrorKind::BuildError(Box::new(error))
+    }
 }
 
 /// An error that occurred while compiling overrides or scripts specified in

@@ -5,6 +5,7 @@
 
 use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_metadata::{BuildPlatform, FilterMatch, RustBinaryId, TestCaseName};
+use std::num::NonZero;
 
 /// The expected result for a test execution, including both the outcome and the
 /// expected rerun behavior.
@@ -335,9 +336,16 @@ impl TestCaseFixture {
     /// Determines the expected test result based on test status and run
     /// properties.
     ///
+    /// `stress_iteration` is the 1-indexed iteration for a stress run, as
+    /// shown in nextest's output, or `None` outside of stress runs.
+    ///
     /// Returns both the expected outcome and the expected rerun behavior.
-    pub fn expected_result(&self, properties: RunProperties) -> ExpectedTestResult {
-        let result = self.expected_check_result(properties);
+    pub fn expected_result(
+        &self,
+        properties: RunProperties,
+        stress_iteration: Option<NonZero<u32>>,
+    ) -> ExpectedTestResult {
+        let result = self.expected_check_result(properties, stress_iteration);
         let expected_reruns = self.expected_reruns(result, properties);
         ExpectedTestResult {
             result,
@@ -345,7 +353,11 @@ impl TestCaseFixture {
         }
     }
 
-    fn expected_check_result(&self, properties: RunProperties) -> CheckResult {
+    fn expected_check_result(
+        &self,
+        properties: RunProperties,
+        stress_iteration: Option<NonZero<u32>>,
+    ) -> CheckResult {
         // BenchOverrideTimeout - the benchmark times out due to override.
         if self.has_property(TestCaseFixtureProperties::BENCH_OVERRIDE_TIMEOUT)
             && properties.contains(RunProperties::BENCH_OVERRIDE_TIMEOUT)
@@ -399,9 +411,14 @@ impl TestCaseFixture {
         match self.status {
             TestCaseFixtureStatus::Pass => {
                 // NeedsSameCwd tests fail when relocated.
-                if self.has_property(TestCaseFixtureProperties::NEEDS_SAME_CWD)
-                    && properties.contains(RunProperties::RELOCATED)
-                {
+                let relocated_fail = self.has_property(TestCaseFixtureProperties::NEEDS_SAME_CWD)
+                    && properties.contains(RunProperties::RELOCATED);
+                // FailsOnFirstStressIteration tests fail on the first
+                // iteration of a stress run.
+                let stress_fail = self
+                    .has_property(TestCaseFixtureProperties::FAILS_ON_FIRST_STRESS_ITERATION)
+                    && stress_iteration.map(NonZero::get) == Some(1);
+                if relocated_fail || stress_fail {
                     CheckResult::Fail
                 } else {
                     CheckResult::Pass
@@ -773,5 +790,8 @@ bitflags::bitflags! {
         /// Flaky test configured with `flaky-result = "fail"` and
         /// `junit.flaky-fail-status = "success"`.
         const FLAKY_RESULT_FAIL_JUNIT_SUCCESS = 0x4000;
+        /// Test that fails on the first iteration of a stress run, and passes
+        /// otherwise.
+        const FAILS_ON_FIRST_STRESS_ITERATION = 0x8000;
     }
 }

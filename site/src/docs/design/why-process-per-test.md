@@ -20,16 +20,16 @@ The Rust ecosystem is now staggeringly large. There are millions of Rust develop
 * These tests integrate with all sorts of different libraries, including many not written in Rust, or with other unusual requirements
 * Test runners need to be able to run tests reliably, and rely on certain properties—for example, that killing one test will have no effect on others
 
-## Focal points in game theory
+## Schelling points in game theory
 
 <figure markdown="span">
-  ![Photo of Nobel laureate Thomas Schelling, who first described focal points.](../../static/schelling.jpg){ width="400" }
+  ![Photo of Nobel laureate Thomas Schelling, who first described focal (or Schelling) points.](../../static/schelling.jpg){ width="400" }
   <figcaption markdown="span">Thomas Schelling won the 2005 Nobel Prize in Economics for his work on focal points. [Boston Globe](https://www.bostonglobe.com/metro/obituaries/2016/12/17/thomas-schelling-nobel-winning-economist-who-influenced-nuclear-policy/1iMPQdz8NQFB75HwAPwWdM/story.html)</figcaption>
 </figure>
 
-[Game theory](https://en.wikipedia.org/wiki/Game_theory) offers a powerful framework to study these kinds of coordination problems. Consider this classic problem: if two people need to meet in London on a particular day but can't coordinate the time and place, they're likely to choose noon at [Big Ben](https://en.wikipedia.org/wiki/Big_Ben). This becomes what game theorists call a [*focal point*](https://en.wikipedia.org/wiki/Focal_point_(game_theory)), also known as a *Schelling point*—a natural default that everyone can assume without discussion.
+[Game theory](https://en.wikipedia.org/wiki/Game_theory) offers a powerful framework to study these kinds of coordination problems. Consider this classic problem: if two people need to meet in London on a particular day but, for whatever reason, can't coordinate the time and place, they're likely to choose noon at [Big Ben](https://en.wikipedia.org/wiki/Big_Ben). This becomes what game theorists call a [*focal point*](https://en.wikipedia.org/wiki/Focal_point_(game_theory)), also known as a *Schelling point*—a natural default that everyone can assume without discussion.
 
-The process-per-test model is powerful because **it serves as the focal point**, the Big Ben, of how to run tests. Just as everyone in London knows where the Great Clock of Westminster is, every operating system knows how to create and manage processes. Just as noon is a natural meeting time, processes form natural fault boundaries. The process-per-test model forms a universal protocol that everyone in the ecosystem can rely on without explicit coordination.
+The process-per-test model is powerful because **it serves as the Schelling point**, the Big Ben, of how to run tests. Just like it's commonly agreed that the Great Clock of Westminster is the most well-known landmark in London, software developers have all agreed that processes form natural fault boundaries. The process-per-test model forms a universal protocol that everyone in the ecosystem can rely on without explicit coordination.
 
 ## The benefits of separate processes
 
@@ -92,7 +92,7 @@ This represents a *lot* of extra work! Not just the technical kind (though that 
   <figcaption markdown="span">Big Ben, the most recognizable landmark in London. [Unsplash / Henry Be](https://unsplash.com/photos/big-ben-london-MdJq0zFUwrw)</figcaption>
 </figure>
 
-There are many technical benefits to the process-per-test model, but the biggest benefit is in (the lack of) coordination: the process-per-test model acts as a focal point that all participants can agree on by default. This is the key reason that nextest commits to this model being the default in perpetuity.
+There are many technical benefits to the process-per-test model, but the biggest benefit is in (the lack of) coordination: the process-per-test model acts as a Schelling point that all participants can agree on by default. This is the key reason that nextest commits to this model being the default in perpetuity.
 
 Nevertheless, we're excited to see developments in this space. We'll consider opt-ins for newer patterns that can deliver feature-rich and reliable test running at scale like nextest does today.
 
@@ -119,7 +119,7 @@ It can be illuminating to contrast process termination with thread termination:
 * Synchronization across processes is possible via functions like [`flock`][flock], but is often advisory and generally uncommon. Code that uses these tools is generally prepared to encounter protected data in an invalid state.
 * Cross-process mutexes are quite rare (message-passing is much more common), and shared-memory code is usually written with great care.
 
-These examples make clear how focal points manifest and perpetuate: we've all generally agreed that other processes might behave in strange ways, but we assume that other threads within our process are going to behave reliably.
+These examples make clear how Schelling points manifest and perpetuate: we've all generally agreed that other processes might behave in strange ways, but we assume that other threads within our process are going to behave reliably.
 
 [^no-tokio-mutex]: Based on our experiences with cancellation in other Rust projects, we strongly recommend Tokio mutexes be treated as a feature of last resort.
 

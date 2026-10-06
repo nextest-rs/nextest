@@ -1,56 +1,120 @@
+# Notes:
+#
+# - Render social images at 2x (2400x1260) because Pillow snaps each glyph to a
+#   whole pixel, which makes letter spacing visibly uneven at 1x. All sizes and
+#   offsets below are at 2x.
+# - All text uses the Inter 28pt variant for better text spacing than the
+#   default (14pt) variant.
+
 definitions:
-    - &page_title_with_site_name >-
-        {%- if not page.is_homepage -%}
-          {{ page.meta.get("title", page.title) }} - {{ config.site_name }}
+    - &page_title >-
+        {%- if page.is_homepage -%}
+          {{ config.site_name }}
         {%- else -%}
           {{ page.meta.get("title", page.title) }}
         {%- endif -%}
 
+    - &page_title_with_site_name >-
+        {%- if page.is_homepage -%}
+          {{ config.site_name }}
+        {%- else -%}
+          {{ page.meta.get("title", page.title) }} - {{ config.site_name }}
+        {%- endif -%}
+
+    - &page_eyebrow >-
+        {%- if page.is_homepage -%}
+        {%- elif page.ancestors -%}
+          {{ config.site_name }} · {{ page.ancestors[-1].title }}
+        {%- else -%}
+          {{ config.site_name }}
+        {%- endif -%}
+
     - &page_icon >-
-        {{ page.meta.get("icon", config.site_icon) or "" }}
+        {%- if page.is_homepage -%}
+          {{ page.meta.get("icon", config.theme.icon.logo) }}
+        {%- else -%}
+          {{ page.meta.get("icon", "") }}
+        {%- endif -%}
 
     - &page_description >-
         {{ page.meta.get("description", config.site_description) or "" }}
 
-size: { width: 1200, height: 630 }
+    - &site_host >-
+        {{ config.site_url | replace("https://", "") | replace("http://", "") | trim("/") }}
+
+    # This matches --md-accent-fg-color for the slate scheme in
+    # src/theme/css/extra.css.
+    - &accent_color "hsl(350, 45%, 60%)"
+
+size: { width: 2400, height: 1260 }
 layers:
     - background:
           color: "#045"
-    - size: { width: 832, height: 50 }
-      offset: { x: 62, y: 70 }
+
+    - size: { width: 1664, height: 72 }
+      offset: { x: 128, y: 128 }
       typography:
-          content: "cargo-nextest"
+          content: *page_eyebrow
           align: start
-          color: white
+          color: "#ffffffb3"
+          # Use Inter Tight for the small lines: Inter 4 kerns "ex" tighter and
+          # "xt" looser, which makes the x in "nextest" sit unevenly at this
+          # size. Inter Tight is built from Inter 3 and has no positive "xt"
+          # kern.
           font:
               family: Inter Tight
               style: SemiBold
-    - size: { width: 832, height: 310 }
-      offset: { x: 62, y: 160 }
+
+    # The box height sets the title font size (92px at 1x) -- keep roughly 10%
+    # headroom over the longest unbreakable word since the plugin cannot break
+    # inside a word and clips instead
+    - size: { width: 1760, height: 428 }
+      offset: { x: 128, y: 302 }
       typography:
-          content: "{{ page.title }}"
-          align: start
+          content: *page_title
+          align: start bottom
+          overflow: shrink
           color: white
           line:
-              amount: 3
-              height: 1.25
+              amount: 2
+              height: 1.15
           font:
-              family: Inter Tight
+              family: Inter
+              variant: 28pt
               style: Bold
-    - size: { width: 832, height: 110 }
-      offset: { x: 62, y: 450 }
+
+    - size: { width: 160, height: 12 }
+      offset: { x: 128, y: 786 }
+      background:
+          color: *accent_color
+
+    - size: { width: 1664, height: 220 }
+      offset: { x: 128, y: 846 }
       typography:
           content: *page_description
           align: start
-          color: white
+          color: "#ffffffd9"
           line:
               amount: 3
-              height: 1.25
+              height: 1.3
           font:
               family: Inter
+              variant: 28pt
               style: Regular
-    - size: { width: 144, height: 144 }
-      offset: { x: 992, y: 64 }
+
+    - size: { width: 800, height: 48 }
+      offset: { x: 128, y: 128 }
+      origin: start bottom
+      typography:
+          content: *site_host
+          align: start bottom
+          color: "#ffffff80"
+          font:
+              family: Inter Tight
+              style: Medium
+
+    - size: { width: 288, height: 288 }
+      offset: { x: 1984, y: 128 }
       icon:
           value: *page_icon
           color: white

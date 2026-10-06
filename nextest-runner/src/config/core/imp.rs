@@ -1,7 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{ExperimentalDeserialize, NextestVersionDeserialize, ToolConfigFile, ToolName};
+use super::{
+    ConfigFileSelection, ConfigPaths, ConfigSource, ConfigStyles, ExperimentalDeserialize,
+    NextestVersionDeserialize, ToolConfigFile,
+};
 use crate::{
     config::{
         core::ConfigExperimental,
@@ -14,7 +17,7 @@ use crate::{
         },
         overrides::{
             CompiledByProfile, CompiledData, CompiledDefaultFilter, DeserializedOverride,
-            ListSettings, SettingSource, TestSettings,
+            ListSettings, ProfileDefaultFilter, SettingSource, TestSettings,
             group_membership::PrecomputedGroupMembership,
         },
         scripts::{
@@ -35,14 +38,13 @@ use crate::{
     run_mode::NextestRunMode,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use config::{
-    Config, ConfigBuilder, ConfigError, File, FileFormat, FileSourceFile, builder::DefaultState,
-};
+use config::{Config, ConfigBuilder, ConfigError, File, FileFormat, builder::DefaultState};
 use iddqd::IdOrdMap;
 use indexmap::IndexMap;
 use nextest_filtering::{
     BinaryQuery, EvalContext, Filterset, KnownGroups, ParseContext, TestQuery,
 };
+use owo_colors::OwoColorize;
 use petgraph::{Directed, Graph, algo::scc::kosaraju_scc, graph::NodeIndex};
 use serde::Deserialize;
 use std::{
@@ -57,54 +59,41 @@ use tracing::warn;
 /// (the default behavior) or collecting them for testing purposes.
 pub trait ConfigWarnings {
     /// Handle unknown configuration keys found in a config file.
-    fn unknown_config_keys(
-        &mut self,
-        config_file: &Utf8Path,
-        workspace_root: &Utf8Path,
-        tool: Option<&ToolName>,
-        unknown: &BTreeSet<String>,
-    );
+    fn unknown_config_keys(&mut self, source: &ConfigSource, unknown: &BTreeSet<String>);
 
     /// Handle unknown profiles found in the reserved `default-` namespace.
-    fn unknown_reserved_profiles(
-        &mut self,
-        config_file: &Utf8Path,
-        workspace_root: &Utf8Path,
-        tool: Option<&ToolName>,
-        profiles: &[&str],
-    );
+    fn unknown_reserved_profiles(&mut self, source: &ConfigSource, profiles: &[&str]);
 
     /// Handle deprecated `[script.*]` configuration.
-    fn deprecated_script_config(
-        &mut self,
-        config_file: &Utf8Path,
-        workspace_root: &Utf8Path,
-        tool: Option<&ToolName>,
-    );
+    fn deprecated_script_config(&mut self, source: &ConfigSource);
 
     /// Handle warning about empty script sections with neither setup nor
     /// wrapper scripts.
     fn empty_script_sections(
         &mut self,
-        config_file: &Utf8Path,
-        workspace_root: &Utf8Path,
-        tool: Option<&ToolName>,
+        source: &ConfigSource,
         profile_name: &str,
         empty_count: usize,
     );
 }
 
-/// Default implementation of ConfigWarnings that logs warnings using the tracing crate.
-pub struct DefaultConfigWarnings;
+/// Default implementation of ConfigWarnings that logs warnings using the
+/// tracing crate.
+#[derive(Clone, Debug, Default)]
+pub struct DefaultConfigWarnings {
+    styles: ConfigStyles,
+}
+
+impl DefaultConfigWarnings {
+    /// Creates an instance of self that style config paths and tool names with
+    /// `styles`.
+    pub fn new(styles: ConfigStyles) -> Self {
+        Self { styles }
+    }
+}
 
 impl ConfigWarnings for DefaultConfigWarnings {
-    fn unknown_config_keys(
-        &mut self,
-        config_file: &Utf8Path,
-        workspace_root: &Utf8Path,
-        tool: Option<&ToolName>,
-        unknown: &BTreeSet<String>,
-    ) {
+    fn unknown_config_keys(&mut self, source: &ConfigSource, unknown: &BTreeSet<String>) {
         let mut unknown_str = String::new();
         if unknown.len() == 1 {
             // Print this on the same line.
@@ -121,26 +110,16 @@ impl ConfigWarnings for DefaultConfigWarnings {
 
         warn!(
             "in config file {}{}, ignoring unknown configuration {unknown_str}",
-            config_file
-                .strip_prefix(workspace_root)
-                .unwrap_or(config_file),
-            provided_by_tool(tool),
+            source.path().display().style(self.styles.path),
+            provided_by_tool(source.tool(), self.styles.tool),
         )
     }
 
-    fn unknown_reserved_profiles(
-        &mut self,
-        config_file: &Utf8Path,
-        workspace_root: &Utf8Path,
-        tool: Option<&ToolName>,
-        profiles: &[&str],
-    ) {
+    fn unknown_reserved_profiles(&mut self, source: &ConfigSource, profiles: &[&str]) {
         warn!(
             "in config file {}{}, ignoring unknown profiles in the reserved `default-` namespace:",
-            config_file
-                .strip_prefix(workspace_root)
-                .unwrap_or(config_file),
-            provided_by_tool(tool),
+            source.path().display().style(self.styles.path),
+            provided_by_tool(source.tool(), self.styles.tool),
         );
 
         for profile in profiles {
@@ -148,37 +127,26 @@ impl ConfigWarnings for DefaultConfigWarnings {
         }
     }
 
-    fn deprecated_script_config(
-        &mut self,
-        config_file: &Utf8Path,
-        workspace_root: &Utf8Path,
-        tool: Option<&ToolName>,
-    ) {
+    fn deprecated_script_config(&mut self, source: &ConfigSource) {
         warn!(
             "in config file {}{}, [script.*] is deprecated and will be removed in a \
              future version of nextest; use the `scripts.setup` table instead",
-            config_file
-                .strip_prefix(workspace_root)
-                .unwrap_or(config_file),
-            provided_by_tool(tool),
+            source.path().display().style(self.styles.path),
+            provided_by_tool(source.tool(), self.styles.tool),
         );
     }
 
     fn empty_script_sections(
         &mut self,
-        config_file: &Utf8Path,
-        workspace_root: &Utf8Path,
-        tool: Option<&ToolName>,
+        source: &ConfigSource,
         profile_name: &str,
         empty_count: usize,
     ) {
         warn!(
             "in config file {}{}, [[profile.{}.scripts]] has {} {} \
              with neither setup nor wrapper scripts",
-            config_file
-                .strip_prefix(workspace_root)
-                .unwrap_or(config_file),
-            provided_by_tool(tool),
+            source.path().display().style(self.styles.path),
+            provided_by_tool(source.tool(), self.styles.tool),
             profile_name,
             empty_count,
             plural::sections_str(empty_count),
@@ -215,6 +183,9 @@ pub struct NextestConfig {
     inner: NextestConfigImpl,
     compiled: CompiledByProfile,
 }
+
+/// The config path to the default profile's default-filter.
+const DEFAULT_PROFILE_DEFAULT_FILTER_KEY: &str = "profile.default.default-filter";
 
 impl NextestConfig {
     /// The default location of the config within the path: `.config/nextest.toml`, used to read the
@@ -275,7 +246,7 @@ impl NextestConfig {
             config_file,
             tool_config_files,
             experimental,
-            &mut DefaultConfigWarnings,
+            &mut DefaultConfigWarnings::default(),
         )
     }
 
@@ -291,21 +262,21 @@ impl NextestConfig {
     where
         I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
     {
-        Self::from_sources_impl(
+        Self::from_sources_with_selection(
             workspace_root,
             pcx,
-            config_file,
+            ConfigFileSelection::new(config_file),
             tool_config_files,
             experimental,
             warnings,
         )
     }
 
-    // A custom unknown_callback can be passed in while testing.
-    fn from_sources_impl<'a, I>(
+    /// Reads configuration from the given workspace root and file selection.
+    pub fn from_sources_with_selection<'a, I>(
         workspace_root: impl Into<Utf8PathBuf>,
         pcx: &ParseContext<'_>,
-        config_file: Option<&Utf8Path>,
+        selection: ConfigFileSelection<'_>,
         tool_config_files: impl IntoIterator<IntoIter = I>,
         experimental: &BTreeSet<ConfigExperimental>,
         warnings: &mut impl ConfigWarnings,
@@ -314,11 +285,40 @@ impl NextestConfig {
         I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
     {
         let workspace_root = workspace_root.into();
+        Self::from_sources_with_paths(
+            &ConfigPaths::capture(&workspace_root).map_err(|error| {
+                ConfigParseError::from_paths_capture_error(
+                    &workspace_root,
+                    selection.explicit_config_file(),
+                    error,
+                )
+            })?,
+            pcx,
+            selection,
+            tool_config_files,
+            experimental,
+            warnings,
+        )
+    }
+
+    /// Reads configuration from the given paths and file selection.
+    pub fn from_sources_with_paths<'a, I>(
+        paths: &ConfigPaths,
+        pcx: &ParseContext<'_>,
+        selection: ConfigFileSelection<'_>,
+        tool_config_files: impl IntoIterator<IntoIter = I>,
+        experimental: &BTreeSet<ConfigExperimental>,
+        warnings: &mut impl ConfigWarnings,
+    ) -> Result<Self, ConfigParseError>
+    where
+        I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
+    {
+        let workspace_root = paths.workspace_root().as_path().to_owned();
         let tool_config_files_rev = tool_config_files.into_iter().rev();
         let (inner, compiled) = Self::read_from_sources(
             pcx,
-            &workspace_root,
-            config_file,
+            paths,
+            selection,
             tool_config_files_rev,
             experimental,
             warnings,
@@ -340,11 +340,10 @@ impl NextestConfig {
             .expect("default config is always valid");
 
         let mut unknown = BTreeSet::new();
-        let deserialized: NextestConfigDeserialize =
-            serde_ignored::deserialize(config, |path: serde_ignored::Path| {
-                unknown.insert(path.to_string());
-            })
-            .expect("default config is always valid");
+        let deserialized = Self::deserialize_config(config, |path| {
+            unknown.insert(path.to_string());
+        })
+        .expect("default config is always valid");
 
         // Make sure there aren't any unknown keys in the default config, since it is
         // embedded/shipped with this binary.
@@ -375,8 +374,8 @@ impl NextestConfig {
 
     fn read_from_sources<'a>(
         pcx: &ParseContext<'_>,
-        workspace_root: &Utf8Path,
-        file: Option<&Utf8Path>,
+        paths: &ConfigPaths,
+        selection: ConfigFileSelection<'_>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
         experimental: &BTreeSet<ConfigExperimental>,
         warnings: &mut impl ConfigWarnings,
@@ -394,15 +393,18 @@ impl NextestConfig {
         // from profiles defined in the same file or in previously loaded (lower priority) files.
         let mut known_profiles = BTreeSet::new();
 
-        // Next, merge in tool configs.
-        for ToolConfigFile { config_file, tool } in tool_config_files_rev {
-            let source = File::new(config_file.as_str(), FileFormat::Toml);
+        for source in selection.sources(paths, tool_config_files_rev)? {
+            let Some(contents) = source.read()? else {
+                continue;
+            };
+            let file_config = Config::builder()
+                .add_source(File::from_str(&contents, FileFormat::Toml))
+                .build()
+                .map_err(|error| ConfigParseError::new(&source, error.into()))?;
             Self::deserialize_individual_config(
                 pcx,
-                workspace_root,
-                config_file,
-                Some(tool),
-                source.clone(),
+                &source,
+                &file_config,
                 &mut compiled,
                 experimental,
                 warnings,
@@ -412,39 +414,26 @@ impl NextestConfig {
             )?;
 
             // This is the final, composite builder used at the end.
-            composite_builder = composite_builder.add_source(source);
+            composite_builder = composite_builder.add_source(file_config);
         }
 
-        // Next, merge in the config from the given file.
-        let (config_file, source) = match file {
-            Some(file) => (file.to_owned(), File::new(file.as_str(), FileFormat::Toml)),
-            None => {
-                let config_file = workspace_root.join(Self::CONFIG_PATH);
-                let source = File::new(config_file.as_str(), FileFormat::Toml).required(false);
-                (config_file, source)
-            }
-        };
-
-        Self::deserialize_individual_config(
-            pcx,
-            workspace_root,
-            &config_file,
-            None,
-            source.clone(),
-            &mut compiled,
-            experimental,
-            warnings,
-            &mut known_groups,
-            &mut known_scripts,
-            &mut known_profiles,
-        )?;
-
-        composite_builder = composite_builder.add_source(source);
-
-        // The unknown set is ignored here because any values in it have already been reported in
+        let config_file = selection.repo_config_path(paths)?;
+        let composite = composite_builder
+            .build()
+            .map_err(|error| ConfigParseError::from_path(&config_file, error.into()))?;
+        // Unknown keys are ignored here because any values in it have already been reported in
         // deserialize_individual_config.
-        let (config, _unknown) = Self::build_and_deserialize_config(&composite_builder)
-            .map_err(|kind| ConfigParseError::new(&config_file, None, kind))?;
+        let config = Self::deserialize_config(composite, |_| {})
+            .map_err(|kind| ConfigParseError::from_path(&config_file, kind))?;
+
+        let config = config.into_config_impl();
+
+        // A higher-priority file can redefine a profile that a lower-priority
+        // file inherits from, so do one final check for cycles in the merged
+        // config.
+        config
+            .sanitize_profile_inherits(&BTreeSet::new())
+            .map_err(|kind| ConfigParseError::from_path(&config_file, kind))?;
 
         // Reverse all the compiled data at the end.
         compiled.default.reverse();
@@ -452,16 +441,14 @@ impl NextestConfig {
             data.reverse();
         }
 
-        Ok((config.into_config_impl(), compiled))
+        Ok((config, compiled))
     }
 
     #[expect(clippy::too_many_arguments)]
     fn deserialize_individual_config(
         pcx: &ParseContext<'_>,
-        workspace_root: &Utf8Path,
-        config_file: &Utf8Path,
-        tool: Option<&ToolName>,
-        source: File<FileSourceFile, FileFormat>,
+        source: &ConfigSource,
+        file_config: &Config,
         compiled_out: &mut CompiledByProfile,
         experimental: &BTreeSet<ConfigExperimental>,
         warnings: &mut impl ConfigWarnings,
@@ -471,14 +458,21 @@ impl NextestConfig {
     ) -> Result<(), ConfigParseError> {
         // Try building default builder + this file to get good error attribution and handle
         // overrides additively.
-        let default_builder = Self::make_default_config();
-        let this_builder = default_builder.add_source(source);
-        let (mut this_config, unknown) = Self::build_and_deserialize_config(&this_builder)
-            .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
+        let layered = Self::make_default_config()
+            .add_source(file_config.clone())
+            .build()
+            .map_err(|error| ConfigParseError::new(source, error.into()))?;
+        let mut unknown = BTreeSet::new();
+        let mut this_config = Self::deserialize_config(layered, |path| {
+            unknown.insert(path.to_string());
+        })
+        .map_err(|kind| ConfigParseError::new(source, kind))?;
 
         if !unknown.is_empty() {
-            warnings.unknown_config_keys(config_file, workspace_root, tool, &unknown);
+            warnings.unknown_config_keys(source, &unknown);
         }
+
+        let tool = source.tool();
 
         // Check that test groups are named as expected.
         let (valid_groups, invalid_groups): (BTreeSet<_>, _) =
@@ -501,7 +495,7 @@ impl NextestConfig {
             } else {
                 ConfigParseErrorKind::InvalidTestGroupsDefined(invalid_groups)
             };
-            return Err(ConfigParseError::new(config_file, tool, kind));
+            return Err(ConfigParseError::new(source, kind));
         }
 
         known_groups.extend(valid_groups);
@@ -509,15 +503,14 @@ impl NextestConfig {
         // If both scripts and old_setup_scripts are present, produce an error.
         if !this_config.scripts.is_empty() && !this_config.old_setup_scripts.is_empty() {
             return Err(ConfigParseError::new(
-                config_file,
-                tool,
+                source,
                 ConfigParseErrorKind::BothScriptAndScriptsDefined,
             ));
         }
 
         // If old_setup_scripts are present, produce a warning.
         if !this_config.old_setup_scripts.is_empty() {
-            warnings.deprecated_script_config(config_file, workspace_root, tool);
+            warnings.deprecated_script_config(source);
             this_config.scripts.setup = this_config.old_setup_scripts.clone();
         }
 
@@ -536,21 +529,16 @@ impl NextestConfig {
             }
             if !missing_features.is_empty() {
                 return Err(ConfigParseError::new(
-                    config_file,
-                    tool,
+                    source,
                     ConfigParseErrorKind::ExperimentalFeaturesNotEnabled { missing_features },
                 ));
             }
         }
 
-        let duplicate_ids: BTreeSet<_> = this_config.scripts.duplicate_ids().cloned().collect();
-        if !duplicate_ids.is_empty() {
-            return Err(ConfigParseError::new(
-                config_file,
-                tool,
-                ConfigParseErrorKind::DuplicateConfigScriptNames(duplicate_ids),
-            ));
-        }
+        this_config
+            .scripts
+            .check_duplicate_ids()
+            .map_err(|kind| ConfigParseError::new(source, kind))?;
 
         // Check that setup scripts are named as expected.
         let (valid_scripts, invalid_scripts): (BTreeSet<_>, _) = this_config
@@ -576,7 +564,7 @@ impl NextestConfig {
             } else {
                 ConfigParseErrorKind::InvalidConfigScriptsDefined(invalid_scripts)
             };
-            return Err(ConfigParseError::new(config_file, tool, kind));
+            return Err(ConfigParseError::new(source, kind));
         }
 
         known_scripts.extend(
@@ -592,12 +580,7 @@ impl NextestConfig {
             .filter(|p| p.starts_with("default-") && !NextestConfig::DEFAULT_PROFILES.contains(p))
             .collect();
         if !unknown_default_profiles.is_empty() {
-            warnings.unknown_reserved_profiles(
-                config_file,
-                workspace_root,
-                tool,
-                &unknown_default_profiles,
-            );
+            warnings.unknown_reserved_profiles(source, &unknown_default_profiles);
         }
 
         // Check that the profiles correctly use the inherits setting.
@@ -605,7 +588,7 @@ impl NextestConfig {
         // loaded (lower priority) files.
         this_config
             .sanitize_profile_inherits(known_profiles)
-            .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
+            .map_err(|kind| ConfigParseError::new(source, kind))?;
 
         // Add this file's profiles to known_profiles for subsequent files.
         known_profiles.extend(
@@ -615,8 +598,23 @@ impl NextestConfig {
         );
 
         // Compile the overrides for this file.
-        let this_compiled = CompiledByProfile::new(pcx, &this_config)
-            .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
+        //
+        // The default-config.toml shipped with nextest sets default-filter only
+        // on profile.default, so that is the only profile that can carry a
+        // filter that this file did not write.
+        let file_default_filter =
+            match file_config.get::<String>(DEFAULT_PROFILE_DEFAULT_FILTER_KEY) {
+                Ok(filter) => Some(filter),
+                Err(ConfigError::NotFound(_)) => None,
+                Err(error) => return Err(ConfigParseError::new(source, error.into())),
+            };
+        let this_compiled = CompiledByProfile::new(
+            pcx,
+            source,
+            &this_config,
+            ProfileDefaultFilter::new(file_default_filter.as_deref()),
+        )
+        .map_err(|kind| ConfigParseError::new(source, kind))?;
 
         // Check that all overrides specify known test groups.
         let mut unknown_group_errors = Vec::new();
@@ -650,8 +648,7 @@ impl NextestConfig {
         if !unknown_group_errors.is_empty() {
             let known_groups = TestGroup::make_all_groups(known_groups.iter().cloned()).collect();
             return Err(ConfigParseError::new(
-                config_file,
-                tool,
+                source,
                 ConfigParseErrorKind::UnknownTestGroups {
                     errors: unknown_group_errors,
                     known_groups,
@@ -739,13 +736,7 @@ impl NextestConfig {
         });
 
         if empty_script_count > 0 {
-            warnings.empty_script_sections(
-                config_file,
-                workspace_root,
-                tool,
-                "default",
-                empty_script_count,
-            );
+            warnings.empty_script_sections(source, "default", empty_script_count);
         }
 
         this_compiled.other.iter().for_each(|(profile_name, data)| {
@@ -779,13 +770,7 @@ impl NextestConfig {
             });
 
             if empty_script_count > 0 {
-                warnings.empty_script_sections(
-                    config_file,
-                    workspace_root,
-                    tool,
-                    profile_name,
-                    empty_script_count,
-                );
+                warnings.empty_script_sections(source, profile_name, empty_script_count);
             }
         });
 
@@ -797,8 +782,7 @@ impl NextestConfig {
                 .map(|script| script.id.clone())
                 .collect();
             return Err(ConfigParseError::new(
-                config_file,
-                tool,
+                source,
                 ConfigParseErrorKind::ProfileScriptErrors {
                     errors: Box::new(profile_script_errors),
                     known_scripts,
@@ -840,37 +824,46 @@ impl NextestConfig {
         let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
         store_dir.push(name);
 
-        // Grab the compiled data as well.
-        let compiled_data = match self.compiled.other.get(name) {
-            Some(data) => data.clone().chain(self.compiled.default.clone()),
-            None => self.compiled.default.clone(),
-        };
+        // Grab the compiled data as well, furthest ancestor first so that the
+        // profile itself ends up with the highest priority.
+        let mut compiled_data = self.compiled.default.clone();
+        for profile_name in inheritance_chain
+            .iter()
+            .rev()
+            .map(|(ancestor, _)| *ancestor)
+            .chain(std::iter::once(name))
+        {
+            // It is possible that a profile in the chain doesn't have any
+            // compiled data associated with it. `compiled.other` is built only
+            // from the config files that were read, so a profile that exists
+            // solely in the embedded default config, such as `default-miri`,
+            // doesn't have an entry in `compiled.other`. Ignore this case since
+            // if there's no data, there's certainly no overrides.
+            if let Some(data) = self.compiled.other.get(profile_name) {
+                compiled_data = data.clone().chain(compiled_data);
+            }
+        }
 
         Ok(EarlyProfile {
             name: name.to_owned(),
             store_dir,
             default_profile: &self.inner.default_profile,
             custom_profile,
-            inheritance_chain,
+            inheritance_chain: inheritance_chain
+                .into_iter()
+                .map(|(_, profile)| profile)
+                .collect(),
             test_groups: &self.inner.test_groups,
             scripts: &self.inner.scripts,
             compiled_data,
         })
     }
 
-    /// This returns a tuple of (config, ignored paths).
-    fn build_and_deserialize_config(
-        builder: &ConfigBuilder<DefaultState>,
-    ) -> Result<(NextestConfigDeserialize, BTreeSet<String>), ConfigParseErrorKind> {
-        let config = builder
-            .build_cloned()
-            .map_err(|error| ConfigParseErrorKind::BuildError(Box::new(error)))?;
-
-        let mut ignored = BTreeSet::new();
-        let mut cb = |path: serde_ignored::Path| {
-            ignored.insert(path.to_string());
-        };
-        let ignored_de = serde_ignored::Deserializer::new(config, &mut cb);
+    fn deserialize_config(
+        config: Config,
+        mut ignored: impl FnMut(serde_ignored::Path<'_>),
+    ) -> Result<NextestConfigDeserialize, ConfigParseErrorKind> {
+        let ignored_de = serde_ignored::Deserializer::new(config, &mut ignored);
         let config: NextestConfigDeserialize = serde_path_to_error::deserialize(ignored_de)
             .map_err(|error| {
                 // Both serde_path_to_error and the latest versions of the
@@ -887,7 +880,7 @@ impl NextestConfig {
                 )))
             })?;
 
-        Ok((config, ignored))
+        Ok(config)
     }
 }
 
@@ -1311,7 +1304,7 @@ impl NextestConfigImpl {
     fn resolve_inheritance_chain(
         &self,
         profile_name: &str,
-    ) -> Result<Vec<&CustomProfileImpl>, ProfileNotFound> {
+    ) -> Result<Vec<(&str, &CustomProfileImpl)>, ProfileNotFound> {
         let mut chain = Vec::new();
 
         // Start from the profile's parent, not the profile itself (the profile
@@ -1323,7 +1316,7 @@ impl NextestConfigImpl {
         while let Some(name) = curr {
             let profile = self.get_profile(name)?;
             if let Some(profile) = profile {
-                chain.push(profile);
+                chain.push((name, profile));
                 curr = profile.inherits.as_deref();
             } else {
                 // Reached the default profile -- stop.
@@ -1618,7 +1611,6 @@ struct StoreConfigImpl {
 
 #[derive(Clone, Debug)]
 pub(in crate::config) struct DefaultProfileImpl {
-    default_filter: String,
     test_threads: TestThreads,
     threads_required: ThreadsRequired,
     run_extra_args: Vec<String>,
@@ -1643,9 +1635,6 @@ pub(in crate::config) struct DefaultProfileImpl {
 impl DefaultProfileImpl {
     fn new(p: CustomProfileImpl) -> Self {
         Self {
-            default_filter: p
-                .default_filter
-                .expect("default-filter present in default profile"),
             test_threads: p
                 .test_threads
                 .expect("test-threads present in default profile"),
@@ -1690,10 +1679,6 @@ impl DefaultProfileImpl {
             ),
             inherits: Inherits::new(p.inherits),
         }
-    }
-
-    pub(in crate::config) fn default_filter(&self) -> &str {
-        &self.default_filter
     }
 
     pub(in crate::config) fn inherits(&self) -> Option<&str> {
@@ -1839,9 +1824,18 @@ impl CustomProfileImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::utils::test_helpers::*;
-    use camino_tempfile::tempdir;
+    use crate::config::{
+        core::{ConfigSourceKind, ToolName},
+        overrides::CompiledDefaultFilterSection,
+        utils::test_helpers::*,
+    };
+    use camino_tempfile::{Utf8TempDir, tempdir};
+    use guppy::graph::cargo::BuildPlatform;
     use iddqd::{IdHashItem, IdHashMap, id_hash_map, id_upcast};
+    use nextest_filtering::{CompiledExpr, FiltersetKind};
+    use nextest_metadata::TestCaseName;
+    use std::time::Duration;
+    use test_case::test_case;
 
     fn tool_name(s: &str) -> ToolName {
         ToolName::new(s.into()).unwrap()
@@ -1857,127 +1851,110 @@ mod tests {
     }
 
     impl ConfigWarnings for TestConfigWarnings {
-        fn unknown_config_keys(
-            &mut self,
-            config_file: &Utf8Path,
-            _workspace_root: &Utf8Path,
-            tool: Option<&ToolName>,
-            unknown: &BTreeSet<String>,
-        ) {
+        fn unknown_config_keys(&mut self, source: &ConfigSource, unknown: &BTreeSet<String>) {
             self.unknown_keys
                 .insert_unique(UnknownKeys {
-                    tool: tool.cloned(),
-                    config_file: config_file.to_owned(),
+                    kind: source.kind().clone(),
+                    config_file: source.path().absolute_path().to_owned(),
                     keys: unknown.clone(),
                 })
-                .unwrap();
+                .expect("each config source reports unknown keys at most once");
         }
 
-        fn unknown_reserved_profiles(
-            &mut self,
-            config_file: &Utf8Path,
-            _workspace_root: &Utf8Path,
-            tool: Option<&ToolName>,
-            profiles: &[&str],
-        ) {
+        fn unknown_reserved_profiles(&mut self, source: &ConfigSource, profiles: &[&str]) {
             self.reserved_profiles
                 .insert_unique(ReservedProfiles {
-                    tool: tool.cloned(),
-                    config_file: config_file.to_owned(),
+                    kind: source.kind().clone(),
+                    config_file: source.path().absolute_path().to_owned(),
                     profiles: profiles.iter().map(|&s| s.to_owned()).collect(),
                 })
-                .unwrap();
+                .expect("each config source reports reserved profiles at most once");
         }
 
         fn empty_script_sections(
             &mut self,
-            config_file: &Utf8Path,
-            _workspace_root: &Utf8Path,
-            tool: Option<&ToolName>,
+            source: &ConfigSource,
             profile_name: &str,
             empty_count: usize,
         ) {
             self.empty_script_warnings
                 .insert_unique(EmptyScriptSections {
-                    tool: tool.cloned(),
-                    config_file: config_file.to_owned(),
+                    kind: source.kind().clone(),
+                    config_file: source.path().absolute_path().to_owned(),
                     profile_name: profile_name.to_owned(),
                     empty_count,
                 })
-                .unwrap();
+                .expect(
+                    "each config source reports a profile's empty script sections at most once",
+                );
         }
 
-        fn deprecated_script_config(
-            &mut self,
-            config_file: &Utf8Path,
-            _workspace_root: &Utf8Path,
-            tool: Option<&ToolName>,
-        ) {
+        fn deprecated_script_config(&mut self, source: &ConfigSource) {
             self.deprecated_scripts
                 .insert_unique(DeprecatedScripts {
-                    tool: tool.cloned(),
-                    config_file: config_file.to_owned(),
+                    kind: source.kind().clone(),
+                    config_file: source.path().absolute_path().to_owned(),
                 })
-                .unwrap();
+                .expect("each config source reports deprecated script config at most once");
         }
     }
 
-    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
     struct UnknownKeys {
-        tool: Option<ToolName>,
+        kind: ConfigSourceKind,
         config_file: Utf8PathBuf,
         keys: BTreeSet<String>,
     }
 
     impl IdHashItem for UnknownKeys {
-        type Key<'a> = Option<&'a ToolName>;
+        type Key<'a> = &'a ConfigSourceKind;
         fn key(&self) -> Self::Key<'_> {
-            self.tool.as_ref()
+            &self.kind
         }
         id_upcast!();
     }
 
-    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
     struct ReservedProfiles {
-        tool: Option<ToolName>,
+        kind: ConfigSourceKind,
         config_file: Utf8PathBuf,
         profiles: Vec<String>,
     }
 
     impl IdHashItem for ReservedProfiles {
-        type Key<'a> = Option<&'a ToolName>;
+        type Key<'a> = &'a ConfigSourceKind;
         fn key(&self) -> Self::Key<'_> {
-            self.tool.as_ref()
+            &self.kind
         }
         id_upcast!();
     }
 
-    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
     struct DeprecatedScripts {
-        tool: Option<ToolName>,
+        kind: ConfigSourceKind,
         config_file: Utf8PathBuf,
     }
 
     impl IdHashItem for DeprecatedScripts {
-        type Key<'a> = Option<&'a ToolName>;
+        type Key<'a> = &'a ConfigSourceKind;
         fn key(&self) -> Self::Key<'_> {
-            self.tool.as_ref()
+            &self.kind
         }
         id_upcast!();
     }
 
-    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
     struct EmptyScriptSections {
-        tool: Option<ToolName>,
+        kind: ConfigSourceKind,
         config_file: Utf8PathBuf,
         profile_name: String,
         empty_count: usize,
     }
 
     impl IdHashItem for EmptyScriptSections {
-        type Key<'a> = (&'a Option<ToolName>, &'a str);
+        type Key<'a> = (&'a ConfigSourceKind, &'a str);
         fn key(&self) -> Self::Key<'_> {
-            (&self.tool, &self.profile_name)
+            (&self.kind, &self.profile_name)
         }
         id_upcast!();
     }
@@ -2062,7 +2039,7 @@ mod tests {
             warnings.unknown_keys,
             id_hash_map! {
                 UnknownKeys {
-                    tool: None,
+                    kind: ConfigSourceKind::DiscoveredRepository,
                     config_file: workspace_root.join(".config/nextest.toml"),
                     keys: maplit::btreeset! {
                         "ignored1".to_owned(),
@@ -2071,7 +2048,7 @@ mod tests {
                     }
                 },
                 UnknownKeys {
-                    tool: Some(tool_name("my-tool")),
+                    kind: ConfigSourceKind::Tool(tool_name("my-tool")),
                     config_file: tool_path.clone(),
                     keys: maplit::btreeset! {
                         "store.ignored4".to_owned(),
@@ -2085,12 +2062,12 @@ mod tests {
             warnings.reserved_profiles,
             id_hash_map! {
                 ReservedProfiles {
-                    tool: None,
+                    kind: ConfigSourceKind::DiscoveredRepository,
                     config_file: workspace_root.join(".config/nextest.toml"),
                     profiles: vec!["default-foo".to_owned()],
                 },
                 ReservedProfiles {
-                    tool: Some(tool_name("my-tool")),
+                    kind: ConfigSourceKind::Tool(tool_name("my-tool")),
                     config_file: tool_path,
                     profiles: vec!["default-bar".to_owned()],
                 }
@@ -2180,19 +2157,19 @@ mod tests {
             warnings.empty_script_warnings,
             id_hash_map! {
                 EmptyScriptSections {
-                    tool: None,
+                    kind: ConfigSourceKind::DiscoveredRepository,
                     config_file: workspace_root.join(".config/nextest.toml"),
                     profile_name: "default".to_owned(),
                     empty_count: 1,
                 },
                 EmptyScriptSections {
-                    tool: None,
+                    kind: ConfigSourceKind::DiscoveredRepository,
                     config_file: workspace_root.join(".config/nextest.toml"),
                     profile_name: "custom".to_owned(),
                     empty_count: 2,
                 },
                 EmptyScriptSections {
-                    tool: Some(tool_name("tool")),
+                    kind: ConfigSourceKind::Tool(tool_name("tool")),
                     config_file: tool_path,
                     profile_name: "tool".to_owned(),
                     empty_count: 1,
@@ -2243,14 +2220,378 @@ mod tests {
             warnings.deprecated_scripts,
             id_hash_map! {
                 DeprecatedScripts {
-                    tool: None,
+                    kind: ConfigSourceKind::DiscoveredRepository,
                     config_file: graph.workspace().root().join(".config/nextest.toml"),
                 },
                 DeprecatedScripts {
-                    tool: Some(tool_name("my-tool")),
+                    kind: ConfigSourceKind::Tool(tool_name("my-tool")),
                     config_file: tool_path,
                 }
             }
         );
+    }
+
+    #[test]
+    fn inherited_profiles_contribute_compiled_data() {
+        let dir = tempdir().unwrap();
+        let graph = temp_workspace(
+            &dir,
+            r#"
+            [scripts.setup.prepare]
+            command = "echo prepare"
+
+            [scripts.wrapper.grandparent-wrapper]
+            command = "grandparent-wrapper"
+
+            [scripts.wrapper.parent-wrapper]
+            command = "parent-wrapper"
+
+            [[profile.default.overrides]]
+            filter = "all()"
+            retries = 3
+            slow-timeout = "10s"
+
+            [profile.grandparent]
+
+            [[profile.grandparent.overrides]]
+            filter = "test(parent)"
+            retries = 13
+            slow-timeout = "30s"
+
+            [[profile.grandparent.scripts]]
+            filter = "all()"
+            run-wrapper = "grandparent-wrapper"
+
+            [profile.parent]
+            inherits = "grandparent"
+            default-filter = "test(parent)"
+
+            [[profile.parent.overrides]]
+            filter = "test(parent)"
+            retries = 8
+            slow-timeout = "40s"
+
+            [[profile.parent.scripts]]
+            filter = "all()"
+            setup = ["prepare"]
+
+            [[profile.parent.scripts]]
+            filter = "test(parent)"
+            run-wrapper = "parent-wrapper"
+
+            [profile.child]
+            inherits = "parent"
+
+            [[profile.child.overrides]]
+            filter = "test(child)"
+            retries = 5
+        "#,
+        );
+        let pcx = ParseContext::new(&graph);
+        let config = NextestConfig::from_sources(
+            dir.path(),
+            &pcx,
+            None,
+            &[],
+            &maplit::btreeset! {
+                ConfigExperimental::SetupScripts,
+                ConfigExperimental::WrapperScripts,
+            },
+        )
+        .unwrap();
+        let profile = config
+            .profile("child")
+            .unwrap()
+            .apply_build_platforms(&build_platforms());
+
+        let override_profiles: Vec<_> = profile
+            .compiled_data
+            .overrides
+            .iter()
+            .map(|override_| override_.id().profile_name.as_str())
+            .collect();
+        assert_eq!(
+            override_profiles,
+            ["child", "parent", "grandparent", "default"],
+            "overrides are ordered from the profile itself to its furthest ancestor"
+        );
+        assert_eq!(
+            profile.default_filter().profile,
+            "parent",
+            "default-filter is inherited from the nearest ancestor that sets it"
+        );
+
+        let package_id = graph.workspace().iter().next().unwrap().id();
+        let binary = binary_query(
+            &graph,
+            package_id,
+            "lib",
+            "test-package",
+            BuildPlatform::Target,
+        );
+        for (name, retries, timeout, wrapper) in [
+            ("child_only", 5, 10, Some("grandparent-wrapper")),
+            ("parent_only", 8, 40, Some("parent-wrapper")),
+            ("parent_and_child", 5, 40, Some("parent-wrapper")),
+            ("other", 3, 10, Some("grandparent-wrapper")),
+        ] {
+            let test_name = TestCaseName::new(name);
+            let query = TestQuery {
+                binary_query: binary.to_query(),
+                test_name: &test_name,
+            };
+            let settings = profile.settings_for(NextestRunMode::Test, &query);
+            assert_eq!(settings.retries().count(), retries, "retries for {name}");
+            assert_eq!(
+                settings.slow_timeout().period,
+                Duration::from_secs(timeout),
+                "slow timeout for {name}"
+            );
+            assert_eq!(
+                settings
+                    .run_wrapper()
+                    .map(|wrapper| wrapper.command.program.as_str()),
+                wrapper,
+                "run wrapper for {name}"
+            );
+        }
+
+        let setup_scripts: Vec<_> = profile
+            .compiled_data
+            .scripts
+            .iter()
+            .flat_map(|scripts| scripts.setup.iter().cloned())
+            .collect();
+        assert_eq!(
+            setup_scripts,
+            [ScriptId::new("prepare".into()).unwrap()],
+            "child profile inherits the parent profile's setup script selection"
+        );
+    }
+
+    #[test]
+    fn cross_file_inheritance_cycle_is_rejected() {
+        let workspace_dir = tempdir().unwrap();
+        let graph = temp_workspace(&workspace_dir, "");
+        let workspace_root = graph.workspace().root();
+
+        // Each file on its own is acyclic -- the cycle only exists once the
+        // higher-priority file redefines `a`.
+        let lower_path = workspace_root.join(".config/lower.toml");
+        std::fs::write(
+            &lower_path,
+            "[profile.a]\nretries = 1\n[profile.b]\ninherits = 'a'\n",
+        )
+        .unwrap();
+        let upper_path = workspace_root.join(".config/upper.toml");
+        std::fs::write(&upper_path, "[profile.a]\ninherits = 'b'\n").unwrap();
+
+        // Tool files are processed in reverse array order, so the redefining
+        // file comes first here to be merged last.
+        let error = NextestConfig::from_sources(
+            workspace_root,
+            &ParseContext::new(&graph),
+            None,
+            &[
+                ToolConfigFile {
+                    tool: tool_name("upper"),
+                    config_file: upper_path,
+                },
+                ToolConfigFile {
+                    tool: tool_name("lower"),
+                    config_file: lower_path,
+                },
+            ][..],
+            &Default::default(),
+        )
+        .expect_err("a cycle spanning config files is rejected");
+
+        let ConfigParseErrorKind::InheritanceErrors(errors) = error.kind() else {
+            panic!("expected inheritance errors, got {error:?}");
+        };
+        assert!(
+            errors
+                .iter()
+                .any(|error| matches!(error, InheritsError::InheritanceCycle(_))),
+            "{errors:?}"
+        );
+    }
+
+    fn tool_config_file(
+        dir: &Utf8TempDir,
+        file_name: &str,
+        tool: &str,
+        contents: &str,
+    ) -> ToolConfigFile {
+        let config_file = dir.path().join(file_name);
+        std::fs::write(&config_file, contents).expect("wrote the tool config file");
+        ToolConfigFile {
+            tool: tool_name(tool),
+            config_file,
+        }
+    }
+
+    #[test]
+    fn unknown_key_warnings_only_include_fields_the_file_defines() {
+        let dir = tempdir().unwrap();
+        let graph = temp_workspace(
+            &dir,
+            "[profile.ci]\ntest-threads = 2\nrepo-typo = true\nshared-typo = true",
+        );
+        let root = graph.workspace().root();
+        // We must produce a warning for:
+        //
+        // * tool file with tool-typo
+        // * tool file with shared-typo
+        // * repository file with repo-typo
+        // * repository file with shared-typo
+        //
+        // We must NOT warn about repository file with tool-typo. This is true
+        // today because when we deserialize a config file, we do so against the
+        // default config, not in a layered fashion.
+        let tool = tool_config_file(
+            &dir,
+            "tool.toml",
+            "t",
+            "[profile.ci]\nretries = 1\ntool-typo = true\nshared-typo = true",
+        );
+        let tool_path = tool.config_file.clone();
+
+        let mut warnings = TestConfigWarnings::default();
+        NextestConfig::from_sources_with_warnings(
+            root,
+            &ParseContext::new(&graph),
+            None,
+            &[tool],
+            &BTreeSet::new(),
+            &mut warnings,
+        )
+        .expect("config is valid");
+
+        assert_eq!(
+            warnings.unknown_keys,
+            id_hash_map! {
+                UnknownKeys {
+                    kind: ConfigSourceKind::DiscoveredRepository,
+                    config_file: root.join(NextestConfig::CONFIG_PATH),
+                    keys: maplit::btreeset! {
+                        "profile.ci.repo-typo".to_owned(),
+                        "profile.ci.shared-typo".to_owned(),
+                    },
+                },
+                UnknownKeys {
+                    kind: ConfigSourceKind::Tool(tool_name("t")),
+                    config_file: tool_path,
+                    keys: maplit::btreeset! {
+                        "profile.ci.tool-typo".to_owned(),
+                        "profile.ci.shared-typo".to_owned(),
+                    },
+                },
+            },
+            "each file is warned about exactly the unknown keys it wrote"
+        );
+    }
+
+    #[test_case("", Some("test(tool)"), "test(tool)"; "repo config omits the default profile")]
+    #[test_case("[profile.default]\nretries = 1", Some("test(tool)"), "test(tool)"; "repo config sets no default filter")]
+    #[test_case("[profile.default]\ndefault-filter = 'test(repo)'", Some("test(tool)"), "test(repo)"; "repo config sets a default filter")]
+    // With no file setting a default filter, the value can only come from
+    // CompiledByProfile::for_default_config.
+    #[test_case("[profile.default]\nretries = 1", None, "all()"; "no file sets a default filter")]
+    fn default_filter_precedence_between_tool_and_repo_configs(
+        repo_contents: &str,
+        tool_filter: Option<&str>,
+        expected_filter: &str,
+    ) {
+        let dir = tempdir().unwrap();
+        let graph = temp_workspace(&dir, repo_contents);
+        let tool_config_files: Vec<_> = tool_filter
+            .map(|filter| {
+                tool_config_file(
+                    &dir,
+                    "tool.toml",
+                    "t",
+                    &format!("[profile.default]\ndefault-filter = '{filter}'"),
+                )
+            })
+            .into_iter()
+            .collect();
+        let pcx = ParseContext::new(&graph);
+        let config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &tool_config_files,
+            &BTreeSet::new(),
+        )
+        .unwrap();
+        let profile = config
+            .profile(NextestConfig::DEFAULT_PROFILE)
+            .expect("default profile exists")
+            .apply_build_platforms(&build_platforms());
+        let expected_expr = Filterset::parse(
+            expected_filter.to_owned(),
+            &pcx,
+            FiltersetKind::DefaultFilter,
+            &KnownGroups::Unavailable,
+        )
+        .expect("expected filter parses")
+        .compiled;
+        assert_eq!(profile.default_filter().expr, expected_expr);
+        assert_eq!(
+            profile.default_filter().profile,
+            NextestConfig::DEFAULT_PROFILE
+        );
+        assert!(
+            matches!(
+                profile.default_filter().section,
+                CompiledDefaultFilterSection::Profile
+            ),
+            "{:?}",
+            profile.default_filter().section
+        );
+    }
+
+    #[test]
+    fn default_config_sets_default_filter_only_on_the_default_profile() {
+        let default_config = NextestConfig::default_config("foo");
+
+        let built_in = NextestConfig::make_default_config()
+            .build()
+            .expect("the built-in config builds");
+        let filter = built_in
+            .get::<String>(DEFAULT_PROFILE_DEFAULT_FILTER_KEY)
+            .expect("the built-in default profile sets a default-filter");
+
+        // The default filter defined in configuration must agree with
+        // CompiledDefaultFilter::for_default_config, which hardcodes
+        // CompiledExpr::ALL. (Why we don't just use the default filter is
+        // complicated, having to do with not passing around a PackageGraph
+        // unless necessary.)
+        let dir = tempdir().unwrap();
+        let graph = temp_workspace(&dir, "");
+        let compiled = Filterset::parse(
+            filter,
+            &ParseContext::new(&graph),
+            FiltersetKind::DefaultFilter,
+            &KnownGroups::Unavailable,
+        )
+        .expect("the built-in default-filter parses")
+        .compiled;
+        assert_eq!(compiled, CompiledExpr::ALL);
+
+        let names: Vec<&str> = default_config
+            .inner
+            .other_profiles()
+            .map(|(name, _)| name)
+            .collect();
+        assert_eq!(names, ["default-miri"]);
+        for (name, profile) in default_config.inner.other_profiles() {
+            assert_eq!(
+                profile.default_filter(),
+                None,
+                "built-in profile {name} sets no default-filter"
+            );
+        }
     }
 }
