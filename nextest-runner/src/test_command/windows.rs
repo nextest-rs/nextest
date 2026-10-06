@@ -8,7 +8,7 @@ pub(super) fn pipe_reader_to_file(rx: PipeReader) -> File {
     File::from(OwnedHandle::from(rx))
 }
 
-pub(super) fn pipe_reader_to_child_stdout(rx: PipeReader) -> io::Result<ChildStdout> {
+pub(crate) fn pipe_reader_to_child_stdout(rx: PipeReader) -> io::Result<ChildStdout> {
     ChildStdout::from_std(process::ChildStdout::from(OwnedHandle::from(rx)))
 }
 

@@ -26,6 +26,8 @@ use tracing::warn;
 
 mod imp;
 use imp::attach_capture_readers;
+#[cfg(test)]
+pub(crate) use imp::pipe_reader_to_child_stdout;
 pub(crate) use imp::{Child, ChildAccumulator, ChildFds};
 
 /// Platforms without atomic CLOEXEC, per `library/std/src/sys/pipe/unix.rs`.

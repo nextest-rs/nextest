@@ -1484,12 +1484,12 @@ async fn detect_fd_leaks<'a>(
     stopwatch: &mut StopwatchStart,
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
 ) -> LeakDetectInfo {
+    let mut sleep = std::pin::pin!(tokio::time::sleep(leak_timeout.period));
+    let waiting_stopwatch = crate::time::stopwatch();
+
     loop {
         // Ignore stop and continue events here since the leak timeout should be very small.
         // TODO: we may want to consider them.
-        let mut sleep = std::pin::pin!(tokio::time::sleep(leak_timeout.period));
-        let waiting_stopwatch = crate::time::stopwatch();
-
         tokio::select! {
             biased;
 
@@ -1662,6 +1662,20 @@ fn create_execution_result(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        config::scripts::{
+            ScriptCommand, ScriptCommandEnvMap, ScriptCommandRelativeTo, SetupScriptJunitConfig,
+        },
+        reporter::events::ChildExecutionOutputDescription,
+        runner::ShutdownRequest,
+        test_command::pipe_reader_to_child_stdout,
+    };
+    use std::{
+        io::{self, PipeWriter, Write},
+        task::Poll,
+        time::Instant,
+    };
+    use tokio::sync::mpsc::unbounded_channel;
 
     #[test]
     fn execution_result_without_exit_status_is_exec_fail() {
@@ -1675,5 +1689,255 @@ mod tests {
             result_for(Some(ExitStatus::default())),
             ExecutionResult::Pass,
         );
+    }
+
+    /// Returns a dummy `SetupScriptConfig` -- this isn't actually used in the
+    /// leak tests, it's just required by the types.
+    fn leak_test_config() -> SetupScriptConfig {
+        SetupScriptConfig {
+            command: ScriptCommand {
+                program: "unused".to_owned(),
+                args: Vec::new(),
+                env: ScriptCommandEnvMap::default(),
+                relative_to: ScriptCommandRelativeTo::None,
+            },
+            slow_timeout: None,
+            leak_timeout: None,
+            capture_stdout: true,
+            capture_stderr: false,
+            junit: SetupScriptJunitConfig::default(),
+        }
+    }
+
+    /// Returns a dummy `UnitContext` for use in leak tests.
+    ///
+    /// For this test we could use a TestPacket, but that's annoying to create
+    /// compared to a SetupScriptPacket.
+    fn leak_test_context(config: &SetupScriptConfig) -> UnitContext<'_> {
+        UnitContext {
+            packet: UnitPacket::SetupScript(SetupScriptPacket {
+                stress_index: None,
+                script_id: ScriptId::new("unused".into()).expect("valid script ID"),
+                config,
+                program: "unused".to_owned(),
+            }),
+            slow_after: None,
+        }
+    }
+
+    /// Creates an OS pipe, and pretends that the read end is a child process's
+    /// stdout.
+    ///
+    /// The write end is also returned so that the test can control when to
+    /// close it.
+    fn held_open_stdout() -> (ChildAccumulator, PipeWriter) {
+        let (reader, writer) = io::pipe().expect("created a pipe");
+        let stdout = pipe_reader_to_child_stdout(reader)
+            .expect("converted the pipe to a tokio child stdout");
+        let child_acc = ChildAccumulator::new(ChildFds::new_split(Some(stdout), None));
+        (child_acc, writer)
+    }
+
+    /// Creates a context for leak detection.
+    ///
+    /// Returns:
+    ///
+    /// * The future that detects leaks.
+    /// * The write end of the pipe so that the test can control when to close it.
+    /// * The request sender so that the test can send requests to the executor.
+    fn start_leak_detection<'a>(
+        config: &'a SetupScriptConfig,
+        leak_timeout: LeakTimeout,
+    ) -> (
+        impl Future<Output = LeakDetectInfo> + 'a,
+        PipeWriter,
+        UnboundedSender<RunUnitRequest<'a>>,
+    ) {
+        let (mut child_acc, writer) = held_open_stdout();
+        let (req_tx, mut req_rx) = unbounded_channel();
+
+        let detect = async move {
+            let cx = leak_test_context(config);
+            let mut stopwatch = crate::time::stopwatch();
+            detect_fd_leaks(
+                &cx,
+                0,
+                &mut child_acc,
+                None,
+                leak_timeout,
+                &mut stopwatch,
+                &mut req_rx,
+            )
+            .await
+        };
+        (detect, writer, req_tx)
+    }
+
+    fn exiting_wait_and_stdout_len(response: InfoResponse<'_>) -> (Duration, u64) {
+        let InfoResponse::SetupScript(SetupScriptInfoResponse {
+            state: UnitState::Exiting {
+                waiting_duration, ..
+            },
+            output: ChildExecutionOutputDescription::Output { output, .. },
+            ..
+        }) = &response
+        else {
+            panic!("expected a setup script that is exiting, found {response:?}");
+        };
+        let (stdout_len, _stderr_len) = output.stdout_stderr_len();
+        (*waiting_duration, stdout_len.expect("stdout is captured"))
+    }
+
+    /// Tests that receiving output doesn't reset the leak timeout, with a leak
+    /// timeout set to a very _large_ value.
+    #[tokio::test]
+    async fn detect_fd_leaks_reports_whole_wait_despite_output_and_requests() {
+        // Set a ~infinite leak timeout to ensure that leak detection never
+        // returns.
+        let leak_timeout = LeakTimeout {
+            period: crate::time::far_future_duration(),
+            result: LeakTimeoutResult::Pass,
+        };
+        let config = leak_test_config();
+        let (detect, mut writer, req_tx) = start_leak_detection(&config, leak_timeout);
+        let (info_tx, mut info_rx) = unbounded_channel();
+
+        let mut detect = std::pin::pin!(detect);
+        // Poll the future once. This runs `detect_fd_leaks` up to the select.
+        assert!(
+            futures::poll!(detect.as_mut()).is_pending(),
+            "leak detection waits while the descriptor is open",
+        );
+
+        // This stopwatch starts after the wait clock in the leak detection
+        // future.
+        let test_stopwatch = crate::time::stopwatch();
+        let mut written = 0;
+
+        for round in 1..=3 {
+            // The leak detection must return a value greater than this.
+            let at_least = test_stopwatch.snapshot().active;
+
+            // Write a byte and send a cancellation request to the unit.
+            writer.write_all(b"x").expect("wrote to the pipe");
+            written += 1;
+            for request in [
+                RunUnitRequest::OtherCancel,
+                RunUnitRequest::Signal(SignalRequest::Shutdown(ShutdownRequest::Twice)),
+            ] {
+                req_tx.send(request).expect("the receiver is open");
+            }
+
+            // Wait until the byte is seen by the accumulator and grab the
+            // current wait duration.
+            let waiting_duration = loop {
+                req_tx
+                    .send(RunUnitRequest::Query(RunUnitQuery::GetInfo(
+                        info_tx.clone(),
+                    )))
+                    .expect("the receiver is open");
+                assert!(
+                    futures::poll!(detect.as_mut()).is_pending(),
+                    "leak detection waits while the descriptor is open, in round {round}",
+                );
+                let response = info_rx.try_recv().expect("the info query is answered");
+                let (waiting_duration, stdout_len) = exiting_wait_and_stdout_len(response);
+                if stdout_len == written {
+                    break waiting_duration;
+                }
+                // The write has not reached the accumulator yet, so ask again
+                // shortly in the future.
+                tokio::task::yield_now().await;
+            };
+            // If we reset the wait clock in each loop iteration in the SUT,
+            // then this check would fail.
+            assert!(
+                waiting_duration >= at_least,
+                "the wait reported in round {round} ({waiting_duration:?}) is at least the \
+                 {at_least:?} that leak detection is known to have waited",
+            );
+        }
+
+        let at_least = test_stopwatch.snapshot().active;
+        // Now drop the writer.
+        drop(writer);
+        match detect.await {
+            // Since we set a far-future leak timeout, we expect no leak.
+            LeakDetectInfo::NoLeak { time_to_close } => assert!(
+                time_to_close >= at_least,
+                "the time to close ({time_to_close:?}) is at least the {at_least:?} that leak \
+                 detection is known to have waited",
+            ),
+            info @ (LeakDetectInfo::Leaked | LeakDetectInfo::SkippedForInterceptor) => {
+                panic!("expected no leak once the descriptor closed, found {info:?}")
+            }
+        }
+    }
+
+    /// Tests that receiving output doesn't reset the leak timeout, with a leak
+    /// timeout set to a very _small_ value.
+    #[tokio::test]
+    async fn detect_fd_leaks_reports_leak_despite_output_and_requests() {
+        let leak_timeout = LeakTimeout {
+            // We choose a value of 1ms here.
+            //
+            // Why not 100us? Because Tokio's timer resolution is 1ms, and the
+            // overdue timeout below would be just 2ms which is not helpful.
+            //
+            // Why not something like 1 second? Because if the leak timeout is
+            // reset on receiving events, we'll spin for 20 seconds.
+            //
+            // Something like 10ms might be defensible in case this test is
+            // flaky in practice.
+            period: Duration::from_millis(1),
+            result: LeakTimeoutResult::Pass,
+        };
+        // This is well past the leak timeout, so a wait this long means the
+        // leak timeout was (probably!) restarted.
+        let overdue = 20 * leak_timeout.period;
+
+        let config = leak_test_config();
+        let (detect, mut writer, req_tx) = start_leak_detection(&config, leak_timeout);
+        let (info_tx, mut info_rx) = unbounded_channel();
+
+        let mut detect = std::pin::pin!(detect);
+        assert!(
+            futures::poll!(detect.as_mut()).is_pending(),
+            "leak detection waits while the descriptor is open",
+        );
+
+        let began = Instant::now();
+        loop {
+            let waited = began.elapsed();
+            // Spam both the writer and the request channels -- neither should
+            // cause the leak timeout to be reset.
+            writer.write_all(b"x").expect("wrote to the pipe");
+            for request in [
+                RunUnitRequest::OtherCancel,
+                RunUnitRequest::Signal(SignalRequest::Shutdown(ShutdownRequest::Twice)),
+                RunUnitRequest::Query(RunUnitQuery::GetInfo(info_tx.clone())),
+            ] {
+                req_tx.send(request).expect("the receiver is open");
+            }
+            // The leak timeout fires only when the runtime polls its drivers.
+            tokio::task::yield_now().await;
+            match futures::poll!(detect.as_mut()) {
+                Poll::Ready(LeakDetectInfo::Leaked) => {
+                    // The leak fired -- yay!
+                    break;
+                }
+                Poll::Ready(
+                    info @ (LeakDetectInfo::NoLeak { .. } | LeakDetectInfo::SkippedForInterceptor),
+                ) => panic!("expected a leak while the descriptor stays open, found {info:?}"),
+                Poll::Pending => {}
+            }
+            info_rx.try_recv().expect("the info query is answered");
+            assert!(
+                waited < overdue,
+                "the leak is reported once the {:?} leak timeout has passed, even with output \
+                 and requests still arriving, but there was no report after {waited:?}",
+                leak_timeout.period,
+            );
+        }
     }
 }
