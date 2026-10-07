@@ -605,12 +605,60 @@ pub(super) fn progress_str(
     s
 }
 
+// Keep summary size and memory usage bounded even if every test reports a
+// distinct group. Retain names in lexical order so scheduling cannot change the
+// summary; the remaining counts are folded into `other`.
+const MAX_WRAPPER_GROUPS: usize = 5;
+
+#[derive(Debug, Default)]
+struct WrapperGroupCounts {
+    named: BTreeMap<RunWrapperGroup, usize>,
+    other: usize,
+}
+
+impl WrapperGroupCounts {
+    fn record(&mut self, group: &RunWrapperGroup) {
+        if group.as_str() == "other" {
+            self.other += 1;
+        } else if let Some(count) = self.named.get_mut(group) {
+            *count += 1;
+        } else if self.named.len() < MAX_WRAPPER_GROUPS {
+            self.named.insert(group.clone(), 1);
+        } else if self
+            .named
+            .last_key_value()
+            .is_some_and(|(last, _)| group < last)
+        {
+            let (_, count) = self.named.pop_last().expect("the group limit is non-zero");
+            self.other += count;
+            self.named.insert(group.clone(), 1);
+        } else {
+            self.other += 1;
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.named.len() + usize::from(self.other > 0)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (&str, usize)> {
+        self.named
+            .iter()
+            .map(|(group, count)| (group.as_str(), *count))
+            .chain((self.other > 0).then_some(("other", self.other)))
+    }
+}
+
 #[derive(Debug, Default)]
 pub(super) struct RunWrapperGroupCounts {
-    passed: BTreeMap<RunWrapperGroup, usize>,
-    failed: BTreeMap<RunWrapperGroup, usize>,
-    exec_failed: BTreeMap<RunWrapperGroup, usize>,
-    timed_out: BTreeMap<RunWrapperGroup, usize>,
+    passed: WrapperGroupCounts,
+    failed: WrapperGroupCounts,
+    exec_failed: WrapperGroupCounts,
+    timed_out: WrapperGroupCounts,
 }
 
 impl RunWrapperGroupCounts {
@@ -647,7 +695,7 @@ impl RunWrapperGroupCounts {
                 } => &mut self.failed,
             },
         };
-        *groups.entry(group.clone()).or_default() += 1;
+        groups.record(group);
     }
 
     pub(super) fn take(&mut self) -> Self {
@@ -700,7 +748,7 @@ pub(super) fn write_summary_str(
         || leaky > 0
         || passed_groups.is_some_and(|groups| !groups.is_empty())
     {
-        let mut text = Vec::with_capacity(3 + passed_groups.map_or(0, BTreeMap::len));
+        let mut text = Vec::with_capacity(3 + passed_groups.map_or(0, WrapperGroupCounts::len));
         if passed_slow > 0 {
             text.push(format!(
                 "{} {}",
@@ -723,7 +771,7 @@ pub(super) fn write_summary_str(
             ));
         }
         if let Some(groups) = passed_groups {
-            for (group, count) in groups {
+            for (group, count) in groups.iter() {
                 text.push(format!(
                     "{} {}",
                     count.style(styles.count),
@@ -744,7 +792,7 @@ pub(super) fn write_summary_str(
         );
         let failed_groups = groups.map(|groups| &groups.failed);
         if leaky_failed > 0 || failed_groups.is_some_and(|groups| !groups.is_empty()) {
-            let mut text = Vec::with_capacity(1 + failed_groups.map_or(0, BTreeMap::len));
+            let mut text = Vec::with_capacity(1 + failed_groups.map_or(0, WrapperGroupCounts::len));
             if leaky_failed > 0 {
                 text.push(format!(
                     "{} due to being {}",
@@ -753,7 +801,7 @@ pub(super) fn write_summary_str(
                 ));
             }
             if let Some(groups) = failed_groups {
-                for (group, count) in groups {
+                for (group, count) in groups.iter() {
                     text.push(format!(
                         "{} {}",
                         count.style(styles.count),
@@ -796,11 +844,7 @@ pub(super) fn write_summary_str(
     );
 }
 
-fn write_failure_groups(
-    groups: Option<&BTreeMap<RunWrapperGroup, usize>>,
-    styles: &Styles,
-    out: &mut String,
-) {
+fn write_failure_groups(groups: Option<&WrapperGroupCounts>, styles: &Styles, out: &mut String) {
     if let Some(groups) = groups.filter(|groups| !groups.is_empty()) {
         let text: Vec<_> = groups
             .iter()
@@ -1528,10 +1572,18 @@ mod tests {
                     groups.record(&statuses);
                     assert_eq!(
                         (
-                            groups.passed.values().sum::<usize>(),
-                            groups.failed.values().sum::<usize>(),
-                            groups.exec_failed.values().sum::<usize>(),
-                            groups.timed_out.values().sum::<usize>()
+                            groups.passed.iter().map(|(_, count)| count).sum::<usize>(),
+                            groups.failed.iter().map(|(_, count)| count).sum::<usize>(),
+                            groups
+                                .exec_failed
+                                .iter()
+                                .map(|(_, count)| count)
+                                .sum::<usize>(),
+                            groups
+                                .timed_out
+                                .iter()
+                                .map(|(_, count)| count)
+                                .sum::<usize>()
                         ),
                         (
                             stats.passed,
@@ -1558,5 +1610,39 @@ mod tests {
                 }
             }
         }
+    }
+    #[test]
+    fn wrapper_groups_are_bounded_and_order_independent() {
+        let reports: Vec<RunWrapperGroup> = (0..100)
+            .map(|i| format!("group {i:03}").parse().unwrap())
+            .collect();
+        let mut forward = WrapperGroupCounts::default();
+        let mut backward = WrapperGroupCounts::default();
+        for group in &reports {
+            forward.record(group);
+            forward.record(group);
+        }
+        for group in reports.iter().rev() {
+            backward.record(group);
+            backward.record(group);
+        }
+        assert_eq!(forward.named.len(), MAX_WRAPPER_GROUPS);
+        assert_eq!(
+            forward.iter().collect::<Vec<_>>(),
+            backward.iter().collect::<Vec<_>>()
+        );
+        assert_eq!(forward.other, (100 - MAX_WRAPPER_GROUPS) * 2);
+        forward.record(&"other".parse().unwrap());
+        assert_eq!(
+            forward.iter().filter(|(name, _)| *name == "other").count(),
+            1
+        );
+        assert_eq!(forward.iter().map(|(_, count)| count).sum::<usize>(), 201);
+        let mut out = String::new();
+        write_failure_groups(Some(&forward), &Styles::default(), &mut out);
+        assert_eq!(
+            out,
+            " (2 group 000, 2 group 001, 2 group 002, 2 group 003, 2 group 004, 191 other)"
+        );
     }
 }
