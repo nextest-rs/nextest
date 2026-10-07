@@ -27,8 +27,8 @@ use crate::{
     },
     errors::WriteEventError,
     helpers::{
-        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, DurationRounding,
-        ThemeCharacters, decimal_char_width, plural,
+        DisplayCounterIndex, DisplayScriptInstance, DisplayStressIndex, DisplayTestInstance,
+        DurationRounding, ThemeCharacters, decimal_char_width, plural,
         progress::{ShowTerminalProgress, TerminalProgress},
     },
     indenter::indented,
@@ -1677,12 +1677,25 @@ impl<'a> DisplayReporterImpl<'a> {
         // Write the status prefix (e.g., "PASS", "FAIL", "FLAKY 2/3").
         self.write_status_line_prefix(describe, kind, writer)?;
 
-        // Write the duration, wrapper report, and test instance.
+        // Write the duration, counters, wrapper report, and test instance.
         write!(
             writer,
             "{}",
             DisplayBracketedDuration(last_status.time_taken),
         )?;
+        if let Some(stress_index) = stress_index {
+            write!(
+                writer,
+                "[{}] ",
+                DisplayStressIndex {
+                    stress_index,
+                    count_style: self.styles.list_styles.count,
+                },
+            )?;
+        }
+        if let Some(counter) = self.display_counter_index(counter) {
+            write!(writer, "{counter} ")?;
+        }
         if let Some(wrapper_report) = &last_status.run_wrapper_report {
             write!(
                 writer,
@@ -1693,7 +1706,7 @@ impl<'a> DisplayReporterImpl<'a> {
         writeln!(
             writer,
             "{}",
-            self.display_test_instance(stress_index, counter, test_instance),
+            self.display_test_instance(None, TestInstanceCounter::None, test_instance),
         )?;
 
         // For Windows aborts, print out the exception code on a separate line.
@@ -1869,7 +1882,16 @@ impl<'a> DisplayReporterImpl<'a> {
         counter: TestInstanceCounter,
         instance: TestInstanceId<'a>,
     ) -> DisplayTestInstance<'_> {
-        let counter_index = match (counter, self.counter_width) {
+        DisplayTestInstance::new(
+            stress_index,
+            self.display_counter_index(counter),
+            instance,
+            &self.styles.list_styles,
+        )
+    }
+
+    fn display_counter_index(&self, counter: TestInstanceCounter) -> Option<DisplayCounterIndex> {
+        match (counter, self.counter_width) {
             (TestInstanceCounter::Counter { current, total }, Some(_)) => {
                 Some(DisplayCounterIndex::new_counter(current, total))
             }
@@ -1877,14 +1899,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 DisplayCounterIndex::new_padded(self.theme_characters.hbar_char(), counter_width),
             ),
             (TestInstanceCounter::None, _) | (_, None) => None,
-        };
-
-        DisplayTestInstance::new(
-            stress_index,
-            counter_index,
-            instance,
-            &self.styles.list_styles,
-        )
+        }
     }
 
     fn write_command_line(
@@ -3684,7 +3699,7 @@ mod tests {
 
         assert_eq!(
             out,
-            "        PASS [   1.000s] (cached) (  1/100) my-binary-id test_name\n"
+            "        PASS [   1.000s] (  1/100) (cached) my-binary-id test_name\n"
         );
     }
 
