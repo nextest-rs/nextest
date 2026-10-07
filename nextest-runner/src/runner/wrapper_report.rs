@@ -16,10 +16,6 @@ pub(super) const RUN_WRAPPER_REPORT_ENV: &str = "NEXTEST_RUN_WRAPPER_REPORT";
 
 // Allow both maximum-length fields even when every character is JSON-escaped.
 const MAX_REPORT_SIZE: u64 = 4096;
-#[cfg(test)]
-const MAX_LABEL_LEN: usize = 256;
-#[cfg(test)]
-const MAX_GROUP_LEN: usize = 64;
 
 pub(super) fn new_report_dir() -> Result<Utf8TempDir, ChildStartError> {
     camino_tempfile::Builder::new()
@@ -56,6 +52,7 @@ pub(super) async fn read_report(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::reporter::events::{RunWrapperGroup, RunWrapperLabel};
     use std::fs;
 
     fn report_dir(contents: &[u8]) -> Utf8TempDir {
@@ -126,8 +123,8 @@ mod tests {
 
     #[tokio::test]
     async fn length_limits_are_enforced() {
-        let long_label = "x".repeat(MAX_LABEL_LEN + 1);
-        let long_group = "x".repeat(MAX_GROUP_LEN + 1);
+        let long_label = "x".repeat(RunWrapperLabel::MAX_LEN + 1);
+        let long_group = "x".repeat(RunWrapperGroup::MAX_LEN + 1);
         for contents in [
             format!(r#"{{"label":"{long_label}"}}"#),
             format!(r#"{{"label":"cached","group":"{long_group}"}}"#),
@@ -136,7 +133,7 @@ mod tests {
             assert!(read_report(&dir.path().join("report.json")).await.is_err());
         }
 
-        let max_label = "x".repeat(MAX_LABEL_LEN);
+        let max_label = "x".repeat(RunWrapperLabel::MAX_LEN);
         let dir = report_dir(format!(r#"{{"label":"{max_label}"}}"#).as_bytes());
         assert_eq!(
             read_report(&dir.path().join("report.json"))
@@ -153,16 +150,19 @@ mod tests {
     async fn escaped_maximum_length_fields_are_accepted() {
         let contents = format!(
             r#"{{"label":"{}","group":"{}"}}"#,
-            "\\u0061".repeat(MAX_LABEL_LEN),
-            "\\u0062".repeat(MAX_GROUP_LEN)
+            "\\u0061".repeat(RunWrapperLabel::MAX_LEN),
+            "\\u0062".repeat(RunWrapperGroup::MAX_LEN)
         );
         let dir = report_dir(contents.as_bytes());
         let report = read_report(&dir.path().join("report.json"))
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(report.label.as_str(), "a".repeat(MAX_LABEL_LEN));
-        assert_eq!(report.group.unwrap().as_str(), "b".repeat(MAX_GROUP_LEN));
+        assert_eq!(report.label.as_str(), "a".repeat(RunWrapperLabel::MAX_LEN));
+        assert_eq!(
+            report.group.unwrap().as_str(),
+            "b".repeat(RunWrapperGroup::MAX_LEN)
+        );
     }
 
     #[test]

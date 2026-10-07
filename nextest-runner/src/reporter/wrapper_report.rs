@@ -62,6 +62,9 @@ fn parse_text(
 pub struct RunWrapperLabel(String);
 
 impl RunWrapperLabel {
+    /// Maximum length of the report text in bytes.
+    pub(crate) const MAX_LEN: usize = 256;
+
     /// Returns the report text.
     pub fn as_str(&self) -> &str {
         &self.0
@@ -72,7 +75,7 @@ impl TryFrom<String> for RunWrapperLabel {
     type Error = RunWrapperTextError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        parse_text(value, "label", 256).map(Self)
+        parse_text(value, "label", Self::MAX_LEN).map(Self)
     }
 }
 
@@ -96,6 +99,9 @@ impl fmt::Display for RunWrapperLabel {
 pub struct RunWrapperGroup(String);
 
 impl RunWrapperGroup {
+    /// Maximum length of the report text in bytes.
+    pub(crate) const MAX_LEN: usize = 64;
+
     /// Returns the report text.
     pub fn as_str(&self) -> &str {
         &self.0
@@ -106,7 +112,7 @@ impl TryFrom<String> for RunWrapperGroup {
     type Error = RunWrapperTextError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        parse_text(value, "group", 64).map(Self)
+        parse_text(value, "group", Self::MAX_LEN).map(Self)
     }
 }
 
