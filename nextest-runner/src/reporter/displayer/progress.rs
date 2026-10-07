@@ -607,10 +607,10 @@ pub(super) fn progress_str(
 
 #[derive(Debug, Default)]
 pub(super) struct RunWrapperGroupCounts {
-    passed: BTreeMap<String, usize>,
-    failed: BTreeMap<String, usize>,
-    exec_failed: BTreeMap<String, usize>,
-    timed_out: BTreeMap<String, usize>,
+    passed: BTreeMap<RunWrapperGroup, usize>,
+    failed: BTreeMap<RunWrapperGroup, usize>,
+    exec_failed: BTreeMap<RunWrapperGroup, usize>,
+    timed_out: BTreeMap<RunWrapperGroup, usize>,
 }
 
 impl RunWrapperGroupCounts {
@@ -797,7 +797,7 @@ pub(super) fn write_summary_str(
 }
 
 fn write_failure_groups(
-    groups: Option<&BTreeMap<String, usize>>,
+    groups: Option<&BTreeMap<RunWrapperGroup, usize>>,
     styles: &Styles,
     out: &mut String,
 ) {
@@ -1422,8 +1422,8 @@ mod tests {
             output: make_test_output(),
             result,
             run_wrapper_report: group.map(|group| RunWrapperReport {
-                label: format!("reported as {group}"),
-                group: Some(group.to_owned()),
+                label: format!("reported as {group}").parse().unwrap(),
+                group: Some(group.parse().unwrap()),
             }),
             start_time: Local::now().fixed_offset(),
             time_taken: Duration::from_secs(1),

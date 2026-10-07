@@ -16,7 +16,9 @@ pub(super) const RUN_WRAPPER_REPORT_ENV: &str = "NEXTEST_RUN_WRAPPER_REPORT";
 
 // Allow both maximum-length fields even when every character is JSON-escaped.
 const MAX_REPORT_SIZE: u64 = 4096;
+#[cfg(test)]
 const MAX_LABEL_LEN: usize = 256;
+#[cfg(test)]
 const MAX_GROUP_LEN: usize = 64;
 
 pub(super) fn new_report_dir() -> Result<Utf8TempDir, ChildStartError> {
@@ -48,34 +50,7 @@ pub(super) async fn read_report(
 
     let report: RunWrapperReport = serde_json::from_slice(&contents)
         .map_err(|error| RunWrapperReportError::Parse(Arc::new(error)))?;
-    if !valid_text(&report.label, MAX_LABEL_LEN) {
-        return Err(RunWrapperReportError::InvalidLabel);
-    }
-    if report
-        .group
-        .as_deref()
-        .is_some_and(|group| !valid_text(group, MAX_GROUP_LEN))
-    {
-        return Err(RunWrapperReportError::InvalidGroup);
-    }
     Ok(Some(report))
-}
-
-fn valid_text(value: &str, max_len: usize) -> bool {
-    // Reports come from arbitrary wrapper scripts: restrict them to printable
-    // ASCII with alphanumeric first and last characters.
-    value
-        .bytes()
-        .next()
-        .is_some_and(|byte| byte.is_ascii_alphanumeric())
-        && value.len() <= max_len
-        && value
-            .bytes()
-            .all(|byte| byte == b' ' || byte.is_ascii_graphic())
-        && value
-            .bytes()
-            .next_back()
-            .is_some_and(|byte| byte.is_ascii_alphanumeric())
 }
 
 #[cfg(test)]
@@ -99,10 +74,13 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(
-            report.label,
+            report.label.as_str(),
             "not cached: external read (outside workspace) seen"
         );
-        assert_eq!(report.group.as_deref(), Some("io"));
+        assert_eq!(
+            report.group.as_ref().map(|group| group.as_str()),
+            Some("io")
+        );
     }
 
     #[tokio::test]
@@ -165,7 +143,8 @@ mod tests {
                 .await
                 .unwrap()
                 .unwrap()
-                .label,
+                .label
+                .as_str(),
             max_label
         );
     }
@@ -182,8 +161,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(report.label, "a".repeat(MAX_LABEL_LEN));
-        assert_eq!(report.group, Some("b".repeat(MAX_GROUP_LEN)));
+        assert_eq!(report.label.as_str(), "a".repeat(MAX_LABEL_LEN));
+        assert_eq!(report.group.unwrap().as_str(), "b".repeat(MAX_GROUP_LEN));
     }
 
     #[test]

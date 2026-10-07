@@ -6,6 +6,9 @@
 //! These types form the interface between the test runner and the test
 //! reporter. The root structure for all events is [`TestEvent`].
 
+pub use super::wrapper_report::{
+    RunWrapperGroup, RunWrapperLabel, RunWrapperReport, RunWrapperTextError,
+};
 use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 #[cfg(test)]
 use crate::output_spec::ArbitraryOutputSpec;
@@ -1413,21 +1416,6 @@ pub struct OutputErrorSlice {
 
     /// The byte offset in the original output where this slice starts.
     pub start: usize,
-}
-
-/// A note reported by a run wrapper.
-///
-/// Written as JSON to the path in `NEXTEST_RUN_WRAPPER_REPORT`; an absent
-/// report means the wrapper ran the test normally.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[cfg_attr(test, derive(test_strategy::Arbitrary))]
-pub struct RunWrapperReport {
-    /// A short label displayed on the per-test status line.
-    pub label: String,
-    /// An optional category used to aggregate counts in the final run summary.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub group: Option<String>,
 }
 
 /// Information about a single execution of a test.
@@ -3114,8 +3102,8 @@ mod tests {
             },
             result: ExecutionResultDescription::Pass,
             run_wrapper_report: Some(RunWrapperReport {
-                label: "cached".to_owned(),
-                group: Some("cached".to_owned()),
+                label: "cached".parse().unwrap(),
+                group: Some("cached".parse().unwrap()),
             }),
             start_time: chrono::Utc::now().into(),
             time_taken: Duration::from_millis(10),

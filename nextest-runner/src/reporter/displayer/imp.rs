@@ -3657,8 +3657,8 @@ mod tests {
             output: make_split_output(Some(ExecutionResult::Pass), "", ""),
             result: ExecutionResultDescription::Pass,
             run_wrapper_report: Some(RunWrapperReport {
-                label: "cached".to_owned(),
-                group: Some("cached".to_owned()),
+                label: "cached".parse().unwrap(),
+                group: Some("cached".parse().unwrap()),
             }),
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),

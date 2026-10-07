@@ -1,0 +1,209 @@
+// Copyright (c) The nextest Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! Parsed text reported by run wrapper scripts.
+
+use serde::{Deserialize, Serialize};
+use std::{fmt, str::FromStr};
+use thiserror::Error;
+
+/// A note reported by a run wrapper.
+///
+/// Written as JSON to the path in `NEXTEST_RUN_WRAPPER_REPORT`; an absent
+/// report means the wrapper ran the test normally.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
+pub struct RunWrapperReport {
+    /// A short label displayed on the per-test status line.
+    pub label: RunWrapperLabel,
+    /// An optional category used to aggregate counts in the final run summary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<RunWrapperGroup>,
+}
+
+/// An invalid label or group in a wrapper report.
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+#[error(
+    "the {field} must contain 1 to {max_len} printable ASCII characters, and must start and end with a letter or digit"
+)]
+pub struct RunWrapperTextError {
+    field: &'static str,
+    max_len: usize,
+}
+
+fn parse_text(
+    value: String,
+    field: &'static str,
+    max_len: usize,
+) -> Result<String, RunWrapperTextError> {
+    if value
+        .as_bytes()
+        .first()
+        .is_some_and(u8::is_ascii_alphanumeric)
+        && value.len() <= max_len
+        && value
+            .bytes()
+            .all(|byte| byte == b' ' || byte.is_ascii_graphic())
+        && value
+            .as_bytes()
+            .last()
+            .is_some_and(u8::is_ascii_alphanumeric)
+    {
+        Ok(value)
+    } else {
+        Err(RunWrapperTextError { field, max_len })
+    }
+}
+
+/// A validated label from a run wrapper report.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "String")]
+pub struct RunWrapperLabel(String);
+
+impl RunWrapperLabel {
+    /// Returns the report text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for RunWrapperLabel {
+    type Error = RunWrapperTextError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        parse_text(value, "label", 256).map(Self)
+    }
+}
+
+impl FromStr for RunWrapperLabel {
+    type Err = RunWrapperTextError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::try_from(value.to_owned())
+    }
+}
+
+impl fmt::Display for RunWrapperLabel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// A validated group from a run wrapper report.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "String")]
+pub struct RunWrapperGroup(String);
+
+impl RunWrapperGroup {
+    /// Returns the report text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for RunWrapperGroup {
+    type Error = RunWrapperTextError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        parse_text(value, "group", 64).map(Self)
+    }
+}
+
+impl FromStr for RunWrapperGroup {
+    type Err = RunWrapperTextError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::try_from(value.to_owned())
+    }
+}
+
+impl fmt::Display for RunWrapperGroup {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use test_strategy::proptest;
+
+    impl Arbitrary for RunWrapperLabel {
+        type Parameters = ();
+        type Strategy = BoxedStrategy<Self>;
+
+        fn arbitrary_with(_: ()) -> Self::Strategy {
+            "[a-zA-Z0-9]([ -~]{0,254}[a-zA-Z0-9])?"
+                .prop_map(|text| text.parse().unwrap())
+                .boxed()
+        }
+    }
+
+    impl Arbitrary for RunWrapperGroup {
+        type Parameters = ();
+        type Strategy = BoxedStrategy<Self>;
+
+        fn arbitrary_with(_: ()) -> Self::Strategy {
+            "[a-zA-Z0-9]([ -~]{0,62}[a-zA-Z0-9])?"
+                .prop_map(|text| text.parse().unwrap())
+                .boxed()
+        }
+    }
+
+    #[proptest]
+    fn report_text_roundtrips(label: RunWrapperLabel, group: RunWrapperGroup) {
+        let report = RunWrapperReport {
+            label,
+            group: Some(group),
+        };
+        let value = serde_json::to_value(&report).unwrap();
+        prop_assert_eq!(value["label"].as_str(), Some(report.label.as_str()));
+        prop_assert_eq!(
+            value["group"].as_str(),
+            report.group.as_ref().map(RunWrapperGroup::as_str)
+        );
+        prop_assert_eq!(
+            serde_json::from_value::<RunWrapperReport>(value).unwrap(),
+            report
+        );
+    }
+
+    #[test]
+    fn invalid_text_cannot_be_constructed_or_deserialized() {
+        for text in [
+            "",
+            " leading",
+            "trailing ",
+            "bad\nlabel",
+            "escape\u{1b}",
+            "café",
+            "punctuation)",
+        ] {
+            assert!(text.parse::<RunWrapperLabel>().is_err(), "{text:?}");
+            assert!(text.parse::<RunWrapperGroup>().is_err(), "{text:?}");
+            assert!(
+                serde_json::from_value::<RunWrapperReport>(serde_json::json!({"label": text}))
+                    .is_err()
+            );
+            assert!(
+                serde_json::from_value::<RunWrapperReport>(
+                    serde_json::json!({"label": "valid", "group": text})
+                )
+                .is_err()
+            );
+        }
+        for (length, label_ok, group_ok) in [
+            (1, true, true),
+            (64, true, true),
+            (65, true, false),
+            (256, true, false),
+            (257, false, false),
+        ] {
+            let text = "x".repeat(length);
+            assert_eq!(text.parse::<RunWrapperLabel>().is_ok(), label_ok);
+            assert_eq!(text.parse::<RunWrapperGroup>().is_ok(), group_ok);
+        }
+    }
+}

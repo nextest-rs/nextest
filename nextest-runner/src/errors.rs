@@ -503,16 +503,6 @@ pub enum RunWrapperReportError {
     /// The report could not be parsed.
     #[error("failed to parse the report")]
     Parse(#[source] Arc<serde_json::Error>),
-    /// The label was invalid.
-    #[error(
-        "the label must contain 1 to 256 printable ASCII characters, and must start and end with a letter or digit"
-    )]
-    InvalidLabel,
-    /// The group was invalid.
-    #[error(
-        "the group must contain 1 to 64 printable ASCII characters, and must start and end with a letter or digit"
-    )]
-    InvalidGroup,
 }
 
 /// An error that occurred while reading the output of a setup script.
