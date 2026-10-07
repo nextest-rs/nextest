@@ -23,8 +23,11 @@ use crate::{
     runner::{StressCondition, StressCount},
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
+use camino::Utf8PathBuf;
 use chrono::{DateTime, FixedOffset};
 use nextest_metadata::MismatchReason;
+#[cfg(test)]
+use proptest::strategy::Strategy;
 use quick_junit::ReportUuid;
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
@@ -1678,7 +1681,14 @@ impl ChildOutputDescription {
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum ChildStartErrorDescription {
     /// An error occurred while creating a temporary path for a setup script.
-    TempPath {
+    #[serde(rename = "temp-path")]
+    SetupScriptTempPath {
+        /// The source error.
+        source: SerializableError,
+    },
+
+    /// An error occurred while creating a wrapper report directory.
+    RunWrapperReportTempDir {
         /// The source error.
         source: SerializableError,
     },
@@ -1693,9 +1703,13 @@ pub enum ChildStartErrorDescription {
 impl fmt::Display for ChildStartErrorDescription {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::TempPath { .. } => {
+            Self::SetupScriptTempPath { .. } => {
                 write!(f, "error creating temporary path for setup script")
             }
+            Self::RunWrapperReportTempDir { .. } => write!(
+                f,
+                "error creating temporary directory for run wrapper report"
+            ),
             Self::Spawn { .. } => write!(f, "error spawning child process"),
         }
     }
@@ -1704,7 +1718,9 @@ impl fmt::Display for ChildStartErrorDescription {
 impl std::error::Error for ChildStartErrorDescription {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::TempPath { source } | Self::Spawn { source } => Some(source),
+            Self::SetupScriptTempPath { source }
+            | Self::RunWrapperReportTempDir { source }
+            | Self::Spawn { source } => Some(source),
         }
     }
 }
@@ -1745,6 +1761,14 @@ pub enum ChildErrorDescription {
         /// The source error.
         source: SerializableError,
     },
+    /// An error occurred while reading a run wrapper report.
+    RunWrapperReport {
+        /// The path to the report.
+        #[cfg_attr(test, strategy(proptest::arbitrary::any::<String>().prop_map(Utf8PathBuf::from)))]
+        path: Utf8PathBuf,
+        /// The source error.
+        source: SerializableError,
+    },
 }
 
 impl fmt::Display for ChildErrorDescription {
@@ -1757,6 +1781,9 @@ impl fmt::Display for ChildErrorDescription {
             }
             Self::Wait { .. } => {
                 write!(f, "error waiting for child process to exit")
+            }
+            Self::RunWrapperReport { path, .. } => {
+                write!(f, "error reading run wrapper report `{path}`")
             }
             Self::SetupScriptOutput { .. } => {
                 write!(f, "error reading setup script output")
@@ -1772,7 +1799,8 @@ impl std::error::Error for ChildErrorDescription {
             | Self::ReadStderr { source }
             | Self::ReadCombined { source }
             | Self::Wait { source }
-            | Self::SetupScriptOutput { source } => Some(source),
+            | Self::SetupScriptOutput { source }
+            | Self::RunWrapperReport { source, .. } => Some(source),
         }
     }
 }
@@ -1960,7 +1988,10 @@ impl From<ChildOutput> for ChildOutputDescription {
 impl From<ChildStartError> for ChildStartErrorDescription {
     fn from(error: ChildStartError) -> Self {
         match error {
-            ChildStartError::TempPath(e) => Self::TempPath {
+            ChildStartError::SetupScriptTempPath(e) => Self::SetupScriptTempPath {
+                source: SerializableError::new(&*e),
+            },
+            ChildStartError::RunWrapperReportTempDir(e) => Self::RunWrapperReportTempDir {
                 source: SerializableError::new(&*e),
             },
             ChildStartError::Spawn(e) => Self::Spawn {
@@ -1984,6 +2015,10 @@ impl From<ChildError> for ChildErrorDescription {
             },
             ChildError::Fd(ChildFdError::Wait(e)) => Self::Wait {
                 source: SerializableError::new(&*e),
+            },
+            ChildError::RunWrapperReport { path, error } => Self::RunWrapperReport {
+                path,
+                source: SerializableError::new(&error),
             },
             ChildError::SetupScriptOutput(e) => Self::SetupScriptOutput {
                 source: SerializableError::new(&e),
@@ -2743,6 +2778,20 @@ mod tests {
     use crate::{output_spec::RecordingSpec, record::ZipStoreOutputDescription};
     use proptest::prelude::*;
     use test_strategy::proptest;
+
+    #[test]
+    fn setup_script_temp_path_preserves_published_serialization() {
+        let value = serde_json::json!({
+            "kind": "temp-path",
+            "source": { "message": "permission denied", "causes": [] },
+        });
+        let error: ChildStartErrorDescription = serde_json::from_value(value.clone()).unwrap();
+        assert!(matches!(
+            error,
+            ChildStartErrorDescription::SetupScriptTempPath { .. }
+        ));
+        assert_eq!(serde_json::to_value(error).unwrap(), value);
+    }
 
     #[derive(Clone, Copy, Debug)]
     enum FailureSummary {
