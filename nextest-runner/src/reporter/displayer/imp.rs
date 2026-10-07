@@ -1304,15 +1304,10 @@ impl<'a> DisplayReporterImpl<'a> {
                     sub_stats.initial_run_count != 1 || sub_stats.finished_count != 1,
                 );
 
+                let groups = self.run_wrapper_groups.take();
                 let mut summary_str = String::new();
-                write_summary_str(
-                    sub_stats,
-                    Some(&self.run_wrapper_groups),
-                    &self.styles,
-                    &mut summary_str,
-                );
+                write_summary_str(sub_stats, Some(&groups), &self.styles, &mut summary_str);
                 writeln!(writer, " {tests_str} run: {summary_str}")?;
-                self.run_wrapper_groups.clear();
             }
             TestEventKind::RunFinished {
                 start_time: _start_time,

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    config::elements::FlakyResult,
+    config::elements::{FlakyResult, SlowTimeoutResult},
     helpers::{
         DisplayTestInstance, plural,
         progress::{PROGRESS_REFRESH_RATE_HZ, progress_bar_style, term_progress_percent},
@@ -609,6 +609,8 @@ pub(super) fn progress_str(
 pub(super) struct RunWrapperGroupCounts {
     passed: BTreeMap<String, usize>,
     failed: BTreeMap<String, usize>,
+    exec_failed: BTreeMap<String, usize>,
+    timed_out: BTreeMap<String, usize>,
 }
 
 impl RunWrapperGroupCounts {
@@ -631,18 +633,30 @@ impl RunWrapperGroupCounts {
             ExecutionDescription::Flaky {
                 result: FlakyResult::Fail,
                 ..
-            }
-            | ExecutionDescription::Failure { .. } => &mut self.failed,
+            } => &mut self.failed,
+            ExecutionDescription::Failure { last_status, .. } => match last_status.result {
+                ExecutionResultDescription::ExecFail => &mut self.exec_failed,
+                ExecutionResultDescription::Timeout {
+                    result: SlowTimeoutResult::Fail,
+                } => &mut self.timed_out,
+                ExecutionResultDescription::Pass
+                | ExecutionResultDescription::Leak { .. }
+                | ExecutionResultDescription::Fail { .. }
+                | ExecutionResultDescription::Timeout {
+                    result: SlowTimeoutResult::Pass,
+                } => &mut self.failed,
+            },
         };
         *groups.entry(group.clone()).or_default() += 1;
     }
 
-    pub(super) fn clear(&mut self) {
-        self.passed.clear();
-        self.failed.clear();
+    pub(super) fn take(&mut self) -> Self {
+        std::mem::take(self)
     }
 }
 
+// `None` means the caller has no wrapper-report counts (for example, the live
+// progress bar). It renders like empty counts, without implying a completed run.
 pub(super) fn write_summary_str(
     run_stats: &RunStats,
     groups: Option<&RunWrapperGroupCounts>,
@@ -755,19 +769,23 @@ pub(super) fn write_summary_str(
     if exec_failed > 0 {
         swrite!(
             out,
-            "{} {}, ",
+            "{} {}",
             exec_failed.style(styles.count),
             "exec failed".style(styles.fail),
         );
+        write_failure_groups(groups.map(|groups| &groups.exec_failed), styles, out);
+        swrite!(out, ", ");
     }
 
     if failed_timed_out > 0 {
         swrite!(
             out,
-            "{} {}, ",
+            "{} {}",
             failed_timed_out.style(styles.count),
             "timed out".style(styles.fail),
         );
+        write_failure_groups(groups.map(|groups| &groups.timed_out), styles, out);
+        swrite!(out, ", ");
     }
 
     swrite!(
@@ -776,6 +794,22 @@ pub(super) fn write_summary_str(
         skipped.style(styles.count),
         "skipped".style(styles.skip),
     );
+}
+
+fn write_failure_groups(
+    groups: Option<&BTreeMap<String, usize>>,
+    styles: &Styles,
+    out: &mut String,
+) {
+    if let Some(groups) = groups.filter(|groups| !groups.is_empty()) {
+        let text: Vec<_> = groups
+            .iter()
+            .map(|(group, count)| {
+                format!("{} {}", count.style(styles.count), group.style(styles.fail))
+            })
+            .collect();
+        swrite!(out, " ({})", text.join(", "));
+    }
 }
 
 fn progress_bar_cancel_prefix(reason: Option<CancelReason>, styles: &Styles) -> String {
@@ -825,7 +859,7 @@ pub(super) fn progress_bar_msg(
 mod tests {
     use super::*;
     use crate::{
-        config::elements::{FlakyResult, JunitFlakyFailStatus},
+        config::elements::{FlakyResult, JunitFlakyFailStatus, LeakTimeoutResult},
         output_spec::LiveSpec,
         reporter::{TestOutputDisplay, test_helpers::global_slot_assignment},
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
@@ -1402,46 +1436,127 @@ mod tests {
 
     #[test]
     fn wrapper_groups_follow_the_final_test_outcome() {
+        let statuses = [
+            ExecutionStatuses::new(
+                vec![grouped_status(
+                    ExecutionResultDescription::Pass,
+                    Some("cached"),
+                )],
+                FlakyResult::Pass,
+            ),
+            ExecutionStatuses::new(
+                vec![grouped_status(
+                    ExecutionResultDescription::ExecFail,
+                    Some("infrastructure"),
+                )],
+                FlakyResult::Pass,
+            ),
+            ExecutionStatuses::new(
+                vec![grouped_status(
+                    ExecutionResultDescription::Timeout {
+                        result: SlowTimeoutResult::Fail,
+                    },
+                    Some("infrastructure"),
+                )],
+                FlakyResult::Pass,
+            ),
+            ExecutionStatuses::new(
+                vec![
+                    grouped_status(ExecutionResultDescription::ExecFail, Some("first attempt")),
+                    grouped_status(ExecutionResultDescription::Pass, Some("retried")),
+                ],
+                FlakyResult::Fail,
+            ),
+        ];
         let mut groups = RunWrapperGroupCounts::default();
-        groups.record(&ExecutionStatuses::new(
-            vec![grouped_status(
-                ExecutionResultDescription::Pass,
-                Some("cached"),
-            )],
-            FlakyResult::Pass,
-        ));
-        groups.record(&ExecutionStatuses::new(
-            vec![grouped_status(
-                ExecutionResultDescription::ExecFail,
-                Some("infrastructure"),
-            )],
-            FlakyResult::Pass,
-        ));
-        groups.record(&ExecutionStatuses::new(
-            vec![
-                grouped_status(ExecutionResultDescription::ExecFail, Some("first attempt")),
-                grouped_status(ExecutionResultDescription::Pass, Some("flaky")),
-            ],
-            FlakyResult::Fail,
-        ));
-
-        let stats = RunStats {
-            initial_run_count: 3,
-            finished_count: 3,
-            passed: 1,
-            failed: 2,
+        let mut stats = RunStats {
+            initial_run_count: statuses.len(),
             ..RunStats::default()
         };
+        for statuses in &statuses {
+            groups.record(statuses);
+            stats.on_test_finished(statuses);
+        }
         let mut summary = String::new();
         write_summary_str(&stats, Some(&groups), &Styles::default(), &mut summary);
 
         assert_eq!(
             summary,
-            "1 passed (1 cached), 2 failed (1 flaky, 1 infrastructure), 0 skipped"
+            "1 passed (1 cached), 1 failed (1 retried), 1 exec failed (1 infrastructure), 1 timed out (1 infrastructure), 0 skipped"
         );
         assert!(
             !summary.contains("first attempt"),
             "only the final attempt's group is counted"
         );
+    }
+    #[test]
+    fn wrapper_group_buckets_match_run_stats() {
+        for result in [
+            ExecutionResultDescription::Pass,
+            ExecutionResultDescription::Leak {
+                result: LeakTimeoutResult::Pass,
+            },
+            ExecutionResultDescription::Leak {
+                result: LeakTimeoutResult::Fail,
+            },
+            ExecutionResultDescription::Fail {
+                failure: FailureDescription::ExitCode { code: 101 },
+                leaked: false,
+            },
+            ExecutionResultDescription::ExecFail,
+            ExecutionResultDescription::Timeout {
+                result: SlowTimeoutResult::Pass,
+            },
+            ExecutionResultDescription::Timeout {
+                result: SlowTimeoutResult::Fail,
+            },
+        ] {
+            for flaky_result in [FlakyResult::Pass, FlakyResult::Fail] {
+                for attempts in [1, 2] {
+                    let mut statuses = Vec::new();
+                    if attempts == 2 {
+                        statuses.push(grouped_status(
+                            ExecutionResultDescription::ExecFail,
+                            Some("previous"),
+                        ));
+                    }
+                    statuses.push(grouped_status(result.clone(), Some("reported")));
+                    let statuses = ExecutionStatuses::new(statuses, flaky_result);
+                    let mut stats = RunStats::default();
+                    let mut groups = RunWrapperGroupCounts::default();
+                    stats.on_test_finished(&statuses);
+                    groups.record(&statuses);
+                    assert_eq!(
+                        (
+                            groups.passed.values().sum::<usize>(),
+                            groups.failed.values().sum::<usize>(),
+                            groups.exec_failed.values().sum::<usize>(),
+                            groups.timed_out.values().sum::<usize>()
+                        ),
+                        (
+                            stats.passed,
+                            stats.failed,
+                            stats.exec_failed,
+                            stats.failed_timed_out
+                        ),
+                        "{result:?}, {flaky_result:?}, {attempts} attempts",
+                    );
+                    let taken = groups.take();
+                    assert_eq!(
+                        taken.passed.len()
+                            + taken.failed.len()
+                            + taken.exec_failed.len()
+                            + taken.timed_out.len(),
+                        1
+                    );
+                    assert!(
+                        groups.passed.is_empty()
+                            && groups.failed.is_empty()
+                            && groups.exec_failed.is_empty()
+                            && groups.timed_out.is_empty()
+                    );
+                }
+            }
+        }
     }
 }
