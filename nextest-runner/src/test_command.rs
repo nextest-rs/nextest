@@ -3,7 +3,7 @@
 
 use crate::{
     cargo_config::EnvironmentMap,
-    config::scripts::ScriptCommandEnvMap,
+    config::scripts::WrapperScriptConfig,
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     helpers::dylib_path_envvar,
     list::{RustBuildMeta, TestListState},
@@ -95,7 +95,7 @@ impl TestCommand {
         lctx: &LocalExecuteContext<'_>,
         program: String,
         args: &[Cow<'_, str>],
-        wrapper_env: Option<&ScriptCommandEnvMap>,
+        wrapper_script: Option<&WrapperScriptConfig>,
         cwd: &Utf8Path,
         package: &PackageMetadata<'_>,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
@@ -109,14 +109,14 @@ impl TestCommand {
 
         // Set exactly when the wrapper participates in the command line (see
         // `TestCommandCli::apply_wrappers`).
-        let has_wrapper = wrapper_env.is_some();
+        let has_wrapper = wrapper_script.is_some();
 
         // Apply Cargo's config.toml env first (workspace-wide), then the
         // wrapper's command.env (per-script). This way command.env takes
         // priority as the more specific configuration.
         lctx.env.apply_env(&mut cmd);
-        if let Some(env) = wrapper_env {
-            env.apply_env(&mut cmd);
+        if let Some(wrapper) = wrapper_script {
+            wrapper.command.env.apply_env(&mut cmd);
         }
 
         if let Some(out_dir) = lctx
