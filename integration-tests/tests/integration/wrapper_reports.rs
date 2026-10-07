@@ -117,7 +117,9 @@ fn wrapper_reports_record_and_replay() {
             (mode != "absent").then_some("wrapped")
         );
         assert_eq!(
-            report.and_then(|r| r.group.as_ref()).map(|g| g.as_str()),
+            report
+                .and_then(|r| r.category.as_ref())
+                .map(|category| category.as_str()),
             (mode == "valid").then_some("wrapped")
         );
         check_report_cleanup(&project, mode, 1);
@@ -146,7 +148,7 @@ fn wrapper_report_errors_fail_the_attempt_and_survive_replay() {
     for mode in [
         "invalid",
         "invalid-label",
-        "invalid-group",
+        "invalid-category",
         "oversized",
         "directory",
     ] {

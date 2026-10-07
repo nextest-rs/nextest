@@ -62,22 +62,22 @@ fn main() {
             .unwrap();
             let first_attempt = env::var("NEXTEST_ATTEMPT").unwrap() == "1";
             let report = match mode.as_str() {
-                "valid" => Some(r#"{"label":"wrapped","group":"wrapped"}"#.to_owned()),
+                "valid" => Some(r#"{"label":"wrapped","category":"wrapped"}"#.to_owned()),
                 "label-only" => Some(r#"{"label":"wrapped"}"#.to_owned()),
                 "absent" => None,
                 "invalid" => Some("not json".to_owned()),
                 "invalid-label" => Some(r#"{"label":"bad\nlabel"}"#.to_owned()),
-                "invalid-group" => Some(r#"{"label":"wrapped","group":""}"#.to_owned()),
+                "invalid-category" => Some(r#"{"label":"wrapped","category":""}"#.to_owned()),
                 "oversized" => Some("x".repeat(4097)),
                 "directory" => {
                     fs::create_dir(&path).unwrap();
                     None
                 }
                 "retry" if first_attempt => Some("not json".to_owned()),
-                "retry" => Some(r#"{"label":"wrapped","group":"wrapped"}"#.to_owned()),
+                "retry" => Some(r#"{"label":"wrapped","category":"wrapped"}"#.to_owned()),
                 "retry-absent" if first_attempt => {
                     code = 1;
-                    Some(r#"{"label":"first attempt","group":"previous"}"#.to_owned())
+                    Some(r#"{"label":"first attempt","category":"previous"}"#.to_owned())
                 }
                 "retry-absent" => None,
                 _ => panic!("unknown wrapper report mode: {}", mode),

@@ -7,7 +7,7 @@
 //! reporter. The root structure for all events is [`TestEvent`].
 
 pub use super::wrapper_report::{
-    RunWrapperGroup, RunWrapperLabel, RunWrapperReport, RunWrapperTextError,
+    RunWrapperCategory, RunWrapperLabel, RunWrapperReport, RunWrapperTextError,
 };
 use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 #[cfg(test)]
@@ -3103,7 +3103,7 @@ mod tests {
             result: ExecutionResultDescription::Pass,
             run_wrapper_report: Some(RunWrapperReport {
                 label: "cached".parse().unwrap(),
-                group: Some("cached".parse().unwrap()),
+                category: Some("cached".parse().unwrap()),
             }),
             start_time: chrono::Utc::now().into(),
             time_taken: Duration::from_millis(10),
@@ -3123,13 +3123,13 @@ mod tests {
             .unwrap()
             .as_object_mut()
             .unwrap()
-            .remove("group");
-        let without_group: ExecuteStatus<RecordingSpec> =
+            .remove("category");
+        let without_category: ExecuteStatus<RecordingSpec> =
             serde_json::from_value(value.clone()).unwrap();
         assert_eq!(
-            without_group.run_wrapper_report.unwrap().group,
+            without_category.run_wrapper_report.unwrap().category,
             None,
-            "group is optional in the report"
+            "category is optional in the report"
         );
 
         value.as_object_mut().unwrap().remove("run-wrapper-report");

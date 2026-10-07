@@ -19,10 +19,10 @@ pub struct RunWrapperReport {
     pub label: RunWrapperLabel,
     /// An optional category used to aggregate counts in the final run summary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub group: Option<RunWrapperGroup>,
+    pub category: Option<RunWrapperCategory>,
 }
 
-/// An invalid label or group in a wrapper report.
+/// An invalid label or category in a wrapper report.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 #[error(
     "the {field} must contain 1 to {max_len} printable ASCII characters, and must start and end with a letter or digit"
@@ -93,12 +93,12 @@ impl fmt::Display for RunWrapperLabel {
     }
 }
 
-/// A validated group from a run wrapper report.
+/// A validated category from a run wrapper report.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String")]
-pub struct RunWrapperGroup(String);
+pub struct RunWrapperCategory(String);
 
-impl RunWrapperGroup {
+impl RunWrapperCategory {
     /// Maximum length of the report text in bytes.
     pub(crate) const MAX_LEN: usize = 64;
 
@@ -108,15 +108,15 @@ impl RunWrapperGroup {
     }
 }
 
-impl TryFrom<String> for RunWrapperGroup {
+impl TryFrom<String> for RunWrapperCategory {
     type Error = RunWrapperTextError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        parse_text(value, "group", Self::MAX_LEN).map(Self)
+        parse_text(value, "category", Self::MAX_LEN).map(Self)
     }
 }
 
-impl FromStr for RunWrapperGroup {
+impl FromStr for RunWrapperCategory {
     type Err = RunWrapperTextError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -124,7 +124,7 @@ impl FromStr for RunWrapperGroup {
     }
 }
 
-impl fmt::Display for RunWrapperGroup {
+impl fmt::Display for RunWrapperCategory {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
@@ -147,7 +147,7 @@ mod tests {
         }
     }
 
-    impl Arbitrary for RunWrapperGroup {
+    impl Arbitrary for RunWrapperCategory {
         type Parameters = ();
         type Strategy = BoxedStrategy<Self>;
 
@@ -159,16 +159,16 @@ mod tests {
     }
 
     #[proptest]
-    fn report_text_roundtrips(label: RunWrapperLabel, group: RunWrapperGroup) {
+    fn report_text_roundtrips(label: RunWrapperLabel, category: RunWrapperCategory) {
         let report = RunWrapperReport {
             label,
-            group: Some(group),
+            category: Some(category),
         };
         let value = serde_json::to_value(&report).unwrap();
         prop_assert_eq!(value["label"].as_str(), Some(report.label.as_str()));
         prop_assert_eq!(
-            value["group"].as_str(),
-            report.group.as_ref().map(RunWrapperGroup::as_str)
+            value["category"].as_str(),
+            report.category.as_ref().map(RunWrapperCategory::as_str)
         );
         prop_assert_eq!(
             serde_json::from_value::<RunWrapperReport>(value).unwrap(),
@@ -188,19 +188,19 @@ mod tests {
             "punctuation)",
         ] {
             assert!(text.parse::<RunWrapperLabel>().is_err(), "{text:?}");
-            assert!(text.parse::<RunWrapperGroup>().is_err(), "{text:?}");
+            assert!(text.parse::<RunWrapperCategory>().is_err(), "{text:?}");
             assert!(
                 serde_json::from_value::<RunWrapperReport>(serde_json::json!({"label": text}))
                     .is_err()
             );
             assert!(
                 serde_json::from_value::<RunWrapperReport>(
-                    serde_json::json!({"label": "valid", "group": text})
+                    serde_json::json!({"label": "valid", "category": text})
                 )
                 .is_err()
             );
         }
-        for (length, label_ok, group_ok) in [
+        for (length, label_ok, category_ok) in [
             (1, true, true),
             (64, true, true),
             (65, true, false),
@@ -209,7 +209,7 @@ mod tests {
         ] {
             let text = "x".repeat(length);
             assert_eq!(text.parse::<RunWrapperLabel>().is_ok(), label_ok);
-            assert_eq!(text.parse::<RunWrapperGroup>().is_ok(), group_ok);
+            assert_eq!(text.parse::<RunWrapperCategory>().is_ok(), category_ok);
         }
     }
 }

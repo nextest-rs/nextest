@@ -606,32 +606,35 @@ pub(super) fn progress_str(
 }
 
 // Keep summary size and memory usage bounded even if every test reports a
-// distinct group. Retain names in lexical order so scheduling cannot change the
+// distinct category. Retain names in lexical order so scheduling cannot change the
 // summary; the remaining counts are folded into `other`.
-const MAX_WRAPPER_GROUPS: usize = 5;
+const MAX_WRAPPER_CATEGORIES: usize = 5;
 
 #[derive(Debug, Default)]
-struct WrapperGroupCounts {
-    named: BTreeMap<RunWrapperGroup, usize>,
+struct WrapperCategoryCounts {
+    named: BTreeMap<RunWrapperCategory, usize>,
     other: usize,
 }
 
-impl WrapperGroupCounts {
-    fn record(&mut self, group: &RunWrapperGroup) {
-        if group.as_str() == "other" {
+impl WrapperCategoryCounts {
+    fn record(&mut self, category: &RunWrapperCategory) {
+        if category.as_str() == "other" {
             self.other += 1;
-        } else if let Some(count) = self.named.get_mut(group) {
+        } else if let Some(count) = self.named.get_mut(category) {
             *count += 1;
-        } else if self.named.len() < MAX_WRAPPER_GROUPS {
-            self.named.insert(group.clone(), 1);
+        } else if self.named.len() < MAX_WRAPPER_CATEGORIES {
+            self.named.insert(category.clone(), 1);
         } else if self
             .named
             .last_key_value()
-            .is_some_and(|(last, _)| group < last)
+            .is_some_and(|(last, _)| category < last)
         {
-            let (_, count) = self.named.pop_last().expect("the group limit is non-zero");
+            let (_, count) = self
+                .named
+                .pop_last()
+                .expect("the category limit is non-zero");
             self.other += count;
-            self.named.insert(group.clone(), 1);
+            self.named.insert(category.clone(), 1);
         } else {
             self.other += 1;
         }
@@ -648,31 +651,31 @@ impl WrapperGroupCounts {
     fn iter(&self) -> impl Iterator<Item = (&str, usize)> {
         self.named
             .iter()
-            .map(|(group, count)| (group.as_str(), *count))
+            .map(|(category, count)| (category.as_str(), *count))
             .chain((self.other > 0).then_some(("other", self.other)))
     }
 }
 
 #[derive(Debug, Default)]
-pub(super) struct RunWrapperGroupCounts {
-    passed: WrapperGroupCounts,
-    failed: WrapperGroupCounts,
-    exec_failed: WrapperGroupCounts,
-    timed_out: WrapperGroupCounts,
+pub(super) struct RunWrapperCategoryCounts {
+    passed: WrapperCategoryCounts,
+    failed: WrapperCategoryCounts,
+    exec_failed: WrapperCategoryCounts,
+    timed_out: WrapperCategoryCounts,
 }
 
-impl RunWrapperGroupCounts {
+impl RunWrapperCategoryCounts {
     pub(super) fn record<S: OutputSpec>(&mut self, run_statuses: &ExecutionStatuses<S>) {
-        let Some(group) = run_statuses
+        let Some(category) = run_statuses
             .last_status()
             .run_wrapper_report
             .as_ref()
-            .and_then(|report| report.group.as_ref())
+            .and_then(|report| report.category.as_ref())
         else {
             return;
         };
 
-        let groups = match run_statuses.describe() {
+        let categories = match run_statuses.describe() {
             ExecutionDescription::Success { .. }
             | ExecutionDescription::Flaky {
                 result: FlakyResult::Pass,
@@ -695,7 +698,7 @@ impl RunWrapperGroupCounts {
                 } => &mut self.failed,
             },
         };
-        groups.record(group);
+        categories.record(category);
     }
 
     pub(super) fn take(&mut self) -> Self {
@@ -707,7 +710,7 @@ impl RunWrapperGroupCounts {
 // progress bar). It renders like empty counts, without implying a completed run.
 pub(super) fn write_summary_str(
     run_stats: &RunStats,
-    groups: Option<&RunWrapperGroupCounts>,
+    categories: Option<&RunWrapperCategoryCounts>,
     styles: &Styles,
     out: &mut String,
 ) {
@@ -742,13 +745,14 @@ pub(super) fn write_summary_str(
         "passed".style(styles.pass)
     );
 
-    let passed_groups = groups.map(|groups| &groups.passed);
+    let passed_categories = categories.map(|categories| &categories.passed);
     if passed_slow > 0
         || flaky > 0
         || leaky > 0
-        || passed_groups.is_some_and(|groups| !groups.is_empty())
+        || passed_categories.is_some_and(|categories| !categories.is_empty())
     {
-        let mut text = Vec::with_capacity(3 + passed_groups.map_or(0, WrapperGroupCounts::len));
+        let mut text =
+            Vec::with_capacity(3 + passed_categories.map_or(0, WrapperCategoryCounts::len));
         if passed_slow > 0 {
             text.push(format!(
                 "{} {}",
@@ -770,12 +774,12 @@ pub(super) fn write_summary_str(
                 "leaky".style(styles.skip),
             ));
         }
-        if let Some(groups) = passed_groups {
-            for (group, count) in groups.iter() {
+        if let Some(categories) = passed_categories {
+            for (category, count) in categories.iter() {
                 text.push(format!(
                     "{} {}",
                     count.style(styles.count),
-                    group.style(styles.skip),
+                    category.style(styles.skip),
                 ));
             }
         }
@@ -790,9 +794,10 @@ pub(super) fn write_summary_str(
             failed.style(styles.count),
             "failed".style(styles.fail),
         );
-        let failed_groups = groups.map(|groups| &groups.failed);
-        if leaky_failed > 0 || failed_groups.is_some_and(|groups| !groups.is_empty()) {
-            let mut text = Vec::with_capacity(1 + failed_groups.map_or(0, WrapperGroupCounts::len));
+        let failed_categories = categories.map(|categories| &categories.failed);
+        if leaky_failed > 0 || failed_categories.is_some_and(|categories| !categories.is_empty()) {
+            let mut text =
+                Vec::with_capacity(1 + failed_categories.map_or(0, WrapperCategoryCounts::len));
             if leaky_failed > 0 {
                 text.push(format!(
                     "{} due to being {}",
@@ -800,12 +805,12 @@ pub(super) fn write_summary_str(
                     "leaky".style(styles.fail),
                 ));
             }
-            if let Some(groups) = failed_groups {
-                for (group, count) in groups.iter() {
+            if let Some(categories) = failed_categories {
+                for (category, count) in categories.iter() {
                     text.push(format!(
                         "{} {}",
                         count.style(styles.count),
-                        group.style(styles.fail),
+                        category.style(styles.fail),
                     ));
                 }
             }
@@ -821,7 +826,11 @@ pub(super) fn write_summary_str(
             exec_failed.style(styles.count),
             "exec failed".style(styles.fail),
         );
-        write_failure_groups(groups.map(|groups| &groups.exec_failed), styles, out);
+        write_failure_categories(
+            categories.map(|categories| &categories.exec_failed),
+            styles,
+            out,
+        );
         swrite!(out, ", ");
     }
 
@@ -832,7 +841,11 @@ pub(super) fn write_summary_str(
             failed_timed_out.style(styles.count),
             "timed out".style(styles.fail),
         );
-        write_failure_groups(groups.map(|groups| &groups.timed_out), styles, out);
+        write_failure_categories(
+            categories.map(|categories| &categories.timed_out),
+            styles,
+            out,
+        );
         swrite!(out, ", ");
     }
 
@@ -844,12 +857,20 @@ pub(super) fn write_summary_str(
     );
 }
 
-fn write_failure_groups(groups: Option<&WrapperGroupCounts>, styles: &Styles, out: &mut String) {
-    if let Some(groups) = groups.filter(|groups| !groups.is_empty()) {
-        let text: Vec<_> = groups
+fn write_failure_categories(
+    categories: Option<&WrapperCategoryCounts>,
+    styles: &Styles,
+    out: &mut String,
+) {
+    if let Some(categories) = categories.filter(|categories| !categories.is_empty()) {
+        let text: Vec<_> = categories
             .iter()
-            .map(|(group, count)| {
-                format!("{} {}", count.style(styles.count), group.style(styles.fail))
+            .map(|(category, count)| {
+                format!(
+                    "{} {}",
+                    count.style(styles.count),
+                    category.style(styles.fail)
+                )
             })
             .collect();
         swrite!(out, " ({})", text.join(", "));
@@ -1454,9 +1475,9 @@ mod tests {
         .into()
     }
 
-    fn grouped_status(
+    fn categorized_status(
         result: ExecutionResultDescription,
-        group: Option<&str>,
+        category: Option<&str>,
     ) -> ExecuteStatus<LiveSpec> {
         ExecuteStatus {
             retry_data: RetryData {
@@ -1465,9 +1486,9 @@ mod tests {
             },
             output: make_test_output(),
             result,
-            run_wrapper_report: group.map(|group| RunWrapperReport {
-                label: format!("reported as {group}").parse().unwrap(),
-                group: Some(group.parse().unwrap()),
+            run_wrapper_report: category.map(|category| RunWrapperReport {
+                label: format!("reported as {category}").parse().unwrap(),
+                category: Some(category.parse().unwrap()),
             }),
             start_time: Local::now().fixed_offset(),
             time_taken: Duration::from_secs(1),
@@ -1479,24 +1500,24 @@ mod tests {
     }
 
     #[test]
-    fn wrapper_groups_follow_the_final_test_outcome() {
+    fn wrapper_categories_follow_the_final_test_outcome() {
         let statuses = [
             ExecutionStatuses::new(
-                vec![grouped_status(
+                vec![categorized_status(
                     ExecutionResultDescription::Pass,
                     Some("cached"),
                 )],
                 FlakyResult::Pass,
             ),
             ExecutionStatuses::new(
-                vec![grouped_status(
+                vec![categorized_status(
                     ExecutionResultDescription::ExecFail,
                     Some("infrastructure"),
                 )],
                 FlakyResult::Pass,
             ),
             ExecutionStatuses::new(
-                vec![grouped_status(
+                vec![categorized_status(
                     ExecutionResultDescription::Timeout {
                         result: SlowTimeoutResult::Fail,
                     },
@@ -1506,23 +1527,23 @@ mod tests {
             ),
             ExecutionStatuses::new(
                 vec![
-                    grouped_status(ExecutionResultDescription::ExecFail, Some("first attempt")),
-                    grouped_status(ExecutionResultDescription::Pass, Some("retried")),
+                    categorized_status(ExecutionResultDescription::ExecFail, Some("first attempt")),
+                    categorized_status(ExecutionResultDescription::Pass, Some("retried")),
                 ],
                 FlakyResult::Fail,
             ),
         ];
-        let mut groups = RunWrapperGroupCounts::default();
+        let mut categories = RunWrapperCategoryCounts::default();
         let mut stats = RunStats {
             initial_run_count: statuses.len(),
             ..RunStats::default()
         };
         for statuses in &statuses {
-            groups.record(statuses);
+            categories.record(statuses);
             stats.on_test_finished(statuses);
         }
         let mut summary = String::new();
-        write_summary_str(&stats, Some(&groups), &Styles::default(), &mut summary);
+        write_summary_str(&stats, Some(&categories), &Styles::default(), &mut summary);
 
         assert_eq!(
             summary,
@@ -1530,11 +1551,11 @@ mod tests {
         );
         assert!(
             !summary.contains("first attempt"),
-            "only the final attempt's group is counted"
+            "only the final attempt's category is counted"
         );
     }
     #[test]
-    fn wrapper_group_buckets_match_run_stats() {
+    fn wrapper_category_buckets_match_run_stats() {
         for result in [
             ExecutionResultDescription::Pass,
             ExecutionResultDescription::Leak {
@@ -1559,27 +1580,35 @@ mod tests {
                 for attempts in [1, 2] {
                     let mut statuses = Vec::new();
                     if attempts == 2 {
-                        statuses.push(grouped_status(
+                        statuses.push(categorized_status(
                             ExecutionResultDescription::ExecFail,
                             Some("previous"),
                         ));
                     }
-                    statuses.push(grouped_status(result.clone(), Some("reported")));
+                    statuses.push(categorized_status(result.clone(), Some("reported")));
                     let statuses = ExecutionStatuses::new(statuses, flaky_result);
                     let mut stats = RunStats::default();
-                    let mut groups = RunWrapperGroupCounts::default();
+                    let mut categories = RunWrapperCategoryCounts::default();
                     stats.on_test_finished(&statuses);
-                    groups.record(&statuses);
+                    categories.record(&statuses);
                     assert_eq!(
                         (
-                            groups.passed.iter().map(|(_, count)| count).sum::<usize>(),
-                            groups.failed.iter().map(|(_, count)| count).sum::<usize>(),
-                            groups
+                            categories
+                                .passed
+                                .iter()
+                                .map(|(_, count)| count)
+                                .sum::<usize>(),
+                            categories
+                                .failed
+                                .iter()
+                                .map(|(_, count)| count)
+                                .sum::<usize>(),
+                            categories
                                 .exec_failed
                                 .iter()
                                 .map(|(_, count)| count)
                                 .sum::<usize>(),
-                            groups
+                            categories
                                 .timed_out
                                 .iter()
                                 .map(|(_, count)| count)
@@ -1593,7 +1622,7 @@ mod tests {
                         ),
                         "{result:?}, {flaky_result:?}, {attempts} attempts",
                     );
-                    let taken = groups.take();
+                    let taken = categories.take();
                     assert_eq!(
                         taken.passed.len()
                             + taken.failed.len()
@@ -1602,36 +1631,36 @@ mod tests {
                         1
                     );
                     assert!(
-                        groups.passed.is_empty()
-                            && groups.failed.is_empty()
-                            && groups.exec_failed.is_empty()
-                            && groups.timed_out.is_empty()
+                        categories.passed.is_empty()
+                            && categories.failed.is_empty()
+                            && categories.exec_failed.is_empty()
+                            && categories.timed_out.is_empty()
                     );
                 }
             }
         }
     }
     #[test]
-    fn wrapper_groups_are_bounded_and_order_independent() {
-        let reports: Vec<RunWrapperGroup> = (0..100)
-            .map(|i| format!("group {i:03}").parse().unwrap())
+    fn wrapper_categories_are_bounded_and_order_independent() {
+        let reports: Vec<RunWrapperCategory> = (0..100)
+            .map(|i| format!("category {i:03}").parse().unwrap())
             .collect();
-        let mut forward = WrapperGroupCounts::default();
-        let mut backward = WrapperGroupCounts::default();
-        for group in &reports {
-            forward.record(group);
-            forward.record(group);
+        let mut forward = WrapperCategoryCounts::default();
+        let mut backward = WrapperCategoryCounts::default();
+        for category in &reports {
+            forward.record(category);
+            forward.record(category);
         }
-        for group in reports.iter().rev() {
-            backward.record(group);
-            backward.record(group);
+        for category in reports.iter().rev() {
+            backward.record(category);
+            backward.record(category);
         }
-        assert_eq!(forward.named.len(), MAX_WRAPPER_GROUPS);
+        assert_eq!(forward.named.len(), MAX_WRAPPER_CATEGORIES);
         assert_eq!(
             forward.iter().collect::<Vec<_>>(),
             backward.iter().collect::<Vec<_>>()
         );
-        assert_eq!(forward.other, (100 - MAX_WRAPPER_GROUPS) * 2);
+        assert_eq!(forward.other, (100 - MAX_WRAPPER_CATEGORIES) * 2);
         forward.record(&"other".parse().unwrap());
         assert_eq!(
             forward.iter().filter(|(name, _)| *name == "other").count(),
@@ -1639,10 +1668,10 @@ mod tests {
         );
         assert_eq!(forward.iter().map(|(_, count)| count).sum::<usize>(), 201);
         let mut out = String::new();
-        write_failure_groups(Some(&forward), &Styles::default(), &mut out);
+        write_failure_categories(Some(&forward), &Styles::default(), &mut out);
         assert_eq!(
             out,
-            " (2 group 000, 2 group 001, 2 group 002, 2 group 003, 2 group 004, 191 other)"
+            " (2 category 000, 2 category 001, 2 category 002, 2 category 003, 2 category 004, 191 other)"
         );
     }
 }

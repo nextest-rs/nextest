@@ -14,7 +14,7 @@ use super::{
         write_final_warnings, write_skip_counts,
     },
     progress::{
-        MaxProgressRunning, ProgressBarState, RunWrapperGroupCounts, progress_bar_msg,
+        MaxProgressRunning, ProgressBarState, RunWrapperCategoryCounts, progress_bar_msg,
         progress_str, terminal_progress_value, write_summary_str,
     },
     unit_output::{OutputDisplayOverrides, TestOutputDisplay},
@@ -161,7 +161,7 @@ impl DisplayReporterBuilder {
                 cancel_status: None,
                 unit_output: UnitOutputReporter::new(overrides, self.displayer_kind),
                 final_outputs: DebugIgnore(Vec::new()),
-                run_wrapper_groups: RunWrapperGroupCounts::default(),
+                run_wrapper_categories: RunWrapperCategoryCounts::default(),
                 run_id_unique_prefix: None,
                 redactor: self.redactor,
             },
@@ -556,7 +556,7 @@ struct DisplayReporterImpl<'a> {
     cancel_status: Option<CancelReason>,
     unit_output: UnitOutputReporter,
     final_outputs: DebugIgnore<Vec<FinalOutputEntry<'a>>>,
-    run_wrapper_groups: RunWrapperGroupCounts,
+    run_wrapper_categories: RunWrapperCategoryCounts,
     // The unique prefix for the current run ID, if a recording session is active.
     // Used for highlighting the run ID in RunStarted output.
     run_id_unique_prefix: Option<ShortestRunIdPrefix>,
@@ -1008,7 +1008,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 current_stats,
                 ..
             } => {
-                self.run_wrapper_groups.record(run_statuses);
+                self.run_wrapper_categories.record(run_statuses);
                 let describe = run_statuses.describe();
                 let last_status = run_statuses.last_status();
                 let test_output_display = self.unit_output.overrides().resolve_for_describe(
@@ -1304,9 +1304,9 @@ impl<'a> DisplayReporterImpl<'a> {
                     sub_stats.initial_run_count != 1 || sub_stats.finished_count != 1,
                 );
 
-                let groups = self.run_wrapper_groups.take();
+                let categories = self.run_wrapper_categories.take();
                 let mut summary_str = String::new();
-                write_summary_str(sub_stats, Some(&groups), &self.styles, &mut summary_str);
+                write_summary_str(sub_stats, Some(&categories), &self.styles, &mut summary_str);
                 writeln!(writer, " {tests_str} run: {summary_str}")?;
             }
             TestEventKind::RunFinished {
@@ -1361,7 +1361,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         let mut summary_str = String::new();
                         write_summary_str(
                             run_stats,
-                            Some(&self.run_wrapper_groups),
+                            Some(&self.run_wrapper_categories),
                             &self.styles,
                             &mut summary_str,
                         );
@@ -3658,7 +3658,7 @@ mod tests {
             result: ExecutionResultDescription::Pass,
             run_wrapper_report: Some(RunWrapperReport {
                 label: "cached".parse().unwrap(),
-                group: Some("cached".parse().unwrap()),
+                category: Some("cached".parse().unwrap()),
             }),
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),

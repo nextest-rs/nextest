@@ -52,7 +52,7 @@ pub(super) async fn read_report(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reporter::events::{RunWrapperGroup, RunWrapperLabel};
+    use crate::reporter::events::{RunWrapperCategory, RunWrapperLabel};
     use std::fs;
 
     fn report_dir(contents: &[u8]) -> Utf8TempDir {
@@ -64,7 +64,7 @@ mod tests {
     #[tokio::test]
     async fn valid_report_is_loaded() {
         let dir = report_dir(
-            br#"{"label":"not cached: external read (outside workspace) seen","group":"io"}"#,
+            br#"{"label":"not cached: external read (outside workspace) seen","category":"io"}"#,
         );
         let report = read_report(&dir.path().join("report.json"))
             .await
@@ -75,20 +75,20 @@ mod tests {
             "not cached: external read (outside workspace) seen"
         );
         assert_eq!(
-            report.group.as_ref().map(|group| group.as_str()),
+            report.category.as_ref().map(|category| category.as_str()),
             Some("io")
         );
     }
 
     #[tokio::test]
-    async fn group_is_optional() {
+    async fn category_is_optional() {
         let dir = report_dir(br#"{"label":"cached"}"#);
         assert_eq!(
             read_report(&dir.path().join("report.json"))
                 .await
                 .unwrap()
                 .unwrap()
-                .group,
+                .category,
             None
         );
     }
@@ -112,9 +112,9 @@ mod tests {
             br#"{"label":"bad\nlabel"}"#,
             br#"{"label":"ends with punctuation)"}"#,
             br#"{"label":"caf\u00e9"}"#,
-            br#"{"label":"cached","group":""}"#,
-            br#"{"label":"cached","group":" leading space"}"#,
-            br#"{"label":"cached","group":"bad\ngroup"}"#,
+            br#"{"label":"cached","category":""}"#,
+            br#"{"label":"cached","category":" leading space"}"#,
+            br#"{"label":"cached","category":"bad\ncategory"}"#,
         ] {
             let dir = report_dir(contents);
             assert!(read_report(&dir.path().join("report.json")).await.is_err());
@@ -124,10 +124,10 @@ mod tests {
     #[tokio::test]
     async fn length_limits_are_enforced() {
         let long_label = "x".repeat(RunWrapperLabel::MAX_LEN + 1);
-        let long_group = "x".repeat(RunWrapperGroup::MAX_LEN + 1);
+        let long_category = "x".repeat(RunWrapperCategory::MAX_LEN + 1);
         for contents in [
             format!(r#"{{"label":"{long_label}"}}"#),
-            format!(r#"{{"label":"cached","group":"{long_group}"}}"#),
+            format!(r#"{{"label":"cached","category":"{long_category}"}}"#),
         ] {
             let dir = report_dir(contents.as_bytes());
             assert!(read_report(&dir.path().join("report.json")).await.is_err());
@@ -149,9 +149,9 @@ mod tests {
     #[tokio::test]
     async fn escaped_maximum_length_fields_are_accepted() {
         let contents = format!(
-            r#"{{"label":"{}","group":"{}"}}"#,
+            r#"{{"label":"{}","category":"{}"}}"#,
             "\\u0061".repeat(RunWrapperLabel::MAX_LEN),
-            "\\u0062".repeat(RunWrapperGroup::MAX_LEN)
+            "\\u0062".repeat(RunWrapperCategory::MAX_LEN)
         );
         let dir = report_dir(contents.as_bytes());
         let report = read_report(&dir.path().join("report.json"))
@@ -160,8 +160,8 @@ mod tests {
             .unwrap();
         assert_eq!(report.label.as_str(), "a".repeat(RunWrapperLabel::MAX_LEN));
         assert_eq!(
-            report.group.unwrap().as_str(),
-            "b".repeat(RunWrapperGroup::MAX_LEN)
+            report.category.unwrap().as_str(),
+            "b".repeat(RunWrapperCategory::MAX_LEN)
         );
     }
 
