@@ -94,7 +94,7 @@ maplit = "1.0.2"
 miette = "7.6.0"
 mukti-metadata = "0.3.0"
 newtype-uuid = { version = "1.4.0", features = ["v4"] }
-nextest-filtering = { version = "0.22.0", path = "nextest-filtering" }
+nextest-filtering = { version = "0.23.0", path = "nextest-filtering" }
 nextest-metadata = { version = "0.15.0", path = "nextest-metadata" }
 nextest-runner = { path = "nextest-runner" }
 nextest-workspace-hack = "0.1.0"
