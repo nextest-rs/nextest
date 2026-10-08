@@ -912,23 +912,18 @@ impl<'a> DisplayReporterImpl<'a> {
                         short_status_str(&run_status.result),
                     );
 
-                    // Print the try status and time taken.
+                    // Print the try status.
                     write!(
                         writer,
-                        "{:>12} {}",
+                        "{:>12} ",
                         try_status_string.style(self.styles.retry),
-                        DisplayBracketedDuration(run_status.time_taken),
                     )?;
-
-                    // Print the name of the test.
-                    writeln!(
+                    self.write_status_line_body(
+                        *stress_index,
+                        TestInstanceCounter::Padded,
+                        *test_instance,
+                        run_status,
                         writer,
-                        "{}",
-                        self.display_test_instance(
-                            *stress_index,
-                            TestInstanceCounter::Padded,
-                            *test_instance
-                        )
                     )?;
 
                     // This test is guaranteed to have failed.
@@ -1687,38 +1682,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
         // Write the status prefix (e.g., "PASS", "FAIL", "FLAKY 2/3").
         self.write_status_line_prefix(describe, kind, writer)?;
-
-        // Write the duration, counters, wrapper report, and test instance.
-        write!(
-            writer,
-            "{}",
-            DisplayBracketedDuration(last_status.time_taken),
-        )?;
-        if let Some(stress_index) = stress_index {
-            write!(
-                writer,
-                "[{}] ",
-                DisplayStressIndex {
-                    stress_index,
-                    count_style: self.styles.list_styles.count,
-                },
-            )?;
-        }
-        if let Some(counter) = self.display_counter_index(counter) {
-            write!(writer, "{counter} ")?;
-        }
-        if let Some(wrapper_report) = &last_status.run_wrapper_report {
-            write!(
-                writer,
-                "({}) ",
-                wrapper_report.label.style(self.styles.script_id),
-            )?;
-        }
-        writeln!(
-            writer,
-            "{}",
-            self.display_test_instance(None, TestInstanceCounter::None, test_instance),
-        )?;
+        self.write_status_line_body(stress_index, counter, test_instance, last_status, writer)?;
 
         // For Windows aborts, print out the exception code on a separate line.
         if let ExecutionResultDescription::Fail {
@@ -1747,6 +1711,42 @@ impl<'a> DisplayReporterImpl<'a> {
         }
 
         Ok(())
+    }
+
+    fn write_status_line_body(
+        &self,
+        stress_index: Option<StressIndex>,
+        counter: TestInstanceCounter,
+        test_instance: TestInstanceId<'a>,
+        status: &ExecuteStatus<LiveSpec>,
+        writer: &mut dyn WriteStr,
+    ) -> io::Result<()> {
+        write!(writer, "{}", DisplayBracketedDuration(status.time_taken))?;
+        if let Some(stress_index) = stress_index {
+            write!(
+                writer,
+                "[{}] ",
+                DisplayStressIndex {
+                    stress_index,
+                    count_style: self.styles.list_styles.count,
+                },
+            )?;
+        }
+        if let Some(counter) = self.display_counter_index(counter) {
+            write!(writer, "{counter} ")?;
+        }
+        if let Some(wrapper_report) = &status.run_wrapper_report {
+            write!(
+                writer,
+                "({}) ",
+                wrapper_report.label.style(self.styles.script_id),
+            )?;
+        }
+        writeln!(
+            writer,
+            "{}",
+            self.display_test_instance(None, TestInstanceCounter::None, test_instance),
+        )
     }
 
     fn write_status_line_prefix(

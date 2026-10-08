@@ -241,26 +241,37 @@ fn wrapper_reports_are_isolated_between_retries() {
         assert_eq!(statuses[0].len(), 2);
         let report = statuses[0].last_status().run_wrapper_report.as_ref();
         assert_eq!(report.is_some(), mode == "retry");
-        assert_eq!(
-            run.stderr_as_str()
-                .contains("1 passed (1 flaky; wrapper: 1 wrapped)"),
-            mode == "retry",
-            "{run}"
-        );
-        assert!(
-            !run.stderr_as_str().contains("1 previous"),
-            "only the final attempt contributes to the summary: {run}"
-        );
         let replay = cli(&env, &project, mode)
             .args(["replay", "-R", RUN_ID])
             .output();
-        assert_eq!(
-            replay
-                .stdout_as_str()
-                .contains("1 passed (1 flaky; wrapper: 1 wrapped)"),
-            mode == "retry",
-            "{replay}"
-        );
+        for (output, text) in [
+            (&run, run.stderr_as_str()),
+            (&replay, replay.stdout_as_str()),
+        ] {
+            let first_attempt = text
+                .lines()
+                .find(|line| line.contains("TRY 1 "))
+                .expect("the first attempt failed and will be retried");
+            assert_eq!(
+                first_attempt.contains(") (first attempt) "),
+                mode == "retry-absent",
+                "the retry label follows its counter: {output}"
+            );
+            assert_eq!(
+                text.matches("(first attempt)").count(),
+                usize::from(mode == "retry-absent"),
+                "the first attempt's label is only displayed on its own line: {output}"
+            );
+            assert_eq!(
+                text.contains("1 passed (1 flaky; wrapper: 1 wrapped)"),
+                mode == "retry",
+                "{output}"
+            );
+            assert!(
+                !text.contains("1 previous"),
+                "only the final attempt contributes to the summary: {output}"
+            );
+        }
         check_report_cleanup(&project, mode, 2);
     }
 }
@@ -295,6 +306,11 @@ fn wrapper_reports_are_isolated_between_stress_runs() {
             (&run, run.stderr_as_str()),
             (&replay, replay.stdout_as_str()),
         ] {
+            assert_eq!(
+                text.matches(") (first attempt) ").count(),
+                if mode == "retry-absent" { 2 } else { 0 },
+                "{output}"
+            );
             assert_eq!(
                 text.matches(iteration_summary).count(),
                 if has_category { 2 } else { 0 },
