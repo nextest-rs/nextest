@@ -10,12 +10,12 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.147] - 2026-10-07
+## [0.9.148] - 2026-10-07
 
 ### Changed
 
 - For [setup scripts](https://nexte.st/docs/configuration/setup-scripts/), `slow-timeout` no longer accepts `on-timeout = "pass"`, and nextest now reports a configuration error if it is specified. A setup script that times out always fails the run. Previously, this setting was accepted but handled inconsistently: the timed-out script was counted as a failure, but the run was not cancelled. ([#3640])
-- Internal dependency update: `target-spec` updated to 3.7.0, updating built-in targets to Rust 1.98.
+- Internal dependency updates: `guppy` updated to 0.19.1, and `target-spec` updated to 3.7.0, updating built-in targets to Rust 1.98.
 
 ### Fixed
 
@@ -51,6 +51,10 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 [#3643]: https://github.com/nextest-rs/nextest/pull/3643
 [#3646]: https://github.com/nextest-rs/nextest/pull/3646
 [#3647]: https://github.com/nextest-rs/nextest/pull/3647
+
+## [0.9.147] - 2026-10-07
+
+This release was not finalized due to a publishing issue.
 
 ## [0.9.146] - 2026-09-21
 
@@ -2376,6 +2380,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.148]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.148
 [0.9.147]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.147
 [0.9.146]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.146
 [0.9.145]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.145
