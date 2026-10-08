@@ -234,8 +234,7 @@ jobs:
             build-tool: cargo
             dry-run: true
           - target: universal-apple-darwin
-            # macos-14 for M1 runners
-            os: macos-14
+            os: macos-15
             build-target: universal-apple-darwin
             build-tool: cargo
             dry-run: false

@@ -10,6 +10,48 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.147] - 2026-10-07
+
+### Changed
+
+- For [setup scripts](https://nexte.st/docs/configuration/setup-scripts/), `slow-timeout` no longer accepts `on-timeout = "pass"`, and nextest now reports a configuration error if it is specified. A setup script that times out always fails the run. Previously, this setting was accepted but handled inconsistently: the timed-out script was counted as a failure, but the run was not cancelled. ([#3640])
+- Internal dependency update: `target-spec` updated to 3.7.0, updating built-in targets to Rust 1.98.
+
+### Fixed
+
+- [Stress runs](https://nexte.st/docs/features/stress-tests/) now exit with a non-zero code if any iteration failed. Previously, with fail-fast disabled, the exit code reflected only the last iteration, so a stress run with failures in earlier iterations exited with code 0 if the last iteration passed. ([#3624])
+
+- Stress runs now always run at least one iteration. Previously, `--stress-duration` with a very short duration (such as `1ns`) could finish without running any tests. ([#3633])
+
+- Runs stopped by [immediate fail-fast](https://nexte.st/docs/running/#failing-fast) (`--max-fail N:immediate`) are now treated as failed rather than cancelled. Previously, in stress runs, the summary read `0 passed; cancelled due to test failure` and the failing iteration was not counted as failed. ([#3639])
+
+- When the [global timeout](https://nexte.st/docs/features/slow-tests/#setting-a-global-timeout) fires with immediate fail-fast enabled, nextest now reports the global timeout as the reason the run was cancelled. Previously, the tests terminated by the timeout counted as failures, so nextest printed a second `Cancelling due to test failure` line and reported a test failure as the reason. ([#3637])
+
+- After the global timeout fires, nextest no longer keeps a CPU core busy while it waits for running tests to shut down. ([#3647])
+
+- The [leak timeout](https://nexte.st/docs/features/leaky-tests/) is no longer restarted each time a leaked handle produces output, or each time nextest handles a signal or an info request while waiting. Previously, a test that exited while leaving behind a process that kept writing to standard output or standard error could delay leak detection indefinitely. ([#3646])
+
+- If waiting on a test or setup script process fails, nextest now reports the test or script as an execution failure, with the underlying error shown. Previously, nextest panicked. ([#3643])
+
+- The `Cancelling` and `Killing` status lines no longer contain stray colons. Previously, nextest printed lines like `Killing due to second signal: : 1 test still running`, and a trailing colon when nothing was still running. ([#3641])
+
+### Internal improvements
+
+- Source builds of nextest no longer compile two versions of `zstd`. ([#3620])
+
+  Thanks [Jake-Shadle](https://github.com/Jake-Shadle) for your contribution!
+
+[#3620]: https://github.com/nextest-rs/nextest/pull/3620
+[#3624]: https://github.com/nextest-rs/nextest/issues/3624
+[#3633]: https://github.com/nextest-rs/nextest/pull/3633
+[#3637]: https://github.com/nextest-rs/nextest/pull/3637
+[#3639]: https://github.com/nextest-rs/nextest/pull/3639
+[#3640]: https://github.com/nextest-rs/nextest/pull/3640
+[#3641]: https://github.com/nextest-rs/nextest/pull/3641
+[#3643]: https://github.com/nextest-rs/nextest/pull/3643
+[#3646]: https://github.com/nextest-rs/nextest/pull/3646
+[#3647]: https://github.com/nextest-rs/nextest/pull/3647
+
 ## [0.9.146] - 2026-09-21
 
 ### Fixed
@@ -2334,6 +2376,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.147]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.147
 [0.9.146]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.146
 [0.9.145]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.145
 [0.9.144]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.144
