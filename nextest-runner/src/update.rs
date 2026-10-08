@@ -17,7 +17,7 @@ use self_update::{ArchiveKind, Compression, Extract};
 use semver::{Version, VersionReq};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-#[cfg(not(any(target_arch = "riscv32", target_arch = "riscv64")))]
+#[cfg(not(target_arch = "riscv32"))]
 use std::sync::OnceLock;
 use std::{
     fs,
@@ -710,9 +710,9 @@ fn cleanup_backup_temp_directories(
 /// Returns a ureq agent configured with rustls and the aws-lc-rs crypto
 /// provider.
 ///
-/// On RISC-V, rustls/aws-lc-rs aren't available; see the RISC-V variant
+/// On 32-bit RISC-V, rustls/aws-lc-rs aren't available; see the RISC-V variant
 /// below.
-#[cfg(not(any(target_arch = "riscv32", target_arch = "riscv64")))]
+#[cfg(not(target_arch = "riscv32"))]
 fn ureq_agent() -> ureq::Agent {
     // Install aws-lc-rs as the default rustls crypto provider. The OnceLock
     // ensures we only attempt this once; if it's already set (by us or someone
@@ -749,10 +749,10 @@ fn ureq_agent() -> ureq::Agent {
 
 /// Returns a ureq agent configured with native-tls.
 ///
-/// On RISC-V, rustls/aws-lc-rs aren't available (see
+/// On 32-bit RISC-V, rustls/aws-lc-rs aren't available (see
 /// <https://github.com/nextest-rs/nextest/issues/820>), so native-tls is used
 /// instead.
-#[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))]
+#[cfg(target_arch = "riscv32")]
 fn ureq_agent() -> ureq::Agent {
     ureq::Agent::new_with_config(
         ureq::Agent::config_builder()
@@ -873,5 +873,39 @@ impl FromStr for UpdateVersion {
                 }),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{net::TcpListener, thread};
+
+    // ureq panics on the first https request if the selected TLS provider's
+    // Cargo feature is off -- this catches a cfg mismatch between ureq_agent
+    // and Cargo.toml on the test's target platform.
+    #[test]
+    fn ureq_agent_tls_provider_is_enabled() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bound a loopback listener");
+        let addr = listener.local_addr().expect("listener has a local address");
+
+        // Accept one connection and hang up so the handshake fails promptly. We
+        // don't wait on the thread to exit, because if the request never
+        // connects, a join would hang rather than fail.
+        thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("accepted a connection");
+            drop(stream);
+        });
+
+        // Call .proxy(None) so proxy environment variables can't redirect the
+        // request away from the listener.
+        let result = ureq_agent()
+            .get(format!("https://{addr}/"))
+            .config()
+            .proxy(None)
+            .build()
+            .call();
+
+        result.expect_err("TLS handshake fails against a peer that hangs up");
     }
 }
