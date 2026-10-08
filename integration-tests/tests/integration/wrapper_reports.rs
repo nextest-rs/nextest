@@ -101,6 +101,19 @@ fn check_report_cleanup(project: &TempProject, mode: &str, attempts: usize) {
     }
 }
 
+fn stress_wrapper_summary(text: &str) -> Option<&str> {
+    let mut summaries = text.lines().filter_map(|line| {
+        line.trim_start()
+            .strip_prefix("Wrapper test results across all iterations: ")
+    });
+    let summary = summaries.next();
+    assert!(
+        summaries.next().is_none(),
+        "only one overall summary: {text}"
+    );
+    summary
+}
+
 #[test]
 fn wrapper_reports_record_and_replay() {
     let env = set_env_vars_for_test();
@@ -248,18 +261,115 @@ fn wrapper_reports_are_isolated_between_retries() {
 fn wrapper_reports_are_isolated_between_stress_runs() {
     let env = set_env_vars_for_test();
     let project = TempProject::new(&env).unwrap();
-    let run = cli(&env, &project, "valid")
-        .args(["run", "-E", SUCCESS_FILTER, "--stress-count", "2"])
-        .output();
-    assert_eq!(
-        run.stderr_as_str()
-            .matches("1 passed (wrapper: 1 wrapped)")
-            .count(),
-        2,
-        "{run}"
-    );
-    assert_eq!(recorded_statuses(&project, "valid").len(), 2);
-    check_report_cleanup(&project, "valid", 2);
+    for mode in ["valid", "label-only", "absent", "retry", "retry-absent"] {
+        let run = cli(&env, &project, mode)
+            .args([
+                "run",
+                "-E",
+                SUCCESS_FILTER,
+                "--stress-count",
+                "2",
+                "--retries",
+                "1",
+            ])
+            .output();
+        let replay = cli(&env, &project, mode)
+            .args(["replay", "-R", RUN_ID])
+            .output();
+        let has_category = matches!(mode, "valid" | "retry");
+        let has_retry = matches!(mode, "retry" | "retry-absent");
+        let iteration_summary = if has_retry {
+            "1 passed (1 flaky; wrapper: 1 wrapped)"
+        } else {
+            "1 passed (wrapper: 1 wrapped)"
+        };
+        for (output, text) in [
+            (&run, run.stderr_as_str()),
+            (&replay, replay.stdout_as_str()),
+        ] {
+            assert_eq!(
+                text.matches(iteration_summary).count(),
+                if has_category { 2 } else { 0 },
+                "{output}"
+            );
+            assert_eq!(
+                stress_wrapper_summary(&text),
+                has_category.then_some("passed (2 wrapped)"),
+                "{output}"
+            );
+        }
+        let statuses = recorded_statuses(&project, mode);
+        assert_eq!(statuses.len(), 2);
+        assert!(
+            statuses
+                .iter()
+                .all(|s| s.len() == if has_retry { 2 } else { 1 })
+        );
+        check_report_cleanup(&project, mode, if has_retry { 4 } else { 2 });
+    }
+}
+
+#[test]
+fn wrapper_stress_summary_includes_failed_iterations() {
+    let env = set_env_vars_for_test();
+    for fail_fast in [false, true] {
+        let project = TempProject::new(&env).unwrap();
+        let mut command = cli(&env, &project, "valid");
+        if fail_fast {
+            command.args([
+                "run",
+                "-E",
+                "binary(=basic) & test(=test_stress_fail_first_iteration)",
+                "--stress-count",
+                "3",
+                "--max-fail",
+                "1:immediate",
+            ]);
+        } else {
+            command.args([
+                "run",
+                "-E",
+                "binary(=basic) & (test(=test_success) | test(=test_stress_fail_first_iteration))",
+                "--stress-count",
+                "2",
+                "--no-fail-fast",
+            ]);
+        }
+        let run = command.unchecked(true).output();
+        assert_eq!(
+            run.exit_status.code(),
+            Some(NextestExitCode::TEST_RUN_FAILED),
+            "{run}"
+        );
+        let replay = cli(&env, &project, "valid")
+            .args(["replay", "-R", RUN_ID])
+            .output();
+        for (output, text) in [
+            (&run, run.stderr_as_str()),
+            (&replay, replay.stdout_as_str()),
+        ] {
+            assert_eq!(
+                stress_wrapper_summary(&text),
+                Some(if fail_fast {
+                    "failed (1 wrapped)"
+                } else {
+                    "passed (3 wrapped), failed (1 wrapped)"
+                }),
+                "{output}"
+            );
+            assert!(
+                text.contains(if fail_fast {
+                    "1/3 stress run iterations: 0 passed, 1 failed"
+                } else {
+                    "2/2 stress run iterations: 1 passed, 1 failed"
+                }),
+                "{output}"
+            );
+        }
+        let finished = if fail_fast { 1 } else { 4 };
+        assert_eq!(recorded_statuses(&project, "valid").len(), finished);
+        check_report_cleanup(&project, "valid", finished);
+    }
 }
 
 #[test]

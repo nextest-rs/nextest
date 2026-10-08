@@ -162,6 +162,7 @@ impl DisplayReporterBuilder {
                 unit_output: UnitOutputReporter::new(overrides, self.displayer_kind),
                 final_outputs: DebugIgnore(Vec::new()),
                 run_wrapper_categories: RunWrapperCategoryCounts::default(),
+                stress_wrapper_categories: RunWrapperCategoryCounts::default(),
                 run_id_unique_prefix: None,
                 redactor: self.redactor,
             },
@@ -557,6 +558,8 @@ struct DisplayReporterImpl<'a> {
     unit_output: UnitOutputReporter,
     final_outputs: DebugIgnore<Vec<FinalOutputEntry<'a>>>,
     run_wrapper_categories: RunWrapperCategoryCounts,
+    // Keep a separate total because each iteration consumes its own counts.
+    stress_wrapper_categories: RunWrapperCategoryCounts,
     // The unique prefix for the current run ID, if a recording session is active.
     // Used for highlighting the run ID in RunStarted output.
     run_id_unique_prefix: Option<ShortestRunIdPrefix>,
@@ -1009,6 +1012,9 @@ impl<'a> DisplayReporterImpl<'a> {
                 ..
             } => {
                 self.run_wrapper_categories.record(run_statuses);
+                if stress_index.is_some() {
+                    self.stress_wrapper_categories.record(run_statuses);
+                }
                 let describe = run_statuses.describe();
                 let last_status = run_statuses.last_status();
                 let test_output_display = self.unit_output.overrides().resolve_for_describe(
@@ -1432,6 +1438,16 @@ impl<'a> DisplayReporterImpl<'a> {
                         }
 
                         writeln!(writer)?;
+                        if let Some(summary) =
+                            self.stress_wrapper_categories.stress_summary(&self.styles)
+                        {
+                            writeln!(
+                                writer,
+                                "{:>12} {} results across all iterations: {summary}",
+                                "Wrapper".style(self.styles.skip),
+                                self.mode,
+                            )?;
+                        }
                     }
                 }
 

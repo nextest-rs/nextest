@@ -704,6 +704,27 @@ impl RunWrapperCategoryCounts {
     pub(super) fn take(&mut self) -> Self {
         std::mem::take(self)
     }
+
+    pub(super) fn stress_summary(&self, styles: &Styles) -> Option<String> {
+        let mut summary = String::new();
+        for (result, categories, result_style, category_style) in [
+            ("passed", &self.passed, styles.pass, styles.skip),
+            ("failed", &self.failed, styles.fail, styles.fail),
+            ("exec failed", &self.exec_failed, styles.fail, styles.fail),
+            ("timed out", &self.timed_out, styles.fail, styles.fail),
+        ] {
+            if categories.is_empty() {
+                continue;
+            }
+            if !summary.is_empty() {
+                swrite!(summary, ", ");
+            }
+            swrite!(summary, "{} (", result.style(result_style));
+            write_category_counts(categories, styles, category_style, &mut summary);
+            swrite!(summary, ")");
+        }
+        (!summary.is_empty()).then_some(summary)
+    }
 }
 
 // `None` means the caller has no wrapper-report counts (for example, the live
@@ -862,19 +883,28 @@ fn write_summary_details(
             swrite!(out, "; ");
         }
         swrite!(out, "wrapper: ");
-        for (index, (category, count)) in categories.iter().enumerate() {
-            if index > 0 {
-                swrite!(out, ", ");
-            }
-            swrite!(
-                out,
-                "{} {}",
-                count.style(styles.count),
-                category.style(category_style),
-            );
-        }
+        write_category_counts(categories, styles, category_style, out);
     }
     swrite!(out, ")");
+}
+
+fn write_category_counts(
+    categories: &WrapperCategoryCounts,
+    styles: &Styles,
+    category_style: Style,
+    out: &mut String,
+) {
+    for (index, (category, count)) in categories.iter().enumerate() {
+        if index > 0 {
+            swrite!(out, ", ");
+        }
+        swrite!(
+            out,
+            "{} {}",
+            count.style(styles.count),
+            category.style(category_style),
+        );
+    }
 }
 
 fn progress_bar_cancel_prefix(reason: Option<CancelReason>, styles: &Styles) -> String {
@@ -1565,6 +1595,12 @@ mod tests {
             summary,
             "2 passed (1 flaky; wrapper: 1 cached, 1 flaky), 2 failed (1 due to being leaky; wrapper: 1 leaky, 1 retried), 1 exec failed (wrapper: 1 infrastructure), 1 timed out (wrapper: 1 infrastructure), 0 skipped"
         );
+        assert_eq!(
+            categories.stress_summary(&Styles::default()).as_deref(),
+            Some(
+                "passed (1 cached, 1 flaky), failed (1 leaky, 1 retried), exec failed (1 infrastructure), timed out (1 infrastructure)"
+            )
+        );
         assert!(
             !summary.contains("first attempt"),
             "only the final attempt's category is counted"
@@ -1689,6 +1725,16 @@ mod tests {
         assert_eq!(
             out,
             " (wrapper: 2 category 000, 2 category 001, 2 category 002, 2 category 003, 2 category 004, 191 other)"
+        );
+        let categories = RunWrapperCategoryCounts {
+            passed: forward,
+            ..RunWrapperCategoryCounts::default()
+        };
+        assert_eq!(
+            categories.stress_summary(&styles).as_deref(),
+            Some(
+                "passed (2 category 000, 2 category 001, 2 category 002, 2 category 003, 2 category 004, 191 other)"
+            )
         );
     }
 }
