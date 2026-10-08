@@ -859,8 +859,9 @@ fn write_summary_details(
     swrite!(out, " ({nextest_details}");
     if let Some(categories) = categories {
         if !nextest_details.is_empty() {
-            swrite!(out, ", ");
+            swrite!(out, "; ");
         }
+        swrite!(out, "wrapper: ");
         for (index, (category, count)) in categories.iter().enumerate() {
             if index > 0 {
                 swrite!(out, ", ");
@@ -1531,6 +1532,22 @@ mod tests {
                 ],
                 FlakyResult::Fail,
             ),
+            ExecutionStatuses::new(
+                vec![
+                    categorized_status(ExecutionResultDescription::ExecFail, None),
+                    categorized_status(ExecutionResultDescription::Pass, Some("flaky")),
+                ],
+                FlakyResult::Pass,
+            ),
+            ExecutionStatuses::new(
+                vec![categorized_status(
+                    ExecutionResultDescription::Leak {
+                        result: LeakTimeoutResult::Fail,
+                    },
+                    Some("leaky"),
+                )],
+                FlakyResult::Pass,
+            ),
         ];
         let mut categories = RunWrapperCategoryCounts::default();
         let mut stats = RunStats {
@@ -1546,7 +1563,7 @@ mod tests {
 
         assert_eq!(
             summary,
-            "1 passed (1 cached), 1 failed (1 retried), 1 exec failed (1 infrastructure), 1 timed out (1 infrastructure), 0 skipped"
+            "2 passed (1 flaky; wrapper: 1 cached, 1 flaky), 2 failed (1 due to being leaky; wrapper: 1 leaky, 1 retried), 1 exec failed (wrapper: 1 infrastructure), 1 timed out (wrapper: 1 infrastructure), 0 skipped"
         );
         assert!(
             !summary.contains("first attempt"),
@@ -1671,7 +1688,7 @@ mod tests {
         write_summary_details("", Some(&forward), &styles, styles.fail, &mut out);
         assert_eq!(
             out,
-            " (2 category 000, 2 category 001, 2 category 002, 2 category 003, 2 category 004, 191 other)"
+            " (wrapper: 2 category 000, 2 category 001, 2 category 002, 2 category 003, 2 category 004, 191 other)"
         );
     }
 }

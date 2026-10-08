@@ -132,7 +132,7 @@ fn wrapper_reports_record_and_replay() {
         ] {
             assert_eq!(text.contains("(wrapped)"), mode != "absent", "{output}");
             assert_eq!(
-                text.contains("1 passed (1 wrapped)"),
+                text.contains("1 passed (wrapper: 1 wrapped)"),
                 mode == "valid",
                 "{output}"
             );
@@ -222,7 +222,7 @@ fn wrapper_reports_are_isolated_between_retries() {
         assert_eq!(report.is_some(), mode == "retry");
         assert_eq!(
             run.stderr_as_str()
-                .contains("1 passed (1 flaky, 1 wrapped)"),
+                .contains("1 passed (1 flaky; wrapper: 1 wrapped)"),
             mode == "retry",
             "{run}"
         );
@@ -236,7 +236,7 @@ fn wrapper_reports_are_isolated_between_retries() {
         assert_eq!(
             replay
                 .stdout_as_str()
-                .contains("1 passed (1 flaky, 1 wrapped)"),
+                .contains("1 passed (1 flaky; wrapper: 1 wrapped)"),
             mode == "retry",
             "{replay}"
         );
@@ -252,7 +252,9 @@ fn wrapper_reports_are_isolated_between_stress_runs() {
         .args(["run", "-E", SUCCESS_FILTER, "--stress-count", "2"])
         .output();
     assert_eq!(
-        run.stderr_as_str().matches("1 passed (1 wrapped)").count(),
+        run.stderr_as_str()
+            .matches("1 passed (wrapper: 1 wrapped)")
+            .count(),
         2,
         "{run}"
     );
