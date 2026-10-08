@@ -19,7 +19,7 @@ use crate::{
 use anstyle_progress::TermProgress;
 use indicatif::{ProgressBar, ProgressDrawTarget};
 use nextest_metadata::{RustBinaryId, TestCaseName};
-use owo_colors::OwoColorize;
+use owo_colors::{OwoColorize, Style};
 use std::{
     cmp::{max, min},
     collections::BTreeMap,
@@ -745,46 +745,35 @@ pub(super) fn write_summary_str(
         "passed".style(styles.pass)
     );
 
-    let passed_categories = categories.map(|categories| &categories.passed);
-    if passed_slow > 0
-        || flaky > 0
-        || leaky > 0
-        || passed_categories.is_some_and(|categories| !categories.is_empty())
-    {
-        let mut text =
-            Vec::with_capacity(3 + passed_categories.map_or(0, WrapperCategoryCounts::len));
-        if passed_slow > 0 {
-            text.push(format!(
-                "{} {}",
-                passed_slow.style(styles.count),
-                "slow".style(styles.skip),
-            ));
-        }
-        if flaky > 0 {
-            text.push(format!(
-                "{} {}",
-                flaky.style(styles.count),
-                "flaky".style(styles.skip),
-            ));
-        }
-        if leaky > 0 {
-            text.push(format!(
-                "{} {}",
-                leaky.style(styles.count),
-                "leaky".style(styles.skip),
-            ));
-        }
-        if let Some(categories) = passed_categories {
-            for (category, count) in categories.iter() {
-                text.push(format!(
-                    "{} {}",
-                    count.style(styles.count),
-                    category.style(styles.skip),
-                ));
-            }
-        }
-        swrite!(out, " ({})", text.join(", "));
+    let mut passed_details = Vec::new();
+    if passed_slow > 0 {
+        passed_details.push(format!(
+            "{} {}",
+            passed_slow.style(styles.count),
+            "slow".style(styles.skip),
+        ));
     }
+    if flaky > 0 {
+        passed_details.push(format!(
+            "{} {}",
+            flaky.style(styles.count),
+            "flaky".style(styles.skip),
+        ));
+    }
+    if leaky > 0 {
+        passed_details.push(format!(
+            "{} {}",
+            leaky.style(styles.count),
+            "leaky".style(styles.skip),
+        ));
+    }
+    write_summary_details(
+        &passed_details.join(", "),
+        categories.map(|categories| &categories.passed),
+        styles,
+        styles.skip,
+        out,
+    );
     swrite!(out, ", ");
 
     if failed > 0 {
@@ -794,28 +783,22 @@ pub(super) fn write_summary_str(
             failed.style(styles.count),
             "failed".style(styles.fail),
         );
-        let failed_categories = categories.map(|categories| &categories.failed);
-        if leaky_failed > 0 || failed_categories.is_some_and(|categories| !categories.is_empty()) {
-            let mut text =
-                Vec::with_capacity(1 + failed_categories.map_or(0, WrapperCategoryCounts::len));
-            if leaky_failed > 0 {
-                text.push(format!(
-                    "{} due to being {}",
-                    leaky_failed.style(styles.count),
-                    "leaky".style(styles.fail),
-                ));
-            }
-            if let Some(categories) = failed_categories {
-                for (category, count) in categories.iter() {
-                    text.push(format!(
-                        "{} {}",
-                        count.style(styles.count),
-                        category.style(styles.fail),
-                    ));
-                }
-            }
-            swrite!(out, " ({})", text.join(", "));
-        }
+        let failed_details = if leaky_failed > 0 {
+            format!(
+                "{} due to being {}",
+                leaky_failed.style(styles.count),
+                "leaky".style(styles.fail),
+            )
+        } else {
+            String::new()
+        };
+        write_summary_details(
+            &failed_details,
+            categories.map(|categories| &categories.failed),
+            styles,
+            styles.fail,
+            out,
+        );
         swrite!(out, ", ");
     }
 
@@ -826,9 +809,11 @@ pub(super) fn write_summary_str(
             exec_failed.style(styles.count),
             "exec failed".style(styles.fail),
         );
-        write_failure_categories(
+        write_summary_details(
+            "",
             categories.map(|categories| &categories.exec_failed),
             styles,
+            styles.fail,
             out,
         );
         swrite!(out, ", ");
@@ -841,9 +826,11 @@ pub(super) fn write_summary_str(
             failed_timed_out.style(styles.count),
             "timed out".style(styles.fail),
         );
-        write_failure_categories(
+        write_summary_details(
+            "",
             categories.map(|categories| &categories.timed_out),
             styles,
+            styles.fail,
             out,
         );
         swrite!(out, ", ");
@@ -857,24 +844,36 @@ pub(super) fn write_summary_str(
     );
 }
 
-fn write_failure_categories(
+fn write_summary_details(
+    nextest_details: &str,
     categories: Option<&WrapperCategoryCounts>,
     styles: &Styles,
+    category_style: Style,
     out: &mut String,
 ) {
-    if let Some(categories) = categories.filter(|categories| !categories.is_empty()) {
-        let text: Vec<_> = categories
-            .iter()
-            .map(|(category, count)| {
-                format!(
-                    "{} {}",
-                    count.style(styles.count),
-                    category.style(styles.fail)
-                )
-            })
-            .collect();
-        swrite!(out, " ({})", text.join(", "));
+    let categories = categories.filter(|categories| !categories.is_empty());
+    if nextest_details.is_empty() && categories.is_none() {
+        return;
     }
+
+    swrite!(out, " ({nextest_details}");
+    if let Some(categories) = categories {
+        if !nextest_details.is_empty() {
+            swrite!(out, ", ");
+        }
+        for (index, (category, count)) in categories.iter().enumerate() {
+            if index > 0 {
+                swrite!(out, ", ");
+            }
+            swrite!(
+                out,
+                "{} {}",
+                count.style(styles.count),
+                category.style(category_style),
+            );
+        }
+    }
+    swrite!(out, ")");
 }
 
 fn progress_bar_cancel_prefix(reason: Option<CancelReason>, styles: &Styles) -> String {
@@ -1668,7 +1667,8 @@ mod tests {
         );
         assert_eq!(forward.iter().map(|(_, count)| count).sum::<usize>(), 201);
         let mut out = String::new();
-        write_failure_categories(Some(&forward), &Styles::default(), &mut out);
+        let styles = Styles::default();
+        write_summary_details("", Some(&forward), &styles, styles.fail, &mut out);
         assert_eq!(
             out,
             " (2 category 000, 2 category 001, 2 category 002, 2 category 003, 2 category 004, 191 other)"
