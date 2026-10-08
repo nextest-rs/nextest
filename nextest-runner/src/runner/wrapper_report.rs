@@ -27,11 +27,35 @@ pub(super) fn new_report_dir() -> Result<Utf8TempDir, ChildStartError> {
 pub(super) async fn read_report(
     path: &Utf8Path,
 ) -> Result<Option<RunWrapperReport>, RunWrapperReportError> {
-    let file = match tokio::fs::File::open(path).await {
+    let metadata = match tokio::fs::metadata(path).await {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(RunWrapperReportError::Metadata(Arc::new(error))),
+    };
+    // tokio::fs can hang when opening a FIFO without a writer.
+    if !metadata.is_file() {
+        return Err(RunWrapperReportError::NotRegularFile);
+    }
+
+    let mut options = tokio::fs::OpenOptions::new();
+    options.read(true);
+    // A FIFO substituted after the metadata check must not block the open.
+    #[cfg(unix)]
+    options.custom_flags(libc::O_NONBLOCK);
+    let file = match options.open(path).await {
         Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(RunWrapperReportError::Open(Arc::new(error))),
     };
+    // Check the opened file as well, since the path may have changed.
+    if !file
+        .metadata()
+        .await
+        .map_err(|error| RunWrapperReportError::Metadata(Arc::new(error)))?
+        .is_file()
+    {
+        return Err(RunWrapperReportError::NotRegularFile);
+    }
 
     let mut contents = Vec::new();
     file.take(MAX_REPORT_SIZE + 1)
@@ -99,6 +123,52 @@ mod tests {
         assert_eq!(
             read_report(&dir.path().join("report.json")).await.unwrap(),
             None
+        );
+    }
+
+    #[tokio::test]
+    async fn directory_reports_are_rejected() {
+        let dir = new_report_dir().unwrap();
+        let path = dir.path().join("report.json");
+        fs::create_dir(&path).unwrap();
+        assert!(matches!(
+            read_report(&path).await,
+            Err(RunWrapperReportError::NotRegularFile)
+        ));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn fifo_reports_are_rejected_without_a_writer() {
+        use std::{ffi::CString, os::unix::fs::symlink};
+
+        let dir = new_report_dir().unwrap();
+        let path = dir.path().join("report.json");
+        let c_path = CString::new(path.as_str()).unwrap();
+        // SAFETY: c_path is a valid null-terminated string.
+        let result = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
+        assert_eq!(result, 0, "mkfifo failed: {}", io::Error::last_os_error());
+        let link = dir.path().join("report-link.json");
+        symlink(&path, &link).unwrap();
+        for path in [&path, &link] {
+            assert!(matches!(
+                read_report(path).await,
+                Err(RunWrapperReportError::NotRegularFile)
+            ));
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn symlinks_to_regular_reports_are_loaded() {
+        use std::os::unix::fs::symlink;
+
+        let dir = report_dir(br#"{"label":"cached"}"#);
+        let link = dir.path().join("report-link.json");
+        symlink(dir.path().join("report.json"), &link).unwrap();
+        assert_eq!(
+            read_report(&link).await.unwrap().unwrap().label.as_str(),
+            "cached"
         );
     }
 

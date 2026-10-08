@@ -164,6 +164,8 @@ fn wrapper_report_errors_fail_the_attempt_and_survive_replay() {
         "invalid-category",
         "oversized",
         "directory",
+        #[cfg(unix)]
+        "fifo",
     ] {
         let run = cli(&env, &project, mode)
             .args(["run", "-E", SUCCESS_FILTER])
@@ -191,6 +193,12 @@ fn wrapper_report_errors_fail_the_attempt_and_survive_replay() {
                 "{output}"
             );
             assert!(text.contains("1 exec failed"), "{output}");
+            if matches!(mode, "directory" | "fifo") {
+                assert!(
+                    text.contains("the report is not a regular file"),
+                    "{output}"
+                );
+            }
         }
         check_report_cleanup(&project, mode, 1);
     }

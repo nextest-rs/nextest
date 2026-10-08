@@ -73,6 +73,17 @@ fn main() {
                     fs::create_dir(&path).unwrap();
                     None
                 }
+                #[cfg(unix)]
+                "fifo" => {
+                    assert!(
+                        std::process::Command::new("mkfifo")
+                            .arg(&path)
+                            .status()
+                            .expect("create report FIFO")
+                            .success()
+                    );
+                    None
+                }
                 "retry" if first_attempt => Some("not json".to_owned()),
                 "retry" => Some(r#"{"label":"wrapped","category":"wrapped"}"#.to_owned()),
                 "retry-absent" if first_attempt => {

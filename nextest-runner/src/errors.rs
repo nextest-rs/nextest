@@ -488,6 +488,12 @@ pub enum ChildStartError {
 /// An error that occurred while reading a run wrapper report.
 #[derive(Clone, Debug, Error)]
 pub enum RunWrapperReportError {
+    /// The report's metadata could not be read.
+    #[error("failed to read the report's metadata")]
+    Metadata(#[source] Arc<std::io::Error>),
+    /// The report is not a regular file.
+    #[error("the report is not a regular file")]
+    NotRegularFile,
     /// The report could not be opened.
     #[error("failed to open the report")]
     Open(#[source] Arc<std::io::Error>),
