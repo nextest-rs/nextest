@@ -55,11 +55,9 @@ fn main() {
             assert!(!path.exists(), "each attempt starts without a report");
             let audit =
                 PathBuf::from(env::var_os("__NEXTEST_WRAPPER_REPORT_AUDIT").expect("audit dir"));
-            fs::write(
-                audit.join(env::var("NEXTEST_ATTEMPT_ID").unwrap()),
-                path.to_str().unwrap(),
-            )
-            .unwrap();
+            // Attempt IDs contain ':', so use the portable temporary directory name.
+            let report_dir_name = path.parent().unwrap().file_name().unwrap();
+            fs::write(audit.join(report_dir_name), path.to_str().unwrap()).unwrap();
             let first_attempt = env::var("NEXTEST_ATTEMPT").unwrap() == "1";
             let report = match mode.as_str() {
                 "valid" => Some(r#"{"label":"wrapped","category":"wrapped"}"#.to_owned()),

@@ -400,7 +400,8 @@ fn wrapper_stress_summary_includes_failed_iterations() {
 fn target_runner_can_override_report_wrapper() {
     let env = set_env_vars_for_test();
     let project = TempProject::new(&env).unwrap();
-    let runner = shell_words::join([env.passthrough_bin.as_str(), "--ensure-this-arg-is-sent"]);
+    // Runner environment variables are split on whitespace, not shell-parsed.
+    let runner = format!("{} --ensure-this-arg-is-sent", env.passthrough_bin);
     let run = cli(&env, &project, "invalid")
         .env(current_runner_env_var(), runner)
         .args(["run", "-E", SUCCESS_FILTER])
