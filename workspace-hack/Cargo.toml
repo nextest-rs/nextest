@@ -59,7 +59,7 @@ phf_shared = { version = "0.11.3" }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 serde_core = { version = "1.0.229", features = ["alloc", "rc"] }
-syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3.0.3", features = ["full"] }
+syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3.0.3", features = ["extra-traits", "full"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
 ucd-trie = { version = "0.1.7" }
 
