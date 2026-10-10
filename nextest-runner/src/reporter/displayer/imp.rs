@@ -14,8 +14,8 @@ use super::{
         write_final_warnings, write_skip_counts,
     },
     progress::{
-        MaxProgressRunning, ProgressBarState, progress_bar_msg, progress_str,
-        terminal_progress_value, write_summary_str,
+        MaxProgressRunning, ProgressBarState, RunWrapperCategoryCounts, progress_bar_msg,
+        progress_str, terminal_progress_value, write_summary_str,
     },
     unit_output::{OutputDisplayOverrides, TestOutputDisplay},
 };
@@ -27,8 +27,8 @@ use crate::{
     },
     errors::WriteEventError,
     helpers::{
-        DisplayCounterIndex, DisplayScriptInstance, DisplayTestInstance, DurationRounding,
-        ThemeCharacters, decimal_char_width, plural,
+        DisplayCounterIndex, DisplayScriptInstance, DisplayStressIndex, DisplayTestInstance,
+        DurationRounding, ThemeCharacters, decimal_char_width, plural,
         progress::{ShowTerminalProgress, TerminalProgress},
     },
     indenter::indented,
@@ -161,6 +161,8 @@ impl DisplayReporterBuilder {
                 cancel_status: None,
                 unit_output: UnitOutputReporter::new(overrides, self.displayer_kind),
                 final_outputs: DebugIgnore(Vec::new()),
+                run_wrapper_categories: RunWrapperCategoryCounts::default(),
+                stress_wrapper_categories: RunWrapperCategoryCounts::default(),
                 run_id_unique_prefix: None,
                 redactor: self.redactor,
             },
@@ -555,6 +557,9 @@ struct DisplayReporterImpl<'a> {
     cancel_status: Option<CancelReason>,
     unit_output: UnitOutputReporter,
     final_outputs: DebugIgnore<Vec<FinalOutputEntry<'a>>>,
+    run_wrapper_categories: RunWrapperCategoryCounts,
+    // Keep a separate total because each iteration consumes its own counts.
+    stress_wrapper_categories: RunWrapperCategoryCounts,
     // The unique prefix for the current run ID, if a recording session is active.
     // Used for highlighting the run ID in RunStarted output.
     run_id_unique_prefix: Option<ShortestRunIdPrefix>,
@@ -907,23 +912,18 @@ impl<'a> DisplayReporterImpl<'a> {
                         short_status_str(&run_status.result),
                     );
 
-                    // Print the try status and time taken.
+                    // Print the try status.
                     write!(
                         writer,
-                        "{:>12} {}",
+                        "{:>12} ",
                         try_status_string.style(self.styles.retry),
-                        DisplayBracketedDuration(run_status.time_taken),
                     )?;
-
-                    // Print the name of the test.
-                    writeln!(
+                    self.write_status_line_body(
+                        *stress_index,
+                        TestInstanceCounter::Padded,
+                        *test_instance,
+                        run_status,
                         writer,
-                        "{}",
-                        self.display_test_instance(
-                            *stress_index,
-                            TestInstanceCounter::Padded,
-                            *test_instance
-                        )
                     )?;
 
                     // This test is guaranteed to have failed.
@@ -1006,6 +1006,10 @@ impl<'a> DisplayReporterImpl<'a> {
                 current_stats,
                 ..
             } => {
+                self.run_wrapper_categories.record(run_statuses);
+                if stress_index.is_some() {
+                    self.stress_wrapper_categories.record(run_statuses);
+                }
                 let describe = run_statuses.describe();
                 let last_status = run_statuses.last_status();
                 let test_output_display = self.unit_output.overrides().resolve_for_describe(
@@ -1301,8 +1305,9 @@ impl<'a> DisplayReporterImpl<'a> {
                     sub_stats.initial_run_count != 1 || sub_stats.finished_count != 1,
                 );
 
+                let categories = self.run_wrapper_categories.take();
                 let mut summary_str = String::new();
-                write_summary_str(sub_stats, &self.styles, &mut summary_str);
+                write_summary_str(sub_stats, Some(&categories), &self.styles, &mut summary_str);
                 writeln!(writer, " {tests_str} run: {summary_str}")?;
             }
             TestEventKind::RunFinished {
@@ -1355,7 +1360,12 @@ impl<'a> DisplayReporterImpl<'a> {
                         );
 
                         let mut summary_str = String::new();
-                        write_summary_str(run_stats, &self.styles, &mut summary_str);
+                        write_summary_str(
+                            run_stats,
+                            Some(&self.run_wrapper_categories),
+                            &self.styles,
+                            &mut summary_str,
+                        );
                         writeln!(writer, " {tests_str} run: {summary_str}")?;
                     }
                     RunFinishedStats::Stress(stats) => {
@@ -1423,6 +1433,16 @@ impl<'a> DisplayReporterImpl<'a> {
                         }
 
                         writeln!(writer)?;
+                        if let Some(summary) =
+                            self.stress_wrapper_categories.stress_summary(&self.styles)
+                        {
+                            writeln!(
+                                writer,
+                                "{:>12} {} results across all iterations: {summary}",
+                                "Wrapper".style(self.styles.skip),
+                                self.mode,
+                            )?;
+                        }
                     }
                 }
 
@@ -1662,14 +1682,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
         // Write the status prefix (e.g., "PASS", "FAIL", "FLAKY 2/3").
         self.write_status_line_prefix(describe, kind, writer)?;
-
-        // Write the duration and test instance.
-        writeln!(
-            writer,
-            "{}{}",
-            DisplayBracketedDuration(last_status.time_taken),
-            self.display_test_instance(stress_index, counter, test_instance),
-        )?;
+        self.write_status_line_body(stress_index, counter, test_instance, last_status, writer)?;
 
         // For Windows aborts, print out the exception code on a separate line.
         if let ExecutionResultDescription::Fail {
@@ -1698,6 +1711,42 @@ impl<'a> DisplayReporterImpl<'a> {
         }
 
         Ok(())
+    }
+
+    fn write_status_line_body(
+        &self,
+        stress_index: Option<StressIndex>,
+        counter: TestInstanceCounter,
+        test_instance: TestInstanceId<'a>,
+        status: &ExecuteStatus<LiveSpec>,
+        writer: &mut dyn WriteStr,
+    ) -> io::Result<()> {
+        write!(writer, "{}", DisplayBracketedDuration(status.time_taken))?;
+        if let Some(stress_index) = stress_index {
+            write!(
+                writer,
+                "[{}] ",
+                DisplayStressIndex {
+                    stress_index,
+                    count_style: self.styles.list_styles.count,
+                },
+            )?;
+        }
+        if let Some(counter) = self.display_counter_index(counter) {
+            write!(writer, "{counter} ")?;
+        }
+        if let Some(wrapper_report) = &status.run_wrapper_report {
+            write!(
+                writer,
+                "({}) ",
+                wrapper_report.label.style(self.styles.script_id),
+            )?;
+        }
+        writeln!(
+            writer,
+            "{}",
+            self.display_test_instance(None, TestInstanceCounter::None, test_instance),
+        )
     }
 
     fn write_status_line_prefix(
@@ -1844,7 +1893,16 @@ impl<'a> DisplayReporterImpl<'a> {
         counter: TestInstanceCounter,
         instance: TestInstanceId<'a>,
     ) -> DisplayTestInstance<'_> {
-        let counter_index = match (counter, self.counter_width) {
+        DisplayTestInstance::new(
+            stress_index,
+            self.display_counter_index(counter),
+            instance,
+            &self.styles.list_styles,
+        )
+    }
+
+    fn display_counter_index(&self, counter: TestInstanceCounter) -> Option<DisplayCounterIndex> {
+        match (counter, self.counter_width) {
             (TestInstanceCounter::Counter { current, total }, Some(_)) => {
                 Some(DisplayCounterIndex::new_counter(current, total))
             }
@@ -1852,14 +1910,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 DisplayCounterIndex::new_padded(self.theme_characters.hbar_char(), counter_width),
             ),
             (TestInstanceCounter::None, _) | (_, None) => None,
-        };
-
-        DisplayTestInstance::new(
-            stress_index,
-            counter_index,
-            instance,
-            &self.styles.list_styles,
-        )
+        }
     }
 
     fn write_command_line(
@@ -2904,6 +2955,7 @@ mod tests {
             },
             output: make_split_output(Some(ExecutionResult::Pass), "", ""),
             result: ExecutionResultDescription::Pass,
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -2930,6 +2982,7 @@ mod tests {
             },
             output: make_split_output(Some(result), "", ""),
             result: ExecutionResultDescription::from(result),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -2979,6 +3032,7 @@ mod tests {
             // output is not relevant here.
             output: make_split_output(Some(fail_result_internal), "", ""),
             result: fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3000,6 +3054,7 @@ mod tests {
             // output is not relevant here.
             output: make_split_output(Some(fail_result_internal), "", ""),
             result: ExecutionResultDescription::Pass,
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(2),
             is_slow: false,
@@ -3144,6 +3199,7 @@ mod tests {
             },
             output: make_split_output(Some(pass_result_internal), "", ""),
             result: pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3159,6 +3215,7 @@ mod tests {
             },
             output: make_split_output(Some(leak_pass_result_internal), "", ""),
             result: leak_pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(2),
             is_slow: false,
@@ -3174,6 +3231,7 @@ mod tests {
             },
             output: make_split_output(Some(timeout_pass_result_internal), "", ""),
             result: timeout_pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(240),
             is_slow: false,
@@ -3190,6 +3248,7 @@ mod tests {
             },
             output: make_split_output(Some(pass_result_internal), "", ""),
             result: pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(30),
             is_slow: true,
@@ -3205,6 +3264,7 @@ mod tests {
             },
             output: make_split_output(Some(leak_pass_result_internal), "", ""),
             result: leak_pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(30),
             is_slow: true,
@@ -3220,6 +3280,7 @@ mod tests {
             },
             output: make_split_output(Some(timeout_pass_result_internal), "", ""),
             result: timeout_pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(300),
             is_slow: true,
@@ -3236,6 +3297,7 @@ mod tests {
             },
             output: make_split_output(Some(fail_result_internal), "", ""),
             result: fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3250,6 +3312,7 @@ mod tests {
             },
             output: make_split_output(Some(pass_result_internal), "", ""),
             result: pass_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3266,6 +3329,7 @@ mod tests {
             },
             output: make_split_output(Some(fail_result_internal), "", ""),
             result: fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3281,6 +3345,7 @@ mod tests {
             },
             output: make_split_output(Some(fail_leak_result_internal), "", ""),
             result: fail_leak_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3296,6 +3361,7 @@ mod tests {
             },
             output: make_split_output(Some(exec_fail_result_internal), "", ""),
             result: exec_fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3311,6 +3377,7 @@ mod tests {
             },
             output: make_split_output(Some(leak_fail_result_internal), "", ""),
             result: leak_fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3326,6 +3393,7 @@ mod tests {
             },
             output: make_split_output(Some(timeout_fail_result_internal), "", ""),
             result: timeout_fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(60),
             is_slow: false,
@@ -3341,6 +3409,7 @@ mod tests {
             },
             output: make_split_output(None, "", ""),
             result: abort_unix_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3356,6 +3425,7 @@ mod tests {
             },
             output: make_split_output(None, "", ""),
             result: abort_windows_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3372,6 +3442,7 @@ mod tests {
             },
             output: make_split_output(Some(fail_result_internal), "", ""),
             result: fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3387,6 +3458,7 @@ mod tests {
             },
             output: make_split_output(Some(fail_leak_result_internal), "", ""),
             result: fail_leak_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3402,6 +3474,7 @@ mod tests {
             },
             output: make_split_output(Some(leak_fail_result_internal), "", ""),
             result: leak_fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(1),
             is_slow: false,
@@ -3417,6 +3490,7 @@ mod tests {
             },
             output: make_split_output(Some(timeout_fail_result_internal), "", ""),
             result: timeout_fail_result.clone(),
+            run_wrapper_report: None,
             start_time: Local::now().into(),
             time_taken: Duration::from_secs(60),
             is_slow: false,
@@ -3581,6 +3655,63 @@ mod tests {
         );
 
         insta::assert_snapshot!("status_line_all_variants", out);
+    }
+
+    #[test]
+    fn status_line_with_wrapper_report() {
+        let binary_id = RustBinaryId::new("my-binary-id");
+        let test_name = TestCaseName::new("test_name");
+        let test_instance = TestInstanceId {
+            binary_id: &binary_id,
+            test_name: &test_name,
+        };
+        let status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_split_output(Some(ExecutionResult::Pass), "", ""),
+            result: ExecutionResultDescription::Pass,
+            run_wrapper_report: Some(RunWrapperReport {
+                label: "cached".parse().unwrap(),
+                category: Some("cached".parse().unwrap()),
+            }),
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        };
+        let describe = ExecutionDescription::Success {
+            single_status: &status,
+        };
+        let mut out = String::new();
+
+        with_reporter(
+            |mut reporter| {
+                reporter
+                    .inner
+                    .write_status_line_impl(
+                        None,
+                        TestInstanceCounter::Counter {
+                            current: 1,
+                            total: 100,
+                        },
+                        test_instance,
+                        describe,
+                        StatusLineKind::Final,
+                        reporter.output.writer_mut().unwrap(),
+                    )
+                    .unwrap();
+            },
+            &mut out,
+        );
+
+        assert_eq!(
+            out,
+            "        PASS [   1.000s] (  1/100) (cached) my-binary-id test_name\n"
+        );
     }
 
     #[test]

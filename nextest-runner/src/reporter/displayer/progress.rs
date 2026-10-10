@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
+    config::elements::{FlakyResult, SlowTimeoutResult},
     helpers::{
         DisplayTestInstance, plural,
         progress::{PROGRESS_REFRESH_RATE_HZ, progress_bar_style, term_progress_percent},
     },
     list::TestInstanceId,
+    output_spec::OutputSpec,
     reporter::{
         displayer::formatters::DisplayBracketedHhMmSs,
         events::*,
@@ -17,9 +19,10 @@ use crate::{
 use anstyle_progress::TermProgress;
 use indicatif::{ProgressBar, ProgressDrawTarget};
 use nextest_metadata::{RustBinaryId, TestCaseName};
-use owo_colors::OwoColorize;
+use owo_colors::{OwoColorize, Style};
 use std::{
     cmp::{max, min},
+    collections::BTreeMap,
     env, fmt,
     str::FromStr,
     time::{Duration, Instant},
@@ -602,7 +605,136 @@ pub(super) fn progress_str(
     s
 }
 
-pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) {
+// Keep summary size and memory usage bounded even if every test reports a
+// distinct category. Retain names in lexical order so scheduling cannot change the
+// summary; the remaining counts are folded into `other`.
+const MAX_WRAPPER_CATEGORIES: usize = 5;
+
+#[derive(Debug, Default)]
+struct WrapperCategoryCounts {
+    named: BTreeMap<RunWrapperCategory, usize>,
+    other: usize,
+}
+
+impl WrapperCategoryCounts {
+    fn record(&mut self, category: &RunWrapperCategory) {
+        if category.as_str() == "other" {
+            self.other += 1;
+        } else if let Some(count) = self.named.get_mut(category) {
+            *count += 1;
+        } else if self.named.len() < MAX_WRAPPER_CATEGORIES {
+            self.named.insert(category.clone(), 1);
+        } else if self
+            .named
+            .last_key_value()
+            .is_some_and(|(last, _)| category < last)
+        {
+            let (_, count) = self
+                .named
+                .pop_last()
+                .expect("the category limit is non-zero");
+            self.other += count;
+            self.named.insert(category.clone(), 1);
+        } else {
+            self.other += 1;
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.named.len() + usize::from(self.other > 0)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (&str, usize)> {
+        self.named
+            .iter()
+            .map(|(category, count)| (category.as_str(), *count))
+            .chain((self.other > 0).then_some(("other", self.other)))
+    }
+}
+
+#[derive(Debug, Default)]
+pub(super) struct RunWrapperCategoryCounts {
+    passed: WrapperCategoryCounts,
+    failed: WrapperCategoryCounts,
+    exec_failed: WrapperCategoryCounts,
+    timed_out: WrapperCategoryCounts,
+}
+
+impl RunWrapperCategoryCounts {
+    pub(super) fn record<S: OutputSpec>(&mut self, run_statuses: &ExecutionStatuses<S>) {
+        let Some(category) = run_statuses
+            .last_status()
+            .run_wrapper_report
+            .as_ref()
+            .and_then(|report| report.category.as_ref())
+        else {
+            return;
+        };
+
+        let categories = match run_statuses.describe() {
+            ExecutionDescription::Success { .. }
+            | ExecutionDescription::Flaky {
+                result: FlakyResult::Pass,
+                ..
+            } => &mut self.passed,
+            ExecutionDescription::Flaky {
+                result: FlakyResult::Fail,
+                ..
+            } => &mut self.failed,
+            ExecutionDescription::Failure { last_status, .. } => match last_status.result {
+                ExecutionResultDescription::ExecFail => &mut self.exec_failed,
+                ExecutionResultDescription::Timeout {
+                    result: SlowTimeoutResult::Fail,
+                } => &mut self.timed_out,
+                ExecutionResultDescription::Pass
+                | ExecutionResultDescription::Leak { .. }
+                | ExecutionResultDescription::Fail { .. }
+                | ExecutionResultDescription::Timeout {
+                    result: SlowTimeoutResult::Pass,
+                } => &mut self.failed,
+            },
+        };
+        categories.record(category);
+    }
+
+    pub(super) fn take(&mut self) -> Self {
+        std::mem::take(self)
+    }
+
+    pub(super) fn stress_summary(&self, styles: &Styles) -> Option<String> {
+        let mut summary = String::new();
+        for (result, categories, result_style, category_style) in [
+            ("passed", &self.passed, styles.pass, styles.skip),
+            ("failed", &self.failed, styles.fail, styles.fail),
+            ("exec failed", &self.exec_failed, styles.fail, styles.fail),
+            ("timed out", &self.timed_out, styles.fail, styles.fail),
+        ] {
+            if categories.is_empty() {
+                continue;
+            }
+            if !summary.is_empty() {
+                swrite!(summary, ", ");
+            }
+            swrite!(summary, "{} (", result.style(result_style));
+            write_category_counts(categories, styles, category_style, &mut summary);
+            swrite!(summary, ")");
+        }
+        (!summary.is_empty()).then_some(summary)
+    }
+}
+
+// `None` means the caller has no wrapper-report counts (for example, the live
+// progress bar). It renders like empty counts, without implying a completed run.
+pub(super) fn write_summary_str(
+    run_stats: &RunStats,
+    categories: Option<&RunWrapperCategoryCounts>,
+    styles: &Styles,
+    out: &mut String,
+) {
     // Written in this style to ensure new fields are accounted for.
     let &RunStats {
         initial_run_count: _,
@@ -634,31 +766,35 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         "passed".style(styles.pass)
     );
 
-    if passed_slow > 0 || flaky > 0 || leaky > 0 {
-        let mut text = Vec::with_capacity(3);
-        if passed_slow > 0 {
-            text.push(format!(
-                "{} {}",
-                passed_slow.style(styles.count),
-                "slow".style(styles.skip),
-            ));
-        }
-        if flaky > 0 {
-            text.push(format!(
-                "{} {}",
-                flaky.style(styles.count),
-                "flaky".style(styles.skip),
-            ));
-        }
-        if leaky > 0 {
-            text.push(format!(
-                "{} {}",
-                leaky.style(styles.count),
-                "leaky".style(styles.skip),
-            ));
-        }
-        swrite!(out, " ({})", text.join(", "));
+    let mut passed_details = Vec::new();
+    if passed_slow > 0 {
+        passed_details.push(format!(
+            "{} {}",
+            passed_slow.style(styles.count),
+            "slow".style(styles.skip),
+        ));
     }
+    if flaky > 0 {
+        passed_details.push(format!(
+            "{} {}",
+            flaky.style(styles.count),
+            "flaky".style(styles.skip),
+        ));
+    }
+    if leaky > 0 {
+        passed_details.push(format!(
+            "{} {}",
+            leaky.style(styles.count),
+            "leaky".style(styles.skip),
+        ));
+    }
+    write_summary_details(
+        &passed_details.join(", "),
+        categories.map(|categories| &categories.passed),
+        styles,
+        styles.skip,
+        out,
+    );
     swrite!(out, ", ");
 
     if failed > 0 {
@@ -668,33 +804,57 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
             failed.style(styles.count),
             "failed".style(styles.fail),
         );
-        if leaky_failed > 0 {
-            swrite!(
-                out,
-                " ({} due to being {})",
+        let failed_details = if leaky_failed > 0 {
+            format!(
+                "{} due to being {}",
                 leaky_failed.style(styles.count),
                 "leaky".style(styles.fail),
-            );
-        }
+            )
+        } else {
+            String::new()
+        };
+        write_summary_details(
+            &failed_details,
+            categories.map(|categories| &categories.failed),
+            styles,
+            styles.fail,
+            out,
+        );
         swrite!(out, ", ");
     }
 
     if exec_failed > 0 {
         swrite!(
             out,
-            "{} {}, ",
+            "{} {}",
             exec_failed.style(styles.count),
             "exec failed".style(styles.fail),
         );
+        write_summary_details(
+            "",
+            categories.map(|categories| &categories.exec_failed),
+            styles,
+            styles.fail,
+            out,
+        );
+        swrite!(out, ", ");
     }
 
     if failed_timed_out > 0 {
         swrite!(
             out,
-            "{} {}, ",
+            "{} {}",
             failed_timed_out.style(styles.count),
             "timed out".style(styles.fail),
         );
+        write_summary_details(
+            "",
+            categories.map(|categories| &categories.timed_out),
+            styles,
+            styles.fail,
+            out,
+        );
+        swrite!(out, ", ");
     }
 
     swrite!(
@@ -703,6 +863,48 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         skipped.style(styles.count),
         "skipped".style(styles.skip),
     );
+}
+
+fn write_summary_details(
+    nextest_details: &str,
+    categories: Option<&WrapperCategoryCounts>,
+    styles: &Styles,
+    category_style: Style,
+    out: &mut String,
+) {
+    let categories = categories.filter(|categories| !categories.is_empty());
+    if nextest_details.is_empty() && categories.is_none() {
+        return;
+    }
+
+    swrite!(out, " ({nextest_details}");
+    if let Some(categories) = categories {
+        if !nextest_details.is_empty() {
+            swrite!(out, "; ");
+        }
+        swrite!(out, "wrapper: ");
+        write_category_counts(categories, styles, category_style, out);
+    }
+    swrite!(out, ")");
+}
+
+fn write_category_counts(
+    categories: &WrapperCategoryCounts,
+    styles: &Styles,
+    category_style: Style,
+    out: &mut String,
+) {
+    for (index, (category, count)) in categories.iter().enumerate() {
+        if index > 0 {
+            swrite!(out, ", ");
+        }
+        swrite!(
+            out,
+            "{} {}",
+            count.style(styles.count),
+            category.style(category_style),
+        );
+    }
 }
 
 fn progress_bar_cancel_prefix(reason: Option<CancelReason>, styles: &Styles) -> String {
@@ -744,7 +946,7 @@ pub(super) fn progress_bar_msg(
     styles: &Styles,
 ) -> String {
     let mut s = format!("{} running, ", running.style(styles.count));
-    write_summary_str(current_stats, styles, &mut s);
+    write_summary_str(current_stats, None, styles, &mut s);
     s
 }
 
@@ -752,7 +954,7 @@ pub(super) fn progress_bar_msg(
 mod tests {
     use super::*;
     use crate::{
-        config::elements::{FlakyResult, JunitFlakyFailStatus},
+        config::elements::{FlakyResult, JunitFlakyFailStatus, LeakTimeoutResult},
         output_spec::LiveSpec,
         reporter::{TestOutputDisplay, test_helpers::global_slot_assignment},
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
@@ -1188,6 +1390,7 @@ mod tests {
                         },
                         output: make_test_output(),
                         result: ExecutionResultDescription::Pass,
+                        run_wrapper_report: None,
                         start_time: Local::now().fixed_offset(),
                         time_taken: Duration::from_secs(1),
                         is_slow: false,
@@ -1300,5 +1503,238 @@ mod tests {
             errors: None,
         }
         .into()
+    }
+
+    fn categorized_status(
+        result: ExecutionResultDescription,
+        category: Option<&str>,
+    ) -> ExecuteStatus<LiveSpec> {
+        ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 1,
+            },
+            output: make_test_output(),
+            result,
+            run_wrapper_report: category.map(|category| RunWrapperReport {
+                label: format!("reported as {category}").parse().unwrap(),
+                category: Some(category.parse().unwrap()),
+            }),
+            start_time: Local::now().fixed_offset(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+            error_summary: None,
+            output_error_slice: None,
+        }
+    }
+
+    #[test]
+    fn wrapper_categories_follow_the_final_test_outcome() {
+        let statuses = [
+            ExecutionStatuses::new(
+                vec![categorized_status(
+                    ExecutionResultDescription::Pass,
+                    Some("cached"),
+                )],
+                FlakyResult::Pass,
+            ),
+            ExecutionStatuses::new(
+                vec![categorized_status(
+                    ExecutionResultDescription::ExecFail,
+                    Some("infrastructure"),
+                )],
+                FlakyResult::Pass,
+            ),
+            ExecutionStatuses::new(
+                vec![categorized_status(
+                    ExecutionResultDescription::Timeout {
+                        result: SlowTimeoutResult::Fail,
+                    },
+                    Some("infrastructure"),
+                )],
+                FlakyResult::Pass,
+            ),
+            ExecutionStatuses::new(
+                vec![
+                    categorized_status(ExecutionResultDescription::ExecFail, Some("first attempt")),
+                    categorized_status(ExecutionResultDescription::Pass, Some("retried")),
+                ],
+                FlakyResult::Fail,
+            ),
+            ExecutionStatuses::new(
+                vec![
+                    categorized_status(ExecutionResultDescription::ExecFail, None),
+                    categorized_status(ExecutionResultDescription::Pass, Some("flaky")),
+                ],
+                FlakyResult::Pass,
+            ),
+            ExecutionStatuses::new(
+                vec![categorized_status(
+                    ExecutionResultDescription::Leak {
+                        result: LeakTimeoutResult::Fail,
+                    },
+                    Some("leaky"),
+                )],
+                FlakyResult::Pass,
+            ),
+        ];
+        let mut categories = RunWrapperCategoryCounts::default();
+        let mut stats = RunStats {
+            initial_run_count: statuses.len(),
+            ..RunStats::default()
+        };
+        for statuses in &statuses {
+            categories.record(statuses);
+            stats.on_test_finished(statuses);
+        }
+        let mut summary = String::new();
+        write_summary_str(&stats, Some(&categories), &Styles::default(), &mut summary);
+
+        assert_eq!(
+            summary,
+            "2 passed (1 flaky; wrapper: 1 cached, 1 flaky), 2 failed (1 due to being leaky; wrapper: 1 leaky, 1 retried), 1 exec failed (wrapper: 1 infrastructure), 1 timed out (wrapper: 1 infrastructure), 0 skipped"
+        );
+        assert_eq!(
+            categories.stress_summary(&Styles::default()).as_deref(),
+            Some(
+                "passed (1 cached, 1 flaky), failed (1 leaky, 1 retried), exec failed (1 infrastructure), timed out (1 infrastructure)"
+            )
+        );
+        assert!(
+            !summary.contains("first attempt"),
+            "only the final attempt's category is counted"
+        );
+    }
+    #[test]
+    fn wrapper_category_buckets_match_run_stats() {
+        for result in [
+            ExecutionResultDescription::Pass,
+            ExecutionResultDescription::Leak {
+                result: LeakTimeoutResult::Pass,
+            },
+            ExecutionResultDescription::Leak {
+                result: LeakTimeoutResult::Fail,
+            },
+            ExecutionResultDescription::Fail {
+                failure: FailureDescription::ExitCode { code: 101 },
+                leaked: false,
+            },
+            ExecutionResultDescription::ExecFail,
+            ExecutionResultDescription::Timeout {
+                result: SlowTimeoutResult::Pass,
+            },
+            ExecutionResultDescription::Timeout {
+                result: SlowTimeoutResult::Fail,
+            },
+        ] {
+            for flaky_result in [FlakyResult::Pass, FlakyResult::Fail] {
+                for attempts in [1, 2] {
+                    let mut statuses = Vec::new();
+                    if attempts == 2 {
+                        statuses.push(categorized_status(
+                            ExecutionResultDescription::ExecFail,
+                            Some("previous"),
+                        ));
+                    }
+                    statuses.push(categorized_status(result.clone(), Some("reported")));
+                    let statuses = ExecutionStatuses::new(statuses, flaky_result);
+                    let mut stats = RunStats::default();
+                    let mut categories = RunWrapperCategoryCounts::default();
+                    stats.on_test_finished(&statuses);
+                    categories.record(&statuses);
+                    assert_eq!(
+                        (
+                            categories
+                                .passed
+                                .iter()
+                                .map(|(_, count)| count)
+                                .sum::<usize>(),
+                            categories
+                                .failed
+                                .iter()
+                                .map(|(_, count)| count)
+                                .sum::<usize>(),
+                            categories
+                                .exec_failed
+                                .iter()
+                                .map(|(_, count)| count)
+                                .sum::<usize>(),
+                            categories
+                                .timed_out
+                                .iter()
+                                .map(|(_, count)| count)
+                                .sum::<usize>()
+                        ),
+                        (
+                            stats.passed,
+                            stats.failed,
+                            stats.exec_failed,
+                            stats.failed_timed_out
+                        ),
+                        "{result:?}, {flaky_result:?}, {attempts} attempts",
+                    );
+                    let taken = categories.take();
+                    assert_eq!(
+                        taken.passed.len()
+                            + taken.failed.len()
+                            + taken.exec_failed.len()
+                            + taken.timed_out.len(),
+                        1
+                    );
+                    assert!(
+                        categories.passed.is_empty()
+                            && categories.failed.is_empty()
+                            && categories.exec_failed.is_empty()
+                            && categories.timed_out.is_empty()
+                    );
+                }
+            }
+        }
+    }
+    #[test]
+    fn wrapper_categories_are_bounded_and_order_independent() {
+        let reports: Vec<RunWrapperCategory> = (0..100)
+            .map(|i| format!("category {i:03}").parse().unwrap())
+            .collect();
+        let mut forward = WrapperCategoryCounts::default();
+        let mut backward = WrapperCategoryCounts::default();
+        for category in &reports {
+            forward.record(category);
+            forward.record(category);
+        }
+        for category in reports.iter().rev() {
+            backward.record(category);
+            backward.record(category);
+        }
+        assert_eq!(forward.named.len(), MAX_WRAPPER_CATEGORIES);
+        assert_eq!(
+            forward.iter().collect::<Vec<_>>(),
+            backward.iter().collect::<Vec<_>>()
+        );
+        assert_eq!(forward.other, (100 - MAX_WRAPPER_CATEGORIES) * 2);
+        forward.record(&"other".parse().unwrap());
+        assert_eq!(
+            forward.iter().filter(|(name, _)| *name == "other").count(),
+            1
+        );
+        assert_eq!(forward.iter().map(|(_, count)| count).sum::<usize>(), 201);
+        let mut out = String::new();
+        let styles = Styles::default();
+        write_summary_details("", Some(&forward), &styles, styles.fail, &mut out);
+        assert_eq!(
+            out,
+            " (wrapper: 2 category 000, 2 category 001, 2 category 002, 2 category 003, 2 category 004, 191 other)"
+        );
+        let categories = RunWrapperCategoryCounts {
+            passed: forward,
+            ..RunWrapperCategoryCounts::default()
+        };
+        assert_eq!(
+            categories.stress_summary(&styles).as_deref(),
+            Some(
+                "passed (2 category 000, 2 category 001, 2 category 002, 2 category 003, 2 category 004, 191 other)"
+            )
+        );
     }
 }

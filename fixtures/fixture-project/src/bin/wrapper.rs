@@ -6,6 +6,8 @@
 //! This script outputs information to standard error, which is then captured by
 //! nextest's tests.
 
+use std::{env, fs, path::PathBuf};
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     eprintln!("[wrapper] args: {args:?}");
@@ -44,5 +46,55 @@ fn main() {
         .status()
         .expect("failed to execute test binary");
 
-    std::process::exit(status.code().unwrap_or(1));
+    let mut code = status.code().unwrap_or(1);
+    if phase == "run" {
+        if let Ok(mode) = env::var("__NEXTEST_WRAPPER_REPORT_MODE") {
+            let path =
+                PathBuf::from(env::var_os("NEXTEST_RUN_WRAPPER_REPORT").expect("report path"));
+            assert_eq!(path.file_name().unwrap(), "report.json");
+            assert!(!path.exists(), "each attempt starts without a report");
+            let audit =
+                PathBuf::from(env::var_os("__NEXTEST_WRAPPER_REPORT_AUDIT").expect("audit dir"));
+            // Attempt IDs contain ':', so use the portable temporary directory name.
+            let report_dir_name = path.parent().unwrap().file_name().unwrap();
+            fs::write(audit.join(report_dir_name), path.to_str().unwrap()).unwrap();
+            let first_attempt = env::var("NEXTEST_ATTEMPT").unwrap() == "1";
+            let report = match mode.as_str() {
+                "valid" => Some(r#"{"label":"wrapped","category":"wrapped"}"#.to_owned()),
+                "label-only" => Some(r#"{"label":"wrapped"}"#.to_owned()),
+                "absent" => None,
+                "invalid" => Some("not json".to_owned()),
+                "invalid-label" => Some(r#"{"label":"bad\nlabel"}"#.to_owned()),
+                "invalid-category" => Some(r#"{"label":"wrapped","category":""}"#.to_owned()),
+                "oversized" => Some("x".repeat(4097)),
+                "directory" => {
+                    fs::create_dir(&path).unwrap();
+                    None
+                }
+                #[cfg(unix)]
+                "fifo" => {
+                    assert!(
+                        std::process::Command::new("mkfifo")
+                            .arg(&path)
+                            .status()
+                            .expect("create report FIFO")
+                            .success()
+                    );
+                    None
+                }
+                "retry" if first_attempt => Some("not json".to_owned()),
+                "retry" => Some(r#"{"label":"wrapped","category":"wrapped"}"#.to_owned()),
+                "retry-absent" if first_attempt => {
+                    code = 1;
+                    Some(r#"{"label":"first attempt","category":"previous"}"#.to_owned())
+                }
+                "retry-absent" => None,
+                _ => panic!("unknown wrapper report mode: {}", mode),
+            };
+            if let Some(report) = report {
+                fs::write(path, report).unwrap();
+            }
+        }
+    }
+    std::process::exit(code);
 }
