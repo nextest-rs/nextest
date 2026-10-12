@@ -16,6 +16,8 @@ harness = false
 
 As mentioned in [_Nextest's execution model_](how-it-works.md), cargo-nextest has a much thicker interface with the test harness than cargo test does. If you don't use any custom harnesses, cargo-nextest will run out of the box. However, custom test harnesses need to follow certain rules in order to work with nextest.
 
+If a test binary exits unsuccessfully or returns invalid output while listing tests, nextest checks the target's `harness` setting in its package manifest. When it finds `harness = false`, the error includes a hint pointing to these compatibility requirements, alongside the original failure. This detection is best-effort: if the manifest cannot be read or the target cannot be identified, nextest reports the original failure without the hint. When reusing builds with remapped source paths, nextest checks the manifest in the remapped source directory.
+
 ## libtest-mimic (recommended)
 
 Nextest is compatible with custom test harnesses based on [libtest-mimic](https://github.com/LukasKalbertodt/libtest-mimic), version 0.4.0, or 0.5.2 or above (note that 0.5.0 and 0.5.1 have [a regression](https://github.com/nextest-rs/datatest-stable/pull/5)). Using this crate is recommended.
