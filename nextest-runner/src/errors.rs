@@ -474,11 +474,41 @@ pub struct TestPriorityOutOfRange {
 pub enum ChildStartError {
     /// An error occurred while creating a temporary path for a setup script.
     #[error("error creating temporary path for setup script")]
-    TempPath(#[source] Arc<std::io::Error>),
+    SetupScriptTempPath(#[source] Arc<std::io::Error>),
+
+    /// An error occurred while creating a temporary directory for a wrapper report.
+    #[error("error creating temporary directory for run wrapper report")]
+    RunWrapperReportTempDir(#[source] Arc<std::io::Error>),
 
     /// An error occurred while spawning the child process.
     #[error("error spawning child process")]
     Spawn(#[source] Arc<std::io::Error>),
+}
+
+/// An error that occurred while reading a run wrapper report.
+#[derive(Clone, Debug, Error)]
+pub enum RunWrapperReportError {
+    /// The report's metadata could not be read.
+    #[error("failed to read the report's metadata")]
+    Metadata(#[source] Arc<std::io::Error>),
+    /// The report is not a regular file.
+    #[error("the report is not a regular file")]
+    NotRegularFile,
+    /// The report could not be opened.
+    #[error("failed to open the report")]
+    Open(#[source] Arc<std::io::Error>),
+    /// The report could not be read.
+    #[error("failed to read the report")]
+    Read(#[source] Arc<std::io::Error>),
+    /// The report exceeded the size limit.
+    #[error("the report exceeds {max_size} bytes")]
+    TooLarge {
+        /// Maximum report size in bytes.
+        max_size: u64,
+    },
+    /// The report could not be parsed.
+    #[error("failed to parse the report")]
+    Parse(#[source] Arc<serde_json::Error>),
 }
 
 /// An error that occurred while reading the output of a setup script.
@@ -760,6 +790,16 @@ pub enum ChildError {
     /// An error occurred while reading the output of a setup script.
     #[error(transparent)]
     SetupScriptOutput(#[from] SetupScriptOutputError),
+
+    /// An error occurred while reading a run wrapper report.
+    #[error("error reading run wrapper report `{path}`")]
+    RunWrapperReport {
+        /// The path to the report.
+        path: Utf8PathBuf,
+        /// The underlying error.
+        #[source]
+        error: RunWrapperReportError,
+    },
 }
 
 /// An error was returned while reading from child a file descriptor.
