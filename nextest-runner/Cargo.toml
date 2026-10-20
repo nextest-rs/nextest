@@ -161,6 +161,11 @@ self_update = { workspace = true, optional = true, default-features = false }
 # aws-lc-rs instead, activate ureq's TLS and rustls's provider separately.
 ureq = { workspace = true, optional = true, features = ["rustls-no-provider", "rustls-webpki-roots"] }
 rustls = { workspace = true, optional = true, features = ["aws-lc-rs"] }
+# rustls-webpki and webpki-roots are not used in code -- they're defined
+# explicitly here so self-update doesn't resolve to trust anchors with the
+# eMudhra compromise.
+rustls-webpki = { workspace = true, optional = true }
+webpki-roots = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "riscv32")'.dependencies]
 self_update = { workspace = true, optional = true, default-features = false }
@@ -194,8 +199,10 @@ self-update = [
     "dep:http",
     "dep:mukti-metadata",
     "dep:rustls",
+    "dep:rustls-webpki",
     "dep:sha2",
     "dep:ureq",
+    "dep:webpki-roots",
 ]
 usdt = ["dep:usdt"]
 experimental-tokio-console = [

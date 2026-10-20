@@ -10,6 +10,24 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.149] - 2026-10-20
+
+### Security
+
+- `cargo nextest self update` no longer trusts the eMudhra intermediate certificate authorities whose private keys were [disclosed on 2026-10-20](https://emudhra.we-have-a-problem.com/). Previously, an attacker able to intercept network traffic could have used these keys to make `cargo nextest self update` download and install a malicious binary.
+
+  Nextest's self-updater uses a bundled set of root certificates, so operating system and browser updates do not protect it. This release updates webpki-roots to 1.0.10 and rustls-webpki to 0.103.16, both of which distrust the compromised certificates.
+
+  Running tests does not involve network access and is not affected. Builds without the `self-update` feature, including most distribution packages, are also not affected.
+
+  Updating from an earlier version with `cargo nextest self update` would go through the affected code one last time. If you're concerned about your network being compromised, use one of the other [installation methods](https://nexte.st/docs/installation/pre-built-binaries/) instead.
+
+### Fixed
+
+- On riscv64 Linux, `cargo nextest self update` no longer panics. ([#3649])
+
+[#3649]: https://github.com/nextest-rs/nextest/pull/3649
+
 ## [0.9.148] - 2026-10-07
 
 ### Changed
@@ -2380,6 +2398,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.149]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.149
 [0.9.148]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.148
 [0.9.147]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.147
 [0.9.146]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.146
