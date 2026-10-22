@@ -1,0 +1,6 @@
+---
+source: nextest-runner/src/build_scope/scope.rs
+expression: scope.to_string()
+---
+--package=foo --package=foo@1.2 --package='nextest-*' --workspace --exclude=bar --exclude=baz@0.1.0 --lib --bin=my-bin --bin='bin with space' --bin='back\slash' --bins --example=example --example='' --examples --test=integration --test=-dash-test --test='line
+break' --tests --bench=bench --benches --all-targets --features=feat-a --features='feat-b feat-c' --features=-feat-d,feat-e --features='it'\''s' --all-features --no-default-features
