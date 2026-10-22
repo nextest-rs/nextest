@@ -12,6 +12,6 @@ Before reporting vulnerabilities, please understand that part of nextest's job i
 
 ## Reporting a vulnerability
 
-Please report vulnerabilities privately to the primary maintainer's email: rain@nexte.st.
+Please report vulnerabilities privately to the primary maintainer Rain Paharia's email: rain@nexte.st.
 
 We aim to respond to vulnerability reports within 2-3 business days, and to release patches on weekdays shortly afterwards.
