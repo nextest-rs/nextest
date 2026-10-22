@@ -1,0 +1,61 @@
+---
+source: nextest-runner/src/build_scope/scope.rs
+expression: json
+---
+{
+  "packages": {
+    "specs": [
+      "foo",
+      "foo@1.2",
+      "nextest-*"
+    ],
+    "workspace": true,
+    "exclude": [
+      "bar",
+      "baz@0.1.0"
+    ]
+  },
+  "targets": {
+    "lib": true,
+    "bins": {
+      "names": [
+        "my-bin",
+        "bin with space",
+        "back\\slash"
+      ],
+      "all": true
+    },
+    "examples": {
+      "names": [
+        "example",
+        ""
+      ],
+      "all": true
+    },
+    "tests": {
+      "names": [
+        "integration",
+        "-dash-test",
+        "line\nbreak"
+      ],
+      "all": true
+    },
+    "benches": {
+      "names": [
+        "bench"
+      ],
+      "all": true
+    },
+    "all-targets": true
+  },
+  "features": {
+    "features": [
+      "feat-a",
+      "feat-b feat-c",
+      "-feat-d,feat-e",
+      "it's"
+    ],
+    "all-features": true,
+    "no-default-features": true
+  }
+}

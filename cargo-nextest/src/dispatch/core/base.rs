@@ -5,7 +5,7 @@
 
 use crate::{
     ExpectedError, Result, ReuseBuildKind,
-    cargo_cli::{CargoBuildScopeOptions, CargoBuildSettings},
+    cargo_cli::CargoBuildSettings,
     dispatch::{
         EarlyArgs,
         common::ConfigOpts,
@@ -18,6 +18,7 @@ use camino::Utf8PathBuf;
 use guppy::graph::PackageGraph;
 use nextest_filtering::ParseContext;
 use nextest_runner::{
+    build_scope::BuildScope,
     cargo_config::CargoConfigs,
     config::core::{
         ConfigExperimental, ConfigPaths, EarlyProfile, ExperimentalConfig, NextestConfig,
@@ -52,7 +53,7 @@ pub(crate) struct BaseApp {
     config_paths: ConfigPaths,
     manifest_path: Option<Utf8PathBuf>,
     pub(crate) reuse_build: ReuseBuildInfo,
-    build_scope: CargoBuildScopeOptions,
+    build_scope: BuildScope,
     cargo_settings: CargoBuildSettings,
     pub(crate) config_opts: ConfigOpts,
     pub(crate) current_version: Version,
@@ -387,7 +388,7 @@ impl BaseApp {
     }
 
     pub(crate) fn build_scope_args(&self) -> Vec<String> {
-        self.build_scope.to_cli_args()
+        self.build_scope.to_cargo_args()
     }
 
     pub(crate) fn build_binary_list(&self, cargo_command: &str) -> Result<Arc<BinaryList>> {
@@ -419,7 +420,7 @@ impl BaseApp {
             return Ok(m.binary_list.clone());
         }
 
-        let cli_has_scope = self.build_scope.has_any();
+        let cli_has_scope = !self.build_scope.is_empty();
 
         let inherited_scope = match (rerun_build_scope, cli_has_scope) {
             (Some(scope), false) => {
@@ -519,13 +520,14 @@ pub(crate) fn current_version() -> Version {
 mod helpers {
     use crate::{
         ExpectedError, Result,
-        cargo_cli::{CargoBuildScopeOptions, CargoBuildSettings, CargoCli},
+        cargo_cli::{CargoBuildSettings, CargoCli},
         dispatch::core::value_enums::CargoMessageFormatOpt,
         output::OutputContext,
     };
     use camino::Utf8Path;
     use guppy::graph::PackageGraph;
     use nextest_runner::{
+        build_scope::BuildScope,
         list::{BinaryList, BinaryListBuilder},
         platform::BuildPlatforms,
     };
@@ -535,7 +537,7 @@ mod helpers {
         pub(crate) fn compute_binary_list(
             &self,
             cargo_command: &str,
-            build_scope: &CargoBuildScopeOptions,
+            build_scope: &BuildScope,
             graph: &PackageGraph,
             manifest_path: Option<&Utf8Path>,
             output: OutputContext,
@@ -582,7 +584,6 @@ mod helpers {
                 .add_arg("--no-run")
                 .add_flag_value("--message-format", message_format.cargo_arg());
 
-            // Add inherited build scope instead of self.build_scope.
             for arg in inherited_build_scope {
                 cargo_cli.add_owned_arg(arg.clone());
             }
