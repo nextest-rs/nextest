@@ -384,12 +384,7 @@ impl BaseApp {
     }
 
     pub(crate) fn build_scope_args(&self) -> Vec<String> {
-        self.cargo_opts
-            .build_scope
-            .to_cli_args()
-            .into_iter()
-            .map(|s| s.to_owned())
-            .collect()
+        self.cargo_opts.build_scope.to_cli_args()
     }
 
     pub(crate) fn build_binary_list(&self, cargo_command: &str) -> Result<Arc<BinaryList>> {
@@ -547,7 +542,9 @@ mod helpers {
             let message_format = CargoMessageFormatOpt::combine(&self.cargo_message_format)?;
 
             // Only build tests in the cargo test invocation, do not run them.
-            cargo_cli.add_args(["--no-run", "--message-format", message_format.cargo_arg()]);
+            cargo_cli
+                .add_arg("--no-run")
+                .add_flag_value("--message-format", message_format.cargo_arg());
             cargo_cli.add_options(self);
 
             Self::run_cargo_build(
@@ -575,7 +572,9 @@ mod helpers {
 
             let message_format = CargoMessageFormatOpt::combine(&self.cargo_message_format)?;
 
-            cargo_cli.add_args(["--no-run", "--message-format", message_format.cargo_arg()]);
+            cargo_cli
+                .add_arg("--no-run")
+                .add_flag_value("--message-format", message_format.cargo_arg());
 
             // Add inherited build scope instead of self.build_scope.
             for arg in inherited_build_scope {
