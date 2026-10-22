@@ -3295,7 +3295,7 @@ fn test_rerun_from_archive() {
     );
     assert_eq!(
         read_runs_json_entry(&runs_dir, BENCH_RUN_ID)["build-scope-args"],
-        serde_json::json!(["--bench", "my-bench"]),
+        serde_json::json!(["--bench=my-bench"]),
         "a bench run should record its build scope args"
     );
 
@@ -3394,7 +3394,7 @@ fn test_rerun_inherits_package_build_scope() {
         RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER,
     );
 
-    let package_scope_args = serde_json::json!(["--package", "cdylib-example"]);
+    let package_scope_args = serde_json::json!(["--package=cdylib-example"]);
     let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
 
     // With the default scope, the rerun would also build other packages. Those
@@ -3406,7 +3406,7 @@ fn test_rerun_inherits_package_build_scope() {
     assert!(
         rerun_output
             .stderr_as_str()
-            .contains("rerun: inheriting build scope from original run: --package cdylib-example"),
+            .contains("rerun: inheriting build scope from original run: --package=cdylib-example"),
         "rerun should log the inherited build scope: {rerun_output}"
     );
     check_rerun_output(
@@ -3434,7 +3434,7 @@ fn test_rerun_inherits_package_build_scope() {
     assert!(
         rerun2_output
             .stderr_as_str()
-            .contains("rerun: inheriting build scope from original run: --package cdylib-example"),
+            .contains("rerun: inheriting build scope from original run: --package=cdylib-example"),
         "second rerun should log the inherited build scope: {rerun2_output}"
     );
     check_rerun_output(

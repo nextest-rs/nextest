@@ -6,7 +6,7 @@
 use crate::{dispatch::CargoMessageFormatOpt, output::OutputContext};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Args};
-use std::{borrow::Cow, path::PathBuf};
+use std::{borrow::Cow, fmt, path::PathBuf};
 
 /// Build scope options: package selection, target selection, and feature
 /// selection.
@@ -150,7 +150,7 @@ impl CargoBuildScopeOptions {
     }
 
     /// Converts build scope args to a list of CLI arguments for storage.
-    pub(crate) fn to_cli_args(&self) -> Vec<&str> {
+    pub(crate) fn to_cli_args(&self) -> Vec<String> {
         let Self {
             // Package selection.
             packages,
@@ -178,59 +178,59 @@ impl CargoBuildScopeOptions {
 
         // Package selection.
         for pkg in packages {
-            args.extend(["--package", pkg.as_str()]);
+            args.push(format_flag_value("--package", pkg));
         }
         if *workspace {
-            args.push("--workspace");
+            args.push("--workspace".to_owned());
         }
         for exc in exclude {
-            args.extend(["--exclude", exc.as_str()]);
+            args.push(format_flag_value("--exclude", exc));
         }
         if *all {
-            args.push("--all");
+            args.push("--all".to_owned());
         }
 
         // Target selection.
         if *lib {
-            args.push("--lib");
+            args.push("--lib".to_owned());
         }
         for b in bin {
-            args.extend(["--bin", b.as_str()]);
+            args.push(format_flag_value("--bin", b));
         }
         if *bins {
-            args.push("--bins");
+            args.push("--bins".to_owned());
         }
         for ex in example {
-            args.extend(["--example", ex.as_str()]);
+            args.push(format_flag_value("--example", ex));
         }
         if *examples {
-            args.push("--examples");
+            args.push("--examples".to_owned());
         }
         for t in test {
-            args.extend(["--test", t.as_str()]);
+            args.push(format_flag_value("--test", t));
         }
         if *tests {
-            args.push("--tests");
+            args.push("--tests".to_owned());
         }
         for b in bench {
-            args.extend(["--bench", b.as_str()]);
+            args.push(format_flag_value("--bench", b));
         }
         if *benches {
-            args.push("--benches");
+            args.push("--benches".to_owned());
         }
         if *all_targets {
-            args.push("--all-targets");
+            args.push("--all-targets".to_owned());
         }
 
         // Feature selection.
         for f in features {
-            args.extend(["--features", f.as_str()]);
+            args.push(format_flag_value("--features", f));
         }
         if *all_features {
-            args.push("--all-features");
+            args.push("--all-features".to_owned());
         }
         if *no_default_features {
-            args.push("--no-default-features");
+            args.push("--no-default-features".to_owned());
         }
 
         args
@@ -373,53 +373,60 @@ pub(crate) struct CargoOptions {
 #[derive(Clone, Debug)]
 pub(crate) struct CargoCli<'a> {
     cargo_path: Utf8PathBuf,
-    manifest_path: Option<&'a Utf8Path>,
     output: OutputContext,
     command: &'a str,
-    args: Vec<Cow<'a, str>>,
+    args: Vec<Cow<'static, str>>,
     stderr_null: bool,
 }
 
 impl<'a> CargoCli<'a> {
     pub(crate) fn new(
         command: &'a str,
-        manifest_path: Option<&'a Utf8Path>,
+        manifest_path: Option<&Utf8Path>,
         output: OutputContext,
     ) -> Self {
         let cargo_path = cargo_path();
-        Self {
+        let mut cli = Self {
             cargo_path,
-            manifest_path,
             output,
             command,
             args: vec![],
             stderr_null: false,
+        };
+        if let Some(manifest_path) = manifest_path {
+            cli.add_flag_value("--manifest-path", manifest_path);
         }
+        cli
     }
 
-    pub(crate) fn add_arg(&mut self, arg: &'a str) -> &mut Self {
+    pub(crate) fn add_arg(&mut self, arg: &'static str) -> &mut Self {
         self.args.push(Cow::Borrowed(arg));
         self
     }
 
-    pub(crate) fn add_args(&mut self, args: impl IntoIterator<Item = &'a str>) -> &mut Self {
+    pub(crate) fn add_args(&mut self, args: impl IntoIterator<Item = &'static str>) -> &mut Self {
         self.args.extend(args.into_iter().map(Cow::Borrowed));
         self
     }
 
+    pub(crate) fn add_flag_value(
+        &mut self,
+        flag: &'static str,
+        value: impl fmt::Display,
+    ) -> &mut Self {
+        self.add_owned_arg(format_flag_value(flag, value))
+    }
+
     /// Adds build scope options (package, target, and feature selection) to the
     /// command.
-    pub(crate) fn add_build_scope_options(
-        &mut self,
-        scope: &'a CargoBuildScopeOptions,
-    ) -> &mut Self {
+    pub(crate) fn add_build_scope_options(&mut self, scope: &CargoBuildScopeOptions) -> &mut Self {
         for arg in scope.to_cli_args() {
-            self.add_arg(arg);
+            self.add_owned_arg(arg);
         }
         self
     }
 
-    pub(crate) fn add_options(&mut self, options: &'a CargoOptions) -> &mut Self {
+    pub(crate) fn add_options(&mut self, options: &CargoOptions) -> &mut Self {
         self.add_build_scope_options(&options.build_scope);
         self.add_non_build_scope_options(options);
         self
@@ -430,24 +437,24 @@ impl<'a> CargoCli<'a> {
     /// This includes compilation options, manifest options, and other cargo
     /// options. Used when inheriting build scope from a rerun but using the
     /// current run's other options.
-    pub(crate) fn add_non_build_scope_options(&mut self, options: &'a CargoOptions) -> &mut Self {
+    pub(crate) fn add_non_build_scope_options(&mut self, options: &CargoOptions) -> &mut Self {
         // ---
         // Compilation options
         // ---
         if let Some(build_jobs) = &options.build_jobs {
-            self.add_args(["--jobs", build_jobs.as_str()]);
+            self.add_flag_value("--jobs", build_jobs);
         }
         if options.release {
             self.add_arg("--release");
         }
         if let Some(profile) = &options.cargo_profile {
-            self.add_args(["--profile", profile]);
+            self.add_flag_value("--profile", profile);
         }
         if let Some(target) = &options.target {
-            self.add_args(["--target", target]);
+            self.add_flag_value("--target", target);
         }
         if let Some(target_dir) = &options.target_dir {
-            self.add_args(["--target-dir", target_dir.as_str()]);
+            self.add_flag_value("--target-dir", target_dir);
         }
         if options.unit_graph {
             self.add_arg("--unit-graph");
@@ -455,10 +462,7 @@ impl<'a> CargoCli<'a> {
         if let Some(timings) = &options.timings {
             match timings {
                 Some(timings) => {
-                    // The argument must be passed in as "--timings=html,json", not "--timings
-                    // html,json".
-                    let timings = format!("--timings={}", timings.as_str());
-                    self.add_owned_arg(timings);
+                    self.add_flag_value("--timings", timings);
                 }
                 None => {
                     self.add_arg("--timings");
@@ -484,18 +488,15 @@ impl<'a> CargoCli<'a> {
         if options.future_incompat_report {
             self.add_arg("--future-incompat-report");
         }
-        self.add_args(
-            options
-                .unstable_flags
-                .iter()
-                .flat_map(|s| ["-Z", s.as_str()]),
-        );
+        for flag in &options.unstable_flags {
+            self.add_owned_arg(format!("-Z{flag}"));
+        }
 
         self
     }
 
     /// Add Cargo options that are common to all commands.
-    pub(crate) fn add_generic_cargo_options(&mut self, options: &'a CargoOptions) -> &mut Self {
+    pub(crate) fn add_generic_cargo_options(&mut self, options: &CargoOptions) -> &mut Self {
         // ---
         // Manifest options
         // ---
@@ -517,13 +518,16 @@ impl<'a> CargoCli<'a> {
         if options.cargo_quiet > 1 {
             self.stderr_null = true;
         }
-        self.add_args(options.config.iter().flat_map(|s| ["--config", s.as_str()]));
+        for config in &options.config {
+            self.add_flag_value("--config", config);
+        }
 
         self
     }
 
-    pub(crate) fn add_owned_arg(&mut self, arg: String) {
+    pub(crate) fn add_owned_arg(&mut self, arg: String) -> &mut Self {
         self.args.push(Cow::Owned(arg));
+        self
     }
 
     pub(crate) fn all_args(&self) -> Vec<&str> {
@@ -532,9 +536,6 @@ impl<'a> CargoCli<'a> {
             self.output.color.to_arg(),
             self.command,
         ];
-        if let Some(path) = self.manifest_path {
-            all_args.extend(["--manifest-path", path.as_str()]);
-        }
         all_args.extend(self.args.iter().map(|s| &**s));
         all_args
     }
@@ -554,6 +555,10 @@ impl<'a> CargoCli<'a> {
             ret
         }
     }
+}
+
+fn format_flag_value(flag: &'static str, value: impl fmt::Display) -> String {
+    format!("{flag}={value}")
 }
 
 fn cargo_path() -> Utf8PathBuf {
@@ -591,7 +596,7 @@ mod tests {
         );
         cargo_cli
             .add_args(["--format-version=1", "--all-features"])
-            .add_owned_arg("--jobs=4".to_owned());
+            .add_flag_value("--jobs", 4);
 
         let all_args = cargo_cli.all_args();
         assert_eq!(all_args[0], cargo_path().as_str());
@@ -600,8 +605,7 @@ mod tests {
             [
                 "--color=never",
                 "metadata",
-                "--manifest-path",
-                "path/to/Cargo.toml",
+                "--manifest-path=path/to/Cargo.toml",
                 "--format-version=1",
                 "--all-features",
                 "--jobs=4",
@@ -674,41 +678,35 @@ mod tests {
             (
                 "-p foo -p bar@1.2 --exclude baz --workspace",
                 &[
-                    "--package",
-                    "foo",
-                    "--package",
-                    "bar@1.2",
+                    "--package=foo",
+                    "--package=bar@1.2",
                     "--workspace",
-                    "--exclude",
-                    "baz",
+                    "--exclude=baz",
                 ],
             ),
             ("--all", &["--all"]),
             ("--workspace --all", &["--workspace", "--all"]),
             (
                 "--package=nextest-* --all",
-                &["--package", "nextest-*", "--all"],
+                &["--package=nextest-*", "--all"],
             ),
             (
                 "-F a,b --no-default-features",
-                &["--features", "a,b", "--no-default-features"],
+                &["--features=a,b", "--no-default-features"],
             ),
             (
                 "--features 'a b' --all-features",
-                &["--features", "a b", "--all-features"],
+                &["--features=a b", "--all-features"],
             ),
-            ("--lib --bins --test t", &["--lib", "--bins", "--test", "t"]),
+            ("--lib --bins --test t", &["--lib", "--bins", "--test=t"]),
             (
                 "--bin b --example e --examples --tests --bench be --benches --all-targets",
                 &[
-                    "--bin",
-                    "b",
-                    "--example",
-                    "e",
+                    "--bin=b",
+                    "--example=e",
                     "--examples",
                     "--tests",
-                    "--bench",
-                    "be",
+                    "--bench=be",
                     "--benches",
                     "--all-targets",
                 ],
