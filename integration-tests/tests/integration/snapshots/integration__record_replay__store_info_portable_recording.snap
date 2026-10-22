@@ -18,6 +18,6 @@ Run 79000001-0000-0000-0000-000000000001
 
   sizes:            compressed  uncompressed  entries
     log                 <size>        <size>       37
-    store               <size>        <size>        7
+    store               <size>        <size>        8
                     ──────────  ────────────  ───────
-    total               <size>        <size>       44
+    total               <size>        <size>       45

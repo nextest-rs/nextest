@@ -320,7 +320,7 @@ pub struct NamedTargets {
 }
 
 impl NamedTargets {
-    fn empty() -> Self {
+    pub(crate) fn empty() -> Self {
         Self {
             names: Vec::new(),
             all: false,

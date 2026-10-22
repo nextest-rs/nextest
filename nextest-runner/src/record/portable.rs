@@ -20,11 +20,11 @@
 
 use super::{
     format::{
-        CARGO_METADATA_JSON_PATH, OutputDict, PORTABLE_MANIFEST_FILE_NAME,
+        BUILD_SCOPE_JSON_PATH, CARGO_METADATA_JSON_PATH, OutputDict, PORTABLE_MANIFEST_FILE_NAME,
         PORTABLE_RECORDING_FORMAT_VERSION, PortableManifest, RECORD_OPTS_JSON_PATH,
-        RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME, RerunInfo, STDERR_DICT_PATH, STDOUT_DICT_PATH,
-        STORE_FORMAT_VERSION, STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH, has_zip_extension,
-        stored_file_options,
+        RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME, RecordedBuildScope, RerunInfo, STDERR_DICT_PATH,
+        STDOUT_DICT_PATH, STORE_FORMAT_VERSION, STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH,
+        has_zip_extension, stored_file_options,
     },
     reader::{StoreReader, decompress_with_dict},
     store::{RecordedRunInfo, RunFilesExist, StoreRunsDir},
@@ -901,6 +901,14 @@ impl StoreReader for PortableStoreReader<'_> {
         })
     }
 
+    fn read_build_scope(&mut self) -> Result<RecordedBuildScope, RecordReadError> {
+        let bytes = self.read_store_file(BUILD_SCOPE_JSON_PATH)?;
+        serde_json::from_slice(&bytes).map_err(|error| RecordReadError::DeserializeMetadata {
+            file_name: BUILD_SCOPE_JSON_PATH.to_string(),
+            error,
+        })
+    }
+
     fn read_rerun_info(&mut self) -> Result<Option<RerunInfo>, RecordReadError> {
         match self.read_store_file(RERUN_INFO_JSON_PATH) {
             Ok(bytes) => {
@@ -1026,7 +1034,6 @@ mod tests {
             last_written_at: now,
             duration_secs: Some(12.345),
             cli_args: vec!["cargo".to_owned(), "nextest".to_owned(), "run".to_owned()],
-            build_scope_args: vec!["--workspace".to_owned()],
             env_vars: BTreeMap::from([("CARGO_TERM_COLOR".to_owned(), "always".to_owned())]),
             parent_run_id: None,
             sizes: RecordedSizes::default(),

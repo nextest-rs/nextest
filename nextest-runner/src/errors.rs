@@ -2302,6 +2302,14 @@ pub enum RunStoreError {
         error: serde_json::Error,
     },
 
+    /// An error occurred while serializing the build scope.
+    #[error("error serializing build scope")]
+    BuildScopeSerialize {
+        /// The underlying error.
+        #[source]
+        error: serde_json::Error,
+    },
+
     /// An error occurred while serializing the test list.
     #[error("error serializing test list")]
     TestListSerialize {

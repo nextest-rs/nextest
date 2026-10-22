@@ -36,6 +36,7 @@ A zip archive with two types of content:
 - `cargo-metadata.json`: Build graph information.
 - `test-list.json`: The test list summary.
 - `record-opts.json`: Options affecting replay (run mode, etc.).
+- `build-scope.json`: The build scope this run resolved (store format 3.0 and later). Used only by reruns; see [Build scope storage](#build-scope-storage).
 - `rerun-info.json`: Rerun-specific metadata (only for reruns).
 - `stdout.dict`, `stderr.dict`: Zstd dictionaries for self-contained archives.
 
@@ -74,6 +75,7 @@ Both versions use major/minor semantics with `check_readable_by()` for compatibi
 
 Key methods:
 - `read_cargo_metadata()`, `read_test_list()`, `read_record_opts()`: Read metadata.
+- `read_build_scope()`: Read `meta/build-scope.json` (required for store format 3.0 and later).
 - `read_rerun_info()`: Read rerun chain info (returns `None` for non-reruns).
 - `load_dictionaries()`: Must be called before `read_output()`.
 - `read_output(file_name)`: Read decompressed test output.
@@ -91,6 +93,25 @@ There are **two separate format versions**:
 2. **`STORE_FORMAT_VERSION`** (in `format.rs`): Version of the archive format (`store.zip` + `run.log.zst`). This is a `StoreFormatVersion` combining a major version (`StoreFormatMajorVersion`) and minor version (`StoreFormatMinorVersion`). Stored per-run in `runs.json.zst` to enable checking replayability without opening archives. Major versions must match exactly; minor versions allow reading older archives but not newer ones.
 
 **Write permission model**: When reading `runs.json.zst`, if its format version is newer than the current nextest supports, writing is denied (`RunsJsonWritePermission::Denied`) to prevent data loss. Reading always proceeds.
+
+`StoreFormatMajorVersion::last_nextest_version` maps each older major version to the last nextest release that can read it (used in the "use nextest <= X" message). Add an entry whenever the major version is bumped.
+
+## Build scope storage
+
+The build scope (package, target, and feature selection) is stored as a typed `BuildScope` (from `crate::build_scope`), in each run's `store.zip` only:
+
+- `meta/build-scope.json` (`BUILD_SCOPE_JSON_PATH`): a serialized `RecordedBuildScope` (`{"build-kind": ..., "scope": {...}}`, both fields required), written by `RecordSession::setup` (via `RunRecorder::write_build_scope`) for every run, from `RecordSessionConfig::build_scope`. `scope` is the build scope this run resolved (cargo-nextest's `BaseApp::resolve_build_scope`). That's the scope from the run's command line, or, for a rerun without build scope arguments, the scope inherited from the chain root. Read via `StoreReader::read_build_scope`, but only for the chain root: a rerun of a rerun takes the root's scope from the parent's `rerun-info.json`.
+- `RerunRootInfo::build_scope` (`meta/rerun-info.json`, as a `build-scope` object): required. A copy of the root run's `RecordedBuildScope` (same type and shape as its `build-scope.json`), so the root's build kind travels with the chain even if the root is pruned. Reruns inherit its `scope` when the user passes no build scope arguments.
+
+`build-kind` (`BuildKind`) records how the run got its binaries: `cargo` when nextest built the binaries with Cargo (`cargo test --no-run`, or `cargo bench --no-run` for benchmarks) using the scope, including with `--cargo-metadata` alone; and `reused` with `--archive-file` or `--binaries-metadata`, where the scope wasn't used to build anything. cargo-nextest's `BaseApp::build_binary_list_with_scope` returns it alongside the binary list: `Reused` from its reuse early return, `Cargo` after building. Since build scope arguments can't be combined with `--archive-file` or `--binaries-metadata`, a chain root that reused a build always records an empty scope, so a rerun of it inherits `{}`. Nothing reads the build kind for behavior yet; it's recorded so that a future version can treat chains rooted at reused builds differently without a format change.
+
+The scope is deliberately not part of `RecordOpts`: replay reads `record-opts.json` but never `build-scope.json`, so a build scope that a later nextest can't read only breaks rerunning that run, never replaying it.
+
+`runs.json.zst` and the portable manifest don't hold a build scope. Entries written before store format 3.0 had an unstructured `build-scope-args` field; serde ignores it on read, and rewriting `runs.json.zst` drops it (no legacy support, by design). Those runs aren't replayable (major version 2), but they still load, list, and prune. Since nextest 0.9.149 can still read a newer `runs.json.zst` (only writes are denied), it may rerun its own 2.x runs with Cargo's default scope after a newer nextest has rewritten the index. This is an accepted risk.
+
+When a rerun's parent is the chain root (it has no `rerun-info.json`), `ComputedRerunInfo::compute` and `compute_from_archive` build `RerunRootInfo` from the parent's `meta/build-scope.json`. If that file can't be read (missing or malformed: on a 3.x run, the metadata was edited or corrupted), they return a `RecordReadError`, which cargo-nextest reports as `ExpectedError::RecordReadError`, the same as any other read failure.
+
+`BuildScope` ignores unknown fields on read. Adding a field to it requires bumping the `STORE_FORMAT_VERSION` minor, so that older readers refuse to rerun with a wider scope than the one recorded. Adding a `BuildKind` variant also requires bumping the `STORE_FORMAT_VERSION` minor: older readers fail to deserialize an unknown `build-kind`, and the bump makes them report the run as too new instead.
 
 ## Locking model
 
@@ -182,7 +203,7 @@ initial_run -> rerun_1 -> rerun_2 -> ...
 
 Each rerun stores `RerunInfo` containing:
 - `parent_run_id`: Immediate parent.
-- `root_info`: Information from the chain root (build scope args, original run ID).
+- `root_info`: Information from the chain root (build scope, original run ID).
 - `test_suites`: Map of binary ID → passing/outstanding test sets.
 
 **Outstanding test computation** (`rerun.rs`):

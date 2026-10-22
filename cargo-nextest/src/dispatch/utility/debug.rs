@@ -18,9 +18,10 @@ use nextest_runner::{
     list::SerializableFormat,
     platform::BuildPlatforms,
     record::{
-        CARGO_METADATA_JSON_PATH, ExtractOuterFileResult, PORTABLE_MANIFEST_FILE_NAME,
-        PortableRecording, RECORD_OPTS_JSON_PATH, RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME,
-        STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_ZIP_FILE_NAME, StoreReader, TEST_LIST_JSON_PATH,
+        BUILD_SCOPE_JSON_PATH, CARGO_METADATA_JSON_PATH, ExtractOuterFileResult,
+        PORTABLE_MANIFEST_FILE_NAME, PortableRecording, RECORD_OPTS_JSON_PATH,
+        RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME, STDERR_DICT_PATH, STDOUT_DICT_PATH,
+        STORE_ZIP_FILE_NAME, StoreReader, TEST_LIST_JSON_PATH,
     },
     redact::Redactor,
     user_config::elements::MAX_MAX_OUTPUT_SIZE,
@@ -325,6 +326,7 @@ impl ExtractPortableRecordingOpts {
             CARGO_METADATA_JSON_PATH,
             TEST_LIST_JSON_PATH,
             RECORD_OPTS_JSON_PATH,
+            BUILD_SCOPE_JSON_PATH,
             STDOUT_DICT_PATH,
             STDERR_DICT_PATH,
         ] {

@@ -382,6 +382,9 @@ impl<'a> CargoCli<'a> {
     }
 
     /// Adds Cargo options (build scope and otherwise) to this Cargo command.
+    ///
+    /// Here, `build_scope` is the effective scope: either the one provided
+    /// during this run, or one a rerun inherits from its original run.
     pub(crate) fn add_options(
         &mut self,
         build_scope: &BuildScope,
@@ -395,8 +398,7 @@ impl<'a> CargoCli<'a> {
     /// Adds non-build-scope options from `CargoBuildSettings`.
     ///
     /// This includes compilation options, manifest options, and other cargo
-    /// options. Used when inheriting build scope from a rerun but using the
-    /// current run's other options.
+    /// options.
     pub(crate) fn add_build_settings(&mut self, options: &CargoBuildSettings) -> &mut Self {
         // ---
         // Compilation options
@@ -485,7 +487,14 @@ impl<'a> CargoCli<'a> {
         self
     }
 
-    pub(crate) fn add_owned_arg(&mut self, arg: String) -> &mut Self {
+    /// Adds an owned argument.
+    ///
+    /// Do not expose this function outside this module! This is private so that
+    /// dynamic values from outside this module can only be added when combined
+    /// with a flag via `=` (via `add_flag_value` or `add_build_scope`).
+    /// Non-equals Cargo arguments are susceptible to injection attacks (e.g.
+    /// Cargo accepts `-p --config=...`).
+    fn add_owned_arg(&mut self, arg: String) -> &mut Self {
         self.args.push(Cow::Owned(arg));
         self
     }
