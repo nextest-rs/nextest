@@ -1,0 +1,12 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&rerun_output.stderr_as_str(), temp_root)"
+---
+info: experimental features enabled: setup-scripts, wrapper-scripts, benchmarks
+error: error reading recorded run
+
+Caused by:
+  error deserializing `meta/build-scope.json`
+
+Caused by:
+  invalid type: integer `1`, expected struct PackageSelection at line 1 column 47

@@ -249,15 +249,14 @@ impl ComputedRerunInfo {
     /// * If this is a rerun chain, also returns information about the root of the
     ///   chain.
     /// * If this is not a rerun chain, returns the [`RerunRootInfo`] computed
-    ///   from the passed-in build scope args.
+    ///   from the parent's own `meta/build-scope.json`.
     pub fn compute(
         parent_run_id: ReportUuid,
-        parent_build_scope_args: &[String],
         reader: &mut RecordReader,
     ) -> Result<(Self, RerunRootInfo), RecordReadError> {
         let rerun_info = reader.read_rerun_info()?;
         let (prev_test_suites, root_info) =
-            prev_suites_and_root_info(parent_run_id, rerun_info, parent_build_scope_args);
+            prev_suites_and_root_info(parent_run_id, rerun_info, reader)?;
         let test_list = reader.read_test_list()?;
         let outcomes = TestEventOutcomes::collect(reader)?;
 
@@ -277,18 +276,17 @@ impl ComputedRerunInfo {
     /// * If the portable recording is of a rerun, returns information about
     ///   the root of the rerun chain.
     /// * If the portable recording is not of a rerun, returns the [`RerunRootInfo`]
-    ///   computed from the recording's own build scope args.
+    ///   computed from the recording's own `meta/build-scope.json`.
     pub fn compute_from_archive(
         archive: &mut PortableRecording,
     ) -> Result<(Self, RerunRootInfo), RecordReadError> {
         let parent_run_id = archive.run_info().run_id;
-        let parent_build_scope_args = archive.run_info().build_scope_args;
         let mut store = archive
             .open_store()
             .map_err(RecordReadError::PortableRecording)?;
         let rerun_info = store.read_rerun_info()?;
         let (prev_test_suites, root_info) =
-            prev_suites_and_root_info(parent_run_id, rerun_info, &parent_build_scope_args);
+            prev_suites_and_root_info(parent_run_id, rerun_info, &mut store)?;
         let test_list = store.read_test_list()?;
         // No need to load dictionaries since we're not using them.
 
@@ -323,22 +321,22 @@ impl ComputedRerunInfo {
 /// root's info.
 ///
 /// A parent without rerun info is itself the chain root, so its rerun info
-/// is computed from the parent's build scope args.
+/// is computed from the parent's `meta/build-scope.json`.
 fn prev_suites_and_root_info(
     parent_run_id: ReportUuid,
     rerun_info: Option<RerunInfo>,
-    parent_build_scope_args: &[String],
-) -> (Option<IdOrdMap<RerunTestSuiteInfo>>, RerunRootInfo) {
+    store: &mut impl StoreReader,
+) -> Result<(Option<IdOrdMap<RerunTestSuiteInfo>>, RerunRootInfo), RecordReadError> {
     match rerun_info {
         Some(RerunInfo {
             parent_run_id: _,
             root_info,
             test_suites,
-        }) => (Some(test_suites), root_info),
-        None => (
-            None,
-            RerunRootInfo::new(parent_run_id, parent_build_scope_args.to_vec()),
-        ),
+        }) => Ok((Some(test_suites), root_info)),
+        None => {
+            let build_scope = store.read_build_scope()?;
+            Ok((None, RerunRootInfo::new(parent_run_id, build_scope)))
+        }
     }
 }
 

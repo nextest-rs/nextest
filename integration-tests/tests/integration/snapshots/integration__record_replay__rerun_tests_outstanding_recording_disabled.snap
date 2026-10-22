@@ -7,7 +7,7 @@ info: rerun: inheriting build scope from original run: (default scope)
     Finished `test` profile [unoptimized + debuginfo] target(s) in [ELAPSED]
 warning: recording disabled: failed to create run recorder
   caused by:
-  - cannot write to record store: runs.json.zst format version 9999 is newer than supported version 2
+  - cannot write to record store: runs.json.zst format version 9999 is newer than supported version 3
 ────────────
  Nextest run ID 96000003-0000-0000-0000-000000000003 with nextest profile: default
     Starting 1 test across 7 binaries (32 tests skipped)

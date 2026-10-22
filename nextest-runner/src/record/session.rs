@@ -14,7 +14,10 @@ use super::{
 };
 use crate::{
     errors::{RecordPruneError, RecordSetupError, RunStoreError},
-    record::{Styles, format::RerunInfo},
+    record::{
+        Styles,
+        format::{RecordedBuildScope, RerunInfo},
+    },
     reporter::{
         RunFinishedInfo,
         events::{FinalRunStats, RunFinishedStats, StressFinalRunStats},
@@ -41,11 +44,8 @@ pub struct RecordSessionConfig<'a> {
     pub started_at: DateTime<FixedOffset>,
     /// The command-line arguments used to invoke nextest.
     pub cli_args: Vec<String>,
-    /// Build scope arguments (package and target selection).
-    ///
-    /// These determine which packages and targets are built. In a rerun chain,
-    /// these are inherited from the original run unless explicitly overridden.
-    pub build_scope_args: Vec<String>,
+    /// The build scope for this run.
+    pub build_scope: RecordedBuildScope,
     /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
     pub env_vars: BTreeMap<String, String>,
     /// Maximum size per output file before truncation.
@@ -100,11 +100,14 @@ impl RecordSession {
                 config.nextest_version,
                 config.started_at,
                 config.cli_args,
-                config.build_scope_args,
                 config.env_vars,
                 config.max_output_size,
                 config.rerun_info.as_ref().map(|info| info.parent_run_id),
             )
+            .map_err(RecordSetupError::RecorderCreate)?;
+
+        recorder
+            .write_build_scope(&config.build_scope)
             .map_err(RecordSetupError::RecorderCreate)?;
 
         // If this is a rerun, write the rerun info to the archive.

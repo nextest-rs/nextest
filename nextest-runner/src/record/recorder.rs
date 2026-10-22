@@ -11,9 +11,9 @@
 use super::{
     dicts,
     format::{
-        CARGO_METADATA_JSON_PATH, OutputDict, RECORD_OPTS_JSON_PATH, RUN_LOG_FILE_NAME,
-        STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH,
-        stored_file_options, zstd_file_options,
+        BUILD_SCOPE_JSON_PATH, CARGO_METADATA_JSON_PATH, OutputDict, RECORD_OPTS_JSON_PATH,
+        RUN_LOG_FILE_NAME, STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_ZIP_FILE_NAME,
+        TEST_LIST_JSON_PATH, stored_file_options, zstd_file_options,
     },
     summary::{
         OutputEventKind, OutputFileName, OutputKind, RecordOpts, TestEventKindSummary,
@@ -23,7 +23,7 @@ use super::{
 use crate::{
     errors::{RunStoreError, StoreWriterError},
     output_spec::{LiveSpec, RecordingSpec},
-    record::format::{RERUN_INFO_JSON_PATH, RerunInfo},
+    record::format::{RERUN_INFO_JSON_PATH, RecordedBuildScope, RerunInfo},
     reporter::events::{
         ChildExecutionOutputDescription, ChildOutputDescription, ExecuteStatus, ExecutionStatuses,
         SetupScriptExecuteStatus,
@@ -210,6 +210,19 @@ impl RunRecorder {
         // Write dictionaries to make the archive self-contained.
         self.write_archive_file(STDOUT_DICT_PATH, dicts::STDOUT)?;
         self.write_archive_file(STDERR_DICT_PATH, dicts::STDERR)?;
+
+        Ok(())
+    }
+
+    /// Writes the build scope to the archive.
+    pub(crate) fn write_build_scope(
+        &mut self,
+        build_scope: &RecordedBuildScope,
+    ) -> Result<(), RunStoreError> {
+        let build_scope_json = serde_json::to_string(build_scope)
+            .map_err(|error| RunStoreError::BuildScopeSerialize { error })?;
+
+        self.write_archive_file(BUILD_SCOPE_JSON_PATH, build_scope_json.as_bytes())?;
 
         Ok(())
     }
