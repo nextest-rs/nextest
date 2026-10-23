@@ -22,8 +22,8 @@ use integration_tests::{
 };
 use nextest_metadata::NextestExitCode;
 use nextest_runner::record::{
-    CARGO_METADATA_JSON_PATH, PORTABLE_MANIFEST_FILE_NAME, RUN_LOG_FILE_NAME, STORE_ZIP_FILE_NAME,
-    TEST_LIST_JSON_PATH, encode_workspace_path,
+    CARGO_METADATA_JSON_PATH, PORTABLE_MANIFEST_FILE_NAME, RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME,
+    STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH, encode_workspace_path,
 };
 use regex::Regex;
 use std::{
@@ -2415,17 +2415,31 @@ fn test_record_setup_unwritable_state_dir_is_nonfatal() {
 /// Returns None if the file doesn't exist (i.e., this is an original run, not a
 /// rerun).
 fn read_rerun_info(runs_dir: &Utf8Path, run_id: &str) -> Option<serde_json::Value> {
-    let store_zip_path = runs_dir.join(run_id).join("store.zip");
-    let file = std::fs::File::open(&store_zip_path).ok()?;
-    let mut archive = Archive::new(BufReader::new(file)).ok()?;
-    let mut rerun_info_file = archive.get_by_name("meta/rerun-info.json")?;
+    read_store_zip_json(runs_dir, run_id, RERUN_INFO_JSON_PATH)
+}
+
+/// Reads a JSON from `store.zip`, returning `None` if the entry is missing.
+///
+/// Panics on any other failure.
+fn read_store_zip_json(
+    runs_dir: &Utf8Path,
+    run_id: &str,
+    entry_name: &str,
+) -> Option<serde_json::Value> {
+    let store_zip_path = runs_dir.join(run_id).join(STORE_ZIP_FILE_NAME);
+    let file = File::open(&store_zip_path)
+        .unwrap_or_else(|error| panic!("opened {store_zip_path}: {error}"));
+    let mut archive = Archive::new(BufReader::new(file))
+        .unwrap_or_else(|error| panic!("parsed {store_zip_path}: {error}"));
+    let mut entry = archive.get_by_name(entry_name)?;
     let mut contents = String::new();
-    rerun_info_file
+    entry
         .read()
-        .ok()?
-        .read_to_string(&mut contents)
-        .ok()?;
-    serde_json::from_str(&contents).ok()
+        .and_then(|mut reader| reader.read_to_string(&mut contents))
+        .unwrap_or_else(|error| panic!("read {entry_name} from {store_zip_path}: {error}"));
+    let value = serde_json::from_str(&contents)
+        .unwrap_or_else(|error| panic!("parsed {entry_name} from {store_zip_path}: {error}"));
+    Some(value)
 }
 
 /// Basic rerun flow.
