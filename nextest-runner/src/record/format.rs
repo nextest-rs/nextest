@@ -1400,6 +1400,29 @@ mod tests {
     }
 
     #[test]
+    fn test_rerun_root_info_serialize() {
+        let root_info = RerunRootInfo::new(
+            ReportUuid::from_u128(0x550e8400_e29b_41d4_a716_446655440000),
+            vec![
+                "--workspace".to_owned(),
+                "--exclude".to_owned(),
+                "nextest-*".to_owned(),
+                "--test".to_owned(),
+                "integration".to_owned(),
+                "--features".to_owned(),
+                "feat-a".to_owned(),
+            ],
+        );
+        let json = serde_json::to_string_pretty(&root_info).expect("serialization should succeed");
+        insta::assert_snapshot!(json);
+
+        let roundtripped: RerunRootInfo =
+            serde_json::from_str(&json).expect("deserialization should succeed");
+        assert_eq!(roundtripped.run_id, root_info.run_id);
+        assert_eq!(roundtripped.build_scope_args, root_info.build_scope_args);
+    }
+
+    #[test]
     fn test_recorded_run_deserialize_without_minor_version() {
         // Old archives without store-format-minor-version should default to 0.
         let json = r#"{
