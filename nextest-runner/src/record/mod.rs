@@ -55,7 +55,8 @@ pub use format::{
     RUN_LOG_FILE_NAME, RecordedBuildScope, RerunInfo, RerunRootInfo, RerunTestSuiteInfo,
     RunsJsonFormatVersion, RunsJsonWritePermission, STDERR_DICT_PATH, STDOUT_DICT_PATH,
     STORE_FORMAT_VERSION, STORE_ZIP_FILE_NAME, StoreFormatMajorVersion, StoreFormatMinorVersion,
-    StoreFormatVersion, StoreVersionIncompatibility, TEST_LIST_JSON_PATH, has_zip_extension,
+    StoreFormatVersion, StoreVersionIncompatibility, TEST_LIST_JSON_PATH, TooOldRecordingGuidance,
+    has_zip_extension,
 };
 pub use portable::{
     ExtractOuterFileResult, PortableRecording, PortableRecordingEventIter, PortableRecordingResult,

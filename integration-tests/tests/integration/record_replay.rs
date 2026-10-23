@@ -2317,7 +2317,8 @@ fn test_replayability_store_version_too_new() {
     }
 }
 
-/// Test error messages for a store format 2.x run.
+/// Test error messages for a store format 2.x run. (The errors recommend
+/// discarding the recording rather than downgrading the run.)
 ///
 /// Covers on-disk and portable 2.x runs and `store info`.
 #[test]

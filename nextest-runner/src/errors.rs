@@ -2949,10 +2949,7 @@ pub enum PortableRecordingReadError {
     },
 
     /// The store format version is not supported.
-    #[error(
-        "store format version {found} in `{path}` is incompatible: {incompatibility} \
-         (this nextest supports version {supported})"
-    )]
+    #[error("store format version {found} in `{path}` is incompatible: {incompatibility}")]
     UnsupportedStoreFormatVersion {
         /// The path to the archive.
         path: Utf8PathBuf,
