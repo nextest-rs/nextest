@@ -5,7 +5,7 @@
 
 use crate::{
     ExpectedError, ExtractOutputFormat, Result,
-    cargo_cli::{CargoCli, CargoOptions},
+    cargo_cli::{CargoBuildSettings, CargoCli},
     output::{OutputContext, StderrStyles},
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -28,7 +28,7 @@ use tracing::{debug, warn};
 pub(super) fn acquire_graph_data(
     manifest_path: Option<&Utf8Path>,
     target_dir: Option<&Utf8Path>,
-    cargo_opts: &CargoOptions,
+    cargo_opts: &CargoBuildSettings,
     build_platforms: &BuildPlatforms,
     output: OutputContext,
 ) -> Result<String> {

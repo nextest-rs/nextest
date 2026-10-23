@@ -245,8 +245,25 @@ impl CargoBuildScopeOptions {
 pub(crate) struct CargoOptions {
     /// Build scope options (package, target, and feature selection).
     #[command(flatten)]
-    pub(crate) build_scope: CargoBuildScopeOptions,
+    build_scope: CargoBuildScopeOptions,
 
+    #[command(flatten)]
+    settings: CargoBuildSettings,
+}
+
+impl CargoOptions {
+    pub(crate) fn into_parts(self) -> (CargoBuildScopeOptions, CargoBuildSettings) {
+        let Self {
+            build_scope,
+            settings,
+        } = self;
+        (build_scope, settings)
+    }
+}
+
+/// All Cargo options other than build scope options.
+#[derive(Debug, Default, Args)]
+pub(crate) struct CargoBuildSettings {
     // jobs is handled by test runner
     /// Number of build jobs to run
     #[arg(
@@ -426,18 +443,22 @@ impl<'a> CargoCli<'a> {
         self
     }
 
-    pub(crate) fn add_options(&mut self, options: &CargoOptions) -> &mut Self {
-        self.add_build_scope_options(&options.build_scope);
-        self.add_non_build_scope_options(options);
+    pub(crate) fn add_options(
+        &mut self,
+        build_scope: &CargoBuildScopeOptions,
+        settings: &CargoBuildSettings,
+    ) -> &mut Self {
+        self.add_build_scope_options(build_scope);
+        self.add_build_settings(settings);
         self
     }
 
-    /// Adds non-build-scope options from `CargoOptions`.
+    /// Adds non-build-scope options from `CargoBuildSettings`.
     ///
     /// This includes compilation options, manifest options, and other cargo
     /// options. Used when inheriting build scope from a rerun but using the
     /// current run's other options.
-    pub(crate) fn add_non_build_scope_options(&mut self, options: &CargoOptions) -> &mut Self {
+    pub(crate) fn add_build_settings(&mut self, options: &CargoBuildSettings) -> &mut Self {
         // ---
         // Compilation options
         // ---
@@ -496,7 +517,7 @@ impl<'a> CargoCli<'a> {
     }
 
     /// Add Cargo options that are common to all commands.
-    pub(crate) fn add_generic_cargo_options(&mut self, options: &CargoOptions) -> &mut Self {
+    pub(crate) fn add_generic_cargo_options(&mut self, options: &CargoBuildSettings) -> &mut Self {
         // ---
         // Manifest options
         // ---
@@ -635,27 +656,29 @@ mod tests {
     fn add_options_all_settings_set() {
         let options = CargoOptions {
             build_scope: CargoBuildScopeOptions::default(),
-            build_jobs: Some("-1".to_owned()),
-            release: true,
-            cargo_profile: Some("my-profile".to_owned()),
-            target: Some("x86_64-unknown-linux-gnu".to_owned()),
-            target_dir: Some(Utf8PathBuf::from("path/to/target dir")),
-            unit_graph: true,
-            timings: Some(Some("html,json".to_owned())),
-            frozen: true,
-            locked: true,
-            offline: true,
-            // The message format is added by compute_binary_list, not here.
-            cargo_message_format: Vec::new(),
-            cargo_quiet: 1,
-            cargo_verbose: 2,
-            ignore_rust_version: true,
-            future_incompat_report: true,
-            config: vec![
-                "build.rustflags=[\"-Dwarnings\"]".to_owned(),
-                "path/to/config.toml".to_owned(),
-            ],
-            unstable_flags: vec!["unstable-options".to_owned(), "build-std".to_owned()],
+            settings: CargoBuildSettings {
+                build_jobs: Some("-1".to_owned()),
+                release: true,
+                cargo_profile: Some("my-profile".to_owned()),
+                target: Some("x86_64-unknown-linux-gnu".to_owned()),
+                target_dir: Some(Utf8PathBuf::from("path/to/target dir")),
+                unit_graph: true,
+                timings: Some(Some("html,json".to_owned())),
+                frozen: true,
+                locked: true,
+                offline: true,
+                // The message format is added by compute_binary_list, not here.
+                cargo_message_format: Vec::new(),
+                cargo_quiet: 1,
+                cargo_verbose: 2,
+                ignore_rust_version: true,
+                future_incompat_report: true,
+                config: vec![
+                    "build.rustflags=[\"-Dwarnings\"]".to_owned(),
+                    "path/to/config.toml".to_owned(),
+                ],
+                unstable_flags: vec!["unstable-options".to_owned(), "build-std".to_owned()],
+            },
         };
 
         let mut cargo_cli = CargoCli::new(
@@ -666,7 +689,8 @@ mod tests {
                 color: Color::Never,
             },
         );
-        cargo_cli.add_options(&options);
+        let (build_scope, settings) = options.into_parts();
+        cargo_cli.add_options(&build_scope, &settings);
 
         assert_debug_snapshot!(&cargo_cli.all_args()[1..]);
     }
@@ -718,7 +742,7 @@ mod tests {
                 .expect("test command line is valid shell syntax");
             let cli = CargoOptionsCli::try_parse_from(argv)
                 .unwrap_or_else(|error| panic!("`{args}` should parse: {error}"));
-            let scope = cli.cargo_options.build_scope;
+            let scope = cli.cargo_options.into_parts().0;
             assert_eq!(scope.to_cli_args(), *expected, "cargo args for `{args}`");
             assert_eq!(
                 !scope.has_any(),
