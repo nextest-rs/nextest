@@ -8,7 +8,7 @@
 use crate::{
     fixtures::{
         check_rerun_expanded_output, check_rerun_output, check_run_output,
-        check_run_output_for_test_names,
+        check_run_output_for_test_names, save_binaries_metadata,
     },
     temp_project::TempProject,
 };
@@ -488,6 +488,12 @@ fn test_record_replay_cycle() {
     assert!(
         !out_files.is_empty(),
         "archive should contain output files in out/"
+    );
+
+    assert_eq!(
+        read_runs_json_entry(&runs_dir, RUN_ID)["build-scope-args"],
+        serde_json::json!(["--workspace", "--all-targets"]),
+        "runs.json.zst should record the build scope args"
     );
 
     // Create a portable recording with the default filename.
@@ -2969,20 +2975,44 @@ fn test_rerun_tests_outstanding() {
 // A little hack that alters runs.json.zst so that reads succeed but writes are
 // denied.
 fn deny_runs_json_writes(runs_dir: &Utf8Path) {
-    let runs_json_path = runs_dir.join("runs.json.zst");
-    let compressed = fs::read(&runs_json_path).expect("read runs.json.zst");
-    let decompressed =
-        zstd::stream::decode_all(compressed.as_slice()).expect("decompressed runs.json.zst");
-    let mut list: serde_json::Value =
-        serde_json::from_slice(&decompressed).expect("parsed runs.json.zst as JSON");
+    let mut list = read_runs_json(runs_dir);
     let format_version = list
         .get_mut("format-version")
         .expect("runs.json.zst has a format-version field");
     *format_version = serde_json::Value::from(9999);
-    let updated = serde_json::to_vec(&list).expect("serialized runs.json.zst");
+    write_runs_json(runs_dir, &list);
+}
+
+/// Reads runs.json.zst as untyped JSON, so tests can inspect or edit fields
+/// this nextest wouldn't write.
+fn read_runs_json(runs_dir: &Utf8Path) -> serde_json::Value {
+    let runs_json_path = runs_dir.join("runs.json.zst");
+    let compressed = fs::read(&runs_json_path).expect("read runs.json.zst");
+    let decompressed =
+        zstd::stream::decode_all(compressed.as_slice()).expect("decompressed runs.json.zst");
+    serde_json::from_slice(&decompressed).expect("parsed runs.json.zst as JSON")
+}
+
+fn write_runs_json(runs_dir: &Utf8Path, list: &serde_json::Value) {
+    let runs_json_path = runs_dir.join("runs.json.zst");
+    let updated = serde_json::to_vec(list).expect("serialized runs.json.zst");
     let recompressed =
         zstd::stream::encode_all(updated.as_slice(), 3).expect("compressed runs.json.zst");
     fs::write(&runs_json_path, recompressed).expect("wrote runs.json.zst");
+}
+
+fn runs_json_entry_mut<'a>(
+    list: &'a mut serde_json::Value,
+    run_id: &str,
+) -> &'a mut serde_json::Map<String, serde_json::Value> {
+    list["runs"]
+        .as_array_mut()
+        .expect("runs.json.zst has a runs array")
+        .iter_mut()
+        .find(|run| run["run-id"].as_str() == Some(run_id))
+        .unwrap_or_else(|| panic!("run {run_id} is in runs.json.zst"))
+        .as_object_mut()
+        .expect("run entry is an object")
 }
 
 /// Rerun from a portable recording.
@@ -2990,6 +3020,8 @@ fn deny_runs_json_writes(runs_dir: &Utf8Path) {
 /// Coverage: Using `--rerun archive.zip` to rerun failed tests from a portable
 /// archive. Follows the same pattern as `test_rerun_basic_flow` but sources the
 /// parent run from an archive instead of the local store.
+///
+/// Also covers the build scope recorded by reused-build runs and bench runs.
 #[test]
 fn test_rerun_from_archive() {
     let env_info = set_env_vars_for_test();
@@ -3073,12 +3105,10 @@ fn test_rerun_from_archive() {
     );
 
     // Verify that build scope arguments are inherited from the archive.
-    let build_scope_args = rerun_info["root-info"]["build-scope-args"]
-        .as_array()
-        .expect("build-scope-args should be an array");
-    assert!(
-        !build_scope_args.is_empty(),
-        "build-scope-args should be preserved from the archive"
+    let initial_scope_args = serde_json::json!(["--workspace", "--all-targets"]);
+    assert_eq!(
+        rerun_info["root-info"]["build-scope-args"], initial_scope_args,
+        "root-info should carry the build scope args recorded in the archive"
     );
 
     // Test rerunning from the archive at an external path.
@@ -3107,6 +3137,152 @@ fn test_rerun_from_archive() {
     check_rerun_output(
         &external_rerun_output.stderr,
         RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
+    // A rerun that reuses a build doesn't build anything, so it does not log an
+    // inheritance decision. But it still records the scope inherited from the
+    // root.
+    const RERUN_REUSED_BUILD_ID: &str = "97000004-0000-0000-0000-000000000004";
+    save_binaries_metadata(&env_info, &p);
+    let reused_build_rerun_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(RERUN_REUSED_BUILD_ID),
+    )
+    .args([
+        "run",
+        "--binaries-metadata",
+        p.binaries_metadata_path().as_str(),
+        "--rerun",
+        archive_path.as_str(),
+    ])
+    .unchecked(true)
+    .output();
+    assert_eq!(
+        reused_build_rerun_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "rerun with a reused build should fail because failing tests still fail: \
+         {reused_build_rerun_output}"
+    );
+    check_rerun_output(
+        &reused_build_rerun_output.stderr,
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+    let reused_build_stderr = reused_build_rerun_output.stderr_as_str();
+    assert!(
+        !reused_build_stderr.contains("rerun: inheriting build scope"),
+        "rerun with a reused build should not log build scope inheritance: \
+         {reused_build_rerun_output}"
+    );
+    assert!(
+        !reused_build_stderr.contains("rerun: using provided build scope"),
+        "rerun with a reused build should not log a provided build scope: \
+         {reused_build_rerun_output}"
+    );
+    let reused_build_rerun_info = read_rerun_info(&runs_dir, RERUN_REUSED_BUILD_ID)
+        .expect("rerun with a reused build should have rerun-info.json");
+    assert_eq!(
+        reused_build_rerun_info["root-info"]["build-scope-args"], initial_scope_args,
+        "root-info of the rerun with a reused build should carry the root's build scope args"
+    );
+
+    // A rerun chain where the root is a reused build -- the child rerun does
+    // not reuse the build, so it builds with the root's scope, which for reused
+    // builds is empty.
+    const REUSED_ROOT_ID: &str = "97000005-0000-0000-0000-000000000005";
+    const REUSED_ROOT_CHILD_ID: &str = "97000006-0000-0000-0000-000000000006";
+    let reused_root_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(REUSED_ROOT_ID),
+    )
+    .args([
+        "run",
+        "--binaries-metadata",
+        p.binaries_metadata_path().as_str(),
+    ])
+    .unchecked(true)
+    .output();
+    assert_eq!(
+        reused_root_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "root run with a reused build should fail due to failing tests: {reused_root_output}"
+    );
+    check_run_output(&reused_root_output.stderr, RunProperties::empty());
+    // Build scope arguments can't be combined with `--binaries-metadata`, so a
+    // reused-build root (currently) always records the empty scope.
+    assert_eq!(
+        read_runs_json_entry(&runs_dir, REUSED_ROOT_ID)["build-scope-args"],
+        serde_json::json!([]),
+        "the root run with a reused build should record empty build scope args"
+    );
+
+    let reused_root_child_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(REUSED_ROOT_CHILD_ID),
+    )
+    .args(["run", "--rerun", REUSED_ROOT_ID])
+    .unchecked(true)
+    .output();
+    assert_eq!(
+        reused_root_child_output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "rerun of a reused-build root should fail because failing tests still fail: \
+         {reused_root_child_output}"
+    );
+    assert!(
+        reused_root_child_output
+            .stderr_as_str()
+            .contains("rerun: inheriting build scope from original run: (default scope)"),
+        "rerun of a reused-build root should inherit the empty scope: {reused_root_child_output}"
+    );
+    let reused_root_child_info = read_rerun_info(&runs_dir, REUSED_ROOT_CHILD_ID)
+        .expect("rerun of a reused-build root should have rerun-info.json");
+    assert_eq!(
+        reused_root_child_info["root-info"]["run-id"].as_str(),
+        Some(REUSED_ROOT_ID),
+        "root-info should reference the reused-build root"
+    );
+    assert_eq!(
+        reused_root_child_info["root-info"]["build-scope-args"],
+        serde_json::json!([]),
+        "root-info should carry the root's empty build scope args"
+    );
+
+    // Benchmarks also record the build scope.
+    const BENCH_RUN_ID: &str = "97000008-0000-0000-0000-000000000008";
+    let bench_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(BENCH_RUN_ID),
+    )
+    .args([
+        "bench",
+        "--cargo-profile",
+        "dev",
+        "--bench",
+        "my-bench",
+        "-E",
+        "test(=bench_add_two)",
+    ])
+    .output();
+    assert!(
+        bench_output.exit_status.success(),
+        "bench run should succeed: {bench_output}"
+    );
+    assert_eq!(
+        read_runs_json_entry(&runs_dir, BENCH_RUN_ID)["build-scope-args"],
+        serde_json::json!(["--bench", "my-bench"]),
+        "a bench run should record its build scope args"
     );
 
     // Test that we can export a rerun, then rerun from that export, preserving
@@ -3164,6 +3340,137 @@ fn test_rerun_from_archive() {
         chain_rerun_info["root-info"]["run-id"].as_str(),
         Some(INITIAL_RUN_ID),
         "chain rerun root should still be the original run (chain preserved through archives)"
+    );
+    assert_eq!(
+        chain_rerun_info["root-info"]["build-scope-args"], initial_scope_args,
+        "chain rerun root-info should still carry the original run's build scope args"
+    );
+}
+
+fn read_runs_json_entry(runs_dir: &Utf8Path, run_id: &str) -> serde_json::Value {
+    let mut list = read_runs_json(runs_dir);
+    serde_json::Value::Object(runs_json_entry_mut(&mut list, run_id).clone())
+}
+
+// A rerun with no build scope arguments inherits the root run's `-p` scope; the
+// fixture model checks that only that package's tests are considered.
+#[test]
+fn test_rerun_inherits_package_build_scope() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const INITIAL_RUN_ID: &str = "98000001-0000-0000-0000-000000000001";
+    const RERUN_ID: &str = "98000002-0000-0000-0000-000000000002";
+    const RERUN2_ID: &str = "98000003-0000-0000-0000-000000000003";
+    const PROVIDED_SCOPE_RERUN_ID: &str = "98000004-0000-0000-0000-000000000004";
+
+    let initial_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(INITIAL_RUN_ID),
+    )
+    .args(["run", "-p", "cdylib-example"])
+    .output();
+    check_run_output(
+        &initial_output.stderr,
+        RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER,
+    );
+
+    let package_scope_args = serde_json::json!(["--package", "cdylib-example"]);
+    let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
+
+    // With the default scope, the rerun would also build other packages. Those
+    // packages' tests will then be run (and some of them fail).
+    let rerun_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RERUN_ID))
+            .args(["run", "--rerun", INITIAL_RUN_ID])
+            .output();
+    assert!(
+        rerun_output
+            .stderr_as_str()
+            .contains("rerun: inheriting build scope from original run: --package cdylib-example"),
+        "rerun should log the inherited build scope: {rerun_output}"
+    );
+    check_rerun_output(
+        &rerun_output.stderr,
+        RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER | RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
+    let rerun_info =
+        read_rerun_info(&runs_dir, RERUN_ID).expect("rerun should have rerun-info.json");
+    assert_eq!(
+        rerun_info["root-info"]["build-scope-args"], package_scope_args,
+        "root-info should carry the root run's build scope"
+    );
+
+    // A rerun of the rerun takes the scope from the parent's root-info.
+    let rerun2_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(RERUN2_ID),
+    )
+    .args(["run", "--rerun", RERUN_ID])
+    .output();
+    assert!(
+        rerun2_output
+            .stderr_as_str()
+            .contains("rerun: inheriting build scope from original run: --package cdylib-example"),
+        "second rerun should log the inherited build scope: {rerun2_output}"
+    );
+    check_rerun_output(
+        &rerun2_output.stderr,
+        RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER | RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
+    let rerun2_info =
+        read_rerun_info(&runs_dir, RERUN2_ID).expect("second rerun should have rerun-info.json");
+    assert_eq!(
+        rerun2_info["root-info"]["run-id"].as_str(),
+        Some(INITIAL_RUN_ID),
+        "second rerun's root should still be the initial run"
+    );
+    assert_eq!(
+        rerun2_info["root-info"]["build-scope-args"], package_scope_args,
+        "second rerun's root-info should still carry the root run's build scope"
+    );
+
+    // A sibling rerun of the root given explicit build scope arguments uses
+    // them instead of the root run's scope, but the root build scope stays the
+    // same. In this example, cdylib-link's test wasn't seen in the initial run,
+    // so it is treated as outstanding and is run.
+    let provided_scope_output = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(PROVIDED_SCOPE_RERUN_ID),
+    )
+    .args(["run", "--rerun", INITIAL_RUN_ID, "-p", "cdylib-link"])
+    .output();
+    assert!(
+        provided_scope_output
+            .stderr_as_str()
+            .contains("rerun: using provided build scope, not inheriting from original run"),
+        "rerun should log that it uses the provided build scope: {provided_scope_output}"
+    );
+    check_rerun_expanded_output(
+        &provided_scope_output.stderr,
+        &["tests::test_multiply_two_cdylib"],
+        &["test_multiply_two"],
+        RunProperties::ALLOW_SKIPPED_NAMES_IN_OUTPUT,
+    );
+
+    let provided_scope_info = read_rerun_info(&runs_dir, PROVIDED_SCOPE_RERUN_ID)
+        .expect("rerun with a provided scope should have rerun-info.json");
+    assert_eq!(
+        provided_scope_info["root-info"]["build-scope-args"], package_scope_args,
+        "root-info should keep the root run's build scope"
     );
 }
 
