@@ -5,7 +5,7 @@
 
 use crate::{
     ExpectedError, Result, ReuseBuildKind,
-    cargo_cli::CargoOptions,
+    cargo_cli::{CargoBuildScopeOptions, CargoBuildSettings},
     dispatch::{
         EarlyArgs,
         common::ConfigOpts,
@@ -52,7 +52,8 @@ pub(crate) struct BaseApp {
     config_paths: ConfigPaths,
     manifest_path: Option<Utf8PathBuf>,
     pub(crate) reuse_build: ReuseBuildInfo,
-    pub(crate) cargo_opts: CargoOptions,
+    build_scope: CargoBuildScopeOptions,
+    cargo_settings: CargoBuildSettings,
     pub(crate) config_opts: ConfigOpts,
     pub(crate) current_version: Version,
 
@@ -74,12 +75,13 @@ impl BaseApp {
         reuse_build.check_experimental(output);
 
         let reuse_build = reuse_build.process(output, writer)?;
+        let (build_scope, cargo_settings) = cargo_opts.into_parts();
 
-        let cargo_configs = CargoConfigs::new(&cargo_opts.config).map_err(Box::new)?;
+        let cargo_configs = CargoConfigs::new(&cargo_settings.config).map_err(Box::new)?;
 
         let build_platforms = match reuse_build.binaries_metadata() {
             Some(kind) => kind.binary_list.rust_build_meta.build_platforms.clone(),
-            None => detect_build_platforms(&cargo_configs, cargo_opts.target.as_deref())?,
+            None => detect_build_platforms(&cargo_configs, cargo_settings.target.as_deref())?,
         };
 
         let (cargo_metadata_json, package_graph) = match reuse_build.cargo_metadata() {
@@ -87,8 +89,8 @@ impl BaseApp {
             None => {
                 let json = acquire_graph_data(
                     manifest_path.as_deref(),
-                    cargo_opts.target_dir.as_deref(),
-                    &cargo_opts,
+                    cargo_settings.target_dir.as_deref(),
+                    &cargo_settings,
                     &build_platforms,
                     output,
                 )?;
@@ -161,7 +163,8 @@ impl BaseApp {
             config_paths,
             reuse_build,
             manifest_path,
-            cargo_opts,
+            build_scope,
+            cargo_settings,
             config_opts,
             cargo_configs,
             current_version,
@@ -384,14 +387,15 @@ impl BaseApp {
     }
 
     pub(crate) fn build_scope_args(&self) -> Vec<String> {
-        self.cargo_opts.build_scope.to_cli_args()
+        self.build_scope.to_cli_args()
     }
 
     pub(crate) fn build_binary_list(&self, cargo_command: &str) -> Result<Arc<BinaryList>> {
         let binary_list = match self.reuse_build.binaries_metadata() {
             Some(m) => m.binary_list.clone(),
-            None => Arc::new(self.cargo_opts.compute_binary_list(
+            None => Arc::new(self.cargo_settings.compute_binary_list(
                 cargo_command,
+                &self.build_scope,
                 self.graph(),
                 self.manifest_path.as_deref(),
                 self.output,
@@ -415,7 +419,7 @@ impl BaseApp {
             return Ok(m.binary_list.clone());
         }
 
-        let cli_has_scope = self.cargo_opts.build_scope.has_any();
+        let cli_has_scope = self.build_scope.has_any();
 
         let inherited_scope = match (rerun_build_scope, cli_has_scope) {
             (Some(scope), false) => {
@@ -439,7 +443,7 @@ impl BaseApp {
         };
 
         let binary_list = if let Some(scope) = inherited_scope {
-            self.cargo_opts.compute_binary_list_with_inherited(
+            self.cargo_settings.compute_binary_list_with_inherited(
                 cargo_command,
                 scope,
                 self.graph(),
@@ -448,8 +452,9 @@ impl BaseApp {
                 self.build_platforms.clone(),
             )?
         } else {
-            self.cargo_opts.compute_binary_list(
+            self.cargo_settings.compute_binary_list(
                 cargo_command,
+                &self.build_scope,
                 self.graph(),
                 self.manifest_path.as_deref(),
                 self.output,
@@ -510,11 +515,11 @@ pub(crate) fn current_version() -> Version {
     }
 }
 
-// Helper for CargoOptions.
+// Helper for CargoBuildSettings.
 mod helpers {
     use crate::{
         ExpectedError, Result,
-        cargo_cli::{CargoCli, CargoOptions},
+        cargo_cli::{CargoBuildScopeOptions, CargoBuildSettings, CargoCli},
         dispatch::core::value_enums::CargoMessageFormatOpt,
         output::OutputContext,
     };
@@ -526,10 +531,11 @@ mod helpers {
     };
     use std::io::{BufRead, BufReader};
 
-    impl CargoOptions {
+    impl CargoBuildSettings {
         pub(crate) fn compute_binary_list(
             &self,
             cargo_command: &str,
+            build_scope: &CargoBuildScopeOptions,
             graph: &PackageGraph,
             manifest_path: Option<&Utf8Path>,
             output: OutputContext,
@@ -545,7 +551,7 @@ mod helpers {
             cargo_cli
                 .add_arg("--no-run")
                 .add_flag_value("--message-format", message_format.cargo_arg());
-            cargo_cli.add_options(self);
+            cargo_cli.add_options(build_scope, self);
 
             Self::run_cargo_build(
                 cargo_cli,
@@ -581,7 +587,7 @@ mod helpers {
                 cargo_cli.add_owned_arg(arg.clone());
             }
             // Add non-build-scope options from the current CLI.
-            cargo_cli.add_non_build_scope_options(self);
+            cargo_cli.add_build_settings(self);
 
             Self::run_cargo_build(
                 cargo_cli,
