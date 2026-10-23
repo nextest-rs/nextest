@@ -2039,8 +2039,10 @@ fn test_replayability_missing_store_zip() {
     );
     let rerun_stderr = rerun_output.stderr_as_str();
     assert!(
-        rerun_stderr.contains("error: error reading recorded run\n")
-            && rerun_stderr.contains("error opening archive at `"),
+        rerun_stderr.contains(&format!(
+            "error: cannot rerun: failed to read recorded run {RUN_ID}\n\
+             (hint: run tests without `--rerun` to start a new rerun chain)\n"
+        )) && rerun_stderr.contains("error opening archive at `"),
         "rerun of a run without store.zip should get the generic read error: {rerun_output}"
     );
 }
