@@ -391,40 +391,44 @@ impl BaseApp {
         self.build_scope.to_cargo_args()
     }
 
-    pub(crate) fn build_binary_list(&self, cargo_command: &str) -> Result<Arc<BinaryList>> {
-        let binary_list = match self.reuse_build.binaries_metadata() {
-            Some(m) => m.binary_list.clone(),
-            None => Arc::new(self.cargo_settings.compute_binary_list(
-                cargo_command,
-                &self.build_scope,
-                self.graph(),
-                self.manifest_path.as_deref(),
-                self.output,
-                self.build_platforms.clone(),
-            )?),
-        };
-        Ok(binary_list)
+    /// Returns the effective build scope for this command.
+    ///
+    /// * If the CLI build scope is non-empty, use that.
+    /// * Otherwise, if this is a rerun, use the chain root's scope
+    ///   (`rerun_build_scope`).
+    /// * Otherwise, use the default build scope.
+    pub(crate) fn resolve_build_scope<'a>(
+        &'a self,
+        rerun_build_scope: Option<&'a [String]>,
+    ) -> ResolvedBuildScope<'a> {
+        let cli_has_scope = !self.build_scope.is_empty();
+
+        match (rerun_build_scope, cli_has_scope) {
+            // Inherit from the original run.
+            (Some(scope), false) => ResolvedBuildScope::InheritedFromRoot(scope),
+            // User provided build scope args, not inheriting.
+            (Some(_), true) => ResolvedBuildScope::CommandLineOverridesRoot(&self.build_scope),
+            (None, _) => ResolvedBuildScope::CommandLine(&self.build_scope),
+        }
     }
 
-    /// Builds the binary list, potentially inheriting build scope from a rerun.
-    ///
-    /// If `rerun_build_scope` is provided and the CLI has no build scope args,
-    /// inherits the build scope from the original run in the rerun chain.
-    pub(crate) fn build_binary_list_with_rerun(
+    pub(crate) fn build_binary_list(&self, cargo_command: &str) -> Result<Arc<BinaryList>> {
+        self.build_binary_list_with_scope(cargo_command, self.resolve_build_scope(None))
+    }
+
+    /// Builds the binary list with the given build scope.
+    pub(crate) fn build_binary_list_with_scope(
         &self,
         cargo_command: &str,
-        rerun_build_scope: Option<&[String]>,
+        build_scope: ResolvedBuildScope<'_>,
     ) -> Result<Arc<BinaryList>> {
         // If reusing a build, just return that.
         if let Some(m) = self.reuse_build.binaries_metadata() {
             return Ok(m.binary_list.clone());
         }
 
-        let cli_has_scope = !self.build_scope.is_empty();
-
-        let inherited_scope = match (rerun_build_scope, cli_has_scope) {
-            (Some(scope), false) => {
-                // Inherit from the original run.
+        match build_scope {
+            ResolvedBuildScope::InheritedFromRoot(scope) => {
                 if scope.is_empty() {
                     info!("rerun: inheriting build scope from original run: (default scope)");
                 } else {
@@ -433,34 +437,35 @@ impl BaseApp {
                         scope.join(" ")
                     );
                 }
-                Some(scope)
             }
-            (Some(_), true) => {
-                // User provided build scope args, not inheriting.
+            ResolvedBuildScope::CommandLineOverridesRoot(_) => {
                 info!("rerun: using provided build scope, not inheriting from original run");
-                None
             }
-            (None, _) => None,
-        };
+            ResolvedBuildScope::CommandLine(_) => {}
+        }
 
-        let binary_list = if let Some(scope) = inherited_scope {
-            self.cargo_settings.compute_binary_list_with_inherited(
-                cargo_command,
-                scope,
-                self.graph(),
-                self.manifest_path.as_deref(),
-                self.output,
-                self.build_platforms.clone(),
-            )?
-        } else {
-            self.cargo_settings.compute_binary_list(
-                cargo_command,
-                &self.build_scope,
-                self.graph(),
-                self.manifest_path.as_deref(),
-                self.output,
-                self.build_platforms.clone(),
-            )?
+        let binary_list = match build_scope {
+            ResolvedBuildScope::CommandLine(scope)
+            | ResolvedBuildScope::CommandLineOverridesRoot(scope) => {
+                self.cargo_settings.compute_binary_list(
+                    cargo_command,
+                    scope,
+                    self.graph(),
+                    self.manifest_path.as_deref(),
+                    self.output,
+                    self.build_platforms.clone(),
+                )?
+            }
+            ResolvedBuildScope::InheritedFromRoot(scope) => {
+                self.cargo_settings.compute_binary_list_with_inherited(
+                    cargo_command,
+                    scope,
+                    self.graph(),
+                    self.manifest_path.as_deref(),
+                    self.output,
+                    self.build_platforms.clone(),
+                )?
+            }
         };
 
         Ok(Arc::new(binary_list))
@@ -498,6 +503,14 @@ impl BaseApp {
         }
         Ok(profile)
     }
+}
+
+/// The build scope for a command, including its source.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ResolvedBuildScope<'a> {
+    CommandLine(&'a BuildScope),
+    InheritedFromRoot(&'a [String]),
+    CommandLineOverridesRoot(&'a BuildScope),
 }
 
 /// Returns the current nextest version.

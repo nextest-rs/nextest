@@ -1040,9 +1040,10 @@ impl App {
         let rerun_build_scope = rerun_state
             .as_ref()
             .map(|s| s.root_info.build_scope_args.as_slice());
+        let build_scope = self.base.resolve_build_scope(rerun_build_scope);
         let binary_list = self
             .base
-            .build_binary_list_with_rerun("test", rerun_build_scope)?;
+            .build_binary_list_with_scope("test", build_scope)?;
         let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
         let double_spawn = self.base.load_double_spawn();
         let target_runner = self.base.load_runner(build_platforms);
@@ -1303,7 +1304,10 @@ impl App {
             .make_test_filter(NextestRunMode::Benchmark, filter_exprs)?
             .test_filter;
 
-        let binary_list = self.base.build_binary_list("bench")?;
+        let build_scope = self.base.resolve_build_scope(None);
+        let binary_list = self
+            .base
+            .build_binary_list_with_scope("bench", build_scope)?;
         let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
         let double_spawn = self.base.load_double_spawn();
         let target_runner = self.base.load_runner(build_platforms);
