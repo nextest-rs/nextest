@@ -1549,11 +1549,15 @@ impl App {
         }
 
         let run_dir = snapshot.runs_dir().run_dir(parent_run_id);
-        let mut reader =
-            RecordReader::open(&run_dir).map_err(|err| ExpectedError::RecordReadError { err })?;
+        let parent_read_error = |err| ExpectedError::RerunParentReadError {
+            run_id: parent_run_id,
+            archive_path: None,
+            err: Box::new(err),
+        };
+        let mut reader = RecordReader::open(&run_dir).map_err(parent_read_error)?;
 
-        let (outstanding_tests, root_info) = ComputedRerunInfo::compute(parent_run_id, &mut reader)
-            .map_err(|err| ExpectedError::RecordReadError { err })?;
+        let (outstanding_tests, root_info) =
+            ComputedRerunInfo::compute(parent_run_id, &mut reader).map_err(parent_read_error)?;
 
         Ok((
             RerunState {
@@ -1576,7 +1580,11 @@ impl App {
         // If the archive is itself a rerun, use its root_info.
         // Otherwise, this archive is the root of the chain.
         let (outstanding_tests, root_info) = ComputedRerunInfo::compute_from_archive(&mut archive)
-            .map_err(|err| ExpectedError::RecordReadError { err })?;
+            .map_err(|err| ExpectedError::RerunParentReadError {
+                run_id: parent_run_id,
+                archive_path: Some(archive_path.to_path_buf()),
+                err: Box::new(err),
+            })?;
 
         Ok((
             RerunState {
