@@ -2318,6 +2318,8 @@ fn test_replayability_store_version_too_new() {
 }
 
 /// Test error messages for a store format 2.x run.
+///
+/// Covers on-disk and portable 2.x runs and `store info`.
 #[test]
 fn test_replayability_store_version_too_old() {
     let env_info = set_env_vars_for_test();
@@ -2335,8 +2337,80 @@ fn test_replayability_store_version_too_old() {
         recording.exit_status.success(),
         "recording should succeed: {recording}"
     );
+
+    // Export the run in the newest format (export refuses 2.x runs), then
+    // rewrite the manifest to match the 2.x format.
+    let archive_path = temp_root.join(format!("nextest-run-{RUN_ID}.zip"));
+    let export = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args([
+            "store",
+            "export",
+            RUN_ID,
+            "--archive-file",
+            archive_path.as_str(),
+        ])
+        .output();
+    assert!(
+        export.exit_status.success(),
+        "store export should succeed: {export}"
+    );
+    let mut manifest = read_zip_json(&archive_path, PORTABLE_MANIFEST_FILE_NAME)
+        .unwrap_or_else(|| panic!("{archive_path} contains {PORTABLE_MANIFEST_FILE_NAME}"));
+    manifest["format-version"] = serde_json::json!({ "major": 1, "minor": 0 });
+    let manifest_run = manifest["run"]
+        .as_object_mut()
+        .expect("manifest has a run object");
+    for (key, value) in [
+        ("store-format-version", 2),
+        ("store-format-minor-version", 1),
+    ] {
+        let previous = manifest_run.insert(key.to_owned(), serde_json::json!(value));
+        assert!(
+            previous.is_some(),
+            "manifest run should already have {key}: {manifest_run:?}"
+        );
+    }
+    manifest_run.insert(
+        "build-scope-args".to_owned(),
+        serde_json::json!(["--workspace"]),
+    );
+    let manifest_bytes = serde_json::to_vec_pretty(&manifest).expect("serialized manifest");
+    rewrite_zip_entry(
+        &archive_path,
+        PORTABLE_MANIFEST_FILE_NAME,
+        Some(&manifest_bytes),
+    );
+
     let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
     make_store_format_2_entry(&runs_dir, RUN_ID, &["--workspace"]);
+
+    let info = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info", RUN_ID])
+        .output();
+    assert!(
+        info.exit_status.success(),
+        "store info should succeed for a 2.x run: {info}"
+    );
+    insta::assert_snapshot!(
+        "version_incompat_too_old_major__store_info",
+        redact_dynamic_fields(&info.stdout_as_str(), temp_root)
+    );
+
+    let portable_rerun_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args(["run", "--rerun", archive_path.as_str()])
+            .unchecked(true)
+            .output();
+    assert_eq!(
+        portable_rerun_output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "run --rerun of a 2.x portable recording should fail with SETUP_ERROR: \
+         {portable_rerun_output}"
+    );
+    insta::assert_snapshot!(
+        "version_incompat_too_old_major__portable_run_rerun",
+        redact_dynamic_fields(&portable_rerun_output.stderr_as_str(), temp_root)
+    );
 
     // This integration test only checks `run --rerun`, because that's the case
     // we're concerned about with GHSA-vc25-qg58-w57c. Other error messages are
@@ -2533,19 +2607,23 @@ fn read_store_zip_json(
     run_id: &str,
     entry_name: &str,
 ) -> Option<serde_json::Value> {
-    let store_zip_path = runs_dir.join(run_id).join(STORE_ZIP_FILE_NAME);
-    let file = File::open(&store_zip_path)
-        .unwrap_or_else(|error| panic!("opened {store_zip_path}: {error}"));
+    read_zip_json(&runs_dir.join(run_id).join(STORE_ZIP_FILE_NAME), entry_name)
+}
+
+/// Like `read_store_zip_json`, but for any entry in any zip file (e.g. a
+/// portable recording's `manifest.json`).
+fn read_zip_json(zip_path: &Utf8Path, entry_name: &str) -> Option<serde_json::Value> {
+    let file = File::open(zip_path).unwrap_or_else(|error| panic!("opened {zip_path}: {error}"));
     let mut archive = Archive::new(BufReader::new(file))
-        .unwrap_or_else(|error| panic!("parsed {store_zip_path}: {error}"));
+        .unwrap_or_else(|error| panic!("parsed {zip_path}: {error}"));
     let mut entry = archive.get_by_name(entry_name)?;
     let mut contents = String::new();
     entry
         .read()
         .and_then(|mut reader| reader.read_to_string(&mut contents))
-        .unwrap_or_else(|error| panic!("read {entry_name} from {store_zip_path}: {error}"));
+        .unwrap_or_else(|error| panic!("read {entry_name} from {zip_path}: {error}"));
     let value = serde_json::from_str(&contents)
-        .unwrap_or_else(|error| panic!("parsed {entry_name} from {store_zip_path}: {error}"));
+        .unwrap_or_else(|error| panic!("parsed {entry_name} from {zip_path}: {error}"));
     Some(value)
 }
 
@@ -3173,11 +3251,19 @@ fn rewrite_store_zip_entry(
     entry_name: &str,
     replacement: Option<&[u8]>,
 ) {
-    let store_zip_path = runs_dir.join(run_id).join(STORE_ZIP_FILE_NAME);
-    let file = File::open(&store_zip_path)
-        .unwrap_or_else(|error| panic!("opened {store_zip_path}: {error}"));
+    rewrite_zip_entry(
+        &runs_dir.join(run_id).join(STORE_ZIP_FILE_NAME),
+        entry_name,
+        replacement,
+    );
+}
+
+/// Like `rewrite_store_zip_entry`, but for any entry in any zip file (e.g. a
+/// portable recording's `manifest.json`).
+fn rewrite_zip_entry(zip_path: &Utf8Path, entry_name: &str, replacement: Option<&[u8]>) {
+    let file = File::open(zip_path).unwrap_or_else(|error| panic!("opened {zip_path}: {error}"));
     let mut archive = Archive::new(BufReader::new(file))
-        .unwrap_or_else(|error| panic!("parsed {store_zip_path}: {error}"));
+        .unwrap_or_else(|error| panic!("parsed {zip_path}: {error}"));
     let names: Vec<String> = archive
         .entries()
         .iter()
@@ -3185,19 +3271,19 @@ fn rewrite_store_zip_entry(
         .collect();
     assert!(
         names.iter().any(|name| name == entry_name),
-        "{store_zip_path} should contain {entry_name}, found: {names:?}"
+        "{zip_path} should contain {entry_name}, found: {names:?}"
     );
 
     let mut kept_entries = Vec::new();
     for name in names.into_iter().filter(|name| name != entry_name) {
         let mut entry = archive
             .get_by_name(&name)
-            .unwrap_or_else(|| panic!("{store_zip_path} contains {name}"));
+            .unwrap_or_else(|| panic!("{zip_path} contains {name}"));
         let mut contents = Vec::new();
         entry
             .read()
             .and_then(|mut reader| reader.read_to_end(&mut contents))
-            .unwrap_or_else(|error| panic!("read {name} from {store_zip_path}: {error}"));
+            .unwrap_or_else(|error| panic!("read {name} from {zip_path}: {error}"));
         kept_entries.push((name, contents));
     }
     drop(archive);
@@ -3205,19 +3291,18 @@ fn rewrite_store_zip_entry(
         kept_entries.push((entry_name.to_owned(), replacement.to_vec()));
     }
 
-    let file = File::create(&store_zip_path)
-        .unwrap_or_else(|error| panic!("created {store_zip_path}: {error}"));
+    let file = File::create(zip_path).unwrap_or_else(|error| panic!("created {zip_path}: {error}"));
     let mut writer = ArchiveWriter::new(file);
     let mut options = FileOptions::default();
     options.compression_method = CompressionMethod::STORE;
     for (name, contents) in &kept_entries {
         writer
             .add_file(name, &contents[..], &options)
-            .unwrap_or_else(|error| panic!("wrote {name} to {store_zip_path}: {error}"));
+            .unwrap_or_else(|error| panic!("wrote {name} to {zip_path}: {error}"));
     }
     writer
         .finish()
-        .unwrap_or_else(|error| panic!("finished writing {store_zip_path}: {error}"));
+        .unwrap_or_else(|error| panic!("finished writing {zip_path}: {error}"));
 }
 
 /// Rerun from a portable recording.
