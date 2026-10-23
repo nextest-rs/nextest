@@ -206,14 +206,14 @@ With full-fidelity events, we would like to avoid painting ourselves into a corn
 
 The store format version is _not_ additive. We use two version components, major and minor. If a version of nextest encounters a store format version with a major version different from the one it recognizes, it will refuse to read the file.
 
-* A newer version of nextest encountering an older store format major version will print out the last nextest version that supports that store format version.
+* A newer version of nextest encountering an older store format major version will print out the last nextest version that supports that store format version. The exception is store formats before 3.0: for those, nextest recommends discarding the recording instead, for the reasons listed below.
 * If an older version of nextest encounters a newer store format major or minor version, it will tell users to update their copy of nextest.
 
-For example, to address [a vulnerability](https://github.com/nextest-rs/nextest/security/advisories/GHSA-vc25-qg58-w57c), a new store format version 3.0 (with `runs.json.zst` format version 3) was introduced. This new format changed how the [build scope](#storing-the-build-scope) is stored, resulting in the following consequences:
+To address [a vulnerability](https://github.com/nextest-rs/nextest/security/advisories/GHSA-vc25-qg58-w57c), a new store format version 3.0 (with `runs.json.zst` format version 3) was introduced. This new format changed how the [build scope](#storing-the-build-scope) is stored, resulting in the following consequences:
 
 * Recordings with store format 2.x can only be replayed or rerun with nextest 0.9.149 or earlier. Newer versions of nextest still list them and prune them as usual.
 * Once a newer version of nextest writes to a record store, nextest 0.9.149 and earlier can still read it, but can no longer write to it. Recording is disabled with a warning, and pruning fails.
-* With store format 2.x, build scope arguments were stored in `runs.json.zst`. (With store format 3.x, we moved build scope arguments to being inside the run's `store.zip` file.) Newer versions of nextest ignore the field when reading `runs.json.zst`, and drop it when they rewrite that file. Since nextest 0.9.149 can still read the rewritten index, it may then rerun those recordings with Cargo's default build scope rather than the one they were recorded with. We accept this risk due to the security implications of the vulnerability.
+* With store format 2.x, build scope arguments were stored in `runs.json.zst`. (With store format 3.x, we moved build scope arguments to being inside the run's `store.zip` file.) Newer versions of nextest ignore the field when reading `runs.json.zst`, and drop it when they rewrite that file. Since nextest 0.9.149 can still read the rewritten index, it may then rerun a 2.x recording that is the root of a rerun chain (not itself a rerun) with Cargo's default build scope, rather than the one it was recorded with. (Replaying is unaffected, as are reruns of reruns, which take the chain root's build scope from `rerun-info.json`.) We accept this risk due to the security implications of the vulnerability, and mitigate it by recommending that users discard 2.x recordings rather than downgrade.
 
 Bumps to the store format version are currently done manually. We have plans to automate this using JSON schema support.
 

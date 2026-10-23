@@ -15,14 +15,23 @@ use super::{
 };
 use crate::{
     helpers::{ThemeCharacters, plural},
+    indenter::indented,
     redact::{Redactor, SizeDisplay},
 };
 use camino::Utf8Path;
 use chrono::{DateTime, Utc};
 use owo_colors::{OwoColorize, Style};
 use quick_junit::ReportUuid;
-use std::{collections::HashMap, error::Error, fmt};
+use std::{
+    collections::HashMap,
+    error::Error,
+    fmt::{self, Write as _},
+};
 use swrite::{SWrite, swrite};
+
+/// Indentation for continuation lines of a field value, matching the " {:18}"
+/// label column in `write_field`.
+const FIELD_VALUE_INDENT: &str = "                    ";
 
 /// Styles for displaying record store information.
 #[derive(Clone, Debug, Default)]
@@ -600,12 +609,11 @@ impl<'a> DisplayRecordedRunInfoDetailed<'a> {
         label: &str,
         value: impl fmt::Display,
     ) -> fmt::Result {
-        writeln!(
-            f,
-            "  {:18}{}",
-            format!("{}:", label).style(self.styles.label),
-            value,
-        )
+        write!(f, "  {:18}", format!("{}:", label).style(self.styles.label))?;
+        // Continuation lines of a multi-line value (e.g. a store version
+        // error's guidance) align with the value column.
+        let mut value_writer = indented(f).with_str(FIELD_VALUE_INDENT).skip_initial();
+        writeln!(value_writer, "{value}")
     }
 
     /// Writes the status field with exit code for completed runs.

@@ -94,7 +94,13 @@ There are **two separate format versions**:
 
 **Write permission model**: When reading `runs.json.zst`, if its format version is newer than the current nextest supports, writing is denied (`RunsJsonWritePermission::Denied`) to prevent data loss. Reading always proceeds.
 
-`StoreFormatMajorVersion::last_nextest_version` maps each older major version to the last nextest release that can read it (used in the "use nextest <= X" message). Add an entry whenever the major version is bumped.
+`StoreFormatMajorVersion::too_old_guidance` maps each older major version to a `TooOldRecordingGuidance`:
+
+- `UseOlderNextest`: the "use nextest <= X" message, naming the last nextest release that can read the recording.
+- `Discard`: for majors before 3. The message recommends discarding the recording rather than switching to an older nextest. When a newer nextest rewrites `runs.json.zst`, it drops these runs' `build-scope-args`, so an older nextest could rerun chain-root runs with Cargo's default build scope. (Reruns of reruns are unaffected, since they carry the root's scope in `rerun-info.json`.)
+- `Unknown`: no entry exists for this major version, so the message gives no advice.
+
+Add an entry whenever the major version is bumped; `test_too_old_guidance_known_for_all_older_majors` fails if one is missing.
 
 ## Build scope storage
 

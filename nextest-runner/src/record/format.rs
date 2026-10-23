@@ -122,7 +122,7 @@ impl StoreFormatVersion {
             return Err(StoreVersionIncompatibility::RecordingTooOld {
                 recording_major: self.major,
                 supported_major: supported.major,
-                last_nextest_version: self.major.last_nextest_version(),
+                guidance: self.major.too_old_guidance(),
             });
         }
         if self.major > supported.major {
@@ -148,18 +148,41 @@ impl fmt::Display for StoreFormatVersion {
 }
 
 impl StoreFormatMajorVersion {
-    /// Returns the last nextest version that supported this store format major
-    /// version, if known.
-    ///
-    /// This is used to provide actionable guidance when an archive is too old
-    /// for the current nextest.
-    pub fn last_nextest_version(self) -> Option<&'static str> {
+    /// Returns the guidance to display to users when a recording at this major
+    /// version is too old for this nextest.
+    pub fn too_old_guidance(self) -> TooOldRecordingGuidance {
         match self.0 {
-            1 => Some("0.9.130"),
-            2 => Some("0.9.149"),
-            _ => None,
+            // Store formats before 3.0 get Discard due to a vulnerability.
+            1 => TooOldRecordingGuidance::Discard {
+                last_nextest_version: "0.9.130",
+            },
+            2 => TooOldRecordingGuidance::Discard {
+                last_nextest_version: "0.9.149",
+            },
+            _ => TooOldRecordingGuidance::Unknown,
         }
     }
+}
+
+/// The guidance for a recording whose store format major version is older than
+/// this nextest supports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TooOldRecordingGuidance {
+    /// The recording is readable by an older nextest, and switching to the
+    /// older version is believed to be safe.
+    ///
+    /// This is currently unused.
+    UseOlderNextest {
+        /// The last version of nextest that supported this recording.
+        last_nextest_version: &'static str,
+    },
+    /// The recording should be discarded rather than read with an older nextest.
+    Discard {
+        /// The last version of nextest that supported this recording.
+        last_nextest_version: &'static str,
+    },
+    /// No guidance is known for this major version.
+    Unknown,
 }
 
 /// An incompatibility between a recording's store format version and what the
@@ -172,9 +195,8 @@ pub enum StoreVersionIncompatibility {
         recording_major: StoreFormatMajorVersion,
         /// The major version this nextest supports.
         supported_major: StoreFormatMajorVersion,
-        /// The last nextest version that supported the recording's major version,
-        /// if known.
-        last_nextest_version: Option<&'static str>,
+        /// The guidance to give users about the recording.
+        guidance: TooOldRecordingGuidance,
     },
     /// The recording's major version is newer than the supported major version.
     RecordingTooNew {
@@ -198,17 +220,29 @@ impl fmt::Display for StoreVersionIncompatibility {
             Self::RecordingTooOld {
                 recording_major,
                 supported_major,
-                last_nextest_version,
+                guidance,
             } => {
                 write!(
                     f,
                     "recording has major version {recording_major}, \
                      but this nextest requires version {supported_major}"
                 )?;
-                if let Some(version) = last_nextest_version {
-                    write!(f, " (use nextest <= {version} to replay this recording)")?;
+                match guidance {
+                    TooOldRecordingGuidance::UseOlderNextest {
+                        last_nextest_version,
+                    } => write!(
+                        f,
+                        "\n(use nextest <= {last_nextest_version} to replay this recording)"
+                    ),
+                    TooOldRecordingGuidance::Discard {
+                        last_nextest_version,
+                    } => write!(
+                        f,
+                        "\n(recordings from nextest {last_nextest_version} and earlier \
+                         are no longer supported; discard this recording and record a new run)"
+                    ),
+                    TooOldRecordingGuidance::Unknown => Ok(()),
                 }
-                Ok(())
             }
             Self::RecordingTooNew {
                 recording_major,
@@ -1451,12 +1485,17 @@ mod tests {
             StoreVersionIncompatibility::RecordingTooOld {
                 recording_major: StoreFormatMajorVersion::new(1),
                 supported_major: StoreFormatMajorVersion::new(2),
-                last_nextest_version: Some("0.9.130"),
+                guidance: TooOldRecordingGuidance::Discard {
+                    last_nextest_version: "0.9.130",
+                },
             },
         );
         insta::assert_snapshot!(
             error.to_string(),
-            @"recording has major version 1, but this nextest requires version 2 (use nextest <= 0.9.130 to replay this recording)"
+            @"
+        recording has major version 1, but this nextest requires version 2
+        (recordings from nextest 0.9.130 and earlier are no longer supported; discard this recording and record a new run)
+        "
         );
 
         // Archive older than supported → ArchiveTooOld (unknown version).
@@ -1466,7 +1505,7 @@ mod tests {
             StoreVersionIncompatibility::RecordingTooOld {
                 recording_major: StoreFormatMajorVersion::new(3),
                 supported_major: StoreFormatMajorVersion::new(5),
-                last_nextest_version: None,
+                guidance: TooOldRecordingGuidance::Unknown,
             },
         );
         insta::assert_snapshot!(
@@ -1474,7 +1513,39 @@ mod tests {
             @"recording has major version 3, but this nextest requires version 5"
         );
 
+        // No major version maps to UseOlderNextest yet, so construct it
+        // directly for now.
+        let error = StoreVersionIncompatibility::RecordingTooOld {
+            recording_major: StoreFormatMajorVersion::new(3),
+            supported_major: StoreFormatMajorVersion::new(4),
+            guidance: TooOldRecordingGuidance::UseOlderNextest {
+                last_nextest_version: "0.9.200",
+            },
+        };
+        insta::assert_snapshot!(error.to_string(), @"
+        recording has major version 3, but this nextest requires version 4
+        (use nextest <= 0.9.200 to replay this recording)
+        ");
+
         insta::assert_snapshot!(version(1, 2).to_string(), @"1.2");
+    }
+
+    // Every major older than the current one must have guidance.
+    #[test]
+    fn test_too_old_guidance_known_for_all_older_majors() {
+        for major in 1..STORE_FORMAT_VERSION.major.0 {
+            let major = StoreFormatMajorVersion::new(major);
+            match major.too_old_guidance() {
+                TooOldRecordingGuidance::UseOlderNextest { .. }
+                | TooOldRecordingGuidance::Discard { .. } => {}
+                TooOldRecordingGuidance::Unknown => {
+                    panic!(
+                        "store format major version {major} has no too_old_guidance entry \
+                         (add one when bumping STORE_FORMAT_VERSION's major version)"
+                    )
+                }
+            }
+        }
     }
 
     #[test]
