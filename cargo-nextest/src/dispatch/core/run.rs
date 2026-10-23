@@ -1547,11 +1547,9 @@ impl App {
         let mut reader =
             RecordReader::open(&run_dir).map_err(|err| ExpectedError::RecordReadError { err })?;
 
-        let (outstanding_tests, root_info) = ComputedRerunInfo::compute(&mut reader)
-            .map_err(|err| ExpectedError::RecordReadError { err })?;
-        let root_info = root_info.unwrap_or_else(|| {
-            RerunRootInfo::new(parent_run_id, run_info.build_scope_args.clone())
-        });
+        let (outstanding_tests, root_info) =
+            ComputedRerunInfo::compute(parent_run_id, &run_info.build_scope_args, &mut reader)
+                .map_err(|err| ExpectedError::RecordReadError { err })?;
 
         Ok((
             RerunState {
@@ -1569,17 +1567,12 @@ impl App {
         let mut archive = PortableRecording::open(archive_path)
             .map_err(|err| ExpectedError::PortableRecordingReadError { err })?;
 
-        let run_info = archive.run_info();
-        let parent_run_id = run_info.run_id;
-
-        let (outstanding_tests, root_info) = ComputedRerunInfo::compute_from_archive(&mut archive)
-            .map_err(|err| ExpectedError::RecordReadError { err })?;
+        let parent_run_id = archive.run_info().run_id;
 
         // If the archive is itself a rerun, use its root_info.
         // Otherwise, this archive is the root of the chain.
-        let root_info = root_info.unwrap_or_else(|| {
-            RerunRootInfo::new(parent_run_id, run_info.build_scope_args.clone())
-        });
+        let (outstanding_tests, root_info) = ComputedRerunInfo::compute_from_archive(&mut archive)
+            .map_err(|err| ExpectedError::RecordReadError { err })?;
 
         Ok((
             RerunState {
