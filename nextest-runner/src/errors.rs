@@ -1330,6 +1330,17 @@ pub enum FromMessagesError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum CreateTestListError {
+    /// Listing failed for a binary known to use a custom test harness.
+    #[error(
+        "this binary uses a custom test harness (`harness = false`), which may not support nextest\n\
+         (hint: see https://nexte.st/docs/design/custom-test-harnesses/ for compatibility requirements)"
+    )]
+    CustomTestHarness {
+        /// The original listing error.
+        #[source]
+        error: Box<CreateTestListError>,
+    },
+
     /// The proposed cwd for a process is not a directory.
     #[error(
         "for `{binary_id}`, current directory `{cwd}` is not a directory\n\
