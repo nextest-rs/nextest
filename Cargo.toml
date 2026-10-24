@@ -99,7 +99,7 @@ nextest-metadata = { version = "0.15.0", path = "nextest-metadata" }
 nextest-runner = { path = "nextest-runner" }
 nextest-workspace-hack = "0.1.0"
 nix = { version = "0.31.3", default-features = false, features = ["signal"] }
-num_threads = "0.1.7"
+num_threads = "0.1.8"
 # Note: we don't use owo-colors' if_supports_color support for now, instead preferring to use our
 # own supports-color + stylesheets everywhere.
 owo-colors = "4.4.0"
