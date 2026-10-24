@@ -1347,8 +1347,15 @@ fn test_run_with_priorities() {
 fn test_run_from_archive_with_no_includes() {
     let env_info = set_env_vars_for_test();
 
-    let (_p1, archive_file) =
-        create_archive(&env_info, "", false, "archive_no_includes").expect("archive succeeded");
+    let (_p1, archive_file) = create_archive_with_args(
+        &env_info,
+        "",
+        false,
+        "archive_no_includes",
+        &["--zstd-long"],
+        true,
+    )
+    .expect("archive succeeded");
     let (_p2, extracted_target) = run_archive(&env_info, &archive_file);
 
     for path in [

@@ -59,6 +59,10 @@ pub(crate) struct ArchiveOpts {
         allow_negative_numbers = true
     )]
     pub(crate) zstd_level: i32,
+
+    /// Enable Zstandard long-distance matching (2^27-byte window).
+    #[arg(long, help_heading = "Archive options")]
+    pub(crate) zstd_long: bool,
     // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
 }
 
@@ -81,6 +85,7 @@ impl ArchiveApp {
         output_file: &camino::Utf8Path,
         format: ArchiveFormatOpt,
         zstd_level: i32,
+        zstd_long: bool,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
         // Do format detection first so we fail immediately.
@@ -141,6 +146,7 @@ impl ArchiveApp {
             &path_mapper,
             format,
             zstd_level,
+            zstd_long,
             output_file,
             |event| {
                 reporter.report_event(event, &mut writer)?;
