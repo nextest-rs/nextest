@@ -96,6 +96,8 @@ fn test_argument_parsing() {
         // --cargo-metadata + --binaries-metadata or --archive-file (see below).
         "cargo nextest run --cargo-metadata=path --binaries-metadata=foo --workspace-remap remapped-path",
         "cargo nextest archive --archive-file my-archive.tar.zst --zstd-level -1",
+        "cargo nextest archive --archive-file my-archive.tar.zst --zstd-long",
+        "cargo nextest archive --archive-file my-archive.tar.zst --zstd-level 3 --zstd-long",
         "cargo nextest archive --archive-file my-archive.foo --archive-format tar-zst",
         "cargo nextest archive --archive-file my-archive.foo --archive-format tar-zstd",
         "cargo nextest list --archive-file my-archive.tar.zst",

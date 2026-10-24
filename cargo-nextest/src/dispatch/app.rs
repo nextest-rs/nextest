@@ -188,6 +188,7 @@ impl AppOpts {
                     &archive_opts.archive_file,
                     archive_opts.archive_format,
                     archive_opts.zstd_level,
+                    archive_opts.zstd_long,
                     output_writer,
                 )?;
                 Ok(0)
