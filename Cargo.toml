@@ -86,7 +86,7 @@ insta = { version = "1.48.0", default-features = false }
 is_ci = "1.2.0"
 itertools = "0.15.0"
 jsonschema = "0.58.6"
-libc = "0.2.189"
+libc = "0.2.191"
 libtest-mimic = "0.8.2"
 locked-tripwire = { version = "0.1.0", features = ["nextest"] }
 log = "0.4.34"
