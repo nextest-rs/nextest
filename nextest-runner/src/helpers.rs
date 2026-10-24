@@ -426,9 +426,9 @@ impl fmt::Display for DisplayScriptInstance {
     }
 }
 
-struct DisplayStressIndex {
-    stress_index: StressIndex,
-    count_style: Style,
+pub(crate) struct DisplayStressIndex {
+    pub(crate) stress_index: StressIndex,
+    pub(crate) count_style: Style,
 }
 
 impl fmt::Display for DisplayStressIndex {
