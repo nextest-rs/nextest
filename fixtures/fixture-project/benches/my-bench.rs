@@ -22,17 +22,17 @@ fn check_run_mode() {
     }
 }
 
+// Don't call `Bencher::iter` here since libtest's convergence loop takes up to
+// 3s per benchmark, and we don't care about the benchmark itself. bench.
 #[bench]
-fn bench_add_two(b: &mut test::Bencher) {
+fn bench_add_two(_b: &mut test::Bencher) {
     check_run_mode();
-    b.iter(|| 2 + 2);
 }
 
 #[bench]
 #[ignore]
-fn bench_ignored(b: &mut test::Bencher) {
+fn bench_ignored(_b: &mut test::Bencher) {
     check_run_mode();
-    b.iter(|| 2 + 2);
 }
 
 #[bench]
