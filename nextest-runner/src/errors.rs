@@ -932,6 +932,36 @@ pub struct InvalidCustomTestGroupName(pub InvalidIdentifier);
 #[error("invalid configuration script name: {0}")]
 pub struct InvalidConfigScriptName(pub InvalidIdentifier);
 
+/// An error that occurred while constructing a
+/// [`PackageSpec`](crate::build_scope::PackageSpec).
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+#[error("invalid package spec `{}`: {kind}", .spec.escape_debug())]
+pub struct PackageSpecError {
+    spec: String,
+    kind: PackageSpecErrorKind,
+}
+
+impl PackageSpecError {
+    /// Returns the raw package spec string that caused this error.
+    pub fn spec(&self) -> &str {
+        &self.spec
+    }
+
+    /// Returns the kind of error that occurred.
+    pub fn kind(&self) -> &PackageSpecErrorKind {
+        &self.kind
+    }
+}
+
+/// The kind of error that occurred while constructing a
+/// [`PackageSpec`](crate::build_scope::PackageSpec).
+///
+/// Returned by [`PackageSpecError::kind`].
+///
+/// This is uninhabited until package spec validation lands.
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum PackageSpecErrorKind {}
+
 /// Error returned while parsing a [`ToolConfigFile`](crate::config::core::ToolConfigFile) value.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ToolConfigFileParseError {
