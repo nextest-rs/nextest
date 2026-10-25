@@ -11,41 +11,87 @@ use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::Utf8TempDir;
 use camino_tempfile_ext::prelude::*;
 use guppy::{
-    MetadataCommand, PackageId,
+    PackageId,
     graph::{PackageGraph, cargo::BuildPlatform},
 };
 use nextest_filtering::BinaryQuery;
 use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
 use serde::Deserialize;
-use std::{path::PathBuf, process::Command};
 use target_spec::{Platform, TargetFeatures};
 
 pub(in crate::config) fn temp_workspace(
     temp_dir: &Utf8TempDir,
     config_contents: &str,
 ) -> PackageGraph {
-    Command::new(cargo_path())
-        .args(["init", "--lib", "--name=test-package", "--vcs=none"])
-        .current_dir(temp_dir)
-        .status()
-        .expect("error initializing cargo project");
-
     temp_dir
         .child(".config/nextest.toml")
         .write_str(config_contents)
         .expect("error writing config file");
 
-    PackageGraph::from_command(MetadataCommand::new().current_dir(temp_dir.path()))
+    PackageGraph::from_json(single_package_metadata(temp_dir.path()).to_string())
         .expect("error creating package graph")
 }
 
-pub(super) fn cargo_path() -> Utf8PathBuf {
-    match std::env::var_os("CARGO") {
-        Some(cargo_path) => PathBuf::from(cargo_path)
-            .try_into()
-            .expect("CARGO env var is not valid UTF-8"),
-        None => Utf8PathBuf::from("cargo"),
-    }
+/// Returns synthesized metadata for `cargo init --lib --name=test-package`.
+///
+/// We synthesize the metadata to avoid spawning a (slow) Cargo instance for
+/// each test.
+fn single_package_metadata(workspace_root: &Utf8Path) -> serde_json::Value {
+    let package_id = "path+file:///test-package#test-package@0.1.0";
+    let target_dir = workspace_root.join("target");
+    serde_json::json!({
+        "packages": [{
+            "name": "test-package",
+            "version": "0.1.0",
+            "id": package_id,
+            "license": null,
+            "license_file": null,
+            "description": null,
+            "source": null,
+            "dependencies": [],
+            "targets": [{
+                "kind": ["lib"],
+                "crate_types": ["lib"],
+                "name": "test_package",
+                "src_path": workspace_root.join("src").join("lib.rs"),
+                "edition": "2024",
+                "doc": true,
+                "doctest": true,
+                "test": true,
+            }],
+            "features": {},
+            "manifest_path": workspace_root.join("Cargo.toml"),
+            "metadata": null,
+            "publish": null,
+            "authors": [],
+            "categories": [],
+            "keywords": [],
+            "readme": null,
+            "repository": null,
+            "homepage": null,
+            "documentation": null,
+            "edition": "2024",
+            "links": null,
+            "default_run": null,
+            "rust_version": null,
+        }],
+        "workspace_members": [package_id],
+        "workspace_default_members": [package_id],
+        "resolve": {
+            "nodes": [{
+                "id": package_id,
+                "dependencies": [],
+                "deps": [],
+                "features": [],
+            }],
+            "root": package_id,
+        },
+        "target_directory": target_dir,
+        "build_directory": target_dir,
+        "version": 1,
+        "workspace_root": workspace_root,
+        "metadata": null,
+    })
 }
 
 pub(in crate::config) struct BinaryQueryCreator<'a> {
