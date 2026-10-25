@@ -57,7 +57,9 @@ enable-ansi-support.workspace = true
 fs-err.workspace = true
 hex.workspace = true
 libc.workspace = true
-nextest-metadata.workspace = true
+# proptest1 matches nextest-runner's dev-dependency features, so that the setup
+# script's `cargo run` reuses the test build.
+nextest-metadata = { workspace = true, features = ["proptest1"] }
 nextest-workspace-hack.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

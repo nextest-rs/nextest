@@ -18,8 +18,6 @@ publish = false
 [dependencies]
 ahash = { version = "0.8.12", features = ["serde"] }
 aho-corasick = { version = "1.1.5" }
-bit-set = { version = "0.8.0" }
-bit-vec = { version = "0.8.0" }
 camino = { version = "1.2.6", default-features = false, features = ["serde1"] }
 clap = { version = "4.6.7", features = ["derive", "env", "unicode", "unstable-markdown", "wrap_help"] }
 clap_builder = { version = "4.6.7", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }

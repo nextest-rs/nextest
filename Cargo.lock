@@ -2705,8 +2705,6 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "aho-corasick",
- "bit-set 0.8.0",
- "bit-vec 0.8.0",
  "bitflags 2.13.2",
  "camino",
  "clap",
