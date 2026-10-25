@@ -901,6 +901,58 @@ fn test_run() {
     );
 }
 
+/// Test that versioned and glob `-p` and `--exclude` values are supported.
+#[test]
+fn test_run_versioned_and_glob_package_specs() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+
+    for spec in ["cdylib-example@0.1", "cdylib-ex*"] {
+        // When specified with `-p`, both of these should select only
+        // `cdylib-example`.
+        let output = CargoNextestCli::for_test(&env_info)
+            .args([
+                "--manifest-path",
+                p.manifest_path().as_str(),
+                "run",
+                "-p",
+                spec,
+            ])
+            .output();
+        check_run_output(&output.stderr, RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER);
+
+        // When specified with `--exclude`, both of these should exclude
+        // `cdylib-example`.
+        let list_output = CargoNextestCli::for_test(&env_info)
+            .args([
+                "--manifest-path",
+                p.manifest_path().as_str(),
+                "list",
+                "--workspace",
+                "--exclude",
+                spec,
+                "--message-format",
+                "json",
+            ])
+            .output();
+        let summary: TestListSummary =
+            serde_json::from_slice(&list_output.stdout).expect("parsed test list JSON");
+        let binary_ids: BTreeSet<&str> = summary
+            .rust_suites
+            .keys()
+            .map(|binary_id| binary_id.as_str())
+            .collect();
+        assert!(
+            !binary_ids.contains("cdylib-example"),
+            "--exclude {spec} should exclude cdylib-example, found: {binary_ids:?}"
+        );
+        assert!(
+            binary_ids.contains("cdylib-link"),
+            "--exclude {spec} should keep other workspace packages, found: {binary_ids:?}"
+        );
+    }
+}
+
 #[test]
 fn test_run_junit_report_skipped_all() {
     let env_info = set_env_vars_for_test();
