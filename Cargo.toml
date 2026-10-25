@@ -186,6 +186,10 @@ opt-level = 3
 [profile.dev.package.similar]
 opt-level = 3
 
+# Build zstd-sys in opt mode to speed up archive extraction and recording in tests.
+[profile.dev.package.zstd-sys]
+opt-level = 3
+
 [profile.release]
 # Ensure that symbols and debuginfo aren't stripped. They're useful for debugging issues with
 # nextest in the field, and don't bloat up binaries too much
