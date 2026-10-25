@@ -2000,6 +2000,25 @@ fn test_replayability_missing_store_zip() {
         stderr.contains("error opening archive at"),
         "replay error should mention opening archive: {stderr}"
     );
+
+    // A rerun where the parent run's store.zip isn't available gets the generic read error.
+    // (We check these by assertion since the message has OS-specific error text. It also
+    // has native path separators, though those could potentially be normalized.)
+    let rerun_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["run", "--rerun", RUN_ID])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        rerun_output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "rerun of a run without store.zip should fail with SETUP_ERROR: {rerun_output}"
+    );
+    let rerun_stderr = rerun_output.stderr_as_str();
+    assert!(
+        rerun_stderr.contains("error: error reading recorded run\n")
+            && rerun_stderr.contains("error opening archive at `"),
+        "rerun of a run without store.zip should get the generic read error: {rerun_output}"
+    );
 }
 
 /// Replayability: missing run.log.zst.
