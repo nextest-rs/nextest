@@ -10,6 +10,44 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.150] - 2026-10-26
+
+### Security
+
+- Fixed [GHSA-vc25-qg58-w57c](https://github.com/nextest-rs/nextest/security/advisories/GHSA-vc25-qg58-w57c): with the experimental [run recording](https://nexte.st/docs/features/record-replay-rerun/) feature enabled, `cargo nextest run --rerun` with a malicious [portable recording](https://nexte.st/docs/features/record-replay-rerun/portable-recordings/) could run arbitrary code during the build.
+
+  Reruns inherit the original run's [build scope](https://nexte.st/docs/design/architecture/recording-runs/#build-scope-arguments) (defined as the combination of package, target, and feature selection options). Nextest versions 0.9.125 through 0.9.149 recorded the build scope as raw Cargo arguments, and passed them to Cargo unchanged. A crafted recording could therefore add any Cargo option, such as a `--config` that sets `build.rustc-wrapper`. That code ran as the invoking user during the build, before any tests started, even with a warm build cache.
+
+  Nextest now records the build scope as structured data, and passes each value to Cargo joined to its flag (for example, `--package=<value>`), so a recording can no longer add other Cargo options.
+
+  To ensure that everyone working on your repository uses a fixed version, set the [minimum required version](https://nexte.st/docs/configuration/minimum-versions/) in `.config/nextest.toml`:
+
+  ```toml
+  nextest-version = "0.9.150"
+  ```
+
+### Added
+
+- `cargo nextest archive` has a new `--zstd-long` option, which enables Zstandard long-distance matching with a 128 MiB window. For large archives, this can significantly improve the compression ratio at lower compression levels. Extracting these archives needs no extra options. ([#3664])
+
+  Thanks [nsextonTT](https://github.com/nsextonTT) for your first contribution!
+
+### Changed
+
+- Run recording now uses store format 3.0. As part of the security fix above:
+  - Recordings made by nextest 0.9.149 and earlier, including portable recordings, can no longer be replayed or rerun. Nextest still lists and prunes them, and recommends discarding them.
+  - Once this version of nextest writes to a record store, nextest 0.9.149 and earlier can still read the store but can no longer write to it. These versions disable recording with a warning, and pruning fails.
+
+  For more details, see [recorded run versioning](https://nexte.st/docs/design/architecture/recording-runs/#recorded-run-versioning).
+
+- If `cargo nextest run --rerun` can't read the parent run, the error now names the run (and the portable recording, if any), and suggests starting a new rerun chain.
+
+### Fixed
+
+- Nextest now passes Cargo options to Cargo as single `--flag=value` arguments. Previously, an option value that started with `-`, such as `--target-dir=-build`, was passed as a separate argument and could be misinterpreted by Cargo as a flag.
+
+[#3664]: https://github.com/nextest-rs/nextest/pull/3664
+
 ## [0.9.149] - 2026-10-20
 
 ### Security
@@ -2398,6 +2436,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.150]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.150
 [0.9.149]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.149
 [0.9.148]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.148
 [0.9.147]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.147
