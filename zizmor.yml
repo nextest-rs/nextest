@@ -1,11 +1,4 @@
 rules:
-  unpinned-uses:
-    config:
-      policies:
-        # dtolnay/rust-toolchain is a trusted action that uses lightweight branch
-        # refs (@stable, @nightly, etc.) by design. Pinning to a hash would break
-        # the intended usage pattern.
-        dtolnay/rust-toolchain: any
   # dtolnay/rust-toolchain handles component installation, target addition, and
   # override configuration beyond what a bare `rustup` invocation provides.
   superfluous-actions:
