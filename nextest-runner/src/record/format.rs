@@ -7,6 +7,7 @@ use super::{
     CompletedRunStats, ComponentSizes, RecordedRunInfo, RecordedRunStatus, RecordedSizes,
     StressCompletedRunStats,
 };
+use crate::build_scope::BuildScope;
 use camino::Utf8Path;
 use chrono::{DateTime, FixedOffset, Utc};
 use eazip::{CompressionMethod, write::FileOptions};
@@ -121,7 +122,7 @@ impl StoreFormatVersion {
             return Err(StoreVersionIncompatibility::RecordingTooOld {
                 recording_major: self.major,
                 supported_major: supported.major,
-                last_nextest_version: self.major.last_nextest_version(),
+                guidance: self.major.too_old_guidance(),
             });
         }
         if self.major > supported.major {
@@ -147,17 +148,41 @@ impl fmt::Display for StoreFormatVersion {
 }
 
 impl StoreFormatMajorVersion {
-    /// Returns the last nextest version that supported this store format major
-    /// version, if known.
-    ///
-    /// This is used to provide actionable guidance when an archive is too old
-    /// for the current nextest.
-    pub fn last_nextest_version(self) -> Option<&'static str> {
+    /// Returns the guidance to display to users when a recording at this major
+    /// version is too old for this nextest.
+    pub fn too_old_guidance(self) -> TooOldRecordingGuidance {
         match self.0 {
-            1 => Some("0.9.130"),
-            _ => None,
+            // Store formats before 3.0 get Discard due to a vulnerability.
+            1 => TooOldRecordingGuidance::Discard {
+                last_nextest_version: "0.9.130",
+            },
+            2 => TooOldRecordingGuidance::Discard {
+                last_nextest_version: "0.9.149",
+            },
+            _ => TooOldRecordingGuidance::Unknown,
         }
     }
+}
+
+/// The guidance for a recording whose store format major version is older than
+/// this nextest supports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TooOldRecordingGuidance {
+    /// The recording is readable by an older nextest, and switching to the
+    /// older version is believed to be safe.
+    ///
+    /// This is currently unused.
+    UseOlderNextest {
+        /// The last version of nextest that supported this recording.
+        last_nextest_version: &'static str,
+    },
+    /// The recording should be discarded rather than read with an older nextest.
+    Discard {
+        /// The last version of nextest that supported this recording.
+        last_nextest_version: &'static str,
+    },
+    /// No guidance is known for this major version.
+    Unknown,
 }
 
 /// An incompatibility between a recording's store format version and what the
@@ -170,9 +195,8 @@ pub enum StoreVersionIncompatibility {
         recording_major: StoreFormatMajorVersion,
         /// The major version this nextest supports.
         supported_major: StoreFormatMajorVersion,
-        /// The last nextest version that supported the recording's major version,
-        /// if known.
-        last_nextest_version: Option<&'static str>,
+        /// The guidance to give users about the recording.
+        guidance: TooOldRecordingGuidance,
     },
     /// The recording's major version is newer than the supported major version.
     RecordingTooNew {
@@ -196,17 +220,29 @@ impl fmt::Display for StoreVersionIncompatibility {
             Self::RecordingTooOld {
                 recording_major,
                 supported_major,
-                last_nextest_version,
+                guidance,
             } => {
                 write!(
                     f,
                     "recording has major version {recording_major}, \
                      but this nextest requires version {supported_major}"
                 )?;
-                if let Some(version) = last_nextest_version {
-                    write!(f, " (use nextest <= {version} to replay this recording)")?;
+                match guidance {
+                    TooOldRecordingGuidance::UseOlderNextest {
+                        last_nextest_version,
+                    } => write!(
+                        f,
+                        "\n(use nextest <= {last_nextest_version} to replay this recording)"
+                    ),
+                    TooOldRecordingGuidance::Discard {
+                        last_nextest_version,
+                    } => write!(
+                        f,
+                        "\n(recordings from nextest {last_nextest_version} and earlier \
+                         are no longer supported; discard this recording and record a new run)"
+                    ),
+                    TooOldRecordingGuidance::Unknown => Ok(()),
                 }
-                Ok(())
             }
             Self::RecordingTooNew {
                 recording_major,
@@ -238,7 +274,13 @@ impl fmt::Display for StoreVersionIncompatibility {
 // ---
 
 /// The current format version for runs.json.zst.
-pub(super) const RUNS_JSON_FORMAT_VERSION: RunsJsonFormatVersion = RunsJsonFormatVersion::new(2);
+///
+/// Changelog:
+///
+/// - 3: `build-scope-args` removed (the build scope now lives in each run's
+///   `store.zip`). Bumped alongside store format 3.0 so older nextest versions
+///   refuse to write to `runs.json.zst`.
+pub(super) const RUNS_JSON_FORMAT_VERSION: RunsJsonFormatVersion = RunsJsonFormatVersion::new(3);
 
 /// The current format version for recorded test runs (store.zip and run.log).
 ///
@@ -255,10 +297,15 @@ pub(super) const RUNS_JSON_FORMAT_VERSION: RunsJsonFormatVersion = RunsJsonForma
 ///
 /// - 2.1: `junit_report_skipped` field added to `TestSkipped` events.
 ///
-/// - 2.2: `run-wrapper-report` field added to `ExecuteStatus`.
+/// - 3.0: The build scope is stored as a typed struct in
+///   `meta/build-scope.json` and `rerun-info.json`'s `build-scope`,
+///   replacing `runs.json.zst`'s `build-scope-args`. Adding a `BuildScope`
+///   field or a `BuildKind` variant requires bumping the minor version here.
+///
+/// - 3.1: `run-wrapper-report` field added to `ExecuteStatus`.
 pub const STORE_FORMAT_VERSION: StoreFormatVersion = StoreFormatVersion::new(
-    StoreFormatMajorVersion::new(2),
-    StoreFormatMinorVersion::new(2),
+    StoreFormatMajorVersion::new(3),
+    StoreFormatMinorVersion::new(1),
 );
 
 /// Testing-only environment variable to force a specific store format version
@@ -420,12 +467,6 @@ pub(super) struct RecordedRun {
     /// The command-line arguments used to invoke nextest.
     #[serde(default)]
     pub(super) cli_args: Vec<String>,
-    /// Build scope arguments (package and target selection).
-    ///
-    /// These determine which packages and targets are built. In a rerun chain,
-    /// these are inherited from the original run unless explicitly overridden.
-    #[serde(default)]
-    pub(super) build_scope_args: Vec<String>,
     /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
     ///
     /// This has a default for deserializing old runs.json.zst files that don't have this field.
@@ -574,7 +615,6 @@ impl From<RecordedRun> for RecordedRunInfo {
             last_written_at: run.last_written_at,
             duration_secs: run.duration_secs,
             cli_args: run.cli_args,
-            build_scope_args: run.build_scope_args,
             env_vars: run.env_vars,
             parent_run_id: run.parent_run_id,
             sizes: run.sizes.into(),
@@ -594,7 +634,6 @@ impl From<&RecordedRunInfo> for RecordedRun {
             last_written_at: run.last_written_at,
             duration_secs: run.duration_secs,
             cli_args: run.cli_args.clone(),
-            build_scope_args: run.build_scope_args.clone(),
             env_vars: run.env_vars.clone(),
             parent_run_id: run.parent_run_id,
             sizes: run.sizes.into(),
@@ -689,6 +728,42 @@ impl From<&RecordedRunStatus> for RecordedRunStatusFormat {
     }
 }
 
+/// The contents of `meta/build-scope.json`, and of `rerun-info.json`'s root
+/// `build-scope`.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RecordedBuildScope {
+    /// How the run got its test binaries.
+    pub build_kind: BuildKind,
+    /// The build scope for this run or rerun root.
+    ///
+    /// Currently, if [`Self::build_kind`] is [`BuildKind::Reused`], this field
+    /// is meaningless. In the future, we'll be able to populate this field.
+    pub scope: BuildScope,
+}
+
+impl RecordedBuildScope {
+    /// Creates a new [`RecordedBuildScope`] with the given `build_kind` and
+    /// `scope`.
+    pub fn new(build_kind: BuildKind, scope: BuildScope) -> Self {
+        Self { build_kind, scope }
+    }
+}
+
+/// The mechanism through which a run's test binaries were obtained.
+///
+/// This is currently stored for informational purposes only, and is
+/// not used.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BuildKind {
+    /// Nextest used Cargo to build the binaries, with `cargo test --no-run`, or
+    /// `cargo bench --no-run` for benchmarks.
+    Cargo,
+    /// The binaries came from `--archive-file` or `--binaries-metadata`.
+    Reused,
+}
+
 // ---
 // Rerun types
 // ---
@@ -716,20 +791,19 @@ pub struct RerunRootInfo {
     /// The run ID.
     pub run_id: ReportUuid,
 
-    /// Build scope args from the original run.
-    pub build_scope_args: Vec<String>,
+    /// The build scope of the rerun chain's root run.
+    pub build_scope: RecordedBuildScope,
 }
 
 impl RerunRootInfo {
     /// Creates a new `RerunRootInfo` for a root of a rerun chain.
     ///
-    /// `build_scope_args` should be the build scope arguments extracted from
-    /// the original run's CLI args. Use `extract_build_scope_args` from
-    /// `cargo-nextest` to extract these.
-    pub fn new(run_id: ReportUuid, build_scope_args: Vec<String>) -> Self {
+    /// `build_scope` is the rerun chain root's recorded build scope, read from
+    /// its `meta/build-scope.json`.
+    pub fn new(run_id: ReportUuid, build_scope: RecordedBuildScope) -> Self {
         Self {
             run_id,
-            build_scope_args,
+            build_scope,
         }
     }
 }
@@ -788,6 +862,11 @@ pub static CARGO_METADATA_JSON_PATH: &str = "meta/cargo-metadata.json";
 pub static TEST_LIST_JSON_PATH: &str = "meta/test-list.json";
 /// Path to record options within the store archive.
 pub static RECORD_OPTS_JSON_PATH: &str = "meta/record-opts.json";
+/// Path to the run's build scope.
+///
+/// Kept out of `record-opts.json` so that an unreadable scope only blocks
+/// reruns, not replays.
+pub static BUILD_SCOPE_JSON_PATH: &str = "meta/build-scope.json";
 /// Path to rerun info within the store archive (only present for reruns).
 pub static RERUN_INFO_JSON_PATH: &str = "meta/rerun-info.json";
 /// Path to the stdout dictionary within the store archive.
@@ -904,10 +983,15 @@ impl fmt::Display for PortableRecordingVersionIncompatibility {
 }
 
 /// The current format version for portable recordings.
+///
+/// Changelog:
+///
+/// - 1.1: the manifest's run metadata no longer has `build-scope-args`
+///   (the build scope is in the inner store's `meta/build-scope.json`).
 pub const PORTABLE_RECORDING_FORMAT_VERSION: PortableRecordingFormatVersion =
     PortableRecordingFormatVersion::new(
         PortableRecordingFormatMajorVersion::new(1),
-        PortableRecordingFormatMinorVersion::new(0),
+        PortableRecordingFormatMinorVersion::new(1),
     );
 
 /// File name for the manifest within a portable recording.
@@ -1031,6 +1115,9 @@ pub(super) fn zstd_file_options() -> FileOptions {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::build_scope::{
+        FeatureSelection, NamedTargets, PackageSelection, PackageSpec, TargetSelection,
+    };
 
     #[test]
     fn test_output_dict_for_path() {
@@ -1161,6 +1248,32 @@ mod tests {
 
     // --- RecordedRun serialization snapshot tests ---
 
+    fn make_test_build_scope() -> BuildScope {
+        BuildScope::new(
+            PackageSelection {
+                specs: Vec::new(),
+                workspace: true,
+                exclude: vec![PackageSpec::new("nextest-*").expect("spec is valid")],
+            },
+            TargetSelection {
+                lib: false,
+                bins: NamedTargets::empty(),
+                examples: NamedTargets::empty(),
+                tests: NamedTargets {
+                    names: vec!["integration".to_owned()],
+                    all: false,
+                },
+                benches: NamedTargets::empty(),
+                all_targets: false,
+            },
+            FeatureSelection {
+                features: vec!["feat-a".to_owned()],
+                all_features: false,
+                no_default_features: false,
+            },
+        )
+    }
+
     fn make_test_run(status: RecordedRunStatusFormat) -> RecordedRun {
         RecordedRun {
             run_id: ReportUuid::from_u128(0x550e8400_e29b_41d4_a716_446655440000),
@@ -1178,7 +1291,6 @@ mod tests {
                 "run".to_owned(),
                 "--workspace".to_owned(),
             ],
-            build_scope_args: vec!["--workspace".to_owned()],
             env_vars: BTreeMap::from([
                 ("CARGO_TERM_COLOR".to_owned(), "always".to_owned()),
                 ("NEXTEST_PROFILE".to_owned(), "ci".to_owned()),
@@ -1375,12 +1487,17 @@ mod tests {
             StoreVersionIncompatibility::RecordingTooOld {
                 recording_major: StoreFormatMajorVersion::new(1),
                 supported_major: StoreFormatMajorVersion::new(2),
-                last_nextest_version: Some("0.9.130"),
+                guidance: TooOldRecordingGuidance::Discard {
+                    last_nextest_version: "0.9.130",
+                },
             },
         );
         insta::assert_snapshot!(
             error.to_string(),
-            @"recording has major version 1, but this nextest requires version 2 (use nextest <= 0.9.130 to replay this recording)"
+            @"
+        recording has major version 1, but this nextest requires version 2
+        (recordings from nextest 0.9.130 and earlier are no longer supported; discard this recording and record a new run)
+        "
         );
 
         // Archive older than supported → ArchiveTooOld (unknown version).
@@ -1390,7 +1507,7 @@ mod tests {
             StoreVersionIncompatibility::RecordingTooOld {
                 recording_major: StoreFormatMajorVersion::new(3),
                 supported_major: StoreFormatMajorVersion::new(5),
-                last_nextest_version: None,
+                guidance: TooOldRecordingGuidance::Unknown,
             },
         );
         insta::assert_snapshot!(
@@ -1398,22 +1515,82 @@ mod tests {
             @"recording has major version 3, but this nextest requires version 5"
         );
 
+        // No major version maps to UseOlderNextest yet, so construct it
+        // directly for now.
+        let error = StoreVersionIncompatibility::RecordingTooOld {
+            recording_major: StoreFormatMajorVersion::new(3),
+            supported_major: StoreFormatMajorVersion::new(4),
+            guidance: TooOldRecordingGuidance::UseOlderNextest {
+                last_nextest_version: "0.9.200",
+            },
+        };
+        insta::assert_snapshot!(error.to_string(), @"
+        recording has major version 3, but this nextest requires version 4
+        (use nextest <= 0.9.200 to replay this recording)
+        ");
+
         insta::assert_snapshot!(version(1, 2).to_string(), @"1.2");
+    }
+
+    // Every major older than the current one must have guidance.
+    #[test]
+    fn test_too_old_guidance_known_for_all_older_majors() {
+        for major in 1..STORE_FORMAT_VERSION.major.0 {
+            let major = StoreFormatMajorVersion::new(major);
+            match major.too_old_guidance() {
+                TooOldRecordingGuidance::UseOlderNextest { .. }
+                | TooOldRecordingGuidance::Discard { .. } => {}
+                TooOldRecordingGuidance::Unknown => {
+                    panic!(
+                        "store format major version {major} has no too_old_guidance entry \
+                         (add one when bumping STORE_FORMAT_VERSION's major version)"
+                    )
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_runs_json_with_store_format_2_entry() {
+        // A store format 2.x entry has `build-scope-args`, which this nextest
+        // ignores. We must still be able to load the entry.
+        let json = r#"{
+            "format-version": 2,
+            "runs": [{
+                "run-id": "550e8400-e29b-41d4-a716-446655440000",
+                "store-format-version": 2,
+                "store-format-minor-version": 1,
+                "nextest-version": "0.9.149",
+                "started-at": "2024-12-19T14:22:33-08:00",
+                "last-written-at": "2024-12-19T22:22:33Z",
+                "cli-args": ["cargo", "nextest", "run", "-p", "foo", "--features", "a b"],
+                "build-scope-args": ["--package=foo", "--features=a b"],
+                "env-vars": {},
+                "sizes": {
+                    "log": { "compressed": 0, "uncompressed": 0 },
+                    "store": { "compressed": 0, "uncompressed": 0 }
+                },
+                "status": { "status": "incomplete" }
+            }]
+        }"#;
+        let list: RecordedRunList = serde_json::from_str(json).expect("2.x entry deserializes");
+        let data = list.into_data();
+        assert_eq!(data.runs.len(), 1);
+        assert_eq!(data.runs[0].store_format_version, version(2, 1));
+
+        // When the recorded run list is written out, the `build-scope-args`
+        // field is dropped. (This is by design.)
+        let rewritten = RecordedRunList::from_data(&data.runs, data.last_pruned_at);
+        let rewritten = serde_json::to_value(&rewritten).expect("rewritten run list serializes");
+        let rewritten_run = &rewritten["runs"][0];
+        assert_eq!(rewritten_run.get("build-scope-args"), None);
     }
 
     #[test]
     fn test_rerun_root_info_serialize() {
         let root_info = RerunRootInfo::new(
             ReportUuid::from_u128(0x550e8400_e29b_41d4_a716_446655440000),
-            vec![
-                "--workspace".to_owned(),
-                "--exclude".to_owned(),
-                "nextest-*".to_owned(),
-                "--test".to_owned(),
-                "integration".to_owned(),
-                "--features".to_owned(),
-                "feat-a".to_owned(),
-            ],
+            RecordedBuildScope::new(BuildKind::Cargo, make_test_build_scope()),
         );
         let json = serde_json::to_string_pretty(&root_info).expect("serialization should succeed");
         insta::assert_snapshot!(json);
@@ -1421,7 +1598,47 @@ mod tests {
         let roundtripped: RerunRootInfo =
             serde_json::from_str(&json).expect("deserialization should succeed");
         assert_eq!(roundtripped.run_id, root_info.run_id);
-        assert_eq!(roundtripped.build_scope_args, root_info.build_scope_args);
+        assert_eq!(roundtripped.build_scope, root_info.build_scope);
+    }
+
+    #[test]
+    fn test_rerun_root_info_deserialize_errors() {
+        let cases = [
+            // Store format 2.x entries have `build-scope-args` only.
+            (
+                "store_format_2",
+                r#"{"run-id": "550e8400-e29b-41d4-a716-446655440000", "build-scope-args": ["--workspace"]}"#,
+            ),
+            // Missing `build-kind` and `scope` fields.
+            (
+                "missing_build_kind",
+                r#"{"run-id": "550e8400-e29b-41d4-a716-446655440000", "build-scope": {"scope": {}}}"#,
+            ),
+            // Missing `scope` field.
+            (
+                "missing_scope",
+                r#"{"run-id": "550e8400-e29b-41d4-a716-446655440000", "build-scope": {"build-kind": "cargo"}}"#,
+            ),
+            // Unknown `build-kind`.
+            (
+                "unknown_build_kind",
+                r#"{"run-id": "550e8400-e29b-41d4-a716-446655440000", "build-scope": {"build-kind": "bazel", "scope": {}}}"#,
+            ),
+        ];
+        let errors: Vec<_> = cases
+            .iter()
+            .map(|(label, json)| {
+                let error = serde_json::from_str::<RerunRootInfo>(json)
+                    .expect_err("rerun root info should fail to parse");
+                format!("{label}: {error}")
+            })
+            .collect();
+        insta::assert_snapshot!(errors.join("\n"), @"
+        store_format_2: missing field `build-scope` at line 1 column 87
+        missing_build_kind: missing field `build-kind` at line 1 column 79
+        missing_scope: missing field `scope` at line 1 column 89
+        unknown_build_kind: unknown variant `bazel`, expected `cargo` or `reused` at line 1 column 88
+        ");
     }
 
     #[test]
@@ -1537,8 +1754,8 @@ mod tests {
         // Verify the current PORTABLE_RECORDING_FORMAT_VERSION constant.
         assert_eq!(
             PORTABLE_RECORDING_FORMAT_VERSION,
-            portable_version(1, 0),
-            "current portable recording format version should be 1.0"
+            portable_version(1, 1),
+            "current portable recording format version should be 1.1"
         );
     }
 }

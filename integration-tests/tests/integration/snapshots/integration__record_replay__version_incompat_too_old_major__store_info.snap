@@ -1,0 +1,24 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&info.stdout_as_str(), temp_root)"
+---
+Run 84000002-0000-0000-0000-000000000002
+
+  nextest version:  <version>
+  command:          '[EXE]' nextest --no-pager --manifest-path '[PATH]' --user-config-file '[PATH]' run -E 'test(=test_success)'
+  env:              CARGO_TERM_COLOR=never NEXTEST_SHOW_PROGRESS=counter NEXTEST_STATE_DIR='[PATH]' NEXTEST_USER_CONFIG_FILE=none
+  status:           completed (exit code 0)
+  started at:       XXXX-XX-XX XX:XX:XX (<ago> ago)
+  last written at:  XXXX-XX-XX XX:XX:XX (<ago> ago)
+  duration:         <duration>
+  replayable:       no: store format version incompatible: recording has major version 2, but this nextest requires version 3
+                    (recordings from nextest 0.9.149 and earlier are no longer supported; discard this recording and record a new run)
+
+  tests:
+    passed:         1
+
+  sizes:            compressed  uncompressed  entries
+    log                 <size>        <size>       36
+    store               <size>        <size>        7
+                    ──────────  ────────────  ───────
+    total               <size>        <size>       43

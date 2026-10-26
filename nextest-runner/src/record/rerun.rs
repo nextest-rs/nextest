@@ -246,20 +246,22 @@ impl ComputedRerunInfo {
 
     /// Computes outstanding tests from a recorded run.
     ///
-    /// If this is a rerun chain, also returns information about the root of the
-    /// chain.
+    /// * If this is a rerun chain, also returns information about the root of the
+    ///   chain.
+    /// * If this is not a rerun chain, returns the [`RerunRootInfo`] computed
+    ///   from the parent's own `meta/build-scope.json`.
     pub fn compute(
+        parent_run_id: ReportUuid,
         reader: &mut RecordReader,
-    ) -> Result<(Self, Option<RerunRootInfo>), RecordReadError> {
+    ) -> Result<(Self, RerunRootInfo), RecordReadError> {
         let rerun_info = reader.read_rerun_info()?;
+        let (prev_test_suites, root_info) =
+            prev_suites_and_root_info(parent_run_id, rerun_info, reader)?;
         let test_list = reader.read_test_list()?;
         let outcomes = TestEventOutcomes::collect(reader)?;
 
-        let prev_test_suites = rerun_info.as_ref().map(|info| &info.test_suites);
         let new_test_suites =
-            compute_outstanding_pure(prev_test_suites, &test_list, &outcomes.outcomes);
-
-        let root_info = rerun_info.map(|info| info.root_info);
+            compute_outstanding_pure(prev_test_suites.as_ref(), &test_list, &outcomes.outcomes);
 
         Ok((
             Self {
@@ -271,15 +273,20 @@ impl ComputedRerunInfo {
 
     /// Computes outstanding tests from a portable recording.
     ///
-    /// If the archive is itself a rerun, also returns information about the
-    /// root of the chain.
+    /// * If the portable recording is of a rerun, returns information about
+    ///   the root of the rerun chain.
+    /// * If the portable recording is not of a rerun, returns the [`RerunRootInfo`]
+    ///   computed from the recording's own `meta/build-scope.json`.
     pub fn compute_from_archive(
         archive: &mut PortableRecording,
-    ) -> Result<(Self, Option<RerunRootInfo>), RecordReadError> {
+    ) -> Result<(Self, RerunRootInfo), RecordReadError> {
+        let parent_run_id = archive.run_info().run_id;
         let mut store = archive
             .open_store()
             .map_err(RecordReadError::PortableRecording)?;
         let rerun_info = store.read_rerun_info()?;
+        let (prev_test_suites, root_info) =
+            prev_suites_and_root_info(parent_run_id, rerun_info, &mut store)?;
         let test_list = store.read_test_list()?;
         // No need to load dictionaries since we're not using them.
 
@@ -289,10 +296,8 @@ impl ComputedRerunInfo {
             .map_err(RecordReadError::PortableRecording)?;
         let outcomes = collect_from_events(run_log.events()?.map(|r| r.map(|e| e.kind)))?;
 
-        let prev_test_suites = rerun_info.as_ref().map(|info| &info.test_suites);
-        let new_test_suites = compute_outstanding_pure(prev_test_suites, &test_list, &outcomes);
-
-        let root_info = rerun_info.map(|info| info.root_info);
+        let new_test_suites =
+            compute_outstanding_pure(prev_test_suites.as_ref(), &test_list, &outcomes);
 
         Ok((
             Self {
@@ -308,6 +313,29 @@ impl ComputedRerunInfo {
             parent_run_id,
             root_info,
             test_suites: self.test_suites,
+        }
+    }
+}
+
+/// Splits the parent's rerun info into its test suites and the rerun chain
+/// root's info.
+///
+/// A parent without rerun info is itself the chain root, so its rerun info
+/// is computed from the parent's `meta/build-scope.json`.
+fn prev_suites_and_root_info(
+    parent_run_id: ReportUuid,
+    rerun_info: Option<RerunInfo>,
+    store: &mut impl StoreReader,
+) -> Result<(Option<IdOrdMap<RerunTestSuiteInfo>>, RerunRootInfo), RecordReadError> {
+    match rerun_info {
+        Some(RerunInfo {
+            parent_run_id: _,
+            root_info,
+            test_suites,
+        }) => Ok((Some(test_suites), root_info)),
+        None => {
+            let build_scope = store.read_build_scope()?;
+            Ok((None, RerunRootInfo::new(parent_run_id, build_scope)))
         }
     }
 }

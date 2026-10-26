@@ -15,14 +15,23 @@ use super::{
 };
 use crate::{
     helpers::{ThemeCharacters, plural},
+    indenter::indented,
     redact::{Redactor, SizeDisplay},
 };
 use camino::Utf8Path;
 use chrono::{DateTime, Utc};
 use owo_colors::{OwoColorize, Style};
 use quick_junit::ReportUuid;
-use std::{collections::HashMap, error::Error, fmt};
+use std::{
+    collections::HashMap,
+    error::Error,
+    fmt::{self, Write as _},
+};
 use swrite::{SWrite, swrite};
+
+/// Indentation for continuation lines of a field value, matching the " {:18}"
+/// label column in `write_field`.
+const FIELD_VALUE_INDENT: &str = "                    ";
 
 /// Styles for displaying record store information.
 #[derive(Clone, Debug, Default)]
@@ -600,12 +609,11 @@ impl<'a> DisplayRecordedRunInfoDetailed<'a> {
         label: &str,
         value: impl fmt::Display,
     ) -> fmt::Result {
-        writeln!(
-            f,
-            "  {:18}{}",
-            format!("{}:", label).style(self.styles.label),
-            value,
-        )
+        write!(f, "  {:18}", format!("{}:", label).style(self.styles.label))?;
+        // Continuation lines of a multi-line value (e.g. a store version
+        // error's guidance) align with the value column.
+        let mut value_writer = indented(f).with_str(FIELD_VALUE_INDENT).skip_initial();
+        writeln!(value_writer, "{value}")
     }
 
     /// Writes the status field with exit code for completed runs.
@@ -1168,7 +1176,6 @@ mod tests {
             last_written_at: started_at,
             duration_secs: Some(duration_secs),
             cli_args: Vec::new(),
-            build_scope_args: Vec::new(),
             env_vars: BTreeMap::new(),
             parent_run_id: None,
             sizes: RecordedSizes {
@@ -1214,7 +1221,6 @@ mod tests {
             last_written_at: started_at,
             duration_secs: Some(12.345),
             cli_args,
-            build_scope_args: Vec::new(),
             env_vars,
             parent_run_id: parent_run_id.map(|s| s.parse().expect("valid UUID")),
             sizes: RecordedSizes {
@@ -2398,7 +2404,6 @@ mod tests {
             last_written_at: started_at,
             duration_secs: Some(1.0),
             cli_args: Vec::new(),
-            build_scope_args: Vec::new(),
             env_vars: BTreeMap::new(),
             parent_run_id: parent_run_id.map(|s| s.parse().expect("valid UUID")),
             sizes: RecordedSizes {

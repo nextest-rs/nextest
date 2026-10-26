@@ -8,7 +8,7 @@
 use crate::{
     fixtures::{
         check_rerun_expanded_output, check_rerun_output, check_run_output,
-        check_run_output_for_test_names, save_binaries_metadata,
+        check_run_output_for_test_names, save_binaries_metadata, save_cargo_metadata,
     },
     temp_project::TempProject,
 };
@@ -22,8 +22,9 @@ use integration_tests::{
 };
 use nextest_metadata::NextestExitCode;
 use nextest_runner::record::{
-    CARGO_METADATA_JSON_PATH, PORTABLE_MANIFEST_FILE_NAME, RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME,
-    STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH, encode_workspace_path,
+    BUILD_SCOPE_JSON_PATH, CARGO_METADATA_JSON_PATH, PORTABLE_MANIFEST_FILE_NAME,
+    RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME, STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH,
+    encode_workspace_path,
 };
 use regex::Regex;
 use std::{
@@ -38,6 +39,7 @@ const EXPECTED_ARCHIVE_FILES: &[&str] = &[
     "meta/cargo-metadata.json",
     "meta/test-list.json",
     "meta/record-opts.json",
+    "meta/build-scope.json",
     "meta/stdout.dict",
     "meta/stderr.dict",
     // out/ directory contains content-addressed output files (variable names).
@@ -491,9 +493,15 @@ fn test_record_replay_cycle() {
     );
 
     assert_eq!(
-        read_runs_json_entry(&runs_dir, RUN_ID)["build-scope-args"],
-        serde_json::json!(["--workspace", "--all-targets"]),
-        "runs.json.zst should record the build scope args"
+        read_build_scope(&runs_dir, RUN_ID),
+        serde_json::json!({
+            "build-kind": "cargo",
+            "scope": {
+                "packages": { "workspace": true },
+                "targets": { "all-targets": true },
+            },
+        }),
+        "store.zip should record the build scope"
     );
 
     // Create a portable recording with the default filename.
@@ -561,13 +569,23 @@ fn test_record_replay_cycle() {
     );
     assert_eq!(
         manifest["format-version"]["minor"].as_u64(),
-        Some(0),
-        "manifest format-version minor should be 0"
+        Some(1),
+        "manifest format-version minor should be 1"
     );
     assert_eq!(
         manifest["run"]["run-id"].as_str(),
         Some(RUN_ID),
         "manifest run-id should match"
+    );
+    assert_eq!(
+        manifest["run"].get("build-scope-args"),
+        None,
+        "manifest run should not carry build scope args (the scope is in the inner store.zip)"
+    );
+    assert_eq!(
+        manifest["run"].get("build-scope"),
+        None,
+        "manifest run should not carry a build scope (the scope is in the inner store.zip)"
     );
 
     // portable_recording_path does not need to be cleaned up, since
@@ -2021,8 +2039,10 @@ fn test_replayability_missing_store_zip() {
     );
     let rerun_stderr = rerun_output.stderr_as_str();
     assert!(
-        rerun_stderr.contains("error: error reading recorded run\n")
-            && rerun_stderr.contains("error opening archive at `"),
+        rerun_stderr.contains(&format!(
+            "error: cannot rerun: failed to read recorded run {RUN_ID}\n\
+             (hint: run tests without `--rerun` to start a new rerun chain)\n"
+        )) && rerun_stderr.contains("error opening archive at `"),
         "rerun of a run without store.zip should get the generic read error: {rerun_output}"
     );
 }
@@ -2297,6 +2317,163 @@ fn test_replayability_store_version_too_new() {
     }
 }
 
+/// Test error messages for a store format 2.x run. (The errors recommend
+/// discarding the recording rather than downgrading the run.)
+///
+/// Covers on-disk and portable 2.x runs and `store info`.
+#[test]
+fn test_replayability_store_version_too_old() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const RUN_ID: &str = "84000002-0000-0000-0000-000000000002";
+
+    let recording = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(RUN_ID))
+        .args(["run", "-E", "test(=test_success)"])
+        .output();
+    assert!(
+        recording.exit_status.success(),
+        "recording should succeed: {recording}"
+    );
+
+    // Export the run in the newest format (export refuses 2.x runs), then
+    // rewrite the manifest to match the 2.x format.
+    let archive_path = temp_root.join(format!("nextest-run-{RUN_ID}.zip"));
+    let export = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args([
+            "store",
+            "export",
+            RUN_ID,
+            "--archive-file",
+            archive_path.as_str(),
+        ])
+        .output();
+    assert!(
+        export.exit_status.success(),
+        "store export should succeed: {export}"
+    );
+    let mut manifest = read_zip_json(&archive_path, PORTABLE_MANIFEST_FILE_NAME)
+        .unwrap_or_else(|| panic!("{archive_path} contains {PORTABLE_MANIFEST_FILE_NAME}"));
+    manifest["format-version"] = serde_json::json!({ "major": 1, "minor": 0 });
+    let manifest_run = manifest["run"]
+        .as_object_mut()
+        .expect("manifest has a run object");
+    for (key, value) in [
+        ("store-format-version", 2),
+        ("store-format-minor-version", 1),
+    ] {
+        let previous = manifest_run.insert(key.to_owned(), serde_json::json!(value));
+        assert!(
+            previous.is_some(),
+            "manifest run should already have {key}: {manifest_run:?}"
+        );
+    }
+    manifest_run.insert(
+        "build-scope-args".to_owned(),
+        serde_json::json!(["--workspace"]),
+    );
+    let manifest_bytes = serde_json::to_vec_pretty(&manifest).expect("serialized manifest");
+    rewrite_zip_entry(
+        &archive_path,
+        PORTABLE_MANIFEST_FILE_NAME,
+        Some(&manifest_bytes),
+    );
+
+    let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
+    make_store_format_2_entry(&runs_dir, RUN_ID, &["--workspace"]);
+
+    let info = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "info", RUN_ID])
+        .output();
+    assert!(
+        info.exit_status.success(),
+        "store info should succeed for a 2.x run: {info}"
+    );
+    insta::assert_snapshot!(
+        "version_incompat_too_old_major__store_info",
+        redact_dynamic_fields(&info.stdout_as_str(), temp_root)
+    );
+
+    let portable_rerun_output =
+        cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args(["run", "--rerun", archive_path.as_str()])
+            .unchecked(true)
+            .output();
+    assert_eq!(
+        portable_rerun_output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "run --rerun of a 2.x portable recording should fail with SETUP_ERROR: \
+         {portable_rerun_output}"
+    );
+    insta::assert_snapshot!(
+        "version_incompat_too_old_major__portable_run_rerun",
+        redact_dynamic_fields(&portable_rerun_output.stderr_as_str(), temp_root)
+    );
+
+    // This integration test only checks `run --rerun`, because that's the case
+    // we're concerned about with GHSA-vc25-qg58-w57c. Other error messages are
+    // checked in unit tests.
+    let rerun_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["run", "--rerun", RUN_ID])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        rerun_output.exit_status.code(),
+        Some(NextestExitCode::SETUP_ERROR),
+        "run --rerun should fail with SETUP_ERROR: {rerun_output}"
+    );
+    insta::assert_snapshot!(
+        "version_incompat_too_old_major__run_rerun",
+        redact_dynamic_fields(&rerun_output.stderr_as_str(), temp_root)
+    );
+
+    // Test upgrading a store written by cargo-nextest < 0.9.150.
+    //
+    // As part of the upgrade, we drop build scopes deliberately to mitigate
+    // against nextest downgrades. See
+    // https://github.com/nextest-rs/nextest/security/advisories/GHSA-vc25-qg58-w57c.
+    const NEW_RUN_ID: &str = "84000003-0000-0000-0000-000000000003";
+    let new_recording = cli_with_recording(
+        &env_info,
+        &p,
+        &cache_dir,
+        &user_config_path,
+        Some(NEW_RUN_ID),
+    )
+    .args(["run", "-E", "test(=test_success)"])
+    .output();
+    assert!(
+        new_recording.exit_status.success(),
+        "new recording should succeed: {new_recording}"
+    );
+
+    let list = read_runs_json(&runs_dir);
+    assert_eq!(
+        list["format-version"],
+        serde_json::json!(3),
+        "the new recording should upgrade runs.json.zst"
+    );
+    assert_eq!(
+        read_runs_json_entry(&runs_dir, RUN_ID)["store-format-version"],
+        serde_json::json!(2)
+    );
+
+    let list_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args(["store", "list"])
+        .output();
+    assert!(
+        list_output.exit_status.success(),
+        "store list should succeed: {list_output}"
+    );
+    insta::assert_snapshot!(
+        "store_list_upgraded_from_store_format_2",
+        redact_dynamic_fields(&list_output.stdout_as_str(), temp_root)
+    );
+}
+
 // A corrupted runs.json.zst must disable recording with a warning.
 #[test]
 fn test_record_setup_corrupt_index_is_nonfatal() {
@@ -2418,6 +2595,11 @@ fn read_rerun_info(runs_dir: &Utf8Path, run_id: &str) -> Option<serde_json::Valu
     read_store_zip_json(runs_dir, run_id, RERUN_INFO_JSON_PATH)
 }
 
+fn read_build_scope(runs_dir: &Utf8Path, run_id: &str) -> serde_json::Value {
+    read_store_zip_json(runs_dir, run_id, BUILD_SCOPE_JSON_PATH)
+        .unwrap_or_else(|| panic!("run {run_id}'s store.zip contains {BUILD_SCOPE_JSON_PATH}"))
+}
+
 /// Reads a JSON from `store.zip`, returning `None` if the entry is missing.
 ///
 /// Panics on any other failure.
@@ -2426,19 +2608,23 @@ fn read_store_zip_json(
     run_id: &str,
     entry_name: &str,
 ) -> Option<serde_json::Value> {
-    let store_zip_path = runs_dir.join(run_id).join(STORE_ZIP_FILE_NAME);
-    let file = File::open(&store_zip_path)
-        .unwrap_or_else(|error| panic!("opened {store_zip_path}: {error}"));
+    read_zip_json(&runs_dir.join(run_id).join(STORE_ZIP_FILE_NAME), entry_name)
+}
+
+/// Like `read_store_zip_json`, but for any entry in any zip file (e.g. a
+/// portable recording's `manifest.json`).
+fn read_zip_json(zip_path: &Utf8Path, entry_name: &str) -> Option<serde_json::Value> {
+    let file = File::open(zip_path).unwrap_or_else(|error| panic!("opened {zip_path}: {error}"));
     let mut archive = Archive::new(BufReader::new(file))
-        .unwrap_or_else(|error| panic!("parsed {store_zip_path}: {error}"));
+        .unwrap_or_else(|error| panic!("parsed {zip_path}: {error}"));
     let mut entry = archive.get_by_name(entry_name)?;
     let mut contents = String::new();
     entry
         .read()
         .and_then(|mut reader| reader.read_to_string(&mut contents))
-        .unwrap_or_else(|error| panic!("read {entry_name} from {store_zip_path}: {error}"));
+        .unwrap_or_else(|error| panic!("read {entry_name} from {zip_path}: {error}"));
     let value = serde_json::from_str(&contents)
-        .unwrap_or_else(|error| panic!("parsed {entry_name} from {store_zip_path}: {error}"));
+        .unwrap_or_else(|error| panic!("parsed {entry_name} from {zip_path}: {error}"));
     Some(value)
 }
 
@@ -3029,13 +3215,105 @@ fn runs_json_entry_mut<'a>(
         .expect("run entry is an object")
 }
 
+/// Rewrites a run in the store format 2.1 style:
+///
+/// * `build-scope-args` in the `runs.json.zst` entry.
+/// * No `meta/build-scope.json`.
+fn make_store_format_2_entry(runs_dir: &Utf8Path, run_id: &str, build_scope_args: &[&str]) {
+    let mut list = read_runs_json(runs_dir);
+    list["format-version"] = serde_json::Value::from(2);
+    let entry = runs_json_entry_mut(&mut list, run_id);
+    entry.insert("store-format-version".to_owned(), serde_json::json!(2));
+    entry.insert(
+        "store-format-minor-version".to_owned(),
+        serde_json::json!(1),
+    );
+    entry.insert(
+        "build-scope-args".to_owned(),
+        serde_json::json!(build_scope_args),
+    );
+    write_runs_json(runs_dir, &list);
+    remove_store_zip_entry(runs_dir, run_id, BUILD_SCOPE_JSON_PATH);
+}
+
+fn remove_store_zip_entry(runs_dir: &Utf8Path, run_id: &str, entry_name: &str) {
+    rewrite_store_zip_entry(runs_dir, run_id, entry_name, None);
+}
+
+fn replace_store_zip_entry(runs_dir: &Utf8Path, run_id: &str, entry_name: &str, contents: &[u8]) {
+    rewrite_store_zip_entry(runs_dir, run_id, entry_name, Some(contents));
+}
+
+/// Rewrites a recorded run's `store.zip` with the given (existing) entry
+/// replaced or removed.
+fn rewrite_store_zip_entry(
+    runs_dir: &Utf8Path,
+    run_id: &str,
+    entry_name: &str,
+    replacement: Option<&[u8]>,
+) {
+    rewrite_zip_entry(
+        &runs_dir.join(run_id).join(STORE_ZIP_FILE_NAME),
+        entry_name,
+        replacement,
+    );
+}
+
+/// Like `rewrite_store_zip_entry`, but for any entry in any zip file (e.g. a
+/// portable recording's `manifest.json`).
+fn rewrite_zip_entry(zip_path: &Utf8Path, entry_name: &str, replacement: Option<&[u8]>) {
+    let file = File::open(zip_path).unwrap_or_else(|error| panic!("opened {zip_path}: {error}"));
+    let mut archive = Archive::new(BufReader::new(file))
+        .unwrap_or_else(|error| panic!("parsed {zip_path}: {error}"));
+    let names: Vec<String> = archive
+        .entries()
+        .iter()
+        .map(|metadata| metadata.name().to_owned())
+        .collect();
+    assert!(
+        names.iter().any(|name| name == entry_name),
+        "{zip_path} should contain {entry_name}, found: {names:?}"
+    );
+
+    let mut kept_entries = Vec::new();
+    for name in names.into_iter().filter(|name| name != entry_name) {
+        let mut entry = archive
+            .get_by_name(&name)
+            .unwrap_or_else(|| panic!("{zip_path} contains {name}"));
+        let mut contents = Vec::new();
+        entry
+            .read()
+            .and_then(|mut reader| reader.read_to_end(&mut contents))
+            .unwrap_or_else(|error| panic!("read {name} from {zip_path}: {error}"));
+        kept_entries.push((name, contents));
+    }
+    drop(archive);
+    if let Some(replacement) = replacement {
+        kept_entries.push((entry_name.to_owned(), replacement.to_vec()));
+    }
+
+    let file = File::create(zip_path).unwrap_or_else(|error| panic!("created {zip_path}: {error}"));
+    let mut writer = ArchiveWriter::new(file);
+    let mut options = FileOptions::default();
+    options.compression_method = CompressionMethod::STORE;
+    for (name, contents) in &kept_entries {
+        writer
+            .add_file(name, &contents[..], &options)
+            .unwrap_or_else(|error| panic!("wrote {name} to {zip_path}: {error}"));
+    }
+    writer
+        .finish()
+        .unwrap_or_else(|error| panic!("finished writing {zip_path}: {error}"));
+}
+
 /// Rerun from a portable recording.
 ///
 /// Coverage: Using `--rerun archive.zip` to rerun failed tests from a portable
 /// archive. Follows the same pattern as `test_rerun_basic_flow` but sources the
 /// parent run from an archive instead of the local store.
 ///
-/// Also covers the build scope recorded by reused-build runs and bench runs.
+/// Also covers the build scope (including `build-kind`) recorded by
+/// reused-build, benchmark, and `--cargo-metadata` runs.
 #[test]
 fn test_rerun_from_archive() {
     let env_info = set_env_vars_for_test();
@@ -3118,11 +3396,17 @@ fn test_rerun_from_archive() {
         "root-info should reference the original run"
     );
 
-    // Verify that build scope arguments are inherited from the archive.
-    let initial_scope_args = serde_json::json!(["--workspace", "--all-targets"]);
+    let initial_scope = serde_json::json!({
+        "packages": { "workspace": true },
+        "targets": { "all-targets": true },
+    });
+    let initial_build_scope = serde_json::json!({
+        "build-kind": "cargo",
+        "scope": initial_scope,
+    });
     assert_eq!(
-        rerun_info["root-info"]["build-scope-args"], initial_scope_args,
-        "root-info should carry the build scope args recorded in the archive"
+        rerun_info["root-info"]["build-scope"], initial_build_scope,
+        "root-info should carry the build scope recorded in the archive"
     );
 
     // Test rerunning from the archive at an external path.
@@ -3195,16 +3479,32 @@ fn test_rerun_from_archive() {
         "rerun with a reused build should not log a provided build scope: \
          {reused_build_rerun_output}"
     );
+    assert_eq!(
+        read_build_scope(&runs_dir, RERUN_REUSED_BUILD_ID),
+        serde_json::json!({
+            "build-kind": "reused",
+            "scope": initial_scope,
+        }),
+        "the rerun with a reused build should record the build scope inherited from the root, \
+         marked as reused"
+    );
+    // The info is from the root of the rerun chain, so it has the root's
+    // `cargo` build kind even though this particular rerun reused a build.
     let reused_build_rerun_info = read_rerun_info(&runs_dir, RERUN_REUSED_BUILD_ID)
         .expect("rerun with a reused build should have rerun-info.json");
     assert_eq!(
-        reused_build_rerun_info["root-info"]["build-scope-args"], initial_scope_args,
-        "root-info of the rerun with a reused build should carry the root's build scope args"
+        reused_build_rerun_info["root-info"]["build-scope"], initial_build_scope,
+        "root-info of the rerun with a reused build should carry the root's build kind and scope"
     );
 
     // A rerun chain where the root is a reused build -- the child rerun does
     // not reuse the build, so it builds with the root's scope, which for reused
     // builds is empty.
+    //
+    // * The run's own `build-scope.json` says `cargo`.
+    // * But the root-info carries the root's `reused`.
+    //
+    // This shows that the kind comes from the root rather than the child.
     const REUSED_ROOT_ID: &str = "97000005-0000-0000-0000-000000000005";
     const REUSED_ROOT_CHILD_ID: &str = "97000006-0000-0000-0000-000000000006";
     let reused_root_output = cli_with_recording(
@@ -3229,10 +3529,11 @@ fn test_rerun_from_archive() {
     check_run_output(&reused_root_output.stderr, RunProperties::empty());
     // Build scope arguments can't be combined with `--binaries-metadata`, so a
     // reused-build root (currently) always records the empty scope.
+    let reused_root_build_scope = serde_json::json!({ "build-kind": "reused", "scope": {} });
     assert_eq!(
-        read_runs_json_entry(&runs_dir, REUSED_ROOT_ID)["build-scope-args"],
-        serde_json::json!([]),
-        "the root run with a reused build should record empty build scope args"
+        read_build_scope(&runs_dir, REUSED_ROOT_ID),
+        reused_root_build_scope,
+        "the root run with a reused build should record an empty scope, marked as reused"
     );
 
     let reused_root_child_output = cli_with_recording(
@@ -3265,9 +3566,44 @@ fn test_rerun_from_archive() {
         "root-info should reference the reused-build root"
     );
     assert_eq!(
-        reused_root_child_info["root-info"]["build-scope-args"],
-        serde_json::json!([]),
-        "root-info should carry the root's empty build scope args"
+        reused_root_child_info["root-info"]["build-scope"], reused_root_build_scope,
+        "root-info should carry the root's `reused` build kind"
+    );
+    assert_eq!(
+        read_build_scope(&runs_dir, REUSED_ROOT_CHILD_ID),
+        serde_json::json!({ "build-kind": "cargo", "scope": {} }),
+        "the rerun builds with the inherited empty scope, so it should record `cargo`"
+    );
+
+    // With `--cargo-metadata` but not `--binaries-metadata`, we still perform a
+    // build, so the build-kind is still Cargo. Note that `--cargo-metadata`
+    // conflicts with `--manifest-path`, so we can't use `cli_with_recording` --
+    // we construct a `CargoNextestCli` with the right parameters manually.
+    const CARGO_METADATA_RUN_ID: &str = "97000007-0000-0000-0000-000000000007";
+    save_cargo_metadata(&p);
+    let cargo_metadata_output = CargoNextestCli::for_test(&env_info)
+        .args([
+            "--user-config-file",
+            user_config_path.as_str(),
+            "run",
+            "--cargo-metadata",
+            p.cargo_metadata_path().as_str(),
+            "-E",
+            "test(=test_success)",
+        ])
+        .env(NEXTEST_STATE_DIR_ENV, cache_dir.as_str())
+        .env(NEXTEST_REDACT_ENV, "1")
+        .env(FORCE_RUN_ID_ENV, CARGO_METADATA_RUN_ID)
+        .current_dir(p.workspace_root())
+        .output();
+    assert!(
+        cargo_metadata_output.exit_status.success(),
+        "run with `--cargo-metadata` should succeed: {cargo_metadata_output}"
+    );
+    assert_eq!(
+        read_build_scope(&runs_dir, CARGO_METADATA_RUN_ID),
+        serde_json::json!({ "build-kind": "cargo", "scope": {} }),
+        "a run with only `--cargo-metadata` builds, so it should record `cargo`"
     );
 
     // Benchmarks also record the build scope.
@@ -3294,9 +3630,12 @@ fn test_rerun_from_archive() {
         "bench run should succeed: {bench_output}"
     );
     assert_eq!(
-        read_runs_json_entry(&runs_dir, BENCH_RUN_ID)["build-scope-args"],
-        serde_json::json!(["--bench", "my-bench"]),
-        "a bench run should record its build scope args"
+        read_build_scope(&runs_dir, BENCH_RUN_ID),
+        serde_json::json!({
+            "build-kind": "cargo",
+            "scope": { "targets": { "benches": { "names": ["my-bench"] } } },
+        }),
+        "a bench run should record `cargo` with its build scope"
     );
 
     // Test that we can export a rerun, then rerun from that export, preserving
@@ -3356,8 +3695,8 @@ fn test_rerun_from_archive() {
         "chain rerun root should still be the original run (chain preserved through archives)"
     );
     assert_eq!(
-        chain_rerun_info["root-info"]["build-scope-args"], initial_scope_args,
-        "chain rerun root-info should still carry the original run's build scope args"
+        chain_rerun_info["root-info"]["build-scope"], initial_build_scope,
+        "chain rerun root-info should still carry the original run's build scope"
     );
 }
 
@@ -3394,7 +3733,12 @@ fn test_rerun_inherits_package_build_scope() {
         RunProperties::CDYLIB_EXAMPLE_PACKAGE_FILTER,
     );
 
-    let package_scope_args = serde_json::json!(["--package", "cdylib-example"]);
+    // In this rerun chain, every run is built with Cargo, so build-scope.json
+    // and the root info both say `cargo`.
+    let package_scope = serde_json::json!({
+        "build-kind": "cargo",
+        "scope": { "packages": { "specs": ["cdylib-example"] } },
+    });
     let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
 
     // With the default scope, the rerun would also build other packages. Those
@@ -3406,7 +3750,7 @@ fn test_rerun_inherits_package_build_scope() {
     assert!(
         rerun_output
             .stderr_as_str()
-            .contains("rerun: inheriting build scope from original run: --package cdylib-example"),
+            .contains("rerun: inheriting build scope from original run: --package=cdylib-example"),
         "rerun should log the inherited build scope: {rerun_output}"
     );
     check_rerun_output(
@@ -3417,9 +3761,18 @@ fn test_rerun_inherits_package_build_scope() {
     let rerun_info =
         read_rerun_info(&runs_dir, RERUN_ID).expect("rerun should have rerun-info.json");
     assert_eq!(
-        rerun_info["root-info"]["build-scope-args"], package_scope_args,
+        rerun_info["root-info"]["build-scope"], package_scope,
         "root-info should carry the root run's build scope"
     );
+    assert_eq!(
+        read_build_scope(&runs_dir, RERUN_ID),
+        package_scope,
+        "the rerun's own build-scope.json should record the scope it was built with, inherited from the root"
+    );
+    // Removing the middle rerun's build-scope.json shows that a rerun of a
+    // rerun never reads it. The root scope comes from the parent's
+    // rerun-info.json.
+    remove_store_zip_entry(&runs_dir, RERUN_ID, BUILD_SCOPE_JSON_PATH);
 
     // A rerun of the rerun takes the scope from the parent's root-info.
     let rerun2_output = cli_with_recording(
@@ -3434,7 +3787,7 @@ fn test_rerun_inherits_package_build_scope() {
     assert!(
         rerun2_output
             .stderr_as_str()
-            .contains("rerun: inheriting build scope from original run: --package cdylib-example"),
+            .contains("rerun: inheriting build scope from original run: --package=cdylib-example"),
         "second rerun should log the inherited build scope: {rerun2_output}"
     );
     check_rerun_output(
@@ -3450,7 +3803,7 @@ fn test_rerun_inherits_package_build_scope() {
         "second rerun's root should still be the initial run"
     );
     assert_eq!(
-        rerun2_info["root-info"]["build-scope-args"], package_scope_args,
+        rerun2_info["root-info"]["build-scope"], package_scope,
         "second rerun's root-info should still carry the root run's build scope"
     );
 
@@ -3483,9 +3836,128 @@ fn test_rerun_inherits_package_build_scope() {
     let provided_scope_info = read_rerun_info(&runs_dir, PROVIDED_SCOPE_RERUN_ID)
         .expect("rerun with a provided scope should have rerun-info.json");
     assert_eq!(
-        provided_scope_info["root-info"]["build-scope-args"], package_scope_args,
+        provided_scope_info["root-info"]["build-scope"], package_scope,
         "root-info should keep the root run's build scope"
     );
+    assert_eq!(
+        read_build_scope(&runs_dir, PROVIDED_SCOPE_RERUN_ID),
+        serde_json::json!({
+            "build-kind": "cargo",
+            "scope": { "packages": { "specs": ["cdylib-link"] } },
+        }),
+        "the rerun's own build-scope.json should record the provided build scope"
+    );
+}
+
+/// Test that a 3.x root run whose `meta/build-scope.json` is missing or
+/// malformed causes the rerun to fail -- but that other things like listing and
+/// replay still work for that run.
+#[test]
+fn test_rerun_missing_build_scope() {
+    let env_info = set_env_vars_for_test();
+    let p = TempProject::new(&env_info).unwrap();
+    let cache_dir = create_cache_dir(&p);
+    let temp_root = p.temp_root();
+    let (_user_config_dir, user_config_path) = create_record_user_config();
+
+    const RUN_ID: &str = "98300001-0000-0000-0000-000000000001";
+    const MALFORMED_RUN_ID: &str = "98300002-0000-0000-0000-000000000002";
+
+    for run_id in [RUN_ID, MALFORMED_RUN_ID] {
+        let recording =
+            cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, Some(run_id))
+                .args(["run", "-E", "test(=test_success)"])
+                .output();
+        assert!(
+            recording.exit_status.success(),
+            "recording {run_id} should succeed: {recording}"
+        );
+    }
+
+    let runs_dir = find_runs_dir(&cache_dir).expect("runs directory should exist");
+    remove_store_zip_entry(&runs_dir, RUN_ID, BUILD_SCOPE_JSON_PATH);
+    replace_store_zip_entry(
+        &runs_dir,
+        MALFORMED_RUN_ID,
+        BUILD_SCOPE_JSON_PATH,
+        br#"{"build-kind": "cargo", "scope": {"packages": 1}}"#,
+    );
+
+    // None of these read build-scope.json, so they still work.
+    let unaffected_commands: [&[&str]; 4] = [
+        &["store", "list"],
+        &["store", "prune", "--dry-run"],
+        &["store", "info", RUN_ID],
+        &["replay", "-R", RUN_ID],
+    ];
+    for args in unaffected_commands {
+        let output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args(args.iter().copied())
+            .output();
+        assert!(
+            output.exit_status.success(),
+            "{args:?} should succeed despite the missing build scope: {output}"
+        );
+    }
+
+    let archive_path = temp_root.join("missing-build-scope.zip");
+    let export_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+        .args([
+            "store",
+            "export",
+            RUN_ID,
+            "--archive-file",
+            archive_path.as_str(),
+        ])
+        .output();
+    assert!(
+        export_output.exit_status.success(),
+        "export of a run without build-scope.json should succeed: {export_output}"
+    );
+
+    let rerun = |label: &str, args: &[&str]| {
+        let rerun_output = cli_with_recording(&env_info, &p, &cache_dir, &user_config_path, None)
+            .args(args.iter().copied())
+            .unchecked(true)
+            .output();
+        assert_eq!(
+            rerun_output.exit_status.code(),
+            Some(NextestExitCode::SETUP_ERROR),
+            "{label}: rerun of a run without a readable build scope should fail with \
+             SETUP_ERROR: {rerun_output}"
+        );
+        rerun_output
+    };
+
+    let inherited_output = rerun("inherited", &["run", "--rerun", RUN_ID]);
+    insta::assert_snapshot!(
+        "rerun_error_missing_build_scope__inherited",
+        redact_dynamic_fields(&inherited_output.stderr_as_str(), temp_root)
+    );
+
+    // Even if an explicit build scope is passed in, the rerun is rejected,
+    // since the rerun records the chain's root scope for later reruns.
+    let explicit_scope_output = rerun(
+        "explicit_scope",
+        &["run", "--rerun", RUN_ID, "-p", "cdylib-example"],
+    );
+    assert_eq!(
+        redact_dynamic_fields(&explicit_scope_output.stderr_as_str(), temp_root),
+        redact_dynamic_fields(&inherited_output.stderr_as_str(), temp_root),
+        "a rerun with an explicit scope should fail the same way as one that inherits"
+    );
+
+    let cases: [(&str, &[&str]); 2] = [
+        ("portable", &["run", "--rerun", archive_path.as_str()]),
+        ("malformed", &["run", "--rerun", MALFORMED_RUN_ID]),
+    ];
+    for (label, args) in cases {
+        let rerun_output = rerun(label, args);
+        insta::assert_snapshot!(
+            format!("rerun_error_missing_build_scope__{label}"),
+            redact_dynamic_fields(&rerun_output.stderr_as_str(), temp_root)
+        );
+    }
 }
 
 // --- Experimental feature gating tests ---

@@ -49,12 +49,14 @@ pub use display::{
     DisplayRunList, RunListAlignment, Styles,
 };
 pub use format::{
-    CARGO_METADATA_JSON_PATH, OutputDict, PORTABLE_MANIFEST_FILE_NAME,
-    PortableRecordingFormatVersion, PortableRecordingVersionIncompatibility, RECORD_OPTS_JSON_PATH,
-    RERUN_INFO_JSON_PATH, RUN_LOG_FILE_NAME, RerunInfo, RerunRootInfo, RerunTestSuiteInfo,
+    BUILD_SCOPE_JSON_PATH, BuildKind, CARGO_METADATA_JSON_PATH, OutputDict,
+    PORTABLE_MANIFEST_FILE_NAME, PortableRecordingFormatVersion,
+    PortableRecordingVersionIncompatibility, RECORD_OPTS_JSON_PATH, RERUN_INFO_JSON_PATH,
+    RUN_LOG_FILE_NAME, RecordedBuildScope, RerunInfo, RerunRootInfo, RerunTestSuiteInfo,
     RunsJsonFormatVersion, RunsJsonWritePermission, STDERR_DICT_PATH, STDOUT_DICT_PATH,
     STORE_FORMAT_VERSION, STORE_ZIP_FILE_NAME, StoreFormatMajorVersion, StoreFormatMinorVersion,
-    StoreFormatVersion, StoreVersionIncompatibility, TEST_LIST_JSON_PATH, has_zip_extension,
+    StoreFormatVersion, StoreVersionIncompatibility, TEST_LIST_JSON_PATH, TooOldRecordingGuidance,
+    has_zip_extension,
 };
 pub use portable::{
     ExtractOuterFileResult, PortableRecording, PortableRecordingEventIter, PortableRecordingResult,

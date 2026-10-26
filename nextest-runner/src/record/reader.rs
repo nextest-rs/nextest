@@ -11,15 +11,16 @@
 
 use super::{
     format::{
-        CARGO_METADATA_JSON_PATH, OutputDict, RECORD_OPTS_JSON_PATH, RUN_LOG_FILE_NAME,
-        STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH,
+        BUILD_SCOPE_JSON_PATH, CARGO_METADATA_JSON_PATH, OutputDict, RECORD_OPTS_JSON_PATH,
+        RUN_LOG_FILE_NAME, STDERR_DICT_PATH, STDOUT_DICT_PATH, STORE_ZIP_FILE_NAME,
+        TEST_LIST_JSON_PATH,
     },
     summary::{RecordOpts, TestEventSummary},
 };
 use crate::{
     errors::RecordReadError,
     output_spec::RecordingSpec,
-    record::format::{RERUN_INFO_JSON_PATH, RerunInfo},
+    record::format::{RERUN_INFO_JSON_PATH, RecordedBuildScope, RerunInfo},
     user_config::elements::MAX_MAX_OUTPUT_SIZE,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -45,6 +46,9 @@ pub trait StoreReader {
 
     /// Returns the record options from the store.
     fn read_record_opts(&mut self) -> Result<RecordOpts, RecordReadError>;
+
+    /// Returns the build scope for this run from the store.
+    fn read_build_scope(&mut self) -> Result<RecordedBuildScope, RecordReadError>;
 
     /// Returns the rerun info from the store, if this is a rerun.
     ///
@@ -213,6 +217,15 @@ impl RecordReader {
         })
     }
 
+    /// Returns the build scope from the archive.
+    pub fn read_build_scope(&mut self) -> Result<RecordedBuildScope, RecordReadError> {
+        let bytes = self.read_archive_file(BUILD_SCOPE_JSON_PATH)?;
+        serde_json::from_slice(&bytes).map_err(|error| RecordReadError::DeserializeMetadata {
+            file_name: BUILD_SCOPE_JSON_PATH.to_string(),
+            error,
+        })
+    }
+
     /// Returns the rerun info from the archive, if this is a rerun.
     ///
     /// Returns `Ok(None)` if this run is not a rerun (the file doesn't exist).
@@ -340,6 +353,10 @@ impl StoreReader for RecordReader {
 
     fn read_record_opts(&mut self) -> Result<RecordOpts, RecordReadError> {
         RecordReader::read_record_opts(self)
+    }
+
+    fn read_build_scope(&mut self) -> Result<RecordedBuildScope, RecordReadError> {
+        RecordReader::read_build_scope(self)
     }
 
     fn read_rerun_info(&mut self) -> Result<Option<RerunInfo>, RecordReadError> {

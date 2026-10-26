@@ -1,0 +1,10 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&portable_rerun_output.stderr_as_str(), temp_root)"
+---
+info: experimental features enabled: setup-scripts, wrapper-scripts, benchmarks
+error: error reading portable recording
+
+Caused by:
+  store format version 2.1 in `[TEMP_DIR]/nextest-run-84000002-0000-0000-0000-000000000002.zip` is incompatible: recording has major version 2, but this nextest requires version 3
+  (recordings from nextest 0.9.149 and earlier are no longer supported; discard this recording and record a new run)

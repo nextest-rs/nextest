@@ -1,0 +1,13 @@
+---
+source: integration-tests/tests/integration/record_replay.rs
+expression: "redact_dynamic_fields(&rerun_output.stderr_as_str(), temp_root)"
+---
+info: experimental features enabled: setup-scripts, wrapper-scripts, benchmarks
+error: cannot rerun: failed to read recorded run 98300002-0000-0000-0000-000000000002
+(hint: run tests without `--rerun` to start a new rerun chain)
+
+Caused by:
+  error deserializing `meta/build-scope.json`
+
+Caused by:
+  invalid type: integer `1`, expected struct PackageSelection at line 1 column 47

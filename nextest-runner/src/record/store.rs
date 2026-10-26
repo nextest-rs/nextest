@@ -402,7 +402,6 @@ impl<'store> ExclusiveLockedRunStore<'store> {
         nextest_version: Version,
         started_at: DateTime<FixedOffset>,
         cli_args: Vec<String>,
-        build_scope_args: Vec<String>,
         env_vars: BTreeMap<String, String>,
         max_output_size: bytesize::ByteSize,
         parent_run_id: Option<ReportUuid>,
@@ -432,7 +431,6 @@ impl<'store> ExclusiveLockedRunStore<'store> {
             last_written_at: now,
             duration_secs: None,
             cli_args,
-            build_scope_args,
             env_vars,
             parent_run_id,
             sizes: RecordedSizes::default(),
@@ -490,11 +488,6 @@ pub struct RecordedRunInfo {
     pub duration_secs: Option<f64>,
     /// The command-line arguments used to invoke nextest.
     pub cli_args: Vec<String>,
-    /// Build scope arguments (package and target selection).
-    ///
-    /// These determine which packages and targets are built. In a rerun chain,
-    /// these are inherited from the original run unless explicitly overridden.
-    pub build_scope_args: Vec<String>,
     /// Environment variables that affect nextest behavior (NEXTEST_* and CARGO_*).
     pub env_vars: BTreeMap<String, String>,
     /// If this is a rerun, the ID of the parent run.

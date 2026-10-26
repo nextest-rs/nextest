@@ -53,7 +53,7 @@ We store a global index of runs as a [Zstandard](https://facebook.github.io/zstd
 * the nextest version used for this run.
 * the time at which this run started, and when it was last written.
 * how long the run took.
-* CLI and [build scope arguments](#build-scope-arguments).
+* CLI arguments. (The [build scope](#storing-the-build-scope) is stored with each run rather than in the index.)
 * relevant environment variables.
 * the parent run ID for [reruns](#reruns).
 * compressed and uncompressed sizes for the [run event log](#run-event-log) and the [test output store](#test-output-store).
@@ -206,8 +206,14 @@ With full-fidelity events, we would like to avoid painting ourselves into a corn
 
 The store format version is _not_ additive. We use two version components, major and minor. If a version of nextest encounters a store format version with a major version different from the one it recognizes, it will refuse to read the file.
 
-* A newer version of nextest encountering an older store format major version will print out the nextest versions that support that store format version. (Not yet implemented.)
+* A newer version of nextest encountering an older store format major version will print out the last nextest version that supports that store format version. The exception is store formats before 3.0: for those, nextest recommends discarding the recording instead, for the reasons listed below.
 * If an older version of nextest encounters a newer store format major or minor version, it will tell users to update their copy of nextest.
+
+To address [a vulnerability](https://github.com/nextest-rs/nextest/security/advisories/GHSA-vc25-qg58-w57c), a new store format version 3.0 (with `runs.json.zst` format version 3) was introduced. This new format changed how the [build scope](#storing-the-build-scope) is stored, resulting in the following consequences:
+
+* Recordings with store format 2.x can only be replayed or rerun with nextest 0.9.149 or earlier. Newer versions of nextest still list them and prune them as usual.
+* Once a newer version of nextest writes to a record store, nextest 0.9.149 and earlier can still read it, but can no longer write to it. Recording is disabled with a warning, and pruning fails.
+* With store format 2.x, build scope arguments were stored in `runs.json.zst`. (With store format 3.x, we moved build scope arguments to being inside the run's `store.zip` file.) Newer versions of nextest ignore the field when reading `runs.json.zst`, and drop it when they rewrite that file. Since nextest 0.9.149 can still read the rewritten index, it may then rerun a 2.x recording that is the root of a rerun chain (not itself a rerun) with Cargo's default build scope, rather than the one it was recorded with. (Replaying is unaffected, as are reruns of reruns, which take the chain root's build scope from `rerun-info.json`.) We accept this risk due to the security implications of the vulnerability, and mitigate it by recommending that users discard 2.x recordings rather than downgrade.
 
 Bumps to the store format version are currently done manually. We have plans to automate this using JSON schema support.
 
@@ -433,6 +439,41 @@ Other Cargo options:
 These options generally do not affect the test set, so nextest does not consider them build scope arguments. (`--target` is an exception in that cross-compilation can affect the test set. But we do not consider it to be a build scope argument. If users are cross-compiling, they're already used to passing in `--target` for every command, so it's reasonable to expect them to do the same for reruns.)
 
 In summary, the set of options that determine the build scope are exactly the arguments under *Package selection*, *Target selection*, and *Feature selection*. This categorization can be communicated to users directly.
+
+#### Storing the build scope
+
+Nextest stores the build scope as a structured object. For example, for `cargo nextest run -p my-package --all-targets`, the run's `store.zip` contains a `meta/build-scope.json` with:
+
+```json
+{
+  "build-kind": "cargo",
+  "scope": {
+    "packages": { "specs": ["my-package"] },
+    "targets": { "all-targets": true }
+  }
+}
+```
+
+Within `scope`, empty selections are left out, so an empty build scope (Cargo's defaults) is stored as `{}`. The deprecated `--all` is stored as `"workspace": true`.
+
+The `build-kind` field records how the test binaries were produced:
+
+* `cargo`: nextest built the binaries with Cargo (`cargo test --no-run`, or `cargo bench --no-run` for benchmarks) using this build scope. This includes runs that pass `--cargo-metadata` without `--binaries-metadata`, since those runs still perform a build.
+* `reused`: the binaries came from a reused build (`--archive-file` or `--binaries-metadata`), so the build scope wasn't used to build anything.
+
+Build scope arguments can't be combined with `--archive-file` or `--binaries-metadata`. If a reused build is used to start a rerun chain, we currently store an empty build scope. (This is something we should be able to fix in the future by adding more information to the binaries metadata.)
+
+Within each run's `store.zip`, the build scope is stored in two places:
+
+* Every run's `meta/build-scope.json` records the build scope corresponding to that specific run. This can be any of:
+
+  * An overridden build scope from the command line (see [_Overriding build scope arguments_](#overriding-build-scope-arguments) below).
+  * For a rerun without build scope arguments, the scope inherited from the root of the rerun chain.
+  * For a `cargo nextest run` without arguments, an empty scope.
+
+* Each rerun's `meta/rerun-info.json` records the build scope of the root of the rerun chain. This is the scope that reruns inherit along a chain.
+
+  When a rerun's parent is the root of a rerun chain, nextest reads the parent's `meta/build-scope.json` to start the chain.
 
 #### Overriding build scope arguments
 

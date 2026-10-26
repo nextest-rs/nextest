@@ -2342,6 +2342,14 @@ pub enum RunStoreError {
         error: serde_json::Error,
     },
 
+    /// An error occurred while serializing the build scope.
+    #[error("error serializing build scope")]
+    BuildScopeSerialize {
+        /// The underlying error.
+        #[source]
+        error: serde_json::Error,
+    },
+
     /// An error occurred while serializing the test list.
     #[error("error serializing test list")]
     TestListSerialize {
@@ -2981,10 +2989,7 @@ pub enum PortableRecordingReadError {
     },
 
     /// The store format version is not supported.
-    #[error(
-        "store format version {found} in `{path}` is incompatible: {incompatibility} \
-         (this nextest supports version {supported})"
-    )]
+    #[error("store format version {found} in `{path}` is incompatible: {incompatibility}")]
     UnsupportedStoreFormatVersion {
         /// The path to the archive.
         path: Utf8PathBuf,

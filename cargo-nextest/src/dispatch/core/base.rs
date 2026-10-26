@@ -5,7 +5,7 @@
 
 use crate::{
     ExpectedError, Result, ReuseBuildKind,
-    cargo_cli::CargoOptions,
+    cargo_cli::CargoBuildSettings,
     dispatch::{
         EarlyArgs,
         common::ConfigOpts,
@@ -18,6 +18,7 @@ use camino::Utf8PathBuf;
 use guppy::graph::PackageGraph;
 use nextest_filtering::ParseContext;
 use nextest_runner::{
+    build_scope::BuildScope,
     cargo_config::CargoConfigs,
     config::core::{
         ConfigExperimental, ConfigPaths, EarlyProfile, ExperimentalConfig, NextestConfig,
@@ -27,6 +28,7 @@ use nextest_runner::{
     errors::ConfigParseError,
     list::BinaryList,
     platform::BuildPlatforms,
+    record::BuildKind,
     reuse_build::ReuseBuildInfo,
     target_runner::TargetRunner,
 };
@@ -52,7 +54,8 @@ pub(crate) struct BaseApp {
     config_paths: ConfigPaths,
     manifest_path: Option<Utf8PathBuf>,
     pub(crate) reuse_build: ReuseBuildInfo,
-    pub(crate) cargo_opts: CargoOptions,
+    build_scope: BuildScope,
+    cargo_settings: CargoBuildSettings,
     pub(crate) config_opts: ConfigOpts,
     pub(crate) current_version: Version,
 
@@ -74,12 +77,13 @@ impl BaseApp {
         reuse_build.check_experimental(output);
 
         let reuse_build = reuse_build.process(output, writer)?;
+        let (build_scope, cargo_settings) = cargo_opts.into_parts();
 
-        let cargo_configs = CargoConfigs::new(&cargo_opts.config).map_err(Box::new)?;
+        let cargo_configs = CargoConfigs::new(&cargo_settings.config).map_err(Box::new)?;
 
         let build_platforms = match reuse_build.binaries_metadata() {
             Some(kind) => kind.binary_list.rust_build_meta.build_platforms.clone(),
-            None => detect_build_platforms(&cargo_configs, cargo_opts.target.as_deref())?,
+            None => detect_build_platforms(&cargo_configs, cargo_settings.target.as_deref())?,
         };
 
         let (cargo_metadata_json, package_graph) = match reuse_build.cargo_metadata() {
@@ -87,8 +91,8 @@ impl BaseApp {
             None => {
                 let json = acquire_graph_data(
                     manifest_path.as_deref(),
-                    cargo_opts.target_dir.as_deref(),
-                    &cargo_opts,
+                    cargo_settings.target_dir.as_deref(),
+                    &cargo_settings,
                     &build_platforms,
                     output,
                 )?;
@@ -161,7 +165,8 @@ impl BaseApp {
             config_paths,
             reuse_build,
             manifest_path,
-            cargo_opts,
+            build_scope,
+            cargo_settings,
             config_opts,
             cargo_configs,
             current_version,
@@ -383,86 +388,70 @@ impl BaseApp {
         })
     }
 
-    pub(crate) fn build_scope_args(&self) -> Vec<String> {
-        self.cargo_opts
-            .build_scope
-            .to_cli_args()
-            .into_iter()
-            .map(|s| s.to_owned())
-            .collect()
+    /// Returns the effective build scope for this command.
+    ///
+    /// * If the CLI build scope is non-empty, use that.
+    /// * Otherwise, if this is a rerun, use the chain root's scope
+    ///   (`rerun_build_scope`).
+    /// * Otherwise, use the default build scope.
+    pub(crate) fn resolve_build_scope<'a>(
+        &'a self,
+        rerun_build_scope: Option<&'a BuildScope>,
+    ) -> ResolvedBuildScope<'a> {
+        let cli_has_scope = !self.build_scope.is_empty();
+
+        match (rerun_build_scope, cli_has_scope) {
+            // Inherit from the original run.
+            (Some(scope), false) => ResolvedBuildScope::InheritedFromRoot(scope),
+            // User provided build scope args, not inheriting.
+            (Some(_), true) => ResolvedBuildScope::CommandLineOverridesRoot(&self.build_scope),
+            (None, _) => ResolvedBuildScope::CommandLine(&self.build_scope),
+        }
     }
 
     pub(crate) fn build_binary_list(&self, cargo_command: &str) -> Result<Arc<BinaryList>> {
-        let binary_list = match self.reuse_build.binaries_metadata() {
-            Some(m) => m.binary_list.clone(),
-            None => Arc::new(self.cargo_opts.compute_binary_list(
-                cargo_command,
-                self.graph(),
-                self.manifest_path.as_deref(),
-                self.output,
-                self.build_platforms.clone(),
-            )?),
-        };
+        let (binary_list, _build_kind) =
+            self.build_binary_list_with_scope(cargo_command, self.resolve_build_scope(None))?;
         Ok(binary_list)
     }
 
-    /// Builds the binary list, potentially inheriting build scope from a rerun.
+    /// Builds the binary list with the given build scope.
     ///
-    /// If `rerun_build_scope` is provided and the CLI has no build scope args,
-    /// inherits the build scope from the original run in the rerun chain.
-    pub(crate) fn build_binary_list_with_rerun(
+    /// Returns the binary list and the build kind (Cargo or reused).
+    pub(crate) fn build_binary_list_with_scope(
         &self,
         cargo_command: &str,
-        rerun_build_scope: Option<&[String]>,
-    ) -> Result<Arc<BinaryList>> {
+        build_scope: ResolvedBuildScope<'_>,
+    ) -> Result<(Arc<BinaryList>, BuildKind)> {
         // If reusing a build, just return that.
         if let Some(m) = self.reuse_build.binaries_metadata() {
-            return Ok(m.binary_list.clone());
+            return Ok((m.binary_list.clone(), BuildKind::Reused));
         }
 
-        let cli_has_scope = self.cargo_opts.build_scope.has_any();
-
-        let inherited_scope = match (rerun_build_scope, cli_has_scope) {
-            (Some(scope), false) => {
-                // Inherit from the original run.
+        match build_scope {
+            ResolvedBuildScope::InheritedFromRoot(scope) => {
                 if scope.is_empty() {
                     info!("rerun: inheriting build scope from original run: (default scope)");
                 } else {
-                    info!(
-                        "rerun: inheriting build scope from original run: {}",
-                        scope.join(" ")
-                    );
+                    info!("rerun: inheriting build scope from original run: {scope}");
                 }
-                Some(scope)
             }
-            (Some(_), true) => {
-                // User provided build scope args, not inheriting.
+            ResolvedBuildScope::CommandLineOverridesRoot(_) => {
                 info!("rerun: using provided build scope, not inheriting from original run");
-                None
             }
-            (None, _) => None,
-        };
+            ResolvedBuildScope::CommandLine(_) => {}
+        }
 
-        let binary_list = if let Some(scope) = inherited_scope {
-            self.cargo_opts.compute_binary_list_with_inherited(
-                cargo_command,
-                scope,
-                self.graph(),
-                self.manifest_path.as_deref(),
-                self.output,
-                self.build_platforms.clone(),
-            )?
-        } else {
-            self.cargo_opts.compute_binary_list(
-                cargo_command,
-                self.graph(),
-                self.manifest_path.as_deref(),
-                self.output,
-                self.build_platforms.clone(),
-            )?
-        };
+        let binary_list = self.cargo_settings.compute_binary_list(
+            cargo_command,
+            build_scope.scope(),
+            self.graph(),
+            self.manifest_path.as_deref(),
+            self.output,
+            self.build_platforms.clone(),
+        )?;
 
-        Ok(Arc::new(binary_list))
+        Ok((Arc::new(binary_list), BuildKind::Cargo))
     }
 
     #[inline]
@@ -499,6 +488,24 @@ impl BaseApp {
     }
 }
 
+/// The build scope for a command, including its source.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ResolvedBuildScope<'a> {
+    CommandLine(&'a BuildScope),
+    InheritedFromRoot(&'a BuildScope),
+    CommandLineOverridesRoot(&'a BuildScope),
+}
+
+impl<'a> ResolvedBuildScope<'a> {
+    pub(crate) fn scope(self) -> &'a BuildScope {
+        match self {
+            Self::CommandLine(scope)
+            | Self::InheritedFromRoot(scope)
+            | Self::CommandLineOverridesRoot(scope) => scope,
+        }
+    }
+}
+
 /// Returns the current nextest version.
 pub(crate) fn current_version() -> Version {
     // This is a test-only, not part of the public API.
@@ -515,26 +522,28 @@ pub(crate) fn current_version() -> Version {
     }
 }
 
-// Helper for CargoOptions.
+// Helper for CargoBuildSettings.
 mod helpers {
     use crate::{
         ExpectedError, Result,
-        cargo_cli::{CargoCli, CargoOptions},
+        cargo_cli::{CargoBuildSettings, CargoCli},
         dispatch::core::value_enums::CargoMessageFormatOpt,
         output::OutputContext,
     };
     use camino::Utf8Path;
     use guppy::graph::PackageGraph;
     use nextest_runner::{
+        build_scope::BuildScope,
         list::{BinaryList, BinaryListBuilder},
         platform::BuildPlatforms,
     };
     use std::io::{BufRead, BufReader};
 
-    impl CargoOptions {
+    impl CargoBuildSettings {
         pub(crate) fn compute_binary_list(
             &self,
             cargo_command: &str,
+            build_scope: &BuildScope,
             graph: &PackageGraph,
             manifest_path: Option<&Utf8Path>,
             output: OutputContext,
@@ -547,42 +556,10 @@ mod helpers {
             let message_format = CargoMessageFormatOpt::combine(&self.cargo_message_format)?;
 
             // Only build tests in the cargo test invocation, do not run them.
-            cargo_cli.add_args(["--no-run", "--message-format", message_format.cargo_arg()]);
-            cargo_cli.add_options(self);
-
-            Self::run_cargo_build(
-                cargo_cli,
-                graph,
-                build_platforms,
-                message_format.forward_json(),
-            )
-        }
-
-        /// Computes the binary list using inherited build scope from a rerun.
-        ///
-        /// This uses the inherited build scope args instead of the current CLI's
-        /// build scope, but uses all other options from the current CLI.
-        pub(crate) fn compute_binary_list_with_inherited(
-            &self,
-            cargo_command: &str,
-            inherited_build_scope: &[String],
-            graph: &PackageGraph,
-            manifest_path: Option<&Utf8Path>,
-            output: OutputContext,
-            build_platforms: BuildPlatforms,
-        ) -> Result<BinaryList> {
-            let mut cargo_cli = CargoCli::new(cargo_command, manifest_path, output);
-
-            let message_format = CargoMessageFormatOpt::combine(&self.cargo_message_format)?;
-
-            cargo_cli.add_args(["--no-run", "--message-format", message_format.cargo_arg()]);
-
-            // Add inherited build scope instead of self.build_scope.
-            for arg in inherited_build_scope {
-                cargo_cli.add_owned_arg(arg.clone());
-            }
-            // Add non-build-scope options from the current CLI.
-            cargo_cli.add_non_build_scope_options(self);
+            cargo_cli
+                .add_arg("--no-run")
+                .add_flag_value("--message-format", message_format.cargo_arg());
+            cargo_cli.add_options(build_scope, self);
 
             Self::run_cargo_build(
                 cargo_cli,

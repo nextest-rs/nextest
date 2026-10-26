@@ -450,6 +450,13 @@ pub enum ExpectedError {
         run_id: ReportUuid,
         incompatibility: StoreVersionIncompatibility,
     },
+    #[error("error reading recorded run {run_id} for rerun")]
+    RerunParentReadError {
+        run_id: ReportUuid,
+        archive_path: Option<Utf8PathBuf>,
+        #[source]
+        err: Box<RecordReadError>,
+    },
     #[error("error creating portable recording")]
     PortableRecordingError {
         #[source]
@@ -679,6 +686,7 @@ impl ExpectedError {
             | Self::RunIdResolutionError { .. }
             | Self::RecordReadError { .. }
             | Self::StoreVersionIncompatible { .. }
+            | Self::RerunParentReadError { .. }
             | Self::TestListFromSummaryError { .. } => NextestExitCode::SETUP_ERROR,
             Self::PortableRecordingError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
             Self::PortableRecordingReadError { .. } => NextestExitCode::SETUP_ERROR,
@@ -1420,6 +1428,22 @@ impl ExpectedError {
                     incompatibility,
                 );
                 None
+            }
+            Self::RerunParentReadError {
+                run_id,
+                archive_path,
+                err,
+            } => {
+                let location = match archive_path {
+                    Some(path) => format!(" in portable recording `{}`", path.style(styles.bold)),
+                    None => String::new(),
+                };
+                error!(
+                    "cannot rerun: failed to read recorded run {}{location}\n\
+                     (hint: run tests without `--rerun` to start a new rerun chain)",
+                    run_id.style(styles.bold),
+                );
+                Some(&**err as &dyn Error)
             }
             Self::TestListFromSummaryError { err } => {
                 error!("error reconstructing test list from archived summary");

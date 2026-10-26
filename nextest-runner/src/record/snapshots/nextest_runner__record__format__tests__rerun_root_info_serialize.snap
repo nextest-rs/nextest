@@ -4,13 +4,27 @@ expression: json
 ---
 {
   "run-id": "550e8400-e29b-41d4-a716-446655440000",
-  "build-scope-args": [
-    "--workspace",
-    "--exclude",
-    "nextest-*",
-    "--test",
-    "integration",
-    "--features",
-    "feat-a"
-  ]
+  "build-scope": {
+    "build-kind": "cargo",
+    "scope": {
+      "packages": {
+        "workspace": true,
+        "exclude": [
+          "nextest-*"
+        ]
+      },
+      "targets": {
+        "tests": {
+          "names": [
+            "integration"
+          ]
+        }
+      },
+      "features": {
+        "features": [
+          "feat-a"
+        ]
+      }
+    }
+  }
 }

@@ -41,6 +41,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Lint (clippy)
         run: cargo clippy --all-features --all-targets
       - name: Lint (rustfmt)
@@ -71,6 +73,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build rustdoc
         run: cargo doc --all-features --workspace
 
@@ -127,6 +131,8 @@ jobs:
           # one that populates the cache. The `test` jobs below restore the same
           # entry via this key and never write to it.
           shared-key: build-${{ matrix.rust-version }}
+          # TODO-RAINCLAUDE: save only on main; PR-scoped entries are unrestorable elsewhere and exhaust the 10 GB free cache tier.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build nextest-metadata
         run: cargo build --package nextest-metadata
       - name: Build cargo-nextest without self-update
@@ -309,6 +315,8 @@ jobs:
           toolchain: stable
           targets: x86_64-pc-windows-gnu
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install wine and gcc-mingw-w64-x86-64-win32
         run: |
           sudo apt-get update
@@ -421,6 +429,8 @@ jobs:
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@be39649afda95dbf70f87cce95f68b8d5797b296 # nightly
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build cargo-nextest
         run: cargo build --package cargo-nextest
       # build.build-dir was stabilized in Cargo 1.91. The new build directory

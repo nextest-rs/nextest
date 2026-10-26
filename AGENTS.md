@@ -146,6 +146,10 @@ When modifying any struct that is serialized to disk or over the wire:
 
 - The `clippy::format_push_string` lint is enabled. If triggered, use the `swrite!` macro from the `swrite` crate instead of `push_str(&format!(...))`.
 
+### Cargo invocations
+
+- When constructing arguments for Cargo, always use the `--flag=value` form, never `--flag value` as two separate arguments.
+
 ### Lint attributes
 
 - Always use `#[expect(...)]` instead of `#[allow(...)]` for suppressing lints. The `expect` attribute will warn if the lint is no longer triggered, helping to keep the codebase clean.

@@ -32,8 +32,9 @@ use nextest_runner::{
     list::{BinaryList, ListProgressOptions, TestExecuteContext, TestList},
     record::{
         ComputedRerunInfo, PortableRecording, RecordOpts, RecordReader, RecordRetentionPolicy,
-        RecordSession, RecordSessionConfig, RerunRootInfo, RunIdOrRecordingSelector, RunIdSelector,
-        RunStore, STORE_FORMAT_VERSION, Styles as RecordStyles, records_state_dir,
+        RecordSession, RecordSessionConfig, RecordedBuildScope, RerunRootInfo,
+        RunIdOrRecordingSelector, RunIdSelector, RunStore, STORE_FORMAT_VERSION,
+        Styles as RecordStyles, records_state_dir,
     },
     redact::Redactor,
     reporter::{
@@ -1037,12 +1038,11 @@ impl App {
 
         // Start running Cargo commands at this point, once all initial
         // validation is complete.
-        let rerun_build_scope = rerun_state
-            .as_ref()
-            .map(|s| s.root_info.build_scope_args.as_slice());
-        let binary_list = self
+        let rerun_build_scope = rerun_state.as_ref().map(|s| &s.root_info.build_scope.scope);
+        let build_scope = self.base.resolve_build_scope(rerun_build_scope);
+        let (binary_list, build_kind) = self
             .base
-            .build_binary_list_with_rerun("test", rerun_build_scope)?;
+            .build_binary_list_with_scope("test", build_scope)?;
         let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
         let double_spawn = self.base.load_double_spawn();
         let target_runner = self.base.load_runner(build_platforms);
@@ -1166,6 +1166,8 @@ impl App {
             && resolved_user_config.record.enabled
         {
             let env_vars_for_recording = capture_env_vars_for_recording();
+            let build_scope_for_recording =
+                RecordedBuildScope::new(build_kind, build_scope.scope().clone());
 
             let outstanding_tests = test_filter.into_rerun_info();
             let rerun_info = if let Some(outstanding) = outstanding_tests {
@@ -1182,7 +1184,7 @@ impl App {
                 nextest_version: self.base.current_version.clone(),
                 started_at: runner.started_at().fixed_offset(),
                 cli_args: cli_args_for_recording,
-                build_scope_args: self.base.build_scope_args(),
+                build_scope: build_scope_for_recording,
                 env_vars: env_vars_for_recording,
                 max_output_size: resolved_user_config.record.max_output_size,
                 rerun_info,
@@ -1303,7 +1305,10 @@ impl App {
             .make_test_filter(NextestRunMode::Benchmark, filter_exprs)?
             .test_filter;
 
-        let binary_list = self.base.build_binary_list("bench")?;
+        let build_scope = self.base.resolve_build_scope(None);
+        let (binary_list, build_kind) = self
+            .base
+            .build_binary_list_with_scope("bench", build_scope)?;
         let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
         let double_spawn = self.base.load_double_spawn();
         let target_runner = self.base.load_runner(build_platforms);
@@ -1428,7 +1433,7 @@ impl App {
                 nextest_version: self.base.current_version.clone(),
                 started_at: runner.started_at().fixed_offset(),
                 cli_args: cli_args_for_recording,
-                build_scope_args: self.base.build_scope_args(),
+                build_scope: RecordedBuildScope::new(build_kind, build_scope.scope().clone()),
                 env_vars: env_vars_for_recording,
                 max_output_size: resolved_user_config.record.max_output_size,
                 // TODO: support reruns? value seems dubious.
@@ -1544,14 +1549,15 @@ impl App {
         }
 
         let run_dir = snapshot.runs_dir().run_dir(parent_run_id);
-        let mut reader =
-            RecordReader::open(&run_dir).map_err(|err| ExpectedError::RecordReadError { err })?;
+        let parent_read_error = |err| ExpectedError::RerunParentReadError {
+            run_id: parent_run_id,
+            archive_path: None,
+            err: Box::new(err),
+        };
+        let mut reader = RecordReader::open(&run_dir).map_err(parent_read_error)?;
 
-        let (outstanding_tests, root_info) = ComputedRerunInfo::compute(&mut reader)
-            .map_err(|err| ExpectedError::RecordReadError { err })?;
-        let root_info = root_info.unwrap_or_else(|| {
-            RerunRootInfo::new(parent_run_id, run_info.build_scope_args.clone())
-        });
+        let (outstanding_tests, root_info) =
+            ComputedRerunInfo::compute(parent_run_id, &mut reader).map_err(parent_read_error)?;
 
         Ok((
             RerunState {
@@ -1569,17 +1575,16 @@ impl App {
         let mut archive = PortableRecording::open(archive_path)
             .map_err(|err| ExpectedError::PortableRecordingReadError { err })?;
 
-        let run_info = archive.run_info();
-        let parent_run_id = run_info.run_id;
-
-        let (outstanding_tests, root_info) = ComputedRerunInfo::compute_from_archive(&mut archive)
-            .map_err(|err| ExpectedError::RecordReadError { err })?;
+        let parent_run_id = archive.run_info().run_id;
 
         // If the archive is itself a rerun, use its root_info.
         // Otherwise, this archive is the root of the chain.
-        let root_info = root_info.unwrap_or_else(|| {
-            RerunRootInfo::new(parent_run_id, run_info.build_scope_args.clone())
-        });
+        let (outstanding_tests, root_info) = ComputedRerunInfo::compute_from_archive(&mut archive)
+            .map_err(|err| ExpectedError::RerunParentReadError {
+                run_id: parent_run_id,
+                archive_path: Some(archive_path.to_path_buf()),
+                err: Box::new(err),
+            })?;
 
         Ok((
             RerunState {

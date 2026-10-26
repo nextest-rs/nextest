@@ -5,7 +5,7 @@
 
 use crate::{
     ExpectedError, ExtractOutputFormat, Result,
-    cargo_cli::{CargoCli, CargoOptions},
+    cargo_cli::{CargoBuildSettings, CargoCli},
     output::{OutputContext, StderrStyles},
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -28,17 +28,16 @@ use tracing::{debug, warn};
 pub(super) fn acquire_graph_data(
     manifest_path: Option<&Utf8Path>,
     target_dir: Option<&Utf8Path>,
-    cargo_opts: &CargoOptions,
+    cargo_opts: &CargoBuildSettings,
     build_platforms: &BuildPlatforms,
     output: OutputContext,
 ) -> Result<String> {
     let cargo_target_arg = build_platforms.to_cargo_target_arg()?;
-    let cargo_target_arg_str = cargo_target_arg.to_string();
 
     let mut cargo_cli = CargoCli::new("metadata", manifest_path, output);
     cargo_cli
         .add_args(["--format-version=1", "--all-features"])
-        .add_args(["--filter-platform", &cargo_target_arg_str])
+        .add_flag_value("--filter-platform", &cargo_target_arg)
         .add_generic_cargo_options(cargo_opts);
 
     // We used to be able to pass in --no-deps in common cases, but that was (a) error-prone and (b)
