@@ -43,7 +43,10 @@ jobs:
       - name: Install uv
         uses: eifinger/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          enable-cache: true
+          # Set enable-cache to false because the "auto" default enables the
+          # cache on GitHub-hosted runners. Like not using Swatinem/rust-cache,
+          # this keeps the publishing job free of restored artifacts.
+          enable-cache: false
       - name: Build rustdoc
         run: ./scripts/build-rustdoc.sh
       - name: Build site
