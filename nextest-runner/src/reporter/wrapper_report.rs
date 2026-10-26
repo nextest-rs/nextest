@@ -10,7 +10,7 @@ use thiserror::Error;
 /// A note reported by a run wrapper.
 ///
 /// Written as JSON to the path in `NEXTEST_RUN_WRAPPER_REPORT`; an absent
-/// report means the wrapper ran the test normally.
+/// report means the wrapper provided no information.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
