@@ -133,7 +133,8 @@ jobs:
           # one that populates the cache. The `test` jobs below restore the same
           # entry via this key and never write to it.
           shared-key: build-${{ matrix.rust-version }}
-          # TODO-RAINCLAUDE: save only on main; PR-scoped entries are unrestorable elsewhere and exhaust the 10 GB free cache tier.
+          # Save only on main -- PR-scoped entries are unrestorable elsewhere
+          # and exhaust the 10 GB free cache tier.
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build nextest-metadata
         run: cargo build --package nextest-metadata
