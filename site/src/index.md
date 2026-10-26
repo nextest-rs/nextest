@@ -7,6 +7,12 @@ hide:
     - toc
 ---
 
+!!! danger "Security update: upgrade to nextest 0.9.150"
+
+    Nextest 0.9.125 through 0.9.149 are affected by [GHSA-vc25-qg58-w57c](https://github.com/nextest-rs/nextest/security/advisories/GHSA-vc25-qg58-w57c). Please [update to nextest 0.9.150](docs/installation/updating.md) or later.
+
+    For more details, see the [changelog](changelog.md#0.9.150).
+
 <div class="grid cards" markdown>
 
 -   :octicons-sparkles-fill-16:{ .lg .middle } __Clean, beautiful user interface__
