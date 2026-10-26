@@ -569,6 +569,14 @@ fn cargo_path() -> Utf8PathBuf {
 mod tests {
     use super::*;
     use crate::output::Color;
+    use clap::Parser;
+    use insta::assert_debug_snapshot;
+
+    #[derive(Debug, Parser)]
+    struct CargoOptionsCli {
+        #[command(flatten)]
+        cargo_options: CargoOptions,
+    }
 
     #[test]
     fn to_expression_uses_all_args() {
@@ -617,5 +625,108 @@ mod tests {
             &cargo_cli.all_args()[1..],
             ["--color=always", "locate-project"]
         );
+    }
+
+    #[test]
+    fn add_options_all_settings_set() {
+        let options = CargoOptions {
+            build_scope: CargoBuildScopeOptions::default(),
+            build_jobs: Some("-1".to_owned()),
+            release: true,
+            cargo_profile: Some("my-profile".to_owned()),
+            target: Some("x86_64-unknown-linux-gnu".to_owned()),
+            target_dir: Some(Utf8PathBuf::from("path/to/target dir")),
+            unit_graph: true,
+            timings: Some(Some("html,json".to_owned())),
+            frozen: true,
+            locked: true,
+            offline: true,
+            // The message format is added by compute_binary_list, not here.
+            cargo_message_format: Vec::new(),
+            cargo_quiet: 1,
+            cargo_verbose: 2,
+            ignore_rust_version: true,
+            future_incompat_report: true,
+            config: vec![
+                "build.rustflags=[\"-Dwarnings\"]".to_owned(),
+                "path/to/config.toml".to_owned(),
+            ],
+            unstable_flags: vec!["unstable-options".to_owned(), "build-std".to_owned()],
+        };
+
+        let mut cargo_cli = CargoCli::new(
+            "test",
+            Some(Utf8Path::new("path/to/Cargo.toml")),
+            OutputContext {
+                verbose: false,
+                color: Color::Never,
+            },
+        );
+        cargo_cli.add_options(&options);
+
+        assert_debug_snapshot!(&cargo_cli.all_args()[1..]);
+    }
+
+    #[test]
+    fn build_scope_from_argv() {
+        let cases: &[(&str, &[&str])] = &[
+            ("", &[]),
+            (
+                "-p foo -p bar@1.2 --exclude baz --workspace",
+                &[
+                    "--package",
+                    "foo",
+                    "--package",
+                    "bar@1.2",
+                    "--workspace",
+                    "--exclude",
+                    "baz",
+                ],
+            ),
+            ("--all", &["--all"]),
+            ("--workspace --all", &["--workspace", "--all"]),
+            (
+                "--package=nextest-* --all",
+                &["--package", "nextest-*", "--all"],
+            ),
+            (
+                "-F a,b --no-default-features",
+                &["--features", "a,b", "--no-default-features"],
+            ),
+            (
+                "--features 'a b' --all-features",
+                &["--features", "a b", "--all-features"],
+            ),
+            ("--lib --bins --test t", &["--lib", "--bins", "--test", "t"]),
+            (
+                "--bin b --example e --examples --tests --bench be --benches --all-targets",
+                &[
+                    "--bin",
+                    "b",
+                    "--example",
+                    "e",
+                    "--examples",
+                    "--tests",
+                    "--bench",
+                    "be",
+                    "--benches",
+                    "--all-targets",
+                ],
+            ),
+        ];
+
+        for (args, expected) in cases {
+            let argv = shell_words::split(&format!("cargo-nextest {args}"))
+                .expect("test command line is valid shell syntax");
+            let cli = CargoOptionsCli::try_parse_from(argv)
+                .unwrap_or_else(|error| panic!("`{args}` should parse: {error}"));
+            let scope = cli.cargo_options.build_scope;
+            assert_eq!(scope.to_cli_args(), *expected, "cargo args for `{args}`");
+            assert_eq!(
+                !scope.has_any(),
+                expected.is_empty(),
+                "is_empty for `{args}`"
+            );
+        }
     }
 }

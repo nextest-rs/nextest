@@ -108,8 +108,9 @@ impl TempProject {
         // because it's only used for creating new archives).
         _ = CargoNextestCli::for_test(env_info)
             .args([
-                "run",
-                "--no-run",
+                "list",
+                "--list-type",
+                "binaries-only",
                 "--manifest-path",
                 ret.manifest_path().as_str(),
                 "--archive-file",

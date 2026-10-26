@@ -1,7 +1,7 @@
 [package]
 name = "nextest-runner"
 description = "Core runner logic for cargo nextest."
-version = "0.124.0"
+version = "0.127.0"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/nextest-rs/nextest"
@@ -161,6 +161,11 @@ self_update = { workspace = true, optional = true, default-features = false }
 # aws-lc-rs instead, activate ureq's TLS and rustls's provider separately.
 ureq = { workspace = true, optional = true, features = ["rustls-no-provider", "rustls-webpki-roots"] }
 rustls = { workspace = true, optional = true, features = ["aws-lc-rs"] }
+# rustls-webpki and webpki-roots are not used in code -- they're defined
+# explicitly here so self-update doesn't resolve to trust anchors with the
+# eMudhra compromise.
+rustls-webpki = { workspace = true, optional = true }
+webpki-roots = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "riscv32")'.dependencies]
 self_update = { workspace = true, optional = true, default-features = false }
@@ -194,8 +199,10 @@ self-update = [
     "dep:http",
     "dep:mukti-metadata",
     "dep:rustls",
+    "dep:rustls-webpki",
     "dep:sha2",
     "dep:ureq",
+    "dep:webpki-roots",
 ]
 usdt = ["dep:usdt"]
 experimental-tokio-console = [

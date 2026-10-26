@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.23.0] - 2026-10-07
+
+### Changed
+
+- `guppy` updated to 0.19.1.
+
 ## [0.22.0] - 2026-08-04
 
 ### Changed
@@ -231,6 +237,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.23.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.23.0
 [0.22.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.22.0
 [0.21.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.21.3
 [0.21.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.21.2

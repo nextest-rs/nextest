@@ -18,8 +18,6 @@ publish = false
 [dependencies]
 ahash = { version = "0.8.12", features = ["serde"] }
 aho-corasick = { version = "1.1.5" }
-bit-set = { version = "0.8.0" }
-bit-vec = { version = "0.8.0" }
 camino = { version = "1.2.6", default-features = false, features = ["serde1"] }
 clap = { version = "4.6.7", features = ["derive", "env", "unicode", "unstable-markdown", "wrap_help"] }
 clap_builder = { version = "4.6.7", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
@@ -41,7 +39,7 @@ proptest = { version = "1.11.0" }
 regex-automata = { version = "0.4.18", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
 serde_core = { version = "1.0.229", features = ["alloc", "rc"] }
-serde_json = { version = "1.0.151", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
+serde_json = { version = "1.0.154", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
 smallvec = { version = "1.16.2", default-features = false, features = ["const_generics"] }
 target-spec = { version = "3.7.0", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.8", default-features = false, features = ["fixtures"] }
@@ -59,7 +57,7 @@ phf_shared = { version = "0.11.3" }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 serde_core = { version = "1.0.229", features = ["alloc", "rc"] }
-syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3.0.3", features = ["full"] }
+syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3.0.3", features = ["extra-traits", "full"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
 ucd-trie = { version = "0.1.7" }
 
@@ -71,13 +69,13 @@ futures-core = { version = "0.3.34" }
 futures-sink = { version = "0.3.34" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4.2", default-features = false, features = ["std", "sys_rng"] }
 httparse = { version = "1.10.1" }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.45", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.16.2", default-features = false, features = ["const_new"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -88,10 +86,10 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
-serde_json = { version = "1.0.151", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
+serde_json = { version = "1.0.154", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -102,18 +100,18 @@ futures-core = { version = "0.3.34" }
 futures-sink = { version = "0.3.34" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4.2", default-features = false, features = ["std", "sys_rng"] }
 httparse = { version = "1.10.1" }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.45", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.16.2", default-features = false, features = ["const_new"] }
 tokio = { version = "1.53.1", default-features = false, features = ["net"] }
 
 [target.aarch64-unknown-linux-gnu.build-dependencies]
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 
 [target.x86_64-unknown-linux-musl.dependencies]
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
@@ -123,13 +121,13 @@ futures-core = { version = "0.3.34" }
 futures-sink = { version = "0.3.34" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4.2", default-features = false, features = ["std", "sys_rng"] }
 httparse = { version = "1.10.1" }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.45", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.16.2", default-features = false, features = ["const_new"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -140,10 +138,10 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 [target.x86_64-unknown-linux-musl.build-dependencies]
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
-serde_json = { version = "1.0.151", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
+serde_json = { version = "1.0.154", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -154,18 +152,18 @@ futures-core = { version = "0.3.34" }
 futures-sink = { version = "0.3.34" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4.2", default-features = false, features = ["std", "sys_rng"] }
 httparse = { version = "1.10.1" }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.45", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.16.2", default-features = false, features = ["const_new"] }
 tokio = { version = "1.53.1", default-features = false, features = ["net"] }
 
 [target.aarch64-unknown-linux-musl.build-dependencies]
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 
 [target.x86_64-unknown-illumos.dependencies]
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
@@ -175,13 +173,13 @@ futures-core = { version = "0.3.34" }
 futures-sink = { version = "0.3.34" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4.2", default-features = false, features = ["std", "sys_rng"] }
 httparse = { version = "1.10.1" }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.45", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.16.2", default-features = false, features = ["const_new"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -192,10 +190,10 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 [target.x86_64-unknown-illumos.build-dependencies]
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
-serde_json = { version = "1.0.151", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
+serde_json = { version = "1.0.154", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -207,13 +205,13 @@ futures-core = { version = "0.3.34" }
 futures-sink = { version = "0.3.34" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4.2", default-features = false, features = ["std", "sys_rng"] }
 httparse = { version = "1.10.1" }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.45", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.16.2", default-features = false, features = ["const_new"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -224,10 +222,10 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 [target.x86_64-unknown-freebsd.build-dependencies]
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
-serde_json = { version = "1.0.151", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
+serde_json = { version = "1.0.154", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -239,13 +237,13 @@ futures-core = { version = "0.3.34" }
 futures-sink = { version = "0.3.34" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4.2", default-features = false, features = ["std", "sys_rng"] }
 httparse = { version = "1.10.1" }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.45", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.16.2", default-features = false, features = ["const_new"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -256,10 +254,10 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 [target.aarch64-unknown-freebsd.build-dependencies]
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
 dof = { version = "0.4.0", default-features = false, features = ["des"] }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
-serde_json = { version = "1.0.151", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
+serde_json = { version = "1.0.154", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -270,13 +268,13 @@ futures-core = { version = "0.3.34" }
 futures-sink = { version = "0.3.34" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4.2", default-features = false, features = ["std", "sys_rng"] }
 httparse = { version = "1.10.1" }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
 proc-macro2 = { version = "1.0.106" }
 quote = { version = "1.0.45" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
-rustls = { version = "0.23.45", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.16.2", default-features = false, features = ["const_new"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -286,10 +284,10 @@ zerocopy = { version = "0.8.27", default-features = false, features = ["derive",
 
 [target.aarch64-apple-darwin.build-dependencies]
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
-libc = { version = "0.2.189", features = ["extra_traits"] }
+libc = { version = "0.2.191", features = ["extra_traits"] }
 log = { version = "0.4.29", default-features = false, features = ["std"] }
 serde = { version = "1.0.229", features = ["alloc", "derive", "rc"] }
-serde_json = { version = "1.0.151", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
+serde_json = { version = "1.0.154", features = ["alloc", "float_roundtrip", "unbounded_depth"] }
 usdt-impl = { version = "0.6.0", default-features = false, features = ["des"] }
 zerocopy = { version = "0.8.27", default-features = false, features = ["derive", "simd"] }
 
@@ -299,7 +297,7 @@ futures-core = { version = "0.3.34" }
 futures-sink = { version = "0.3.34" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4.2", default-features = false, features = ["std", "sys_rng"] }
 httparse = { version = "1.10.1" }
-rustls = { version = "0.23.45", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.16.2", default-features = false, features = ["const_new"] }
 tokio = { version = "1.53.1", default-features = false, features = ["net"] }
@@ -316,7 +314,7 @@ futures-core = { version = "0.3.34" }
 futures-sink = { version = "0.3.34" }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4.2", default-features = false, features = ["std", "sys_rng"] }
 httparse = { version = "1.10.1" }
-rustls = { version = "0.23.45", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
 smallvec = { version = "1.16.2", default-features = false, features = ["const_new"] }
 tokio = { version = "1.53.1", default-features = false, features = ["net"] }

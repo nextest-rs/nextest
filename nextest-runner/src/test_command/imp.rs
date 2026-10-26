@@ -32,6 +32,9 @@ cfg_if::cfg_if! {
     }
 }
 
+#[cfg(test)]
+pub(crate) use os::pipe_reader_to_child_stdout;
+
 pub(super) fn attach_capture_readers(
     child: &mut TokioChild,
     stdout_rx: Option<PipeReader>,

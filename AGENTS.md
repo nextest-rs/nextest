@@ -75,6 +75,7 @@ Every Rust source file must start with:
 - **Lifetimes** used extensively to avoid cloning (e.g., `TestInstance<'a>`)
 - **Restricted visibility**: Use `pub(crate)` and `pub(super)` liberally (237 uses in nextest-runner)
 - **Non-exhaustive in stable crates**: The `nextest-metadata` crate has a stable API and public types there should be `#[non_exhaustive]` for forward compatibility. Internal crates like `nextest-runner` do not have stable APIs, so `#[non_exhaustive]` is not required (though error types may still use it).
+- **Named constructors over `From`**: Don't add new `From` impls for conversions between domain types. Use a named constructor or method instead (e.g., `PackageSpec::new`), so that conversions are visible at the call site.
 
 ### Error handling
 
@@ -169,7 +170,7 @@ For doctests, use `cargo test --doc` (doctests are not supported by nextest).
 
 ### Testing tools
 
-- **test-case**: For parameterized tests.
+- **test-case**: For parameterized tests. For small tests, prefer a single `#[test]` that loops over a table of cases (with the case in each assertion message) over many `#[test_case]` attributes.
 - **proptest**: For property-based testing.
 - **insta**: For snapshot testing.
 - **libtest-mimic**: For custom test harnesses.
@@ -204,6 +205,7 @@ Examples:
 - **Atomic commits**: Each commit should be a logical unit of change.
 - **Bisect-able history**: Every commit must build and pass all checks.
 - **Separate concerns**: Format fixes and refactoring should be in separate commits from feature changes.
+- **Tests for existing behavior go first**: If a change needs new tests for behavior that already works before the change, add those tests in a prep commit beneath it. The change's own commit then only adjusts them, which shows the behavior is preserved and keeps the change atomic.
 
 ### Changelog
 

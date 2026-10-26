@@ -133,6 +133,7 @@ where
         // other words, we reinitialize the global timeout for each sub-run.
         let mut global_timeout_sleep =
             std::pin::pin!(crate::time::pausable_sleep(self.global_timeout));
+        let mut global_timeout_fired = false;
 
         // This is the interval at which tick events are sent to the reporter.
         let mut tick_interval = tokio::time::interval(self.tick_interval);
@@ -140,7 +141,8 @@ where
 
         loop {
             let internal_event = tokio::select! {
-                _ = &mut global_timeout_sleep => {
+                _ = &mut global_timeout_sleep, if !global_timeout_fired => {
+                    global_timeout_fired = true;
                     InternalEvent::GlobalTimeout
                 },
                 _ = tick_interval.tick() => {
@@ -2288,6 +2290,46 @@ mod tests {
             pop_begin_cancel_reason(&events),
             Some(CancelReason::GlobalTimeout),
             "the global timeout replaces the immediate test failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn global_timeout_fires_once() {
+        let events = Mutex::new(Vec::new());
+        let mut cx = cancel_test_cx(&events);
+        // Set a global timeout of zero.
+        cx.global_timeout = Duration::ZERO;
+
+        let (_executor_tx, executor_rx) = unbounded_channel();
+        let mut signal_handler = SignalHandler::noop();
+        let mut input_handler = InputHandler::noop();
+        let report_cancel_rx = std::pin::pin!(Fuse::terminated());
+        let mut run = std::pin::pin!(cx.run(
+            executor_rx,
+            &mut signal_handler,
+            &mut input_handler,
+            report_cancel_rx,
+        ));
+
+        loop {
+            assert!(
+                futures::poll!(run.as_mut()).is_pending(),
+                "the dispatcher runs until the executor channel is closed"
+            );
+            assert!(
+                tokio::task::coop::has_budget_remaining(),
+                "the dispatcher goes idle once the global timeout has fired"
+            );
+            if !events.lock().unwrap().is_empty() {
+                break;
+            }
+            // Suspend this task until one of the dispatcher's timers wakes it.
+            futures::pending!();
+        }
+        assert_eq!(
+            pop_begin_cancel_reason(&events),
+            Some(CancelReason::GlobalTimeout),
+            "the reported cancel reason is the global timeout"
         );
     }
 

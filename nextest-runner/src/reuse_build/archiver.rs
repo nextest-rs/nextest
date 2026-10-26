@@ -174,6 +174,7 @@ pub fn archive_to_file<'a, F>(
     path_mapper: &'a PathMapper,
     format: ArchiveFormat,
     zstd_level: i32,
+    zstd_long: bool,
     output_file: &'a Utf8Path,
     mut callback: F,
     redactor: Redactor,
@@ -229,6 +230,7 @@ where
                 target_stdlib,
                 format,
                 zstd_level,
+                zstd_long,
                 file,
                 redactor,
             )?;
@@ -317,6 +319,7 @@ impl<'a, W: Write> Archiver<'a, W> {
         target_stdlib: Option<Utf8PathBuf>,
         format: ArchiveFormat,
         compression_level: i32,
+        zstd_long: bool,
         writer: W,
         redactor: Redactor,
     ) -> Result<Self, ArchiveCreateError> {
@@ -328,6 +331,15 @@ impl<'a, W: Write> Archiver<'a, W> {
                 encoder
                     .include_checksum(true)
                     .map_err(ArchiveCreateError::OutputArchiveIo)?;
+                if zstd_long {
+                    // Enabling long-distance matching defaults the window log to 27 (128 MiB).
+                    // If we make the window log configurable in the future, call
+                    // `encoder.window_log(log)` here as well (and `decoder.window_log_max(log)`
+                    // in unarchiver.rs if `log > 27`).
+                    encoder
+                        .long_distance_matching(true)
+                        .map_err(ArchiveCreateError::OutputArchiveIo)?;
+                }
                 if let Err(err) = encoder.multithread(get_num_cpus() as u32) {
                     tracing::warn!(
                         ?err,
