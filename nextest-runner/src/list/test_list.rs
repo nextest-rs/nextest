@@ -2466,12 +2466,7 @@ mod tests {
             let mut cli_no_wrappers = TestCommandCli::default();
             cli_no_wrappers.apply_wrappers(None, None, workspace_root, target_dir);
             cli_no_wrappers.extend(["binary", "arg"]);
-            assert!(
-                cli_no_wrappers
-                    .wrapper
-                    .map(|wrapper| &wrapper.command.env)
-                    .is_none()
-            );
+            assert!(cli_no_wrappers.wrapper.is_none());
             assert_eq!(cli_no_wrappers.to_owned_cli(), vec!["binary", "arg"]);
         }
 
@@ -2485,12 +2480,7 @@ mod tests {
             let mut cli_runner_only = TestCommandCli::default();
             cli_runner_only.apply_wrappers(None, Some(&runner), workspace_root, target_dir);
             cli_runner_only.extend(["binary", "arg"]);
-            assert!(
-                cli_runner_only
-                    .wrapper
-                    .map(|wrapper| &wrapper.command.env)
-                    .is_none()
-            );
+            assert!(cli_runner_only.wrapper.is_none());
             assert_eq!(
                 cli_runner_only.to_owned_cli(),
                 vec!["runner", "binary", "arg"],
@@ -2636,10 +2626,7 @@ mod tests {
             );
             cli_wrapper_overrides.extend(["binary", "arg"]);
             assert!(
-                cli_wrapper_overrides
-                    .wrapper
-                    .map(|wrapper| &wrapper.command.env)
-                    .is_none(),
+                cli_wrapper_overrides.wrapper.is_none(),
                 "overrides-wrapper with runner should not apply wrapper env"
             );
             assert_eq!(
@@ -2725,12 +2712,7 @@ mod tests {
                 target_dir,
             );
             cli_runner_args.extend(["binary", "arg"]);
-            assert!(
-                cli_runner_args
-                    .wrapper
-                    .map(|wrapper| &wrapper.command.env)
-                    .is_none()
-            );
+            assert!(cli_runner_args.wrapper.is_none());
             assert_eq!(
                 cli_runner_args.to_owned_cli(),
                 vec!["runner", "--runner-flag", "value", "binary", "arg"],

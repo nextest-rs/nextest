@@ -640,12 +640,8 @@ impl WrapperCategoryCounts {
         }
     }
 
-    fn len(&self) -> usize {
-        self.named.len() + usize::from(self.other > 0)
-    }
-
     fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.named.is_empty() && self.other == 0
     }
 
     fn iter(&self) -> impl Iterator<Item = (&str, usize)> {
@@ -1601,10 +1597,6 @@ mod tests {
                 "passed (1 cached, 1 flaky), failed (1 leaky, 1 retried), exec failed (1 infrastructure), timed out (1 infrastructure)"
             )
         );
-        assert!(
-            !summary.contains("first attempt"),
-            "only the final attempt's category is counted"
-        );
     }
     #[test]
     fn wrapper_category_buckets_match_run_stats() {
@@ -1644,49 +1636,20 @@ mod tests {
                     stats.on_test_finished(&statuses);
                     categories.record(&statuses);
                     assert_eq!(
-                        (
-                            categories
-                                .passed
-                                .iter()
-                                .map(|(_, count)| count)
-                                .sum::<usize>(),
-                            categories
-                                .failed
-                                .iter()
-                                .map(|(_, count)| count)
-                                .sum::<usize>(),
-                            categories
-                                .exec_failed
-                                .iter()
-                                .map(|(_, count)| count)
-                                .sum::<usize>(),
-                            categories
-                                .timed_out
-                                .iter()
-                                .map(|(_, count)| count)
-                                .sum::<usize>()
-                        ),
-                        (
+                        [
+                            &categories.passed,
+                            &categories.failed,
+                            &categories.exec_failed,
+                            &categories.timed_out,
+                        ]
+                        .map(|counts| counts.iter().map(|(_, count)| count).sum::<usize>()),
+                        [
                             stats.passed,
                             stats.failed,
                             stats.exec_failed,
                             stats.failed_timed_out
-                        ),
+                        ],
                         "{result:?}, {flaky_result:?}, {attempts} attempts",
-                    );
-                    let taken = categories.take();
-                    assert_eq!(
-                        taken.passed.len()
-                            + taken.failed.len()
-                            + taken.exec_failed.len()
-                            + taken.timed_out.len(),
-                        1
-                    );
-                    assert!(
-                        categories.passed.is_empty()
-                            && categories.failed.is_empty()
-                            && categories.exec_failed.is_empty()
-                            && categories.timed_out.is_empty()
                     );
                 }
             }

@@ -3114,25 +3114,10 @@ mod tests {
         };
 
         let mut value = serde_json::to_value(&status).unwrap();
-        let roundtrip: ExecuteStatus<RecordingSpec> =
-            serde_json::from_value(value.clone()).unwrap();
-        assert_eq!(roundtrip, status);
-
-        value
-            .get_mut("run-wrapper-report")
-            .unwrap()
-            .as_object_mut()
-            .unwrap()
-            .remove("category");
-        let without_category: ExecuteStatus<RecordingSpec> =
-            serde_json::from_value(value.clone()).unwrap();
         assert_eq!(
-            without_category.run_wrapper_report.unwrap().category,
-            None,
-            "category is optional in the report"
+            value.as_object_mut().unwrap().remove("run-wrapper-report"),
+            Some(serde_json::json!({"label": "cached", "category": "cached"}))
         );
-
-        value.as_object_mut().unwrap().remove("run-wrapper-report");
         let without_field: ExecuteStatus<RecordingSpec> = serde_json::from_value(value).unwrap();
         assert_eq!(without_field.run_wrapper_report, None);
     }

@@ -159,11 +159,8 @@ mod tests {
     }
 
     #[proptest]
-    fn report_text_roundtrips(label: RunWrapperLabel, category: RunWrapperCategory) {
-        let report = RunWrapperReport {
-            label,
-            category: Some(category),
-        };
+    fn report_text_roundtrips(label: RunWrapperLabel, category: Option<RunWrapperCategory>) {
+        let report = RunWrapperReport { label, category };
         let value = serde_json::to_value(&report).unwrap();
         prop_assert_eq!(value["label"].as_str(), Some(report.label.as_str()));
         prop_assert_eq!(

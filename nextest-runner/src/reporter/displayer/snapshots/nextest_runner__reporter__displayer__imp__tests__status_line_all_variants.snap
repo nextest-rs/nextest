@@ -83,3 +83,5 @@ TIMEOUT-PASS [ 240.000s] ( 22/100) my-binary-id test_name
 TRY 2 LKFAIL [   1.000s] ( 37/100) my-binary-id test_name
 # timeout fail retry: 
    TRY 2 TMT [  60.000s] ( 38/100) my-binary-id test_name
+# wrapper report:
+        PASS [   1.000s] (  1/100) (cached) my-binary-id test_name

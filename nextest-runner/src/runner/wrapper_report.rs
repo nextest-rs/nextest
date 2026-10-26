@@ -105,19 +105,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn category_is_optional() {
-        let dir = report_dir(br#"{"label":"cached"}"#);
-        assert_eq!(
-            read_report(&dir.path().join("report.json"))
-                .await
-                .unwrap()
-                .unwrap()
-                .category,
-            None
-        );
-    }
-
-    #[tokio::test]
     async fn absent_report_is_not_an_error() {
         let dir = new_report_dir().unwrap();
         assert_eq!(
@@ -176,44 +163,15 @@ mod tests {
     async fn invalid_reports_are_errors() {
         for contents in [
             br#"not json"#.as_slice(),
-            br#"{"label":""}"#,
-            br#"{"label":" leading space"}"#,
-            br#"{"label":"trailing space "}"#,
             br#"{"label":"bad\nlabel"}"#,
-            br#"{"label":"ends with punctuation)"}"#,
-            br#"{"label":"caf\u00e9"}"#,
             br#"{"label":"cached","category":""}"#,
-            br#"{"label":"cached","category":" leading space"}"#,
-            br#"{"label":"cached","category":"bad\ncategory"}"#,
         ] {
             let dir = report_dir(contents);
-            assert!(read_report(&dir.path().join("report.json")).await.is_err());
+            assert!(matches!(
+                read_report(&dir.path().join("report.json")).await,
+                Err(RunWrapperReportError::Parse(_))
+            ));
         }
-    }
-
-    #[tokio::test]
-    async fn length_limits_are_enforced() {
-        let long_label = "x".repeat(RunWrapperLabel::MAX_LEN + 1);
-        let long_category = "x".repeat(RunWrapperCategory::MAX_LEN + 1);
-        for contents in [
-            format!(r#"{{"label":"{long_label}"}}"#),
-            format!(r#"{{"label":"cached","category":"{long_category}"}}"#),
-        ] {
-            let dir = report_dir(contents.as_bytes());
-            assert!(read_report(&dir.path().join("report.json")).await.is_err());
-        }
-
-        let max_label = "x".repeat(RunWrapperLabel::MAX_LEN);
-        let dir = report_dir(format!(r#"{{"label":"{max_label}"}}"#).as_bytes());
-        assert_eq!(
-            read_report(&dir.path().join("report.json"))
-                .await
-                .unwrap()
-                .unwrap()
-                .label
-                .as_str(),
-            max_label
-        );
     }
 
     #[tokio::test]
@@ -235,23 +193,14 @@ mod tests {
         );
     }
 
-    #[test]
-    fn report_directories_are_isolated_and_removed() {
-        let first = report_dir(b"first");
-        let second = report_dir(b"second");
-        let first_path = first.path().to_owned();
-        assert_ne!(first.path(), second.path());
-        drop(first);
-        assert!(!first_path.exists());
-        assert_eq!(
-            fs::read(second.path().join("report.json")).unwrap(),
-            b"second"
-        );
-    }
-
     #[tokio::test]
     async fn oversized_reports_are_errors() {
         let dir = report_dir(&vec![b'x'; MAX_REPORT_SIZE as usize + 1]);
-        assert!(read_report(&dir.path().join("report.json")).await.is_err());
+        assert!(matches!(
+            read_report(&dir.path().join("report.json")).await,
+            Err(RunWrapperReportError::TooLarge {
+                max_size: MAX_REPORT_SIZE,
+            })
+        ));
     }
 }

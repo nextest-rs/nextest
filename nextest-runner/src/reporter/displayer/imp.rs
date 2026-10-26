@@ -3654,40 +3654,15 @@ mod tests {
             &mut out,
         );
 
-        insta::assert_snapshot!("status_line_all_variants", out);
-    }
-
-    #[test]
-    fn status_line_with_wrapper_report() {
-        let binary_id = RustBinaryId::new("my-binary-id");
-        let test_name = TestCaseName::new("test_name");
-        let test_instance = TestInstanceId {
-            binary_id: &binary_id,
-            test_name: &test_name,
-        };
-        let status = ExecuteStatus {
-            retry_data: RetryData {
-                attempt: 1,
-                total_attempts: 1,
-            },
-            output: make_split_output(Some(ExecutionResult::Pass), "", ""),
-            result: ExecutionResultDescription::Pass,
-            run_wrapper_report: Some(RunWrapperReport {
-                label: "cached".parse().unwrap(),
-                category: Some("cached".parse().unwrap()),
-            }),
-            start_time: Local::now().into(),
-            time_taken: Duration::from_secs(1),
-            is_slow: false,
-            delay_before_start: Duration::ZERO,
-            error_summary: None,
-            output_error_slice: None,
-        };
+        let mut status = pass_status;
+        status.run_wrapper_report = Some(RunWrapperReport {
+            label: "cached".parse().unwrap(),
+            category: Some("cached".parse().unwrap()),
+        });
         let describe = ExecutionDescription::Success {
             single_status: &status,
         };
-        let mut out = String::new();
-
+        out.push_str("# wrapper report:\n");
         with_reporter(
             |mut reporter| {
                 reporter
@@ -3708,10 +3683,7 @@ mod tests {
             &mut out,
         );
 
-        assert_eq!(
-            out,
-            "        PASS [   1.000s] (  1/100) (cached) my-binary-id test_name\n"
-        );
+        insta::assert_snapshot!("status_line_all_variants", out);
     }
 
     #[test]
