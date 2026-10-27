@@ -3,7 +3,7 @@
 
 use crate::{
     errors::{ChildFdError, ErrorList},
-    test_command::{create_pipe, spawn_piped, spawn_process},
+    test_command::{SpawnLockMode, create_pipe, lock_process_spawn, spawn_piped, spawn_process},
     test_output::{CaptureStrategy, ChildExecutionOutput, ChildOutput, ChildSplitOutput},
 };
 use bytes::BytesMut;
@@ -64,16 +64,21 @@ pub(super) fn spawn(
 
     let (child, child_fds) = match strategy {
         CaptureStrategy::None => {
+            // No pipes are created here, but this fork must not land inside
+            // another thread's pipe-creation window; see `PROCESS_SPAWN_LOCK`.
+            let _guard = lock_process_spawn(SpawnLockMode::Plain);
             let child = spawn_process(cmd)?;
             (child, ChildFds::new_split(None, None))
         }
         CaptureStrategy::Split => {
+            // `spawn_piped` takes the write lock itself.
             let mut child = spawn_piped(cmd, true, true)?;
             let stdout = child.stdout.take().expect("stdout was set");
             let stderr = child.stderr.take().expect("stderr was set");
             (child, ChildFds::new_split(Some(stdout), Some(stderr)))
         }
         CaptureStrategy::Combined => {
+            let _guard = lock_process_spawn(SpawnLockMode::Captured);
             let (rx, tx) = create_pipe()?;
             cmd.stdout(tx.try_clone()?).stderr(tx);
             let child = spawn_process(cmd)?;
