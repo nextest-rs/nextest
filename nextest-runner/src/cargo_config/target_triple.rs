@@ -4,12 +4,12 @@
 use super::ExtractedCustomPlatform;
 use crate::{
     cargo_config::{CargoConfigSource, CargoConfigs, DiscoveredConfig},
-    errors::TargetTripleError,
+    errors::{RustBuildMetaParseError, TargetTripleError},
 };
 use bstr::ByteSlice;
 use camino::{Utf8Path, Utf8PathBuf};
 use std::{fmt, process::Command};
-use target_spec::{Platform, TargetFeatures, summaries::PlatformSummary};
+use target_spec::{CustomSource, Platform, TargetFeatures, summaries::PlatformSummary};
 
 /// Represents a target triple that's being cross-compiled against.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -29,26 +29,34 @@ impl TargetTriple {
     /// This target triple is assumed to originate from a build-metadata config.
     pub fn deserialize(
         platform: Option<PlatformSummary>,
-    ) -> Result<Option<TargetTriple>, target_spec::Error> {
-        platform
-            .map(|summary| {
-                let platform = summary.to_platform()?;
-                let location = if platform.is_custom() {
-                    TargetDefinitionLocation::MetadataCustom(
-                        summary
-                            .custom_json
-                            .expect("custom platform <=> custom JSON"),
-                    )
-                } else {
-                    TargetDefinitionLocation::Builtin
-                };
-                Ok(TargetTriple {
-                    platform,
-                    source: TargetTripleSource::Metadata,
-                    location,
-                })
-            })
-            .transpose()
+    ) -> Result<Option<TargetTriple>, RustBuildMetaParseError> {
+        let Some(summary) = platform else {
+            return Ok(None);
+        };
+        let platform = summary.to_platform()?;
+        let location = match platform.custom_source() {
+            None => TargetDefinitionLocation::Builtin,
+            Some(CustomSource::Json(json)) => {
+                TargetDefinitionLocation::MetadataCustom(json.to_owned())
+            }
+            Some(CustomSource::Cfg(_)) => TargetDefinitionLocation::RustcCfgCustom,
+            // CustomSource is non_exhaustive.
+            Some(_) => {
+                return Err(RustBuildMetaParseError::Unsupported {
+                    message: format!(
+                        "custom platform {:?} is defined in a way that this version of nextest \
+                         does not understand; try upgrading nextest, and if that doesn't help, \
+                         please report a bug",
+                        platform.triple_str(),
+                    ),
+                });
+            }
+        };
+        Ok(Some(TargetTriple {
+            platform,
+            source: TargetTripleSource::Metadata,
+            location,
+        }))
     }
 
     /// Converts a string that was output by older versions of nextest back to a target triple.
