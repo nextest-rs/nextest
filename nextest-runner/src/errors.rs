@@ -45,6 +45,7 @@ use std::{
     process::ExitStatus,
     sync::Arc,
 };
+use tar::EntryType;
 use target_spec_miette::IntoMietteDiagnostic;
 use thiserror::Error;
 
@@ -1723,6 +1724,22 @@ pub enum ArchiveReadError {
         component: String,
     },
 
+    /// An archive entry was of an unsupported type: a symlink, hard link,
+    /// device, FIFO, or other non-file type.
+    #[error(
+        "path in archive `{path}` has unsupported entry type: {} \
+         (nextest archives only contain regular files and directories, so this archive \
+         was likely not created by `cargo nextest archive`, or was modified afterwards)",
+        display_entry_type(*entry_type),
+    )]
+    UnsupportedEntryType {
+        /// The path with the unsupported entry type.
+        path: Utf8PathBuf,
+
+        /// The entry type.
+        entry_type: EntryType,
+    },
+
     /// An error occurred while reading a checksum.
     #[error("corrupted archive: checksum read error for path `{path}`")]
     ChecksumRead {
@@ -1772,6 +1789,29 @@ pub enum ArchiveReadError {
         #[source]
         error: Box<guppy::Error>,
     },
+}
+
+fn display_entry_type(entry_type: EntryType) -> String {
+    let description = match entry_type {
+        EntryType::Regular => "regular file",
+        EntryType::Link => "hard link",
+        EntryType::Symlink => "symbolic link",
+        EntryType::Char => "character device",
+        EntryType::Block => "block device",
+        EntryType::Directory => "directory",
+        EntryType::Fifo => "FIFO",
+        EntryType::Continuous => "contiguous file",
+        EntryType::GNULongName => "GNU long name header",
+        EntryType::GNULongLink => "GNU long link header",
+        EntryType::GNUSparse => "GNU sparse file",
+        EntryType::XGlobalHeader => "PAX global header",
+        EntryType::XHeader => "PAX extended header",
+        _ => "unknown",
+    };
+    format!(
+        "{description} (type byte {:?})",
+        char::from(entry_type.as_byte())
+    )
 }
 
 /// An error occurred while extracting a file.

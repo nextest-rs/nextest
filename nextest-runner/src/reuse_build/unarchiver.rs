@@ -19,6 +19,7 @@ use std::{
     io::{self, Seek},
     time::Instant,
 };
+use tar::EntryType;
 
 #[derive(Debug)]
 pub(crate) struct Unarchiver<'a> {
@@ -288,6 +289,13 @@ impl<'a> ArchiveReader<'a> {
                 }
             }
 
+            match entry.header().entry_type() {
+                EntryType::Regular | EntryType::GNUSparse | EntryType::Directory => {}
+                entry_type => {
+                    return Err(ArchiveReadError::UnsupportedEntryType { path, entry_type });
+                }
+            }
+
             // Validation: checksum matches.
             let mut header = entry.header().clone();
             let actual_cksum = header
@@ -342,3 +350,119 @@ pub enum ExtractDestination {
 }
 
 type ArchiveEntry<'r, 'a> = tar::Entry<'r, zstd::Decoder<'static, io::BufReader<&'a mut fs::File>>>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_entry_type_validation() {
+        let rejected = [
+            EntryType::Symlink,
+            EntryType::Link,
+            EntryType::Char,
+            EntryType::Block,
+            EntryType::Fifo,
+        ];
+        for entry_type in rejected {
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(entry_type);
+            header.set_size(0);
+            header.set_mode(0o644);
+            let mut file = archive_with(|builder| {
+                builder
+                    .append_data(&mut header, "target/entry", io::empty())
+                    .expect("appended entry");
+            });
+
+            let mut reader =
+                ArchiveReader::new(&mut file, ArchiveFormat::TarZst).expect("archive is readable");
+            let first = reader
+                .entries()
+                .expect("entries are readable")
+                .next()
+                .expect("archive has an entry")
+                .map(|(_, path)| path);
+            match first {
+                Err(ArchiveReadError::UnsupportedEntryType {
+                    path,
+                    entry_type: actual,
+                }) => {
+                    assert_eq!(path, "target/entry", "path for {entry_type:?}");
+                    assert_eq!(actual, entry_type, "entry type for {entry_type:?}");
+                }
+                other => {
+                    panic!("{entry_type:?}: expected UnsupportedEntryType, found {other:?}")
+                }
+            }
+        }
+
+        let source_dir = camino_tempfile::tempdir().expect("created source dir");
+        let regular_path = source_dir.path().join("regular");
+        fs::write(&regular_path, b"contents").expect("wrote regular file");
+        let sparse_path = source_dir.path().join("sparse");
+        fs::File::create(&sparse_path)
+            .expect("created sparse file")
+            .set_len(64 * 1024)
+            .expect("extended sparse file");
+
+        let mut file = archive_with(|builder| {
+            builder
+                .append_path_with_name(&regular_path, "target/regular")
+                .expect("appended regular file");
+            builder
+                .append_path_with_name(&sparse_path, "target/sparse")
+                .expect("appended sparse file");
+            builder
+                .append_dir("target/dir", source_dir.path())
+                .expect("appended directory");
+        });
+
+        let mut reader =
+            ArchiveReader::new(&mut file, ArchiveFormat::TarZst).expect("archive is readable");
+        let accepted: Vec<_> = reader
+            .entries()
+            .expect("entries are readable")
+            .map(|entry| {
+                let (entry, path) = entry.expect("entry is accepted");
+                (path, entry.header().entry_type())
+            })
+            .collect();
+        // Note that tar only detects sparse files on Linux, Android, and
+        // FreeBSD, so on other platforms the sparse file is a Regular entry.
+        let expected_sparse_type = if cfg!(any(
+            target_os = "linux",
+            target_os = "android",
+            target_os = "freebsd"
+        )) {
+            EntryType::GNUSparse
+        } else {
+            EntryType::Regular
+        };
+        assert_eq!(
+            accepted,
+            [
+                (Utf8PathBuf::from("target/regular"), EntryType::Regular),
+                (Utf8PathBuf::from("target/sparse"), expected_sparse_type),
+                (Utf8PathBuf::from("target/dir"), EntryType::Directory),
+            ],
+            "accepted entries"
+        );
+    }
+
+    fn archive_with(
+        build: impl FnOnce(&mut tar::Builder<zstd::Encoder<'static, fs::File>>),
+    ) -> fs::File {
+        let file = camino_tempfile::tempfile().expect("created archive file");
+        let encoder = zstd::Encoder::new(file, 0).expect("created zstd encoder");
+        let mut builder = tar::Builder::new(encoder);
+        build(&mut builder);
+        let mut file = builder
+            .into_inner()
+            .expect("finished tar archive")
+            .finish()
+            .expect("finished zstd stream");
+        file.rewind().expect("rewound archive file");
+        file
+    }
+}
