@@ -108,7 +108,7 @@ petgraph = "0.8.3"
 pin-project-lite = "0.2.17"
 pretty_assertions = "1.4.1"
 proptest = "1.11.0"
-pulldown-cmark = { version = "0.13.4", default-features = false }
+pulldown-cmark = { version = "0.13.5", default-features = false }
 quick-junit = "0.8.0"
 rand = "0.10.3"
 recursion = "0.5.4"
