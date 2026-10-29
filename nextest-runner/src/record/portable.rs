@@ -26,27 +26,25 @@ use super::{
         STDOUT_DICT_PATH, STORE_FORMAT_VERSION, STORE_ZIP_FILE_NAME, TEST_LIST_JSON_PATH,
         has_zip_extension, stored_file_options,
     },
-    reader::{StoreReader, decompress_with_dict},
+    reader::{RunLogEventIter, StoreReader, decompress_with_dict},
     store::{RecordedRunInfo, RunFilesExist, StoreRunsDir},
-    summary::{RecordOpts, TestEventSummary},
+    summary::RecordOpts,
 };
 use crate::{
     errors::{PortableRecordingError, PortableRecordingReadError, RecordReadError},
-    output_spec::RecordingSpec,
     user_config::elements::MAX_MAX_OUTPUT_SIZE,
 };
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use bytesize::ByteSize;
 use camino::{Utf8Path, Utf8PathBuf};
 use countio::Counter;
-use debug_ignore::DebugIgnore;
 use eazip::{Archive, ArchiveWriter, CompressionMethod};
 use itertools::Either;
 use nextest_metadata::TestListSummary;
 use std::{
     borrow::Cow,
     fs::File,
-    io::{self, BufRead, BufReader, Cursor, Read, Seek, SeekFrom, Write},
+    io::{self, BufReader, Cursor, Read, Seek, SeekFrom, Write},
 };
 
 /// Result of writing a portable recording.
@@ -734,7 +732,10 @@ pub struct PortableRecordingRunLog {
 
 impl PortableRecordingRunLog {
     /// Returns an iterator over events from the run log.
-    pub fn events(&self) -> Result<PortableRecordingEventIter<'_>, RecordReadError> {
+    pub fn events(
+        &self,
+    ) -> Result<RunLogEventIter<BufReader<zstd::stream::Decoder<'static, &[u8]>>>, RecordReadError>
+    {
         // The run log is zstd-compressed JSON Lines. Use with_buffer since the
         // data is already in memory (no need for Decoder's internal BufReader).
         let decoder =
@@ -744,53 +745,8 @@ impl PortableRecordingRunLog {
                     error,
                 }
             })?;
-        Ok(PortableRecordingEventIter {
-            // BufReader is still needed for read_line().
-            reader: DebugIgnore(BufReader::new(decoder)),
-            line_buf: String::new(),
-            line_number: 0,
-        })
-    }
-}
-
-/// Iterator over events from a portable recording's run log.
-#[derive(Debug)]
-pub struct PortableRecordingEventIter<'a> {
-    reader: DebugIgnore<BufReader<zstd::stream::Decoder<'static, &'a [u8]>>>,
-    line_buf: String,
-    line_number: usize,
-}
-
-impl Iterator for PortableRecordingEventIter<'_> {
-    type Item = Result<TestEventSummary<RecordingSpec>, RecordReadError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            self.line_buf.clear();
-            self.line_number += 1;
-
-            match self.reader.read_line(&mut self.line_buf) {
-                Ok(0) => return None,
-                Ok(_) => {
-                    let trimmed = self.line_buf.trim();
-                    if trimmed.is_empty() {
-                        continue;
-                    }
-                    return Some(serde_json::from_str(trimmed).map_err(|error| {
-                        RecordReadError::ParseEvent {
-                            line_number: self.line_number,
-                            error,
-                        }
-                    }));
-                }
-                Err(error) => {
-                    return Some(Err(RecordReadError::ReadRunLog {
-                        line_number: self.line_number,
-                        error,
-                    }));
-                }
-            }
-        }
+        // BufReader is still needed for read_until().
+        Ok(RunLogEventIter::new(BufReader::new(decoder)))
     }
 }
 

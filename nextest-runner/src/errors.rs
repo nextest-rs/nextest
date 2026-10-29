@@ -2770,6 +2770,19 @@ pub enum RecordReadError {
         error: std::io::Error,
     },
 
+    /// A run log line was longer than the limit.
+    #[error(
+        "line {line_number} in run log exceeds the maximum size of {}",
+        SizeDisplay(.limit.0)
+    )]
+    RunLogLineTooLong {
+        /// The line number that was too long.
+        line_number: usize,
+
+        /// The maximum line length.
+        limit: ByteSize,
+    },
+
     /// Failed to parse an event from the run log.
     #[error("error parsing event at line {line_number}")]
     ParseEvent {

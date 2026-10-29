@@ -446,7 +446,7 @@ impl StoreSizes {
 }
 
 /// Compresses data using a pre-trained zstd dictionary.
-fn compress_with_dict(data: &[u8], dict_bytes: &[u8]) -> io::Result<Vec<u8>> {
+pub(super) fn compress_with_dict(data: &[u8], dict_bytes: &[u8]) -> io::Result<Vec<u8>> {
     // Compression level 3 is a good balance of speed and ratio for
     // dictionaries.
     let dict = zstd::dict::EncoderDictionary::copy(dict_bytes, 3);
