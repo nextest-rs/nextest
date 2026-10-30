@@ -301,9 +301,11 @@ pub(super) const RUNS_JSON_FORMAT_VERSION: RunsJsonFormatVersion = RunsJsonForma
 ///   `meta/build-scope.json` and `rerun-info.json`'s `build-scope`,
 ///   replacing `runs.json.zst`'s `build-scope-args`. Adding a `BuildScope`
 ///   field or a `BuildKind` variant requires bumping the minor version here.
+///
+/// - 3.1: `run-wrapper-report` field added to `ExecuteStatus`.
 pub const STORE_FORMAT_VERSION: StoreFormatVersion = StoreFormatVersion::new(
     StoreFormatMajorVersion::new(3),
-    StoreFormatMinorVersion::new(0),
+    StoreFormatMinorVersion::new(1),
 );
 
 /// Testing-only environment variable to force a specific store format version
