@@ -382,8 +382,7 @@ impl TargetPlatform {
     /// Converts a summary to a [`TargetPlatform`].
     pub fn from_summary(summary: TargetPlatformSummary) -> Result<Self, RustBuildMetaParseError> {
         Ok(Self {
-            triple: TargetTriple::deserialize(Some(summary.platform))
-                .map_err(RustBuildMetaParseError::PlatformDeserializeError)?
+            triple: TargetTriple::deserialize(Some(summary.platform))?
                 .expect("the input is not None, so the output must not be None"),
             libdir: PlatformLibdir::from_summary(summary.libdir),
         })
@@ -489,7 +488,71 @@ impl PlatformLibdir {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cargo_config::{TargetDefinitionLocation, TargetTripleSource};
+    use indoc::indoc;
     use test_case::test_case;
+
+    #[test]
+    fn test_build_platforms_custom_cfg_roundtrip() {
+        let cfg_text = indoc! {r#"
+            panic="unwind"
+            target_arch="x86_64"
+            target_endian="little"
+            target_env="gnu"
+            target_family="unix"
+            target_os="linux"
+            target_pointer_width="64"
+            target_vendor="unknown"
+            unix
+        "#};
+        let target_platform =
+            Platform::new_custom_cfg("x86_64-custom-linux-gnu", cfg_text, TargetFeatures::Unknown)
+                .expect("cfg text is valid");
+        let target_libdir = PlatformLibdir::Available(Utf8PathBuf::from("/target/lib"));
+        let build_platforms = BuildPlatforms {
+            host: HostPlatform {
+                platform: TargetTriple::x86_64_unknown_linux_gnu().platform,
+                libdir: PlatformLibdir::Available(Utf8PathBuf::from("/host/lib")),
+            },
+            target: Some(TargetPlatform::new(
+                TargetTriple {
+                    platform: target_platform.clone(),
+                    source: TargetTripleSource::CliOption,
+                    location: TargetDefinitionLocation::RustcCfgCustom,
+                },
+                target_libdir.clone(),
+            )),
+        };
+
+        let json = serde_json::to_string(&build_platforms.to_summary())
+            .expect("serialized build platforms");
+        let summary: BuildPlatformsSummary =
+            serde_json::from_str(&json).expect("deserialized build platforms");
+        let roundtripped =
+            BuildPlatforms::from_summary(summary).expect("build platforms round-trip");
+
+        // Everything round-trips except the source, which becomes Metadata.
+        let expected = BuildPlatforms {
+            target: Some(TargetPlatform::new(
+                TargetTriple {
+                    platform: target_platform,
+                    source: TargetTripleSource::Metadata,
+                    location: TargetDefinitionLocation::RustcCfgCustom,
+                },
+                target_libdir,
+            )),
+            ..build_platforms
+        };
+        assert_eq!(roundtripped, expected, "build platforms round-trip");
+        assert_eq!(
+            roundtripped
+                .to_cargo_target_arg()
+                .expect("cargo target arg")
+                .to_string(),
+            "x86_64-custom-linux-gnu",
+            "cargo target arg is the triple"
+        );
+    }
 
     #[test]
     fn test_from_rustc_output_invalid() {
