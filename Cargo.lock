@@ -1490,9 +1490,9 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "future-queue"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47cdf4a7eef4808ffa1e5c47dbf37124dfe33a7acc34e8568c5d5359b365a8cb"
+checksum = "c09841083de051df2edffda66cf2a49bd09e78eac36fa0eedd7a45de01d2a828"
 dependencies = [
  "debug-ignore",
  "fnv",
