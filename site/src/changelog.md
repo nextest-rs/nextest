@@ -10,6 +10,16 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.151] - 2026-11-02
+
+### Fixed
+
+- With [test groups](https://nexte.st/docs/configuration/test-groups/) and [`threads-required`](https://nexte.st/docs/configuration/threads-required/), a test waiting for a slot in its group is now started as soon as enough threads are free. Previously, if the threads were freed by a test outside that group, the waiting test could be delayed. If no other test in its group was still running, the run could end with the test not being run. ([#3697])
+- Fixed a panic when [reusing builds](https://nexte.st/docs/ci-features/archiving/) (`--archive-file` or `--binaries-metadata`) for a custom target provided by `rustc --print=cfg`. ([#3698])
+
+[#3697]: https://github.com/nextest-rs/nextest/pull/3697
+[#3698]: https://github.com/nextest-rs/nextest/pull/3698
+
 ## [0.9.150] - 2026-10-26
 
 ### Security
@@ -2436,6 +2446,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.151]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.151
 [0.9.150]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.150
 [0.9.149]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.149
 [0.9.148]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.148
