@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::TargetTriple;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::Utf8TempDir;
 use color_eyre::eyre::{Context, Result};
 use target_spec::{Platform, TargetFeatures};
@@ -64,6 +64,13 @@ pub(super) fn setup_temp_dir() -> Result<Utf8TempDir> {
     .wrap_err("error writing foo/extra-custom-config.toml")?;
 
     Ok(dir)
+}
+
+/// Writes `contents` to `<dir>/<rel_path>`, creating parent directories as needed.
+pub(super) fn write_config(dir: &Utf8Path, rel_path: &str, contents: &str) {
+    let path = dir.join(rel_path);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, contents).unwrap();
 }
 
 impl TargetTriple {
