@@ -14,6 +14,7 @@ mod imp;
 pub mod structured;
 #[cfg(test)]
 pub(crate) mod test_helpers;
+mod wrapper_report;
 
 pub(crate) use displayer::{DisplayConfig, DisplayReporter, DisplayReporterBuilder, DisplayerKind};
 pub use displayer::{

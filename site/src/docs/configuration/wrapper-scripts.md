@@ -168,6 +168,57 @@ run-wrapper = 'wine-script'
 
 If `list-wrapper` is specified, `filter` cannot contain `test()` or `default()` predicates, since those predicates can only be evaluated after listing is completed.
 
+## Run-wrapper reports
+
+Run wrappers can report a label and an optional category for each test attempt. For example, a caching wrapper can label a result as `cached` or explain why it reran a test.
+
+Nextest sets `NEXTEST_RUN_WRAPPER_REPORT` to the path of a `report.json` file in a temporary directory. Each attempt gets its own directory, including retries and stress iterations. The file is initially absent, and creating a report is optional.
+
+Write the complete report before the wrapper exits. Nextest reads it after the attempt finishes, then removes the temporary directory. The report must be a single JSON object in a regular file, at most 4096 bytes long:
+
+```json
+{"label":"cached","category":"cached"}
+```
+
+| Field | Required | Meaning |
+| ----- | -------- | ------- |
+| `label` | Yes | Text displayed after the counter on the attempt's status line. Maximum 256 characters. |
+| `category` | No | A name used to count results in the summary. Maximum 64 characters. |
+
+Both fields must be non-empty strings of printable ASCII characters, starting and ending with a letter or digit. Spaces and punctuation are allowed between those endpoints.
+
+An unreadable, oversized, or invalid report causes the attempt to fail. If the test already failed, nextest preserves that failure and also displays the report error.
+
+For example, this script runs the supplied command, writes a report during the run phase, and preserves the command's exit status:
+
+```sh
+#!/bin/sh
+
+"$@"
+status=$?
+
+if [ "${NEXTEST_TEST_PHASE:-}" = "run" ] &&
+    [ -n "${NEXTEST_RUN_WRAPPER_REPORT:-}" ]; then
+    printf '%s\n' \
+        '{"label":"executed through wrapper","category":"wrapped"}' \
+        > "$NEXTEST_RUN_WRAPPER_REPORT"
+fi
+
+exit "$status"
+```
+
+The phase check lets the same script also serve as a `list-wrapper` without writing a run report while listing tests.
+
+Labels are shown for individual attempts, including failed attempts that will be retried. Categories count each test once using only its final attempt, within the corresponding result (passed, failed, execution failed, or timed out). For example:
+
+```text
+Summary [...] 3 tests run: 3 passed (wrapper: 2 cached, 1 rerun), 0 skipped
+```
+
+For each result, nextest keeps the first five category names in lexicographic order, excluding the special name `other`. Additional categories, and reports with category `other`, contribute to the combined `other` count. Stress runs show categories per iteration and an additional summary across all iterations.
+
+Reports are included in recorded runs, so `cargo nextest replay` can show the same labels and category summaries.
+
 ## Wrapper scripts vs target runners
 
 Both wrapper scripts and [target runners](../features/target-runners.md) can be used to wrap test executables. The key differences between the two are related to configurability and scope.

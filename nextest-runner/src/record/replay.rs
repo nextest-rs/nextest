@@ -482,6 +482,7 @@ fn convert_execute_status(
         retry_data: status.retry_data,
         output,
         result: status.result.clone(),
+        run_wrapper_report: status.run_wrapper_report.clone(),
         start_time: status.start_time,
         time_taken: status.time_taken,
         is_slow: status.is_slow,

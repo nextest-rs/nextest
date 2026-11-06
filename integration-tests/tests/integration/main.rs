@@ -47,6 +47,7 @@ mod sigttou;
 mod stuck_signal;
 mod temp_project;
 mod user_config;
+mod wrapper_reports;
 
 use crate::temp_project::{UdsStatus, create_uds};
 use camino_tempfile::Utf8TempDir;
