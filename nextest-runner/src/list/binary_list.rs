@@ -718,8 +718,10 @@ mod tests {
     use crate::{
         cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
         list::{
-            SerializableFormat,
-            test_helpers::{PACKAGE_GRAPH_FIXTURE, PACKAGE_METADATA_ID, package_metadata},
+            BuildScriptInfo, SerializableFormat,
+            test_helpers::{
+                PACKAGE_GRAPH_FIXTURE, PACKAGE_METADATA_ID, WORKSPACE_PACKAGE_ID, package_metadata,
+            },
         },
         platform::{HostPlatform, PlatformLibdir, TargetPlatform},
     };
@@ -1326,6 +1328,81 @@ mod tests {
             "the two builds of one dylib target are told apart by the triple component of their \
              uplifted paths; the rlibs live in the fixture's build directory, which is not under \
              the target directory, so they are not recorded at all"
+        );
+    }
+
+    #[test]
+    fn test_build_scripts_recorded_only_for_workspace_packages() {
+        let build_dir = PACKAGE_GRAPH_FIXTURE
+            .workspace()
+            .build_directory()
+            .expect("fixture sets build_directory");
+        let std_id = "path+file:///fake/sysroot/lib/rustlib/src/rust/library/std#0.0.0";
+
+        let build_platforms =
+            BuildPlatforms::new_with_no_target().expect("host platform is detected");
+        let mut state = BinaryListBuildState::new(&PACKAGE_GRAPH_FIXTURE, build_platforms);
+        for (package_id, name) in [
+            (WORKSPACE_PACKAGE_ID, "workspace"),
+            (PACKAGE_METADATA_ID, "non-workspace"),
+            (std_id, "not-in-graph"),
+        ] {
+            let linked_path = build_dir.join(format!("debug/build/{name}-link"));
+            let message = json!({
+                "reason": "build-script-executed",
+                "package_id": package_id,
+                "linked_libs": [],
+                "linked_paths": [format!("native={linked_path}")],
+                "cfgs": [],
+                "env": [["BUILD_SCRIPT_ENV", name]],
+                "out_dir": build_dir.join(format!("debug/build/{name}/out")),
+            });
+            let message = serde_json::from_value::<Message>(message)
+                .expect("message is a valid build-script-executed message");
+            state
+                .process_message(message)
+                .expect("processing build script message succeeds");
+        }
+
+        let expected_out_dirs = BTreeMap::from([(
+            WORKSPACE_PACKAGE_ID.to_owned(),
+            Utf8PathBuf::from("debug/build/workspace/out"),
+        )]);
+        let expected_info = BTreeMap::from([(
+            WORKSPACE_PACKAGE_ID.to_owned(),
+            BuildScriptInfo {
+                envs: BTreeMap::from([("BUILD_SCRIPT_ENV".to_owned(), "workspace".to_owned())]),
+            },
+        )]);
+        let expected_linked_paths = BTreeMap::from([
+            (
+                Utf8PathBuf::from("debug/build/workspace-link"),
+                btreeset! { WORKSPACE_PACKAGE_ID.to_owned() },
+            ),
+            (
+                Utf8PathBuf::from("debug/build/non-workspace-link"),
+                btreeset! { PACKAGE_METADATA_ID.to_owned() },
+            ),
+            (
+                Utf8PathBuf::from("debug/build/not-in-graph-link"),
+                btreeset! { std_id.to_owned() },
+            ),
+        ]);
+
+        let meta = &state.rust_build_meta;
+        assert_eq!(
+            meta.build_script_out_dirs, expected_out_dirs,
+            "only the workspace package has its out_dir recorded"
+        );
+        assert_eq!(
+            meta.build_script_info,
+            Some(expected_info),
+            "only the workspace package has its env recorded"
+        );
+        assert_eq!(
+            meta.linked_paths, expected_linked_paths,
+            "linked paths are recorded for every package, including ones absent from \
+             cargo metadata (e.g. standard library crates built with -Zbuild-std)"
         );
     }
 
