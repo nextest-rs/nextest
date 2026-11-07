@@ -28,6 +28,9 @@ pub(super) static PACKAGE_GRAPH_FIXTURE: LazyLock<PackageGraph> = LazyLock::new(
 pub(super) static PACKAGE_METADATA_ID: &str =
     "metadata-helper 0.1.0 (path+file:///Users/fakeuser/local/testcrates/metadata/metadata-helper)";
 
+pub(super) static WORKSPACE_PACKAGE_ID: &str =
+    "metadata-base 0.1.0 (path+file:///Users/fakeuser/local/testcrates/metadata/metadata-base)";
+
 pub(super) fn package_metadata() -> PackageMetadata<'static> {
     PACKAGE_GRAPH_FIXTURE
         .metadata(&PackageId::new(PACKAGE_METADATA_ID))
