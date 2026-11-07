@@ -502,12 +502,15 @@ impl<'g> BinaryListBuildState<'g> {
         let package_id = guppy::PackageId::new(build_script.package_id.repr);
         let in_workspace = self.graph.metadata(&package_id).map_or_else(
             |_| {
-                // Warn about processing a package that isn't in the package graph.
-                warn!(
+                debug!(
                     target: "nextest-runner::list",
-                    "warning: saw package ID `{}` which wasn't produced by cargo metadata",
+                    "package ID `{}` isn't in cargo metadata, so its build \
+                     script's out_dir and env won't be recorded (this is \
+                     expected for the standard library and its dependencies \
+                     under -Zbuild-std)",
                     package_id
                 );
+                // Absent packages can't be workspace members.
                 false
             },
             |p| p.in_workspace(),
