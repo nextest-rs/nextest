@@ -21,8 +21,10 @@ use crate::{
     errors::RecordReadError,
     output_spec::RecordingSpec,
     record::format::{RERUN_INFO_JSON_PATH, RecordedBuildScope, RerunInfo},
+    redact::SizeDisplay,
     user_config::elements::MAX_MAX_OUTPUT_SIZE,
 };
+use bytesize::ByteSize;
 use camino::{Utf8Path, Utf8PathBuf};
 use debug_ignore::DebugIgnore;
 use eazip::Archive;
@@ -266,7 +268,7 @@ impl RecordReader {
     /// Returns an iterator over events in the run log.
     ///
     /// Events are read one at a time from the zstd-compressed JSON Lines file.
-    pub fn events(&self) -> Result<RecordEventIter, RecordReadError> {
+    pub fn events(&self) -> Result<RunLogEventIter<BufReader<LogDecoder>>, RecordReadError> {
         let log_path = self.run_dir.join(RUN_LOG_FILE_NAME);
         let file = File::open(&log_path).map_err(|error| RecordReadError::OpenRunLog {
             path: log_path.clone(),
@@ -277,11 +279,7 @@ impl RecordReader {
                 path: log_path,
                 error,
             })?;
-        Ok(RecordEventIter {
-            reader: DebugIgnore(BufReader::new(decoder)),
-            line_buf: String::new(),
-            line_number: 0,
-        })
+        Ok(RunLogEventIter::new(BufReader::new(decoder)))
     }
 
     /// Reads output for a specific file from the archive.
@@ -419,39 +417,82 @@ pub(super) fn decompress_with_dict(
     let dict = zstd::dict::DecoderDictionary::copy(dict_bytes);
     let decoder = zstd::stream::Decoder::with_prepared_dictionary(compressed, &dict)?;
     let mut decompressed = Vec::new();
-    decoder.take(limit).read_to_end(&mut decompressed)?;
+    decoder
+        .take(limit.saturating_add(1))
+        .read_to_end(&mut decompressed)?;
+    if decompressed.len() as u64 > limit {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "decompressed size exceeds the limit of {}",
+                SizeDisplay(limit)
+            ),
+        ));
+    }
     Ok(decompressed)
 }
 
 /// Zstd decoder reading from a file.
 type LogDecoder = zstd::stream::Decoder<'static, BufReader<File>>;
 
-/// Iterator over recorded events.
+/// The maximum length of a run log line.
 ///
-/// Reads events one at a time from the zstd-compressed JSON Lines run log.
+/// This is at least as large as any lin nextest writes today. In particular,
+/// event lines embed failure text, so this matches the archive size limit.
+const MAX_RUN_LOG_LINE_SIZE: ByteSize = MAX_MAX_OUTPUT_SIZE;
+
+/// An iterator over events in a zstd-compressed JSON Lines run log.
+///
+/// This is shared by the store and portable readers.
 #[derive(Debug)]
-pub struct RecordEventIter {
-    reader: DebugIgnore<BufReader<LogDecoder>>,
-    line_buf: String,
+pub struct RunLogEventIter<R> {
+    reader: DebugIgnore<R>,
+    line_buf: Vec<u8>,
     line_number: usize,
+    limit: ByteSize,
 }
 
-impl Iterator for RecordEventIter {
+impl<R: BufRead> RunLogEventIter<R> {
+    pub(super) fn new(reader: R) -> Self {
+        Self {
+            reader: DebugIgnore(reader),
+            line_buf: Vec::new(),
+            line_number: 0,
+            limit: MAX_RUN_LOG_LINE_SIZE,
+        }
+    }
+}
+
+impl<R: BufRead> Iterator for RunLogEventIter<R> {
     type Item = Result<TestEventSummary<RecordingSpec>, RecordReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let limit = self.limit.as_u64();
         loop {
             self.line_buf.clear();
             self.line_number += 1;
 
-            match self.reader.read_line(&mut self.line_buf) {
+            // Reading at most limit + 1 bytes bounds memory per line.
+            match self
+                .reader
+                .by_ref()
+                .take(limit.saturating_add(1))
+                .read_until(b'\n', &mut self.line_buf)
+            {
                 Ok(0) => return None,
                 Ok(_) => {
-                    let trimmed = self.line_buf.trim();
-                    if trimmed.is_empty() {
+                    let line = self.line_buf.strip_suffix(b"\n").unwrap_or(&self.line_buf);
+                    if line.len() as u64 > limit {
+                        return Some(Err(RecordReadError::RunLogLineTooLong {
+                            line_number: self.line_number,
+                            limit: self.limit,
+                        }));
+                    }
+                    let line = line.trim_ascii();
+                    if line.is_empty() {
                         continue;
                     }
-                    return Some(serde_json::from_str(trimmed).map_err(|error| {
+                    return Some(serde_json::from_slice(line).map_err(|error| {
                         RecordReadError::ParseEvent {
                             line_number: self.line_number,
                             error,
@@ -472,6 +513,115 @@ impl Iterator for RecordEventIter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::record::recorder::compress_with_dict;
+
+    #[test]
+    fn test_run_log_line_limit() {
+        #[derive(Debug, PartialEq)]
+        enum LineResult {
+            End,
+            TooLong { line_number: usize },
+            ParseError { line_number: usize },
+        }
+
+        let limit = ByteSize::b(8);
+        let cases: [(&str, &[u8], LineResult); 8] = [
+            ("empty input", b"", LineResult::End),
+            ("only blank lines", b"\n\n  \n", LineResult::End),
+            (
+                "line at limit",
+                b"12345678\n",
+                LineResult::ParseError { line_number: 1 },
+            ),
+            (
+                "line at limit without newline",
+                b"12345678",
+                LineResult::ParseError { line_number: 1 },
+            ),
+            (
+                "line over limit",
+                b"123456789\n",
+                LineResult::TooLong { line_number: 1 },
+            ),
+            (
+                "line over limit without newline",
+                b"123456789",
+                LineResult::TooLong { line_number: 1 },
+            ),
+            (
+                "line over limit after a blank line",
+                b"\n123456789\n",
+                LineResult::TooLong { line_number: 2 },
+            ),
+            (
+                "multibyte character crossing the limit",
+                "1234567\u{e9}\n".as_bytes(),
+                LineResult::TooLong { line_number: 1 },
+            ),
+        ];
+
+        for (description, input, expected) in cases {
+            let mut iter = RunLogEventIter {
+                reader: DebugIgnore(io::Cursor::new(input)),
+                line_buf: Vec::new(),
+                line_number: 0,
+                limit,
+            };
+            let actual = match iter.next() {
+                None => LineResult::End,
+                Some(Err(RecordReadError::RunLogLineTooLong {
+                    line_number,
+                    limit: error_limit,
+                })) => {
+                    assert_eq!(error_limit, limit, "{description}: error limit");
+                    LineResult::TooLong { line_number }
+                }
+                Some(Err(RecordReadError::ParseEvent { line_number, .. })) => {
+                    LineResult::ParseError { line_number }
+                }
+                Some(other) => panic!("{description}: unexpected result {other:?}"),
+            };
+            assert_eq!(actual, expected, "{description}");
+            assert!(
+                iter.line_buf.len() as u64 <= limit.as_u64() + 1,
+                "{description}: buffered {} bytes, more than limit + 1",
+                iter.line_buf.len()
+            );
+        }
+    }
+
+    #[test]
+    fn test_decompress_with_dict_limit() {
+        let limit = 64;
+        let dict = OutputDict::Stdout
+            .dict_bytes()
+            .expect("stdout dictionary exists");
+        for (len, within_limit) in [
+            (0, true),
+            (63, true),
+            (64, true),
+            (65, false),
+            (4096, false),
+        ] {
+            let data = vec![b'x'; len];
+            let compressed = compress_with_dict(&data, dict).expect("compressed data");
+            let result = decompress_with_dict(&compressed, dict, limit);
+            if within_limit {
+                assert_eq!(
+                    result.expect("decompression within the limit succeeds"),
+                    data,
+                    "len {len}: round-trips"
+                );
+            } else {
+                let error = result.expect_err("decompression over the limit fails");
+                assert_eq!(
+                    error.kind(),
+                    io::ErrorKind::InvalidData,
+                    "len {len}: error kind"
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_record_reader_nonexistent_dir() {

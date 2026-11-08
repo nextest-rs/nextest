@@ -59,10 +59,10 @@ pub use format::{
     has_zip_extension,
 };
 pub use portable::{
-    ExtractOuterFileResult, PortableRecording, PortableRecordingEventIter, PortableRecordingResult,
-    PortableRecordingRunLog, PortableRecordingWriter, PortableStoreReader,
+    ExtractOuterFileResult, PortableRecording, PortableRecordingResult, PortableRecordingRunLog,
+    PortableRecordingWriter, PortableStoreReader,
 };
-pub use reader::{RecordEventIter, RecordReader, StoreReader};
+pub use reader::{RecordReader, RunLogEventIter, StoreReader};
 pub use recorder::{RunRecorder, StoreSizes};
 pub use replay::{
     LoadOutput, ReplayContext, ReplayConversionError, ReplayHeader, ReplayReporter,
