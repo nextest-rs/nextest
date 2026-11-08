@@ -2103,6 +2103,21 @@ pub enum TargetTripleError {
         error: std::io::Error,
     },
 
+    /// A custom triple from metadata can't be used as a file name.
+    #[error(
+        "for custom platform obtained from {triple_source}, \
+         triple {triple:?} cannot be used as a file name \
+         (custom platform triples must be a single path component other than `.` or `..`); \
+         the metadata may be malformed and should be regenerated"
+    )]
+    CustomPlatformInvalidTriple {
+        /// The location where the triple was obtained from.
+        triple_source: TargetTripleSource,
+
+        /// The triple that was rejected.
+        triple: String,
+    },
+
     /// Failed to write a custom platform to disk.
     #[error(
         "for custom platform obtained from {source}, \
@@ -2151,6 +2166,7 @@ impl TargetTripleError {
             // The remaining types are covered via the error source path.
             TargetTripleError::InvalidEnvironmentVar
             | TargetTripleError::TargetPathReadError { .. }
+            | TargetTripleError::CustomPlatformInvalidTriple { .. }
             | TargetTripleError::CustomPlatformTempDirError { .. }
             | TargetTripleError::CustomPlatformWriteError { .. }
             | TargetTripleError::CustomPlatformCloseError { .. } => None,
