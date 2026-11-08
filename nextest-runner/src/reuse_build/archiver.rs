@@ -346,7 +346,10 @@ impl<'a, W: Write> Archiver<'a, W> {
                         "libzstd compiled without multithreading, defaulting to single-thread"
                     );
                 }
-                tar::Builder::new(encoder)
+                let mut builder = tar::Builder::new(encoder);
+                // This is the default value, but let's make it explicit.
+                builder.follow_symlinks(true);
+                builder
             }
         };
 
