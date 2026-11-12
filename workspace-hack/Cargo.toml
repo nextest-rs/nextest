@@ -11,6 +11,11 @@ exclude.workspace = true
 # You can choose to publish this crate: see https://docs.rs/cargo-hakari/latest/cargo_hakari/publishing.
 publish = false
 
+# hakari's dependencies exist only for feature unification, so they are unused
+# by design.
+[lints.cargo]
+unused_dependencies = "allow"
+
 # The parts of the file between the BEGIN HAKARI SECTION and END HAKARI SECTION comments
 # are managed by hakari.
 

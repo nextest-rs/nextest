@@ -46,4 +46,7 @@ mod version;
 pub(crate) use dispatch::ExtractOutputFormat;
 pub use dispatch::main_impl;
 pub(crate) use errors::*;
+// Silence the unused dependencies lint -- locked-tripwire is a compile-time
+// check against installs without --locked.
+use locked_tripwire as _;
 pub(crate) use output::OutputWriter;

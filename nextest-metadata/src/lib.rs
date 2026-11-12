@@ -45,4 +45,7 @@ mod test_list;
 
 pub use errors::*;
 pub use exit_codes::*;
+// Silence the unused dependencies lint -- workspace-hack is only for feature
+// unification.
+use nextest_workspace_hack as _;
 pub use test_list::*;
