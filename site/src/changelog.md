@@ -10,9 +10,7 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.152-b.1] - 2026-11-13
-
-This is a test release for the new install scripts.
+## [0.9.152] - 2026-11-13
 
 ### Added
 
@@ -23,7 +21,7 @@ This is a test release for the new install scripts.
 - Nextest now rejects malformed or untrusted inputs in a few more places:
   - When [reusing builds](https://nexte.st/docs/ci-features/archiving/), archive extraction now fails if the archive contains entries other than regular files and directories, such as symlinks, hard links, devices, or FIFOs. Archives created by `cargo nextest archive` never contain such entries. ([#3710])
 
-    This is not classified as a security issue becaus build archives are not (and cannot be, because they contain arbitrary executable code) a trust boundary.
+    This is not classified as a security issue because build archives are not (and cannot be, because they contain arbitrary executable code) a trust boundary.
 
   - When reusing builds for a custom target, nextest now rejects target triples that contain path separators or are absolute paths. ([#3711])
 
@@ -2482,7 +2480,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
-[0.9.152-b.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.152-b.1
+[0.9.152]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.152
 [0.9.151]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.151
 [0.9.150]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.150
 [0.9.149]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.149
