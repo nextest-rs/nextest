@@ -80,6 +80,13 @@ extra_javascript:
 hooks:
     - overrides/hooks/shortcodes.py
 
+validation:
+    links:
+        # This ext.shortcodes emit page-independent links like
+        # `/changelog.md#0.9.66`, which MkDocs then resolves and validates like
+        # relative links.
+        absolute_links: relative_to_docs
+
 nav:
     - "Home": index.md
     - "About":
@@ -212,3 +219,6 @@ markdown_extensions:
           custom_checkbox: true
     - pymdownx.tilde
     - mdx_truly_sane_lists
+
+    # Local extensions
+    - ext.shortcodes
