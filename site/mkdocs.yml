@@ -24,6 +24,7 @@ theme:
         - navigation.instant.progress
         # Makes "summarized/full" and "colorized/plaintext" tabs linked
         - content.tabs.link
+        - content.code.copy
         - content.action.edit
         - content.action.view
         - search.highlight
@@ -72,6 +73,9 @@ extra:
 extra_css:
     - fonts/inter.css
     - theme/css/extra.css
+
+extra_javascript:
+    - theme/js/hero-install.js
 
 hooks:
     - overrides/hooks/shortcodes.py

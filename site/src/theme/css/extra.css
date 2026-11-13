@@ -324,6 +324,100 @@ body {
     border-color: hsla(0, 0%, 100%, 0.85);
 }
 
+.mdx-hero__install.tabbed-set {
+    max-width: 32rem;
+    margin: 1.5rem auto 0;
+    text-align: left;
+}
+
+.mdx-hero .md-typeset .mdx-hero__install .tabbed-labels > label {
+    color: hsla(0, 0%, 100%, 0.7);
+    font-size: 0.75rem;
+}
+
+.mdx-hero .md-typeset .mdx-hero__install .tabbed-labels > label > svg {
+    width: 1.1em;
+    height: 1.1em;
+    fill: currentColor;
+    vertical-align: -0.2em;
+}
+
+.mdx-hero .md-typeset .mdx-hero__install .tabbed-labels > label:hover,
+.mdx-hero .md-typeset .mdx-hero__install > input:checked:nth-child(1) ~ .tabbed-labels > :nth-child(1),
+.mdx-hero .md-typeset .mdx-hero__install > input:checked:nth-child(2) ~ .tabbed-labels > :nth-child(2) {
+    color: var(--md-primary-bg-color);
+}
+
+.mdx-hero .md-typeset .mdx-hero__install .tabbed-labels::before {
+    background: var(--md-primary-bg-color);
+}
+
+.mdx-hero__command {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: hsla(0, 0%, 0%, 0.25);
+    border-radius: 0.2rem;
+    padding: 0.6rem 0.5rem 0.6rem 0.9rem;
+}
+
+.mdx-hero .md-typeset .mdx-hero__command code {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+    background: none;
+    padding: 0;
+    font-size: 0.8rem;
+    color: var(--md-primary-bg-color);
+}
+
+.mdx-hero__copy {
+    flex: none;
+    display: flex;
+    padding: 0.2rem;
+    border-radius: 0.1rem;
+    color: hsla(0, 0%, 100%, 0.7);
+    cursor: pointer;
+}
+
+.mdx-hero__copy:hover,
+.mdx-hero__copy:focus-visible {
+    color: var(--md-primary-bg-color);
+    background: hsla(0, 0%, 100%, 0.1);
+}
+
+.mdx-hero__copy svg {
+    width: 1rem;
+    height: 1rem;
+    fill: currentColor;
+}
+
+.mdx-hero .md-typeset p.mdx-hero__other {
+    font-size: 0.8rem;
+    margin: 0.6rem 0 0;
+}
+
+.mdx-hero .md-typeset p.mdx-hero__other a {
+    color: var(--md-primary-bg-color);
+    text-decoration: underline;
+}
+
+@media only screen and (max-width: 480px) {
+    .mdx-hero .md-typeset .mdx-hero__install .tabbed-labels > label {
+        font-size: 0.65rem;
+        padding-left: 0.5em;
+        padding-right: 0.5em;
+    }
+
+    .mdx-hero .md-typeset .mdx-hero__command code {
+        white-space: normal;
+        overflow-wrap: normal;
+        word-break: normal;
+        font-size: 0.7rem;
+    }
+}
+
 /* --- Cover image (feature card) --- */
 
 #nextest-cover {

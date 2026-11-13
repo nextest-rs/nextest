@@ -7,9 +7,68 @@ description: Installing pre-built nextest binaries with cargo-binstall or platfo
 
 The quickest way to get going with nextest is to download a pre-built binary for your platform.
 
-## Downloading and installing from your terminal
+## Installing via the install scripts
 
-The instructions below are suitable for both end users and CI. These links will stay stable.
+The easiest way to install nextest is to use the install script. We provide `sh` and PowerShell install scripts:
+
+=== ":material-console: Linux, macOS, WSL"
+
+    Run the following command in your shell. This also works on FreeBSD and illumos, and in Cygwin and Git Bash (MSYS) on Windows.
+
+    ```
+    curl -LsSf https://get.nexte.st/install.sh | sh -s --
+    ```
+
+    This will install nextest to `$CARGO_HOME/bin`, or `~/.cargo/bin` if `CARGO_HOME` isn't set.
+
+    To pass in options, add them after `--`. For example, to install the latest release in the 0.9 series:
+
+    ```
+    curl -LsSf https://get.nexte.st/install.sh | sh -s -- --version 0.9
+    ```
+
+=== ":material-microsoft-windows: Windows (PowerShell)"
+
+    Run the following command in your shell (both Windows PowerShell 5.1 and PowerShell 7 are supported):
+
+    ```powershell
+    irm https://get.nexte.st/install.ps1 | iex
+    ```
+
+    This will install nextest to `$env:CARGO_HOME\bin`, or `~\.cargo\bin` if `CARGO_HOME` isn't set.
+
+    To pass in options, run the script as a script block. For example, to install the latest release in the 0.9 series:
+
+    ```powershell
+    & ([scriptblock]::Create((irm https://get.nexte.st/install.ps1))) -Version 0.9
+    ```
+
+### Install script options
+
+| Unix shell | PowerShell | Environment variable | Description |
+| --- | --- | --- | --- |
+| `--version <VERSION>` | `-Version <VERSION>` | `NEXTEST_INSTALL_VERSION` | The version to install: `latest` (the default), a version series like `0.9`, or an exact version like `0.9.150`. |
+| `--install-dir <DIR>` | `-InstallDir <DIR>` | `NEXTEST_INSTALL_DIR` | The directory to install nextest into. |
+| `--target <TRIPLE>` | `-Target <TRIPLE>` | `NEXTEST_INSTALL_TARGET` | The [target triple](https://doc.rust-lang.org/rustc/platform-support.html) to install, if you'd like a different build from the one that matches your system. |
+
+Options take precedence over environment variables. With `install.sh`, `--help` prints a summary of the options.
+
+`latest` and version series like `0.9` only select stable releases. To stay on the 0.9 series and avoid breaking changes, use `0.9` (see the [stability policy](../stability/index.md) for more). To install a pre-release, pass its exact version, for example `0.9.152-b.1`.
+
+??? info "How the install scripts work"
+
+    - **Choosing a build.** Without `--target`, the build that matches your platform is installed. On Linux, if glibc is missing, or older than the standard build requires, the statically linked [musl](https://musl.libc.org/) build is installed instead. On Windows, the build for your machine's native architecture is installed.
+    - **Verification.** The download's SHA-256 checksum is verified before anything is installed.
+    - **Existing installs.** An existing `cargo-nextest` binary in the install directory is replaced.
+    - **Your `PATH`.** The install scripts don't modify your `PATH`. If the install directory isn't on your `PATH`, you'll see a message saying so.
+    
+    The Unix install script requires `curl`, `tar`, and `gunzip`, along with one of `sha256sum`, `shasum`, `sha256`, `digest`, or `openssl` for checksum verification.
+
+To update nextest after installing it, run `cargo nextest self update`. For more, see [_Updating nextest_](updating.md).
+
+## Downloading and installing from the release URLs
+
+If you would like to avoid using the install script, nextest also provides stable [release URLs](release-urls.md) for its binaries. The instructions below are suitable for both end users and CI.
 
 === ":material-language-rust: With cargo-binstall"
 

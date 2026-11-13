@@ -10,13 +10,46 @@
           Up to 3&times; faster than <code>cargo test</code>, with a modern
           interface, per-test isolation, and first-class CI support.
         </p>
+        {#- This is the same markup as pymdownx.tabbed so Material styles it and content.tabs.link restores and syncs it. The label text must match pre-built-binaries.md exactly. -#}
+        <div class="mdx-hero__install tabbed-set tabbed-alternate" data-tabs="hero:2">
+          <input checked="checked" id="hero-install-unix" name="__tabbed_hero" type="radio" />
+          <input id="hero-install-windows" name="__tabbed_hero" type="radio" data-hero-os="windows" />
+          <div class="tabbed-labels">
+            <label for="hero-install-unix">{% include ".icons/material/console.svg" %} Linux, macOS, WSL</label>
+            <label for="hero-install-windows">{% include ".icons/material/microsoft-windows.svg" %} Windows (PowerShell)</label>
+          </div>
+          <div class="tabbed-content">
+            <div class="tabbed-block">
+              <div class="mdx-hero__command">
+                <code>curl -LsSf https://get.nexte.st/install.sh | sh</code>
+                <button class="mdx-hero__copy md-icon" type="button" title="Copy to clipboard"
+                        data-clipboard-text="curl -LsSf https://get.nexte.st/install.sh | sh">
+                  {% include ".icons/material/content-copy.svg" %}
+                </button>
+              </div>
+            </div>
+            <div class="tabbed-block">
+              <div class="mdx-hero__command">
+                <code>irm https://get.nexte.st/install.ps1 | iex</code>
+                <button class="mdx-hero__copy md-icon" type="button" title="Copy to clipboard"
+                        data-clipboard-text="irm https://get.nexte.st/install.ps1 | iex">
+                  {% include ".icons/material/content-copy.svg" %}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="mdx-hero__other">
+          Or install with
+          <a href="{{ 'docs/installation/pre-built-binaries/' | url }}">cargo-binstall, Homebrew, and more</a>.
+        </p>
         <div class="mdx-hero__actions">
-          <a href="{{ 'docs/installation/pre-built-binaries/' | url }}"
+          <a href="{{ 'docs/running/' | url }}"
              class="md-button md-button--primary">
             Get started
           </a>
-          <a href="{{ 'docs/running/' | url }}" class="md-button">
-            Learn more
+          <a href="{{ 'docs/design/how-it-works/' | url }}" class="md-button">
+            How it works
           </a>
         </div>
       </div>
