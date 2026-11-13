@@ -3203,6 +3203,7 @@ pub enum TestListFromSummaryError {
 mod self_update_errors {
     use super::*;
     use crate::update::PrereleaseKind;
+    use byte_wrapper::HexArray;
     use mukti_metadata::ReleaseStatus;
     use semver::{Version, VersionReq};
 
@@ -3364,10 +3365,10 @@ mod self_update_errors {
         #[error("SHA-256 checksum mismatch: expected: {expected}, actual: {actual}")]
         ChecksumMismatch {
             /// The expected checksum.
-            expected: String,
+            expected: mukti_metadata::Digest,
 
             /// The actual checksum.
-            actual: String,
+            actual: HexArray<32>,
         },
 
         /// An error occurred while renaming a file.

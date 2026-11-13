@@ -105,7 +105,7 @@ zstd.workspace = true
 ###
 ### Update-related features, optionally enabled
 ###
-hex = { workspace = true, optional = true }
+byte-wrapper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 mukti-metadata = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
@@ -194,7 +194,7 @@ tracing-subscriber.workspace = true
 [features]
 config-schema = ["dep:schemars"]
 self-update = [
-    "dep:hex",
+    "dep:byte-wrapper",
     "dep:self_update",
     "dep:http",
     "dep:mukti-metadata",
