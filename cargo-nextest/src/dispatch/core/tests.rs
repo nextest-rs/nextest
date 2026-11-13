@@ -143,6 +143,14 @@ fn test_argument_parsing() {
         "cargo nextest self update --beta --check",
         "cargo nextest self update --rc --force",
         // ---
+        // Self setup
+        // ---
+        "cargo nextest self setup",
+        "cargo nextest self setup --source user",
+        "cargo nextest self setup --source self-update",
+        "cargo nextest self setup --source package-manager",
+        "cargo nextest self setup --source install-script",
+        // ---
         // Self schema
         // ---
         "cargo nextest self schema repo-config",
@@ -402,6 +410,10 @@ fn test_argument_parsing() {
             "cargo nextest self update --rc --version 0.9.100",
             ArgumentConflict,
         ),
+        // ---
+        // Self setup sources
+        // ---
+        ("cargo nextest self setup --source unknown", InvalidValue),
         // ---
         // Store command conflicts
         // ---

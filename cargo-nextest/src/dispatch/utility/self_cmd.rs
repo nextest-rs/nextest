@@ -115,6 +115,7 @@ pub(crate) enum SetupSource {
     User,
     SelfUpdate,
     PackageManager,
+    InstallScript,
 }
 
 /// Selects which embedded JSON Schema to print.
