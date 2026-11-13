@@ -291,7 +291,7 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cargo_config::test_helpers::setup_temp_dir;
+    use crate::cargo_config::test_helpers::{setup_temp_dir, write_config};
     use std::ffi::OsStr;
 
     #[test]
@@ -328,6 +328,110 @@ mod tests {
             .get(OsStr::new("SOME_VAR"))
             .expect("SOME_VAR is specified in test config");
         assert_eq!(var.value, "cli-config");
+    }
+
+    #[test]
+    fn test_env_var_from_include() {
+        // An `[env]` value defined in an included config file should be picked up, and the including
+        // file's own values should take precedence over it.
+        let temp = camino_tempfile::tempdir().unwrap();
+        let dir = Utf8PathBuf::try_from(temp.path().canonicalize().unwrap()).unwrap();
+
+        write_config(
+            &dir,
+            ".cargo/config.toml",
+            r#"
+            include = ["included.toml"]
+
+            [env]
+            OWN_VAR = "from-config"
+            SHARED_VAR = "from-config"
+            "#,
+        );
+        write_config(
+            &dir,
+            ".cargo/included.toml",
+            r#"
+            [env]
+            INCLUDED_VAR = "from-include"
+            SHARED_VAR = "from-include"
+            "#,
+        );
+
+        let configs =
+            CargoConfigs::new_with_isolation(&[] as &[&str], &dir, &dir, Vec::new()).unwrap();
+        let env = EnvironmentMap::new(&configs);
+
+        assert_eq!(
+            env.map
+                .get(OsStr::new("INCLUDED_VAR"))
+                .expect("INCLUDED_VAR is set from the included config")
+                .value,
+            "from-include",
+        );
+        assert_eq!(
+            env.map
+                .get(OsStr::new("OWN_VAR"))
+                .expect("OWN_VAR is set from the main config")
+                .value,
+            "from-config",
+        );
+        // The including file's own value wins over the included file's value.
+        assert_eq!(
+            env.map
+                .get(OsStr::new("SHARED_VAR"))
+                .expect("SHARED_VAR is set")
+                .value,
+            "from-config",
+        );
+    }
+
+    #[test]
+    fn test_env_var_include_precedence() {
+        // With two includes defining the same variable, the later include wins; and the top-level
+        // config still wins over both includes.
+        let temp = camino_tempfile::tempdir().unwrap();
+        let dir = Utf8PathBuf::try_from(temp.path().canonicalize().unwrap()).unwrap();
+
+        write_config(
+            &dir,
+            ".cargo/config.toml",
+            r#"
+            include = ["first.toml", "second.toml"]
+
+            [env]
+            TOP_VAR = "from-config"
+            "#,
+        );
+        write_config(
+            &dir,
+            ".cargo/first.toml",
+            r#"
+            [env]
+            TOP_VAR = "from-first"
+            INCLUDE_VAR = "from-first"
+            "#,
+        );
+        write_config(
+            &dir,
+            ".cargo/second.toml",
+            r#"
+            [env]
+            TOP_VAR = "from-second"
+            INCLUDE_VAR = "from-second"
+            "#,
+        );
+
+        let configs =
+            CargoConfigs::new_with_isolation(&[] as &[&str], &dir, &dir, Vec::new()).unwrap();
+        let env = EnvironmentMap::new(&configs);
+
+        let value = |name| env.map.get(OsStr::new(name)).map(|var| var.value.as_str());
+
+        // The top-level config wins over both includes.
+        assert_eq!(value("TOP_VAR"), Some("from-config"));
+        // Between the two includes, the one listed later wins.
+        assert_eq!(value("INCLUDE_VAR"), Some("from-second"));
     }
 
     #[test]
