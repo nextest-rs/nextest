@@ -371,6 +371,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46c5e41b57b8bba42a04676d81cb89e9ee8e859a1a66f80a5a72e1cb76b34d43"
 
 [[package]]
+name = "byte-wrapper"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0eb9a5ab28ca4c6542eb083379b3bc482cbb3c1a863ce46c6b2b108e118cb84"
+dependencies = [
+ "base64 0.23.1",
+ "hex",
+ "serde_core",
+]
+
+[[package]]
 name = "bytecount"
 version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2511,14 +2522,15 @@ dependencies = [
 
 [[package]]
 name = "mukti-metadata"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26fa66de8d0e39780ff7cbb1409149f8423418339230f520240e5eb08576e1e8"
+checksum = "0873cc59ecdb6342634b7fe5086ab55b1ac04fdbbd8e46d209fc236d3254c128"
 dependencies = [
+ "byte-wrapper",
  "semver",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2601,6 +2613,7 @@ dependencies = [
  "async-scoped",
  "atomicwrites",
  "bstr",
+ "byte-wrapper",
  "bytes",
  "bytesize",
  "camino",
@@ -2626,7 +2639,6 @@ dependencies = [
  "future-queue",
  "futures",
  "guppy",
- "hex",
  "home",
  "http",
  "humantime-serde",

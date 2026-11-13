@@ -25,6 +25,7 @@ async-scoped = { version = "0.9.0", features = ["use-tokio"] }
 atomicwrites = "0.4.4"
 bitflags = "2.13.2"
 bstr = { version = "1.13.1", default-features = false, features = ["std"] }
+byte-wrapper = { version = "0.2.1", default-features = false, features = ["hex"] }
 bytesize = { version = "2.7.0", features = ["serde"] }
 bytes = "1.12.1"
 camino = "1.2.6"
@@ -91,7 +92,7 @@ libtest-mimic = "0.8.2"
 locked-tripwire = { version = "0.1.0", features = ["nextest"] }
 maplit = "1.0.2"
 miette = "7.6.0"
-mukti-metadata = "0.3.0"
+mukti-metadata = "0.4.0"
 newtype-uuid = { version = "1.4.0", features = ["v4"] }
 nextest-filtering = { version = "0.23.0", path = "nextest-filtering" }
 nextest-metadata = { version = "0.15.0", path = "nextest-metadata" }

@@ -7,6 +7,7 @@ use crate::{
     errors::{UpdateError, UpdateVersionParseError},
     helpers::{ThemeCharacters, progress::progress_bar_style},
 };
+use byte_wrapper::HexArray;
 use camino::{Utf8Path, Utf8PathBuf};
 use indicatif::{ProgressBar, ProgressStyle};
 use mukti_metadata::{
@@ -535,22 +536,10 @@ impl MuktiUpdateContext<'_> {
             error,
         })?;
         let hash = hasher.finalize();
-        let hash_str = hex::encode(hash);
-
-        match self.location.checksums.get(&DigestAlgorithm::SHA256) {
-            Some(checksum) => {
-                if checksum.0 != hash_str {
-                    return Err(UpdateError::ChecksumMismatch {
-                        expected: checksum.0.clone(),
-                        actual: hash_str,
-                    });
-                }
-                debug!(target: "nextest-runner::update", "SHA-256 checksum verified: {hash_str}");
-            }
-            None => {
-                warn!(target: "nextest-runner::update", "unable to verify SHA-256 checksum of downloaded archive ({hash_str})");
-            }
-        }
+        verify_sha256(
+            self.location.checksums.get(&DigestAlgorithm::SHA256),
+            HexArray::new(hash.into()),
+        )?;
 
         // Now extract data from this archive.
         Extract::from_source(tmp_archive_path.as_std_path())
@@ -600,6 +589,27 @@ impl MuktiUpdateContext<'_> {
 
         Ok(())
     }
+}
+
+fn verify_sha256(
+    expected: Option<&mukti_metadata::Digest>,
+    actual: HexArray<32>,
+) -> Result<(), UpdateError> {
+    match expected {
+        Some(expected) => {
+            if expected.as_bytes() != actual.as_slice() {
+                return Err(UpdateError::ChecksumMismatch {
+                    expected: expected.clone(),
+                    actual,
+                });
+            }
+            debug!(target: "nextest-runner::update", "SHA-256 checksum verified: {actual}");
+        }
+        None => {
+            warn!(target: "nextest-runner::update", "unable to verify SHA-256 checksum of downloaded archive ({actual})");
+        }
+    }
+    Ok(())
 }
 
 /// Moves a file from the given path to the specified destination.
@@ -880,6 +890,48 @@ impl FromStr for UpdateVersion {
 mod tests {
     use super::*;
     use std::{net::TcpListener, thread};
+
+    #[test]
+    fn verify_sha256_compares_bytes() {
+        const ACTUAL: HexArray<32> = HexArray::new([
+            0x1d, 0x4c, 0xe3, 0x02, 0xb8, 0x20, 0xc0, 0xf0, 0xc9, 0x48, 0x82, 0xc1, 0xcf, 0x08,
+            0xfc, 0x36, 0x0c, 0xaf, 0x08, 0xbe, 0x6e, 0x7d, 0xf4, 0xb8, 0x9b, 0xfb, 0xa9, 0x13,
+            0x51, 0xc4, 0x7b, 0x02,
+        ]);
+        const ACTUAL_LOWER: &str =
+            "1d4ce302b820c0f0c94882c1cf08fc360caf08be6e7df4b89bfba91351c47b02";
+        const ACTUAL_UPPER: &str =
+            "1D4CE302B820C0F0C94882C1CF08FC360CAF08BE6E7DF4B89BFBA91351C47B02";
+        const OTHER_LOWER: &str =
+            "6b284d6fde9670dfb6ee10ea9d9abbc85f95643d3f592472d420d82e257b3a6c";
+
+        let parse = |hex: &str| -> mukti_metadata::Digest {
+            serde_json::from_value(serde_json::Value::String(hex.to_owned()))
+                .expect("deserialized a hex digest")
+        };
+
+        verify_sha256(Some(&parse(ACTUAL_LOWER)), ACTUAL).expect("lowercase digest matches");
+        verify_sha256(Some(&parse(ACTUAL_UPPER)), ACTUAL).expect("uppercase digest matches");
+        verify_sha256(None, ACTUAL).expect("a missing digest only warns");
+
+        let error = verify_sha256(Some(&parse(OTHER_LOWER)), ACTUAL)
+            .expect_err("a different digest is a mismatch");
+        let error_message = error.to_string();
+        match error {
+            UpdateError::ChecksumMismatch { expected, actual } => {
+                assert_eq!(expected, parse(OTHER_LOWER), "expected digest is reported");
+                assert_eq!(actual, ACTUAL, "actual digest is reported");
+                assert_eq!(
+                    error_message,
+                    format!(
+                        "SHA-256 checksum mismatch: expected: {OTHER_LOWER}, actual: {ACTUAL_LOWER}"
+                    ),
+                    "message shows both digests as lowercase hex",
+                );
+            }
+            other => panic!("expected ChecksumMismatch, got {other:?}"),
+        }
+    }
 
     // ureq panics on the first https request if the selected TLS provider's
     // Cargo feature is off -- this catches a cfg mismatch between ureq_agent
