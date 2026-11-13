@@ -19,5 +19,5 @@ pub use parsing::ParsedExpr;
 /// The canonical filterset DSL reference.
 ///
 /// This is used by the CLI to render `cargo nextest help filterset`. The
-/// nextest website also renders it via an `<!-- include -->` snippet.
+/// nextest website also renders it via a `pymdownx.snippets` include.
 pub const FILTERSET_REFERENCE_MD: &str = include_str!("../reference.md");

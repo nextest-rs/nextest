@@ -10,7 +10,7 @@ This section contains the full set of operators supported by the filterset DSL.
 
 <!-- md:version 0.9.140 --> This reference is also available locally by running `cargo nextest help filterset`.
 
-<!-- include: nextest-filtering/reference.md -->
+--8<-- "nextest-filtering/reference.md"
 
 ## More information
 

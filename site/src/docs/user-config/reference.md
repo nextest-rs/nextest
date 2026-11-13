@@ -23,7 +23,7 @@ User configuration is loaded from platform-specific locations:
 
 For more information about configuration hierarchy, see [_Configuration hierarchy_](index.md#configuration-hierarchy).
 
-<!-- include: nextest-runner/user-config-reference.md -->
+--8<-- "nextest-runner/user-config-reference.md"
 
 ## Default configuration
 

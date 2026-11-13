@@ -77,9 +77,6 @@ extra_css:
 extra_javascript:
     - theme/js/hero-install.js
 
-hooks:
-    - overrides/hooks/shortcodes.py
-
 validation:
     links:
         # This ext.shortcodes emit page-independent links like
@@ -201,8 +198,12 @@ markdown_extensions:
     - pymdownx.keys
     - pymdownx.mark
     - pymdownx.snippets:
+          # Paths are relative to the cwd (site/), so this is the repo root. The
+          # included reference docs live in other crates because `cargo nextest
+          # help` renders them too.
           base_path:
-              - "."
+              - ".."
+          check_paths: true
     - pymdownx.smartsymbols:
           ordinal_numbers: false
     - pymdownx.superfences:
