@@ -446,7 +446,7 @@ jobs:
       - name: Download mukti
         run: |
           mkdir -p ~/bin
-          curl -LsSf "https://github.com/nextest-rs/mukti/releases/download/mukti-bin-0.7.8/mukti-bin-0.7.8-x86_64-unknown-linux-musl.tar.gz" \
+          curl -LsSf "https://github.com/nextest-rs/mukti/releases/download/mukti-bin-0.8.0/mukti-bin-0.8.0-x86_64-unknown-linux-musl.tar.gz" \
             | tar xzf - -C ~/bin
       - name: Add release metadata
         env:
@@ -488,6 +488,18 @@ jobs:
       - name: Add extra redirects
         run: |
           cat nextest/site/release-meta-static/extra-redirects >> release-meta/_redirects
+      - name: Generate install manifests and scripts
+        run: |
+          cd release-meta
+          ~/bin/mukti-bin --json releases.json generate-install-manifests .
+          ~/bin/mukti-bin --json releases.json generate-install-scripts \
+            --bin-name cargo-nextest \
+            --base-url https://get.nexte.st \
+            --docs-url https://nexte.st/docs/installation/pre-built-binaries/ \
+            --env-prefix NEXTEST_INSTALL \
+            --post-install-args "nextest self setup --source install-script" \
+            --post-install-min-version 0.9.152 \
+            .
       - name: Update release-meta repo
         env:
           REF_NAME: ${{ github.ref_name }}
@@ -496,7 +508,7 @@ jobs:
           git config user.email "bot@nexte.st"
           git config user.name "Nextest Bot"
           git pull --autostash --rebase origin main
-          git add releases.json _redirects
+          git add releases.json _redirects install.sh install.ps1 '*/install-manifest.txt'
           if git diff --cached --quiet; then
             echo "No changes to release metadata; nothing to do."
           else
