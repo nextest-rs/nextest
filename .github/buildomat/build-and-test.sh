@@ -6,8 +6,6 @@ set -o errexit
 set -o pipefail
 set -o xtrace
 
-PLATFORM="$1"
-
 # Enable ANSI colors in Cargo and nextest output.
 export CARGO_TERM_COLOR=always
 
@@ -16,8 +14,7 @@ rustc --version
 
 # Install nextest
 banner install
-mkdir -p "${CARGO_HOME:-$HOME/.cargo}/bin"
-curl -LsSf https://get.nexte.st/latest/"$PLATFORM" | gunzip | tar xf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+curl -LsSf https://get.nexte.st/install.sh | sh -s --
 
 banner metadata
 ptime -m cargo build --package nextest-metadata
