@@ -10,4 +10,4 @@
 
 # Build and test on illumos.
 
-exec .github/buildomat/build-and-test.sh illumos
+exec .github/buildomat/build-and-test.sh

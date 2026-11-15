@@ -37,11 +37,12 @@ jobs:
       # often enough that most runs missed anyway. This also keeps the
       # publishing job free of restored artifacts.
       #
-      # Fetch nextest directly from get.nexte.st rather than via
+      # Install nextest with the get.nexte.st install script rather than via
       # taiki-e/install-action: docs must reflect the latest release regardless
       # of any delay in updating the install action.
       - name: Install nextest
-        run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        shell: bash
+        run: curl -LsSf https://get.nexte.st/install.sh | sh -s --
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
