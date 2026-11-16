@@ -13,7 +13,7 @@ on:
 permissions: {}
 
 env:
-  MUKTI_VERSION: "0.8.0"
+  MUKTI_VERSION: "0.8.1"
 
 jobs:
   nextest-filtering-release:
