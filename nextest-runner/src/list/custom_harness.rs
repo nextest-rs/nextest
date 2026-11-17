@@ -4,8 +4,8 @@
 //! Best-effort detection of custom test harnesses for listing diagnostics.
 
 use camino::Utf8Path;
+use cargo_manifest::Manifest;
 use nextest_metadata::RustTestBinaryKind;
-use serde::Deserialize;
 use std::fs;
 
 pub(super) fn is_custom_harness(
@@ -28,13 +28,12 @@ fn manifest_has_custom_harness(
     binary_name: &str,
     kind: &RustTestBinaryKind,
 ) -> bool {
-    let Ok(manifest) = toml::from_str::<Manifest>(manifest) else {
+    let Ok(manifest) = Manifest::from_slice(manifest.as_bytes()) else {
         return false;
     };
     // A remapped or modified manifest might describe a different package.
     if manifest
         .package
-        .or(manifest.project)
         .as_ref()
         .map(|package| package.name.as_str())
         != Some(package_name)
@@ -47,7 +46,7 @@ fn manifest_has_custom_harness(
             let name = target
                 .name
                 .unwrap_or_else(|| package_name.replace('-', "_"));
-            name == binary_name && target.harness == Some(false)
+            name == binary_name && !target.harness
         })
     } else {
         let targets = match kind.as_str() {
@@ -62,36 +61,10 @@ fn manifest_has_custom_harness(
         let mut matching_targets = targets
             .iter()
             .filter(|target| target.name.as_deref() == Some(binary_name));
-        matching_targets.next().is_some_and(|target| {
-            target.harness == Some(false) && matching_targets.next().is_none()
-        })
+        matching_targets
+            .next()
+            .is_some_and(|target| !target.harness && matching_targets.next().is_none())
     }
-}
-
-#[derive(Deserialize)]
-struct Manifest {
-    package: Option<Package>,
-    project: Option<Package>,
-    lib: Option<Target>,
-    #[serde(default)]
-    bin: Vec<Target>,
-    #[serde(default)]
-    test: Vec<Target>,
-    #[serde(default)]
-    bench: Vec<Target>,
-    #[serde(default)]
-    example: Vec<Target>,
-}
-
-#[derive(Deserialize)]
-struct Package {
-    name: String,
-}
-
-#[derive(Deserialize)]
-struct Target {
-    name: Option<String>,
-    harness: Option<bool>,
 }
 
 #[cfg(test)]
