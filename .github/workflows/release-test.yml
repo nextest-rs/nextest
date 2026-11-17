@@ -38,6 +38,9 @@ jobs:
     name: Build internal-test binaries for ${{ matrix.target }}
     permissions:
       contents: write
+      # For the build provenance attestations.
+      id-token: write
+      attestations: write
     environment: release-binaries
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'internal-test-')
     needs:
@@ -149,6 +152,15 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
           TARGET: ${{ matrix.target }}
         run: ./scripts/archive-and-upload-windows.sh internal-test.exe
+      # On Windows, attest the archives of the signed binary, not the unsigned ones the
+      # dry run above leaves in the workspace root.
+      - name: Attest Windows archives
+        if: endsWith(matrix.target, '-pc-windows-msvc')
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            target/signed/${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+            target/signed/${{ github.ref_name }}-${{ matrix.target }}.zip
       - name: Set archive output variable
         id: archive-output
         shell: bash
