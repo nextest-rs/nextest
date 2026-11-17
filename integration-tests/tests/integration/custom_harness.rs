@@ -17,10 +17,7 @@ use nextest_metadata::NextestExitCode;
 use std::fs;
 
 const HARNESS_NAME: &str = "harness-diagnostic";
-const BINARY_ID: &str = "with-build-script::harness-diagnostic";
 const MODE_ENV: &str = "__NEXTEST_CUSTOM_HARNESS_MODE";
-const HINT: &str = "this binary uses a custom test harness";
-const DOCS_URL: &str = "https://nexte.st/docs/design/custom-test-harnesses/";
 
 const HARNESS_SOURCE: &str = r#"
 use std::{env, io::{self, Write}, process};
@@ -57,6 +54,8 @@ fn test_custom_harness_listing_failures() {
     let fresh = p
         .list_cli(&env_info, "nonzero-normal")
         .args([
+            "--cargo-quiet",
+            "--cargo-quiet",
             "--package",
             "with-build-script",
             "--test",
@@ -93,7 +92,7 @@ fn test_custom_harness_compatible_listing() {
         Some(NextestExitCode::OK),
         "{output}"
     );
-    assert_hint(&output, false);
+    insta::assert_snapshot!("compatible_listing_stderr", output.stderr_as_str());
 
     let summary = output.decode_test_list_json().unwrap();
     assert_eq!(summary.test_count, 2, "{output}");
@@ -259,63 +258,16 @@ impl HarnessProject {
 }
 
 #[track_caller]
-fn assert_hint(output: &CargoNextestOutput, expected: bool) {
-    let stderr = output.stderr_as_str();
-    assert_eq!(stderr.contains(HINT), expected, "{output}");
-    assert_eq!(stderr.contains(DOCS_URL), expected, "{output}");
-    assert_eq!(
-        stderr.matches(HINT).count(),
-        usize::from(expected),
-        "{output}"
-    );
-}
-
-#[track_caller]
 fn assert_listing_failure(output: &CargoNextestOutput, mode: &str, hint: bool) {
     assert_eq!(
         output.exit_status.code(),
         Some(NextestExitCode::TEST_LIST_CREATION_FAILED),
         "{mode}: {output}",
     );
-    let stderr = output.stderr_as_str();
-    assert!(stderr.contains(BINARY_ID), "{mode}: {output}");
-    assert_hint(output, hint);
-    if mode.starts_with("nonzero-") {
-        for detail in [
-            "exit code 23",
-            "harness stdout marker",
-            "harness stderr marker",
-        ] {
-            assert!(
-                stderr.contains(detail),
-                "{mode} is missing {detail}: {output}"
-            );
-        }
-    } else if mode.starts_with("malformed-") {
-        assert!(
-            stderr.contains("did not end with the string"),
-            "{mode}: {output}"
-        );
-        assert!(
-            stderr.contains(&format!("malformed listing: {mode}")),
-            "{output}"
-        );
-    } else {
-        assert!(
-            stderr.contains("produced non-UTF-8 output"),
-            "{mode}: {output}"
-        );
-        assert!(
-            stderr.contains(&format!("harness UTF-8 marker: {mode}")),
-            "{output}"
-        );
-    }
-    if !mode.starts_with("malformed-") {
-        assert!(stderr.contains("--list --format terse"), "{mode}: {output}");
-        assert_eq!(
-            stderr.contains("--ignored"),
-            mode.ends_with("-ignored"),
-            "{mode}: {output}"
-        );
-    }
+    let binary_path =
+        regex::Regex::new(r"(?:[A-Za-z]:)?[/\\][^`\n]*[/\\]harness_diagnostic-[0-9a-f]+(?:\.exe)?")
+            .unwrap();
+    let snapshot = output.to_snapshot();
+    let snapshot = binary_path.replace_all(&snapshot, "<harness-binary>");
+    insta::assert_snapshot!(format!("listing_{mode}_hint_{hint}"), snapshot,);
 }

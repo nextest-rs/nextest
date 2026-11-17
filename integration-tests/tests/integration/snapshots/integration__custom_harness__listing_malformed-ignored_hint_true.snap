@@ -1,0 +1,20 @@
+---
+source: integration-tests/tests/integration/custom_harness.rs
+expression: snapshot
+---
+exit status|code: Some(104)
+--- stdout ---
+
+
+--- stderr ---
+info: experimental features enabled: setup-scripts, wrapper-scripts, benchmarks
+error: creating test list failed
+
+Caused by:
+  this binary uses a custom test harness (`harness = false`), which may not support nextest
+  (hint: see https://nexte.st/docs/design/custom-test-harnesses/ for compatibility requirements)
+
+Caused by:
+  for `with-build-script::harness-diagnostic`, line "malformed listing: malformed-ignored" did not end with the string ": test" or ": benchmark"
+  full output:
+  malformed listing: malformed-ignored
