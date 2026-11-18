@@ -19,7 +19,6 @@ use std::{
     ffi::{OsStr, OsString},
     fs::File,
     io::{BufRead, BufReader, PipeReader, PipeWriter},
-    path::Path,
     sync::{LazyLock, PoisonError, RwLock},
 };
 use tracing::warn;
@@ -30,31 +29,90 @@ use imp::attach_capture_readers;
 pub(crate) use imp::pipe_reader_to_child_stdout;
 pub(crate) use imp::{Child, ChildAccumulator, ChildFds};
 
-/// Platforms without atomic CLOEXEC, per `library/std/src/sys/pipe/unix.rs`.
-/// Windows std already serializes `CreateProcess`.
-const SPAWN_INHERITS_PIPES: bool = cfg!(all(
-    unix,
-    not(any(
-        target_os = "android",
-        target_os = "cygwin",
-        target_os = "dragonfly",
-        target_os = "freebsd",
-        target_os = "hurd",
-        target_os = "illumos",
-        target_os = "linux",
-        target_os = "netbsd",
-        target_os = "openbsd",
-        target_os = "redox",
-    ))
-));
-
-/// Without atomic CLOEXEC, a concurrent spawn can inherit a pipe before CLOEXEC
-/// is set, and a test that inherits a capture pipe shows up as leaky
-/// (rust-lang/rust#95584).
+/// Serializes pipe creation against process spawning.
 ///
-/// Pipe creation and fork/exec spawns take the write lock, since fork/exec
-/// creates its own pipe. `posix_spawn` spawns take the read lock.
+/// On Unix, `fork` copies every descriptor open in the parent into the child,
+/// and `FD_CLOEXEC` only closes those copies at the child's `execve`. A child
+/// that has been forked but not yet scheduled to exec therefore holds a copy of
+/// every descriptor in this process -- including the capture-pipe write ends
+/// created for a *different* test. Under load the fork-to-`execve` gap can
+/// exceed `leak-timeout`, and the other test is reported as leaky even though
+/// it spawned nothing and holds no descriptor. (rust-lang/rust#95584 is the
+/// non-atomic-CLOEXEC variant of the same exposure; atomic CLOEXEC only closes
+/// the window inside `std::io::pipe()`, not the inheritance that lasts until
+/// the new child execs.)
+///
+/// The window is closed by keeping pipe creation and the fork indivisible:
+///
+/// * a spawn that creates capture pipes holds the write lock across
+///   `create_pipe` -> spawn -> the drop of this process's copies of the write
+///   ends, which happens inside [`spawn_process`] when the temporary
+///   `tokio::process::Command` is dropped;
+/// * a spawn that creates no pipes holds the read lock across its fork, so it
+///   cannot land inside such a window.
+///
+/// This is required on every Unix target, not only those without atomic
+/// CLOEXEC. Windows needs no lock: there is no `fork`, and std already
+/// serializes `CreateProcess`.
+#[cfg(unix)]
 static PROCESS_SPAWN_LOCK: RwLock<()> = RwLock::new(());
+
+/// Which side of [`PROCESS_SPAWN_LOCK`] a spawn takes.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum SpawnLockMode {
+    /// The spawn creates capture pipes: hold the write lock across pipe
+    /// creation, the fork, and the drop of this process's write-end copies.
+    Captured,
+    /// The spawn creates no pipes: hold the read lock across its fork.
+    Plain,
+}
+
+/// Holds [`PROCESS_SPAWN_LOCK`] for the duration of a spawn.
+#[derive(Debug)]
+pub(crate) struct ProcessSpawnGuard {
+    #[cfg(unix)]
+    _inner: SpawnLockInner,
+}
+
+#[cfg(unix)]
+#[derive(Debug)]
+// The guards are held only for their `Drop` implementations and are never
+// read, so dead-code analysis would otherwise flag both payloads.
+#[allow(dead_code)]
+enum SpawnLockInner {
+    Write(std::sync::RwLockWriteGuard<'static, ()>),
+    Read(std::sync::RwLockReadGuard<'static, ()>),
+}
+
+/// Acquires the process-spawn lock in the mode appropriate for a spawn.
+///
+/// A [`SpawnLockMode::Captured`] guard must be held from before [`create_pipe`]
+/// until after [`spawn_process`] returns; a [`SpawnLockMode::Plain`] guard must
+/// be held across [`spawn_process`].
+pub(crate) fn lock_process_spawn(mode: SpawnLockMode) -> ProcessSpawnGuard {
+    #[cfg(unix)]
+    {
+        // This lock protects no data, so a panic leaves no state to repair.
+        let inner = match mode {
+            SpawnLockMode::Captured => SpawnLockInner::Write(
+                PROCESS_SPAWN_LOCK
+                    .write()
+                    .unwrap_or_else(PoisonError::into_inner),
+            ),
+            SpawnLockMode::Plain => SpawnLockInner::Read(
+                PROCESS_SPAWN_LOCK
+                    .read()
+                    .unwrap_or_else(PoisonError::into_inner),
+            ),
+        };
+        ProcessSpawnGuard { _inner: inner }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = mode;
+        ProcessSpawnGuard {}
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct LocalExecuteContext<'a> {
@@ -243,32 +301,21 @@ impl TestCommand {
 
 /// Use std's pipes for atomic CLOEXEC on illumos (missing in mio-pipe 0.1.1)
 /// and anonymous pipes on Windows, which Tokio does not provide.
+///
+/// A caller that creates a capture pipe must hold a
+/// [`SpawnLockMode::Captured`] guard (see [`lock_process_spawn`]) across this
+/// call and the spawn.
 fn create_pipe() -> std::io::Result<(PipeReader, PipeWriter)> {
-    // This lock protects no data, so a panic leaves no state to repair.
-    let _guard = SPAWN_INHERITS_PIPES.then(|| {
-        PROCESS_SPAWN_LOCK
-            .write()
-            .unwrap_or_else(PoisonError::into_inner)
-    });
     std::io::pipe()
 }
 
 /// Capture pipes must come from `create_pipe`, not `Stdio::piped()`.
 ///
-/// Only Apple with an absolute program is known to use `posix_spawn`.
+/// The caller must hold the process-spawn lock (see [`lock_process_spawn`]).
+/// This process's copies of any capture write ends stored in `cmd` are closed
+/// when the temporary `tokio::process::Command` below is dropped, i.e. before
+/// this function returns and while the caller still holds the guard.
 fn spawn_process(cmd: std::process::Command) -> std::io::Result<tokio::process::Child> {
-    let exclusive = SPAWN_INHERITS_PIPES
-        && (!cfg!(target_vendor = "apple") || !Path::new(cmd.get_program()).is_absolute());
-    let _write_guard = exclusive.then(|| {
-        PROCESS_SPAWN_LOCK
-            .write()
-            .unwrap_or_else(PoisonError::into_inner)
-    });
-    let _read_guard = (SPAWN_INHERITS_PIPES && !exclusive).then(|| {
-        PROCESS_SPAWN_LOCK
-            .read()
-            .unwrap_or_else(PoisonError::into_inner)
-    });
     tokio::process::Command::from(cmd).spawn()
 }
 
@@ -277,6 +324,15 @@ pub(crate) fn spawn_piped(
     capture_stdout: bool,
     capture_stderr: bool,
 ) -> std::io::Result<tokio::process::Child> {
+    // No other thread may fork while these pipes are in the descriptor table;
+    // see `PROCESS_SPAWN_LOCK`. The guard must outlive `spawn_process`, whose
+    // dropped `Command` closes this process's copies of the write ends.
+    let spawn_guard = lock_process_spawn(if capture_stdout || capture_stderr {
+        SpawnLockMode::Captured
+    } else {
+        SpawnLockMode::Plain
+    });
+
     let stdout_rx = if capture_stdout {
         let (rx, tx) = create_pipe()?;
         cmd.stdout(tx);
@@ -292,7 +348,12 @@ pub(crate) fn spawn_piped(
         None
     };
 
+    // Test-only rendezvous inside the critical section; see `test_hooks`.
+    #[cfg(all(test, unix))]
+    test_hooks::park_if_hooked(cmd.get_program());
+
     let mut child = spawn_process(cmd)?;
+    drop(spawn_guard);
     if let Err(error) = attach_capture_readers(&mut child, stdout_rx, stderr_rx) {
         // The caller cannot supervise a child it never receives.
         _ = child.start_kill();
@@ -486,6 +547,75 @@ pub(crate) fn apply_ld_dyld_env(cmd: &mut std::process::Command, dylib_path: &Os
     }
 }
 
+/// Test-only rendezvous inside the spawn lock's critical section.
+///
+/// The window between pipe creation and the drop of this process's write-end
+/// copies is only a few syscalls wide, so a regression test cannot reliably
+/// land a competing fork inside it by racing. The test installs a hook for a
+/// unique program path; `spawn_piped` parks that one spawn inside the window
+/// (while it holds the write lock) until the test has attempted the competing
+/// fork.
+#[cfg(all(test, unix))]
+pub(crate) mod test_hooks {
+    use std::{
+        ffi::OsStr,
+        path::{Path, PathBuf},
+        sync::{Arc, Mutex, mpsc},
+    };
+
+    struct SpawnHook {
+        program: PathBuf,
+        reached: mpsc::Sender<()>,
+        resume: Arc<Mutex<mpsc::Receiver<()>>>,
+    }
+
+    static HOOK: Mutex<Option<SpawnHook>> = Mutex::new(None);
+
+    /// Installs a hook for `program`. A matching spawn signals `reached` and
+    /// then blocks until a message arrives on `resume`.
+    pub(crate) fn install(
+        program: &Path,
+        reached: mpsc::Sender<()>,
+        resume: Arc<Mutex<mpsc::Receiver<()>>>,
+    ) {
+        *HOOK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(SpawnHook {
+            program: program.to_owned(),
+            reached,
+            resume,
+        });
+    }
+
+    /// Removes the hook.
+    pub(crate) fn clear() {
+        *HOOK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+
+    pub(super) fn park_if_hooked(program: &OsStr) {
+        let (reached, resume) = {
+            let hook = HOOK
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            match hook.as_ref() {
+                Some(hook) if hook.program.as_os_str() == program => {
+                    (hook.reached.clone(), Arc::clone(&hook.resume))
+                }
+                _ => return,
+            }
+        };
+        // The hook mutex is not held while parked; other spawns still serialize
+        // on the spawn lock, which is the point.
+        let _ = reached.send(());
+        let _ = resume
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .recv();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -518,5 +648,164 @@ mod tests {
             ],
             "parsed key-value pairs match"
         );
+    }
+}
+
+#[cfg(all(test, unix))]
+mod spawn_lock_tests {
+    use super::*;
+    use std::{
+        os::{
+            raw::{c_char, c_int},
+            unix::fs::symlink,
+        },
+        sync::{Arc, Mutex, mpsc},
+        time::{Duration, Instant},
+    };
+    use tokio::io::AsyncReadExt;
+
+    /// Far beyond nextest's 200 ms default leak timeout: the sibling child
+    /// holds every descriptor inherited at `fork` until it execs, so the
+    /// elapsed hold must overshoot the budget whenever the leak check starts.
+    const SIBLING_EXEC_DELAY: Duration = Duration::from_secs(2);
+    const LEAK_TIMEOUT: Duration = Duration::from_millis(200);
+
+    unsafe extern "C" {
+        fn fork() -> c_int;
+        fn usleep(usec: u32) -> c_int;
+        fn execv(path: *const c_char, argv: *const *const c_char) -> c_int;
+        fn _exit(code: c_int) -> !;
+        fn waitpid(pid: c_int, status: *mut c_int, options: c_int) -> c_int;
+    }
+
+    enum Outcome {
+        NoLeak { time_to_close: Duration },
+        Leaked,
+    }
+
+    struct HookCleanup;
+
+    impl Drop for HookCleanup {
+        fn drop(&mut self) {
+            test_hooks::clear();
+        }
+    }
+
+    /// Forks and delays the child's `execve`, modelling the runner's
+    /// fork-to-`execve` gap under load. The child holds every descriptor
+    /// inherited at `fork` until it execs.
+    fn fork_and_exec_after(delay: Duration) {
+        let pid = unsafe { fork() };
+        assert!(pid >= 0, "fork failed");
+        if pid == 0 {
+            let path = c"/bin/true";
+            let argv = [path.as_ptr(), std::ptr::null()];
+            unsafe {
+                usleep(delay.as_micros() as u32);
+                execv(path.as_ptr(), argv.as_ptr());
+                _exit(127);
+            }
+        }
+        let mut status = 0;
+        let reaped = unsafe { waitpid(pid, &mut status, 0) };
+        assert_eq!(reaped, pid, "sibling reaped");
+    }
+
+    async fn wait_for_eof(
+        mut stdout: tokio::process::ChildStdout,
+        mut stderr: tokio::process::ChildStderr,
+    ) -> Outcome {
+        let started = Instant::now();
+        let mut obuf = Vec::new();
+        let mut ebuf = Vec::new();
+        let read = async {
+            let (out, err) =
+                tokio::join!(stdout.read_to_end(&mut obuf), stderr.read_to_end(&mut ebuf));
+            out.expect("stdout read");
+            err.expect("stderr read");
+        };
+        match tokio::time::timeout(LEAK_TIMEOUT, read).await {
+            Ok(()) => Outcome::NoLeak {
+                time_to_close: started.elapsed(),
+            },
+            Err(_) => Outcome::Leaked,
+        }
+    }
+
+    /// A test that spawns nothing and is fully reaped must not be reported
+    /// leaky because a *different* spawn forked while its capture pipes were in
+    /// this process's descriptor table and that child had not exec'd yet.
+    ///
+    /// Without the cross-spawn lock this fails: the sibling forked inside the
+    /// window holds the victim's capture pipes for `SIBLING_EXEC_DELAY`, so the
+    /// victim's reads do not reach EOF within `LEAK_TIMEOUT`.
+    #[test]
+    fn capture_pipes_are_not_inherited_by_a_concurrent_spawn() {
+        let dir =
+            std::env::temp_dir().join(format!("nextest-runner-spawn-lock-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let victim_program = dir.join("victim-pure");
+        let _ = std::fs::remove_file(&victim_program);
+        symlink("/bin/true", &victim_program).expect("victim symlink");
+
+        let (reached_tx, reached_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        test_hooks::install(&victim_program, reached_tx, Arc::new(Mutex::new(resume_rx)));
+        let _cleanup = HookCleanup;
+
+        let program = victim_program.clone();
+        let victim = std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("runtime");
+            rt.block_on(async move {
+                let cmd = std::process::Command::new(&program);
+                let mut child = spawn_piped(cmd, true, true).expect("victim spawns");
+                let stdout = child.stdout.take().expect("stdout captured");
+                let stderr = child.stderr.take().expect("stderr captured");
+                child.wait().await.expect("victim reaped");
+                wait_for_eof(stdout, stderr).await
+            })
+        });
+
+        // The victim's pipes now exist and are in this process's descriptor
+        // table; the victim's spawn is parked before `spawn_process`.
+        reached_rx
+            .recv_timeout(Duration::from_secs(30))
+            .expect("victim reaches the spawn window");
+
+        // A competing spawn takes the read side of the spawn lock, exactly as a
+        // pipe-less runner spawn would. Without the fix it forks here, inside
+        // the victim's window.
+        let (about_to_fork_tx, about_to_fork_rx) = mpsc::channel();
+        let sibling = std::thread::spawn(move || {
+            about_to_fork_tx.send(()).expect("signal");
+            let _guard = lock_process_spawn(SpawnLockMode::Plain);
+            fork_and_exec_after(SIBLING_EXEC_DELAY);
+        });
+        about_to_fork_rx
+            .recv_timeout(Duration::from_secs(30))
+            .expect("sibling reaches the spawn lock");
+        // Give the sibling time to fork (without the fix) or block on the lock
+        // (with it). The victim is parked, so no leak budget elapses.
+        std::thread::sleep(Duration::from_millis(500));
+        resume_tx.send(()).expect("resume the victim");
+
+        let outcome = victim.join().expect("victim thread");
+        sibling.join().expect("sibling thread");
+
+        match outcome {
+            Outcome::NoLeak { time_to_close } => {
+                // Informational: carry the measurement, not just the verdict.
+                eprintln!("victim's capture pipes closed after {time_to_close:?}");
+            }
+            Outcome::Leaked => panic!(
+                "the pure victim was reported leaky: a concurrently spawned sibling held its \
+                 capture pipe until the sibling exec'd. The spawn lock must close that window."
+            ),
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
