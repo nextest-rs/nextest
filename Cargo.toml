@@ -42,6 +42,7 @@ camino-tempfile-ext = "0.3.3"
 cargo-nextest = { path = "cargo-nextest", default-features = false, features = [
     "default-no-update",
 ] }
+cargo-manifest = "0.21.0"
 cargo_metadata = "0.23.1"
 cfg-if = "1.0.5"
 chrono = { version = "0.4.45", features = ["serde"] }

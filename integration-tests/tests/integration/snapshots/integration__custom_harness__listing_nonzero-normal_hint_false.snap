@@ -1,0 +1,21 @@
+---
+source: integration-tests/tests/integration/custom_harness.rs
+expression: snapshot
+---
+exit status|code: Some(104)
+--- stdout ---
+
+
+--- stderr ---
+info: experimental features enabled: setup-scripts, wrapper-scripts, benchmarks
+error: creating test list failed
+
+Caused by:
+  for `with-build-script::harness-diagnostic`, command `<harness-binary> --list --format terse` exited with exit code 23
+  --- stdout:
+  harness stdout marker
+
+  --- stderr:
+  harness stderr marker
+
+  ---

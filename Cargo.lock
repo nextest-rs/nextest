@@ -454,6 +454,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo-manifest"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fae5b96898dec422317cc18037ff6ddd3f7d0766e74a230e9aeddfc21f878267"
+dependencies = [
+ "serde",
+ "thiserror 2.0.20",
+ "toml",
+]
+
+[[package]]
 name = "cargo-nextest"
 version = "0.9.152"
 dependencies = [
@@ -2620,6 +2631,7 @@ dependencies = [
  "camino-anchored",
  "camino-tempfile",
  "camino-tempfile-ext",
+ "cargo-manifest",
  "cargo_metadata",
  "cfg-if",
  "chrono",
