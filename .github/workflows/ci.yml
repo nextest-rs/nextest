@@ -438,16 +438,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build cargo-nextest
         run: cargo build --package cargo-nextest
-      # build.build-dir was stabilized in Cargo 1.91. The new build directory
-      # layout is nightly-only, and as of the 2026-07-30 nightly it is the
-      # default there, so -Zbuild-dir-new-layout is now redundant. It is kept so
-      # these steps stay pinned to the new layout if that default changes. (The
-      # layout was stabilized and then reverted once already, so it might.)
-      #
-      # The legacy layout is covered separately below, via Cargo's temporary
-      # opt-out env var. Once that env var goes away, this job should install a
-      # stable toolchain for those steps instead: build.build-dir itself is
-      # stable, so only the layout needs nightly.
+      # build.build-dir was stabilized in Cargo 1.91, and the new build
+      # directory layout became the default in Cargo 1.100. The steps below use
+      # the new layout unless they set Cargo's temporary opt-out env var.
       - name: Run fixture tests with build-dir
         env:
           CARGO_NEXTEST: target/debug/cargo-nextest
@@ -455,7 +448,6 @@ jobs:
           CARGO_BUILD_BUILD_DIR: ${{ github.workspace }}/build-output
         run: |
           ./scripts/nextest-without-rustup.sh run \
-            -Z build-dir-new-layout \
             --manifest-path fixtures/fixture-project/Cargo.toml \
             --package cdylib-link --package cdylib-example \
             --package with-build-script
@@ -481,26 +473,12 @@ jobs:
           CARGO_BUILD_BUILD_DIR: ${{ github.workspace }}/build-output
         run: |
           ./scripts/nextest-without-rustup.sh run \
-            -Z build-dir-new-layout \
             --manifest-path fixtures/fixture-project/Cargo.toml \
             --package fixture-project --lib
-      # The same dylib test under the new layout without build.build-dir, which
-      # is the configuration nightly users get by default (and the one reported
-      # in #3512).
-      - name: Run dylib fixture tests with the new layout only
-        env:
-          CARGO_NEXTEST: target/debug/cargo-nextest
-          RUSTUP_AVAILABLE: 1
-          RUSTFLAGS: ""
-        run: |
-          ./scripts/nextest-without-rustup.sh run \
-            -Z build-dir-new-layout \
-            --manifest-path fixtures/fixture-project/Cargo.toml \
-            --package fixture-project --lib
-      # And with build.build-dir under the legacy layout, which is what stable
-      # users get today. __CARGO_TEMPORARY_BUILD_DIR_NEW_LAYOUT_OPT_OUT is
-      # Cargo's own opt-out; see the note above about replacing it with a stable
-      # toolchain once it is removed.
+          ./scripts/check-build-dir-layout.sh new "$CARGO_BUILD_BUILD_DIR"
+      # Also test against the legacy layout. We use Cargo's temporary opt out
+      # for now. Once the opt-out is removed, we should switch this step to being
+      # run under Rust 1.99 instead.
       - name: Run dylib fixture tests with build-dir under the legacy layout
         env:
           CARGO_NEXTEST: target/debug/cargo-nextest
@@ -512,6 +490,7 @@ jobs:
           ./scripts/nextest-without-rustup.sh run \
             --manifest-path fixtures/fixture-project/Cargo.toml \
             --package fixture-project --lib
+          ./scripts/check-build-dir-layout.sh legacy "$CARGO_BUILD_BUILD_DIR"
       # fixture-project is included here so that the archive has to carry the
       # dylib-test dylib. Here, dylib-test is not among the selected packages,
       # so it doesn't enter the set of packages that apply_archive_filters
@@ -531,7 +510,6 @@ jobs:
           CARGO_BUILD_BUILD_DIR: ${{ github.workspace }}/build-output
         run: |
           ./scripts/nextest-without-rustup.sh archive \
-            -Z build-dir-new-layout \
             --manifest-path fixtures/fixture-project/Cargo.toml \
             --archive-file target/build-dir-archive.tar.zst \
             --lib \
