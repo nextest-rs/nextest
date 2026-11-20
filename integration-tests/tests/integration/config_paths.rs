@@ -146,9 +146,6 @@ fn config_diagnostics_color() {
         ),
     ] {
         fs::write(&config, contents).unwrap();
-        // This is run outside the test workspace so cargo's `.cargo/config`
-        // deprecation warning (which the normalizer cannot match once colored)
-        // does not appear.
         let output = CargoNextestCli::for_test(&env_info)
             .current_dir(temp_root)
             .args([
