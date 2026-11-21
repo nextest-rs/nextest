@@ -144,5 +144,5 @@ Default filters can be set per-platform via [the `overrides` section](configurat
 ```toml title="Per-platform default filter configuration"
 [[profile.default.overrides]]
 platform = 'cfg(windows)'
-default-filter = 'not test()'
+default-filter = 'not test(unix_tests)'
 ```
