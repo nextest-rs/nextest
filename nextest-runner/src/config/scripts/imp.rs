@@ -338,7 +338,7 @@ impl SetupScriptCommand {
         let env_path = camino_tempfile::Builder::new()
             .prefix("nextest-env")
             .tempfile()
-            .map_err(|error| ChildStartError::TempPath(Arc::new(error)))?
+            .map_err(|error| ChildStartError::SetupScriptTempPath(Arc::new(error)))?
             .into_temp_path();
 
         cmd.current_dir(test_list.workspace_root())

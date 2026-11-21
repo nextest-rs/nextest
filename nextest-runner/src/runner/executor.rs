@@ -34,8 +34,8 @@ use crate::{
     },
     runner::{
         ExecutorEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus,
-        InternalTerminateReason, RunUnitQuery, RunUnitRequest, SignalRequest, UnitExecuteStatus,
-        parse_env_file,
+        InternalTerminateReason, RUN_WRAPPER_REPORT_ENV, RunUnitQuery, RunUnitRequest,
+        SignalRequest, UnitExecuteStatus, new_report_dir, parse_env_file, read_report,
     },
     target_runner::TargetRunner,
     test_command::{ChildAccumulator, ChildFds},
@@ -720,6 +720,7 @@ impl<'a> ExecutorContext<'a> {
                 slow_after: None,
                 output: ChildExecutionOutput::StartError(error),
                 result: ExecutionResult::ExecFail,
+                run_wrapper_report: None,
                 stopwatch_end: stopwatch.snapshot(),
             },
         }
@@ -747,7 +748,14 @@ impl<'a> ExecutorContext<'a> {
             test.retry_data.attempt,
         );
 
+        let wrapper_report_dir = cmd.has_wrapper().then(new_report_dir).transpose()?;
+        let wrapper_report_path = wrapper_report_dir
+            .as_ref()
+            .map(|dir| dir.path().join("report.json"));
         let command_mut = cmd.command_mut();
+        if let Some(path) = &wrapper_report_path {
+            command_mut.env(RUN_WRAPPER_REPORT_ENV, path);
+        }
 
         // Test-related environment variables.
         command_mut.env("NEXTEST_RUN_ID", self.run_id.to_string());
@@ -1106,6 +1114,22 @@ impl<'a> ExecutorContext<'a> {
         });
 
         let stopwatch_end = stopwatch.snapshot();
+        let mut errors: Vec<_> = child_acc.errors.into_iter().map(ChildError::from).collect();
+        let mut exec_result = exec_result;
+        let run_wrapper_report = if let Some(path) = wrapper_report_path {
+            match read_report(&path).await {
+                Ok(report) => report,
+                Err(error) => {
+                    errors.push(ChildError::RunWrapperReport { path, error });
+                    if exec_result.is_success() {
+                        exec_result = ExecutionResult::ExecFail;
+                    }
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         // Compute stdout and stderr lengths for USDT probe
         let (stdout_len, stderr_len) = child_acc.output.stdout_stderr_len();
@@ -1139,9 +1163,10 @@ impl<'a> ExecutorContext<'a> {
             output: ChildExecutionOutput::Output {
                 result: Some(exec_result),
                 output: child_acc.output.freeze(),
-                errors: ErrorList::new(UnitKind::WAITING_ON_TEST_MESSAGE, child_acc.errors),
+                errors: ErrorList::new(UnitKind::WAITING_ON_TEST_MESSAGE, errors),
             },
             result: exec_result,
+            run_wrapper_report,
             stopwatch_end,
         })
     }
