@@ -35,7 +35,7 @@ Since benchmarks typically take longer than tests to run, nextest applies a diff
 # Set a global timeout of 2 hours for benchmarks.
 bench.global-timeout = "2h"
 
-[profile.default.overrides]
+[[profile.default.overrides]]
 # Terminate this benchmark after 10 minutes.
 filter = "test(bench_commands)"
 bench.slow-timeout = { period = "60s", terminate-after = 10 }
