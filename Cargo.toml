@@ -63,7 +63,7 @@ derive-where = "1.7.0"
 dialoguer = "0.12.0"
 duct = "1.1.2"
 dunce = "1.0.5"
-eazip = { version = "0.2.6", default-features = false, features = ["deflate", "std", "zstd"] }
+eazip = { version = "0.2.8", default-features = false, features = ["deflate", "std", "zstd"] }
 enable-ansi-support = "0.3.1"
 etcetera = "0.11.0"
 fixture-data = { path = "fixture-data" }
