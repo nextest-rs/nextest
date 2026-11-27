@@ -1,0 +1,5 @@
+---
+source: integration-tests/tests/integration/custom_harness.rs
+expression: output.stderr_as_str()
+---
+info: experimental features enabled: setup-scripts, wrapper-scripts, benchmarks
