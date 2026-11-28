@@ -105,7 +105,7 @@ num_threads = "0.1.8"
 owo-colors = "4.4.0"
 pathdiff = { version = "0.2.3", features = ["camino"] }
 petgraph = "0.8.3"
-pin-project-lite = "0.2.17"
+pin-project-lite = "0.2.18"
 pretty_assertions = "1.4.1"
 proptest = "1.11.0"
 pulldown-cmark = { version = "0.13.6", default-features = false }
