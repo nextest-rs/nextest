@@ -94,6 +94,9 @@ Nextest exposes these environment variables to your tests _at runtime only_. The
 `NEXTEST_PROFILE` <!-- md:version 0.9.89 -->
 : The [nextest profile](index.md#profiles) in use.
 
+`NEXTEST_RUN_WRAPPER_REPORT`
+: Path where a run wrapper can write an optional JSON report for the current test attempt. Each attempt receives a new path. See [_Run-wrapper reports_](wrapper-scripts.md#run-wrapper-reports) for the format and requirements.
+
 `NEXTEST_VERSION` <!-- md:version 0.9.130 -->
 : The current nextest version as a semver string (e.g. `"0.9.120"`). Set for both tests and [setup scripts](setup-scripts.md).
 
