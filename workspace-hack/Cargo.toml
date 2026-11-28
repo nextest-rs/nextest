@@ -24,8 +24,8 @@ unused_dependencies = "allow"
 ahash = { version = "0.8.12", features = ["serde"] }
 aho-corasick = { version = "1.1.5" }
 camino = { version = "1.2.6", default-features = false, features = ["serde1"] }
-clap = { version = "4.6.7", features = ["derive", "env", "unicode", "unstable-markdown", "wrap_help"] }
-clap_builder = { version = "4.6.7", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
+clap = { version = "4.6.10", features = ["derive", "env", "unicode", "unstable-markdown", "wrap_help"] }
+clap_builder = { version = "4.6.10", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
 either = { version = "1.15.0", features = ["use_std"] }
 foldhash = { version = "0.2.0" }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3.4", default-features = false, features = ["std"] }
@@ -59,10 +59,10 @@ camino = { version = "1.2.6", default-features = false, features = ["serde1"] }
 memchr = { version = "2.7.6" }
 once_cell = { version = "1.21.4" }
 phf_shared = { version = "0.11.3" }
-proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.45" }
+proc-macro2 = { version = "1.0.107" }
+quote = { version = "1.0.47" }
 serde_core = { version = "1.0.229", features = ["alloc", "rc"] }
-syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3.0.3", features = ["extra-traits", "full"] }
+syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3.0.10", features = ["extra-traits", "full"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.117", features = ["extra-traits", "full", "visit", "visit-mut"] }
 ucd-trie = { version = "0.1.7" }
 
@@ -77,8 +77,8 @@ httparse = { version = "1.10.1" }
 libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
-proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.45" }
+proc-macro2 = { version = "1.0.107" }
+quote = { version = "1.0.47" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
@@ -129,8 +129,8 @@ httparse = { version = "1.10.1" }
 libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
-proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.45" }
+proc-macro2 = { version = "1.0.107" }
+quote = { version = "1.0.47" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
@@ -181,8 +181,8 @@ httparse = { version = "1.10.1" }
 libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
-proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.45" }
+proc-macro2 = { version = "1.0.107" }
+quote = { version = "1.0.47" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
@@ -213,8 +213,8 @@ httparse = { version = "1.10.1" }
 libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
-proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.45" }
+proc-macro2 = { version = "1.0.107" }
+quote = { version = "1.0.47" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
@@ -245,8 +245,8 @@ httparse = { version = "1.10.1" }
 libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
-proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.45" }
+proc-macro2 = { version = "1.0.107" }
+quote = { version = "1.0.47" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
@@ -276,8 +276,8 @@ httparse = { version = "1.10.1" }
 libc = { version = "0.2.191", features = ["extra_traits"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 mio = { version = "1.2.0", features = ["net", "os-ext"] }
-proc-macro2 = { version = "1.0.106" }
-quote = { version = "1.0.45" }
+proc-macro2 = { version = "1.0.107" }
+quote = { version = "1.0.47" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "std", "tls12"] }
 slab = { version = "0.4.11" }
